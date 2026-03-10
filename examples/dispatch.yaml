@@ -1,0 +1,36 @@
+dimensions:
+  snapshot:
+    dtype: int
+  generator:
+    values: [wind, solar, gas]
+
+parameters:
+  p_max:
+    dims: [generator]
+    default: null
+  load:
+    dims: [snapshot]
+    default: null
+  cost:
+    dims: [generator]
+    default: null
+
+variables:
+  p:
+    foreach: [snapshot, generator]
+    where: "p_max > 0"
+    bounds:
+      lower: 0
+      upper: p_max
+
+constraints:
+  power_balance:
+    foreach: [snapshot]
+    equations:
+      - expression: sum(p, over=generator) == load
+
+objectives:
+  total_cost:
+    sense: minimize
+    equations:
+      - expression: sum(p * cost, over=generator)
