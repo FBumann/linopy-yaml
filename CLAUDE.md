@@ -29,21 +29,36 @@ mypy linopy_yaml
 
 ```
 linopy_yaml/
-├── __init__.py          # Public API: Model, register
+├── __init__.py          # Public API: installs monkey-patch, exports register
+├── accessor.py          # YamlAccessor, _YamlDescriptor, from_yaml(), _install()
 ├── schema.py            # Pydantic models for YAML validation
 ├── loader.py            # Data coercion, validation, master coords
 ├── expression_parser.py # pyparsing grammar for math expressions
 ├── where_parser.py      # pyparsing grammar for where strings
 ├── builder.py           # Schema + data → linopy Model construction
-├── helpers.py           # Built-in helpers (sum, roll) + registry
-└── model.py             # Model subclass with from_yaml(), extend()
+└── helpers.py           # Built-in helpers (sum, roll) + registry
 tests/
 ├── conftest.py          # Shared fixtures
 ├── test_schema.py       # YAML schema validation tests
 ├── test_loader.py       # Data loading and coercion tests
 ├── test_parser.py       # Expression and where-string parser tests
-├── test_builder.py      # End-to-end model building tests
 └── test_dispatch.py     # Integration test with the dispatch example
+```
+
+## API
+
+```python
+import linopy_yaml  # monkey-patches linopy.Model
+from linopy import Model
+
+# Build from YAML
+m = Model.from_yaml("model.yaml", data={...}, coords={...})
+
+# Accessor on YAML-built models
+m.yaml.schema    # MathSchema (parsed YAML)
+m.yaml.dataset   # xr.Dataset (loaded parameters)
+m.yaml.coords    # dict[str, pd.Index] (master coordinates)
+m.yaml.add(...)  # extend with another YAML file
 ```
 
 ## Development Guidelines

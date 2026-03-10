@@ -71,9 +71,10 @@ Python call site:
 
 ```python
 import linopy_yaml
+from linopy import Model
 import pandas as pd
 
-m = linopy_yaml.Model.from_yaml(
+m = Model.from_yaml(
     "dispatch.yaml",
     data={
         "p_max": pd.Series({"wind": 100, "solar": 60, "gas": 200}),
@@ -100,17 +101,25 @@ print(m.solution["p"])
 
 ## 2. Relationship to linopy
 
-`linopy_yaml` is a **pure consumer of linopy's public API**. It calls `model.add_variables()`, `model.add_constraints()`, and `model.add_objective()` — nothing else. It does not monkey-patch, subclass internal classes, or depend on linopy internals.
+`linopy_yaml` is a **pure consumer of linopy's public API**. It calls `model.add_variables()`, `model.add_constraints()`, and `model.add_objective()` — nothing else. It does not subclass or depend on linopy internals.
 
-The `linopy_yaml.Model` class subclasses `linopy.Model` to attach `from_yaml()` and `extend()` classmethods and to store the parsed math definition and parameter dataset as attributes. All existing linopy behaviour is inherited unchanged.
+At import time, `linopy_yaml` monkey-patches `linopy.Model` with two additions:
+
+- `Model.from_yaml(path, data=..., coords=...)` — builds a model from a YAML file
+- `model.yaml` — accessor on instances built from YAML (schema, dataset, coords, add)
+
+The result of `from_yaml()` is a plain `linopy.Model`. The YAML metadata is stored externally via a descriptor and weakref-based registry, avoiding any modification to linopy's `__slots__`.
+
+This works reliably but has a minor limitation: the accessor link breaks if a model is pickled or deep-copied. A future linopy PR could add `_yaml_accessor` to `Model.__slots__` (defaulting to `None`), which would eliminate the need for the external registry and make the integration fully native.
 
 ```
-linopy_yaml.Model
-    └── linopy.Model          (all solving, variable/constraint storage, etc.)
-         └── from_yaml()      (new classmethod — builds the model from YAML + data)
-         └── extend()         (new method — adds more math from another YAML file)
-         └── .math            (new property — the parsed MathSchema)
-         └── .dataset         (new property — the xr.Dataset of parameters)
+linopy.Model                      (unchanged — all solving, variable/constraint storage, etc.)
+    ├── .from_yaml()              (monkey-patched — builds model from YAML + data)
+    └── .yaml                     (monkey-patched descriptor — accessor for YAML metadata)
+         ├── .schema              (the parsed MathSchema)
+         ├── .dataset             (xr.Dataset of loaded parameters)
+         ├── .coords              (master coordinate dict)
+         └── .add()               (extend with another YAML file)
 ```
 
 ### Why a separate package?
@@ -718,17 +727,24 @@ Register custom helpers with @linopy_yaml.register('weighted_sum').
 
 ## 9. Python API
 
+`linopy_yaml` monkey-patches `linopy.Model` at import time. Importing the package adds:
+
+- `Model.from_yaml()` — static method to build a model from YAML
+- `model.yaml` — accessor on instances built from YAML
+
+No subclassing. The result of `from_yaml()` is a plain `linopy.Model`.
+
 ### 9.1 `Model.from_yaml()`
 
 ```python
-@classmethod
-def from_yaml(
-    cls,
-    path: str | Path,
-    *,
-    data: dict[str, Any] | None = None,
-    coords: dict[str, Any] | None = None,
-) -> Model:
+import linopy_yaml  # registers Model.from_yaml() and model.yaml accessor
+from linopy import Model
+
+m = Model.from_yaml(
+    "dispatch.yaml",
+    data={...},
+    coords={...},
+)
 ```
 
 **Parameters:**
@@ -739,24 +755,36 @@ def from_yaml(
 | `data`    | `dict` or `None` | Parameter data. Keys are parameter names as declared in the YAML. See [Section 4.3](#43-accepted-input-types-per-parameter) for accepted value types.                |
 | `coords`  | `dict` or `None` | Dimension coordinate values. Keys are dimension names. Values are anything accepted by `pd.Index()`. Overrides `values` declared in the YAML for the same dimension. |
 
-**Returns:** A fully built `linopy_yaml.Model` (subclass of `linopy.Model`). The model has no solver attached; call `.solve()` as normal.
+**Returns:** A `linopy.Model` with the `.yaml` accessor populated. Call `.solve()` as normal.
 
 **Raises:** `ValueError` with descriptive message for any validation failure. `pydantic.ValidationError` if the YAML structure is invalid.
 
-### 9.2 `Model.extend()`
+### 9.2 `model.yaml` accessor
 
-Adds additional variables, constraints, and/or objectives from a second YAML file. Useful for building modular models from composable pieces.
+Available on models built via `Model.from_yaml()`. Raises `AttributeError` with a clear message on other models.
 
 ```python
-def extend(
-    self,
-    path: str | Path,
-    *,
-    data: dict[str, Any] | None = None,
-) -> None:
+m.yaml.schema      # MathSchema — the parsed YAML definition
+m.yaml.dataset     # xr.Dataset — all loaded parameters
+m.yaml.coords      # dict[str, pd.Index] — master coordinates
+m.yaml.add(path, data=...)  # extend with another YAML file
 ```
 
-The second YAML may reference dimensions and parameters already loaded in the model. New parameters introduced in the second YAML can be provided via `data=`. Existing parameters cannot be overridden.
+**`model.yaml.schema`** — Programmatic access to the YAML definition:
+
+```python
+m.yaml.schema.variables["p"].foreach   # ['snapshot', 'generator']
+m.yaml.schema.parameters["load"].dims  # ['snapshot']
+```
+
+**`model.yaml.dataset`** — The loaded parameter dataset:
+
+```python
+m.yaml.dataset["p_max"]    # xr.DataArray indexed over generator
+m.yaml.dataset["load"]     # xr.DataArray indexed over snapshot
+```
+
+**`model.yaml.add(path, data=...)`** — Add variables, constraints, and/or objectives from a second YAML file. The second YAML may reference dimensions and parameters already loaded. New parameters can be provided via `data=`.
 
 ### 9.3 `@linopy_yaml.register(name)`
 
@@ -768,24 +796,6 @@ import linopy_yaml
 @linopy_yaml.register("weighted_sum")
 def weighted_sum(array, weights, *, over):
     return (array * weights).sum(over)
-```
-
-### 9.4 `Model.math`
-
-Property returning the parsed `MathSchema` object. Provides programmatic access to the YAML definition after loading.
-
-```python
-m.math.variables["p"].foreach   # ['snapshot', 'generator']
-m.math.parameters["load"].dims  # ['snapshot']
-```
-
-### 9.5 `Model.dataset`
-
-Property returning the `xr.Dataset` of all loaded parameters, after coercion and validation.
-
-```python
-m.dataset["p_max"]    # xr.DataArray indexed over generator
-m.dataset["load"]     # xr.DataArray indexed over snapshot
 ```
 
 -----

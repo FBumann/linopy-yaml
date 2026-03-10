@@ -53,10 +53,11 @@ objectives:
 **Python:**
 
 ```python
-import linopy_yaml
+import linopy_yaml  # registers Model.from_yaml() and model.yaml accessor
+from linopy import Model
 import pandas as pd
 
-m = linopy_yaml.Model.from_yaml(
+m = Model.from_yaml(
     "dispatch.yaml",
     data={
         "p_max": pd.Series({"wind": 100, "solar": 60, "gas": 200}),
@@ -70,6 +71,11 @@ m = linopy_yaml.Model.from_yaml(
 
 m.solve()
 print(m.solution["p"])
+
+# Inspect the YAML definition
+m.yaml.schema      # parsed MathSchema
+m.yaml.dataset     # xr.Dataset of loaded parameters
+m.yaml.coords      # master coordinate dict
 ```
 
 ## Installation

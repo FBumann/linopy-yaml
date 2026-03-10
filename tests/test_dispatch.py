@@ -2,8 +2,9 @@
 
 import pandas as pd
 import pytest
+from linopy import Model
 
-from linopy_yaml import Model
+import linopy_yaml  # noqa: F401 — registers .from_yaml() and .yaml accessor
 
 
 @pytest.mark.xfail(reason="upstream linopy bug: as_dataarray(scalar, coords=2D) fails")
@@ -33,13 +34,11 @@ def test_dispatch_builds(dispatch_yaml):
     # Objective was set
     assert m.objective is not None
 
-    # Math schema is accessible
-    assert m.math.variables["p"].foreach == ["snapshot", "generator"]
-    assert m.math.parameters["load"].dims == ["snapshot"]
-
-    # Dataset is accessible
-    assert "p_max" in m.dataset
-    assert "load" in m.dataset
+    # YAML accessor is available
+    assert m.yaml.schema.variables["p"].foreach == ["snapshot", "generator"]
+    assert m.yaml.schema.parameters["load"].dims == ["snapshot"]
+    assert "p_max" in m.yaml.dataset
+    assert "load" in m.yaml.dataset
 
 
 @pytest.mark.xfail(reason="upstream linopy bug: as_dataarray(scalar, coords=2D) fails")
@@ -72,3 +71,10 @@ def test_dispatch_solves(dispatch_yaml):
         load_t = [80, 120, 150, 180, 140, 100][t]
         gen_sum = float(p_sol.sel(snapshot=t).sum())
         assert abs(gen_sum - load_t) < 1e-4, f"Balance violated at t={t}"
+
+
+def test_non_yaml_model_raises():
+    """Accessing .yaml on a plain model raises a clear error."""
+    m = Model()
+    with pytest.raises(AttributeError, match="not built from YAML"):
+        _ = m.yaml
