@@ -24,13 +24,10 @@ dimensions:
 parameters:
   p_max:
     dims: [generator]
-    default: null
   load:
     dims: [snapshot]
-    default: null
   cost:
     dims: [generator]
-    default: null
 
 variables:
   p:

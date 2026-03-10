@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import numpy as np
@@ -55,36 +54,31 @@ def load_parameters(
     data = data or {}
     arrays: dict[str, xr.DataArray] = {}
 
-    # Step 2: check required parameters are present
-    for pname, pdef in schema.parameters.items():
-        if pdef.default is None and pname not in data:
+    # Step 2: check all declared parameters are provided
+    for pname in schema.parameters:
+        if pname not in data:
             msg = (
-                f"Parameter '{pname}' is required (no default declared) "
-                f"but was not provided in data.\n"
-                f"Add '{pname}' to the data= argument, or declare a default "
-                f"under 'parameters.{pname}.default'."
+                f"Parameter '{pname}' is required but was not provided in data.\n"
+                f"Add '{pname}' to the data= argument."
             )
             raise ValueError(msg)
 
-    # Step 5: warn about unknown data keys
+    # Step 5: reject unknown data keys
     declared = set(schema.parameters)
     unknown = set(data) - declared
     if unknown:
-        warnings.warn(
-            f"The following data keys are not declared as parameters "
-            f"and will be ignored: {sorted(unknown)}",
-            UserWarning,
-            stacklevel=3,
+        msg = (
+            f"The following data keys are not declared as parameters: "
+            f"{sorted(unknown)}.\n"
+            f"Declare them under 'parameters:' in the YAML or remove "
+            f"them from data=."
         )
+        raise ValueError(msg)
 
     # Coerce each parameter
     for pname, pdef in schema.parameters.items():
-        if pname in data:
-            raw = data[pname]
-            arr = _coerce_to_dataarray(pname, raw, pdef.dims, master_coords)
-        else:
-            # Has a default — create scalar
-            arr = xr.DataArray(pdef.default)
+        raw = data[pname]
+        arr = _coerce_to_dataarray(pname, raw, pdef.dims, master_coords)
 
         # Expand scalars and reindex to master coords
         if pdef.dims:

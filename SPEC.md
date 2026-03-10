@@ -41,13 +41,10 @@ dimensions:
 parameters:
   p_max:
     dims: [generator]
-    default: null
   load:
     dims: [snapshot]
-    default: null
   cost:
     dims: [generator]
-    default: null
 
 variables:
   p:
@@ -182,35 +179,29 @@ Declares all named input data the model expects. Every parameter referenced in v
 parameters:
   p_max:
     dims: [generator]         # required: list of declared dimension names
-    default: .inf             # optional: scalar default if data not provided
     dtype: float              # optional: float | int | bool | str. Default: float
 
   efficiency:
     dims: []                  # empty list = scalar parameter
-    default: null             # null = no default, data must be provided
 
   is_storage:
     dims: [generator]
     dtype: bool
-    default: false
 
   load:
     dims: [snapshot]
-    default: null
 ```
 
 **Fields:**
 
-| Field     | Type           | Default  | Description                                                                                               |
-|-----------|----------------|----------|-----------------------------------------------------------------------------------------------------------|
-| `dims`    | list[str]      | required | Dimensions this parameter is indexed over. Must all be declared in `dimensions`. Empty list means scalar. |
-| `default` | scalar or null | `null`   | Scalar default value. If null, the parameter must be provided in `data=`. Supports `.inf` and `-.inf`.    |
-| `dtype`   | str            | `float`  | Expected data type. Used for coercion after loading.                                                      |
+| Field  | Type      | Default  | Description                                                                                               |
+|--------|-----------|----------|-----------------------------------------------------------------------------------------------------------|
+| `dims` | list[str] | required | Dimensions this parameter is indexed over. Must all be declared in `dimensions`. Empty list means scalar. |
+| `dtype` | str      | `float`  | Expected data type. Used for coercion after loading.                                                      |
 
 **Rules:**
 
-- A parameter with `default: null` that is missing from `data=` raises at load time.
-- A parameter with a non-null `default` that is missing from `data=` is filled with the scalar default and broadcasts freely over all dimensions.
+- Every declared parameter must be provided in `data=` at load time.
 - Parameters cannot have dims that aren't in `dimensions`.
 
 ### 3.3 `variables`
@@ -385,8 +376,8 @@ Validation happens in this order at load time. Each step fails immediately if it
 
 **Step 2: Parameter presence**
 
-- Every parameter with `default: null` is present in `data=`.
-- Error: `"Parameter '{name}' is required (no default declared) but was not provided in data."`
+- Every declared parameter is present in `data=`.
+- Error: `"Parameter '{name}' is required but was not provided in data."`
 
 **Step 3: Dimension names in provided data**
 
@@ -400,8 +391,8 @@ Validation happens in this order at load time. Each step fails immediately if it
 
 **Step 5: Unknown data keys**
 
-- Keys in `data=` that are not declared parameters produce a warning (not an error), since the user may be passing extra data for use in `extend()` later.
-- Warning: `"The following data keys are not declared as parameters and will be ignored: {names}"`
+- Keys in `data=` that are not declared parameters raise an error. The YAML is the source of truth.
+- Error: `"The following data keys are not declared as parameters: {names}. Declare them under 'parameters:' in the YAML or remove them from data=."`
 
 ### 4.5 What the loader does NOT validate
 
@@ -680,8 +671,8 @@ or pass coords={'snapshot': [...]} to from_yaml().
 **Missing required parameter:**
 
 ```
-Parameter 'load' is required (no default declared) but was not provided in data.
-Add 'load' to the data= argument, or declare a default under 'parameters.load.default'.
+Parameter 'load' is required but was not provided in data.
+Add 'load' to the data= argument.
 ```
 
 **Parameter with unexpected dims:**
@@ -819,20 +810,21 @@ m.dataset["load"]     # xr.DataArray indexed over snapshot
 
 ## 11. Open Questions
 
-**Q1: Package name.**
-Current candidates: `linopy-math`, `linopy-yaml`, `linopy-declarative`. The name affects discoverability and signals intent. `linopy-math` is closest to Calliope's terminology (which inspired this design) and clearest about what the package adds.
+### Resolved
 
-**Q2: Sub-expressions.**
-Calliope supports `sub_expressions` in constraints — named intermediate expressions that can be reused across equations. Excluded from v1 to keep the parser scope manageable, but worth considering for v2.
+**Q1: Package name.** → `linopy-yaml` (Python import: `linopy_yaml`).
+
+**Q2: Sub-expressions.** → Deferred to v2. Not needed for v1.
+
+**Q4: `bounds` as full expressions.** → Deferred. Interactions with linopy's internals make this complex.
+
+**Q5: Where string dimension comparisons.** → Implemented. The where parser checks dimension names when a name is not found as a parameter.
+
+**Q6: Validation strictness.** → Unknown data keys raise an error. The YAML is the source of truth.
+
+**Q7: Parameter defaults.** → Removed. Every parameter must be provided in `data=`. Keeps the loader simple and explicit.
+
+### Open
 
 **Q3: Array slicing syntax.**
 Calliope supports `p[generator_bus=bus]` — selecting a subset of an array along a dimension. This is needed for network models where a generator is "at" a bus. Probably needed before this package is useful for PyPSA-style models.
-
-**Q4: `bounds` as full expressions.**
-Currently `bounds.lower` and `bounds.upper` accept only a number or a parameter name. Supporting full arithmetic expressions (`lower: p_min * 0.9`) would make the schema more consistent. Low-risk addition, could be in v1.
-
-**Q5: Where string dimension comparisons.**
-`where: "snapshot > 0"` compares a dimension coordinate to a literal. This is useful but requires the where parser to know which names are dimensions (not parameters). Currently `snapshot` would not be found in the parameter dataset and would return False. Needs a dedicated code path for dimension-coordinate comparisons.
-
-**Q6: Validation strictness.**
-Should providing `data=` for a parameter not declared in the YAML be a warning or an error? Currently it's a warning. An error would be stricter (the YAML is the source of truth) but might be annoying in workflows where the same data dict is reused across models.

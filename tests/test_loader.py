@@ -80,15 +80,6 @@ class TestLoadParameters:
         ds = load_parameters(s, {"a": da}, mc)
         assert float(ds["a"].sel(x=1)) == 20.0
 
-    def test_default_fills_scalar(self):
-        s = _schema(
-            dims={"x": {"values": [1]}},
-            params={"a": {"dims": ["x"], "default": 42}},
-        )
-        mc = build_master_coords(s, None)
-        ds = load_parameters(s, {}, mc)
-        assert float(ds["a"].sel(x=1)) == 42.0
-
     def test_missing_required_raises(self):
         s = _schema(
             dims={"x": {"values": [1]}},
@@ -98,10 +89,10 @@ class TestLoadParameters:
         with pytest.raises(ValueError, match="required"):
             load_parameters(s, {}, mc)
 
-    def test_unknown_keys_warn(self):
+    def test_unknown_keys_raises(self):
         s = _schema(dims={"x": {"values": [1]}})
         mc = build_master_coords(s, None)
-        with pytest.warns(UserWarning, match="not declared"):
+        with pytest.raises(ValueError, match="not declared"):
             load_parameters(s, {"extra": 1}, mc)
 
     def test_unexpected_dims_raises(self):

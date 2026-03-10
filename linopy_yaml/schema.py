@@ -24,10 +24,9 @@ class DimensionDef(BaseModel):
 
 
 class ParameterDef(BaseModel):
-    """A declared parameter with dims, default, and dtype."""
+    """A declared parameter with dims and dtype."""
 
     dims: list[str]
-    default: Any = None
     dtype: str = "float"
 
     @field_validator("dtype")
