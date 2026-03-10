@@ -58,7 +58,7 @@ m = Model.from_yaml("model.yaml", data={...}, coords={...})
 m.yaml.schema    # MathSchema (parsed YAML)
 m.yaml.dataset   # xr.Dataset (loaded parameters)
 m.yaml.coords    # dict[str, pd.Index] (master coordinates)
-m.yaml.add(...)  # extend with another YAML file
+m.yaml.extend(...)  # extend with another YAML file
 ```
 
 ## Development Guidelines

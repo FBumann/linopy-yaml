@@ -119,7 +119,7 @@ linopy.Model                      (unchanged — all solving, variable/constrain
          ├── .schema              (the parsed MathSchema)
          ├── .dataset             (xr.Dataset of loaded parameters)
          ├── .coords              (master coordinate dict)
-         └── .add()               (extend with another YAML file)
+         └── .extend()               (extend with another YAML file)
 ```
 
 ### Why a separate package?
@@ -767,7 +767,7 @@ Available on models built via `Model.from_yaml()`. Raises `AttributeError` with 
 m.yaml.schema      # MathSchema — the parsed YAML definition
 m.yaml.dataset     # xr.Dataset — all loaded parameters
 m.yaml.coords      # dict[str, pd.Index] — master coordinates
-m.yaml.add(path, data=...)  # extend with another YAML file
+m.yaml.extend(path, data=...)  # extend with another YAML file
 ```
 
 **`model.yaml.schema`** — Programmatic access to the YAML definition:
@@ -784,7 +784,7 @@ m.yaml.dataset["p_max"]    # xr.DataArray indexed over generator
 m.yaml.dataset["load"]     # xr.DataArray indexed over snapshot
 ```
 
-**`model.yaml.add(path, data=...)`** — Add variables, constraints, and/or objectives from a second YAML file. The second YAML may reference dimensions and parameters already loaded. New parameters can be provided via `data=`.
+**`model.yaml.extend(path, data=...)`** — Add variables, constraints, and/or objectives from a second YAML file. The second YAML may reference dimensions and parameters already loaded. New parameters can be provided via `data=`.
 
 ### 9.3 `@linopy_yaml.register(name)`
 

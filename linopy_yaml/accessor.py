@@ -77,7 +77,7 @@ class YamlAccessor:
         """The master coordinates for all declared dimensions."""
         return dict(self._coords)
 
-    def add(
+    def extend(
         self,
         path: str | Path,
         *,
