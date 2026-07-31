@@ -37,6 +37,8 @@ from lpspec.relational.result import Result
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    from polars._typing import MaintainOrderJoin
+
 
 #: The four frames a sink reads, as schemas. Stated here because the executor
 #: is what fills them and an empty model still has to have them.
@@ -113,7 +115,7 @@ class PolarsExecutor:
 
         self._cols = _stack(cols, _COLS)
         self._rows = _stack([r for r, _ in built], _ROWS)
-        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX)
+        self._matrix = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -185,6 +187,18 @@ class PolarsExecutor:
         The terminal aggregate is where duplicates from ``Sum`` and
         ``GroupSum`` — which project rather than aggregate — collapse, and it
         is skipped where nothing can (:func:`_needs_aggregate`).
+
+        **Either way the share leaves ordered by ``row``.** Every sink reads
+        the matrix a row range at a time, so one that is handed an unordered
+        matrix orders it — a second pass over a finished frame, and a second
+        copy of it while the solver's own model is resident. Ordering it here
+        happens inside the pipeline that is already materialising the rows.
+
+        A lone term gets the order from its *join*: the row frame is in label
+        order and ``maintain_order='left'`` keeps it, for less than sorting the
+        result costs. Several terms are several ordered runs stacked, and runs
+        are not an order, so those sort — which is why only the lone term asks
+        the join for anything, a stack having paid for the order regardless.
         """
 
         lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs")
@@ -228,8 +242,13 @@ class PolarsExecutor:
             return rows, None
 
         pieces = []
+        carried_order: MaintainOrderJoin | None = 'left' if len(terms) == 1 else None
         for p, sign in terms:
-            placed = frame.join(p.frame, on=list(p.dims), how='inner') if p.dims else frame.join(p.frame, how='cross')
+            placed = (
+                frame.join(p.frame, on=list(p.dims), how='inner', maintain_order=carried_order)
+                if p.dims
+                else frame.join(p.frame, how='cross')
+            )
             pieces.append(
                 placed.select(
                     'row',
@@ -239,7 +258,8 @@ class PolarsExecutor:
             )
         stacked = pl.concat(pieces)
         if not _needs_aggregate([fragment for fragment, _ in terms], self._q.may_share_a_column):
-            matrix = stacked.collect(engine='streaming')
+            ordered = stacked if len(pieces) == 1 else stacked.sort('row')
+            matrix = ordered.collect(engine='streaming')
             self._check_no_undefined_divisor(f"constraint '{c.name}'", matrix, c.lhs, c.rhs)
             return rows, matrix
 
@@ -540,6 +560,25 @@ def _needs_aggregate(
     if any(not t.survives_dropping(set(t.dims) if projected else set()) for t in terms):
         return True
     return any(may_share(a, b) for i, a in enumerate(terms) for b in terms[i + 1 :])
+
+
+def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
+    """*matrix* with ``row`` known to ascend — checked, not assumed.
+
+    Every constraint orders its own share and they are stacked in declaration
+    order, which is ascending row ranges, so the concatenation is ordered by
+    construction. polars cannot see that through a ``concat``, and a sink that
+    finds the flag missing orders the whole matrix again.
+
+    So the claim is verified and then stated. ``is_sorted`` is a linear scan
+    over a column the frame already holds; the sort behind it is the
+    correctness floor and is expected never to run.
+    """
+    if not matrix.height:
+        return matrix
+    if not matrix['row'].is_sorted():
+        return matrix.sort('row')
+    return matrix.with_columns(pl.col('row').set_sorted())
 
 
 def _has_repeated_entry(matrix: pl.DataFrame) -> bool:
