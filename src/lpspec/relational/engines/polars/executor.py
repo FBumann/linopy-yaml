@@ -35,7 +35,7 @@ from lpspec.relational.engines.polars.labels import Labeller
 from lpspec.relational.result import Result
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
 
 #: The four frames a sink reads, as schemas. Stated here because the executor
@@ -238,7 +238,7 @@ class PolarsExecutor:
                 )
             )
         stacked = pl.concat(pieces)
-        if not _needs_aggregate([fragment for fragment, _ in terms]):
+        if not _needs_aggregate([fragment for fragment, _ in terms], self._q.may_share_a_column):
             matrix = stacked.collect(engine='streaming')
             self._check_no_undefined_divisor(f"constraint '{c.name}'", matrix, c.lhs, c.rhs)
             return rows, matrix
@@ -282,7 +282,7 @@ class PolarsExecutor:
             return None
         pieces = [p.frame.select(pl.col('var_label').alias('col'), pl.col('coeff')) for p in comp.terms]
         stacked = pl.concat(pieces)
-        if _needs_aggregate(comp.terms, projected=True):
+        if _needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
             stacked = stacked.group_by('col').agg(pl.col('coeff').sum())
         return stacked.collect(engine='streaming')
 
@@ -489,7 +489,12 @@ def _spanning(solver: str, quantity: str, values: pl.Series | None, expected: in
         )
 
 
-def _needs_aggregate(terms: Sequence[TermFragment], *, projected: bool = False) -> bool:
+def _needs_aggregate(
+    terms: Sequence[TermFragment],
+    may_share: Callable[[TermFragment, TermFragment], bool],
+    *,
+    projected: bool = False,
+) -> bool:
     """Whether stacking *terms* can put two rows on one solver column.
 
     Named for the answer, not the condition: an inverted test here is a wrong
@@ -498,10 +503,14 @@ def _needs_aggregate(terms: Sequence[TermFragment], *, projected: bool = False) 
     Two things can put a label twice into the stack, and they are asked
     separately. A single fragment that is not
     :attr:`~lpspec.relational.engines.polars.compiler.TermFragment.keyed`
-    already holds one twice on its own. Two fragments collide only if they
-    carry the *same* variable — ``x + 2 * x`` is one row each and one column —
-    because labels are dense and assigned a declaration at a time, so distinct
-    variables cannot reach a shared one however either fragment was reshaped.
+    already holds one twice on its own. Whether a *pair* can is *may_share*,
+    which answers no for distinct variables — ``x + 2 * x`` is one column and
+    ``x + y`` is two, because labels are dense and assigned a declaration at a
+    time — and then asks whether two fragments of one variable send some label
+    to one **row**. For the network shape,
+    ``group_sum(f, by=to) - group_sum(f, by=from)``, that happens only where a
+    line's two ends are one bus. See
+    :meth:`~lpspec.relational.engines.polars.compiler.PolarsCompiler.may_share_a_column`.
 
     That second half is what makes the ordinary multi-term constraint free.
     ``reserve_up + reserve_down <= p_max`` stacks two fragments, and reading
@@ -530,8 +539,7 @@ def _needs_aggregate(terms: Sequence[TermFragment], *, projected: bool = False) 
     """
     if any(not t.survives_dropping(set(t.dims) if projected else set()) for t in terms):
         return True
-    carried = [t.variable for t in terms]
-    return len(set(carried)) != len(carried)
+    return any(may_share(a, b) for i, a in enumerate(terms) for b in terms[i + 1 :])
 
 
 def _has_repeated_entry(matrix: pl.DataFrame) -> bool:
