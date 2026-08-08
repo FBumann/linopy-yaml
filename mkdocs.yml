@@ -46,6 +46,7 @@ nav:
           - storage: models/storage.md
           - transport: models/transport.md
           - piecewise: models/piecewise.md
+          - monthly budget: models/monthly_budget.md
           - walkthrough: models/walkthrough.md
       - The PyPSA ladder:
           - rung 1 — transport: models/pypsa_transport.md
