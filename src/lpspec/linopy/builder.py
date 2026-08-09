@@ -360,6 +360,12 @@ def _eval_ast(
             raise NameError(unknown_helper_message(node.name))
         helper = _HELPERS[node.name]
         args = [_eval_ast(a, ctx) for a in node.args]
+        if node.name == 'at':
+            # same lookup as group_sum for the same reason: the coordinate
+            # lives on the dimension rather than in the parameter dataset
+            by = node.kwargs['by']
+            assert isinstance(by, CoordinateNode)
+            return _helper_at(args[0], _coordinate_array(by, ctx), into=by.into)
         if node.name == 'group_sum':
             # the coordinate lives on the dimension, not in the parameter
             # dataset, so it is looked up here rather than evaluated as an
@@ -454,6 +460,39 @@ def _helper_group_sum(array: Any, mapping: Any, *, into: str) -> Any:
     raise _unsupported('group_sum()', array)
 
 
+def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
+    """Read *array* through a declared coordinate — the adjoint of a group.
+
+    Usage in YAML: ``at(on, over=flow, by=component)``
+
+    *mapping* is the same one-dimensional array ``group_sum`` takes: the
+    coordinate's values over the dim carrying it (``flow`` -> component labels).
+    Grouping sums *along* it; this indexes *through* it, so the operand must
+    carry ``into`` and the result carries the mapping's own dim instead.
+
+    That is xarray's vectorised selection, which is the pullback exactly: one
+    ``into`` label is read once per fine label pointing at it, so the fan-out
+    is the indexer's doing rather than a broadcast we arrange.
+    """
+    if not isinstance(mapping, xr.DataArray):
+        msg = f'at() coordinate must be an array (got {type(mapping).__name__}). Usage: at(expr, over=dim, by=coord)'
+        raise TypeError(msg)
+    if mapping.ndim != 1:
+        msg = f'at() mapping must have exactly one dimension, got {list(mapping.dims)}'
+        raise LanguageError(msg)
+
+    # A null coordinate says this fine label belongs to no coarse one, so it
+    # reads nothing and its row is absent — the same reading group_sum gives a
+    # null group, and the relational lane gets it free from an inner join.
+    present = mapping.notnull()
+    if not bool(present.all()):
+        dim = str(mapping.dims[0])
+        mapping = mapping.isel({dim: present.to_numpy()})
+    if isinstance(array, xr.DataArray) or hasattr(array, 'sel'):
+        return array.sel({into: mapping.rename(into)})
+    raise _unsupported('at()', array)
+
+
 def _unsupported(call: str, array: Any) -> TypeError:
     """One wording for an operand shape a helper cannot take.
 
@@ -513,6 +552,7 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
 #: that would make the differential tests a comparison of dialects.
 _HELPERS: dict[str, Callable[..., Any]] = {
     'sum': _helper_sum,
+    'at': _helper_at,
     'group_sum': _helper_group_sum,
     'shift': _helper_shift,
 }

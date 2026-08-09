@@ -1,0 +1,56 @@
+# Multi-period investment on a *flat* snapshot index.
+#
+# `snapshot` is one dimension carrying `period` as a coordinate, rather than a
+# `period x snapshot` rectangle. That is what lets the periods be **ragged** —
+# four snapshots in 2030 and two in 2050 here — because a coordinate is a
+# per-row column and nothing assumes every period has the same shape. A
+# rectangle cannot say it: it forces one resolution on every period.
+#
+# The line that needs `at()` is `within_cap`. Capacity is decided per period and
+# binds at every snapshot in that period, so a coarse-dim *variable* has to be
+# read at a fine-dim row. A per-period *parameter* could be pre-joined in data
+# prep; a variable cannot, which is why this model had no formulation before.
+dimensions:
+  snapshot:
+    dtype: int
+    coords: [period]
+  period:
+    dtype: int
+  generator:
+    dtype: str
+
+parameters:
+  load:
+    dims: [snapshot]
+  # what one snapshot stands for: a 2050 snapshot represents four hours, so the
+  # operating cost of a coarse period is not understated against a fine one
+  weight:
+    dims: [snapshot]
+  opex:
+    dims: [generator]
+  capex:
+    dims: [generator, period]
+
+variables:
+  p:
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  p_nom:
+    foreach: [period, generator]
+    bounds:
+      lower: 0
+      upper: 100
+
+constraints:
+  within_cap:
+    foreach: [snapshot, generator]
+    expression: p <= at(p_nom, over=snapshot, by=period)
+  balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+
+objectives:
+  total_cost:
+    sense: minimize
+    expression: p * opex * weight + p_nom * capex

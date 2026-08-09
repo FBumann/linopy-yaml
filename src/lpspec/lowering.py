@@ -232,6 +232,21 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
                 into=by_node.into,
             )
 
+        if node.name == 'at':
+            over_node = node.kwargs['over']
+            by_node = node.kwargs['by']
+            if not isinstance(over_node, DimensionNode):
+                raise LanguageError(f'{context}: at(over=...) must name a dimension')
+            if not isinstance(by_node, CoordinateNode):
+                raise LanguageError(f'{context}: at(by=...) must name a coordinate')
+            _check_dim_rules(node, schema, context)
+            return plan.At(
+                _lower_expr(node.args[0], schema, context),
+                over=over_node.name,
+                coordinate=by_node.name,
+                into=by_node.into,
+            )
+
         if node.name == 'shift':
             over_node = node.kwargs['over']
             if not isinstance(over_node, DimensionNode):

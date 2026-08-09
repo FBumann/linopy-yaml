@@ -408,6 +408,8 @@ class PolarsCompiler:
             if isinstance(e, plan.GroupSum):
                 inner = _propagate_absence(ev(e.operand))
                 return _map_fragments(inner, lambda p: self._group_fragment(p, e, context))
+            if isinstance(e, plan.At):
+                return _map_fragments(ev(e.operand), lambda p: self._at_fragment(p, e, context))
             if isinstance(e, plan.Translate):
                 return _map_fragments(ev(e.operand), lambda p: self._translate_fragment(p, e, context))
             raise LanguageError(f'unsupported expression node {type(e).__name__} in {context}')
@@ -546,6 +548,40 @@ class PolarsCompiler:
         # it, which is why this constructs rather than `replace`s — see _sum_fragment
         return TermFragment(
             (*keep, g.into), frame, p.is_term, keyed, _relabel(p.label_dims, g.over, g.into), variable=p.variable
+        )
+
+    def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
+        """Spread ``into`` back out over ``over`` — the adjoint of a group.
+
+        The same mapping table as :meth:`_group_fragment`, joined on the other
+        column. Grouping reads one row per ``over`` label and lands it on one
+        ``into``; this reads one row per ``into`` and lands it on *every*
+        ``over`` sharing it, so the join **fans out**. That is the fan-out a
+        group pays in reverse, and it is still one equi-join against a mapping
+        table the frame already holds — pointwise, so the locality class does
+        not move.
+
+        **The key claim has to weaken, and that is the whole difference.** A
+        group merges labels; a pullback *duplicates* one — the same
+        ``var_label`` now appears at every fine coordinate of its component. So
+        the label no longer spans a dim the frame carries, and any later
+        reduction can bring two copies into one row. ``keyed=False`` is what
+        makes the terminal aggregate run and add them, rather than the frame
+        silently holding a cell twice.
+        """
+
+        if a.into not in p.dims:
+            raise LanguageError(f"in {context}: At through '{a.into}' but the expression has dims {list(p.dims)}")
+        keep = tuple(x for x in p.dims if x != a.into)
+        mapping = self.dimensions[a.over].select(pl.col('val').alias(a.over), pl.col(a.coordinate).alias(a.into))
+        frame = p.frame.join(mapping, on=a.into, how='inner').select(*keep, a.over, *p.carried)
+        return TermFragment(
+            (*keep, a.over),
+            frame,
+            p.is_term,
+            keyed=False,
+            label_dims=p.label_dims - {a.into},
+            variable=p.variable,
         )
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:

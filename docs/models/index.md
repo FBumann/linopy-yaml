@@ -43,6 +43,7 @@ drift from what the engine builds.
 |---|---|---|---|---|---|---|---|---|---|
 | [dispatch](dispatch.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · |
 | [monthly_budget](monthly_budget.md) | · | **✓** | **✓** | · | · | · | **✓** | · | · |
+| [multi_period](multi_period.md) | · | **✓** | · | · | · | · | **✓** | · | · |
 | [piecewise](piecewise.md) | · | **✓** | · | · | · | · | **✓** | **✓** | · |
 | [storage](storage.md) | · | **✓** | · | · | **✓** | · | **✓** | · | · |
 | [transport](transport.md) | · | · | **✓** | · | · | · | **✓** | · | · |

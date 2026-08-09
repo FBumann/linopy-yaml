@@ -75,6 +75,12 @@ BUILTINS: dict[str, Builtin] = {
         dimension_kwargs=('over',),
         coordinate_kwargs=('by',),
     ),
+    'at': Builtin(
+        1,
+        'at(<expr>, over=<dim>, by=<coord>)',
+        dimension_kwargs=('over',),
+        coordinate_kwargs=('by',),
+    ),
     'shift': Builtin(
         1,
         'shift(<expr>, over=<dim>, by=<n>[, edge=wrap|<number>])',
