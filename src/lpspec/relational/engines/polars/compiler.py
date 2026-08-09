@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import LanguageError
+from lpspec.errors import LanguageError, LpspecError
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
@@ -433,18 +433,26 @@ class PolarsCompiler:
         if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
             return None
 
-        expected = math.prod(self.dimension_cardinality[d] for d in v.dims)
+        cards = [self.dimension_cardinality[d] for d in v.dims]
+        expected = math.prod(cards)
         table = self.parameters[param]
         if table.select(pl.len()).collect().item() != expected:
             return None
 
-        # Collected rather than concatenated horizontally, which would keep the
-        # whole thing lazy and measured a little faster: polars deprecates that
-        # concat's height-padding today and will require equal heights — which
-        # is exactly the precondition checked above — so the natural spelling is
-        # the one that warns until that release lands.
-        ordered = table.sort([pl.col(d).replace_strict(self._ordinals(d), return_dtype=pl.Int64) for d in v.dims])
-        return frame.with_columns(ordered.select(pl.col('value').alias(alias)).collect(engine='streaming')[alias])
+        stride = 1
+        strides: list[int] = []
+        for card in reversed(cards):
+            strides.insert(0, stride)
+            stride *= card
+        position = sum(
+            (
+                pl.col(d).replace_strict(self._ordinals(d), return_dtype=pl.Int64) * step
+                for d, step in zip(v.dims, strides, strict=True)
+            ),
+            start=pl.lit(0, dtype=pl.Int64),
+        )
+        pairs = table.select(position.alias('__at__'), pl.col('value')).collect(engine='streaming')
+        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs['value'], expected)))
 
     def _ordinals(self, dim: str) -> dict[Any, int]:
         """Each coordinate of *dim* to its position in that dimension's index.
@@ -1030,3 +1038,19 @@ def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = Fa
     # may be wider than `a.dims`, which is why the presence key travels with the
     # frame rather than being re-derived from dims here (#345).
     return replace(a, dims=out_dims, frame=frame, is_term=is_term, keyed=a.keyed and c.keyed)
+
+
+def _scattered(at: pl.Series, values: pl.Series, size: int) -> Any:
+    """*values* moved to the positions *at* names, one pass, order checked."""
+    import numpy as np
+
+    indices = at.to_numpy()
+    written = np.zeros(size, dtype=bool)
+    written[indices] = True
+    if not written.all():
+        msg = 'a parameter passed the density gate but does not cover the coordinate product'
+        raise LpspecError(msg)
+
+    out = np.empty(size, dtype=np.float64)
+    out[indices] = values.to_numpy()
+    return out
