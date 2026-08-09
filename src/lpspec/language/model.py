@@ -11,6 +11,7 @@ file *declares*, before ``plan.Program`` (what it lowers to) and an executor
 
 from __future__ import annotations
 
+import math
 from importlib import metadata
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -329,7 +330,7 @@ SUPPORTED_VERSIONS: tuple[int, ...] = (0,)
 
 
 def _without_absence(value: Any) -> Any:
-    """Strip what is absent — a null, or a mapping declaring nothing.
+    """Strip what is absent — a null, an infinite bound, or a mapping declaring nothing.
 
     An empty **list** is kept, because in this schema a list carries
     *cardinality* and zero is one of its values: ``foreach: []`` is a scalar
@@ -342,8 +343,23 @@ def _without_absence(value: Any) -> Any:
     """
     if isinstance(value, dict):
         pruned = {k: _without_absence(v) for k, v in value.items()}
-        return {k: v for k, v in pruned.items() if v is not None and v != {}}
+        return {k: v for k, v in pruned.items() if not _is_absent(v)}
     return value
+
+
+def _is_absent(value: Any) -> bool:
+    """Whether a serialised value says *nothing is here*.
+
+    ``inf`` is included because an infinite bound is not a bound — it is the
+    unbounded side, which is what omitting the bound already means. Stripping
+    it is what makes JSON lossless as well: JSON has no infinity, so anything
+    that reached ``model_dump_json`` as ``inf`` came back as ``null`` and read
+    as absent anyway. Removing it here means the two agree instead of one being
+    quietly wrong.
+    """
+    if value is None or value == {}:
+        return True
+    return isinstance(value, float) and math.isinf(value)
 
 
 class Model(_StrictBlock):

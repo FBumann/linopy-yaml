@@ -144,24 +144,26 @@ def test_absence_is_dropped_and_values_are_kept():
         assert stated in text, f'{stated!r} is a value and should be written'
 
 
-def test_json_is_lossy_and_yaml_is_not():
-    """`model_dump_json` cannot carry an unbounded bound, and YAML can.
+def test_json_carries_a_model_too():
+    """`model_dump_json` round-trips, because nothing infinite survives to it.
 
-    JSON has no infinity, so pydantic writes `null` where a bound is `-inf` —
-    which reads as *absent* rather than *unbounded*. That is not a bug to fix
-    here, it is the format, and it is why `to_yaml` is the review form: YAML
-    spells it `-.inf` and reads it back.
-
-    Held as a test so nobody reaches for `model_dump_json` expecting the round
-    trip the other forms give.
+    JSON has no infinity, so an unbounded `-inf` bound used to come back as
+    `null` and read as *absent*. It is absent — that is what an infinite bound
+    means — so the serializer drops it and the two agree instead of one being
+    quietly wrong. Held here because the fix is easy to undo by "restoring" a
+    bound that was never information.
     """
     model = lps.load_model(
         {
             'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
-            'variables': {'x': {'foreach': ['t']}},
-            'objectives': {'o': {'sense': 'minimize', 'expression': 'x'}},
+            'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0}}, 'y': {'foreach': ['t']}},
+            'objectives': {'o': {'sense': 'minimize', 'expression': 'x + y'}},
         }
     )
-    assert model.to_dict()['variables']['x']['bounds']['lower'] == float('-inf')
-    assert json.loads(model.model_dump_json())['variables']['x']['bounds']['lower'] is None
-    assert pyyaml.safe_load(model.to_yaml())['variables']['x']['bounds']['lower'] == float('-inf')
+    assert json.loads(model.model_dump_json()) == model.to_dict()
+    assert lps.load_model(json.loads(model.model_dump_json())).to_dict() == model.to_dict()
+
+    out = model.to_dict()['variables']
+    assert out['x']['bounds'] == {'lower': 0.0}, 'a real bound stays, its infinite partner does not'
+    assert 'bounds' not in out['y'], 'unbounded on both sides is no bounds block at all'
+    assert lps.load_model(model.to_dict()).variables['y'].bounds.lower == float('-inf')

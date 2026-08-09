@@ -61,18 +61,22 @@ both forms over every example and every port, holds that the two forms match,
 and holds that dumping twice gives the same bytes, since a review copy that
 changes per run is a diff nobody can read.
 
-**Every value is written; only what is absent is dropped** — a null, or a
-mapping that declares nothing. One mechanical rule, on purpose: omitting
+**Every value is written; only what is absent is dropped** — a null, an
+infinite bound, or a mapping that declares nothing. One mechanical rule, on purpose: omitting
 *defaults* reads better but needs a list of which ones are consequential, and
 that list is a second copy of the schema. An empty **list** stays, because a
 list carries cardinality here and zero is one of its values — `foreach: []` is
 a scalar declaration.
 
-The rule lives on the model's **serializer**, so pydantic's own `model_dump`
-carries it too rather than disagreeing with the file. `model_dump_json` is the
-one form that cannot: JSON has no infinity, so an unbounded `-inf` bound
-becomes `null` — which reads as *absent* rather than *unbounded*. YAML spells
-it `-.inf` and reads it back, which is why `to_yaml` is the review form.
+An infinite bound is in that list because it is not a bound — it is the
+unbounded side, which is exactly what omitting the bound already means. That
+also makes JSON lossless: JSON has no infinity, so anything reaching
+`model_dump_json` as `inf` came back as `null` and read as absent regardless.
+
+The rule lives on the model's **serializer**, so `model_dump`, `model_dump_json`,
+`to_dict` and `to_yaml` all give the same content — a helper beside them would
+have left pydantic's own methods describing the model differently from the
+file.
 
 **Which solver is a caller's choice, not the file's.** `solver_name` is
 `highs` (ships with the package) or `gurobi` (needs the `[gurobi]` extra), and
