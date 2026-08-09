@@ -236,7 +236,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     ---
 
-    Five ideas — dimensions, absence, topology, `roll`, the dim algebra — each
+    Five ideas — dimensions, absence, topology, `shift`, the dim algebra — each
     shown in a model that runs, and what the language will *not* do.
 
     [:octicons-arrow-right-24: The guide](guide.md)
