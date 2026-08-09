@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.66](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.65...v0.0.1-alpha.66) (2026-08-09)
+
+
+### Documentation
+
+* **roadmap:** motivation and end state; the detail moves to issues ([#474](https://github.com/FBumann/lpspec/issues/474)) ([ebff8b0](https://github.com/FBumann/lpspec/commit/ebff8b0eb7f5aec9eff32d8faca2d1bdf27a4484))
+
 ## [0.0.1-alpha.65](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.64...v0.0.1-alpha.65) (2026-08-09)
 
 
