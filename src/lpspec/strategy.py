@@ -30,13 +30,15 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import polars as pl
 
-from lpspec.api import load_schema
+from lpspec.api import check
 from lpspec.api import solve as _solve
 from lpspec.errors import DataError, LpspecError
 from lpspec.relational.frames import as_frame
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+    from lpspec.language.schema import MathSchema
 
 #: Parquet rather than pickle, and not a knob: measured over 1M rows, zstd is
 #: 8.3x smaller *and* 3x faster than pickling the frame, and still smaller and
@@ -276,17 +278,26 @@ def solve_over(
         with ProcessPoolExecutor(4, mp_context=ctx) as pool:
             runs = lps.solve_over(model, sources, axis, keep=('p',), executor=pool)
     """
+    keep = tuple(keep)
     if carry and executor is not None:
         raise LpspecError(
             'carry and executor are mutually exclusive: a carried value makes slice i+1 depend on '
             "slice i's answer, so the slices cannot run concurrently. Drop the executor, or drop the carry."
         )
+    if isinstance(axis, (EachCoordinate, EachWindow)) and carry and not axis.ordered:
+        raise LpspecError(
+            f'carry needs an ordered axis: {axis!r} has no defined "next" slice for a value to move into. '
+            f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
+        )
+    # Everything above and below this line is answerable from the declarations
+    # and the keywords, so it is answered before a single source is read — a
+    # mistyped carry should not cost a scan of every parquet file first. The
+    # schema then rides down to the slices already parsed, rather than each of
+    # them (and each worker) reading the same YAML again.
+    schema = check(model)
+    plan: dict[str, tuple[str, str | None, int | None]] = _carry_plan(schema, carry, keep) if carry else {}
+
     if isinstance(axis, (EachCoordinate, EachWindow)):
-        if carry and not axis.ordered:
-            raise LpspecError(
-                f'carry needs an ordered axis: {axis!r} has no defined "next" slice for a value to move into. '
-                f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
-            )
         cuts = axis._slices(sources)
         # a window is keyed by where it *starts*, and its rows are indexed by
         # `into` — so the key column cannot be `dim`, which the slice dropped.
@@ -298,7 +309,6 @@ def solve_over(
     if not cuts:
         raise DataError('the axis produced no slices')
 
-    keep = tuple(keep)
     # the caller's own coords are merged under the axis's, which owns the dim it
     # re-indexed; popped once rather than per slice, so the loop stays pure
     caller_coords = dict(build_kwargs.pop('coords', None) or {})
@@ -313,7 +323,7 @@ def solve_over(
 
     def arguments(sliced: dict[str, Any], coords: dict[str, Any], crosses: bool) -> tuple[Any, ...]:
         return (
-            model,
+            schema,
             _encode(sliced, memo, workers_share_fs=shared) if crosses else dict(sliced),
             {**caller_coords, **coords} or None,
             keep,
@@ -327,7 +337,6 @@ def solve_over(
             primals[name].append(frame.select(pl.lit(key).alias(key_name), pl.all()))
 
     if executor is None:
-        plan: dict[str, tuple[str, str | None, int | None]] = _carry_plan(model, carry, keep) if carry else {}
         state: dict[str, Any] = {}
         for key, sliced, coords in cuts:
             meta, frames = _run_slice(*arguments({**sliced, **state}, coords, False))
@@ -380,7 +389,7 @@ def _run_slice(
 
 
 def _carry_plan(
-    model: Any,
+    schema: MathSchema,
     carry: Mapping[str, tuple[str, int | None]],
     keep: tuple[str, ...],
 ) -> dict[str, tuple[str, str | None, int | None]]:
@@ -392,16 +401,16 @@ def _carry_plan(
     passes through, which is what lets a myopic pathway hand a whole capacity
     vector forward rather than one number at a time.
 
-    Resolved once, from the declaration alone, so a carry that cannot work is a
-    call-time error rather than something found after slice one has solved.
+    **Nothing here reads data**, which is why it runs before the axis cuts one.
+    Every question is answered by the YAML and the keywords, so a carry that
+    cannot work costs a parse rather than a scan of every source.
     """
-    schema = load_schema(model)
     plan: dict[str, tuple[str, str | None, int | None]] = {}
     for parameter, (variable, index) in carry.items():
         if parameter not in schema.parameters:
-            raise LpspecError(f'carry writes parameter {parameter!r}, which {_named(model)} does not declare')
+            raise LpspecError(f'carry writes parameter {parameter!r}, which the model does not declare')
         if variable not in schema.variables:
-            raise LpspecError(f'carry reads variable {variable!r}, which {_named(model)} does not declare')
+            raise LpspecError(f'carry reads variable {variable!r}, which the model does not declare')
         if variable not in keep:
             raise LpspecError(
                 f'carry reads variable {variable!r}, which this run did not keep. '
@@ -435,10 +444,6 @@ def _carry_plan(
             )
         plan[parameter] = (variable, dropped[0] if dropped else None, index)
     return plan
-
-
-def _named(model: Any) -> str:
-    return f'{model}' if isinstance(model, (str, Path)) else 'the model'
 
 
 def _carried(

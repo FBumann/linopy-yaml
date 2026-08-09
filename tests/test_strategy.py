@@ -475,6 +475,38 @@ def test_a_carry_that_cannot_line_up_says_so_before_anything_solves():
         lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('nope', 3)}, keep=('soc',))
 
 
+def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
+    """ "Early" has to mean before the data, not merely before the solve.
+
+    Every question a carry raises is answered by the two declarations, so
+    answering it after the axis has scanned every parquet file to find its
+    coordinates makes a typo cost a pass over the whole dataset. The unreadable
+    path is the assertion: reaching it at all means the check ran too late.
+    """
+    missing = tmp_path / 'not-written-yet.parquet'
+    sources = {**horizon_sources(), 'load': str(missing)}
+
+    with pytest.raises(lps.LpspecError, match='does not declare'):
+        lps.solve_over(
+            WINDOW,
+            sources,
+            lps.EachWindow('snapshot', length=4, step=4, into='t'),
+            carry={'soc_initial': ('nope', 3)},
+            keep=('soc',),
+        )
+
+    # the same call with a sound carry does reach the sources, and says so
+    with pytest.raises(Exception, match='not-written-yet') as raised:
+        lps.solve_over(
+            WINDOW,
+            sources,
+            lps.EachWindow('snapshot', length=4, step=4, into='t'),
+            carry={'soc_initial': ('soc', 3)},
+            keep=('soc',),
+        )
+    assert not isinstance(raised.value, lps.LpspecError), 'the file, not the carry, is what failed'
+
+
 def test_a_carry_reading_an_unkept_variable_points_at_keep():
     with pytest.raises(lps.LpspecError, match='which this run did not keep'):
         lps.solve_over(
