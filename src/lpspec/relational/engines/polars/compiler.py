@@ -29,7 +29,7 @@ from lpspec.errors import LanguageError
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Mapping, Sequence
 
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
@@ -47,6 +47,12 @@ _ORD_OUT = '__ord out__'
 #: unit needs a column to exist in, and every path drops it by selecting the
 #: dims and the label instead.
 UNIT = '__unit__'
+
+#: The same trick for a *scalar* declaration's presence frame. It is distinct
+#: from :data:`UNIT` rather than reusing it because the two meet: the empty
+#: coordinate product already carries ``UNIT``, and the restriction below cross
+#: joins a presence into it.
+PRESENT = '__present__'
 
 
 @dataclass(frozen=True)
@@ -426,7 +432,7 @@ class PolarsCompiler:
         # costs `_label_frame` both of its arithmetic paths. Whether it is
         # needed is decided here, off the declaration, before any data is read.
         masked = self.program.variable(name).where is not None
-        presence = self.variables[name].select(*dims) if masked else None
+        presence = self._presence(name, dims) if masked else None
         # `presence_dims` is stated rather than left implied. It defaults to
         # None, meaning "keyed by dims" — but dims are rewritten downstream (a
         # product broadcasts, a sum drops) while this frame is not, so an
@@ -440,6 +446,23 @@ class PolarsCompiler:
             presence=presence,
             presence_dims=dims if masked else None,
         )
+
+    def _presence(self, name: str, dims: tuple[str, ...]) -> pl.LazyFrame:
+        """The coordinates a masked variable exists at.
+
+        A **scalar** declaration has none, and `select()` over no dims is the
+        empty frame polars cannot represent — so present and absent would become
+        indistinguishable at the moment presence is built, and the mask would
+        never reach the rows referencing it. The marker column carries the one
+        bit that is left: whether the row is there at all.
+        """
+        frame = self.variables[name]
+        if dims:
+            return frame.select(*dims)
+        # Renamed from a real column, never `pl.lit()`: a select of literals
+        # alone is length 1 whatever it selects from — there is no column to
+        # broadcast against — so an absent scalar would come back present.
+        return frame.select(pl.col('var_label').alias(PRESENT))
 
     def _product(self, a: CompiledExpression, b: CompiledExpression, context: str) -> CompiledExpression:
         """``a * b``, with the variable-carrying side normalised to the left."""
@@ -712,6 +735,20 @@ def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str) -
             return column >= literal
 
 
+def restrict_by_presence(frame: pl.LazyFrame, presence: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
+    """Keep only the rows of *frame* that *presence* admits.
+
+    Keyed by *on* this is a semi-join. A **scalar** declaration has no key to
+    join on — its presence is at most one row, saying only whether it exists —
+    so the question becomes a cross join instead: every row survives a present
+    scalar, and none survives an absent one, which is what makes absence spread
+    through arithmetic (SPEC §7) at no dimension.
+    """
+    if on:
+        return frame.join(presence.select(list(on)), on=list(on), how='semi')
+    return frame.join(presence.select(PRESENT), how='cross').drop(PRESENT)
+
+
 def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     """Restrict every fragment to where the *whole* expression exists.
 
@@ -759,7 +796,7 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
                 continue
             on = list(source.presence_dims or source.dims)
             if all(d in p.dims for d in on):
-                frame = frame.join(source.presence.select(on), on=on, how='semi')
+                frame = restrict_by_presence(frame, source.presence, on)
         return p if frame is p.frame else replace(p, frame=frame)
 
     return _map_fragments(compiled, restrict)

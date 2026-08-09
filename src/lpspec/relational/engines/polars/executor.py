@@ -581,10 +581,14 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str
     the presence frames are read — so it costs ``Labeller.frame`` both of its
     arithmetic paths. An unmasked variable's presence is its whole coordinate
     product and would remove nothing, so it never gets to impose that cost.
+
+    *Having* no dims is not *having nothing to restrict*: a masked scalar
+    variable restricts every row of every constraint that names it, all or
+    nothing. Reading the empty dims as "skip" is what let one through silently.
     """
     out: list[tuple[tuple[str, ...], pl.LazyFrame]] = []
     for p in terms:
-        if p.presence is None or not p.dims:
+        if p.presence is None:
             continue
         # `presence_dims` is narrower than `dims` for an acyclic shift, whose
         # vacated edge lies along one dimension and is silent about the rest.
