@@ -192,11 +192,11 @@ constraints:
   nodal_balance:
     foreach: [snapshot, bus]
     expression: >-
-      group_sum(p, over=generator, by=bus)
-      + group_sum(f, over=link, by=to)
-      - group_sum(f, over=link, by=from)
-      + group_sum(p_dispatch, over=storage, by=bus)
-      - group_sum(p_store, over=storage, by=bus)
+      sum(p, over=generator, group_by=bus)
+      + sum(f, over=link, group_by=to)
+      - sum(f, over=link, group_by=from)
+      + sum(p_dispatch, over=storage, group_by=bus)
+      - sum(p_store, over=storage, group_by=bus)
       == load
 
   ramp_up:
@@ -348,7 +348,7 @@ if __name__ == '__main__':
 ## What it exercises
 
 `shift` across a boundary condition, division of a variable by a parameter, and
-a five-term `group_sum` nodal balance — generators, both ends of every link,
+a five-term `sum` nodal balance — generators, both ends of every link,
 and both directions of storage, all projected onto `bus`.
 
 It also asks for [#31](https://github.com/FBumann/lpspec/issues/31) a third

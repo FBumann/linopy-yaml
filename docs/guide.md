@@ -54,13 +54,13 @@ dimensions:
 
 ```yaml
 - expression: >-
-    group_sum(p, over=generator, by=bus)
-    + group_sum(f, over=line, by=to)
-    - group_sum(f, over=line, by=from)
+    sum(p, over=generator, group_by=bus)
+    + sum(f, over=line, group_by=to)
+    - sum(f, over=line, group_by=from)
     == load
 ```
 
-`group_sum` sums along a coordinate, landing the result on the dimension that
+`sum` sums along a coordinate, landing the result on the dimension that
 coordinate points at. The same `f` is summed twice through two different
 coordinates — once as inflow, once as outflow.
 

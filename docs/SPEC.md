@@ -84,9 +84,9 @@ dimensions:
 The target must be a declared dimension, must not be the dimension carrying the
 coordinate, and a coordinate must not be named after a *different* dimension. A
 coordinate is single-valued per label, and its non-null values are checked
-against the target once data is bound (§8) — the check that makes `group_sum`
+against the target once data is bound (§8) — the check that makes `sum`
 safe. A **partial** coordinate is legal: null says the label belongs to no group
-(a generator on no bus, a line with one open end) and `group_sum` places its
+(a generator on no bus, a line with one open end) and `sum` places its
 terms nowhere, while an unknown *non-null* value is a typo and an error. A
 dimension declaring `coords` needs an index source carrying those columns; they
 are never inferred from the parameters that use the dimension, since inferring
@@ -278,7 +278,7 @@ name-checked, so **every node's dim set is computable before any data is bound**
 | `-x`, `+x` | `dims(x)` | |
 | `a + b`, `a * b`, `a / b` | `dims(a) ∪ dims(b)` | |
 | `sum(x, over=d)` | `dims(x) − {d}` | if `d ∉ dims(x)` |
-| `group_sum(x, over=d, by=c)` | `(dims(x) − {d}) ∪ {target(c)}` | unless `d ∈ dims(x)`, or `d` declares no coordinate `c` |
+| `sum(x, over=d, group_by=c)` | `(dims(x) − {d}) ∪ {target(c)}` | unless `d ∈ dims(x)`, or `d` declares no coordinate `c` |
 | `shift(x, over=d, by=n)` | `dims(x)` | if `d ∉ dims(x)` |
 
 Binary operators **union**: an outer product is legitimate when the frame
@@ -412,7 +412,7 @@ arguments are name-checked at load time:
 | Operator | Result | Notes |
 |---|---|---|
 | `sum(array, over=dim)` | `dim` collapses | `array` must carry `dim` |
-| `group_sum(array, over=dim, by=coord)` | `over` → the dimension `coord` targets | `coord` is declared on `over` (§2); its values are the group labels, checked against the target dimension at bind time. The membership sum that makes topology data rather than structure; groups with no members contribute nothing |
+| `sum(array, over=dim, group_by=coord)` | `over` → the dimension `coord` targets | `coord` is declared on `over` (§2); its values are the group labels, checked against the target dimension at bind time. The membership sum that makes topology data rather than structure; groups with no members contribute nothing |
 | `shift(array, over=dim, by=n)` | value at *t−n* | vacated positions are **absent**: they propagate and drop the row (§6) |
 | `shift(array, over=dim, by=n, edge=wrap)` | value at *t−n*, cyclic | coordinates fixed, values wrap; nothing is vacated |
 | `shift(array, over=dim, by=n, edge=v)` | value at *t−n* | vacated positions contribute the number **`v`** instead, and the row survives (`0` for a sum, `1` for a product) |

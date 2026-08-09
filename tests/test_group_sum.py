@@ -1,10 +1,10 @@
-"""group_sum: the transport YAML through both backends, and what coordinates buy.
+"""sum: the transport YAML through both backends, and what coordinates buy.
 
 Three-way differential on examples/transport.yaml:
-  1. eager lpspec_linopy.build + solve (group_sum via linopy groupby)
+  1. eager lpspec_linopy.build + solve (sum via linopy groupby)
   2. lowered Program -> PolarsExecutor -> the `highs` solver, plus the LP file
   3. hand-built indicator-matrix linopy model (an independent oracle that
-     involves no group_sum at all)
+     involves no sum at all)
 
 Plus ``examples/monthly_budget.yaml``, which is the same primitive over *time*:
 a coordinate on ``snapshot`` groups it into months exactly as a coordinate on
@@ -62,7 +62,7 @@ def test_transport_yaml_agrees_with_an_independent_oracle(transport_data):
     gens, lines, load = transport_data
     data, coords = _inputs(gens, lines, load)
 
-    # indicator matrices, no group_sum involved — an oracle for the oracle
+    # indicator matrices, no sum involved — an oracle for the oracle
     independent = transport_eager_objective(gens, lines, load)
     assert np.isfinite(independent)
 
@@ -83,7 +83,7 @@ def _flatten(expr):
     return [expr]
 
 
-def test_group_sum_lowers_to_one_node_per_injection_term():
+def test_sum_lowers_to_one_node_per_injection_term():
     program = lower_program(schema_of(TRANSPORT_YAML))
 
     (c,) = program.constraints
@@ -98,13 +98,13 @@ def test_group_sum_lowers_to_one_node_per_injection_term():
     [
         # an undeclared dim, or a coordinate the dim does not declare, is caught
         # in resolution before lowering ever sees the call
-        ('group_sum(p, over=nope, by=bus)', r'over=nope\) does not name a declared dimension'),
-        ('group_sum(p, over=generator, by=nope)', r"by=nope\) does not name a coordinate of 'generator'"),
+        ('sum(p, over=nope, group_by=bus)', r'over=nope\) does not name a declared dimension'),
+        ('sum(p, over=generator, group_by=nope)', r"by=nope\) does not name a coordinate of 'generator'"),
         # a coordinate declared on a *different* dim is not in scope either
-        ('group_sum(p, over=generator, by=to)', r"by=to\) does not name a coordinate of 'generator'"),
+        ('sum(p, over=generator, group_by=to)', r"by=to\) does not name a coordinate of 'generator'"),
     ],
 )
-def test_a_name_group_sum_cannot_resolve_is_refused(expression, match):
+def test_a_name_sum_cannot_resolve_is_refused(expression, match):
     with pytest.raises(LanguageError, match=match):
         resolved(expression, schema_of(TRANSPORT_YAML))
 
@@ -114,7 +114,7 @@ def test_grouping_an_expression_that_lacks_the_dim_is_refused():
     lowering raises it by asking `dimensions`, not by restating it."""
     schema = schema_of(TRANSPORT_YAML)
     with pytest.raises(LanguageError, match='but the expression'):
-        _lower_expr(resolved('group_sum(f, over=generator, by=bus)', schema), schema, 't')
+        _lower_expr(resolved('sum(f, over=generator, group_by=bus)', schema), schema, 't')
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ variables:
 constraints:
   meet:
     foreach: [g]
-    expression: group_sum(x, over=item, by=grp) >= target
+    expression: sum(x, over=item, group_by=grp) >= target
 objectives:
   obj:
     sense: minimize
@@ -236,7 +236,7 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
 
     Row absence is the language's idiom for "not present" everywhere else —
     an absent parameter row is a structural zero — and a coordinate is the one
-    place it used to be an error. `i2` belongs to no group, so `group_sum`
+    place it used to be an error. `i2` belongs to no group, so `sum`
     places its terms nowhere and only `i0`/`i1` can meet the target of 3.
     """
     path = tmp_path / 'partial.yaml'
@@ -265,7 +265,7 @@ BROADCAST_GROUP_SUM = {
     'constraints': {
         'cap': {
             'foreach': ['snapshot', 'bus'],
-            'expression': 'group_sum(x * w, over=generator, by=bus) <= limit',
+            'expression': 'sum(x * w, over=generator, group_by=bus) <= limit',
         }
     },
     'objectives': {'o': {'sense': 'maximize', 'expression': 'x'}},
@@ -282,10 +282,10 @@ BROADCAST_SOURCES = {
 }
 
 
-def test_group_sum_over_a_broadcast_dim_still_collapses_its_terms():
+def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     """The variable does not carry the grouped dim, so a group holds it twice.
 
-    `group_sum(x * w, over=generator, by=bus)` with `x` indexed by snapshot
+    `sum(x * w, over=generator, group_by=bus)` with `x` indexed by snapshot
     alone: `generator` reaches the fragment by broadcast from `w`, so two
     generators on one bus put the *same* `var_label` on one row. Nothing after
     this point can tell them apart — a solver handed a row with a column twice
@@ -305,14 +305,14 @@ def test_group_sum_over_a_broadcast_dim_still_collapses_its_terms():
     assert result.objective == pytest.approx(6.0)  # 3x <= 9 at b1, two snapshots
 
 
-def test_group_sum_over_a_foreach_dim_needs_no_such_collapse():
+def test_sum_over_a_foreach_dim_needs_no_such_collapse():
     """The counterpart: when the variable carries the grouped dim, each merged
     row has its own label and there is nothing to add."""
     model = override(
         BROADCAST_GROUP_SUM,
         **{
             'variables.x.foreach': ['snapshot', 'generator'],
-            'constraints.cap.expression': 'group_sum(x * w, over=generator, by=bus) <= limit',
+            'constraints.cap.expression': 'sum(x * w, over=generator, group_by=bus) <= limit',
         },
     )
     sources = dict(

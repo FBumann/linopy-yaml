@@ -236,7 +236,7 @@ def test_sum_over_an_absent_dim_scales_by_that_dims_cardinality():
     assert '3' in query(compiled.terms[0].frame)
 
 
-def test_group_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
+def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
     node = plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus')
     fragment = compiler().expression(node, 'test').terms[0]
     assert fragment.dims == ('snapshot', 'bus')
@@ -342,7 +342,7 @@ def test_a_variable_and_its_shape_operators_stay_keyed():
     """A term keeps one row per (dims…, var_label) through every operator.
 
     `Sum` drops a coordinate column, but the rows it merges came from distinct
-    coordinates and so carry distinct labels; `group_sum` and `roll` join a dim
+    coordinates and so carry distinct labels; `sum` and `roll` join a dim
     table one-to-one. None of them can put a variable on a row twice.
     """
     for node in (
@@ -359,7 +359,7 @@ def test_a_variable_and_its_shape_operators_stay_keyed():
 def test_two_fragments_of_one_variable_are_compared_by_what_moved_their_labels():
     """A shared variable is necessary for a shared column, and not sufficient.
 
-    Two `group_sum`s of one variable through *different* coordinates of one dim
+    Two `sum`s of one variable through *different* coordinates of one dim
     reach the same row only where those coordinates agree, which is a question
     about the dimension table. Everything else answers yes: the cost of being
     wrong is a model whose sinks disagree, against the cost of a sort.
@@ -423,7 +423,7 @@ def test_a_sum_that_drops_nothing_leaves_a_constant_part_keyed():
     assert compiler().expression(scaled, 'test').terms[0].keyed
 
 
-def test_group_sum_over_a_broadcast_dim_is_not_keyed():
+def test_sum_over_a_broadcast_dim_is_not_keyed():
     """Which dim is grouped decides whether the key survives.
 
     `generator` is `p`'s own, so grouping it merges rows with distinct labels.

@@ -549,7 +549,7 @@ class PolarsCompiler:
         into one ``into``, and whether that merges two rows carrying the same
         ``var_label`` depends on where ``over`` came from. If the variable
         carries it, the merged rows have distinct labels and the key survives.
-        If it arrived by broadcast — ``group_sum(x * w, over=generator)`` with
+        If it arrived by broadcast — ``sum(x * w, over=generator)`` with
         ``x`` indexed by snapshot alone — they do not, and the terminal
         aggregate has to run.
         """
@@ -704,7 +704,7 @@ class PolarsCompiler:
         A label's row is decided by what moved it, so equal
         :attr:`~TermFragment.mapping` means the same row and a certain
         collision. Mappings that differ **only in a coordinate** — the network
-        shape, ``group_sum(f, by=to) - group_sum(f, by=from)`` — send it to the
+        shape, ``sum(f, group_by=to) - sum(f, group_by=from)`` — send it to the
         same row exactly where those coordinates agree, which is a question
         about a *dimension table*: is there a line whose ends are one bus? The
         `line` table is forty rows where the matrix is 12.6M.
@@ -756,7 +756,7 @@ def _ordinal(dim: str) -> str:
 
 
 def _relabel(label_dims: frozenset[str], over: str, into: str) -> frozenset[str]:
-    """*label_dims* after ``group_sum`` swaps *over* for *into*: the projected
+    """*label_dims* after ``sum`` swaps *over* for *into*: the projected
     coordinate is label-determined exactly when the dim it replaces was."""
     if over not in label_dims:
         return label_dims
