@@ -107,6 +107,11 @@ class ParameterBlock(_StrictBlock):
     dims: list[str]
     dtype: str = 'float'
 
+    @property
+    def referenced_dims(self) -> list[str]:
+        """The dimensions this block names — `dims` here, `foreach` on the rest."""
+        return self.dims
+
     @field_validator('dtype')
     @classmethod
     def _check_dtype(cls, v: str) -> str:
@@ -139,6 +144,10 @@ class VariableBlock(_StrictBlock):
     binary: bool = False
     integer: bool = False
 
+    @property
+    def referenced_dims(self) -> list[str]:
+        return self.foreach
+
     @model_validator(mode='after')
     def _check_binary_integer(self) -> VariableBlock:
         if self.binary and self.integer:
@@ -155,6 +164,10 @@ class ConstraintBlock(_StrictBlock):
     foreach: list[str]
     where: str | None = None
     expression: str
+
+    @property
+    def referenced_dims(self) -> list[str]:
+        return self.foreach
 
     @model_validator(mode='before')
     @classmethod
@@ -341,22 +354,13 @@ class MathSchema(_StrictBlock):
 
         errors.extend(
             f"{kind} '{name}' references undeclared dimension '{d}'. Declare it under 'dimensions:'."
-            # The three accessors are lambdas because the specs disagree about
-            # the attribute's name, which is also why nothing can annotate them:
-            # the tuple holds three different value types, so the loop variable
-            # never narrows, and a Protocol cannot cover `dims` and `foreach` at
-            # once. Suppressed per line; `unused-ignore` is an error here, so
-            # these stop being silent the moment the shapes converge.
-            for kind, group, dims_of in (
-                # pyrefly: ignore[implicit-any-lambda]
-                ('Parameter', self.parameters, lambda p: p.dims),
-                # pyrefly: ignore[implicit-any-lambda]
-                ('Variable', self.variables, lambda v: v.foreach),
-                # pyrefly: ignore[implicit-any-lambda]
-                ('Constraint', self.constraints, lambda c: c.foreach),
+            for kind, group in (
+                ('Parameter', self.parameters),
+                ('Variable', self.variables),
+                ('Constraint', self.constraints),
             )
             for name, item in group.items()
-            for d in dims_of(item)
+            for d in item.referenced_dims
             if d not in self.dimensions
         )
 

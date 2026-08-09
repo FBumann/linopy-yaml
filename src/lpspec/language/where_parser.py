@@ -156,9 +156,6 @@ def _build_where_grammar() -> pp.ParserElement:
     true_lit = pp.CaselessKeyword('True').set_parse_action(lambda: BooleanLiteralNode(True))
     false_lit = pp.CaselessKeyword('False').set_parse_action(lambda: BooleanLiteralNode(False))
 
-    # Every `# pyrefly: ignore[implicit-any-lambda]` below is the pyparsing
-    # ParseResults handoff — the reasoning is written out once, over the same
-    # grammar in expression_parser.py.
     # pyrefly: ignore[implicit-any-lambda]
     real = pp.Regex(r'-?\d+\.\d*([eE][+-]?\d+)?').set_parse_action(lambda t: float(t[0]))
     # float, not int: UnresolvedComparisonNode.value is declared float, so store one

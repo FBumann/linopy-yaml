@@ -157,15 +157,6 @@ def _build_grammar() -> pp.ParserElement:
     """Build and return the pyparsing grammar for math expressions."""
     arith = pp.Forward()
 
-    # `implicit-any-lambda` (new in pyrefly 1.2) fires on every parse action in
-    # this grammar, and the fix it wants is not available: a lambda cannot carry
-    # an annotation, and routing the action through a typed callback only moves
-    # the problem — pyparsing hands back `ParseResults`, whose `__getitem__` is
-    # a union wide enough that `t[0]` then fails on its own. That is the handoff
-    # pyproject.toml already calls honest for `explicit-any`. Suppressed per
-    # line rather than switched off, so a lambda anywhere else still has to say
-    # what it takes.
-
     # float, not int: NumberNode.value is declared float, so store one
     # pyrefly: ignore[implicit-any-lambda]
     integer = pp.Regex(r'-?\d+').set_parse_action(lambda t: NumberNode(float(t[0])))
