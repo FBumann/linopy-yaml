@@ -130,7 +130,7 @@ def test_check_and_load_schema_need_no_data(dispatch_yaml):
     ('expression', 'match'),
     [
         ('sum(p ** 2, over=generator)', r"operator '\*\*'"),
-        # the CI verb enforces degree 1 with no data bound (ROADMAP, degree axis)
+        # the CI verb enforces degree 1 with no data bound (docs/design/ceiling.md)
         ('sum(p * p, over=generator)', 'degree 2'),
     ],
 )
@@ -251,7 +251,7 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
     so `objective` was a snapshot while `primal` was live — one result
     disagreeing with itself after a second solve, silently and with plausible
     numbers. Nothing supported re-binds data yet, so the bound has to be moved
-    the way the planned in-place update will (ROADMAP 2c: `changeColsBounds`
+    the way the planned in-place update will (#382: `changeColsBounds`
     against labels that are already solver indices).
     """
     key = ['snapshot', 'generator']  # a read is a join, so compare on coordinates

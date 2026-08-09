@@ -53,7 +53,7 @@ no name on the Python surface.
 
 ## When Track 3 lands
 
-[Track 3](../../../../docs/ROADMAP.md#track-3--capabilities-and-the-degree-line)
+[Track 3](https://github.com/FBumann/lpspec/issues/472)
 gives each sink a declared capability table so `check(model, sink=...)` can
 answer "will this sink take it". The table belongs in the sink's own module,
 collected by the family `__init__` rather than owned by it — and it stops

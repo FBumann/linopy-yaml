@@ -156,7 +156,7 @@ declared `escape:` island rather than into the language.
 
 Read, in order:
 
-1. [the deliberate non-primitives in docs/ROADMAP.md](docs/ROADMAP.md) — parity with
+1. [the deliberate non-primitives](docs/design/ceiling.md#deliberate-non-primitives) — parity with
    another tool is not by itself a reason to add anything, and several
    plausible-sounding features are refused there on purpose;
 2. [the ceiling in docs/design/ceiling.md](docs/design/ceiling.md#two-tiers-and-the-ceiling) —
