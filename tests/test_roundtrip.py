@@ -76,11 +76,9 @@ def test_a_dict_built_model_gets_a_file():
     text = lps.load_model(built).to_yaml()
 
     assert lps.load_model(pyyaml.safe_load(text)).model_dump() == lps.load_model(built).model_dump()
-    # readable, not a serialisation: no defaults the author never wrote…
-    assert 'piecewise' not in text
-    # …except `version`, which is the one field whose purpose is to be stated
     assert text.startswith('version: 0\n'), 'a generated file should say which surface it targets'
     assert 'dimensions:' in text
+    assert 'piecewise' not in text, 'an absent section is absence, not a value'
 
 
 def test_a_declared_version_survives():
@@ -109,9 +107,13 @@ def test_the_review_copy_states_the_objective_sense(path: Path):
         assert f'sense: {objective.sense}' in text, f"{path}: '{name}' lost its direction"
 
 
-def test_an_absence_still_reads_as_an_absence():
-    """The other half of the rule: a default whose absence reads correctly is
-    still omitted, so the review copy stays a file rather than a dump."""
+def test_absence_is_dropped_and_values_are_kept():
+    """The whole rule, both halves.
+
+    Judging *defaults* would need a list of which ones matter, and that list is
+    a second copy of the schema — it drifted on its first day, keeping `version`
+    and `sense` while dropping `dtype`. Absence needs no list.
+    """
     text = lps.load_model(
         {
             'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
@@ -120,5 +122,7 @@ def test_an_absence_still_reads_as_an_absence():
         }
     ).to_yaml()
 
-    for noise in ('where: null', 'binary: false', 'integer: false', 'piecewise', 'macros'):
-        assert noise not in text, f'{noise!r} leaked into the review copy'
+    for absent in ('where: null', 'coords: {}', 'macros:', 'piecewise:'):
+        assert absent not in text, f'{absent!r} is absence and should not be written'
+    for stated in ('dtype: int', 'sense: minimize', 'binary: false', 'version: 0'):
+        assert stated in text, f'{stated!r} is a value and should be written'

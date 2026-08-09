@@ -319,6 +319,24 @@ class PiecewiseBlock(_StrictBlock):
 SUPPORTED_VERSIONS: tuple[int, ...] = (0,)
 
 
+def _without_empties(value: Any) -> Any:
+    """Strip what is absent — a null, or a mapping declaring nothing.
+
+    An empty **list** is kept, because in this schema a list carries
+    *cardinality* and zero is one of its values: ``foreach: []`` is a scalar
+    declaration and ``dims: []`` is a scalar parameter, both of them required
+    fields that mean something. An empty **mapping** carries declarations, and
+    none of them is nothing.
+
+    Nothing else is judged. A value that is there is written, whether or not it
+    equals a default.
+    """
+    if isinstance(value, dict):
+        pruned = {k: _without_empties(v) for k, v in value.items()}
+        return {k: v for k, v in pruned.items() if v is not None and v != {}}
+    return value
+
+
 class Model(_StrictBlock):
     """The declared math — one YAML file, or one dict, validated.
 
@@ -356,13 +374,13 @@ class Model(_StrictBlock):
         version gates *nothing* at runtime, because keeping two surfaces alive
         in one codebase is a large permanent cost against a hard error that
         costs one line.
+
+        The installed version comes from the distribution's metadata rather
+        than ``lpspec.__version__``: a language module may not reach forward to
+        the package that consumes its AST.
         """
         if v in SUPPORTED_VERSIONS:
             return v
-        # `importlib.metadata`, not `from lpspec import __version__`: a language
-        # module may not reach forward to the package that consumes its AST
-        # (docs/ARCHITECTURE.md, held by `test_language_never_reaches_a_consumer`).
-        # The distribution's metadata is the same string without the dependency.
         try:
             installed = metadata.version('lpspec')
         except metadata.PackageNotFoundError:  # pragma: no cover — a tree with no dist-info
@@ -375,41 +393,29 @@ class Model(_StrictBlock):
         raise ValueError(msg)
 
     def to_yaml(self) -> str:
-        """The file a reviewer reads — including for a model built as a dict.
+        """The file a reviewer reads — including for a model that never had one.
 
         Hard rule 5 is that the model is the file you review and diff. A model
         a framework emitted as a dict has no such file, so this gives it one:
         dump it, read the YAML, and it is *provably* the same model, because
         ``tests/test_roundtrip.py`` holds the round trip over the whole corpus.
 
-        ``exclude_defaults`` is what keeps it reviewable — it emits what the
-        author declared rather than every field's default, so the output reads
-        like a file someone wrote instead of a serialisation of one.
+        **Every value is written; only what is absent is dropped** — a null,
+        or a mapping that declares nothing. One
+        mechanical rule, and it is mechanical on purpose. Omitting *defaults*
+        reads better and needs a list of which ones are consequential — a
+        second copy of the schema, which drifted immediately: a first cut kept
+        ``version`` and ``sense`` and dropped ``dtype``, so a file whose author
+        wrote ``dtype: str`` was reviewed without it. A null ``values`` or an empty
+        ``coords`` needs no judgement to recognise.
+
+        The output is generated for review rather than authored, so length
+        costs a reader nothing and being unambiguous saves them having to know
+        this package's defaults at all.
         """
         import yaml
 
-        # **Two defaults are stated even when they are the default**, and the
-        # rule is about reading rather than meaning. Omitting a default is safe
-        # where its absence reads as *nothing here* — no `where`, not `binary`,
-        # unbounded `bounds`. It is unsafe where absence makes a reader guess a
-        # choice the author actually made:
-        #
-        #   `version`  absent means 0, but stating which surface a file targets
-        #              is the whole argument for the field (#67)
-        #   `sense`    absent means minimize, and minimise-or-maximise is the
-        #              most consequential word in a model. A reviewer should
-        #              not have to know a default to read its direction — and
-        #              every model in the corpus writes it, so dropping it made
-        #              the review copy differ from the file in the one place
-        #              that matters most.
-        body: dict[str, Any] = {'version': self.version, **self.model_dump(exclude_defaults=True)}
-        for name, objective in self.objectives.items():
-            body.setdefault('objectives', {}).setdefault(name, {})['sense'] = objective.sense
-            body['objectives'][name] = {
-                'sense': objective.sense,
-                **{k: v for k, v in body['objectives'][name].items() if k != 'sense'},
-            }
-        return yaml.safe_dump(body, sort_keys=False, allow_unicode=True)
+        return yaml.safe_dump(_without_empties(self.model_dump()), sort_keys=False, allow_unicode=True)
 
     @model_validator(mode='after')
     def _validate_references(self) -> Model:
