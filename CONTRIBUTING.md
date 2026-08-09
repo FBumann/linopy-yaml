@@ -130,35 +130,17 @@ Versioning, the release PR, and how to force a specific version:
 ## Filing issues
 
 **Cite behaviour and a file, not a private symbol and a line range.** An issue
-outlives several refactors; one written against internals dies with the next
-one and takes its argument down with it. That has now happened four times — #50
-rested on `_sum_piece` / `_group_piece` / `_shift_piece`, #103 on
-`_group_fragment`, #27 instructed a grep for `RelationalBuildError` in
-`lowering.py`, and #244 quoted a results file on a branch since deleted. Every
-one had to be closed and re-filed, because the *finding* survived the rewrite
-and the evidence for it did not.
+outlives several refactors; one written against internals dies with the next and
+takes its argument with it — four have had to be closed and re-filed for exactly
+that. So write `bounds accept a parameter name or a number, not an expression
+(language/schema.py)`, not a line number inside the loop that enforces it.
 
-So write `bounds accept a parameter name or a number, not an expression
-(language/schema.py)` rather than a line number inside the loop that enforces
-it. The narrower reference is worth exactly the time until someone moves the
-loop. This is the same split the docs already run on — a reference page carries
-the rule, the argument goes where it can rot without taking the rule with it.
-
-**One label carries order, and structure carries the rest.**
-
-- **`now`** — in flight, capped at five. Everything else is backlog. A list of
-  forty-six issues in a claimed priority order is fiction; a cap of five is the
-  smallest thing that is not, and it enforces itself.
-- **Sub-issues carry the grouping.** A track is a parent issue and its work is
-  the sub-issues under it. Parentage is structural, so it cannot drift the way a
-  label mirroring a markdown table does — that mirror was tried and was wrong on
-  three issues within the hour.
-
-`blocked:upstream` and `blocked:decision` say what an issue waits on — another
-project, or an open `decision` issue here. A `decision` closes by *resolution*,
-not by work: on yes it becomes `roadmap`, on no it becomes a row in the
-deliberate non-primitives table. Either way answering one is never wasted, which
-is why they are worth clearing in batches.
+**`now` is the only order label**, capped at five; everything else is backlog.
+Grouping is sub-issue parentage — a track is a parent issue — because parentage
+is structural where a label mirroring a list is a copy that drifts.
+`blocked:upstream` and `blocked:decision` say what an issue waits on. A
+`decision` closes by *resolution*, not by work: on yes it becomes `roadmap`, on
+no it becomes a row in the deliberate non-primitives table.
 
 ## Breaking changes are free
 
