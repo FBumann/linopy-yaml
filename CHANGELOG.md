@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.70](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.69...v0.0.1-alpha.70) (2026-08-09)
+
+
+### Features
+
+* **language:** at() — the pullback of group_sum ([#489](https://github.com/FBumann/lpspec/issues/489)) ([e7ce036](https://github.com/FBumann/lpspec/commit/e7ce036f9533e3ffd6dbb02110b1dfd35cb28c0a))
+
+
+### Performance
+
+* **polars:** two group_sums collide only where the coordinates meet, and the matrix leaves in row order ([#487](https://github.com/FBumann/lpspec/issues/487)) ([53621b1](https://github.com/FBumann/lpspec/commit/53621b1894119e845e4b2a75b1ba4abe4cb043da))
+
 ## [0.0.1-alpha.69](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.68...v0.0.1-alpha.69) (2026-08-09)
 
 
