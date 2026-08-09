@@ -8,12 +8,13 @@ Three-way differential on examples/transport.yaml:
 
 Plus ``examples/monthly_budget.yaml``, which is the same primitive over *time*:
 a coordinate on ``snapshot`` groups it into months exactly as a coordinate on
-``generator`` groups onto buses. The gallery page quotes its dual, so a test
-has to hold that number.
+``generator`` groups onto buses. The gallery page quotes its dual and prints
+its snapshot index, so a test has to hold both.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -399,6 +400,7 @@ def test_an_objective_whose_dims_are_all_the_variables_own_still_skips_it():
 # ---------------------------------------------------------------------------
 
 MONTHLY_YAML = Path('examples/monthly_budget.yaml')
+MONTHLY_PAGE = Path('docs/models/monthly_budget.md')
 
 
 def _monthly_sources():
@@ -495,3 +497,20 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group():
     )
     with pytest.raises(DataError, match=r"coordinate 'month' has value\(s\) that are not 'month' coordinates"):
         lps.solve(MONTHLY_YAML, {**sources, 'snapshot': typo})
+
+
+def test_the_index_the_page_prints_is_the_index_it_solves():
+    """The frame printed on the page is the frame these tests build.
+
+    `test_doc_examples.py` sweeps `python` and `yaml` fences and runs neither,
+    so a pasted *output* block is the one kind of doc claim nothing checks —
+    change the timestamps here and the page would keep printing the old ones.
+    Defaults are restored while formatting, so a contributor's `POLARS_FMT_*`
+    environment cannot fail this.
+    """
+    index, _months, _sources = _monthly_sources()
+    fences = re.findall(r'^```text\n(.*?)^```', MONTHLY_PAGE.read_text(), re.MULTILINE | re.DOTALL)
+    printed = [block for block in fences if block.startswith('shape: (')]
+    assert len(printed) == 1, 'the page prints exactly one frame'
+    with pl.Config(restore_defaults=True):
+        assert printed[0].rstrip('\n') == str(index)
