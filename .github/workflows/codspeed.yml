@@ -81,7 +81,9 @@ on:
   # walltime job below would be reachable only by pushing another commit.
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-  # CodSpeed dispatches this itself to backfill a baseline for existing commits
+  # CodSpeed dispatches this itself to backfill a baseline for existing commits.
+  # Only the memory job takes it — see the `if:` on walltime for why the metered
+  # instrument declines a trigger somebody else fires.
   workflow_dispatch:
 
 concurrency:
@@ -132,14 +134,22 @@ jobs:
 
   walltime:
     name: Wall time (macro runner)
-    # `main` always; a pull request only when a maintainer asks, with the label
-    # bench.yml already uses. Two reasons it is not automatic on pull requests:
-    # macro minutes are metered, and bare metal should not run arbitrary code
-    # from a fork. Same shape linopy settled on, and the same label convention
-    # this repo already runs bench.yml by.
+    # Two events reach the macro runner and no others: a push that landed on
+    # `main`, and a pull request carrying the label bench.yml already uses.
+    # Metered minutes are the reason it is not automatic on pull requests, and
+    # bare metal not running fork code unasked is the second.
+    #
+    # Written as an allowlist rather than `event_name != 'pull_request'`, which
+    # is what linopy has and what this job shipped with. That form also admits
+    # `workflow_dispatch` — and this workflow is dispatched *by CodSpeed*, which
+    # backfills baselines on its own schedule and against whatever ref it likes.
+    # The memory job is free and should take those; walltime is the metered one
+    # and must not. The `push` arm names the ref too, so adding a branch to the
+    # trigger above widens the free instrument and not this one.
     if: >-
-      ${{ github.event_name != 'pull_request' ||
-          contains(github.event.pull_request.labels.*.name, 'trigger:bench') }}
+      ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' &&
+           contains(github.event.pull_request.labels.*.name, 'trigger:bench')) }}
     # **Not a free runner.** `walltime` on a shared clock is the noise bench.yml
     # refuses to gate on; measuring it there would produce a series nobody could
     # read. This is the one metered thing in the tree, which is why it is fenced
