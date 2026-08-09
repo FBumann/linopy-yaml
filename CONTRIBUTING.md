@@ -127,6 +127,21 @@ the two required checks above. Approvals are not required, but the PR is.
 Versioning, the release PR, and how to force a specific version:
 [RELEASING.md](RELEASING.md).
 
+## Filing issues
+
+**Cite behaviour and a file, not a private symbol and a line range.** An issue
+outlives several refactors; one written against internals dies with the next and
+takes its argument with it — four have had to be closed and re-filed for exactly
+that. So write `bounds accept a parameter name or a number, not an expression
+(language/schema.py)`, not a line number inside the loop that enforces it.
+
+**`now` is the only order label**, capped at five; everything else is backlog.
+Grouping is sub-issue parentage — a track is a parent issue — because parentage
+is structural where a label mirroring a list is a copy that drifts.
+`blocked:upstream` and `blocked:decision` say what an issue waits on. A
+`decision` closes by *resolution*, not by work: on yes it becomes `roadmap`, on
+no it becomes a row in the deliberate non-primitives table.
+
 ## Breaking changes are free
 
 **The project is `0.0.1aN` until the first official release, and holds no
