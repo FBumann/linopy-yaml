@@ -32,8 +32,6 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable, Mapping, Sequence
 
-    from polars._typing import JoinStrategy, MaintainOrderJoin
-
     from lpspec.relational.engines.polars.binding import BoundSources
 
 
@@ -68,17 +66,6 @@ class TermFragment:
     frame: pl.LazyFrame
     is_term: bool
 
-    keyed: bool = True
-    """At most one row per ``(dims…, var_label)``.
-
-    Never needed for correctness — the assembly aggregates either way — but it
-    lets the executor skip an aggregate over every nonzero in the model.
-    """
-    label_dims: frozenset[str] = frozenset()
-    """The dims ``var_label`` determines: a variable's own ``foreach``.
-
-    A term's other dims arrived by broadcast. See :meth:`survives_dropping`.
-    """
     presence: pl.LazyFrame | None = None
     """Where the *variable* under this fragment exists, keyed by :attr:`dims`.
 
@@ -98,24 +85,6 @@ class TermFragment:
 
     An affine fragment holds at most one, because ``Add`` splits into fragments
     and ``Multiply`` refuses a second — so this is a name, not a set.
-
-    It is what lets two fragments be compared without reading either. Labels are
-    dense and assigned one declaration at a time, so *distinct variables occupy
-    disjoint label ranges*: two fragments naming different variables cannot put
-    a row on the same solver column however they were reshaped, and the
-    terminal aggregate that would collapse them has nothing to do.
-    """
-    mapping: tuple[tuple[str, ...], ...] = ()
-    """Every operator that moved this fragment's labels, in order.
-
-    A ``GroupSum`` records ``('group', over, coordinate, into)`` and a
-    ``Translate`` ``('shift', dimension, by, wrap)``. Read only to compare two
-    fragments of one variable: identical mappings send a label to the same row,
-    and mappings that differ *only* in a coordinate send it to the same row
-    exactly where those coordinates agree — a question about a dimension table
-    rather than about the model. See :meth:`PolarsCompiler.may_share_a_column`.
-
-    Not a description of the frame, and nothing reads it to build one.
     """
     presence_dims: tuple[str, ...] | None = None
     """The columns :attr:`presence` is keyed by; ``None`` means :attr:`dims`.
@@ -136,17 +105,6 @@ class TermFragment:
     def carried(self) -> list[str]:
         """The non-dim columns a projection has to keep."""
         return ['var_label', self.value_column] if self.is_term else [self.value_column]
-
-    def survives_dropping(self, dropped: set[str]) -> bool:
-        """Whether the key survives losing *dropped* from the dim tuple.
-
-        Dropping a label dim merges rows with *different* labels, so the key
-        holds; dropping a broadcast dim merges rows with the *same* one, and it
-        does not. ``sum(q * price, over=generator)`` with ``q`` indexed by
-        snapshot alone reduces to ``q``'s own dims while still holding a row
-        per generator.
-        """
-        return self.keyed and dropped <= self.label_dims
 
 
 @dataclass(frozen=True)
@@ -205,25 +163,23 @@ class PolarsCompiler:
         return out.filter(_falsy_if_null(condition))
 
     def _coordinate_product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
-        """Cross join of the dim tables: labels and ordinals, nothing else."""
+        """Cross join of the dim tables: labels and ordinals, nothing else.
 
-        # **Folded in reverse, then projected back.** polars' streaming engine
-        # walks a cross join right-major, so folding the dims backwards is what
-        # makes the product arrive in *declaration* row-major order — which is
-        # label order, and is what lets `cols` be read positionally instead of
-        # sorted. `labels._in_label_order` verifies that rather than trusting
-        # it. The projection restores the declared column order the fold
-        # reversed; only the row order was ever the point.
+        The rows arrive in whatever order the joins produce them, and nothing
+        depends on that: a label is arithmetic on the ordinals, and
+        :func:`lpspec.relational.engines.polars.labels.frame` sorts on them
+        before it numbers anything.
+        """
         out: pl.LazyFrame | None = None
-        for d in reversed(dims):
-            table = self.dimensions[d].select(pl.col('val').alias(d), pl.col('ord').alias(_ordinal(d)))
+        for d in dims:
+            table = self.dimensions[d].select(pl.col('val').alias(d), pl.col('ord').alias(ordinal(d)))
             out = table if out is None else out.join(table, how='cross')
         if out is None:
             # The empty cross join's unit is one row, not nothing — and the row
             # has to be real, since a `where` on a scalar declaration filters
             # this frame and nothing survives a filter.
             return pl.LazyFrame({UNIT: [0]})
-        return out.select(*(c for d in dims for c in (d, _ordinal(d))))
+        return out
 
     def parameter_join(
         self,
@@ -232,26 +188,17 @@ class PolarsCompiler:
         frame_dims: tuple[str, ...],
         alias: str,
         subject: str,
-        how: JoinStrategy = 'left',
-        maintain_order: MaintainOrderJoin | None = None,
     ) -> pl.LazyFrame:
-        """Join *param* onto *frame*, its value column renamed to *alias*.
+        """Left-join *param* onto *frame*, its value column renamed to *alias*.
 
         A parameter carrying a dim the frame lacks would be reduced over it,
         widening a mask or picking an arbitrary bound, so that is refused.
         *subject* is the caller's word for it, since naming the declaration is
         most of the value.
 
-        *how* is ``left`` for a bound, where a missing value is a fact the
-        caller has to report rather than a row to drop. A mask that cannot be
-        satisfied without the value asks for ``inner`` — see
-        :func:`_certain_parameters`.
-
-        *maintain_order* is asked for only where the result is ordered by
-        construction and something downstream reads it that way — the bounds,
-        which become ``cols``. It is not free (+12 ms on a 10M-row join) and it
-        is far cheaper than restoring the order afterwards (~110 ms to sort the
-        same frame), so it is passed deliberately rather than defaulted on.
+        Always a left join: a missing value is a fact the caller has to be told
+        about — a null bound is refused by name, and a null in a mask reads as
+        false (:func:`_falsy_if_null`) — never a row to drop silently here.
         """
         declaration = self.program.parameter(param)
         extra = set(declaration.dims) - set(frame_dims)
@@ -259,8 +206,8 @@ class PolarsCompiler:
             raise LanguageError(f'{subject} has dims {sorted(extra)} outside the foreach dims {list(frame_dims)}')
         table = self.parameters[param].rename({'value': alias})
         if not declaration.dims:
-            return frame.join(table, how='cross', maintain_order=maintain_order)
-        return frame.join(table, on=list(declaration.dims), how=how, maintain_order=maintain_order)
+            return frame.join(table, how='cross')
+        return frame.join(table, on=list(declaration.dims), how='left')
 
     # ------------------------------------------------------------------
     # predicates (where masks — row absence)
@@ -274,15 +221,12 @@ class PolarsCompiler:
         Walking joins the parameters, so the condition is built first and the
         frame read after — one expression would return the pre-walk frame.
 
-        **A name the mask is certain of is joined rather than left-joined**, and
-        a variable it is certain of is semi-joined and never read. The rows a
-        left join keeps here are rows the filter then drops, so all it adds is
-        the width of the product they are dropped from: on `sector/l` the
-        balance mask keeps 1M coordinates out of 5M, and finding them cost
-        0.106 s through a left join against 0.082 s through an inner one.
+        Every name is left-joined and every atom over a missing value reads as
+        false, so a coordinate the mask cannot evaluate is dropped by the
+        filter rather than by the join. That is the same answer either way, and
+        one join strategy is one thing to reason about.
         """
 
-        certain = _certain_parameters(pred)
         joined: set[str] = set()
         carrier = frame
 
@@ -290,8 +234,7 @@ class PolarsCompiler:
             nonlocal carrier
             alias = f'__where {param}__'
             if alias not in joined:
-                how: JoinStrategy = 'inner' if param in certain else 'left'
-                carrier = self.parameter_join(carrier, param, dims, alias, f"where-parameter '{param}'", how)
+                carrier = self.parameter_join(carrier, param, dims, alias, f"where-parameter '{param}'")
                 joined.add(alias)
             return alias
 
@@ -318,11 +261,6 @@ class PolarsCompiler:
                 nonlocal carrier
                 on = list(self.program.variable(p.variable).dims)
                 flag = f'__where defined {p.variable}__'
-                if p.variable in certain:
-                    if flag not in joined:
-                        carrier = carrier.join(self.variables[p.variable].select(*on), on=on, how='semi')
-                        joined.add(flag)
-                    return pl.lit(value=True)
                 if flag not in joined:
                     marked = (
                         self.variables[p.variable].select(*on).unique().with_columns(pl.lit(value=True).alias(flag))
@@ -365,14 +303,7 @@ class PolarsCompiler:
                 alias = f'__bound {e.name}__'
                 if alias not in joined:
                     carrier = self.parameter_join(
-                        carrier,
-                        e.name,
-                        v.dims,
-                        alias,
-                        f"bound parameter '{e.name}' of variable '{v.name}'",
-                        # the label frame arrives in label order and `cols` is
-                        # read positionally, so this join may not shuffle it
-                        maintain_order='left',
+                        carrier, e.name, v.dims, alias, f"bound parameter '{e.name}' of variable '{v.name}'"
                     )
                     joined.add(alias)
                 return pl.col(alias).cast(pl.Float64)
@@ -452,15 +383,7 @@ class PolarsCompiler:
         # None, meaning "keyed by dims" — but dims are rewritten downstream (a
         # product broadcasts, a sum drops) while this frame is not, so an
         # implied key silently becomes a claim about columns it never had.
-        return TermFragment(
-            dims,
-            frame,
-            True,
-            label_dims=frozenset(dims),
-            variable=name,
-            presence=presence,
-            presence_dims=dims if masked else None,
-        )
+        return TermFragment(dims, frame, True, variable=name, presence=presence, presence_dims=dims if masked else None)
 
     def _presence(self, name: str, dims: tuple[str, ...]) -> pl.LazyFrame:
         """The coordinates a masked variable exists at.
@@ -521,7 +444,6 @@ class PolarsCompiler:
                 f'{missing} is ambiguous under masks — multiply explicitly instead'
             )
         keep = tuple(d for d in p.dims if d not in over)
-        dropped = {d for d in p.dims if d not in keep}
         scale = math.prod(self.dimension_cardinality[d] for d in missing)
         frame = p.frame.select(*keep, *p.carried)
         if scale != 1:
@@ -530,30 +452,16 @@ class PolarsCompiler:
         # summing over a partly-masked dim is well defined and reports nothing.
         # Constructed rather than `replace`d for exactly that: `presence` has to
         # be *dropped* here, and carrying it would be the silent default.
-        return TermFragment(
-            keep,
-            frame,
-            p.is_term,
-            p.survives_dropping(dropped),
-            p.label_dims - dropped,
-            variable=p.variable,
-            mapping=p.mapping,
-        )
+        return TermFragment(keep, frame, p.is_term, variable=p.variable)
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
         """Relabel dim ``over`` to ``into`` through a declared coordinate.
 
         No aggregate here either: the dim table holds one row per label and its
         coordinate was checked for containment at build time, so the join
-        neither duplicates nor drops a term.
-
-        The *key* is a separate question. Grouping merges labels of ``over``
-        into one ``into``, and whether that merges two rows carrying the same
-        ``var_label`` depends on where ``over`` came from. If the variable
-        carries it, the merged rows have distinct labels and the key survives.
-        If it arrived by broadcast — ``sum(x * w, over=generator)`` with
-        ``x`` indexed by snapshot alone — they do not, and the terminal
-        aggregate has to run.
+        neither duplicates nor drops a term. Rows that land on one ``into``
+        stay separate rows and are added by the terminal aggregate at assembly,
+        exactly as ``Sum``'s are.
         """
 
         if g.over not in p.dims:
@@ -561,18 +469,9 @@ class PolarsCompiler:
         keep = tuple(x for x in p.dims if x != g.over)
         mapping = self.dimensions[g.over].select(pl.col('val').alias(g.over), pl.col(g.coordinate).alias(g.into))
         frame = p.frame.join(mapping, on=g.over, how='inner').select(*keep, g.into, *p.carried)
-        keyed = p.keyed and g.over in p.label_dims
         # a group is a sum, so §13 applies here as well: absence does not escape
         # it, which is why this constructs rather than `replace`s — see _sum_fragment
-        return TermFragment(
-            (*keep, g.into),
-            frame,
-            p.is_term,
-            keyed,
-            _relabel(p.label_dims, g.over, g.into),
-            variable=p.variable,
-            mapping=(*p.mapping, ('group', g.over, g.coordinate, g.into)),
-        )
+        return TermFragment((*keep, g.into), frame, p.is_term, variable=p.variable)
 
     def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
         """Spread ``into`` back out over ``over`` — the adjoint of a group.
@@ -585,13 +484,9 @@ class PolarsCompiler:
         table the frame already holds — pointwise, so the locality class does
         not move.
 
-        **The key claim has to weaken, and that is the whole difference.** A
-        group merges labels; a pullback *duplicates* one — the same
-        ``var_label`` now appears at every fine coordinate of its component. So
-        the label no longer spans a dim the frame carries, and any later
-        reduction can bring two copies into one row. ``keyed=False`` is what
-        makes the terminal aggregate run and add them, rather than the frame
-        silently holding a cell twice.
+        A pullback *duplicates* a label — the same ``var_label`` now appears at
+        every fine coordinate of its component — so a later reduction can bring
+        two copies into one row, where the terminal aggregate adds them.
         """
 
         if a.into not in p.dims:
@@ -599,14 +494,7 @@ class PolarsCompiler:
         keep = tuple(x for x in p.dims if x != a.into)
         mapping = self.dimensions[a.over].select(pl.col('val').alias(a.over), pl.col(a.coordinate).alias(a.into))
         frame = p.frame.join(mapping, on=a.into, how='inner').select(*keep, a.over, *p.carried)
-        return TermFragment(
-            (*keep, a.over),
-            frame,
-            p.is_term,
-            keyed=False,
-            label_dims=p.label_dims - {a.into},
-            variable=p.variable,
-        )
+        return TermFragment((*keep, a.over), frame, p.is_term, variable=p.variable)
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
         """A pointwise remap of the dim through its ord: a row at *o*
@@ -662,13 +550,7 @@ class PolarsCompiler:
             # quietly gone — a different constraint, which is the shape #239
             # removed from masks and #289 removes from shift.
             presence, presence_dims = self._edge(s, card, vacated=False), (s.dimension,)
-        return replace(
-            p,
-            frame=frame,
-            presence=presence,
-            presence_dims=presence_dims,
-            mapping=(*p.mapping, ('shift', s.dimension, str(s.by), str(s.wrap))),
-        )
+        return replace(p, frame=frame, presence=presence, presence_dims=presence_dims)
 
     def _filled_edge(self, s: plan.Translate, card: int, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated.
@@ -728,100 +610,18 @@ class PolarsCompiler:
     # assembly helpers used by the executor
     # ------------------------------------------------------------------
 
-    def may_share_a_column(self, a: TermFragment, b: TermFragment) -> bool:
-        """Whether two fragments of one variable can put a row on one column.
-
-        **Distinct variables never do.** Labels are dense and assigned one
-        declaration at a time, so two fragments naming different variables draw
-        from disjoint ranges however either was reshaped (#408). What is left is
-        whether two fragments of *one* variable send some label to the same
-        **row**.
-
-        A label's row is decided by what moved it, so equal
-        :attr:`~TermFragment.mapping` means the same row and a certain
-        collision. Mappings that differ **only in a coordinate** — the network
-        shape, ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``
-        — send it to the
-        same row exactly where those coordinates agree, which is a question
-        about a *dimension table*: is there a line whose ends are one bus? The
-        `line` table is forty rows where the matrix is 12.6M.
-
-        Anything else is answered **yes**. A shift on one side and not the
-        other, a reduction that left them over different dims, a product that
-        broadcast one wider — each changes where a label lands in a way this
-        does not model, and the cost of being wrong is a silently wrong model
-        against the cost of a sort.
-        """
-        if a.variable is None or b.variable is None:
-            return True
-        if a.variable != b.variable:
-            return False
-        if a.dims != b.dims or a.label_dims != b.label_dims:
-            return True
-        if len(a.mapping) != len(b.mapping):
-            return True
-        differing = []
-        for one, other in zip(a.mapping, b.mapping, strict=True):
-            if one == other:
-                continue
-            kind, *rest = one
-            if kind != 'group' or other[0] != 'group' or (rest[0], rest[2]) != (other[1], other[3]):
-                return True
-            differing.append((rest[0], rest[1], other[2]))
-        return all(self._coordinates_meet(over, one, other) for over, one, other in differing)
-
-    def _coordinates_meet(self, dimension: str, one: str, other: str) -> bool:
-        """Whether any label of *dimension* carries the same value in both."""
-        table = self.dimensions[dimension]
-        return bool(table.select((pl.col(one) == pl.col(other)).any()).collect().item())
-
     @staticmethod
     def constant_scalar(p: TermFragment) -> pl.LazyFrame:
-        """The const fragment summed per coordinate: ``(dims…, cval)``.
-
-        One hash group-by, rather than a lookup repeated per frame row.
-        """
+        """The const fragment summed per coordinate: ``(dims…, cval)``."""
 
         if not p.dims:
             return p.frame.select(pl.col('cval').sum())
         return p.frame.group_by(p.dims).agg(pl.col('cval').sum())
 
 
-def _ordinal(dim: str) -> str:
+def ordinal(dim: str) -> str:
     """The frame column carrying *dim*'s position in its declared order."""
     return f'__ord {dim}__'
-
-
-def _relabel(label_dims: frozenset[str], over: str, into: str) -> frozenset[str]:
-    """*label_dims* after ``sum`` swaps *over* for *into*: the projected
-    coordinate is label-determined exactly when the dim it replaces was."""
-    if over not in label_dims:
-        return label_dims
-    return label_dims - {over} | {into}
-
-
-def _certain_parameters(pred: plan.Predicate) -> frozenset[str]:
-    """The names every row surviving *pred* is guaranteed to have a value for.
-
-    Read down the ``And`` spine from the root and no further. A name in any
-    top-level conjunct must be present in a surviving row, because that conjunct
-    has to hold on its own and every atom over a name is false where the name is
-    missing — a comparison against null is null, and :func:`_falsy_if_null`
-    reads null as false. Where else the name appears cannot take that back:
-    ``a and (b > 0 or not a)`` is unsatisfiable, and dropping the rows with no
-    ``a`` is exactly right.
-
-    Stopping at ``Or`` and ``Not`` is the whole of the caution. Under either, a
-    missing value can be what makes the mask *true* — ``not a`` selects
-    precisely the rows an inner join would have dropped.
-    """
-    if isinstance(pred, plan.And):
-        return _certain_parameters(pred.left) | _certain_parameters(pred.right)
-    if isinstance(pred, (plan.ParameterComparison, plan.ParameterDefined)):
-        return frozenset({pred.parameter})
-    if isinstance(pred, plan.VariableDefined):
-        return frozenset({pred.variable})
-    return frozenset()
 
 
 def _falsy_if_null(condition: pl.Expr) -> pl.Expr:
@@ -965,4 +765,4 @@ def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = Fa
     # zeroes a term, it does not unmake the variable underneath it. `out_dims`
     # may be wider than `a.dims`, which is why the presence key travels with the
     # frame rather than being re-derived from dims here (#345).
-    return replace(a, dims=out_dims, frame=frame, is_term=is_term, keyed=a.keyed and c.keyed)
+    return replace(a, dims=out_dims, frame=frame, is_term=is_term)

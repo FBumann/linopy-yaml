@@ -167,8 +167,6 @@ def test_a_parameter_carrying_a_coordinate_twice_is_refused(transport_data):
 
     The relational lane used to resolve it into a sum, silently, which is a
     divergence between two lanes that are supposed to accept the same thing.
-    Refusing it is also what lets the assembly skip its terminal aggregate:
-    every parameter being keyed is the premise that argument rests on.
     """
     gens, lines, load = transport_data
     doubled = pd.concat([gens, gens.head(1)])
@@ -331,9 +329,8 @@ def test_sum_over_a_foreach_dim_needs_no_such_collapse():
 # ---------------------------------------------------------------------------
 
 #: `y` is indexed by bus and `w` by snapshot, so `y * w` holds one row per
-#: (bus, snapshot) and one *column* per bus. The fragment is legitimately
-#: keyed on `(dims…, var_label)`; it is the objective's projection down to
-#: `(col, coeff)` that drops the dims and merges those rows.
+#: (bus, snapshot) and one *column* per bus. It is the objective's projection
+#: down to `(col, coeff)` that drops the dims and merges those rows.
 BROADCAST_OBJECTIVE = {
     'dimensions': {'snapshot': {'dtype': 'int', 'values': [0, 1, 2, 3]}, 'bus': {'dtype': 'str'}},
     'parameters': {'w': {'dims': ['snapshot']}, 'floor': {'dims': ['bus']}},
@@ -353,10 +350,10 @@ BROADCAST_OBJECTIVE_SOURCES = {
 def test_an_objective_term_carrying_dims_is_still_summed_per_column():
     """A coefficient is the *sum* over the dims the objective projects away.
 
-    `keyed` is about `(dims…, var_label)`. The matrix keeps those dims — a
-    constraint row is a function of dims that include the fragment's — so the
-    key carries into `(row, col)`. The objective drops them, and a fragment
-    that still carries one then holds several rows per column.
+    The matrix keeps a fragment's dims — a constraint row is a function of dims
+    that include them — so one row there is one `(row, col)` cell. The
+    objective drops them, and a fragment that still carries one then holds
+    several rows per column.
 
     Nothing downstream would fix it: the hand-off scatters with
     `dense[at] = values`, which keeps the last write rather than accumulating,
@@ -379,14 +376,12 @@ def test_the_broadcast_objective_agrees_with_the_eager_lane():
         assert run.oracle == pytest.approx(6666.0)
 
 
-def test_an_objective_whose_dims_are_all_the_variables_own_still_skips_it():
-    """The counterpart, and the reason the test is `label_dims` not `dims`.
+def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
+    """The counterpart: a projection that merges nothing must change nothing.
 
-    `p * cost` reaches the objective carrying `(snapshot, generator)` — it is
-    never wrapped in a `sum` — and both are `p`'s own dims, so `var_label`
-    determines them and no column can repeat. Refusing every fragment that
-    merely *has* dims would be sound and would re-enable the aggregate on every
-    model in `bench/`, which is the whole optimisation (#161).
+    `y * floor` reaches the objective carrying `bus` alone — `y`'s own dim — so
+    each column holds exactly one row and the sum over it is that row. The
+    aggregate must not turn a coefficient into anything but itself.
     """
     model = override(BROADCAST_OBJECTIVE, **{'objectives.c.expression': 'y * floor'})
     with lps.build(model, BROADCAST_OBJECTIVE_SOURCES) as ex:

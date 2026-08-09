@@ -11,9 +11,8 @@ end-to-end test stands in for it:
 
 - ``AGGREGATE`` absent from ``Sum`` and ``GroupSum``. They *project*; duplicates
   collapse once, in the terminal ``SUM(coeff) GROUP BY row, col`` at assembly.
-  Make either of them aggregate and the answers stay right while the skipped
-  aggregate — 2-4x of build time, see ``executor._needs_aggregate`` — quietly
-  becomes dead code.
+  Make either of them aggregate and the answers stay right while the single
+  place duplicates are meant to collapse quietly becomes two.
 - ``OVER`` absent from a translation, which joins the dim table twice instead.
   A window function answers correctly and gives up bounded-halo locality.
 - the modulo appearing only when a translation wraps.
@@ -31,8 +30,6 @@ planner stays free to change underneath them.
 """
 
 from __future__ import annotations
-
-from dataclasses import replace
 
 import polars as pl
 import pytest
@@ -334,62 +331,16 @@ def test_a_bound_carrying_a_variable_is_refused():
 
 
 # ---------------------------------------------------------------------------
-# keyed — what lets the assembly skip its terminal aggregate
+# the variable a fragment names
 # ---------------------------------------------------------------------------
 
 
-def test_a_variable_and_its_shape_operators_stay_keyed():
-    """A term keeps one row per (dims…, var_label) through every operator.
-
-    `Sum` drops a coordinate column, but the rows it merges came from distinct
-    coordinates and so carry distinct labels; `sum` and `roll` join a dim
-    table one-to-one. None of them can put a variable on a row twice.
-    """
-    for node in (
-        plan.Variable('p'),
-        plan.Sum(plan.Variable('p'), ('generator',)),
-        plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus'),
-        plan.Translate(plan.Variable('p'), 'snapshot', by=1),
-        plan.Multiply(plan.Variable('p'), plan.Parameter('cost')),
-        -plan.Variable('p'),
-    ):
-        assert compiler().expression(node, 'test').terms[0].keyed, node
-
-
-def test_two_fragments_of_one_variable_are_compared_by_what_moved_their_labels():
-    """A shared variable is necessary for a shared column, and not sufficient.
-
-    Two `sum`s of one variable through *different* coordinates of one dim
-    reach the same row only where those coordinates agree, which is a question
-    about the dimension table. Everything else answers yes: the cost of being
-    wrong is a model whose sinks disagree, against the cost of a sort.
-    """
-    q = compiler()
-    by_bus = plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus')
-    one = q.expression(by_bus, 'test').terms[0]
-    same = q.expression(by_bus, 'test').terms[0]
-    assert one.mapping == (('group', 'generator', 'bus', 'bus'),)
-    assert q.may_share_a_column(one, same), 'one mapping, so one row — certain'
-
-    plain = q.expression(plan.Variable('p'), 'test').terms[0]
-    assert q.may_share_a_column(one, plain), 'different dims are not modelled'
-
-    shifted = q.expression(plan.Translate(by_bus, 'snapshot', by=1), 'test').terms[0]
-    assert shifted.mapping[-1][0] == 'shift'
-    assert q.may_share_a_column(one, shifted), 'a shift on one side is not modelled'
-
-    other = q.expression(plan.Variable('p'), 'test').terms[0]
-    assert not q.may_share_a_column(one, replace(other, variable='q')), 'distinct variables never share'
-
-
 def test_a_term_names_its_variable_through_every_operator():
-    """What lets two fragments be compared without reading either.
+    """The name travels, because absence is read off the variable underneath.
 
-    `keyed` says a fragment cannot repeat a label on its own; this says which
-    labels it could possibly hold, and the two together are what the assembly
-    reads to decide whether its terminal aggregate has anything to collapse.
-    An operator that drops the name is not wrong — the aggregate runs — it
-    just puts every constraint back on the sorting path.
+    A fragment carries the coordinates its *variable* exists at beside its own
+    rows (`presence`), and which declaration that is has to survive every
+    reshaping for the constraint rows to be restricted by it.
     """
     for node in (
         plan.Variable('p'),
@@ -403,61 +354,3 @@ def test_a_term_names_its_variable_through_every_operator():
         assert compiler().expression(node, 'test').terms[0].variable == 'p', node
 
     assert compiler().expression(plan.Parameter('cost'), 'test').consts[0].variable is None
-
-
-def test_summing_a_constant_part_over_a_dim_stops_it_being_keyed():
-    """The exception, and the reason the flag is not just "is it a term".
-
-    Dropping a dim from a constant part genuinely merges rows — there is no
-    label left to tell them apart — so a term multiplied by one inherits that.
-    """
-    summed = plan.Sum(plan.Parameter('cost'), ('generator',))
-    assert not compiler().expression(summed, 'test').consts[0].keyed
-    product = plan.Multiply(plan.Variable('p'), summed)
-    assert not compiler().expression(product, 'test').terms[0].keyed
-
-
-def test_a_sum_that_drops_nothing_leaves_a_constant_part_keyed():
-    """Summing over a dim the operand lacks scales it; no rows merge."""
-    scaled = plan.Sum(plan.Multiply(plan.Variable('p'), plan.Parameter('cost')), ('snapshot',))
-    assert compiler().expression(scaled, 'test').terms[0].keyed
-
-
-def test_sum_over_a_broadcast_dim_is_not_keyed():
-    """Which dim is grouped decides whether the key survives.
-
-    `generator` is `p`'s own, so grouping it merges rows with distinct labels.
-    Reaching the fragment by broadcast — a parameter carrying a dim the
-    variable does not — merges rows carrying the same one, and nothing
-    downstream can tell those apart.
-    """
-    own = plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus')
-    assert compiler().expression(own, 'test').terms[0].keyed
-
-    broadcast = plan.GroupSum(
-        plan.Multiply(plan.Variable('p'), plan.Parameter('cost')),
-        over='generator',
-        coordinate='bus',
-        into='bus',
-    )
-    assert compiler().expression(broadcast, 'test').terms[0].keyed  # still p's own dim
-
-    lone = plan.Program(
-        parameters=PROGRAM.parameters,
-        variables=(plan.VariableDeclaration('q', ('snapshot',)),),
-        constraints=(),
-        objective=plan.ObjectiveDeclaration('min', plan.Variable('q')),
-        dimensions=PROGRAM.dimensions,
-    )
-    lonely = PolarsCompiler(
-        lone,
-        bound(),
-        {'q': pl.LazyFrame(schema={'snapshot': pl.Int64, 'var_label': pl.Int64})},
-    )
-    node = plan.GroupSum(
-        plan.Multiply(plan.Variable('q'), plan.Parameter('cost')),
-        over='generator',
-        coordinate='bus',
-        into='bus',
-    )
-    assert not lonely.expression(node, 'test').terms[0].keyed

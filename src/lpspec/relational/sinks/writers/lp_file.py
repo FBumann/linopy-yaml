@@ -1,8 +1,8 @@
 """The ``lp_file`` sink: the model as LP text.
 
-Portability, debugging, and the differential oracle. Every section is sunk
-straight into the open file, so the LP text never exists in this process's
-memory — and no byte is written twice.
+Portability, debugging, and the differential oracle. Every section is a lazy
+frame sunk straight into the open file, so the rendered text is polars' to
+stream and no byte is written twice.
 
 Numbers go through polars' float cast, which round-trips exactly: the text a
 solver reads back is the double the engine computed.
@@ -21,16 +21,6 @@ import polars as pl
 
 if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
-
-
-#: Nonzeros per constraint chunk. The stream a chunk sorts is its terms plus a
-#: header and a footer per row, carrying rendered text — so this is the knob
-#: that bounds the writer's peak rather than its speed. Measured on
-#: `transport/l`, chunking at this width takes the constraint section's peak
-#: contribution from +0.88 GB to a fraction of it, for no change in the bytes.
-#: Wider costs memory for nothing; much narrower pays per-chunk overhead on
-#: every range.
-EMIT_BUDGET = 2_000_000
 
 
 def _sink(frame: pl.LazyFrame, f: IO[bytes]) -> None:
@@ -80,12 +70,7 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         _sink(objective, f)
 
         f.write(b'\ns.t.\n\n')
-        # One range at a time. The stream a chunk sorts carries rendered text,
-        # so sorting the whole model at once is what the writer's peak *is*;
-        # ranges are ascending and each is internally sorted, so the bytes are
-        # the same ones #109 pins.
-        for lo, hi in model.row_chunks_by_nonzeros(EMIT_BUDGET):
-            _sink(_constraint_blocks(model, lo, hi), f)
+        _sink(_constraint_lines(model), f)
 
         f.write(b'\nbounds\n')
         _sink(bounds, f)
@@ -100,61 +85,43 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         f.write(b'\nend\n')
 
 
-def _constraint_blocks(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
-    """Every constraint line, as one sorted stream of ``(key, line)``.
+def _constraint_lines(model: ModelTables) -> pl.LazyFrame:
+    """The whole constraint section, one output line per row of the frame.
 
-    One line per output line rather than one block per row: the pieces are
-    built independently and interleaved by sorting, so nothing has to gather a
-    row's terms into a string first. That is what makes the bytes reproducible
-    — a hash join hands back groups in whatever order it finishes them, and no
-    amount of sorting the *rows* afterwards fixes the order *within* one.
+    A constraint is a header, its terms one per line, then its comparison and
+    right-hand side. So the terms are gathered into a list per row, the header
+    and footer are put on either side of it, and the list is exploded back into
+    lines.
 
-    A row with no terms still needs a line a solver can parse, and the anti-join
-    is what a group-by gave for free — anti rather than a count, because the
-    question is whether the row has *a* term and not how many, so the matrix
-    goes in as it is. Distinguishing its repeated ``row`` values would be a
-    hash pass over every nonzero in the chunk to reach the same answer.
+    **Both orderings are stated, and neither is inherited**, because together
+    they are what #109 pins: a model must write the same bytes twice. The terms
+    are sorted by column *before* the group, since a list keeps the order it
+    was built in; the rows are sorted *after* the join, since a join hands
+    groups back in whatever order it finishes them.
 
-    **The order is one integer, and it is the only other column.** A row's lines
-    occupy ``slots`` consecutive keys and each piece picks one — header first,
-    then the placeholder, then each term at its own column index, then the
-    sense. Sorting one column beats sorting ``(row, ord)``, and carrying nothing
-    else means the sort permutes the rendered text and nothing beside it.
-
-    **Chunk-relative**, because that is what bounds the key. Each range is sunk
-    before the next is built, so only the order *within* one has to hold, and
-    ``row - lo`` is a chunk's height rather than the model's. A global row would
-    put the product one careless model away from overflowing ``Int64`` and
-    reordering the file in silence.
+    A row with no terms still needs a line a solver can parse, which is what
+    the placeholder is: the left join leaves it null, and nothing else can.
     """
-    slots = model.cols.height + 3
-
-    def _key(within: pl.Expr) -> pl.Expr:
-        return ((pl.col('row') - lo) * slots + within).alias('key')
-
-    rows = model.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
-    matrix = model.matrix.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
-    header = rows.select(
-        _key(pl.lit(0, dtype=pl.Int64)),
-        pl.concat_str(pl.lit('c').alias('c'), _digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),
+    terms = (
+        model.matrix.lazy()
+        .sort('row', 'col')
+        .group_by('row')
+        .agg(_term(pl.col('coeff'), pl.col('col')).alias('terms'))
     )
-    placeholder = rows.join(matrix.select('row'), on='row', how='anti').select(
-        _key(pl.lit(1, dtype=pl.Int64)),
-        pl.lit('+0 x0').alias('line'),
+    return (
+        model.rows.lazy()
+        .join(terms, on='row', how='left')
+        .sort('row')
+        .select(
+            pl.concat_list(
+                pl.concat_str(pl.lit('c'), _digits(pl.col('row')), pl.lit(':')),
+                pl.col('terms').fill_null(pl.lit(['+0 x0'], dtype=pl.List(pl.String))),
+                pl.concat_str(pl.col('sense').replace({'==': '='}), pl.lit(' '), _number(pl.col('rhs'))),
+            ).alias('line')
+        )
+        # never empty — every row has a header and a footer at least
+        .explode('line', empty_as_null=False)
     )
-    # Redundant for correctness and not for speed: the ordering below subsumes
-    # this, and the bytes are identical without it — but removing it measured
-    # neutral on `transport/l` and ~10% worse on `profiled/l`, because it
-    # pre-orders the largest input and polars' sort exploits ordered runs.
-    terms = matrix.sort('row', 'col').select(
-        _key(pl.col('col').cast(pl.Int64) + 2),
-        _term(pl.col('coeff'), pl.col('col')).alias('line'),
-    )
-    footer = rows.select(
-        _key(pl.lit(slots - 1, dtype=pl.Int64)),
-        pl.concat_str(pl.col('sense').replace({'==': '='}), pl.lit(' '), _number(pl.col('rhs'))).alias('line'),
-    )
-    return pl.concat([header, placeholder, terms, footer]).sort('key').select('line')
 
 
 def _term(coeff: pl.Expr, col: pl.Expr) -> pl.Expr:

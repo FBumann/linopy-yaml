@@ -344,15 +344,14 @@ in the lane is order-free, which is what lets the query planner rearrange it.
   dimensions' declared ordinals. A contract, not a side effect: it is what makes
   a build reproducible run to run.
 - Variables and constraint rows are the same operation over different frames and
-  it is written once (`Labeller.frame`), which reaches the number three ways
-  depending on how much of the product survives the mask — arithmetic, factored,
-  counted — and they must agree integer for integer. That agreement is why
-  labelling is a module with stated inputs rather than three methods among
-  twenty: nothing else about a build can move an index.
-- The same order comes **back**: `primal` / `dual` / `to_parquet` sort on the
-  label before handing rows over, the order the LP sink writes. Stated at the
-  read rather than assumed, because a `where` decides which rows survive and a
-  join decides nothing about the order they arrive in.
+  it is written once (`labels.frame`), with no second path to disagree with:
+  sort the surviving coordinates on their ordinals, number them from the next
+  free label. A mask, a presence restriction, or neither all take it, so a mask
+  that removes nothing is indistinguishable from no mask. That is why labelling
+  is a module with stated inputs rather than a method among twenty: nothing
+  else about a build can move an index.
+- The same order comes **back**: `primal` / `dual` / `to_parquet` read the
+  label frame, which was numbered in that order, and the LP sink writes it.
 
 **The plan is affine-by-design.** No node introduces variables or constraints as
 a side effect of an expression; formulations are model *transformations*.
@@ -422,7 +421,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/chunking.py` | how a batched pass sizes its chunk: budget ÷ the width of one unit |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
-| `relational/engines/polars/labels.py` | which coordinate gets which solver index; three routes to one number, which must agree |
+| `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, no special cases |
 | `relational/engines/polars/binding.py` | a caller's sources → `BoundSources`, the frozen frames every query is written against |
 | `relational/engines/polars/executor.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
