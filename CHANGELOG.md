@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.67](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.66...v0.0.1-alpha.67) (2026-08-09)
+
+
+### Bug Fixes
+
+* **engine:** a masked-out scalar variable takes its row with it ([#480](https://github.com/FBumann/lpspec/issues/480)) ([2e6f329](https://github.com/FBumann/lpspec/commit/2e6f329f8cc7ae245fa66f07464a13e47ace2ca0))
+
 ## [0.0.1-alpha.66](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.65...v0.0.1-alpha.66) (2026-08-09)
 
 
