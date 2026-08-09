@@ -782,14 +782,42 @@ def test_a_reader_for_an_unkept_variable_fails_the_way_primal_does():
             read_all()
 
 
-def test_a_hand_built_axis_needs_no_class():
+def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
     """`axis` also takes a plain list of `(key, sources, coords)`, so an
-    irregular ladder needs no third constructor on the public surface."""
+    irregular ladder needs no third constructor on the public surface.
+
+    What it cannot do is say what its keys are coordinates *of*, so `key=` is
+    required there — the same argument that leaves `EachWindow.into` without a
+    default. A column called `slice` would be this library naming somebody
+    else's draw.
+    """
     base = scenario_sources()
     cuts = [
         (name, {**base, 'load': base['load'].filter(pl.col('scenario') == name).drop('scenario')}, {})
         for name in ('low', 'high')
     ]
-    runs = lps.solve_over(DISPATCH, base, cuts, keep=('p',))
+
+    with pytest.raises(lps.LpspecError, match='hand-built axis needs key_name='):
+        lps.solve_over(DISPATCH, base, cuts, keep=('p',))
+
+    runs = lps.solve_over(DISPATCH, base, cuts, keep=('p',), key_name='draw')
     assert runs.keys == ['low', 'high']
-    assert runs.meta.columns[0] == 'slice'
+    assert runs.meta.columns[0] == 'draw'
+    assert runs.primal('p').columns[0] == 'draw', 'both frames key the same way, or they stop joining'
+
+
+def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
+    """The derived name is right by default and the caller's word wins.
+
+    The refusal is the narrow one: a key that is already a dimension of a kept
+    variable would collide with a column those frames carry, which polars
+    reports as a duplicate with no idea why. Naming a *dropped* dimension is
+    not refused — that is the caller saying it deliberately, which is a
+    different thing from the library doing it silently.
+    """
+    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), keep=('p',), key_name='case')
+    assert runs.objective.columns[0] == 'case'
+    assert set(runs.primal('p').columns) == {'case', 'snapshot', 'generator', 'value'}
+
+    with pytest.raises(lps.LpspecError, match=r"key_name='generator' is already a dimension of \['p'\]"):
+        lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), keep=('p',), key_name='generator')
