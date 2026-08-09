@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.74](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.73...v0.0.1-alpha.74) (2026-08-09)
+
+
+### Documentation
+
+* roll is not a spelling — shift(edge=wrap) is ([#509](https://github.com/fluxopt/lpspec/issues/509)) ([6f1f98a](https://github.com/fluxopt/lpspec/commit/6f1f98a3ab1994c8b0996a2f5e6f50025c183a0c))
+
 ## [0.0.1-alpha.73](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.72...v0.0.1-alpha.73) (2026-08-09)
 
 
