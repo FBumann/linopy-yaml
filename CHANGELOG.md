@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.63](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.62...v0.0.1-alpha.63) (2026-08-09)
+
+
+### Documentation
+
+* **api:** Gurobi Compute Server, Instant Cloud and WLS already work ([#458](https://github.com/FBumann/lpspec/issues/458)) ([4f18e89](https://github.com/FBumann/lpspec/commit/4f18e89f96cf5c841113594549001d70bb7a0790))
+
 ## [0.0.1-alpha.62](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.61...v0.0.1-alpha.62) (2026-08-01)
 
 
