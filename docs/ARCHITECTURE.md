@@ -5,13 +5,13 @@ this file in the same PR. The language is [docs/SPEC.md](SPEC.md); what may
 enter it is [docs/design/ceiling.md](design/ceiling.md); plans and refusals
 are [docs/ROADMAP.md](ROADMAP.md); measured results are
 [docs/benchmarks.md](benchmarks.md), produced by the harness in
-[bench/](https://github.com/FBumann/lpspec/blob/main/bench/README.md) — which is
+[bench/](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — which is
 also how a claim here gets falsified.
 
 `python examples/walkthrough.py` executes the pipeline below stage by stage
 and prints what each one produces — the same public calls `lps.solve` makes,
 so the demonstration cannot drift from the code. Its output is committed as
-[examples/walkthrough.out](https://github.com/FBumann/lpspec/blob/main/examples/walkthrough.out) and asserted line for line
+[examples/walkthrough.out](https://github.com/fluxopt/lpspec/blob/main/examples/walkthrough.out) and asserted line for line
 (`tests/test_walkthrough.py`), so reading it is the same as running it — and a
 stage that starts telling a different story shows up as a diff in that file.
 
@@ -288,7 +288,7 @@ choice load-bearing in the language's rulebook.
 5. **The public interface is a declared model, not a Python API.** YAML is what
    we ship and document; the contract underneath is `MathSchema`, and whether
    that seam is ever blessed is open
-   ([#381](https://github.com/FBumann/lpspec/issues/381)). The Python surface is
+   ([#381](https://github.com/fluxopt/lpspec/issues/381)). The Python surface is
    the runner (`api.py`); the plan is internal. The whole of it is
    [sixteen names](#the-python-surface), pinned by a test — so the surface grows
    through a list a reviewer reads, like every other fence here.
@@ -375,7 +375,7 @@ streams and no more: `cols` (bounds, objective coefficients, integrality),
 and `genconstr` — plus a semi-continuous threshold on `cols`. Unlike the three
 that exist, those two would land *unevenly*, because the destinations differ
 per sink (see "Capability is not the ceiling"); that unevenness is what
-[Track 3](https://github.com/FBumann/lpspec/issues/472) exists to make declared rather
+[Track 3](https://github.com/fluxopt/lpspec/issues/472) exists to make declared rather
 than discovered at solve time.
 
 **A sink is one of two things, and the directory says which.** A **solver**
@@ -411,7 +411,7 @@ must stay off the import path of a caller who does not use it.
 | `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_schema`, the language's front door |
 | `language/piecewise.py` | `piecewise:` → λ-formulation declarations |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_schema` |
-| `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/FBumann/lpspec/blob/main/src/lpspec/typeset/README.md)) |
+| `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/typeset/README.md)) |
 | `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `convex:` curvature guard, which is the one check that needs values |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
@@ -428,7 +428,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
 | `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued coords |
 | `relational/sinks/tables.py` | what every sink reads and no more — the four frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
-| `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/FBumann/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
+| `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
 | `linopy/__init__.py` | opt-in shim: `build` / `extend` on a `linopy.Model` |
 | `linopy/loader.py` | data coercion to `xr.Dataset`, master coords |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
@@ -529,7 +529,7 @@ read back by joining labels to coordinates.
 extra and imported inside the function), or one in `writers/` keyed by suffix in
 `WRITERS`. Nothing above it changes — no method on the executor, no branch in
 `api.py`, no name on the Python surface. The
-[README](https://github.com/FBumann/lpspec/blob/main/src/lpspec/relational/sinks/README.md)
+[README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md)
 is the full list, and `tests/test_architecture.py` checks the shape off the path.
 
 **Add a consumer of the AST** (a renderer, a checker, a report): a directory

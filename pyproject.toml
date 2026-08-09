@@ -90,7 +90,7 @@ gurobi = [
 ]
 
 [project.urls]
-repository = "https://github.com/FBumann/lpspec"
+repository = "https://github.com/fluxopt/lpspec"
 
 [tool.hatch.version]
 source = "vcs"

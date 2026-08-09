@@ -1,8 +1,8 @@
 site_name: lpspec
 site_description: Self-documenting optimisation models — declarative LP/MILP, built relationally and handed straight to the solver
 site_url: https://lpspec.readthedocs.io/en/latest/
-repo_url: https://github.com/FBumann/lpspec
-repo_name: FBumann/lpspec
+repo_url: https://github.com/fluxopt/lpspec
+repo_name: fluxopt/lpspec
 edit_uri: edit/main/docs/
 strict: true
 
@@ -170,7 +170,7 @@ extra_css:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/FBumann/lpspec
+      link: https://github.com/fluxopt/lpspec
       name: lpspec on GitHub
     - icon: simple/pypi
       link: https://pypi.org/project/lpspec/

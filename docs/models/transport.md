@@ -137,4 +137,4 @@ data on the dimension.
 
 ---
 
-[`examples/transport.yaml`](https://github.com/FBumann/lpspec/blob/main/examples/transport.yaml) · back to [all models](index.md)
+[`examples/transport.yaml`](https://github.com/fluxopt/lpspec/blob/main/examples/transport.yaml) · back to [all models](index.md)

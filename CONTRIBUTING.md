@@ -81,7 +81,7 @@ Three rules, each enforced, so none has to be remembered:
 - **Inside `docs/`, link relatively.** `../SPEC.md`, `models/index.md`. mkdocs
   resolves and validates these; a dead one fails the build.
 - **Outside `docs/`, write the full GitHub URL** —
-  `https://github.com/FBumann/lpspec/blob/main/bench/README.md`, not
+  `https://github.com/fluxopt/lpspec/blob/main/bench/README.md`, not
   `../bench/README.md`. The site has no file above `docs/` to resolve to, and
   mkdocs does *not* flag the relative form: it ships as a silent 404. This is
   the same convention the model pages already use to link at their `.yaml`.

@@ -53,7 +53,7 @@ no name on the Python surface.
 
 ## When Track 3 lands
 
-[Track 3](https://github.com/FBumann/lpspec/issues/472)
+[Track 3](https://github.com/fluxopt/lpspec/issues/472)
 gives each sink a declared capability table so `check(model, sink=...)` can
 answer "will this sink take it". The table belongs in the sink's own module,
 collected by the family `__init__` rather than owned by it — and it stops
@@ -63,7 +63,7 @@ being uniform at exactly the seam this directory draws: SOS is native in
 ## Stable output
 
 Two runs of one model produce the same bytes
-([#109](https://github.com/FBumann/lpspec/issues/109)). It is not free and it
+([#109](https://github.com/fluxopt/lpspec/issues/109)). It is not free and it
 is easy to lose: a parallel join hands back a group in whatever order it
 finished it, so a sink that gathers a row's terms and *then* orders the rows
 has already lost the order within one. `lp_file` emits one frame of lines
