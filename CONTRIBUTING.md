@@ -144,21 +144,21 @@ it. The narrower reference is worth exactly the time until someone moves the
 loop. This is the same split the docs already run on — a reference page carries
 the rule, the argument goes where it can rot without taking the rule with it.
 
-**Two labels carry order, and nothing else does.**
+**One label carries order, and structure carries the rest.**
 
 - **`now`** — in flight, capped at five. Everything else is backlog. A list of
   forty-six issues in a claimed priority order is fiction; a cap of five is the
   smallest thing that is not, and it enforces itself.
-- **`track:1`–`track:4`** — the [ROADMAP](docs/ROADMAP.md) track an issue sits
-  on, applied from what that file already names. So `gh issue list --label
-  track:1` is the board, and ROADMAP stays the one place the argument lives
-  rather than growing a second copy that drifts.
+- **Sub-issues carry the grouping.** A track is a parent issue and its work is
+  the sub-issues under it. Parentage is structural, so it cannot drift the way a
+  label mirroring a markdown table does — that mirror was tried and was wrong on
+  three issues within the hour.
 
 `blocked:upstream` and `blocked:decision` say what an issue waits on — another
 project, or an open `decision` issue here. A `decision` closes by *resolution*,
-not by work: on yes it becomes `roadmap`, on no it becomes a row in ROADMAP's
-non-primitives table. Either way answering one is never wasted, which is why
-they are worth clearing in batches.
+not by work: on yes it becomes `roadmap`, on no it becomes a row in the
+deliberate non-primitives table. Either way answering one is never wasted, which
+is why they are worth clearing in batches.
 
 ## Breaking changes are free
 
