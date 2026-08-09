@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.64](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.63...v0.0.1-alpha.64) (2026-08-09)
+
+
+### Documentation
+
+* **models:** monthly_budget — group_sum over time, not just space ([#461](https://github.com/FBumann/lpspec/issues/461)) ([ab8d71f](https://github.com/FBumann/lpspec/commit/ab8d71f7f652e89703f18ba7a06e670be52637ed))
+
 ## [0.0.1-alpha.63](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.62...v0.0.1-alpha.63) (2026-08-09)
 
 
