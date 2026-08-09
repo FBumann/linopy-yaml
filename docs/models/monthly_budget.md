@@ -17,7 +17,7 @@ nothing else.
 Compare [transport](transport.md): there, $\mathrm{bus}$ is a coordinate on
 `generator` and the sum is over generators at a bus. Here $\mathrm{month}$ is a
 coordinate on `snapshot` and the sum is over snapshots in a month. **It is the
-same construct** — `sum` — and time is not a special axis.
+same construct** — `sum(group_by=)` — and time is not a special axis.
 
 ## The model
 
@@ -145,7 +145,7 @@ shape: (6, 2)
 └─────────────────────┴─────────┘
 ```
 
-Three snapshots in January, one in February, two in March: `sum` needs a
+Three snapshots in January, one in February, two in March: `sum(group_by=)` needs a
 partition, not equal groups.
 
 That one expression is the only place a calendar appears anywhere. Swap it for
@@ -178,7 +178,7 @@ sol.primal('p').join(index, on='snapshot').group_by('month').agg(pl.col('value')
 A `coords:` entry is a **function between two dimensions**, so it needs a
 codomain. `month` being one is not ceremony — three things rest on it:
 
-1. **`sum` replaces `over` with the dimension the coordinate targets.**
+1. **`sum(group_by=)` replaces `over` with the dimension the coordinate targets.**
    The expression's dims are therefore `[month, generator]`, and a `foreach:`
    can only name declared dimensions.
 2. **`monthly_cap` is indexed *by* month.** A parameter carries values *at*
@@ -204,9 +204,10 @@ misspelled is a mistake.
 
 ## What this cannot do
 
-`sum` takes a **partition**: `coords` is a function from snapshot to
-month, so each snapshot belongs to exactly one group. Unequal groups are fine,
-and a group with no members contributes nothing.
+`sum(group_by=)` takes a **partition**: `coords` is a function from snapshot to
+month, so a snapshot with a month belongs to exactly one group. Unequal groups
+are fine, and a group with no members contributes nothing — as does a snapshot
+whose coordinate is null, which belongs to no group and lands nowhere.
 
 What it cannot express is an **overlapping** aggregate — *"trailing twelve
 months, at every month"* — because each snapshot would belong to twelve groups
@@ -216,5 +217,5 @@ it is the fixed-width window, [#468](https://github.com/FBumann/lpspec/issues/46
 The same split shows up one level up, where a *process* loops over plans
 rather than an expression looping over rows
 ([#457](https://github.com/FBumann/lpspec/issues/457)): slicing a model per
-coordinate is a partition, slicing it per window overlaps. Here `sum`
+coordinate is a partition, slicing it per window overlaps. Here `sum(group_by=)`
 partitions, and the overlapping counterpart is the piece that has not landed.

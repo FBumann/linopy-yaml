@@ -125,7 +125,7 @@ objectives:
 
 ## What it exercises
 
-Three `sum` calls, and they are what a network *is* in this language.
+Three `sum(group_by=)` calls, and they are what a network *is* in this language.
 A dimension can carry **coordinates** — `generator` carries `bus`, `line`
 carries `from` and `to` — and `sum(f, over=line, group_by=to)` sums along a
 line's `to` coordinate, landing the result on `bus`. The same `f` is summed

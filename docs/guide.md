@@ -60,7 +60,7 @@ dimensions:
     == load
 ```
 
-`sum` sums along a coordinate, landing the result on the dimension that
+`sum(group_by=)` sums along a coordinate, landing the result on the dimension that
 coordinate points at. The same `f` is summed twice through two different
 coordinates — once as inflow, once as outflow.
 

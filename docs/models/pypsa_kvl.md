@@ -269,7 +269,7 @@ if __name__ == '__main__':
 
 A parameter over two dimensions multiplying a variable over one, reduced along
 the shared dimension — the shape that makes an incidence matrix sayable at all.
-Plus `sum` on both line endpoints for the nodal balance, as in rung 1.
+Plus `sum(group_by=)` on both line endpoints for the nodal balance, as in rung 1.
 
 No new construct was needed for the last rung of the ladder, which is the
 result worth reporting.

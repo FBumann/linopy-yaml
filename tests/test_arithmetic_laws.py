@@ -220,11 +220,12 @@ def test_shift_and_a_filled_shift_are_different_operators():
 # The cases above all reduce over `f` with one mask on `f`, which is the
 # smallest arrangement that shows the rule — and small enough that it could be
 # passing for the wrong reason. These vary one thing at a time: the *reduction*
-# (`sum` rather than `sum`), the *number* of masks, where the mask *sits*
+# (a plain sum rather than a grouped one), the *number* of masks, where the
+# mask *sits*
 # relative to the dim being reduced, and where the absence *comes from*.
 #
-# `sum` is the one that had to be here. #314 routed it through the same
-# propagation as `sum` and nothing covered it, so its behaviour was a claim
+# The grouped form is the one that had to be here. #314 routed it through the
+# same propagation as a plain sum and nothing covered it, so its behaviour was a claim
 # rather than a result.
 # ---------------------------------------------------------------------------
 

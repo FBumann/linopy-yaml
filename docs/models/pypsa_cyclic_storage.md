@@ -331,7 +331,7 @@ if __name__ == '__main__':
 ## What it exercises
 
 `roll`, against rung 3's `shift` — plus division by a parameter and the same
-five-term `sum` balance, with one fewer equation and one fewer parameter.
+five-term `sum(group_by=)` balance, with one fewer equation and one fewer parameter.
 Worth reading the two side by side: neither boundary needs a clause to state it.
 The operator names which one is meant, and picking the wrong one is a different
 model rather than a missing guard.

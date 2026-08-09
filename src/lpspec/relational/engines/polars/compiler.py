@@ -740,7 +740,8 @@ class PolarsCompiler:
         A label's row is decided by what moved it, so equal
         :attr:`~TermFragment.mapping` means the same row and a certain
         collision. Mappings that differ **only in a coordinate** — the network
-        shape, ``sum(f, group_by=to) - sum(f, group_by=from)`` — send it to the
+        shape, ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``
+        — send it to the
         same row exactly where those coordinates agree, which is a question
         about a *dimension table*: is there a line whose ends are one bus? The
         `line` table is forty rows where the matrix is 12.6M.

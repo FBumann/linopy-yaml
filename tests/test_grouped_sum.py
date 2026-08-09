@@ -99,9 +99,9 @@ def test_sum_lowers_to_one_node_per_injection_term():
         # an undeclared dim, or a coordinate the dim does not declare, is caught
         # in resolution before lowering ever sees the call
         ('sum(p, over=nope, group_by=bus)', r'over=nope\) does not name a declared dimension'),
-        ('sum(p, over=generator, group_by=nope)', r"by=nope\) does not name a coordinate of 'generator'"),
+        ('sum(p, over=generator, group_by=nope)', r"group_by=nope\) does not name a coordinate of 'generator'"),
         # a coordinate declared on a *different* dim is not in scope either
-        ('sum(p, over=generator, group_by=to)', r"by=to\) does not name a coordinate of 'generator'"),
+        ('sum(p, over=generator, group_by=to)', r"group_by=to\) does not name a coordinate of 'generator'"),
     ],
 )
 def test_a_name_sum_cannot_resolve_is_refused(expression, match):

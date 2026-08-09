@@ -650,7 +650,7 @@ def _network(self_loop: bool) -> tuple[dict, dict]:
 
 
 def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet():
-    """`by=to` and `by=from` reach one cell exactly on a line to itself.
+    """`group_by=to` and `group_by=from` reach one cell exactly on a line to itself.
 
     Both fragments carry `f`, so counting variables says the aggregate is
     reachable and every nonzero in the model gets sorted to find out. Which

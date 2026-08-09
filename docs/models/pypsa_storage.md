@@ -348,7 +348,7 @@ if __name__ == '__main__':
 ## What it exercises
 
 `shift` across a boundary condition, division of a variable by a parameter, and
-a five-term `sum` nodal balance — generators, both ends of every link,
+a five-term `sum(group_by=)` nodal balance — generators, both ends of every link,
 and both directions of storage, all projected onto `bus`.
 
 It also asks for [#31](https://github.com/FBumann/lpspec/issues/31) a third

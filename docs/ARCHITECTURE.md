@@ -328,7 +328,7 @@ what makes it visible in a signature rather than only in a docstring.
 `(frame dims…, var_label, coeff)` plus a constant part; constraint rows are
 `(row, sense, rhs)`; the coefficient matrix is COO `(row, col, coeff)`. Masks
 are **row absence** — no NaN sentinels, no `-1` labels. Broadcasting is a join,
-`sum` drops coordinate columns, `sum` joins the dim table and projects a
+`sum` drops coordinate columns, `sum(group_by=)` joins the dim table and projects a
 declared coordinate in place of the grouped dim. Neither aggregates: both
 rewrite a fragment's dim tuple, and duplicates collapse in the terminal
 `SUM(coeff) GROUP BY row, col` at assembly.

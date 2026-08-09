@@ -34,7 +34,7 @@ within_cap:
   expression: p <= at(p_nom, onto=snapshot, by=period)
 ```
 
-`at` and `the grouping sum` take the same two arguments because `(over, by)` names one
+`at` and `sum(group_by=)` take the same two arguments because `(over, by)` names one
 mapping table and the helper says which direction it is walked.
 
 A per-period **parameter** needs neither: data prep can join it onto the

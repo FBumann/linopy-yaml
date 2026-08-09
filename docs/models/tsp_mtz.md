@@ -202,7 +202,7 @@ reduction — the map is one-to-one, so nothing is added up; `u` simply moves
 from the `city` axis onto the `from_city` axis. Doing it twice with different
 coordinates puts the same variable at both ends of one row.
 
-That is `sum` doing a job it was not designed for and handling it because
+That is `sum(group_by=)` doing a job it was not designed for and handling it because
 [topology is data](pypsa_transport.md): a coordinate map is a join, and a join
 does not care whether it is many-to-one or one-to-one.
 
@@ -232,7 +232,7 @@ solves large instances this way.
 
 ## What it exercises
 
-`sum` as a relabel through a one-to-one coordinate map, a `where`
+`sum(group_by=)` as a relabel through a one-to-one coordinate map, a `where`
 comparing a dimension against a string coordinate, sparsity standing in for an
 `i ≠ j` guard, and `binary` over a two-dimensional index.
 
