@@ -528,7 +528,7 @@ def _needs_aggregate(
     ``x + y`` is two, because labels are dense and assigned a declaration at a
     time — and then asks whether two fragments of one variable send some label
     to one **row**. For the network shape,
-    ``group_sum(f, by=to) - group_sum(f, by=from)``, that happens only where a
+    ``sum(f, group_by=to) - sum(f, group_by=from)``, that happens only where a
     line's two ends are one bus. See
     :meth:`~lpspec.relational.engines.polars.compiler.PolarsCompiler.may_share_a_column`.
 
