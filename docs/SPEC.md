@@ -365,7 +365,8 @@ where_expr ::= atom | "NOT" where_expr | where_expr ("AND"|"OR") where_expr
             |  "(" where_expr ")"
 atom       ::= NAME | NAME COMPARATOR value | "True" | "False"
 COMPARATOR ::= "<=" | ">=" | "==" | "!=" | "<" | ">"
-value      ::= NUMBER | NAME_OR_STRING
+value      ::= NUMBER | QUOTED | NAME_OR_STRING
+QUOTED     ::= "'" chars "'" | '"' chars '"'
 ```
 
 | Surface | Names a… | Meaning |
@@ -386,6 +387,20 @@ dimension) is a load error naming the near miss, because reading it as text
 would compare a coordinate column against another declaration's name and mask
 everything out. An undeclared *bare* name is a load error, and a mask dim outside `foreach` is
 one too (§5.2).
+
+**Quote a label that is not an identifier**, and quote a date. A bare RHS word
+has to look like a name, so `combined-cycle`, `IT-north` and `CCGT 400MW` are
+only sayable in quotes — and quoting is also what says *label, not name*, so a
+quoted word is never read as a declaration and never a near-miss error.
+
+**A comparison is checked against the declared `dtype`**, and this is the one
+place it matters most: a `datetime` dimension compared to a number is compared
+against the **epoch**, so `snapshot > 0` would silently mean "after 1970-01-01".
+That is a load error naming the fix. A datetime boundary is a quoted ISO date —
+`snapshot > '2030-01-01'`, or `'2030-01-01T06:00'` with a time — which is the
+only spelling, since the language orders and compares coordinates and never
+interprets them. Calendar arithmetic, resampling and timezone conversion stay
+data prep.
 
 ## 7. Operators
 
