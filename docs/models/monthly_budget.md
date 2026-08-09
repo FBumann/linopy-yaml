@@ -137,7 +137,7 @@ cover one of those cases; a mapping column covers all of them.
 The budget's dual is a shadow price per month and technology, so a binding cap
 says what relaxing it would be worth:
 
-```
+```text
 month     generator   dual
 2030-01   wind       -49.0   ← binding: displacing gas (50) with wind (1)
 2030-02   wind        -0.0
@@ -165,7 +165,7 @@ codomain. `month` being one is not ceremony — three things rest on it:
 3. **It is what makes a typo an error.** A value in the snapshot index that is
    not a coordinate of `month` is rejected at bind time:
 
-```
+```text
 DataError: dimension 'snapshot' coordinate 'month' has value(s) that are
            not 'month' coordinates: '2030-3'
 ```
