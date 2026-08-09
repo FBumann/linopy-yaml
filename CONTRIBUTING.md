@@ -127,6 +127,39 @@ the two required checks above. Approvals are not required, but the PR is.
 Versioning, the release PR, and how to force a specific version:
 [RELEASING.md](RELEASING.md).
 
+## Filing issues
+
+**Cite behaviour and a file, not a private symbol and a line range.** An issue
+outlives several refactors; one written against internals dies with the next
+one and takes its argument down with it. That has now happened four times — #50
+rested on `_sum_piece` / `_group_piece` / `_shift_piece`, #103 on
+`_group_fragment`, #27 instructed a grep for `RelationalBuildError` in
+`lowering.py`, and #244 quoted a results file on a branch since deleted. Every
+one had to be closed and re-filed, because the *finding* survived the rewrite
+and the evidence for it did not.
+
+So write `bounds accept a parameter name or a number, not an expression
+(language/schema.py)` rather than a line number inside the loop that enforces
+it. The narrower reference is worth exactly the time until someone moves the
+loop. This is the same split the docs already run on — a reference page carries
+the rule, the argument goes where it can rot without taking the rule with it.
+
+**Two labels carry order, and nothing else does.**
+
+- **`now`** — in flight, capped at five. Everything else is backlog. A list of
+  forty-six issues in a claimed priority order is fiction; a cap of five is the
+  smallest thing that is not, and it enforces itself.
+- **`track:1`–`track:4`** — the [ROADMAP](docs/ROADMAP.md) track an issue sits
+  on, applied from what that file already names. So `gh issue list --label
+  track:1` is the board, and ROADMAP stays the one place the argument lives
+  rather than growing a second copy that drifts.
+
+`blocked:upstream` and `blocked:decision` say what an issue waits on — another
+project, or an open `decision` issue here. A `decision` closes by *resolution*,
+not by work: on yes it becomes `roadmap`, on no it becomes a row in ROADMAP's
+non-primitives table. Either way answering one is never wasted, which is why
+they are worth clearing in batches.
+
 ## Breaking changes are free
 
 **The project is `0.0.1aN` until the first official release, and holds no
