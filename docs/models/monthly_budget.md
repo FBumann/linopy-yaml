@@ -126,7 +126,23 @@ The `month` column is produced before the model, by whatever rule you want:
 index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
 ```
 
-That line is the only place a calendar appears anywhere. Swap it for
+What that produces is the snapshot index the model binds against — a second
+column beside the timestamps, and nothing else:
+
+```text
+snapshot              month
+2030-01-01 00:00:00   2030-01
+2030-01-16 00:00:00   2030-01
+2030-01-31 00:00:00   2030-01
+2030-02-15 00:00:00   2030-02
+2030-03-02 00:00:00   2030-03
+2030-03-17 00:00:00   2030-03
+```
+
+Three snapshots in January, one in February, two in March: `group_sum` needs a
+partition, not equal groups.
+
+That one expression is the only place a calendar appears anywhere. Swap it for
 `dt.quarter()`, a fiscal-year lookup, or a hand-built table of representative
 periods and the model is unchanged — which is why there is no `resample:` or
 `reduce_to_monthly()` in the language and never will be. A domain helper would
