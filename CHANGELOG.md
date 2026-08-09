@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.77](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.76...v0.0.1-alpha.77) (2026-08-09)
+
+
+### Documentation
+
+* **lp:** the presort's cost is unmeasured, not settled ([#517](https://github.com/fluxopt/lpspec/issues/517)) ([5ca09f0](https://github.com/fluxopt/lpspec/commit/5ca09f01b841a07b61e501f43120312cd50e5f56))
+
 ## [0.0.1-alpha.76](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.75...v0.0.1-alpha.76) (2026-08-09)
 
 
