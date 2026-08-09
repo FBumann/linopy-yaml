@@ -390,6 +390,14 @@ REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 #: Declared rather than assumed: `test_every_summary_declares_itself` fails on a
 #: page in neither list, so a new summary cannot quietly opt out of the check.
 DIVERGENT = {
+    'multi_period': (
+        "renders the objective as one sum over the union of both terms' dims. The "
+        'capex term carries (period, generator) and the operating term carries '
+        '(snapshot, generator), and the engine sums each over its own dims — so the '
+        'rendered sum over t as well would multiply capex by the snapshots per '
+        'period. Reproducing it would need the generator to split an additive '
+        'objective into one sum per term.'
+    ),
     'storage': (
         'writes soc_{s-1}, ordinary index arithmetic. The model rolls, and a roll '
         'wraps — which the generator writes as the cyclic ⊖. Matching would mean '

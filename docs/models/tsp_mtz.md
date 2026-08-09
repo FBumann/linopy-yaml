@@ -28,9 +28,9 @@ narrower than "none":
 So the honest refusal is only the second row. The first is not a language limit
 at all: it is 2ⁿ rows, which stops being practical somewhere around twenty
 cities — a data-size wall, not a ceiling. That distinction is worth being
-precise about, because an earlier draft of this page got it wrong and claimed
-DFJ was refused for having a data-dependent row count. By that reasoning the
-cycle basis would be refused too, and it is not.
+precise about: a data-dependent *row count* is not itself a refusal — the
+[cycle basis](pypsa_kvl.md) has one and is ordinary — so what rules DFJ out at
+scale is the size of the data, not the shape of the language.
 
 **Lazy generation is the thing every serious TSP code actually does**, which is
 why "lpspec can express TSP" and "lpspec is a good way to solve a large TSP"

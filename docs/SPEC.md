@@ -279,6 +279,7 @@ name-checked, so **every node's dim set is computable before any data is bound**
 | `a + b`, `a * b`, `a / b` | `dims(a) ∪ dims(b)` | |
 | `sum(x, over=d)` | `dims(x) − {d}` | if `d ∉ dims(x)` |
 | `sum(x, over=d, group_by=c)` | `(dims(x) − {d}) ∪ {target(c)}` | unless `d ∈ dims(x)`, or `d` declares no coordinate `c` |
+| `at(x, onto=d, by=c)` | `(dims(x) − {target(c)}) ∪ {d}` | unless `target(c) ∈ dims(x)`, or `d` declares no coordinate `c`, or `d ∈ dims(x)` already |
 | `shift(x, over=d, by=n)` | `dims(x)` | if `d ∉ dims(x)` |
 
 Binary operators **union**: an outer product is legitimate when the frame
@@ -413,6 +414,7 @@ arguments are name-checked at load time:
 |---|---|---|
 | `sum(array, over=dim)` | `dim` collapses | `array` must carry `dim` |
 | `sum(array, over=dim, group_by=coord)` | `over` → the dimension `coord` targets | `coord` is declared on `over` (§2); its values are the group labels, checked against the target dimension at bind time. The membership sum that makes topology data rather than structure; groups with no members contribute nothing |
+| `at(array, onto=dim, by=coord)` | the dimension `coord` targets → `over` | **The adjoint of `the grouping sum`, and deliberately the same two arguments**: `(over, by)` names one mapping table and the helper says which way it is walked. `the grouping sum` consumes `over` and produces the target; `at` consumes the target and produces `over`, reading one coarse value once per fine label pointing at it. Reads a *variable* as readily as a parameter, which is what a per-component decision gating its flows needs. A fine label whose coordinate is null reads nothing and its row is absent, matching `the grouping sum`'s null group |
 | `shift(array, over=dim, by=n)` | value at *t−n* | vacated positions are **absent**: they propagate and drop the row (§6) |
 | `shift(array, over=dim, by=n, edge=wrap)` | value at *t−n*, cyclic | coordinates fixed, values wrap; nothing is vacated |
 | `shift(array, over=dim, by=n, edge=v)` | value at *t−n* | vacated positions contribute the number **`v`** instead, and the row survives (`0` for a sum, `1` for a product) |
