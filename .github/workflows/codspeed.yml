@@ -1,9 +1,10 @@
 name: CodSpeed
 
-# Cost, in the same terms as ci.yml and bench.yml: one billed job, ~3 minutes,
-# on a free runner, with no secret to manage. CodSpeed is free for public
-# repositories, so this is the cheapest way to run `bench/regressions/` and the
-# only one that runs unasked.
+# Cost, in the same terms as ci.yml and bench.yml: one free-runner job per pull
+# request, plus a metered macro-runner job per merge and per `trigger:bench`
+# label. No secret to manage either way — the wiring is OIDC. CodSpeed itself is
+# free for public repositories; the macro runner is the one thing here that is
+# not, and it is fenced accordingly.
 #
 # **It measures the suite that already exists.** `bench/` is one pytest-benchmark
 # suite, and `--codspeed` swaps in CodSpeed's `benchmark` fixture where
@@ -19,29 +20,46 @@ name: CodSpeed
 # service stores the number for every commit on `main`, so a pull request gets
 # the comparison for one pass.
 #
-# `memory`, and only `memory` — **and walltime is not an oversight, it is
-# unavailable.** A shared runner's clock is the noise bench.yml already refuses
-# to gate on, so walltime has to go on CodSpeed's bare-metal `codspeed-macro`
-# runner, and those are *"only available for organizations and not for personal
-# accounts"* (CodSpeed docs). This repository is owned by a user; linopy, whose
-# workflow this one is shaped after, is owned by PyPSA, and that is the entire
-# difference. Public repositories additionally have to allow the runners under
-# Organization Settings > Actions > Runner groups > Default — a setting there is
-# no organization to reach.
+# **Two instruments, and each gets the runner it needs.** `memory` tracks
+# allocations, which a free runner counts as well as any other, so it runs on
+# every event. `walltime` measures a clock, and a shared clock is the noise
+# bench.yml already refuses to gate on — so it goes on CodSpeed's bare-metal
+# `codspeed-macro` runner or it is not worth running. Do not substitute a free
+# runner for the macro one: that produces a series nobody can read.
 #
-# So a walltime job here queues against a label nothing answers and sits until
-# its timeout. #493 added one, briefly; this is what it cost to find out. Do not
-# re-add it without an organization, and do not substitute a free runner for the
-# macro one — that produces a series nobody can read, which is the thing the
-# paragraph above is about.
+# **Both live in this one file, and that is load-bearing rather than tidy.**
+# CodSpeed aggregates a commit's results per workflow, so splitting walltime
+# into its own file separates the two instruments into two series and the
+# per-commit view stops being one thing. linopy's workflow carries the same
+# note; it is the reason neither of us split them.
 #
-# The gap it would have filled is real and remains open: bench.yml gates on
-# memory, this job measures memory, and the wall-clock ladder is a thing a
-# contributor runs by hand on an idle laptop, so **build CPU time is measured
-# nowhere automatic**.
+# This job was memory-only for a while, and the reason is worth keeping. Macro
+# runners are *"only available for organizations and not for personal
+# accounts"* (CodSpeed docs), and the repository was owned by a user — so #493
+# added a walltime job that queued against a label nothing answered and sat
+# until it timed out. Moving to the fluxopt org (#500) is the entire difference;
+# nothing about the job below was wrong.
 #
-# `simulation` is CodSpeed's usual default and is wrong here for a different
-# reason: it runs the workload under an emulator at a large multiple of real
+# **One setting outside this file has to be right.** A public repository has to
+# allow the runners under Organization Settings > Actions > Runner groups >
+# Default. Without it the job queues exactly as it did in #493, and the symptom
+# is indistinguishable from that one — so check there first, before reading
+# anything here as broken.
+#
+# That machine is metered, which is the whole of why this is fenced: `main`
+# always, a pull request only when somebody applies `trigger:bench` — the label
+# bench.yml is already driven by. Bare metal should not run fork code unasked
+# either.
+#
+# What it buys is the signal the tree has nowhere else. bench.yml gates on
+# memory, this job's other half measures memory, and the wall-clock ladder is a
+# thing a contributor runs by hand on an idle laptop — so build CPU time was
+# **measured nowhere automatic**. Every merge is one point in a series, and
+# merges here are squashes, so a step names the pull request that caused it
+# without anybody bisecting.
+#
+# `simulation` is CodSpeed's usual default and is wrong here whatever the
+# runner: it runs the workload under an emulator at a large multiple of real
 # time, and polars is multi-threaded native code — the slowdown lands on the
 # rungs and the thread count lands on the instruction count.
 #
@@ -57,9 +75,15 @@ name: CodSpeed
 on:
   push:
     branches: [main]
-  # required for a report to have somewhere to land
+  # required for a report to have somewhere to land. `labeled` is on the list
+  # because the default triple stops at `reopened`, and without it applying
+  # `trigger:bench` to an open pull request would re-trigger nothing — the
+  # walltime job below would be reachable only by pushing another commit.
   pull_request:
-  # CodSpeed dispatches this itself to backfill a baseline for existing commits
+    types: [opened, synchronize, reopened, labeled]
+  # CodSpeed dispatches this itself to backfill a baseline for existing commits.
+  # Only the memory job takes it — see the `if:` on walltime for why the metered
+  # instrument declines a trigger somebody else fires.
   workflow_dispatch:
 
 concurrency:
@@ -107,3 +131,51 @@ jobs:
         with:
           mode: memory
           run: uv run --no-sync pytest bench --arms lpspec --sizes s --skip-gate --codspeed
+
+  walltime:
+    name: Wall time (macro runner)
+    # Two events reach the macro runner and no others: a push that landed on
+    # `main`, and a pull request carrying the label bench.yml already uses.
+    # Metered minutes are the reason it is not automatic on pull requests, and
+    # bare metal not running fork code unasked is the second.
+    #
+    # Written as an allowlist rather than `event_name != 'pull_request'`, which
+    # is what linopy has and what this job shipped with. That form also admits
+    # `workflow_dispatch` — and this workflow is dispatched *by CodSpeed*, which
+    # backfills baselines on its own schedule and against whatever ref it likes.
+    # The memory job is free and should take those; walltime is the metered one
+    # and must not. The `push` arm names the ref too, so adding a branch to the
+    # trigger above widens the free instrument and not this one.
+    if: >-
+      ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' &&
+           contains(github.event.pull_request.labels.*.name, 'trigger:bench')) }}
+    # **Not a free runner.** `walltime` on a shared clock is the noise bench.yml
+    # refuses to gate on; measuring it there would produce a series nobody could
+    # read. This is the one metered thing in the tree, which is why it is fenced
+    # to merges and to a label somebody types.
+    runs-on: codspeed-macro
+    timeout-minutes: 20
+    continue-on-error: true
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - run: uv sync --no-default-groups --group codspeed
+
+      # `m`, where the memory job takes `s`. That job is capped by CodSpeed's
+      # ~2M-allocation guidance; this one is not capped by anything except the
+      # meter, and `s` is short enough that per-run overhead is a large share of
+      # what gets recorded. `l` is the next question, once there is a series to
+      # say whether `m` resolves what we want to see.
+      - uses: CodSpeedHQ/action@v5
+        with:
+          mode: walltime
+          run: uv run --no-sync pytest bench --arms lpspec --sizes m --skip-gate --codspeed
