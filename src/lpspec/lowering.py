@@ -7,7 +7,7 @@ a :class:`~lpspec.relational.plan.Program`. It lives on the language side —
 the engine subpackage stays free of YAML knowledge, and this module never
 imports the eager builder.
 
-Covered: foreach, where, arithmetic (+ - * /), sum, group_sum, shift,
+Covered: foreach, where, arithmetic (+ - * /), sum, sum, shift,
 comparison, and binary/integer variables (variable_type). Constructs with no
 lowering raise :class:`~lpspec.errors.LanguageError` naming
 the construct and its rewrite — never a pointer to another backend: the two
@@ -214,19 +214,18 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
             over_node = node.kwargs['over']
             if not isinstance(over_node, DimensionNode):
                 raise LanguageError(f'{context}: sum(over=...) must name a dimension')
+            by_node = node.kwargs.get('group_by')
             _check_dim_rules(node, schema, context)
-            return plan.Sum(_lower_expr(node.args[0], schema, context), (over_node.name,))
-
-        if node.name == 'group_sum':
-            over_node = node.kwargs['over']
-            by_node = node.kwargs['by']
-            if not isinstance(over_node, DimensionNode):
-                raise LanguageError(f'{context}: group_sum(over=...) must name a dimension')
+            operand = _lower_expr(node.args[0], schema, context)
+            if by_node is None:
+                return plan.Sum(operand, (over_node.name,))
             if not isinstance(by_node, CoordinateNode):
-                raise LanguageError(f'{context}: group_sum(by=...) must name a coordinate')
-            _check_dim_rules(node, schema, context)
+                raise LanguageError(f'{context}: sum(group_by=...) must name a coordinate')
+            # Still two plan nodes: reducing a dim away and reducing it into
+            # another are different relational shapes, and the executor cases
+            # were never the thing the surface was collapsing.
             return plan.GroupSum(
-                _lower_expr(node.args[0], schema, context),
+                operand,
                 over=over_node.name,
                 coordinate=by_node.name,
                 into=by_node.into,

@@ -220,11 +220,12 @@ def test_shift_and_a_filled_shift_are_different_operators():
 # The cases above all reduce over `f` with one mask on `f`, which is the
 # smallest arrangement that shows the rule — and small enough that it could be
 # passing for the wrong reason. These vary one thing at a time: the *reduction*
-# (`group_sum` rather than `sum`), the *number* of masks, where the mask *sits*
+# (a plain sum rather than a grouped one), the *number* of masks, where the
+# mask *sits*
 # relative to the dim being reduced, and where the absence *comes from*.
 #
-# `group_sum` is the one that had to be here. #314 routed it through the same
-# propagation as `sum` and nothing covered it, so its behaviour was a claim
+# The grouped form is the one that had to be here. #314 routed it through the
+# same propagation as a plain sum and nothing covered it, so its behaviour was a claim
 # rather than a result.
 # ---------------------------------------------------------------------------
 
@@ -271,16 +272,16 @@ def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
         return float(run.result.objective)
 
 
-def test_group_sum_does_not_distribute_over_addition_either():
-    """`group_sum` is a reduction, so the non-law applies to it unchanged.
+def test_sum_does_not_distribute_over_addition_either():
+    """`sum` is a reduction, so the non-law applies to it unchanged.
 
     #314 routed it through the same absence propagation as `sum` on the argument
     that a group *is* a sum. Nothing tested that, so this is the assertion the
     change was made on: the two spellings separate, and both lanes agree about
     where they land.
     """
-    together = _wide_objective_of('group_sum(x + y, over=f, by=grp) <= 120', foreach=['g', 't'])
-    apart = _wide_objective_of('group_sum(x, over=f, by=grp) + group_sum(y, over=f, by=grp) <= 120', foreach=['g', 't'])
+    together = _wide_objective_of('sum(x + y, over=f, group_by=grp) <= 120', foreach=['g', 't'])
+    apart = _wide_objective_of('sum(x, over=f, group_by=grp) + sum(y, over=f, group_by=grp) <= 120', foreach=['g', 't'])
 
     assert together == pytest.approx(640.0, rel=RTOL)
     assert apart == pytest.approx(480.0, rel=RTOL)

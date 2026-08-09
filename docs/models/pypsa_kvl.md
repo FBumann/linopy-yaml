@@ -136,9 +136,9 @@ constraints:
   nodal_balance:
     foreach: [snapshot, bus]
     expression: >-
-      group_sum(p, over=generator, by=bus)
-      + group_sum(f, over=line, by=to)
-      - group_sum(f, over=line, by=from)
+      sum(p, over=generator, group_by=bus)
+      + sum(f, over=line, group_by=to)
+      - sum(f, over=line, group_by=from)
       == load
 
   # Kirchhoff's voltage law: around each independent cycle, the
@@ -269,7 +269,7 @@ if __name__ == '__main__':
 
 A parameter over two dimensions multiplying a variable over one, reduced along
 the shared dimension — the shape that makes an incidence matrix sayable at all.
-Plus `group_sum` on both line endpoints for the nodal balance, as in rung 1.
+Plus `sum(group_by=)` on both line endpoints for the nodal balance, as in rung 1.
 
 No new construct was needed for the last rung of the ladder, which is the
 result worth reporting.

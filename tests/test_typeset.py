@@ -270,7 +270,7 @@ def test_latex_binary_and_integer_variables_state_their_domain():
     assert r'\in \mathbb{Z}' in tex
 
 
-def test_latex_group_sum_renders_the_coordinate_map_as_a_set_condition():
+def test_latex_sum_renders_the_coordinate_map_as_a_set_condition():
     tex = to_latex('examples/transport.yaml', legend=False)
     assert r'\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g}' in tex
     assert r'\sum_{l \in \mathcal{L} \,:\, \mathrm{to}(l) = b} f_{t,l}' in tex
@@ -318,7 +318,7 @@ def test_typst_uses_its_own_grouping_and_set_notation():
     assert 'italic("load")_(t)' in typ
 
 
-def test_typst_group_sum_renders_the_coordinate_map():
+def test_typst_sum_renders_the_coordinate_map():
     typ = to_typst('examples/transport.yaml', legend=False)
     assert 'sum_(g in cal(G) colon upright("bus")(g) = b) p_(t,g)' in typ
 
@@ -449,7 +449,7 @@ def _summary(stem: str) -> str:
         )
         page = page[:begin] + page[end:]
     # `$$` blocks only. The prose and the YAML fence around them are full of
-    # identifiers like `p_max` and `group_sum`, which read as subscripts.
+    # identifiers like `p_max` and `sum`, which read as subscripts.
     return '\n'.join(page.split('$$')[1::2])
 
 

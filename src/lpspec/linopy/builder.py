@@ -361,19 +361,19 @@ def _eval_ast(
         helper = _HELPERS[node.name]
         args = [_eval_ast(a, ctx) for a in node.args]
         if node.name == 'at':
-            # same lookup as group_sum for the same reason: the coordinate
-            # lives on the dimension rather than in the parameter dataset
+            # same lookup as the grouping sum for the same reason: the
+            # coordinate lives on the dimension rather than in the parameter
+            # dataset
             by = node.kwargs['by']
             assert isinstance(by, CoordinateNode)
             return _helper_at(args[0], _coordinate_array(by, ctx), into=by.into)
-        if node.name == 'group_sum':
+        if (by := node.kwargs.get('group_by')) is not None:
             # the coordinate lives on the dimension, not in the parameter
             # dataset, so it is looked up here rather than evaluated as an
             # operand — the helper still sees a plain mapping array
-            by = node.kwargs['by']
             assert isinstance(by, CoordinateNode)
-            return _helper_group_sum(args[0], _coordinate_array(by, ctx), into=by.into)
-        kwargs = {}
+            return _helper_grouped_sum(args[0], _coordinate_array(by, ctx), into=by.into)
+        kwargs: dict[str, Any] = {}
         for k, v in node.kwargs.items():
             if isinstance(v, DimensionNode):
                 kwargs[k] = v.name
@@ -425,10 +425,10 @@ def _helper_sum(array: Any, *, over: str) -> Any:
     return array
 
 
-def _helper_group_sum(array: Any, mapping: Any, *, into: str) -> Any:
+def _helper_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
     """Sum *array* through a declared coordinate, producing dimension *into*.
 
-    Usage in YAML: ``group_sum(p, over=generator, by=bus)``
+    Usage in YAML: ``sum(p, over=generator, group_by=bus)``
 
     *mapping* is the coordinate's values as a one-dimensional array over the
     dim being grouped (``generator`` → bus labels), supplied by the caller from
@@ -437,12 +437,12 @@ def _helper_group_sum(array: Any, mapping: Any, *, into: str) -> Any:
     """
     if not isinstance(mapping, xr.DataArray):
         msg = (
-            f'group_sum() coordinate must be an array (got '
-            f'{type(mapping).__name__}). Usage: group_sum(expr, over=dim, by=coord)'
+            f'sum(group_by=) coordinate must be an array (got '
+            f'{type(mapping).__name__}). Usage: sum(expr, over=dim, group_by=coord)'
         )
         raise TypeError(msg)
     if mapping.ndim != 1:
-        msg = f'group_sum() mapping must have exactly one dimension, got {list(mapping.dims)}'
+        msg = f'sum(group_by=) mapping must have exactly one dimension, got {list(mapping.dims)}'
         raise LanguageError(msg)
 
     group = mapping.rename(into)
@@ -457,7 +457,7 @@ def _helper_group_sum(array: Any, mapping: Any, *, into: str) -> Any:
         array = array.isel({dim: present.to_numpy()})
     if isinstance(array, xr.DataArray) or hasattr(array, 'groupby'):
         return array.groupby(group).sum()
-    raise _unsupported('group_sum()', array)
+    raise _unsupported('sum(group_by=)', array)
 
 
 def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
@@ -465,7 +465,7 @@ def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
 
     Usage in YAML: ``at(on, onto=flow, by=component)``
 
-    *mapping* is the same one-dimensional array ``group_sum`` takes: the
+    *mapping* is the same one-dimensional array ``sum`` takes: the
     coordinate's values over the dim carrying it (``flow`` -> component labels).
     Grouping sums *along* it; this indexes *through* it, so the operand must
     carry ``into`` and the result carries the mapping's own dim instead.
@@ -482,7 +482,7 @@ def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
         raise LanguageError(msg)
 
     # A null coordinate says this fine label belongs to no coarse one, so it
-    # reads nothing and its row is absent — the same reading group_sum gives a
+    # reads nothing and its row is absent — the same reading sum gives a
     # null group, and the relational lane gets it free from an inner join.
     present = mapping.notnull()
     if not bool(present.all()):
@@ -553,7 +553,6 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
 _HELPERS: dict[str, Callable[..., Any]] = {
     'sum': _helper_sum,
     'at': _helper_at,
-    'group_sum': _helper_group_sum,
     'shift': _helper_shift,
 }
 

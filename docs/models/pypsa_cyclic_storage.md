@@ -199,11 +199,11 @@ constraints:
   nodal_balance:
     foreach: [snapshot, bus]
     expression: >-
-      group_sum(p, over=generator, by=bus)
-      + group_sum(f, over=link, by=to)
-      - group_sum(f, over=link, by=from)
-      + group_sum(p_dispatch, over=storage, by=bus)
-      - group_sum(p_store, over=storage, by=bus)
+      sum(p, over=generator, group_by=bus)
+      + sum(f, over=link, group_by=to)
+      - sum(f, over=link, group_by=from)
+      + sum(p_dispatch, over=storage, group_by=bus)
+      - sum(p_store, over=storage, group_by=bus)
       == load
 
   ramp_up:
@@ -331,7 +331,7 @@ if __name__ == '__main__':
 ## What it exercises
 
 `roll`, against rung 3's `shift` — plus division by a parameter and the same
-five-term `group_sum` balance, with one fewer equation and one fewer parameter.
+five-term `sum(group_by=)` balance, with one fewer equation and one fewer parameter.
 Worth reading the two side by side: neither boundary needs a clause to state it.
 The operator names which one is meant, and picking the wrong one is a different
 model rather than a missing guard.

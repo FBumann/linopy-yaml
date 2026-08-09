@@ -156,7 +156,7 @@ class At(Expression):
     ``over`` and produces ``into``, and this consumes ``into`` and produces
     ``over``. The fields are named for the *table*, not for the direction, so
     the pair reads as one relation rather than two. The surface says which end
-    you stand on: ``group_sum(over=)`` consumes a dim, ``at(onto=)`` produces
+    you stand on: ``sum(over=)`` consumes a dim, ``at(onto=)`` produces
     one, and ``by=`` names the map in both.
 
     The join fans out — many ``over`` labels share one ``into`` label — which is

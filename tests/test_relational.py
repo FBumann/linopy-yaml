@@ -633,7 +633,7 @@ def _network(self_loop: bool) -> tuple[dict, dict]:
         'constraints': {
             'balance': {
                 'foreach': ['snapshot', 'bus'],
-                'expression': 'group_sum(f, over=line, by=to) - group_sum(f, over=line, by=from) == load',
+                'expression': 'sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from) == load',
             }
         },
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(sum(f, over=line), over=snapshot)'}},
@@ -649,8 +649,8 @@ def _network(self_loop: bool) -> tuple[dict, dict]:
     return model, sources
 
 
-def test_two_group_sums_of_one_variable_collide_only_where_the_coordinates_meet():
-    """`by=to` and `by=from` reach one cell exactly on a line to itself.
+def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet():
+    """`group_by=to` and `group_by=from` reach one cell exactly on a line to itself.
 
     Both fragments carry `f`, so counting variables says the aggregate is
     reachable and every nonzero in the model gets sorted to find out. Which

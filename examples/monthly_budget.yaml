@@ -34,7 +34,7 @@ constraints:
   # the snapshot index rather than anything the language knows about calendars.
   monthly_budget:
     foreach: [month, generator]
-    expression: group_sum(p, over=snapshot, by=month) <= monthly_cap
+    expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
 
 objectives:
   total_cost:

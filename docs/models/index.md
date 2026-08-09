@@ -39,7 +39,7 @@ Read off the resolved plan of each model rather than its text, so it cannot
 drift from what the engine builds.
 
 <!-- constructs:begin -->
-| model | verified | `sum` | `group_sum` | `shift` | `roll` | `where` | `bounds` | `piecewise` | MILP |
+| model | verified | `sum` | `sum(group_by)` | `shift` | `roll` | `where` | `bounds` | `piecewise` | MILP |
 |---|---|---|---|---|---|---|---|---|---|
 | [dispatch](dispatch.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · |
 | [monthly_budget](monthly_budget.md) | · | **✓** | **✓** | · | · | · | **✓** | · | · |

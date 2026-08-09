@@ -243,13 +243,13 @@ class TestDimensionKwargs:
             validate_expressions(self._schema('sum(p, over=snapshto) == load'))
         assert 'sum(over=snapshto)' in str(ei.value)
 
-    def test_group_sum_over_typo_is_rejected(self):
+    def test_grouped_sum_over_typo_is_rejected(self):
         with pytest.raises(ValueError, match='does not name a declared dimension'):
-            validate_expressions(self._schema('group_sum(p, over=generatr, by=zone) == load'))
+            validate_expressions(self._schema('sum(p, over=generatr, group_by=zone) == load'))
 
-    def test_group_sum_coordinate_typo_is_rejected(self):
+    def test_sum_coordinate_typo_is_rejected(self):
         with pytest.raises(ValueError, match="does not name a coordinate of 'generator'"):
-            validate_expressions(self._schema('group_sum(p, over=generator, by=zne) == load'))
+            validate_expressions(self._schema('sum(p, over=generator, group_by=zne) == load'))
 
     def test_shift_over_dim_is_checked(self):
         with pytest.raises(ValueError, match='does not name a declared dimension'):
@@ -258,7 +258,7 @@ class TestDimensionKwargs:
     def test_declared_dimensions_still_pass(self):
         for expression, foreach in (
             ('sum(p, over=generator) == load', ['snapshot']),
-            ('group_sum(p, over=generator, by=zone) == load', ['snapshot', 'bus']),
+            ('sum(p, over=generator, group_by=zone) == load', ['snapshot', 'bus']),
             ('shift(p, over=snapshot, by=1, edge=wrap) == load', ['snapshot', 'generator']),
             ('shift(p, over=snapshot, by=1) == load', ['snapshot', 'generator']),
         ):
@@ -365,3 +365,26 @@ class TestDimensionKwargs:
         )
         with pytest.raises(ValueError, match='2 objectives declared'):
             validate_expressions(schema)
+
+
+def test_the_retired_group_sum_names_its_rewrite():
+    """`group_sum` is gone, and the error is the whole migration story.
+
+    There is no alias and no deprecation cycle (CONTRIBUTING, *breaking changes
+    are free*), so a file written against the old spelling has to be told what
+    the new one is at load — the error is what is checked, unlike a shim.
+    """
+    schema = _schema(
+        dimensions={'g': {'dtype': 'str', 'coords': ['bus']}, 'bus': {'dtype': 'str'}},
+        parameters={'c': {'dims': ['g']}, 'cap': {'dims': ['bus']}},
+        variables={'p': {'foreach': ['g']}},
+        constraints={'x': {'foreach': ['bus'], 'expression': 'group_sum(p, over=g, by=bus) <= cap'}},
+        objectives={'o': {'sense': 'minimize', 'expression': 'p * c'}},
+    )
+    with pytest.raises(ValueError) as exc:
+        validate_expressions(schema)
+
+    assert 'no longer a helper' in str(exc.value)
+    assert 'sum(<expr>, over=<dim>, group_by=<coord>)' in str(exc.value), (
+        'a retired spelling has to name its rewrite, not just fail'
+    )

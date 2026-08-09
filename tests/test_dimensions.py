@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from lpspec.language.schema import MathSchema
 
 #: A *network* dispatch model: `conftest.DISPATCH_MODEL` plus buses, so
-#: `group_sum` and per-bus loads are in scope. The dim rules are mostly about
+#: `sum` and per-bus loads are in scope. The dim rules are mostly about
 #: expressions that carry a dim their frame does not, which needs three dims to
 #: state at all.
 BASE = {
@@ -37,7 +37,7 @@ BASE = {
     'constraints': {
         'balance': {
             'foreach': ['snapshot', 'bus'],
-            'expression': 'group_sum(p, over=generator, by=bus) == load',
+            'expression': 'sum(p, over=generator, group_by=bus) == load',
         }
     },
     'objectives': {'total': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'}},
@@ -72,7 +72,7 @@ def test_the_base_model_typechecks():
         ('p * cost', {'snapshot', 'generator'}),
         ('sum(p, over=generator)', {'snapshot'}),
         ('sum(p * cost, over=generator)', {'snapshot'}),
-        ('group_sum(p, over=generator, by=bus)', {'snapshot', 'bus'}),
+        ('sum(p, over=generator, group_by=bus)', {'snapshot', 'bus'}),
         ('shift(p, over=snapshot, by=1, edge=wrap)', {'snapshot', 'generator'}),
     ],
 )
@@ -87,15 +87,15 @@ def test_sum_over_an_absent_dim_is_an_error_not_a_noop():
         _dims('sum(p, over=bus)')
 
 
-def test_group_sum_requires_the_grouped_dim():
-    with pytest.raises(DimensionError, match=r'group_sum\(over=generator\) but the expression has dims'):
-        _dims('group_sum(load, over=generator, by=bus)')
+def test_sum_requires_the_grouped_dim():
+    with pytest.raises(DimensionError, match=r'sum\(over=generator, group_by=\.\.\.\) but the expression has dims'):
+        _dims('sum(load, over=generator, group_by=bus)')
 
 
-def test_group_sum_into_a_dim_the_operand_already_carries():
+def test_sum_into_a_dim_the_operand_already_carries():
     """`(inner - {over}) | {into}` is a union, and a union absorbs a collision.
 
-    `group_sum(load, over=generator, by=bus)` -- with `load` already carrying
+    `sum(load, over=generator, group_by=bus)` -- with `load` already carrying
     `bus` -- asks for `bus` twice: once as the operand's own dim, once as the
     group its terms are placed into. The union returns one, so the rule reports
     a shape neither lane can build. The eager lane makes an xarray object with
@@ -106,7 +106,7 @@ def test_group_sum_into_a_dim_the_operand_already_carries():
     why the rule lives here rather than in either executor.
     """
     with pytest.raises(DimensionError, match='already carries'):
-        _dims('group_sum(load * p, over=generator, by=bus)')
+        _dims('sum(load * p, over=generator, group_by=bus)')
 
 
 def test_roll_requires_the_dim():

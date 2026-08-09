@@ -109,8 +109,8 @@ variables:
 # backend sees the model, so this costs nothing at build and nothing at solve —
 # what it buys is a constraint that reads as the sentence it is.
 expressions:
-  gen_at_bus: group_sum(p, over=generator, by=bus)
-  net_inflow: group_sum(f, over=line, by=to) - group_sum(f, over=line, by=from)
+  gen_at_bus: sum(p, over=generator, group_by=bus)
+  net_inflow: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
 
 constraints:
   balance:
@@ -125,9 +125,9 @@ objectives:
 
 ## What it exercises
 
-Three `group_sum` calls, and they are what a network *is* in this language.
+Three `sum(group_by=)` calls, and they are what a network *is* in this language.
 A dimension can carry **coordinates** — `generator` carries `bus`, `line`
-carries `from` and `to` — and `group_sum(f, over=line, by=to)` sums along a
+carries `from` and `to` — and `sum(f, over=line, group_by=to)` sums along a
 line's `to` coordinate, landing the result on `bus`. The same `f` is summed
 twice through two different coordinates, once as an inflow and once as an
 outflow.

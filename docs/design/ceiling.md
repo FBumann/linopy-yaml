@@ -14,7 +14,7 @@ language could not state becomes a ledger row in
 
 ## Two tiers, and the ceiling
 
-**Primitives** (operators, `sum`, `group_sum`, `roll`/`shift`, `where`
+**Primitives** (operators, `sum`, `sum(group_by=)`, `roll`/`shift`, `where`
 predicates) set the expressive ceiling, and each costs the full two-backend tax:
 eager implementation, plan node + locality class, executor case, lowering case,
 differential tests, SPEC entry. **`macros:` / `expressions:`** are pure AST
@@ -170,7 +170,7 @@ back degree, since it returns affine COO rows either way.
 
 A component library is a fixed set of parametrised templates agreeing on a
 port/flow convention, merged into one program, wired through a data connectivity
-table and a single `group_sum` balance. **Topology is data, not structure** —
+table and a single `sum(group_by=)` balance. **Topology is data, not structure** —
 wiring a specific system is rows in a connectivity table, never generated YAML,
 so structure is bounded by the number of component *types* while cardinality
 lives entirely in data. Schema merge is therefore a pure **compose-then-build**

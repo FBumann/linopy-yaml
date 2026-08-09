@@ -1,6 +1,6 @@
 """``at()`` — the pullback, and the models that had no formulation without it.
 
-`group_sum` walks a mapping table from the fine dim into the coarse one; this
+`sum` walks a mapping table from the fine dim into the coarse one; this
 walks it back out. They take the same two arguments on purpose: ``(onto, by)``
 names one table, and the helper says which direction.
 
