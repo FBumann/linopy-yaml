@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.73](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.72...v0.0.1-alpha.73) (2026-08-09)
+
+
+### Performance
+
+* **lp:** the constraint stream sorts on one key, carrying nothing else ([#492](https://github.com/fluxopt/lpspec/issues/492)) ([e7085ca](https://github.com/fluxopt/lpspec/commit/e7085ca0d15e987363366675e8968d1b8671e880))
+
 ## [0.0.1-alpha.72](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.71...v0.0.1-alpha.72) (2026-08-09)
 
 
