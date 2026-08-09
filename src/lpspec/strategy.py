@@ -168,6 +168,11 @@ class Runs:
     **Duals are not exposed.** A window's shadow price is that window's, and
     concatenating them into a price curve is wrong in a way nothing complains
     about.
+
+    Everything else here is :class:`~lpspec.relational.result.Result`'s reader
+    one dimension wider — same names, same shapes, the slice key prepended. A
+    sweep is where a labelled array earns its keep, and building one out of a
+    slice-keyed frame by hand is the part worth not writing twice.
     """
 
     key_name: str
@@ -194,6 +199,66 @@ class Runs:
         if name not in self._primals:
             raise LpspecError(_no_primal(name, self.kept, self.meta))
         return self._primals[name]
+
+    def to_pandas(self, name: str) -> Any:
+        """:meth:`primal` as a tidy :class:`pandas.DataFrame`.
+
+        Needs pandas, which ships with the ``[linopy]`` extra. Column by column
+        for the same reason ``Result.to_pandas`` does it: polars' own
+        ``to_pandas`` reaches for pyarrow.
+        """
+        import pandas as pd
+
+        frame = self.primal(name)
+        return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
+
+    def to_dataarray(self, name: str) -> Any:
+        """:meth:`primal` as a :class:`xarray.DataArray`, the slice key a dimension.
+
+        ``(scenario, snapshot, generator)`` is what a sweep is *for* — ``.sel``
+        a scenario, take a quantile across them, plot the spread. A slice that
+        reached no solution has no rows and so comes back NaN, which is the
+        same answer a masked coordinate gets from ``Result``.
+        """
+        frame = self.to_pandas(name)
+        dims = [column for column in frame.columns if column != 'value']
+        return frame.set_index(dims).to_xarray()['value'].rename(name)
+
+    def to_dataset(self, *names: str) -> Any:
+        """Kept variables as one :class:`xarray.Dataset`; all of them by default.
+
+        Costs what it says, and more than ``Result``'s does — each variable
+        arrives dense over its own dims *and* over every slice. Name the few you
+        need, or use :meth:`to_parquet`.
+        """
+        wanted = names or tuple(sorted(self._primals))
+        if not wanted:
+            raise LpspecError(_no_primal('anything', self.kept, self.meta))
+        first, *rest = wanted
+        dataset = self.to_dataarray(first).to_dataset(name=first)
+        for name in rest:
+            dataset[name] = self.to_dataarray(name)
+        return dataset
+
+    def to_parquet(self, directory: str | Path = '.') -> dict[str, Path]:
+        """One parquet file per kept variable, ``(key, dims…, value)``.
+
+        Returns name → path, in :meth:`primal`'s order, so the same sweep
+        writes the same bytes. This is a *copy out* of frames already held — it
+        does not bound what the fold accumulated, which is what ``keep`` is for
+        and what spilling per slice would be (#477). A sweep that kept nothing
+        raises rather than leaving an empty directory behind.
+        """
+        if not self._primals:
+            raise LpspecError(_no_primal('anything', self.kept, self.meta))
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        written: dict[str, Path] = {}
+        for name in sorted(self._primals):
+            path = directory / f'{name}.parquet'
+            self._primals[name].write_parquet(path)
+            written[name] = path
+        return written
 
     def __len__(self) -> int:
         return self.meta.height

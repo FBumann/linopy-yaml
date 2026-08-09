@@ -95,6 +95,13 @@ runs = lps.solve_over(
 runs.primal('soc')  # (snapshot_start, t, value) — the window, and the index inside it
 ```
 
+**`Runs` reads like `Result`, one dimension wider** — `primal`, `to_pandas`,
+`to_dataarray`, `to_dataset`, `to_parquet`, under the same names and with the
+slice key prepended. `runs.to_dataarray('p')` is `(scenario, snapshot,
+generator)`, which is what a sweep is *for*: `.sel` one scenario, take a spread
+across them, plot the band. What is missing against `Result` is `dual`, and
+that is [a decision](#solving-one-model-many-times), not an omission.
+
 | Rule | |
 |---|---|
 | **a partition is a filter on the sources** | not a narrower `coords` — the containment check refuses parameter rows outside the declared coordinates, by design. The axis rewrites the sources and supplies the matching `coords` together |
@@ -108,6 +115,8 @@ runs.primal('soc')  # (snapshot_start, t, value) — the window, and the index i
 | the model is parsed once | `solve_over` validates it up front and hands every slice the schema, so a model outside the streaming language fails before the data is touched and no worker re-reads the YAML |
 | **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`, so the key column is `snapshot_start` and holds where each window began. Naming it `snapshot` would put window starts under the name of the coordinate they are not, and join cleanly against real data |
 | a slice that did not solve | contributes no `primal` rows, so that frame can be shorter than the sweep. `objective` is one row per slice always, and is the record of which slices those were |
+| **the lookahead is `t >= step`** | overlapping windows return every row they solved, including the tail the next window recomputes. Keeping only what each window owns is one clause and no special case — `runs.primal('soc').filter(pl.col('t') < step)` — because the final window can never hold more than `step` rows |
+| the readers hold what the fold accumulated | `to_parquet` copies out frames already in memory; it does not bound the sweep. That is `keep`'s job, and spilling per slice is [#477](https://github.com/FBumann/lpspec/issues/477) |
 | **a window spans coordinates, not values** | `length=48` is forty-eight snapshots however they are numbered, so the dimension only has to be **orderable** — datetimes, strings and gapped integers all work. `into` is a dense `0..n-1` local index, which is what keeps the seam's `where: "t == 0"` matching, and it has no default because the name belongs to the model |
 | non-positional grouping | *"each calendar month"* has unequal groups, so it is a precomputed column plus `EachCoordinate`. What `EachWindow` uniquely offers is **overlap** |
 | `carry` excludes `executor` | a carried value makes slice *i+1* depend on slice *i*, so the slices cannot run concurrently. Refused rather than one silently winning |
