@@ -8,6 +8,7 @@ pass, each of these built a model on one lane and raised on the other.
 
 from __future__ import annotations
 
+import datetime
 from copy import deepcopy
 
 import polars as pl
@@ -293,3 +294,56 @@ def test_a_masked_scalar_variable_takes_its_row_with_it(tmp_path, threshold, row
         assert result.dual('budget_row').height == rows
 
     assert eager == relational == objective
+
+
+DATETIME_MODEL = {
+    'dimensions': {'snapshot': {'dtype': 'datetime'}, 'generator': {'dtype': 'str'}},
+    'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['snapshot']}},
+    'variables': {
+        'p': {'foreach': ['snapshot', 'generator'], 'where': "snapshot > '2030-01-02'", 'bounds': {'lower': 0}}
+    },
+    'constraints': {
+        'bal': {
+            'foreach': ['snapshot'],
+            'where': "snapshot > '2030-01-02'",
+            'expression': 'sum(p, over=generator) == load',
+        }
+    },
+    'objectives': {'total': {'sense': 'minimize', 'expression': 'p * cost'}},
+}
+
+
+def test_a_datetime_boundary_is_sayable_on_both_lanes(tmp_path):
+    """A quoted ISO date in a `where`, which had no spelling at all (#460).
+
+    `snapshot > 2030-01-01` and its quoted form both failed to parse, and
+    `snapshot > 0` parsed into a comparison against the *epoch* — so a datetime
+    dimension was usable exactly as long as nothing about the model was
+    conditional on time. There was no way to name a boundary.
+    """
+    path = tmp_path / 'm.yaml'
+    path.write_text(pyyaml.safe_dump(DATETIME_MODEL))
+    days = [datetime.date(2030, 1, d) for d in (1, 2, 3)]
+    frames = {
+        'cost': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [1.0, 5.0]}),
+        'load': pl.DataFrame({'snapshot': days, 'value': [10.0, 20.0, 30.0]}),
+        'snapshot': pl.DataFrame({'snapshot': days}),
+        'generator': pl.DataFrame({'generator': ['wind', 'gas']}),
+    }
+    eager_data = {
+        'cost': pd.Series({'wind': 1.0, 'gas': 5.0}),
+        'load': pd.Series([10.0, 20.0, 30.0], index=pd.Index(days, name='snapshot')),
+    }
+    coords = {'snapshot': pd.Index(days, name='snapshot'), 'generator': pd.Index(['wind', 'gas'], name='generator')}
+
+    m = lpspec_linopy.build(path, data=eager_data, coords=coords)
+    m.solve(solver_name='highs')
+    eager = float(m.objective.value)
+
+    with lps.solve(path, frames) as result:
+        relational = result.objective
+        # only the third day survives the boundary, and it keeps its dtype
+        assert result.primal('p')['snapshot'].dtype in (pl.Date, pl.Datetime('us'))
+        assert result.primal('p').height == 2
+
+    assert eager == relational == 30.0

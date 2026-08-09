@@ -313,6 +313,46 @@ class TestDimensionKwargs:
     def test_a_coordinate_of_the_declared_dtype_passes(self, dtype, values):
         validate_expressions(_schema(dimensions={'g': {'dtype': dtype, 'values': values}}))
 
+    @pytest.mark.parametrize(
+        ('dtype', 'where', 'match'),
+        [
+            ('datetime', 'g > 0', 'compares against the epoch'),
+            ('str', 'g > 3', 'matches no label'),
+            ('int', "g > 'x'", 'matches nothing'),
+            ('datetime', "g > 'not-a-date'", 'is not an ISO date'),
+        ],
+    )
+    def test_a_where_comparison_must_match_the_declared_dtype(self, dtype, where, match):
+        """The same guard as above, one construct over — and this one was
+        silent (#460).
+
+        `_check_dimension_values` guarded a dimension's declared `values:`
+        against its dtype; a `where` comparison against that same dimension had
+        no such guard. polars compares a datetime column to an integer as an
+        offset from the epoch, so `snapshot > 0` quietly meant "after
+        1970-01-01" and dropped every earlier coordinate — and row absence is
+        the structural zero, so the model solved a smaller problem with no
+        error anywhere.
+        """
+        schema = _schema(dimensions={'g': {'dtype': dtype}}, variables={'p': {'foreach': ['g'], 'where': where}})
+        with pytest.raises(ValueError, match=match):
+            validate_expressions(schema)
+
+    @pytest.mark.parametrize(
+        ('dtype', 'where'),
+        [
+            ('datetime', "g > '2030-01-01'"),
+            ('datetime', "g >= '2030-01-01T06:00'"),
+            ('str', "g == 'combined-cycle'"),
+            ('int', 'g > 3'),
+            ('float', 'g > 3.5'),
+        ],
+    )
+    def test_a_where_comparison_of_the_declared_dtype_passes(self, dtype, where):
+        validate_expressions(
+            _schema(dimensions={'g': {'dtype': dtype}}, variables={'p': {'foreach': ['g'], 'where': where}})
+        )
+
     def test_a_second_objective_is_a_load_error(self):
         """Was: `lowering` took the last declaration and dropped the rest, so a
         file declaring cost and emissions solved for emissions without a word.

@@ -18,9 +18,12 @@ Expressions support operator sugar so plans read naturally in Python:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeVar
 
 from lpspec.errors import unknown_name_message
+
+if TYPE_CHECKING:
+    import datetime
 
 ConstraintSense = Literal['==', '<=', '>=']
 ObjectiveSense = Literal['min', 'max']
@@ -215,7 +218,9 @@ class DimensionComparison(Predicate):
 
     dimension: str
     op: ComparisonOperator
-    value: float | str
+    #: ``datetime`` widens this: a datetime dimension's boundary is a date,
+    #: and comparing one to a number reads it as an epoch offset (#460).
+    value: float | str | datetime.date
 
 
 @dataclass(frozen=True)

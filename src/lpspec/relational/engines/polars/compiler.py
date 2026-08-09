@@ -29,6 +29,7 @@ from lpspec.errors import LanguageError
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
+    import datetime
     from collections.abc import Callable, Mapping, Sequence
 
     from polars._typing import JoinStrategy, MaintainOrderJoin
@@ -716,8 +717,8 @@ def _falsy_if_null(condition: pl.Expr) -> pl.Expr:
     return condition.fill_null(value=False)
 
 
-def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str) -> pl.Expr:
-    """One where-comparison. A string and a float are both literals here."""
+def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
+    """One where-comparison. A string, a float and a date are all literals here."""
 
     literal = pl.lit(value)
     match op:
