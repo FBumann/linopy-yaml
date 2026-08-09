@@ -28,7 +28,7 @@ import polars as pl
 
 from lpspec.errors import LanguageError
 from lpspec.relational import plan
-from lpspec.relational.engines.polars.compiler import UNIT, _ordinal
+from lpspec.relational.engines.polars.compiler import UNIT, _ordinal, restrict_by_presence
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -104,7 +104,7 @@ class Labeller:
 
         restricted = self._q.frame(dims, where)
         for on, presence in restrictions:
-            restricted = restricted.join(presence.select(list(on)), on=list(on), how='semi')
+            restricted = restrict_by_presence(restricted, presence, on)
 
         materialised = (
             restricted.sort([_ordinal(d) for d in dims])

@@ -8,6 +8,8 @@ pass, each of these built a model on one lane and raised on the other.
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 import polars as pl
 import pytest
 import yaml as pyyaml
@@ -250,3 +252,44 @@ def test_the_empty_coordinate_builds_on_both_lanes(tmp_path):
         assert result.primal('x').sort('f')['value'].to_list() == [0.0, 30.0, 100.0]
 
     assert eager == relational == 360.0
+
+
+@pytest.mark.parametrize(
+    ('threshold', 'rows', 'objective'),
+    [
+        (999.0, 0, 600.0),
+        (10.0, 1, 360.0),
+    ],
+    ids=['masked out', 'masked in'],
+)
+def test_a_masked_scalar_variable_takes_its_row_with_it(tmp_path, threshold, rows, objective):
+    """Absence spreads through arithmetic at no dimension either (#340).
+
+    Was: the relational lane kept `budget_row` and enforced `sum(x) <= budget`
+    — a constraint the language says should not exist — because a scalar
+    variable's presence was `select()` over no dims, and polars cannot hold a
+    frame with rows and no columns. Present and absent collapsed to the same
+    `(0, 0)` at the moment presence was built, so nothing downstream could
+    restrict on it. Later refused at load instead, which traded a silent wrong
+    answer for a loud divergence; this is the answer.
+
+    The two rungs are the whole property: the mask is data, so the *same file*
+    must drop the row or keep it depending only on what `budget` turns out to
+    be.
+    """
+    model = deepcopy(SCALAR_ROW_MODEL)
+    model['variables']['slack']['where'] = f'budget > {threshold}'
+    path = tmp_path / 'm.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    data = {'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
+
+    m = lpspec_linopy.build(path, data=data)
+    m.solve(solver_name='highs')
+    eager = float(m.objective.value)
+
+    with lps.solve(path, data) as result:
+        relational = result.objective
+        # The row is gone, not slackened: a dropped constraint has no dual.
+        assert result.dual('budget_row').height == rows
+
+    assert eager == relational == objective

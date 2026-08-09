@@ -1161,30 +1161,33 @@ SCALAR_MASKED_MODEL = {
     'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
         'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
-        'slack': {'foreach': [], 'where': 'budget > 100', 'bounds': {'lower': 0, 'upper': 10}},
+        'slack': {'foreach': [], 'where': 'budget > 1000', 'bounds': {'lower': 0, 'upper': 10}},
     },
     'constraints': {'cap': {'foreach': [], 'expression': 'sum(x, over=f) - slack <= budget'}},
     'objectives': {'total': {'sense': 'maximize', 'expression': 'x * cost'}},
 }
 
 
-def test_a_scalar_variable_may_not_be_masked():
-    """The one case `foreach: []` on a variable does not cover (#340).
+def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
+    """Law 7 holds at no dimension either (#340).
 
-    Presence is `select()` over no dims, and polars cannot hold one row of no
-    columns — collecting reports (0, 0), so present and absent are the same
-    frame. The restriction is lost and `cap` stays enforced with the term gone:
-    340.0 where the eager lane, and law 7, say 600.0. The dimensional case has
-    a column to key on, which is what makes this the exception.
+    Was: a scalar's presence was `select()` over no dims, and polars cannot hold
+    rows with no columns — collecting reports (0, 0), so present and absent were
+    one frame and nothing downstream could restrict on it. `cap` stayed enforced
+    with its term gone, as `sum(x) <= budget` — a constraint the file does not
+    contain. The presence frame now carries a marker column instead, and a
+    keyless restriction is a cross join.
 
-    `check()` catches it, so a model repository in CI does not need data bound
-    to see it.
+    Held here as well as in the parity suite because that suite needs the
+    ``[linopy]`` extra, and this has to be true on the bare install too.
     """
-    with pytest.raises(ValueError) as exc:
-        lps.check(SCALAR_MASKED_MODEL)
+    data = {'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
 
-    assert '#340' in str(exc.value), 'the refusal must name where the fix is tracked'
-    assert 'dimension of size 1' in str(exc.value), 'and the workaround'
+    with lps.solve(SCALAR_MASKED_MODEL, data) as sol:
+        # The row is gone, not slackened — a dropped constraint has no dual.
+        assert sol.dual('cap').height == 0
+        # Unbudgeted, both generators run flat out: 100 x 1 + 100 x 2.
+        assert sol.objective == pytest.approx(300.0)
 
 
 #: A masked variable broadcast onto a wider frame, then reduced back. `p` is
