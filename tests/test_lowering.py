@@ -15,7 +15,7 @@ import pytest
 
 from lpspec.errors import DataError, DimensionError, LanguageError
 from lpspec.language.resolution import Namespace
-from lpspec.language.schema import MathSchema
+from lpspec.language.schema import Model
 from lpspec.lowering import _lower_expr, _lower_where, lower_program
 from lpspec.relational.plan import (
     DimensionComparison,
@@ -33,7 +33,7 @@ DISPATCH_YAML = Path('examples/dispatch.yaml')
 
 
 @pytest.fixture
-def dispatch_schema() -> MathSchema:
+def dispatch_schema() -> Model:
     return schema_of(DISPATCH_YAML)
 
 
@@ -152,7 +152,7 @@ def _tidy_cap(names):
     index = pd.MultiIndex.from_tuples(list(CAPS), names=names)
     # tidy_sources normalises to a frame, so read the columns back by name —
     # which is the point: a transposition would show up as swapped values
-    frame = tidy_sources(MathSchema(**NETWORK), {'cap': pd.Series(list(CAPS.values()), index=index)})['cap'].collect()
+    frame = tidy_sources(Model(**NETWORK), {'cap': pd.Series(list(CAPS.values()), index=index)})['cap'].collect()
     table = frame.to_dict(as_series=False)
     return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
 

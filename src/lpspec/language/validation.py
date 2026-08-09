@@ -46,17 +46,17 @@ from lpspec.language.expression_parser import (
 from lpspec.language.helpers import BUILTINS, unknown_helper_message
 from lpspec.language.piecewise import expand_piecewise
 from lpspec.language.resolution import Namespace, resolve_expression, resolve_where
-from lpspec.language.schema import MathSchema
+from lpspec.language.schema import Model
 from lpspec.language.where_parser import parse_where
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 
-def load_schema(model: str | Path | dict[str, Any] | MathSchema) -> MathSchema:
+def load_model(model: str | Path | dict[str, Any] | Model) -> Model:
     """Load and validate a model definition — the language's front door.
 
-    Accepts a YAML file path, an already-parsed dict, or a ``MathSchema``.
+    Accepts a YAML file path, an already-parsed dict, or a ``Model``.
     Validation is complete at this point: schema shape, every expression and
     where string, every named expression and macro template — and every
     declaration a formulation emits, since those are language too. That is why
@@ -79,18 +79,18 @@ def load_schema(model: str | Path | dict[str, Any] | MathSchema) -> MathSchema:
             'yet — track https://github.com/fluxopt/lpspec/issues/30'
         )
         raise NotImplementedError(msg)
-    if isinstance(model, MathSchema):
+    if isinstance(model, Model):
         schema = model
     elif isinstance(model, dict):
-        schema = MathSchema(**model)
+        schema = Model(**model)
     else:
-        schema = MathSchema(**read_yaml(Path(model)))
+        schema = Model(**read_yaml(Path(model)))
     validate_expressions(expand_piecewise(schema))
     return schema
 
 
 def validate_expressions(
-    schema: MathSchema,
+    schema: Model,
     *,
     known_variables: Mapping[str, Sequence[str]] = MappingProxyType({}),
 ) -> None:
@@ -109,7 +109,7 @@ def validate_expressions(
 
     Parameters
     ----------
-    schema : MathSchema
+    schema : Model
         The schema to validate.
     known_variables : Mapping[str, Sequence[str]]
         Variables valid in addition to those declared in *schema*, mapped to
@@ -197,7 +197,7 @@ def validate_expressions(
         raise SchemaError('\n'.join(errors))
 
     # Dim rules are language rules, not backend rules, so they run here rather
-    # than at either entry point — linopy.build/extend and api.load_schema all
+    # than at either entry point — linopy.build/extend and api.load_model all
     # arrive through this function, and a lane that could skip them would be a
     # lane with a different language (hard rule 3).
     check_schema(schema, known_variables)
@@ -213,7 +213,7 @@ _DTYPE_TYPES: dict[str, tuple[type, ...]] = {
 }
 
 
-def _check_dimension_values(schema: MathSchema, errors: list[str]) -> None:
+def _check_dimension_values(schema: Model, errors: list[str]) -> None:
     """Reject a declared coordinate that is not the dtype the file declares.
 
     YAML resolves unquoted scalars by shape, and a coerced label does not join
@@ -234,7 +234,7 @@ def _check_dimension_values(schema: MathSchema, errors: list[str]) -> None:
 
 def _parse_expand(
     expression: str,
-    schema: MathSchema,
+    schema: Model,
     context: str,
     errors: list[str],
 ) -> ArithmeticNode | ComparisonNode | None:

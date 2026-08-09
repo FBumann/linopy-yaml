@@ -11,7 +11,7 @@ import pytest
 
 from lpspec.language.expansion import parse_and_expand
 from lpspec.language.expression_parser import parse_expression
-from lpspec.language.schema import MathSchema
+from lpspec.language.schema import Model
 from lpspec.language.validation import validate_expressions
 from tests.differential import differential
 from tests.oracle import pd
@@ -27,7 +27,7 @@ def make_schema(
     expressions: dict[str, str] | None = None,
     macros: dict | None = None,
     **overrides,
-) -> MathSchema:
+) -> Model:
     base = {
         'dimensions': {
             'snapshot': {'dtype': 'int'},
@@ -62,7 +62,7 @@ def make_schema(
     if macros is not None:
         base['macros'] = macros
     base.update(overrides)
-    return MathSchema(**base)
+    return Model(**base)
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +185,7 @@ def test_macro_collisions_rejected():
     with pytest.raises(ValueError, match="collides with the built-in helper 'sum'"):
         make_schema(macros={'sum': {'args': ['a'], 'template': 'a'}})
     with pytest.raises(ValueError, match="collides with the built-in helper 'sum'"):
-        MathSchema(dimensions={'sum': {'values': [1]}})
+        Model(dimensions={'sum': {'values': [1]}})
 
 
 def test_duplicate_formals_rejected():

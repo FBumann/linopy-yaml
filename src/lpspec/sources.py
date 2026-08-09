@@ -32,11 +32,11 @@ from lpspec.relational.frames import as_frame, labels_frame
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.schema import Model
 
 
 def tidy_sources(
-    schema: MathSchema,
+    schema: Model,
     data: dict[str, object],
     coords: dict[str, Any] | None = None,
 ) -> dict[str, object]:
@@ -95,7 +95,7 @@ def tidy_sources(
     return sources
 
 
-def validate_piecewise_data(schema: MathSchema, values: Mapping[str, Any] | Any) -> None:
+def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
     """Data-time guard for ``convex: true`` blocks (SPEC §3.6).
 
     The hull relaxation is silently wrong for curves of mixed curvature, and
@@ -151,7 +151,7 @@ def validate_piecewise_data(schema: MathSchema, values: Mapping[str, Any] | Any)
                 )
 
 
-def _as_dataarray(schema: MathSchema, pname: str, values: Mapping[str, Any] | Any) -> Any:
+def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) -> Any:
     """One source as a DataArray indexed by its declared dims.
 
     Two shapes reach here: the linopy lane hands over its ``xr.Dataset``

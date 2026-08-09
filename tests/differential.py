@@ -45,7 +45,7 @@ from tests.oracle import linopy, lpspec_linopy
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.schema import Model
     from lpspec.relational.engines.polars.executor import Result
 
 #: Both lanes hand the same numbers to the same solver, so they must agree to
@@ -66,7 +66,7 @@ class Agreement:
     result: Result
     """The relational solution; live until the ``with`` block exits."""
 
-    schema: MathSchema
+    schema: Model
     executor: PolarsExecutor
     lp: Path | None = None
     """The written LP file, when ``lp=True`` — already checked to agree."""

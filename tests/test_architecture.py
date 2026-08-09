@@ -207,7 +207,7 @@ def test_typeset_reads_the_language_and_reaches_no_engine():
     any model the lanes can build, from one walk, holding no opinion they do
     not already hold. That claim is only worth anything if it *cannot* reach
     the plan, a sink, a solver or a dataframe — so ``import lpspec.typeset``
-    must not drag in an engine. It used to, through ``api.load_schema``, and
+    must not drag in an engine. It used to, through ``api.load_model``, and
     nothing failed; the module map said otherwise and no test read it.
 
     Membership is off the path, like the other three, so a new renderer cannot
@@ -287,7 +287,7 @@ def test_typesets_import_closure_needs_no_third_party_engine():
 #: reviewer reads; the fences elsewhere in this file work the same way.
 PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
-    'load it': {'load_schema', 'MathSchema'},
+    'load it': {'load_model', 'Model'},
     'show it': {'to_latex', 'to_markdown', 'to_typst', 'SymbolTable'},
     'catch it': {
         'LpspecError',

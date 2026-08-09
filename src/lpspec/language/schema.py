@@ -319,8 +319,13 @@ class PiecewiseBlock(_StrictBlock):
 SUPPORTED_VERSIONS: tuple[int, ...] = (0,)
 
 
-class MathSchema(_StrictBlock):
-    """Top-level schema for a lpspec YAML file."""
+class Model(_StrictBlock):
+    """The declared math — one YAML file, or one dict, validated.
+
+    First of the three stages the pipeline names: ``Model`` is what a file
+    *says*, ``plan.Program`` is what it lowers to, and an executor is what a
+    build holds. Nothing here has seen data.
+    """
 
     _label: ClassVar[str] = 'the top level of the file'
 
@@ -369,8 +374,45 @@ class MathSchema(_StrictBlock):
         )
         raise ValueError(msg)
 
+    def to_yaml(self) -> str:
+        """The file a reviewer reads — including for a model built as a dict.
+
+        Hard rule 5 is that the model is the file you review and diff. A model
+        a framework emitted as a dict has no such file, so this gives it one:
+        dump it, read the YAML, and it is *provably* the same model, because
+        ``tests/test_roundtrip.py`` holds the round trip over the whole corpus.
+
+        ``exclude_defaults`` is what keeps it reviewable — it emits what the
+        author declared rather than every field's default, so the output reads
+        like a file someone wrote instead of a serialisation of one.
+        """
+        import yaml
+
+        # **Two defaults are stated even when they are the default**, and the
+        # rule is about reading rather than meaning. Omitting a default is safe
+        # where its absence reads as *nothing here* — no `where`, not `binary`,
+        # unbounded `bounds`. It is unsafe where absence makes a reader guess a
+        # choice the author actually made:
+        #
+        #   `version`  absent means 0, but stating which surface a file targets
+        #              is the whole argument for the field (#67)
+        #   `sense`    absent means minimize, and minimise-or-maximise is the
+        #              most consequential word in a model. A reviewer should
+        #              not have to know a default to read its direction — and
+        #              every model in the corpus writes it, so dropping it made
+        #              the review copy differ from the file in the one place
+        #              that matters most.
+        body: dict[str, Any] = {'version': self.version, **self.model_dump(exclude_defaults=True)}
+        for name, objective in self.objectives.items():
+            body.setdefault('objectives', {}).setdefault(name, {})['sense'] = objective.sense
+            body['objectives'][name] = {
+                'sense': objective.sense,
+                **{k: v for k, v in body['objectives'][name].items() if k != 'sense'},
+            }
+        return yaml.safe_dump(body, sort_keys=False, allow_unicode=True)
+
     @model_validator(mode='after')
-    def _validate_references(self) -> MathSchema:
+    def _validate_references(self) -> Model:
         errors = []
 
         # One flat namespace: shadowing would let a new declaration silently

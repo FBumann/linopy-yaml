@@ -19,7 +19,7 @@ import textwrap
 import pytest
 
 from lpspec.errors import DataError, LanguageError
-from lpspec.language.schema import MathSchema
+from lpspec.language.schema import Model
 from tests.oracle import builder, linopy, loader, lpspec_linopy, pd, xr
 
 
@@ -189,13 +189,13 @@ def test_extend_sees_existing_model_variables(yaml_file, model_with):
 # ---------------------------------------------------------------------------
 
 
-def _schema(dims=None, params=None) -> MathSchema:
+def _schema(dims=None, params=None) -> Model:
     raw = {}
     if dims:
         raw['dimensions'] = dims
     if params:
         raw['parameters'] = params
-    return MathSchema.model_validate(raw)
+    return Model.model_validate(raw)
 
 
 class TestBuildMasterCoords:

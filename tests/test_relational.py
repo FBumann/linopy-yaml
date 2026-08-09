@@ -16,7 +16,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError
-from lpspec.language.schema import MathSchema
+from lpspec.language.schema import Model
 from lpspec.lowering import lower_program
 from lpspec.relational import (
     PolarsExecutor,
@@ -666,7 +666,7 @@ def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet():
     for self_loop, expected in ((False, False), (True, True)):
         model, sources = _network(self_loop)
         with lps.build(model, sources) as ex:
-            program = lower_program(MathSchema(**model))
+            program = lower_program(Model(**model))
             terms = ex._q.expression(program.constraints[0].lhs, 'test').terms
             assert len(terms) == 2 and {t.variable for t in terms} == {'f'}
             assert _needs_aggregate(terms, ex._q.may_share_a_column) is expected, f'self_loop={self_loop}'
@@ -694,7 +694,7 @@ def test_stacking_distinct_variables_asks_for_no_aggregate():
 
     def fragments(expression):
         program = lower_program(
-            MathSchema(
+            Model(
                 dimensions=dims,
                 parameters={'rhs': {'dims': ['i']}},
                 variables=variables,
@@ -722,9 +722,9 @@ def test_the_objective_skips_the_aggregate_only_when_a_column_cannot_repeat():
         'cost': pl.DataFrame({'i': [0, 1], 'value': [2.0, 3.0]}),
         'lb': pl.DataFrame({'i': [0, 1], 'value': [1.0, 1.0]}),
     }
-    once = lower_program(MathSchema(**dict(base, objectives={'o': {'sense': 'minimize', 'expression': 'p * cost'}})))
+    once = lower_program(Model(**dict(base, objectives={'o': {'sense': 'minimize', 'expression': 'p * cost'}})))
     twice = lower_program(
-        MathSchema(**dict(base, objectives={'o': {'sense': 'minimize', 'expression': 'p * cost + p * cost'}}))
+        Model(**dict(base, objectives={'o': {'sense': 'minimize', 'expression': 'p * cost + p * cost'}}))
     )
 
     assert _objective_of(once, sources) == ({0: 2.0, 1: 3.0}, 2)
@@ -758,7 +758,7 @@ def test_the_objective_keeps_the_aggregate_when_a_reduction_hides_extra_rows():
         'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 5.0]}),
     }
     # one row per column, each carrying the summed price — not three rows of one
-    assert _objective_of(lower_program(MathSchema(**model)), sources) == ({0: 6.0, 1: 6.0}, 2)
+    assert _objective_of(lower_program(Model(**model)), sources) == ({0: 6.0, 1: 6.0}, 2)
 
 
 def test_infinite_bounds_survive_the_handoff(dispatch_data):

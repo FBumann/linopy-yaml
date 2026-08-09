@@ -31,7 +31,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from lpspec.language.validation import load_schema
+from lpspec.language.validation import load_model
 from lpspec.lowering import lower_program
 from lpspec.relational.engines.polars.executor import PolarsExecutor
 from lpspec.relational.sinks import solver, writer
@@ -40,16 +40,16 @@ from lpspec.sources import tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.schema import Model
     from lpspec.relational.result import Result
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a
 #: consumer that binds no data (``typeset``) must be able to reach it without
-#: reaching the runner. Callers keep saying ``lps.load_schema``.
-__all__ = ['build', 'check', 'load_schema', 'solve', 'write']
+#: reaching the runner. Callers keep saying ``lps.load_model``.
+__all__ = ['build', 'check', 'load_model', 'solve', 'write']
 
 
-def check(model: str | Path | dict[str, Any] | MathSchema) -> MathSchema:
+def check(model: str | Path | dict[str, Any] | Model) -> Model:
     """Compile-check a model without data: parse, expand, validate, lower.
 
     Lowering needs no sources, so this works on a bare YAML file — the CI
@@ -57,13 +57,13 @@ def check(model: str | Path | dict[str, Any] | MathSchema) -> MathSchema:
     uses a construct outside the streaming language, ``ValueError`` for
     schema/expression problems. Returns the validated schema.
     """
-    schema = load_schema(model)
+    schema = load_model(model)
     lower_program(schema)
     return schema
 
 
 def build(
-    model: str | Path | dict[str, Any] | MathSchema,
+    model: str | Path | dict[str, Any] | Model,
     sources: Mapping[str, Any],
     *,
     coords: dict[str, Any] | None = None,
@@ -80,7 +80,7 @@ def build(
         If the model uses a construct outside the streaming language —
         the message names the construct and its context.
     """
-    schema = load_schema(model)
+    schema = load_model(model)
     program = lower_program(schema)  # strict: no fallback, errors carry the reason
     ex = PolarsExecutor()
     try:
@@ -92,7 +92,7 @@ def build(
 
 
 def solve(
-    model: str | Path | dict[str, Any] | MathSchema,
+    model: str | Path | dict[str, Any] | Model,
     sources: Mapping[str, Any],
     solver_options: Mapping[str, Any] | None = None,
     solver_name: str = 'highs',
@@ -125,7 +125,7 @@ def solve(
 
 
 def write(
-    model: str | Path | dict[str, Any] | MathSchema,
+    model: str | Path | dict[str, Any] | Model,
     sources: Mapping[str, Any],
     out: str | Path,
     **build_kwargs: Any,

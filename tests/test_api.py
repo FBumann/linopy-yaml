@@ -118,10 +118,10 @@ def test_runtime_is_linopy_free(dispatch_yaml):
     assert 'LINOPY_FREE_OK' in out.stdout
 
 
-def test_check_and_load_schema_need_no_data(dispatch_yaml):
+def test_check_and_load_model_need_no_data(dispatch_yaml):
     """The model stands for itself: the schema is read from the file when
     wanted, never carried on a built model."""
-    for schema in (lps.check(dispatch_yaml), lps.load_schema(dispatch_yaml)):
+    for schema in (lps.check(dispatch_yaml), lps.load_model(dispatch_yaml)):
         assert schema.variables['p'].foreach == ['snapshot', 'generator']
         assert schema.parameters['load'].dims == ['snapshot']
 

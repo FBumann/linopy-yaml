@@ -1,0 +1,124 @@
+"""``Model.to_yaml`` gives back the same model — held over the whole corpus.
+
+The method is three lines; **this file is the deliverable**. A `to_yaml` that
+drifts from what the engine builds is worse than none: a reviewer would be
+reading a model that never ran, and nothing about the output would look wrong.
+
+The ways it could drift are all quiet. A field gaining a default, a validator
+normalising a value, an alias, a dict that stops preserving order — each turns
+the dumped file into a *different* model while every existing test still
+passes, because every existing test builds from the original.
+
+So the property is checked against the corpus rather than a fixture: every
+example and every ported model, which between them exercise every construct the
+language has (`docs/models/index.md` generates the coverage table from exactly
+this set).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+import yaml as pyyaml
+
+import lpspec as lps
+
+EXAMPLES = sorted(Path('examples').glob('*.yaml'))
+PORTS = sorted(Path('examples/ports').glob('*.yaml'))
+CORPUS = EXAMPLES + PORTS
+
+
+def test_the_corpus_is_not_empty():
+    """A guard on the guard: the parametrised tests below pass vacuously if the
+    globs stop matching, which a directory rename would do silently."""
+    assert len(EXAMPLES) >= 5, f'examples/ looks wrong: {EXAMPLES}'
+    assert len(PORTS) >= 5, f'examples/ports/ looks wrong: {PORTS}'
+
+
+@pytest.mark.parametrize('path', CORPUS, ids=lambda p: p.stem)
+def test_a_model_survives_a_round_trip(path: Path):
+    """`load -> to_yaml -> load` is the same model, field for field."""
+    original = lps.load_model(path)
+    dumped = original.to_yaml()
+    reloaded = lps.load_model(pyyaml.safe_load(dumped))
+
+    assert reloaded.model_dump() == original.model_dump(), f'{path} does not survive a round trip'
+
+
+@pytest.mark.parametrize('path', CORPUS, ids=lambda p: p.stem)
+def test_the_dump_is_stable(path: Path):
+    """Dumping twice gives the same bytes.
+
+    Not pedantry: an unstable dump means a framework that emits a model for
+    review produces a different file on every run, so the diff a reviewer is
+    supposed to read is noise.
+    """
+    once = lps.load_model(path).to_yaml()
+    twice = lps.load_model(pyyaml.safe_load(once)).to_yaml()
+    assert once == twice, f'{path} dumps differently the second time'
+
+
+def test_a_dict_built_model_gets_a_file():
+    """The case this exists for: a model that never had a file.
+
+    #30 and #29 were closed in favour of frameworks building a dict and handing
+    it over. This is what keeps that path honest against hard rule 5 — the dict
+    gets a reviewable file, and it is the same model.
+    """
+    built = {
+        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'parameters': {'cost': {'dims': ['t']}},
+        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'cap': {'foreach': ['t'], 'expression': 'x <= 4'}},
+        'objectives': {'total': {'sense': 'maximize', 'expression': 'x * cost'}},
+    }
+    text = lps.load_model(built).to_yaml()
+
+    assert lps.load_model(pyyaml.safe_load(text)).model_dump() == lps.load_model(built).model_dump()
+    # readable, not a serialisation: no defaults the author never wrote…
+    assert 'piecewise' not in text
+    # …except `version`, which is the one field whose purpose is to be stated
+    assert text.startswith('version: 0\n'), 'a generated file should say which surface it targets'
+    assert 'dimensions:' in text
+
+
+def test_a_declared_version_survives():
+    """`version:` is not a default when the file states it — a dumped model has
+    to keep saying which surface it targets (#67)."""
+    text = lps.load_model({'version': 0, 'dimensions': {'t': {'dtype': 'int', 'values': [0]}}}).to_yaml()
+    assert 'version: 0' in text
+
+
+@pytest.mark.parametrize('path', CORPUS, ids=lambda p: p.stem)
+def test_the_review_copy_states_the_objective_sense(path: Path):
+    """`sense` is emitted even at its default — the one word a reviewer must
+    not have to infer.
+
+    It round-trips either way, since absent means minimize. What it does not do
+    either way is *read*: an objective with no direction makes the reviewer
+    know a default to know whether the model minimises or maximises, and every
+    model in the corpus writes it, so dropping it made the review copy differ
+    from the file in the place that matters most.
+    """
+    model = lps.load_model(path)
+    if not model.objectives:
+        pytest.skip('no objective to state')
+    text = model.to_yaml()
+    for name, objective in model.objectives.items():
+        assert f'sense: {objective.sense}' in text, f"{path}: '{name}' lost its direction"
+
+
+def test_an_absence_still_reads_as_an_absence():
+    """The other half of the rule: a default whose absence reads correctly is
+    still omitted, so the review copy stays a file rather than a dump."""
+    text = lps.load_model(
+        {
+            'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
+            'variables': {'x': {'foreach': ['t']}},
+            'objectives': {'o': {'sense': 'minimize', 'expression': 'x'}},
+        }
+    ).to_yaml()
+
+    for noise in ('where: null', 'binary: false', 'integer: false', 'piecewise', 'macros'):
+        assert noise not in text, f'{noise!r} leaked into the review copy'

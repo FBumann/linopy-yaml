@@ -6,7 +6,7 @@ sixteen names that load, check, build, solve and read one back. The surface is
 pinned by a test and the reasoning behind its size is
 [ARCHITECTURE](ARCHITECTURE.md#the-python-surface).
 
-Five verbs — `check`, `load_schema`, `build`, `solve`, `write` — and the
+Five verbs — `check`, `load_model`, `build`, `solve`, `write` — and the
 exception tree rooted at `LpspecError`: `LanguageError` (with `SchemaError`,
 `DimensionError`, `PiecewiseExpansionError`) for the model, `DataError` for what
 was bound to it.
@@ -15,7 +15,8 @@ was bound to it.
 import lpspec as lps
 
 lps.check('model.yaml')  # parse → validate → lower, no data bound
-schema = lps.load_schema('model.yaml')  # MathSchema
+model = lps.load_model('model.yaml')  # Model — the declared math
+print(model.to_yaml())  # ...and back out, for a model that never had a file
 
 result = lps.solve('model.yaml', sources, solver_options={'time_limit': 60})
 # ...or solver_name='gurobi', the other solver sink — same model either way
@@ -50,6 +51,21 @@ loader recognises. `to_pandas` and `to_dataarray` are the bridges out and need
 pandas / xarray, which ship with the `[linopy]` extra. The only build knob is
 `coords`; **`solver_options` is not a build knob** and is forwarded verbatim to
 the solver.
+
+**A `Model` can be written back out.** `to_yaml()` is what gives a model built
+as a *dict* — which is how a framework emits one — the file hard rule 5 says
+you review and diff. It is the same model: `tests/test_roundtrip.py` holds
+`load → to_yaml → load` over every example and every port, and holds that
+dumping twice gives the same bytes, because a review copy that changes per run
+is a diff nobody can read.
+
+**Two defaults are stated even when they are the default**, and the rule is
+about reading rather than meaning. A default is omitted where its absence reads
+as *nothing here* — no `where`, not `binary`, unbounded `bounds`. It is written
+where absence would make a reader guess a choice the author made: `version`,
+because stating which surface a file targets is the point of the field; and
+`sense`, because minimise-or-maximise is the most consequential word in a model
+and no reviewer should have to know a default to read its direction.
 
 **Which solver is a caller's choice, not the file's.** `solver_name` is
 `highs` (ships with the package) or `gurobi` (needs the `[gurobi]` extra), and
