@@ -156,8 +156,8 @@ objectives:
 
 `shift` vacates the first snapshot, and a vacated position is *absent*, so the
 row there drops on its own — which is the boundary PyPSA wants, since nothing
-precedes it to ramp from. No `where` states it. The cyclic spelling, `roll`,
-would wrap the last snapshot onto the first and quietly build a different
+precedes it to ramp from. No `where` states it. Asking for the wrap,
+`edge=wrap`, would put the last snapshot onto the first and quietly build a different
 model; it needs a gate, and a gate written as `snapshot > 0` hardcodes the
 index origin, so it stops being the boundary on a horizon that starts anywhere
 else. [Rung 4](pypsa_cyclic_storage.md) wants the wrap and asks for it by name.

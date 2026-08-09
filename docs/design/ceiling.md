@@ -14,7 +14,7 @@ language could not state becomes a ledger row in
 
 ## Two tiers, and the ceiling
 
-**Primitives** (operators, `sum`, `sum(group_by=)`, `roll`/`shift`, `where`
+**Primitives** (operators, `sum`, `sum(group_by=)`, `shift`, `where`
 predicates) set the expressive ceiling, and each costs the full two-backend tax:
 eager implementation, plan node + locality class, executor case, lowering case,
 differential tests, SPEC entry. **`macros:` / `expressions:`** are pure AST
