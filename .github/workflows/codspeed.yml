@@ -1,9 +1,10 @@
 name: CodSpeed
 
-# Cost, in the same terms as ci.yml and bench.yml: one billed job, ~3 minutes,
-# on a free runner, with no secret to manage. CodSpeed is free for public
-# repositories, so this is the cheapest way to run `bench/regressions/` and the
-# only one that runs unasked.
+# Cost, in the same terms as ci.yml and bench.yml: one free-runner job per pull
+# request, plus a metered macro-runner job per merge and per `trigger:bench`
+# label. No secret to manage either way — the wiring is OIDC. CodSpeed itself is
+# free for public repositories; the macro runner is the one thing here that is
+# not, and it is fenced accordingly.
 #
 # **It measures the suite that already exists.** `bench/` is one pytest-benchmark
 # suite, and `--codspeed` swaps in CodSpeed's `benchmark` fixture where
@@ -19,13 +20,28 @@ name: CodSpeed
 # service stores the number for every commit on `main`, so a pull request gets
 # the comparison for one pass.
 #
-# `memory`, and only `memory`. `walltime` wants CodSpeed's bare-metal runners,
-# which are metered — and a free runner's clock is the noise bench.yml already
-# refuses to gate on, so paying for a machine to measure it is not what cheap
-# means. `simulation` is CodSpeed's usual default and is wrong here for a
-# different reason: it runs the workload under an emulator at a large multiple
-# of real time, and polars is multi-threaded native code — the slowdown lands on
-# the rungs and the thread count lands on the instruction count.
+# **Two instruments, and each gets the runner it needs.** `memory` tracks
+# allocations, which a free runner counts as well as any other, so it runs on
+# every event. `walltime` measures a clock, and a shared clock is the noise
+# bench.yml already refuses to gate on — so it runs on CodSpeed's bare-metal
+# macro runner or it is not worth running.
+#
+# That machine is metered, which is the whole of why this is fenced: `main`
+# always, a pull request only when somebody applies `trigger:bench` — the label
+# bench.yml is already driven by. Bare metal should not run fork code unasked
+# either.
+#
+# What it buys is the signal the tree has nowhere else. bench.yml gates on
+# memory, this job's other half measures memory, and the wall-clock ladder is a
+# thing a contributor runs by hand on an idle laptop — so **build CPU time is
+# measured nowhere automatic**, and a regression lands unseen. Every merge is
+# one point in a series, and merges here are squashes, so a step names the pull
+# request that caused it without anybody bisecting.
+#
+# `simulation` is CodSpeed's usual default and is wrong here whatever the
+# runner: it runs the workload under an emulator at a large multiple of real
+# time, and polars is multi-threaded native code — the slowdown lands on the
+# rungs and the thread count lands on the instruction count.
 #
 # Not a gate, on purpose. `continue-on-error` keeps it out of the merge
 # decision and no branch ruleset names it; bench.yml stays the thing that fails
@@ -39,8 +55,12 @@ name: CodSpeed
 on:
   push:
     branches: [main]
-  # required for a report to have somewhere to land
+  # required for a report to have somewhere to land. `labeled` is on the list
+  # because the default triple stops at `reopened`, and without it applying
+  # `trigger:bench` to an open pull request would re-trigger nothing — the
+  # walltime job below would be reachable only by pushing another commit.
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   # CodSpeed dispatches this itself to backfill a baseline for existing commits
   workflow_dispatch:
 
@@ -89,3 +109,43 @@ jobs:
         with:
           mode: memory
           run: uv run --no-sync pytest bench --arms lpspec --sizes s --skip-gate --codspeed
+
+  walltime:
+    name: Wall time (macro runner)
+    # `main` always; a pull request only when a maintainer asks, with the label
+    # bench.yml already uses. Two reasons it is not automatic on pull requests:
+    # macro minutes are metered, and bare metal should not run arbitrary code
+    # from a fork. Same shape linopy settled on, and the same label convention
+    # this repo already runs bench.yml by.
+    if: >-
+      ${{ github.event_name != 'pull_request' ||
+          contains(github.event.pull_request.labels.*.name, 'trigger:bench') }}
+    # **Not a free runner.** `walltime` on a shared clock is the noise bench.yml
+    # refuses to gate on; measuring it there would produce a series nobody could
+    # read. This is the one metered thing in the tree, which is why it is fenced
+    # to merges and to a label somebody types.
+    runs-on: codspeed-macro
+    timeout-minutes: 20
+    continue-on-error: true
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - run: uv sync --no-default-groups --group codspeed
+
+      # `m`, where the memory job takes `s`. That job is capped by CodSpeed's
+      # ~2M-allocation guidance; this one is not capped by anything except the
+      # meter, and `s` is short enough that per-run overhead is a large share of
+      # what gets recorded. `l` is the next question, once there is a series to
+      # say whether `m` resolves what we want to see.
+      - uses: CodSpeedHQ/action@v5
+        with:
+          mode: walltime
+          run: uv run --no-sync pytest bench --arms lpspec --sizes m --skip-gate --codspeed
