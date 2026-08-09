@@ -199,9 +199,18 @@ Every tagged build also attaches its wheel and sdist to the GitHub release.
 ## One-time setup
 
 - **Release app** — a GitHub App with `contents: write` + `pull-requests: write`,
-  credentials in secrets `APP_CLIENT_ID` / `APP_PRIVATE_KEY`. Needed so release
-  PRs run CI and prerelease tags trigger publish. Without it, `release.yaml`
-  degrades to `GITHUB_TOKEN` and warns; `prerelease.yaml` refuses to run.
+  credentials in secrets `APP_CLIENT_ID` / `APP_PRIVATE_KEY`, **and installed on
+  the account that owns this repository**. Needed so release PRs run CI and
+  prerelease tags trigger publish. Both `release.yaml` and `prerelease.yaml`
+  refuse to run without it — there is no `GITHUB_TOKEN` fallback, because a PR
+  it authored never triggers CI, so the required checks never report and the
+  release cannot merge. Stopping is the better failure.
+
+  The credentials and the installation are two separate things, and moving the
+  repository separates them — secrets transfer with a repository, an app
+  installation does not. The symptom is `create-github-app-token` failing with a
+  bare `Not Found`, which reads as a bad key and is not one. Install the app on
+  the new owner; nothing about the secrets needs touching.
 - **PyPI** — currently off. The `pypi` job is skipped unless the repo variable
   `PUBLISH_TO_PYPI` is `true`. To go live: register a
   [trusted publisher](https://docs.pypi.org/trusted-publishers/) for

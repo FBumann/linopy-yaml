@@ -34,22 +34,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      # a GITHUB_TOKEN-authored PR does not trigger CI, so prefer the app
+      # Required, not preferred — same as prerelease.yaml, and for the same kind
+      # of reason. A GITHUB_TOKEN-authored PR does not trigger CI, so falling
+      # back to one produces a release PR whose required checks never report:
+      # auto-merge then waits on a result that cannot arrive, which is the
+      # failure #269 was reported as "CI hanging". A release that stops is
+      # better than one that silently cannot finish.
+      - name: Require the release app
+        if: env.HAS_RELEASE_APP != 'true'
+        run: |
+          echo "::error::APP_CLIENT_ID is unset. A release PR authored with GITHUB_TOKEN does not"
+          echo "::error::trigger CI, so its required checks never report and it cannot merge."
+          echo "::error::Install the release app — see RELEASING.md."
+          exit 1
+
       - uses: actions/create-github-app-token@v3
         id: app-token
-        if: env.HAS_RELEASE_APP == 'true'
+        # No `if:` guard on the credentials, and none is possible on the thing
+        # that actually matters: this needs the app *installed on the account
+        # that owns the repository*, which no expression here can see. Moving
+        # the repository is what separates the two — secrets transfer, the
+        # installation does not — and the symptom is a bare `Not Found` from
+        # this step. That reads as a bad key and is not one. See RELEASING.md.
         with:
           client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
-      - name: Warn when falling back to GITHUB_TOKEN
-        if: env.HAS_RELEASE_APP != 'true'
-        run: |
-          echo "::warning::APP_CLIENT_ID is unset — using GITHUB_TOKEN. The release PR will not run CI. See RELEASING.md."
-
       - uses: googleapis/release-please-action@v5
         with:
-          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: ${{ inputs.target-branch || 'main' }}
@@ -75,7 +88,7 @@ jobs:
       - name: Merge the release PR when CI passes (temporary, alpha only)
         if: vars.AUTO_RELEASE != 'false'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           # this job never checks out, so gh has no remote to infer the repo from
           GH_REPO: ${{ github.repository }}
           BASE: ${{ inputs.target-branch || 'main' }}
