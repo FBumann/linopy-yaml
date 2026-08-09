@@ -315,4 +315,5 @@ linopy lane's `data=`/`coords=` shapes. Nothing else: the parametrization reads
 | `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |
-| `profile_build.py` | where the time goes inside one build — a profiler, not a benchmark |
+| `profile_build.py` | which *query* inside one build spends the time — a profiler, not a benchmark. Wraps every collect, so read its shares and not its seconds |
+| `profile_phases.py` | which *phase*, in seconds comparable to a real run. Hoists the parse, the lowering and the parquet read out of the loop and reuses one binding, which takes the spread from 12-55% down to a few percent — the difference between a 10% change being visible and not |
