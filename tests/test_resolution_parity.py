@@ -84,7 +84,7 @@ ACCEPTED = [
 #: sweep masks ``variables.p.where`` on the dispatch model, and a bare variable
 #: name fits neither slot: in a variable's own where it is a self-reference
 #: (rejected at load), and on ``balance`` it spans a dim the constraint does not
-#: (a DimensionError, correctly — reducing it needs ROADMAP Track 1 item 6).
+#: (a DimensionError, correctly — reducing it needs an `all`-reduction, #469).
 #: Mapped rather than skipped so the coverage guard below still names a test.
 COVERED_ELSEWHERE = {
     'VariableDefinedNode': ('tests/test_relational.py::test_a_bare_variable_name_in_a_where_asks_whether_it_exists'),

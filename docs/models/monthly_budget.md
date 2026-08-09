@@ -211,7 +211,7 @@ and a group with no members contributes nothing.
 What it cannot express is an **overlapping** aggregate — *"trailing twelve
 months, at every month"* — because each snapshot would belong to twelve groups
 and no single column can say so. That is a sliding window over a variable, and
-it is [ROADMAP](../ROADMAP.md#track-1--primitives) Track 1 item 4.
+it is the fixed-width window, [#468](https://github.com/FBumann/lpspec/issues/468).
 
 The same split shows up one level up, where a *process* loops over plans
 rather than an expression looping over rows

@@ -212,7 +212,7 @@ class TestLoadTimeIntegration:
 
 
 class TestDimensionKwargs:
-    """ROADMAP 5c: a dim kwarg that names nothing is a silent no-op, not an error.
+    """A dim kwarg that names nothing is a silent no-op, not an error.
 
     ``sum(p, over=snapshto)`` used to build a model that solved and was wrong —
     both lanes agree on the no-op, so nothing downstream caught it.
