@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.0.1-alpha.77](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.76...v0.0.1-alpha.77) (2026-08-09)
+
+
+### Documentation
+
+* **lp:** the presort's cost is unmeasured, not settled ([#517](https://github.com/fluxopt/lpspec/issues/517)) ([5ca09f0](https://github.com/fluxopt/lpspec/commit/5ca09f01b841a07b61e501f43120312cd50e5f56))
+
+## [0.0.1-alpha.76](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.75...v0.0.1-alpha.76) (2026-08-09)
+
+
+### Features
+
+* **language:** version: on a model file, and 0 means unstable ([#515](https://github.com/fluxopt/lpspec/issues/515)) ([7d37589](https://github.com/fluxopt/lpspec/commit/7d375891768a2937fad5a26c7dad4759a367a53b))
+
+## [0.0.1-alpha.75](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.74...v0.0.1-alpha.75) (2026-08-09)
+
+
+### Refactoring
+
+* **language:** edge takes a quoted keyword, edge='wrap' ([#512](https://github.com/fluxopt/lpspec/issues/512)) ([d20d44e](https://github.com/fluxopt/lpspec/commit/d20d44e73aded3f251637bd674f4a220f02ed36f))
+
 ## [0.0.1-alpha.74](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.73...v0.0.1-alpha.74) (2026-08-09)
 
 
