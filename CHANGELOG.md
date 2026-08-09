@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.65](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.64...v0.0.1-alpha.65) (2026-08-09)
+
+
+### Documentation
+
+* **contributing:** issues cite behaviour, and two labels carry order ([#466](https://github.com/FBumann/lpspec/issues/466)) ([86398fd](https://github.com/FBumann/lpspec/commit/86398fdb77982a48db529db2469a11aae8c3435d))
+
 ## [0.0.1-alpha.64](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.63...v0.0.1-alpha.64) (2026-08-09)
 
 
