@@ -7,11 +7,9 @@ The work is issues, grouped under three parents:
 - [Track 2 — the operational surface](https://github.com/FBumann/lpspec/issues/471)
 - [Track 3 — capabilities, and the degree line](https://github.com/FBumann/lpspec/issues/472)
 
-This page used to carry a table per track, and it lost to the tracker it
-duplicated: rows described work that had already shipped, and code and tests
-linked to sections — *Track 5*, *The degree axis*, *ROADMAP 2c* — that had never
-existed or no longer did. An index maintained by hand beside an issue tracker is
-a second copy that drifts. It is not one any more.
+An index maintained by hand beside an issue tracker is a second copy that
+drifts, so there is not one here: the issues are the list, and this page is the
+argument for what the list is *for*.
 
 ## Why
 

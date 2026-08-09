@@ -6,10 +6,11 @@
 # per-row column and nothing assumes every period has the same shape. A
 # rectangle cannot say it: it forces one resolution on every period.
 #
-# The line that needs `at()` is `within_cap`. Capacity is decided per period and
-# binds at every snapshot in that period, so a coarse-dim *variable* has to be
-# read at a fine-dim row. A per-period *parameter* could be pre-joined in data
-# prep; a variable cannot, which is why this model had no formulation before.
+# `within_cap` reads the mapping the other way round from a grouping: capacity
+# is decided per period and binds at every snapshot in that period, so a
+# coarse-dim quantity is read at a fine-dim row. A per-period *parameter* could
+# be pre-joined in data prep; `p_nom` is a variable, and a variable is not data
+# to be joined.
 dimensions:
   snapshot:
     dtype: int

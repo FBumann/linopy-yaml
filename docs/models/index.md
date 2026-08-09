@@ -201,6 +201,6 @@ models. Since lazy generation is what every serious TSP code actually does,
 "lpspec can express TSP" and "lpspec is a good way to solve a large TSP" are
 different sentences and only the first is true.
 
-An earlier draft of this ledger said DFJ was refused for having a
-data-dependent row count. That was wrong — the cycle basis has one too — and
-the corpus is where it got caught.
+A data-dependent row count is not what rules DFJ out: the cycle basis has one
+and is ordinary. What the corpus is for is catching exactly that kind of
+mis-attribution, where a data-size wall reads as a ceiling.

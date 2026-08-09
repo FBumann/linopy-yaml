@@ -18,16 +18,15 @@ $\mathrm{bus}$ in [transport](transport.md). Ragged periods then cost nothing:
 a coordinate is a per-row column, and four snapshots in 2030 beside two in 2050
 is just a column with four of one value and two of another.
 
-## Why this needed a new primitive
+## Both directions of one mapping
 
-The flat index gives the grouping direction for free —
+Grouping reads the coordinate one way:
 `group_sum(p, over=snapshot, by=period)` is a per-period CO₂ budget, and
 [monthly_budget](monthly_budget.md) is the same construct on a different
 coordinate.
 
-`within_cap` needs the **other** direction. Capacity lives on `period` and has
-to be read at each `snapshot`, so a coarse quantity is being pulled onto a fine
-one:
+`within_cap` reads it the other way. Capacity lives on `period` and binds at
+each `snapshot`, so a coarse quantity is pulled onto a fine one:
 
 ```yaml
 within_cap:
@@ -35,14 +34,13 @@ within_cap:
   expression: p <= at(p_nom, over=snapshot, by=period)
 ```
 
-A per-period *parameter* never needed this — data prep can join it onto the
-snapshot index before the model sees it. **A variable cannot be pre-joined**,
-and `p_nom` is a decision. Before `at`, this model had no formulation at all:
-the rectangle could not express ragged time, and the flat index could not
-express the capacity bound.
+`at` and `group_sum` take the same two arguments because `(over, by)` names one
+mapping table and the helper says which direction it is walked.
 
-`at` and `group_sum` are one mapping table read in the two directions, which is
-why they take the same two arguments and differ only in the verb.
+A per-period **parameter** needs neither: data prep can join it onto the
+snapshot index before the model sees it. `p_nom` is a **variable**, and a
+variable is not data to be joined — which is the line between the two, and why
+the pullback is a construct in the language rather than a step before it.
 
 <!-- math:begin -->
 <details markdown="1">
@@ -110,10 +108,11 @@ $$0 \le p^{\mathrm{nom}}_{e,g} \le 100 \qquad \forall\thinspace e \in \mathcal{E
 # per-row column and nothing assumes every period has the same shape. A
 # rectangle cannot say it: it forces one resolution on every period.
 #
-# The line that needs `at()` is `within_cap`. Capacity is decided per period and
-# binds at every snapshot in that period, so a coarse-dim *variable* has to be
-# read at a fine-dim row. A per-period *parameter* could be pre-joined in data
-# prep; a variable cannot, which is why this model had no formulation before.
+# `within_cap` reads the mapping the other way round from a grouping: capacity
+# is decided per period and binds at every snapshot in that period, so a
+# coarse-dim quantity is read at a fine-dim row. A per-period *parameter* could
+# be pre-joined in data prep; `p_nom` is a variable, and a variable is not data
+# to be joined.
 dimensions:
   snapshot:
     dtype: int

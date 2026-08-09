@@ -113,7 +113,7 @@ class PolarsExecutor:
 
         self._cols = _stack(cols, _COLS)
         self._rows = _stack([r for r, _ in built], _ROWS)
-        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX)
+        self._matrix = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -185,6 +185,18 @@ class PolarsExecutor:
         The terminal aggregate is where duplicates from ``Sum`` and
         ``GroupSum`` — which project rather than aggregate — collapse, and it
         is skipped where nothing can (:func:`_needs_aggregate`).
+
+        **Both branches leave the share ordered by ``row``**, because every
+        sink reads the matrix a row range at a time and would otherwise order
+        it itself — a second pass over a finished frame, and a second copy of
+        it while the solver's own model is resident.
+
+        Ordered by the *join* wherever one term is enough for it. A row frame
+        in label order joined with ``maintain_order='left'`` comes out in that
+        order, which on `dispatch/l` is half the cost of sorting the result
+        (0.068 s against 0.129 s). Two terms are two ordered runs stacked, and
+        runs are not an order, so those sort. :func:`_in_row_order` checks the
+        claim either way.
         """
 
         lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs")
@@ -229,7 +241,11 @@ class PolarsExecutor:
 
         pieces = []
         for p, sign in terms:
-            placed = frame.join(p.frame, on=list(p.dims), how='inner') if p.dims else frame.join(p.frame, how='cross')
+            placed = (
+                frame.join(p.frame, on=list(p.dims), how='inner', maintain_order='left')
+                if p.dims
+                else frame.join(p.frame, how='cross')
+            )
             pieces.append(
                 placed.select(
                     'row',
@@ -239,7 +255,10 @@ class PolarsExecutor:
             )
         stacked = pl.concat(pieces)
         if not _needs_aggregate([fragment for fragment, _ in terms]):
-            matrix = stacked.collect(engine='streaming')
+            # One piece keeps the row frame's order through the join; several
+            # are each ordered and stacked, which is runs rather than an order.
+            ordered = stacked if len(pieces) == 1 else stacked.sort('row')
+            matrix = ordered.collect(engine='streaming')
             self._check_no_undefined_divisor(f"constraint '{c.name}'", matrix, c.lhs, c.rhs)
             return rows, matrix
 
@@ -532,6 +551,27 @@ def _needs_aggregate(terms: Sequence[TermFragment], *, projected: bool = False) 
         return True
     carried = [t.variable for t in terms]
     return len(set(carried)) != len(carried)
+
+
+def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
+    """*matrix* with ``row`` known to ascend — checked, not assumed.
+
+    Every constraint orders its own share and they are stacked in declaration
+    order, which is ascending row ranges, so the concatenation is ordered by
+    construction. polars cannot see that through a ``concat``, and a sink that
+    finds the flag missing orders the whole matrix again — 0.22 s at
+    `transport/l`, against 0.16 s to have done it in the pipeline that built
+    it.
+
+    So the claim is verified and then stated. ``is_sorted`` is a linear scan
+    over a column the frame already holds; the sort behind it is the
+    correctness floor and is expected never to run.
+    """
+    if not matrix.height:
+        return matrix
+    if not matrix['row'].is_sorted():
+        return matrix.sort('row')
+    return matrix.with_columns(pl.col('row').set_sorted())
 
 
 def _has_repeated_entry(matrix: pl.DataFrame) -> bool:
