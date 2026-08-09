@@ -136,8 +136,6 @@ class PolarsExecutor:
         ordinary case, and the question is not whether a divisor is dense — it
         is whether it is defined wherever the model actually divides by it.
         """
-        if 'coeff' not in matrix.columns:
-            return
         undefined = matrix.get_column('coeff').is_null().sum()
         if undefined:
             params = sorted(plan.divisor_parameters(*expressions))
