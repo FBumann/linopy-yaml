@@ -242,6 +242,9 @@ def _build_objectives(ctx: EvaluationContext) -> None:
                 msg = f'Expression must not contain a comparison operator. Got: {odef.expression!r}'
                 raise LanguageError(msg)
 
+            # An objective has no `where`, so the mask is the numerator's alone.
+            check_divisors_cover(f"objective '{oname}'", ast, ctx.schema, ctx.dataset, None, ctx.model)
+
             expr = _objective_expression(ast, ctx)
 
             sense = 'min' if odef.sense == 'minimize' else 'max'

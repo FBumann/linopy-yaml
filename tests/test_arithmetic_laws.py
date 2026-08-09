@@ -418,6 +418,27 @@ def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
         assert float(run.result.objective) == pytest.approx(70.0, rel=RTOL)
 
 
+def test_a_sparse_divisor_in_the_objective_is_refused_too():
+    """The refusal holds in the one declaration with no rows to mask.
+
+    The objective aggregates its terms per column, and a sum reads a null
+    coefficient as zero — the exact silent answer #312 exists to refuse. A
+    check only on constraints would let the same quotient through here, and
+    the optimum would simply be missing terms.
+    """
+    model = {
+        'dimensions': {'f': {'values': ['a', 'b']}},
+        'parameters': {'d': {'dims': ['f']}},
+        'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 1, 'upper': 100}}},
+        'constraints': {'c': {'foreach': ['f'], 'expression': 'x <= 10'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x / d, over=f)'}},
+    }
+    sparse = {'d': pd.Series([2.0], index=pd.Index(['a'], name='f'))}
+
+    with pytest.raises(DataError, match='used as a divisor'), differential(model, sparse) as run:
+        _ = run.result.objective
+
+
 def test_a_divisor_may_be_sparse_where_the_row_is_masked_out():
     """The check is keyed to the rows built, not the coordinate product.
 

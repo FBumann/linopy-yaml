@@ -265,7 +265,11 @@ class PolarsExecutor:
         if not comp.terms:
             return None
         pieces = [p.frame.select(pl.col('var_label').alias('col'), pl.col('coeff')) for p in comp.terms]
-        return pl.concat(pieces).group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
+        # A null coefficient means an undefined divisor, and `sum` would read it
+        # as a zero — so the aggregate happens after the check, not before it.
+        stacked = pl.concat(pieces).collect(engine='streaming')
+        self._check_no_undefined_divisor('objective', stacked, o.expression)
+        return stacked.group_by('col').agg(pl.col('coeff').sum())
 
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the executor only supplies the frames

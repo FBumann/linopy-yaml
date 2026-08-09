@@ -32,8 +32,9 @@ dependencies = [
     # the relational engine: every frame a model is built from, and the parquet
     # reader that fills them. Arrow-backed, so a result frame exports the
     # PyCapsule protocol and any consumer takes it without this package
-    # depending on their library.
-    "polars>=1.30",
+    # depending on their library. 1.36 introduced `explode(empty_as_null=)`,
+    # which the LP writer passes.
+    "polars>=1.36",
     # the solver_direct sink's own arithmetic: `searchsorted` builds the CSR
     # row starts HiGHS wants, and the batch coercions are its dtypes. Array
     # work at the solver boundary, not a dataframe dependency.

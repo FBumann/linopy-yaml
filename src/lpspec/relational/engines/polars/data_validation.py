@@ -75,11 +75,14 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
         if d in dimensions:
             _check_labels(p, frame, d, dimensions)
 
-    duplicated = frame.group_by(p.dims).agg(pl.len().alias('n')).filter(pl.col('n') > 1).head(3).collect()
+    # The count column sits beside the dims it grouped by, so its name must be
+    # one no dim can have — '#rows' is not a legal identifier, 'n' is.
+    duplicated = frame.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3).collect()
     if duplicated.height == 0:
         return
     shown = '; '.join(
-        ', '.join(f'{d}={row[d]!r}' for d in p.dims) + f' ({row["n"]} rows)' for row in duplicated.iter_rows(named=True)
+        ', '.join(f'{d}={row[d]!r}' for d in p.dims) + f' ({row["#rows"]} rows)'
+        for row in duplicated.iter_rows(named=True)
     )
     raise DataError(duplicate_coordinate_message(p.name, shown, list(p.dims)))
 

@@ -95,9 +95,11 @@ def _constraint_lines(model: ModelTables) -> pl.LazyFrame:
 
     **Both orderings are what #109 pins**: a model must write the same bytes
     twice. Within a row, the terms come out in column order because the matrix
-    arrives in it (:class:`~lpspec.relational.sinks.tables.ModelTables`) and a
-    list keeps the order it was built in. The rows are sorted **after** the
-    join, since a join hands groups back in whatever order it finishes them.
+    arrives in it (:class:`~lpspec.relational.sinks.tables.ModelTables`) and
+    ``group_by`` documents that within each group the order of rows is
+    preserved — group *order* is what ``maintain_order`` governs, and it does
+    not matter here. The rows are sorted **after** the join, since a join
+    hands groups back in whatever order it finishes them.
 
     A row with no terms still needs a line a solver can parse, which is what
     the placeholder is: the left join leaves it null, and nothing else can.
@@ -114,7 +116,8 @@ def _constraint_lines(model: ModelTables) -> pl.LazyFrame:
                 pl.concat_str(pl.col('sense').replace({'==': '='}), pl.lit(' '), _number(pl.col('rhs'))),
             ).alias('line')
         )
-        # never empty — every row has a header and a footer at least
+        # never empty — every row has a header and a footer at least. The
+        # kwarg is polars 1.36+, which is why the floor sits there.
         .explode('line', empty_as_null=False)
     )
 

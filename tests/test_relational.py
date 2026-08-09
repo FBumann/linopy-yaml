@@ -293,6 +293,30 @@ def test_a_dimensionless_parameter_of_one_row_still_builds():
         assert result.objective == pytest.approx(20.0)  # x == 1 at both coordinates of i, times s
 
 
+def test_a_dimension_named_n_is_still_a_legal_dimension():
+    """No check may claim a legal dim name for a column of its own.
+
+    The duplicate-row check counts rows beside the dims it grouped by, and its
+    count column once did: `n` collided with a dim of the same name, and every
+    build of such a model — healthy data included — died on an internal polars
+    DuplicateError naming no parameter.
+    """
+    model = {
+        'dimensions': {'n': {'dtype': 'int', 'values': [1, 2]}},
+        'parameters': {'cost': {'dims': ['n']}},
+        'variables': {'x': {'foreach': ['n'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'c': {'foreach': ['n'], 'expression': 'x <= 5'}},
+        'objectives': {'o': {'sense': 'maximize', 'expression': 'x * cost'}},
+    }
+    with lps.solve(model, {'cost': pl.DataFrame({'n': [1, 2], 'value': [1.0, 2.0]})}) as result:
+        assert result.objective == pytest.approx(15.0)
+
+    # and the check the column belongs to still catches its own case
+    doubled = {'cost': pl.DataFrame({'n': [1, 1, 2], 'value': [1.0, 9.0, 2.0]})}
+    with pytest.raises(DataError, match="parameter 'cost'"):
+        lps.build(model, doubled)
+
+
 def test_out_of_foreach_dims_rejected(dispatch_data):
     gens, load = dispatch_data
     prog = dispatch_program()
@@ -541,8 +565,8 @@ def test_every_declaration_owns_a_contiguous_run_of_labels():
 
     A solver vector is positional in the same index the labels are, so a
     declaration's share of it is a slice — but only if its labels are a dense
-    run and the runs tile the whole index. Both are true of every path
-    `Labeller.frame` takes, and neither is visible from the frames: a block
+    run and the runs tile the whole index. Both are how `labels.frame` numbers
+    a declaration, and neither is visible from the frames: a block
     that started one late would report a neighbour's numbers under this
     declaration's coordinates, with nothing out of range and nothing null.
     """
