@@ -47,22 +47,19 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
     """A parameter is a function of its dims: one row per coordinate.
 
     Two rows for one has no defined meaning, and the eager lane refuses to lay
-    such a source out at all, so naming it beats silently summing it. It also
-    earns the assembly's skipped aggregate
-    (:attr:`~lpspec.relational.engines.polars.compiler.TermFragment.keyed`), for one pass over
-    a source orders of magnitude smaller than the matrix.
+    such a source out at all, so naming it beats silently summing it.
 
     A parameter with no dims has exactly one coordinate — the empty one — so the
     same rule reads as "exactly one row", and it is the case where breaking it
     is least visible: a dimensionless parameter is broadcast by joining on
     nothing, which is correct for one row and a silent row multiplication for
-    two. In a bound that means duplicate columns for one variable, in a
-    where-mask duplicate mask rows, and `keyed` above is claiming the opposite
-    of what the source holds (#166).
+    two. In a bound that means duplicate columns for one variable, and in a
+    where-mask duplicate mask rows (#166).
 
-    The unknown-label question rides along in the same ``select`` rather than
-    taking a pass of its own (#350): running it separately cost 0.056 s → 0.151 s
-    of build on ``dispatch`` at 1M variables.
+    The labels are checked here too, against the dimensions that have an index
+    of their own — a dimension derived *from* the parameters is not built yet,
+    and would have nothing to answer, the union of what arrived being its
+    definition (#350).
     """
     if not p.dims:
         rows = frame.select(pl.len()).collect().item()
@@ -74,18 +71,9 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
             )
         return
 
-    # Ask the cheap question first. Naming the offending coordinates needs a
-    # group-by, which on a parameter spanning the variable product is the single
-    # most expensive thing in the build — 0.88 s of `profiled`'s 2.34 s at 12M
-    # rows. Whether *any* coordinate repeats is one pass at 0.25 s, and the
-    # group-by is then only paid on the path that is about to raise anyway.
-    probes = {'duplicated': pl.struct(p.dims).is_duplicated().any(), **_unknown_label_probes(p, dimensions)}
-    answers = frame.select(**probes).collect().row(0, named=True)
-    for key, all_known in answers.items():
-        if key != 'duplicated' and all_known is False:
-            _raise_unknown_label(p, frame, key.removeprefix('known '), dimensions)
-    if not answers['duplicated']:
-        return
+    for d in p.dims:
+        if d in dimensions:
+            _check_labels(p, frame, d, dimensions)
 
     duplicated = frame.group_by(p.dims).agg(pl.len().alias('n')).filter(pl.col('n') > 1).head(3).collect()
     if duplicated.height == 0:
@@ -96,59 +84,27 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
     raise DataError(duplicate_coordinate_message(p.name, shown, list(p.dims)))
 
 
-def _unknown_label_probes(p: plan.ParameterDeclaration, dimensions: Dimensions) -> dict[str, pl.Expr]:
-    """One boolean per dim: are this parameter's labels all coordinates of it?
-
-    Only for dimensions already built — those are the ones with an index of
-    their own. A dimension derived from the parameters is not here yet, and
-    would have nothing to answer: the union of what arrived is its definition
-    (#350).
-    """
-    probes: dict[str, pl.Expr] = {}
-    for d in p.dims:
-        if d in dimensions:
-            known = dimensions[d].select('val').collect()['val']
-            # `.implode()`: `is_in` against a bare Series of the same dtype is
-            # ambiguous and deprecated in polars — imploding says "this whole
-            # collection", not "element-wise against a list column".
-            probes[f'known {d}'] = pl.col(d).is_in(known.implode()).all()
-    return probes
-
-
-def _raise_unknown_label(p: plan.ParameterDeclaration, frame: pl.LazyFrame, d: str, dimensions: Dimensions) -> None:
-    """Name the offending labels. Only reached on the path about to raise, so
-    the filter and unique it costs are not paid by a healthy build."""
+def _check_labels(p: plan.ParameterDeclaration, frame: pl.LazyFrame, d: str, dimensions: Dimensions) -> None:
+    """Every label this parameter carries in *d* must be a coordinate of it."""
+    # `.implode()`: `is_in` against a bare Series of the same dtype is ambiguous
+    # and deprecated in polars — imploding says "this whole collection", not
+    # "element-wise against a list column".
     known = dimensions[d].select('val').collect()['val']
     strangers = frame.filter(~pl.col(d).is_in(known.implode())).select(pl.col(d).unique()).collect()[d].to_list()
-    raise DataError(unknown_labels_message(p.name, d, strangers, known.to_list()))
+    if strangers:
+        raise DataError(unknown_labels_message(p.name, d, strangers, known.to_list()))
 
 
-#: Prefix for the scratch count column one coordinate contributes to the
-#: caller's aggregate. The spaces make it unrepresentable as a declared name.
-NUNIQUE = '__n unique '
-
-
-def nunique_exprs(names: list[str]) -> list[pl.Expr]:
-    """The count columns :func: reads.
-
-    Handed to the caller so they ride in the group_by(d) it already runs
-    (#273). Asking separately meant one group_by *per coordinate*, and since
-    the frame is a scan over the caller's source, each of those re-opened and
-    re-parsed the file.
-    """
-    return [pl.col(c).n_unique().alias(f'{NUNIQUE}{c}') for c in names]
-
-
-def check_coordinates_single_valued(d: str, names: list[str], counts: pl.DataFrame) -> None:
+def check_coordinates_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -> None:
     """One label, one coordinate value — two rows disagreeing is a data bug.
 
-    Takes the caller's already-grouped frame rather than the source, so this
-    costs no pass of its own. It also names *every* offending coordinate: the
-    per-coordinate loop this replaced raised on the first and left the rest to
-    be found one build at a time.
+    It names *every* offending coordinate: the per-coordinate loop this replaced
+    raised on the first and left the rest to be found one build at a time.
     """
-    offenders = {c: int((counts[f'{NUNIQUE}{c}'] > 1).sum()) for c in names}
-    bad = {c: n for c, n in offenders.items() if n}
+    if not names:
+        return
+    counts = frame.group_by(d).agg(pl.col(c).n_unique().alias(c) for c in names).collect()
+    bad = {c: n for c in names if (n := int((counts[c] > 1).sum()))}
     if not bad:
         return
     listed = '; '.join(f"'{c}' ({n} label(s))" for c, n in sorted(bad.items()))

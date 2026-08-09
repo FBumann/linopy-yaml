@@ -349,11 +349,11 @@ def check_divisors_cover(name: str, node: Any, schema: MathSchema, dataset: Any,
     out — silently, and identically on both lanes until #312.
     """
     for quotient in _quotients(node):
-        params = _parameter_names(quotient.right, schema)
+        params = _names_of(quotient.right, schema.parameters)
         if not params:
             continue
         needed = mask
-        for variable in _variable_names(quotient.left, schema):
+        for variable in _names_of(quotient.left, schema.variables):
             present = model.variables[variable].labels != -1
             needed = present if needed is None else (needed & present)
         for param in sorted(params):
@@ -371,14 +371,6 @@ def _quotients(node: Any) -> list[Any]:
     for child in _children(node):
         out.extend(_quotients(child))
     return out
-
-
-def _parameter_names(node: Any, schema: MathSchema) -> set[str]:
-    return _names_of(node, schema.parameters)
-
-
-def _variable_names(node: Any, schema: MathSchema) -> set[str]:
-    return _names_of(node, schema.variables)
 
 
 def _names_of(node: Any, declared: Any) -> set[str]:

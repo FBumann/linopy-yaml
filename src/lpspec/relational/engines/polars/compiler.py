@@ -373,10 +373,8 @@ class PolarsCompiler:
         dims = self.program.variable(name).dims
         frame = self.variables[name].select(*dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff'))
         # An *unmasked* variable exists at every coordinate of its foreach, so
-        # its presence could only ever restrict nothing. Leaving it None is not
-        # an optimisation detail: a presence frame is data, and carrying one
-        # costs `_label_frame` both of its arithmetic paths. Whether it is
-        # needed is decided here, off the declaration, before any data is read.
+        # its presence could only ever restrict nothing. Whether one is needed
+        # is decided here, off the declaration, before any data is read.
         masked = self.program.variable(name).where is not None
         presence = self._presence(name, dims) if masked else None
         # `presence_dims` is stated rather than left implied. It defaults to
@@ -689,15 +687,7 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     means. A fragment's rows and its presence are built from one frame and
     rewritten in step — a product joins the rows and leaves the coordinates, a
     translation remaps both, a fill adds to both — so the rows are inside the
-    coordinates by construction and the join can only return them all. Under a
-    mask over a single term, which is the ordinary case, that made the whole
-    pass a semi-join of a frame against itself: 0.31 s over 10M rows on
-    `dispatch/l`, returning the 10M it was given.
-
-    The restriction is a **semi-join, so the presence frame is not deduplicated
-    first**. A semi-join asks whether a key occurs, and occurring twice is still
-    occurring — the distinct changes no row and costs a hash pass over every
-    coordinate the variable has.
+    coordinates by construction and the join could only ever return them all.
     """
     absent = [p for p in (*compiled.terms, *compiled.consts) if p.presence is not None]
     if not absent:

@@ -93,21 +93,16 @@ def _constraint_lines(model: ModelTables) -> pl.LazyFrame:
     and footer are put on either side of it, and the list is exploded back into
     lines.
 
-    **Both orderings are stated, and neither is inherited**, because together
-    they are what #109 pins: a model must write the same bytes twice. The terms
-    are sorted by column *before* the group, since a list keeps the order it
-    was built in; the rows are sorted *after* the join, since a join hands
-    groups back in whatever order it finishes them.
+    **Both orderings are what #109 pins**: a model must write the same bytes
+    twice. Within a row, the terms come out in column order because the matrix
+    arrives in it (:class:`~lpspec.relational.sinks.tables.ModelTables`) and a
+    list keeps the order it was built in. The rows are sorted **after** the
+    join, since a join hands groups back in whatever order it finishes them.
 
     A row with no terms still needs a line a solver can parse, which is what
     the placeholder is: the left join leaves it null, and nothing else can.
     """
-    terms = (
-        model.matrix.lazy()
-        .sort('row', 'col')
-        .group_by('row')
-        .agg(_term(pl.col('coeff'), pl.col('col')).alias('terms'))
-    )
+    terms = model.matrix.lazy().group_by('row').agg(_term(pl.col('coeff'), pl.col('col')).alias('terms'))
     return (
         model.rows.lazy()
         .join(terms, on='row', how='left')

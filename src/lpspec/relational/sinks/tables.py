@@ -56,6 +56,11 @@ class ModelTables:
     ``col`` and ``row`` are dense ``0..n-1``, so they *are* the solver's own
     indices and no sink builds a mapping.
 
+    **``matrix`` arrives sorted by ``(row, col)``.** Both sinks need it — one
+    slices a row range out of it, the other renders a row's terms in column
+    order — so the engine states it once rather than each of them imposing it
+    on a frame that already has it.
+
     **``cols`` carries no ``col``.** It holds one row per column, in label
     order, so a row's position is its index and the column would be the frame's
     own row number. Every other frame is sparse in the index and keeps it —
@@ -163,10 +168,10 @@ class ModelTables:
         call against 0.89 s in forty on the same matrix (#434). So the caller
         says, and both answers come out of the same code.
 
-        The matrix is ordered once, and a chunk is then a ``slice`` of it
-        located by binary search on the label column — the range is contiguous
-        because ``row`` is dense and the frame is sorted, so scanning for it
-        would re-read the whole model once per chunk.
+        A chunk is a ``slice`` of the matrix located by binary search on the
+        label column — the range is contiguous because ``row`` is dense and the
+        frame arrives sorted, so scanning for it would re-read the whole model
+        once per chunk.
 
         **Searched in polars rather than through numpy.** Pulling the label
         column out to search it there is marginally faster and holds a second
@@ -179,13 +184,12 @@ class ModelTables:
         """
         import numpy as np
 
-        ordered = self.matrix.sort('row')
-        label = ordered['row']
+        label = self.matrix['row']
         spans = [(0, self.row_count)] if budget is None else self.row_chunks_by_nonzeros(budget)
         for lo, hi in spans:
             first = int(label.search_sorted(lo, 'left'))
             last = int(label.search_sorted(hi, 'left'))
-            entries = ordered.slice(first, last - first)
+            entries = self.matrix.slice(first, last - first)
             yield lo, hi, entries, np.searchsorted(entries['row'].to_numpy(), np.arange(lo, hi))
 
 

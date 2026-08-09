@@ -198,10 +198,9 @@ class Translate(Expression):
 def children(expression: Expression) -> tuple[Expression, ...]:
     """The sub-expressions of *expression* — the structural half of any walk.
 
-    Three passes recurse over this tree (degree in ``lowering._has_var``, and
-    both halves of :func:`divisor_parameters`), and they differ only in what
-    they do at the leaves. Enumerating the children once per pass is how a node
-    added later reaches two of them and not the third.
+    Both halves of :func:`divisor_parameters` recurse over this tree and differ
+    only in what they do at the leaves. Enumerating the children once is how a
+    node added later reaches both of them rather than one.
     """
     if isinstance(expression, Negate):
         return (expression.operand,)
@@ -209,7 +208,7 @@ def children(expression: Expression) -> tuple[Expression, ...]:
         return (expression.left, expression.right)
     if isinstance(expression, Divide):
         return (expression.numerator, expression.divisor)
-    if isinstance(expression, (Sum, GroupSum, Translate)):
+    if isinstance(expression, (Sum, GroupSum, At, Translate)):
         return (expression.operand,)
     return ()
 

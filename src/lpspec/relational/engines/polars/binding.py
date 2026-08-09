@@ -215,26 +215,15 @@ class _Binder:
             raise DataError(
                 f"index for dimension '{d}' is missing declared coordinate column(s) {missing} (has {available})"
             )
-        # One pass, and one collect. The single-valued check needs an
-        # `n_unique` per coordinate grouped by `d`, which is the aggregate this
-        # is already running — so the counts ride in it rather than costing a
-        # `group_by` each, over a frame that is a scan and would be re-read
-        # every time (#273).
-        grouped = (
-            frame.select(d, *names)
-            .with_row_index(_ROW_POSITION)
-            .group_by(d)
-            .agg(
-                pl.col(_ROW_POSITION).min(),
-                *(pl.col(c).first() for c in names),
-                *data_validation.nunique_exprs(names),
-            )
+        labelled = frame.select(d, *names).with_row_index(_ROW_POSITION)
+        data_validation.check_coordinates_single_valued(d, names, labelled)
+        return (
+            labelled.group_by(d)
+            .agg(pl.col(_ROW_POSITION).min(), *(pl.col(c).first() for c in names))
             .sort(_ROW_POSITION)
             .with_row_index('ord')
-            .collect()
+            .select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64), *names)
         )
-        data_validation.check_coordinates_single_valued(d, names, grouped)
-        return grouped.lazy().select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64), *names)
 
     def _register(self, d: str, table: pl.LazyFrame) -> None:
         materialised = table.collect()

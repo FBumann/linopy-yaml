@@ -111,10 +111,10 @@ class PolarsExecutor:
 
         self._cols = _stack(cols, _COLS)
         self._rows = _stack([r for r, _ in built], _ROWS)
-        # Sorted by `row` because every sink reads the matrix a row range at a
-        # time; each constraint's share is already sorted, so this is stacking
-        # ascending runs.
-        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX).sort('row')
+        # `(row, col)` is what `ModelTables` promises its sinks: one reads the
+        # matrix a row range at a time, the other renders a row's terms in
+        # column order. Stated here, once, rather than re-established by each.
+        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX).sort('row', 'col')
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property

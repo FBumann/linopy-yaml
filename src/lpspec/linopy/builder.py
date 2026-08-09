@@ -422,13 +422,11 @@ def _coordinate_array(by: CoordinateNode, ctx: EvaluationContext) -> Any:
 def _helper_sum(array: Any, *, over: str) -> Any:
     """Sum *array* over dimension *over*.
 
-    If the array does not have the named dimension, it is returned unchanged.
+    A DataArray and a linopy expression both carry ``dims`` and both take the
+    dim positionally, so there is one branch: if the array does not have the
+    named dimension, it is returned unchanged.
     """
-    if isinstance(array, xr.DataArray):
-        if over in array.dims:
-            return array.sum(dim=over)
-        return array
-    if hasattr(array, 'dims') and over in array.dims:
+    if over in getattr(array, 'dims', ()):
         return array.sum(over)
     return array
 
