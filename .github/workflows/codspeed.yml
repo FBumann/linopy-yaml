@@ -27,6 +27,12 @@ name: CodSpeed
 # `codspeed-macro` runner or it is not worth running. Do not substitute a free
 # runner for the macro one: that produces a series nobody can read.
 #
+# **Both live in this one file, and that is load-bearing rather than tidy.**
+# CodSpeed aggregates a commit's results per workflow, so splitting walltime
+# into its own file separates the two instruments into two series and the
+# per-commit view stops being one thing. linopy's workflow carries the same
+# note; it is the reason neither of us split them.
+#
 # This job was memory-only for a while, and the reason is worth keeping. Macro
 # runners are *"only available for organizations and not for personal
 # accounts"* (CodSpeed docs), and the repository was owned by a user — so #493
