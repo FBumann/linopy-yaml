@@ -5,10 +5,16 @@ Three-way differential on examples/transport.yaml:
   2. lowered Program -> PolarsExecutor -> the `highs` solver, plus the LP file
   3. hand-built indicator-matrix linopy model (an independent oracle that
      involves no group_sum at all)
+
+Plus ``examples/monthly_budget.yaml``, which is the same primitive over *time*:
+a coordinate on ``snapshot`` groups it into months exactly as a coordinate on
+``generator`` groups onto buses. The gallery page quotes its dual and prints
+its snapshot index, so a test has to hold both.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -387,3 +393,124 @@ def test_an_objective_whose_dims_are_all_the_variables_own_still_skips_it():
         obj = ex._tables().obj.sort('col')
         assert obj.height == 3
         assert obj['coeff'].to_list() == [1.0, 2.0, 3.0]  # floor itself, un-summed
+
+
+# ---------------------------------------------------------------------------
+# the same construct, grouping time
+# ---------------------------------------------------------------------------
+
+MONTHLY_YAML = Path('examples/monthly_budget.yaml')
+MONTHLY_PAGE = Path('docs/models/monthly_budget.md')
+
+
+def _monthly_sources():
+    """Six snapshots over three calendar months, wind capped in the first.
+
+    The `month` column is data prep — one polars expression — which is the
+    page's whole point: the language never learns what a calendar is.
+    """
+    import datetime as dt
+
+    hours = [dt.datetime(2030, 1, 1) + dt.timedelta(days=15 * i) for i in range(6)]
+    index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
+    months = sorted(set(index['month']))
+    gens = ['wind', 'gas']
+    return (
+        index,
+        months,
+        {
+            'snapshot': index,
+            'month': pl.DataFrame({'month': months}),
+            'p_max': pl.DataFrame({'generator': gens, 'value': [10.0, 100.0]}),
+            'cost': pl.DataFrame({'generator': gens, 'value': [1.0, 50.0]}),
+            'load': pl.DataFrame({'snapshot': hours, 'value': [20.0] * 6}),
+            'monthly_cap': pl.DataFrame(
+                {
+                    'month': [m for m in months for _ in gens],
+                    'generator': gens * len(months),
+                    'value': [5.0 if (m == months[0] and g == 'wind') else 1e4 for m in months for g in gens],
+                }
+            ),
+        },
+    )
+
+
+def test_a_monthly_budget_binds_and_prices_itself():
+    """The number the gallery page quotes, held by a test.
+
+    January caps wind at 5 where three snapshots could carry 30, so the cap
+    binds and its shadow price is the cost of covering that energy with gas
+    instead — 50 against 1. February and March are slack and price at zero,
+    which is what distinguishes a binding budget from a decorative one.
+    """
+    index, _months, sources = _monthly_sources()
+    with lps.solve(MONTHLY_YAML, sources) as result:
+        assert result.is_ok
+        wind = (
+            result.primal('p')
+            .filter(pl.col('generator') == 'wind')
+            .join(index, on='snapshot')
+            .group_by('month')
+            .agg(pl.col('value').sum())
+            .sort('month')
+        )
+        # 3 snapshots in Jan (capped at 5), 1 in Feb, 2 in Mar — unequal groups
+        assert wind['value'].to_list() == pytest.approx([5.0, 10.0, 20.0])
+
+        duals = result.dual('monthly_budget').filter(pl.col('generator') == 'wind').sort('month')
+        assert duals['value'].to_list() == pytest.approx([-49.0, 0.0, 0.0])
+
+
+def test_the_monthly_grouping_is_a_column_and_nothing_else():
+    """Re-grouping the same snapshots re-states the budget, model untouched.
+
+    Quarters instead of months: one different column in the snapshot index,
+    and the constraint now spans three-month blocks. That is the claim the
+    page makes about weeks, seasons and representative periods, checked once.
+    """
+    index, _months, sources = _monthly_sources()
+    quarters = index.with_columns(pl.lit('2030-Q1').alias('month')).select('snapshot', 'month')
+    regrouped = {
+        **sources,
+        'snapshot': quarters,
+        'month': pl.DataFrame({'month': ['2030-Q1']}),
+        'monthly_cap': pl.DataFrame({'month': ['2030-Q1'] * 2, 'generator': ['wind', 'gas'], 'value': [5.0, 1e4]}),
+    }
+    with lps.solve(MONTHLY_YAML, regrouped) as result:
+        assert result.is_ok
+        assert result.dual('monthly_budget').height == 2, 'one row per group, and there is now one group'
+        wind = result.primal('p').filter(pl.col('generator') == 'wind')['value'].sum()
+        assert wind == pytest.approx(5.0), 'the cap now binds across the whole quarter'
+
+
+def test_a_mistyped_month_is_a_typo_and_not_a_new_group():
+    """Why the target of a coordinate has to be a declared dimension.
+
+    Without one there is nothing to check the snapshot index against, and
+    `2030-3` beside `2030-03` would quietly become a fourth group with a budget
+    of its own — the model then solves a smaller problem and says nothing. The
+    same check catches a generator assigned to a bus that does not exist.
+    """
+    index, _months, sources = _monthly_sources()
+    typo = index.with_columns(
+        pl.when(pl.col('month') == '2030-03').then(pl.lit('2030-3')).otherwise(pl.col('month')).alias('month')
+    )
+    with pytest.raises(DataError, match=r"coordinate 'month' has value\(s\) that are not 'month' coordinates"):
+        lps.solve(MONTHLY_YAML, {**sources, 'snapshot': typo})
+
+
+def test_the_index_the_page_prints_is_the_index_it_solves():
+    """The frame printed on the page is the frame these tests build.
+
+    `test_doc_examples.py` sweeps `python` and `yaml` fences and runs neither,
+    so a pasted *output* block is the one kind of doc claim nothing checks —
+    change the timestamps here and the page would keep printing the old ones.
+    Defaults are restored while formatting, so a contributor's `POLARS_FMT_*`
+    environment cannot fail this.
+    """
+    index, _months, _sources = _monthly_sources()
+    fences = re.findall(r'^```text\n(.*?)^```', MONTHLY_PAGE.read_text(), re.MULTILINE | re.DOTALL)
+    printed = [block for block in fences if block.startswith('shape: (')]
+    assert len(printed) == 1, 'the page prints exactly one frame'
+    with pl.Config(restore_defaults=True):
+        assert printed[0].rstrip('\n') == str(index)

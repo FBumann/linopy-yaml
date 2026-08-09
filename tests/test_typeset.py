@@ -384,7 +384,7 @@ GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'models'
 #: Pages whose hand-written summary states the **model's** math. The notation a
 #: gallery reader expects is the spec and `typeset/` is what is under test — so
 #: every symbol the summary uses, the generator has to be able to reach.
-REPRODUCIBLE = ('dispatch', 'transport')
+REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 
 #: Pages whose summary deliberately says something *else*, each with its reason.
 #: Declared rather than assumed: `test_every_summary_declares_itself` fails on a
