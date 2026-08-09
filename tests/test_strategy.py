@@ -364,9 +364,9 @@ def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses():
     seen: list[str] = []
     original = strategy._encode
 
-    def spy(sources, *, shared_fs):
+    def spy(sources, memo, **kwargs):
         seen.append('encoded')
-        return original(sources, shared_fs=shared_fs)
+        return original(sources, memo, **kwargs)
 
     strategy._encode = spy
     try:
@@ -409,6 +409,59 @@ def test_a_parquet_path_slices_without_being_read_whole(tmp_path):
     runs = lps.solve_over(DISPATCH, {**sources, 'load': str(path)}, lps.EachCoordinate('scenario'), keep=('p',))
     assert runs.keys == ['high', 'low', 'mid']
     assert runs.primal('p').height == 3 * 4 * 2
+
+
+def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_one(tmp_path):
+    """`workers_share_fs` is inferred from the pool, and only paths are affected.
+
+    A `ProcessPoolExecutor`'s workers are this machine's, so slurping the file
+    into the message would be reading and shipping it once per slice for
+    nothing. An executor this package did not ship could be anywhere, so its
+    paths travel as their own bytes — which is what a caller building a remote
+    transport depends on, and the reason the flag survives with no transport in
+    the box. `workers_share_fs=` says it outright when the guess is wrong.
+    """
+    sources = scenario_sources()
+    path = tmp_path / 'p_max.parquet'
+    frame = sources.pop('p_max')
+    assert isinstance(frame, pl.DataFrame)
+    frame.write_parquet(path)
+    sources['p_max'] = str(path)
+
+    crossed: list[object] = []
+    original = strategy._encode
+
+    def spy(sliced, memo, **kwargs):
+        encoded = original(sliced, memo, **kwargs)
+        if 'p_max' in encoded:  # the same helper encodes a slice's answers on the way back
+            crossed.append(encoded['p_max'])
+        return encoded
+
+    strategy._encode = spy
+    try:
+        with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
+            local = lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), keep=('p',), executor=pool)
+            assert all(v == str(path) for v in crossed), 'a local pool shipped a file it could have opened'
+
+            crossed.clear()
+            remote = lps.solve_over(
+                DISPATCH, sources, lps.EachCoordinate('scenario'), keep=('p',), executor=pool, workers_share_fs=False
+            )
+            assert all(v == path.read_bytes() for v in crossed), 'the file did not travel as its own bytes'
+    finally:
+        strategy._encode = original
+
+    # and a worker that read the path is a worker that read the same numbers
+    assert remote.objective.equals(local.objective)
+    assert remote.primal('p').equals(local.primal('p'))
+
+    crossed.clear()
+    strategy._encode = spy
+    try:
+        lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), executor=Inline())
+    finally:
+        strategy._encode = original
+    assert all(v == path.read_bytes() for v in crossed), 'an executor we did not ship was assumed local'
 
 
 def test_a_hand_built_axis_needs_no_class():

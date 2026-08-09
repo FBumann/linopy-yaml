@@ -105,7 +105,7 @@ runs = lps.solve_over(
 | **a window spans coordinates, not values** | `length=48` is forty-eight snapshots however they are numbered, so the dimension only has to be **orderable** — datetimes, strings and gapped integers all work. `into` is a dense `0..n-1` local index, which is what keeps the seam's `where: "t == 0"` matching, and it has no default because the name belongs to the model |
 | non-positional grouping | *"each calendar month"* has unequal groups, so it is a precomputed column plus `EachCoordinate`. What `EachWindow` uniquely offers is **overlap** |
 | `carry` excludes `executor` | a carried value makes slice *i+1* depend on slice *i*, so the slices cannot run concurrently. Refused rather than one silently winning |
-| `shared_fs` | whether the executor's workers can read your paths — the one fact the `Executor` protocol cannot report. It only affects sources that do *not* carry the slice key |
+| `workers_share_fs` | whether the executor's workers can read your paths. Inferred from the pool — a stdlib `ProcessPoolExecutor` runs here and reads what is here, anything else is assumed remote — and only path sources are affected |
 
 ### Choosing an executor
 
@@ -121,7 +121,7 @@ class to keep that honest.
 | `None` *(default)* | always, until measurement says otherwise | sequential. Nothing is serialised, because nothing crosses a boundary |
 | `ThreadPoolExecutor` | rarely | works, and sources are **not** encoded — but polars is already multithreaded, so slices contend with its pool, and threads share an address space so peak is additive rather than per-worker |
 | `ProcessPoolExecutor` | genuine local parallelism | **must not use `fork`** — see below. Sources cross as parquet |
-| anything remote | a cluster you already run | dask's `Client`, ray's wrappers, loky. Pass `shared_fs=True` only if the workers really do share your filesystem |
+| anything remote | a cluster you already run | dask's `Client`, ray's wrappers, loky. Assumed not to share your filesystem, so paths travel as bytes; pass `workers_share_fs=True` if the workers really do mount it |
 
 **A forked worker hangs.** polars' thread pool does not survive `fork`, and the
 failure is a **hang** rather than an error — indistinguishable from a slow
@@ -154,10 +154,11 @@ Sources cross a process boundary as parquet, never as pickled frames: measured
 over 1M rows that is 8.3x smaller and 3x faster. A path the workers can reach
 stays a path; one they cannot travels as its own bytes untouched, because
 decoding and re-encoding a parquet file produces identical output for 79x the
-CPU. **Pass paths or frames, whichever you already have** — there is nothing to
-tune. (`df.lazy()` is not an optimisation: an eager frame is embedded in the
-plan, so it pickles *larger* than the frame. Only `scan_parquet` is a
-reference.)
+CPU. Either way a source no slice rewrote is encoded once for the whole sweep
+rather than once per slice. **Pass paths or frames, whichever you already
+have** — there is nothing to tune. (`df.lazy()` is not an optimisation: an eager
+frame is embedded in the plan, so it pickles *larger* than the frame. Only
+`scan_parquet` is a reference.)
 
 **The linopy shim** (`lpspec.linopy.build` / `.extend`, `[linopy]` extra) puts
 the same YAML math on a `linopy.Model` that already exists in memory. It is
