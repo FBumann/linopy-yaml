@@ -259,7 +259,7 @@ class TestDimensionKwargs:
         for expression, foreach in (
             ('sum(p, over=generator) == load', ['snapshot']),
             ('sum(p, over=generator, group_by=zone) == load', ['snapshot', 'bus']),
-            ('shift(p, over=snapshot, by=1, edge=wrap) == load', ['snapshot', 'generator']),
+            ("shift(p, over=snapshot, by=1, edge='wrap') == load", ['snapshot', 'generator']),
             ('shift(p, over=snapshot, by=1) == load', ['snapshot', 'generator']),
         ):
             validate_expressions(self._schema(expression, foreach))

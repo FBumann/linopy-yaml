@@ -8,7 +8,7 @@
 energy balance — one seeding the first snapshot from `soc_initial`, one carrying
 over every other. Closing the cycle *removes the first*, and what is left
 changes by one token: `shift` vacates the first snapshot and drops that row,
-`edge=wrap` puts it onto the last.
+`edge='wrap'` puts it onto the last.
 
 ```diff
 -  energy_balance_initial:
@@ -16,7 +16,7 @@ changes by one token: `shift` vacates the first snapshot and drops that row,
 -    expression: soc == soc_initial + p_store * ... - p_dispatch / ...
    energy_balance:
 -    expression: soc == shift(soc, over=snapshot, by=1) * (1 - standing_loss) + ...
-+    expression: soc == shift(soc, over=snapshot, by=1, edge=wrap) * (1 - standing_loss) + ...
++    expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') * (1 - standing_loss) + ...
 ```
 
 `soc_initial` leaves the instance with it — a cyclic horizon has no seed to
@@ -217,13 +217,13 @@ constraints:
   # Rung 3 needed two equations here: one seeding the first snapshot from
   # soc_initial, one carrying over every other. Closing the cycle *removes* the
   # first, and the whole change is asking for the wrap: where a bare `shift`
-  # vacates the first snapshot and drops that row, `edge=wrap` puts it onto the
+  # vacates the first snapshot and drops that row, `edge='wrap'` puts it onto the
   # last. The
   # operator is the cycle, so nothing else moves.
   energy_balance:
     foreach: [snapshot, storage]
     expression: >-
-      soc == shift(soc, over=snapshot, by=1, edge=wrap) * (1 - standing_loss)
+      soc == shift(soc, over=snapshot, by=1, edge='wrap') * (1 - standing_loss)
       + p_store * efficiency_store
       - p_dispatch / efficiency_dispatch
 
@@ -331,7 +331,7 @@ if __name__ == '__main__':
 
 ## What it exercises
 
-`edge=wrap`, against rung 3's bare `shift` — plus division by a parameter and the same
+`edge='wrap'`, against rung 3's bare `shift` — plus division by a parameter and the same
 five-term `sum(group_by=)` balance, with one fewer equation and one fewer parameter.
 Worth reading the two side by side: neither boundary needs a clause to state it.
 The operator names which one is meant, and picking the wrong one is a different

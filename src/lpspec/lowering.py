@@ -40,6 +40,7 @@ from lpspec.language.expression_parser import (
     DimensionNode,
     EdgeNode,
     FunctionCallNode,
+    KeywordNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -168,6 +169,12 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
         msg = f'EdgeNode({node.policy!r}) reached lowering: an edge policy is a shift() kwarg, not a value.'
         raise AssertionError(msg)
 
+    if isinstance(node, KeywordNode):
+        msg = (
+            f'KeywordNode({node.value!r}) reached lowering. A quoted keyword is consumed '
+            f'by its kwarg during resolution (docs/ARCHITECTURE.md hard rule 1).'
+        )
+        raise AssertionError(msg)
     if isinstance(node, (NameNode, DimensionNode, CoordinateNode)):
         msg = (
             f'{type(node).__name__}({node.name!r}) reached lowering. Expressions '
@@ -261,7 +268,7 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
             has_var = degree.carries_variable(node.args[0])
             edge = node.kwargs.get('edge')
             wrap = isinstance(edge, EdgeNode)
-            # One kwarg, three policies: `edge=wrap` is cyclic and vacates
+            # One kwarg, three policies: `edge='wrap'` is cyclic and vacates
             # nothing, a number is the value the vacated slots contribute, and
             # an absent `edge=` leaves them absent. The pair that used to
             # contradict each other — a cyclic call also asking for a fill —
@@ -334,7 +341,7 @@ def _shift_over_data_message(context: str) -> str:
         f'value, and inventing one is what silently pinned a bound to zero. Say which you mean:\n'
         f'  shift(x, over=d, by=n, edge=0)      the vacated positions contribute zero\n'
         f'  where: "..."                        mask the vacated coordinate out of the row\n'
-        f'  shift(x, over=d, by=n, edge=wrap)   the dimension really is cyclic'
+        f"  shift(x, over=d, by=n, edge='wrap')   the dimension really is cyclic"
     )
 
 

@@ -39,7 +39,7 @@ Read off the resolved plan of each model rather than its text, so it cannot
 drift from what the engine builds.
 
 <!-- constructs:begin -->
-| model | verified | `sum` | `sum(group_by)` | `shift` | `shift(edge=wrap)` | `where` | `bounds` | `piecewise` | MILP |
+| model | verified | `sum` | `sum(group_by)` | `shift` | `shift(edge='wrap')` | `where` | `bounds` | `piecewise` | MILP |
 |---|---|---|---|---|---|---|---|---|---|
 | [dispatch](dispatch.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · |
 | [monthly_budget](monthly_budget.md) | · | **✓** | **✓** | · | · | · | **✓** | · | · |
@@ -155,7 +155,7 @@ the ceiling puts it.
 
 **Rung 4 made the model smaller**, which is the ladder paying off in the
 direction nobody plans for. Closing the horizon deletes rung 3's boundary
-equation outright: `edge=wrap` is cyclic already, so the wrap onto the last snapshot
+equation outright: `edge='wrap'` is cyclic already, so the wrap onto the last snapshot
 is what it does unguarded, and the *acyclic* case is the one needing an extra
 clause. Two rungs written a day apart, differing by one deleted `where`, is a
 sharper statement about the language than either alone.

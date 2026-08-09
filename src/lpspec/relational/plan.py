@@ -176,7 +176,7 @@ class Translate(Expression):
     coord *t - by*.
 
     One node for the whole of ``shift``, whose ``edge=`` decides ``wrap``:
-    ``edge=wrap`` is ``wrap=True`` (periodic, matching ``xarray.roll``), and an
+    ``edge='wrap'`` is ``wrap=True`` (periodic, matching ``xarray.roll``), and an
     absent or numeric ``edge=`` is ``wrap=False``. The node is named for the
     coordinate map rather than for the surface, which is one verb.
 

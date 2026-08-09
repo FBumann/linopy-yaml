@@ -117,7 +117,7 @@ def test_a_where_lands_on_the_quantifier_not_in_the_equation(fmt: Format):
 
 @EVERY_FORMAT
 def test_translation_distinguishes_a_wrapping_edge_from_a_dropping_one(fmt: Format):
-    """``edge=wrap`` wraps and a bare shift does not — one symbol each, since a
+    """``edge='wrap'`` wraps and a bare shift does not — one symbol each, since a
     reader who cannot tell them apart cannot tell the two models apart either."""
 
     def storage(edge: str) -> dict[str, object]:
@@ -134,7 +134,7 @@ def test_translation_distinguishes_a_wrapping_edge_from_a_dropping_one(fmt: Form
         }
 
     cyclic = fmt.operators['cyclic_minus']
-    assert cyclic in typeset(storage(', edge=wrap'), fmt, legend=False)
+    assert cyclic in typeset(storage(", edge='wrap'"), fmt, legend=False)
     assert cyclic not in typeset(storage(''), fmt, legend=False)
 
 
@@ -144,7 +144,7 @@ def test_the_legend_explains_wraparound_only_when_it_is_used(fmt: Format):
         'dimensions': {'snapshot': {'dtype': 'int'}},
         'variables': {'soc': {'foreach': ['snapshot'], 'bounds': {'lower': 0}}},
         'constraints': {
-            'b': {'foreach': ['snapshot'], 'expression': 'soc == shift(soc, over=snapshot, by=1, edge=wrap)'}
+            'b': {'foreach': ['snapshot'], 'expression': "soc == shift(soc, over=snapshot, by=1, edge='wrap')"}
         },
     }
     assert 'cyclic translation' in typeset(rolled, fmt)

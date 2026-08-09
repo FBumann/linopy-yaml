@@ -1,8 +1,8 @@
 """shift: time-coupled recurrences through both backends.
 
 examples/storage.yaml is dispatch plus a cyclic battery:
-soc == shift(soc, over=snapshot, by=1, edge=wrap) + charge * 0.9 - discharge. The eager backend
-The eager backend implements `edge=wrap` with linopy's circular .roll(); the
+soc == shift(soc, over=snapshot, by=1, edge='wrap") + charge * 0.9 - discharge. The eager backend
+The eager backend implements `edge='wrap'` with linopy"s circular .roll(); the
 relational backend lowers it to plan.Translate — a pointwise ord-join remap.
 """
 
@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import lpspec as lps
 from lpspec.errors import LanguageError
 from lpspec.lowering import _lower_expr
 from lpspec.relational.plan import (
@@ -89,8 +90,8 @@ def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inp
     data = {**data, 'load': (data['load'] * 0.93).round(3)}
 
     original = STORAGE_YAML.read_text()
-    assert 'shift(soc, over=snapshot, by=1, edge=wrap)' in original
-    acyclic = original.replace('shift(soc, over=snapshot, by=1, edge=wrap)', 'shift(soc, over=snapshot, by=1)')
+    assert "shift(soc, over=snapshot, by=1, edge='wrap')" in original
+    acyclic = original.replace("shift(soc, over=snapshot, by=1, edge='wrap')", 'shift(soc, over=snapshot, by=1)')
 
     with differential(acyclic, data, coords) as run:
         soc, charge, discharge = _soc_trace(run.result)
@@ -189,8 +190,8 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
 @pytest.mark.parametrize(
     ('expression', 'expected'),
     [
-        ('shift(soc, over=snapshot, by=1, edge=wrap)', Translate(Variable('soc'), 'snapshot', 1)),
-        ('shift(soc, over=snapshot, by=-2, edge=wrap)', Translate(Variable('soc'), 'snapshot', -2)),  # look-ahead
+        ("shift(soc, over=snapshot, by=1, edge='wrap')", Translate(Variable('soc'), 'snapshot', 1)),
+        ("shift(soc, over=snapshot, by=-2, edge='wrap')", Translate(Variable('soc'), 'snapshot', -2)),  # look-ahead
         ('shift(soc, over=snapshot, by=1)', Translate(Variable('soc'), 'snapshot', 1, wrap=False)),
     ],
 )
@@ -202,8 +203,8 @@ def test_translation_lowers_to_a_bounded_halo(expression, expected):
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
-        ('shift(soc, over=nope, by=1, edge=wrap)', r'shift\(over=nope\) does not name a declared dimension'),
-        ('shift(load, over=generator, by=1, edge=wrap)', 'but the expression has dims'),
+        ("shift(soc, over=nope, by=1, edge='wrap')", r'shift\(over=nope\) does not name a declared dimension'),
+        ("shift(load, over=generator, by=1, edge='wrap')", 'but the expression has dims'),
     ],
 )
 def test_translation_along_a_dim_the_expression_lacks_is_refused(expression, match):
@@ -277,3 +278,58 @@ def test_the_fill_a_product_wants_is_one_not_zero():
         assert x[0] == pytest.approx(10.0), 't=0: the fill is 1, so the bound is 10/1'
         assert x[1] == pytest.approx(5.0), 't=1: eff[0] = 2, so 10/2'
         assert x[2] == pytest.approx(2.5), 't=2: eff[1] = 4, so 10/4'
+
+
+EDGE_MODEL = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}, 'wrap': {'dtype': 'str', 'values': ['a', 'b']}},
+    'parameters': {'c': {'dims': ['t']}},
+    'variables': {'x': {'foreach': ['t', 'wrap'], 'bounds': {'lower': 0, 'upper': 5}}},
+    'objectives': {'o': {'sense': 'maximize', 'expression': 'x * c'}},
+}
+
+
+def _with(expr):
+    return {**EDGE_MODEL, 'constraints': {'r': {'foreach': ['t', 'wrap'], 'expression': expr}}}
+
+
+@pytest.mark.parametrize(
+    'edge',
+    ["edge='wrap'", 'edge="wrap"', 'edge=0'],
+    ids=['single', 'double', 'zero fill'],
+)
+def test_an_edge_policy_is_quoted_or_a_number(edge):
+    """The keyword is quoted; the fill is bare.
+
+    A bare word in a kwarg value is a *name to resolve* — `over=wrap` names a
+    dimension — so the one closed keyword `edge=` takes has to say it is a
+    literal. Numbers need no quotes because a number is never a name.
+    """
+    lps.check(_with(f'x - shift(x, over=t, by=1, {edge}) <= 1'))
+
+
+def test_a_bare_wrap_names_a_dimension_and_is_refused():
+    """`over=wrap, edge=wrap` was legal, and the same token meant two things.
+
+    The model here declares a dimension actually called `wrap`, which is what
+    makes the ambiguity concrete rather than theoretical: the parser resolved
+    the two positions differently and a reader could not.
+    """
+    with pytest.raises(ValueError) as exc:
+        lps.check(_with('x - shift(x, over=t, by=1, edge=wrap) <= 1'))
+
+    assert 'bare name where a keyword belongs' in str(exc.value)
+    assert "edge='wrap'" in str(exc.value), 'the refusal has to name the rewrite'
+
+
+def test_a_quoted_keyword_outside_a_kwarg_does_not_parse():
+    """Quotes are for closed keywords in kwarg values, not for arithmetic.
+
+    The *grammar* refuses this rather than resolution, which is the stronger
+    place for it — a quoted word in arithmetic is not a name and not a number,
+    so there is nothing for a later pass to say about it. `resolution.py` keeps
+    a branch for the shape anyway, reachable only from a hand-built AST.
+    """
+    with pytest.raises(ValueError) as exc:
+        lps.check(_with("x - 'wrap' <= 1"))
+
+    assert 'Failed to parse expression' in str(exc.value)

@@ -1136,7 +1136,7 @@ def _reindexed_parameter_model(op: str) -> dict:
     ('op', 'expected'),
     [
         # roll is cyclic: nothing is vacated, so t=0 reads the last value
-        ('shift(dt, over=t, by=1, edge=wrap)', {0: 7.0, 1: 5.0, 2: 6.0}),
+        ("shift(dt, over=t, by=1, edge='wrap')", {0: 7.0, 1: 5.0, 2: 6.0}),
         # shift with the escape hatch: the vacated position contributes zero,
         # and a zero in right-hand-side position is a pin
         ('shift(dt, over=t, by=1, edge=0)', {0: 0.0, 1: 5.0, 2: 6.0}),
@@ -1176,7 +1176,7 @@ def test_a_bare_shift_over_data_is_refused_rather_than_filled():
     with pytest.raises(LanguageError) as exc:
         lps.check(model)
     assert 'edge=0' in str(exc.value), 'the refusal must name the escape hatch'
-    assert 'edge=wrap' in str(exc.value), 'and the policy for a genuinely cyclic horizon'
+    assert "edge='wrap'" in str(exc.value), 'and the policy for a genuinely cyclic horizon'
 
 
 PINNED_MODEL = {

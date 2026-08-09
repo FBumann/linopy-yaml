@@ -12,7 +12,7 @@ reference implementation. This directory is the source; that is the guided tour.
 | | |
 |---|---|
 | `dispatch.yaml` | least-cost generation against a load profile — the smallest complete model |
-| `storage.yaml` | dispatch plus a cyclic battery (`shift(edge=wrap)`) |
+| `storage.yaml` | dispatch plus a cyclic battery (`shift(edge='wrap')`) |
 | `transport.yaml` | a network: coordinates on a dimension *are* the topology (`sum(group_by=)`) |
 | `piecewise.yaml` | per-generator convex cost curves (`piecewise:`) |
 | `walkthrough.yaml` | the model `walkthrough.py` prints every pipeline stage for |

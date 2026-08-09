@@ -70,10 +70,10 @@ dimension. → [transport](models/transport.md)
 ## 4. `shift` reaches along an axis
 
 ```yaml
-- expression: soc == shift(soc, over=snapshot, by=1, edge=wrap) + charge * 0.9 - discharge
+- expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
 ```
 
-One operator, and `edge=` says what happens at the boundary. `edge=wrap` is
+One operator, and `edge=` says what happens at the boundary. `edge='wrap'` is
 cyclic — the first snapshot reads the last, which is what makes a battery
 cyclic without writing the boundary condition out. Omit `edge` and positions
 translated past the edge are **absent**, so the row they would have fed is not

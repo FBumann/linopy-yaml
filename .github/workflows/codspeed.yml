@@ -68,6 +68,20 @@ name: CodSpeed
 # a pull request. This one is a report that arrives without being asked, which
 # is worth having precisely because it is not worth blocking on.
 #
+# There is a third switch, and it is the one not visible from this file:
+# CodSpeed's own check reports through the app, not through this workflow, so
+# neither line above reaches it. It is set to **not fail on a regression** in
+# the project's CodSpeed settings, which is what makes its verdict match the
+# intent above rather than contradict it.
+#
+# That is a measurement decision, not a preference. bench.yml gates memory at
+# 20% because identical code spreads 5.6% on `dispatch-m` and 16% on the
+# smallest workload; a threshold under that reports noise as a finding. The app
+# failed a bench-only pull request at -12.96% and a changelog-only one at
+# -9.22%, both inside that band and neither touching src/ — which is the
+# `10% gate would cry wolf` line in bench.yml, arriving from a second instrument.
+# Restore a failing threshold only alongside a number bench.yml would recognise.
+#
 # **Nothing is measured until a maintainer connects the repository to the
 # CodSpeed GitHub app.** Until then the job runs and uploads nothing. The wiring
 # is OIDC (`id-token: write`), so there is no token secret either way.
