@@ -21,11 +21,10 @@ bare-install job runs the whole suite with none of them present.
 things and nothing else — the shim below, and the `to_pandas` / `to_dataarray`
 bridges out of a result.
 
-**The last leak is closed.** The public exception tree used to be rooted at
-`LinopyYamlError`, left over from when this package was called `linopy-yaml`, so
-every traceback on the pure-polars path named a library that path never loads.
-It is `LpspecError` now, with no alias
-([#389](https://github.com/FBumann/lpspec/issues/389)).
+**Nothing on the product path names linopy, including in a traceback.** The
+public exception tree is rooted at `LpspecError`, with no alias
+([#389](https://github.com/FBumann/lpspec/issues/389)) — a name from this
+extra has no business reaching a caller who never installed it.
 
 ## 2. It is the oracle
 

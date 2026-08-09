@@ -148,6 +148,29 @@ class GroupSum(Expression):
 
 
 @dataclass(frozen=True)
+class At(Expression):
+    """Read ``operand`` through a coordinate — the adjoint of :class:`GroupSum`.
+
+    Same mapping table, walked the other way. ``coordinate`` is carried by dim
+    ``over`` and its values are labels of dim ``into``; ``GroupSum`` consumes
+    ``over`` and produces ``into``, and this consumes ``into`` and produces
+    ``over``. The fields are named for the *table*, not for the direction, so
+    the pair reads as one relation rather than two. The surface says which end
+    you stand on: ``group_sum(over=)`` consumes a dim, ``at(onto=)`` produces
+    one, and ``by=`` names the map in both.
+
+    The join fans out — many ``over`` labels share one ``into`` label — which is
+    the same fan-out ``GroupSum`` pays in reverse, so the locality class is
+    unchanged: one equi-join against a mapping table already in the frame.
+    """
+
+    operand: Expression
+    over: str
+    coordinate: str
+    into: str
+
+
+@dataclass(frozen=True)
 class Translate(Expression):
     """Re-index along one dimension: the result at coord *t* is ``operand`` at
     coord *t - by*.
