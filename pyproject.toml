@@ -155,8 +155,8 @@ docs = [
 dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "ruff==0.16.0",
-    "pyrefly==1.1.1",
+    "ruff==0.16.1",
+    "pyrefly==1.2.0",
     "pre-commit==4.6.1",
     # the shim and the oracle, by reference: the pins live in the extra above,
     # so they cannot drift from what a user installing `lpspec[linopy]` gets
