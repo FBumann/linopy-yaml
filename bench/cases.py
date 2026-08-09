@@ -15,6 +15,12 @@ Cases are chosen so each stresses a *different* SQL shape (docs/ARCHITECTURE.md,
                different order.
 ``transport``  three ``group_sum`` joins per row — the mapping-table path, where
                the eager lane has to materialise a bus x generator product.
+``storage``    a cyclic ``shift`` recurrence — the only locality class whose cost
+               has no eager analogue: xarray shifts an array, we join a term
+               stream against itself on ``snapshot.ord - 1``. Held at
+               ``dispatch``'s width on ``dispatch``'s snapshot counts, so the two
+               ladders differ in exactly one thing: whether a row reaches the
+               previous one.
 
 Data is generated once per (case, shape) into a cache directory and both arms
 read the same parquet files, so no arm pays a generation cost and neither can
@@ -560,6 +566,64 @@ def _profiled_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, An
 
 
 # --------------------------------------------------------------------------
+# storage — the cyclic recurrence, the one shape that reaches sideways
+
+
+def _storage_data(shape: Shape, dest: Path) -> dict[str, str]:
+    rng = _seed(shape)
+    n_snap = shape.sizes['snapshot']
+    n_gen, n_store = shape.sizes['generator'], shape.sizes['store']
+
+    gens = [f'g{i:05d}' for i in range(n_gen)]
+    stores = [f's{i:05d}' for i in range(n_store)]
+    p_max = rng.uniform(50.0, 150.0, n_gen)
+    # dispatch's load, for dispatch's reason: the generators alone serve every
+    # snapshot, so `charge == discharge == soc == 0` satisfies both constraints
+    # whatever the storage parameters say. Feasibility does not depend on the
+    # half of the model this case exists to measure.
+    load = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
+    # ...and the optimum uses storage anyway: generator costs spread over an
+    # order of magnitude, so arbitrage beats the round-trip loss. A case whose
+    # optimum is `soc == 0` would build the same rows and prove nothing.
+    p_store = rng.uniform(10.0, 40.0, n_store)
+
+    return _dump(
+        {
+            'p_max': pd.DataFrame({'generator': gens, 'value': p_max}),
+            'cost': pd.DataFrame({'generator': gens, 'value': rng.uniform(10.0, 100.0, n_gen)}),
+            'load': pd.DataFrame({'snapshot': np.arange(n_snap), 'value': load}),
+            'e_max': pd.DataFrame({'store': stores, 'value': p_store * 4.0}),
+            'p_store': pd.DataFrame({'store': stores, 'value': p_store}),
+            'eta': pd.DataFrame({'store': stores, 'value': rng.uniform(0.85, 0.95, n_store)}),
+            'generator': pd.DataFrame({'generator': gens}),
+            'store': pd.DataFrame({'store': stores}),
+            'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
+        },
+        dest,
+    )
+
+
+def _storage_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+    p_max = pd.read_parquet(paths['p_max']).set_index('generator')['value']
+    load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
+    e_max = pd.read_parquet(paths['e_max']).set_index('store')['value']
+    data = {
+        'p_max': p_max,
+        'cost': pd.read_parquet(paths['cost']).set_index('generator')['value'],
+        'load': load,
+        'e_max': e_max,
+        'p_store': pd.read_parquet(paths['p_store']).set_index('store')['value'],
+        'eta': pd.read_parquet(paths['eta']).set_index('store')['value'],
+    }
+    coords = {
+        'generator': pd.Index(p_max.index, name='generator'),
+        'store': pd.Index(e_max.index, name='store'),
+        'snapshot': pd.Index(load.index, name='snapshot'),
+    }
+    return data, coords
+
+
+# --------------------------------------------------------------------------
 
 
 def _ladder(
@@ -678,5 +742,20 @@ CASES: dict[str, Case] = {
         ),
         write=_transport_data,
         eager_inputs=_transport_eager,
+    ),
+    'storage': Case(
+        name='storage',
+        model=MODELS / 'storage.yaml',
+        # 40 generators + 20 stores x 3 declarations = 100 variables per
+        # snapshot, on dispatch's snapshot counts: deliberately dispatch's
+        # ladder, so the rungs read against each other and the difference
+        # between them is the recurrence and nothing else.
+        # `soc_balance` is 20 rows per snapshot against `power_balance`'s one,
+        # so the self-join is what dominates the case rather than garnishing it.
+        ladder=_ladder(
+            {'generator': 40, 'store': 20}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100
+        ),
+        write=_storage_data,
+        eager_inputs=_storage_eager,
     ),
 }

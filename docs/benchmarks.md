@@ -554,9 +554,11 @@ In rough order of what would change a decision:
   costs what the first did. It follows from there being no process-wide state
   and no lifetime to leak, and every rung here is a single build in a fresh
   process — which is exactly why none of them tests it.
-- **`storage` — `roll`, the bounded-halo self-join.** The one plan shape in the
-  language whose cost is not obviously linear in the model, and no case
-  exercises it.
+- **`storage` — the cyclic `shift` recurrence.** The one plan shape in the
+  language whose cost is not obviously linear in the model. The case now exists
+  — `bench/models/storage.yaml`, held at `dispatch`'s width on `dispatch`'s
+  ladder so the two read against each other — but every number on this page
+  predates it, so it is unmeasured here rather than unwritten.
 - **A MILP**, where solve time dwarfs build and the build ratio stops mattering.
 - **A hand-written highspy/CSR arm** as the speed-of-light floor. Without one,
   every ratio here has linopy as its only denominator.
