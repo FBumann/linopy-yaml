@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.72](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.71...v0.0.1-alpha.72) (2026-08-09)
+
+
+### Bug Fixes
+
+* **docs:** install uv on Read the Docs without asdf ([#501](https://github.com/fluxopt/lpspec/issues/501)) ([13e095e](https://github.com/fluxopt/lpspec/commit/13e095e2ebc9830cd900312dbe50eff95317b230))
+
 ## [0.0.1-alpha.71](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.70...v0.0.1-alpha.71) (2026-08-09)
 
 
