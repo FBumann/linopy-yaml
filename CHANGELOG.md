@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.76](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.75...v0.0.1-alpha.76) (2026-08-09)
+
+
+### Features
+
+* **language:** version: on a model file, and 0 means unstable ([#515](https://github.com/fluxopt/lpspec/issues/515)) ([7d37589](https://github.com/fluxopt/lpspec/commit/7d375891768a2937fad5a26c7dad4759a367a53b))
+
 ## [0.0.1-alpha.75](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.74...v0.0.1-alpha.75) (2026-08-09)
 
 
