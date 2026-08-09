@@ -24,7 +24,7 @@ underestimate `sqrt` everywhere in between.
 |---|---|---|---|---|---|---|---|---|
 | f(x) | 0 | 7.071 | 10.954 | 13.784 | 16.125 | 18.166 | 20 | 24.495 |
 
-The [instance](https://github.com/FBumann/lpspec/blob/main/examples/ports/data/transport_pwl.json) is otherwise
+The [instance](https://github.com/fluxopt/lpspec/blob/main/examples/ports/data/transport_pwl.json) is otherwise
 [Dantzig's](transport_dantzig.md), unchanged.
 
 ## The model

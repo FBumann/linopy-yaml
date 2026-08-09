@@ -41,7 +41,7 @@ made for a while. Nothing about `variable × variable` is non-relational or
 non-local — a coordinate-aligned product is a pointwise self-join. Degree 1 is
 where the language *is*, not where it must stay: what actually gates quadratic is
 **what a sink can ingest**, which is the second axis below, and the sequence is
-[Track 3](https://github.com/FBumann/lpspec/issues/472). The
+[Track 3](https://github.com/fluxopt/lpspec/issues/472). The
 same is true of SOS, indicator and semi-continuous. Read this page as the
 *streamability* closure and nothing more.
 
@@ -104,7 +104,7 @@ generation — because there is no "before" for it to happen in.
 **Outside the plan is not outside the engine**, and the difference is the whole
 of decomposition. A plan cannot contain a loop; a *process* may loop over plans,
 each with its shape fixed before its own data. Rolling horizon is that shape and
-is in scope ([Track 2](https://github.com/FBumann/lpspec/issues/471)); so are
+is in scope ([Track 2](https://github.com/fluxopt/lpspec/issues/471)); so are
 Benders and successive substitution. Nor does appending a cut cost the label
 contract the way removal would: `var_label` is a `ROW_NUMBER()` over the rows
 surviving the `where` mask, so adding *rows* moves no column and renumbers no
@@ -142,7 +142,7 @@ so capability is not a flat set. The whole-Hessian handoff is an implementation
 difference, not a rule-4 violation.
 
 Making this a declared per-sink capability set, with `check` taking an optional
-sink, is [Track 3](https://github.com/FBumann/lpspec/issues/472).
+sink, is [Track 3](https://github.com/fluxopt/lpspec/issues/472).
 
 ## Deliberate non-primitives
 
@@ -158,10 +158,10 @@ is not by itself a reason to add anything.
 | Domain helpers (`reduce_carrier_dim`) | encodes one domain into the language | component libraries over generic primitives |
 | Normalisation (`x / sum(x)`) | a *variable divisor* is rational, not polynomial — no sink takes it at any degree | state the ratio as a constraint, or fix the denominator |
 | Conditionals, iteration, data-dependent structure **inside one plan** | destroys the closed AST | `where` masks + `foreach` dims. A *process* may loop over plans |
-| A Python API for constructing models | hard rule 5 — the model is the file you review and diff | YAML. Whether Python may *emit* declarations is [#381](https://github.com/FBumann/lpspec/issues/381) |
+| A Python API for constructing models | hard rule 5 — the model is the file you review and diff | YAML. Whether Python may *emit* declarations is [#381](https://github.com/fluxopt/lpspec/issues/381) |
 
 Genuinely unsayable math goes to a declared `escape:` island
-([#38](https://github.com/FBumann/lpspec/issues/38)) — named in the file,
+([#38](https://github.com/fluxopt/lpspec/issues/38)) — named in the file,
 bounded by the preceding `where`, terminal, and billed against a label budget
 before any Python runs. It buys back *relational* and *local*; it cannot buy
 back degree, since it returns affine COO rows either way.

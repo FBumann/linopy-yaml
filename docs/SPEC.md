@@ -2,7 +2,7 @@
 
 What a YAML file may contain and what it means. *Why* it is shaped this way:
 [docs/ARCHITECTURE.md](ARCHITECTURE.md). What is planned or refused:
-[docs/ROADMAP.md](ROADMAP.md). A worked example: [README](https://github.com/FBumann/lpspec/blob/main/README.md#example).
+[docs/ROADMAP.md](ROADMAP.md). A worked example: [README](https://github.com/fluxopt/lpspec/blob/main/README.md#example).
 
 ## 0. The laws
 
@@ -56,7 +56,7 @@ for a parameter's `dims: []`, one column for a variable's `foreach: []`, one row
 for a constraint's. That is the ordinary reading of a product over nothing, not
 a special case, so a dummy dimension of size 1 is never how a scalar is written.
 One gap: a scalar **variable** may not carry a `where`
-([#340](https://github.com/FBumann/lpspec/issues/340)) — put the condition on
+([#340](https://github.com/fluxopt/lpspec/issues/340)) — put the condition on
 the constraints that use it.
 
 **`dimensions`** — the master coordinate index. Every dimension named anywhere
@@ -109,7 +109,7 @@ Omitting a bound means unbounded on that side — non-negativity is written, not
 assumed. Bounds are
 a *narrower* language than expressions (a name or a number, never arithmetic) and
 the error says so rather than reporting a parse failure; expressions there are
-[#31](https://github.com/FBumann/lpspec/issues/31). A bound parameter's dims must
+[#31](https://github.com/fluxopt/lpspec/issues/31). A bound parameter's dims must
 not exceed `foreach`.
 
 **Equal bounds pin a variable**, which is how one declaration covers a quantity
@@ -445,7 +445,7 @@ Four rules govern `edge=`, and all four are law 8 in this position:
 
 Anything composable out of these belongs in `macros:`. Math that is not sayable
 at all goes to a declared `escape:` island
-([#38](https://github.com/FBumann/lpspec/issues/38)): named in the file,
+([#38](https://github.com/fluxopt/lpspec/issues/38)): named in the file,
 bounded by the preceding `where` mask, terminal (it yields a constraint, never a
 sub-expression), and billed against a label budget before any Python runs.
 
@@ -519,8 +519,8 @@ language: nothing there changes what a file means.
 | Not here | Instead |
 |---|---|
 | time-series processing (resample, cluster, interpolate, align), file IO, units | data prep; pass a parameter |
-| solver breadth | two solver sinks — HiGHS, which ships, and Gurobi via the `[gurobi]` extra — chosen with `solver_name` at the call, never in the file; LP files for everything else ([#106](https://github.com/FBumann/lpspec/issues/106)) |
-| SOS and indicator constraints | planned, as a *sink capability* rather than a language question — the default solver has no such concept, `lp_file` and Gurobi do ([#23](https://github.com/FBumann/lpspec/issues/23), [Track 3](https://github.com/FBumann/lpspec/issues/472)). `piecewise:` (§4) covers SOS2's usual purpose today |
+| solver breadth | two solver sinks — HiGHS, which ships, and Gurobi via the `[gurobi]` extra — chosen with `solver_name` at the call, never in the file; LP files for everything else ([#106](https://github.com/fluxopt/lpspec/issues/106)) |
+| SOS and indicator constraints | planned, as a *sink capability* rather than a language question — the default solver has no such concept, `lp_file` and Gurobi do ([#23](https://github.com/fluxopt/lpspec/issues/23), [Track 3](https://github.com/fluxopt/lpspec/issues/472)). `piecewise:` (§4) covers SOS2's usual purpose today |
 | multi-objective | one objective — declaring a second is a load error (§2); weight them into one expression |
 | schema migrations | — |
 | arbitrary array ops (`merge`, `reindex`, `apply_ufunc`) | data prep, or a declared `escape:` island — the closed AST is what makes streaming possible |
@@ -533,4 +533,4 @@ readable `.yaml` representation and will not get one: the *math* side is
 feasible, but expression and where strings come back as anonymous arrays, so the
 round-trip is functional and not reviewable — which is the whole point of the
 file. Whether Python may *emit* declarations at all is a separate and open
-question ([#381](https://github.com/FBumann/lpspec/issues/381)).
+question ([#381](https://github.com/fluxopt/lpspec/issues/381)).

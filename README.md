@@ -185,7 +185,7 @@ compatibility shim for every earlier spelling would defeat the point of a small
 language.
 
 In practice: pin an exact version if you depend on this, and read the
-[changelog](https://github.com/FBumann/lpspec/blob/main/CHANGELOG.md) before upgrading — every entry links the PR that
+[changelog](https://github.com/fluxopt/lpspec/blob/main/CHANGELOG.md) before upgrading — every entry links the PR that
 describes the break, and a retired spelling fails at load naming its rewrite
 rather than drifting on silently. What exists is tested: real models round-trip
 through solve, differentially verified against linopy. It is the

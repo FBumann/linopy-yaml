@@ -3,9 +3,9 @@
 Why this project exists, and what it is becoming. **No work items live here.**
 The work is issues, grouped under three parents:
 
-- [Track 1 — primitives](https://github.com/FBumann/lpspec/issues/470)
-- [Track 2 — the operational surface](https://github.com/FBumann/lpspec/issues/471)
-- [Track 3 — capabilities, and the degree line](https://github.com/FBumann/lpspec/issues/472)
+- [Track 1 — primitives](https://github.com/fluxopt/lpspec/issues/470)
+- [Track 2 — the operational surface](https://github.com/fluxopt/lpspec/issues/471)
+- [Track 3 — capabilities, and the degree line](https://github.com/fluxopt/lpspec/issues/472)
 
 An index maintained by hand beside an issue tracker is a second copy that
 drifts, so there is not one here: the issues are the list, and this page is the

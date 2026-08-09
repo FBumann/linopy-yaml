@@ -23,7 +23,7 @@ bridges out of a result.
 
 **Nothing on the product path names linopy, including in a traceback.** The
 public exception tree is rooted at `LpspecError`, with no alias
-([#389](https://github.com/FBumann/lpspec/issues/389)) — a name from this
+([#389](https://github.com/fluxopt/lpspec/issues/389)) — a name from this
 extra has no business reaching a caller who never installed it.
 
 ## 2. It is the oracle
@@ -84,7 +84,7 @@ oracle an oracle, and a construct outside the language is a load error naming
 the rewrite, never a redirection to the other path.
 
 What differs is what each will take as *data*, which is a wart rather than a
-design ([#60](https://github.com/FBumann/lpspec/issues/60)):
+design ([#60](https://github.com/fluxopt/lpspec/issues/60)):
 
 | | product path (`sources=`) | shim (`data=` / `coords=`) |
 |---|---|---|
@@ -105,7 +105,7 @@ solver layer. The first is data prep
 ([SPEC §11](../SPEC.md#11-out-of-scope)), the second is
 [hard rule 5](../ARCHITECTURE.md#hard-rules) — the model is the file you review
 and diff — and the third is
-[#106](https://github.com/FBumann/lpspec/issues/106), where we adopt linopy's
+[#106](https://github.com/fluxopt/lpspec/issues/106), where we adopt linopy's
 *design* for declared solver capabilities without adopting its code.
 
 Where linopy is genuinely ahead, and why none of it is a ceiling question, is the

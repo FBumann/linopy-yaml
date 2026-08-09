@@ -122,7 +122,7 @@ dual solution, and lpspec refuses to invent one — which is what the `·` rows
 are.
 
 Adding a port is four files and five rules:
-[CONTRIBUTING.md](https://github.com/FBumann/lpspec/blob/main/CONTRIBUTING.md#adding-a-ported-model).
+[CONTRIBUTING.md](https://github.com/fluxopt/lpspec/blob/main/CONTRIBUTING.md#adding-a-ported-model).
 
 ## The ladder
 
@@ -163,12 +163,12 @@ sharper statement about the language than either alone.
 ## Ledger — what a port could not say
 
 Feeds [ROADMAP](../ROADMAP.md), with the verdict
-[CLAUDE.md](https://github.com/FBumann/lpspec/blob/main/CLAUDE.md) asks for:
+[CLAUDE.md](https://github.com/fluxopt/lpspec/blob/main/CLAUDE.md) asks for:
 macro, primitive, or escape.
 
 | Port | What could not be said | Worked around by | Verdict |
 |---|---|---|---|
-| PyPSA rung 1 | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/FBumann/lpspec/issues/31). A second model asking for it |
+| PyPSA rung 1 | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/lpspec/issues/31). A second model asking for it |
 | PyPSA unit commitment | `min_up_time` — a unit that starts must stay up for *T* snapshots | left at 0, so the constraint is not written | **split verdict**, below |
 | Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut, which is how every serious TSP code works | [MTZ](tsp_mtz.md), O(n²) and static | **refused, and correctly**: a solve loop is an algorithm, not a model |
 
