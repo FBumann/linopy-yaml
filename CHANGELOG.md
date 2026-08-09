@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.69](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.68...v0.0.1-alpha.69) (2026-08-09)
+
+
+### Bug Fixes
+
+* **language:** quoted literals in a where, and a dtype guard on comparisons ([#485](https://github.com/FBumann/lpspec/issues/485)) ([968861b](https://github.com/FBumann/lpspec/commit/968861b02bb242dabaf9f4df4229429d2076af17))
+
 ## [0.0.1-alpha.68](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.67...v0.0.1-alpha.68) (2026-08-09)
 
 
