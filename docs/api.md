@@ -60,6 +60,17 @@ forwarding verbatim is the contract and translating names would mean holding an
 opinion about every option either one has. A name outside the two is an error
 listing them, never a quiet fallback to the default.
 
+**Gurobi's remote and licensing options travel the same way**, so Compute
+Server, Instant Cloud and WLS need nothing from this package:
+
+```python
+options = {'ComputeServer': 'srv:61000', 'ServerPassword': '…'}
+lps.solve('model.yaml', sources, solver_name='gurobi', solver_options=options)
+```
+
+They are applied when Gurobi's environment is created, which is what
+`ComputeServer`, `TokenServer` and `WLSAccessID` require.
+
 Reading a result:
 
 | Rule | |
