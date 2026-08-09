@@ -519,7 +519,7 @@ def test_every_schema_model_is_strict():
     """A schema model that inherits BaseModel directly silently drops unknown
     keys, which turns a typo into a different model. Strictness lives on
     ``_StrictBlock``, so the check is that nothing bypasses it."""
-    tree = ast.parse((PKG / 'language' / 'schema.py').read_text())
+    tree = ast.parse((PKG / 'language' / 'model.py').read_text())
     loose = [
         node.name
         for node in tree.body

@@ -32,7 +32,7 @@ from lpspec.relational.frames import as_frame, labels_frame
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language.schema import Model
+    from lpspec.language.model import Model
 
 
 def tidy_sources(

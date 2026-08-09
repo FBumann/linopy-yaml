@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     import linopy
     import pandas as pd
 
-    from lpspec.language.schema import Model
+    from lpspec.language.model import Model
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
 

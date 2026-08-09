@@ -40,7 +40,7 @@ from lpspec.sources import tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language.schema import Model
+    from lpspec.language.model import Model
     from lpspec.relational.result import Result
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a

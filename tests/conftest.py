@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 import yaml as pyyaml
 
-from lpspec.language.schema import Model
+from lpspec.language.model import Model
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 

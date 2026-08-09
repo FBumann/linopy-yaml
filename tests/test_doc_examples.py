@@ -50,7 +50,7 @@ import pytest
 import yaml
 
 import lpspec as lps
-from lpspec.language.schema import Model
+from lpspec.language.model import Model
 from lpspec.relational.engines.polars.executor import PolarsExecutor, Result
 
 try:

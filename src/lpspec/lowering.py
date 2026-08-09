@@ -66,7 +66,7 @@ from lpspec.language.where_parser import (
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import Model
+    from lpspec.language.model import Model
 
 _SENSES = {'==', '<=', '>='}
 

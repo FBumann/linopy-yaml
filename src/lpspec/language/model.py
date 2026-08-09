@@ -1,4 +1,13 @@
-"""Pydantic models for YAML schema validation."""
+"""The YAML surface's types — every block a file may contain, rooted at :class:`Model`.
+
+A block per declaration kind, and one strict base: an unrecognised key is an
+error naming the near miss rather than a shrug, because a dropped ``bounds:``
+leaves a variable unbounded and says nothing.
+
+:class:`Model` is the first of the three stages the pipeline names — what a
+file *declares*, before ``plan.Program`` (what it lowers to) and an executor
+(what a build holds). Nothing here has seen data.
+"""
 
 from __future__ import annotations
 
@@ -392,30 +401,37 @@ class Model(_StrictBlock):
         )
         raise ValueError(msg)
 
+    def to_dict(self) -> dict[str, Any]:
+        """The model as plain data — what :meth:`to_yaml` writes.
+
+        Whatever a caller reads it back with, it is the same model:
+        ``load_model(m.to_dict())`` and ``load_model(yaml.safe_load(m.to_yaml()))``
+        both reproduce ``m``, and ``tests/test_roundtrip.py`` holds both over the
+        whole corpus.
+
+        **Every value is written; only what is absent is dropped** — a null, or
+        a mapping that declares nothing. One mechanical rule, on purpose.
+        Omitting *defaults* reads better and needs a list of which ones are
+        consequential; that list is a second copy of the schema, and it drifted
+        on its first day, keeping ``version`` and ``sense`` while dropping
+        ``dtype``. An empty **list** stays, because a list carries cardinality
+        here and zero is one of its values: ``foreach: []`` is a scalar
+        declaration.
+        """
+        return _without_empties(self.model_dump())
+
     def to_yaml(self) -> str:
         """The file a reviewer reads — including for a model that never had one.
 
         Hard rule 5 is that the model is the file you review and diff. A model
-        a framework emitted as a dict has no such file, so this gives it one:
-        dump it, read the YAML, and it is *provably* the same model, because
-        ``tests/test_roundtrip.py`` holds the round trip over the whole corpus.
-
-        **Every value is written; only what is absent is dropped** — a null,
-        or a mapping that declares nothing. One
-        mechanical rule, and it is mechanical on purpose. Omitting *defaults*
-        reads better and needs a list of which ones are consequential — a
-        second copy of the schema, which drifted immediately: a first cut kept
-        ``version`` and ``sense`` and dropped ``dtype``, so a file whose author
-        wrote ``dtype: str`` was reviewed without it. A null ``values`` or an empty
-        ``coords`` needs no judgement to recognise.
-
-        The output is generated for review rather than authored, so length
-        costs a reader nothing and being unambiguous saves them having to know
-        this package's defaults at all.
+        a framework emitted as a dict has no such file; this gives it one. The
+        output is generated for review rather than authored, so length costs a
+        reader nothing and being unambiguous saves them having to know this
+        package's defaults at all.
         """
         import yaml
 
-        return yaml.safe_dump(_without_empties(self.model_dump()), sort_keys=False, allow_unicode=True)
+        return yaml.safe_dump(self.to_dict(), sort_keys=False, allow_unicode=True)
 
     @model_validator(mode='after')
     def _validate_references(self) -> Model:

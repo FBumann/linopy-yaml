@@ -44,9 +44,9 @@ from lpspec.language.expression_parser import (
     VariableNode,
 )
 from lpspec.language.helpers import BUILTINS, unknown_helper_message
+from lpspec.language.model import Model
 from lpspec.language.piecewise import expand_piecewise
 from lpspec.language.resolution import Namespace, resolve_expression, resolve_where
-from lpspec.language.schema import Model
 from lpspec.language.where_parser import parse_where
 
 if TYPE_CHECKING:

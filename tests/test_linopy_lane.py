@@ -19,7 +19,7 @@ import textwrap
 import pytest
 
 from lpspec.errors import DataError, LanguageError
-from lpspec.language.schema import Model
+from lpspec.language.model import Model
 from tests.oracle import builder, linopy, loader, lpspec_linopy, pd, xr
 
 

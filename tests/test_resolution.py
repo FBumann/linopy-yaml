@@ -17,7 +17,7 @@ from lpspec.lowering import lower_program
 from tests.conftest import DISPATCH_MODEL, schema_of
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import Model
+    from lpspec.language.model import Model
 
 
 def _schema(**overrides) -> Model:

@@ -6,7 +6,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.language._yaml import read_yaml
-from lpspec.language.schema import Model
+from lpspec.language.model import Model
 
 MODEL = """dimensions:
   snapshot: {dtype: int, values: [0, 1]}

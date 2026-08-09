@@ -57,8 +57,8 @@ from lpspec.errors import LanguageError, PiecewiseExpansionError
 from lpspec.language.degree import check_expression
 from lpspec.language.dimensions import dims_of
 from lpspec.language.expression_parser import ComparisonNode, parse_expression
+from lpspec.language.model import Model, PiecewiseBlock
 from lpspec.language.resolution import Namespace, resolve_expression
-from lpspec.language.schema import Model, PiecewiseBlock
 
 
 def expand_piecewise(schema: Model) -> Model:

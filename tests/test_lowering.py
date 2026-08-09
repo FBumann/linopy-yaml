@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 
 from lpspec.errors import DataError, DimensionError, LanguageError
+from lpspec.language.model import Model
 from lpspec.language.resolution import Namespace
-from lpspec.language.schema import Model
 from lpspec.lowering import _lower_expr, _lower_where, lower_program
 from lpspec.relational.plan import (
     DimensionComparison,

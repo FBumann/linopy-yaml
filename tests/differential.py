@@ -45,7 +45,7 @@ from tests.oracle import linopy, lpspec_linopy
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
-    from lpspec.language.schema import Model
+    from lpspec.language.model import Model
     from lpspec.relational.engines.polars.executor import Result
 
 #: Both lanes hand the same numbers to the same solver, so they must agree to

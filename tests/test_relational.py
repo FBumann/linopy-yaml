@@ -16,7 +16,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError
-from lpspec.language.schema import Model
+from lpspec.language.model import Model
 from lpspec.lowering import lower_program
 from lpspec.relational import (
     PolarsExecutor,

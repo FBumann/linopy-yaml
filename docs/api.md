@@ -16,7 +16,8 @@ import lpspec as lps
 
 lps.check('model.yaml')  # parse → validate → lower, no data bound
 model = lps.load_model('model.yaml')  # Model — the declared math
-print(model.to_yaml())  # ...and back out, for a model that never had a file
+model.to_dict()  # ...and back out, as data
+model.to_yaml()  # ...or as the file a reviewer reads
 
 result = lps.solve('model.yaml', sources, solver_options={'time_limit': 60})
 # ...or solver_name='gurobi', the other solver sink — same model either way
@@ -52,20 +53,20 @@ pandas / xarray, which ship with the `[linopy]` extra. The only build knob is
 `coords`; **`solver_options` is not a build knob** and is forwarded verbatim to
 the solver.
 
-**A `Model` can be written back out.** `to_yaml()` is what gives a model built
-as a *dict* — which is how a framework emits one — the file hard rule 5 says
-you review and diff. It is the same model: `tests/test_roundtrip.py` holds
-`load → to_yaml → load` over every example and every port, and holds that
-dumping twice gives the same bytes, because a review copy that changes per run
-is a diff nobody can read.
+**A `Model` goes back out two ways, and they agree.** `to_dict()` is the model
+as data; `to_yaml()` is that dict as the file hard rule 5 says you review and
+diff — which a model built as a *dict*, the way a framework emits one, would
+otherwise never have. `tests/test_roundtrip.py` holds `load → out → load` for
+both forms over every example and every port, holds that the two forms match,
+and holds that dumping twice gives the same bytes, since a review copy that
+changes per run is a diff nobody can read.
 
-**Two defaults are stated even when they are the default**, and the rule is
-about reading rather than meaning. A default is omitted where its absence reads
-as *nothing here* — no `where`, not `binary`, unbounded `bounds`. It is written
-where absence would make a reader guess a choice the author made: `version`,
-because stating which surface a file targets is the point of the field; and
-`sense`, because minimise-or-maximise is the most consequential word in a model
-and no reviewer should have to know a default to read its direction.
+**Every value is written; only what is absent is dropped** — a null, or a
+mapping that declares nothing. One mechanical rule, on purpose: omitting
+*defaults* reads better but needs a list of which ones are consequential, and
+that list is a second copy of the schema. An empty **list** stays, because a
+list carries cardinality here and zero is one of its values — `foreach: []` is
+a scalar declaration.
 
 **Which solver is a caller's choice, not the file's.** `solver_name` is
 `highs` (ships with the package) or `gurobi` (needs the `[gurobi]` extra), and

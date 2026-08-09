@@ -20,7 +20,7 @@ from lpspec.language.expression_parser import (
 )
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import Model
+    from lpspec.language.model import Model
 
 
 def build_master_coords(

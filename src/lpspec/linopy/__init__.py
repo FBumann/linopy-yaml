@@ -49,8 +49,8 @@ except ModuleNotFoundError as exc:  # linopy / xarray absent
 from lpspec._notes import note
 from lpspec.errors import LanguageError
 from lpspec.language._yaml import read_yaml
+from lpspec.language.model import Model
 from lpspec.language.piecewise import expand_piecewise
-from lpspec.language.schema import Model
 from lpspec.language.validation import validate_expressions
 from lpspec.linopy.builder import build_model
 from lpspec.linopy.loader import (

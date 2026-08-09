@@ -47,6 +47,20 @@ def test_a_model_survives_a_round_trip(path: Path):
 
 
 @pytest.mark.parametrize('path', CORPUS, ids=lambda p: p.stem)
+def test_the_two_out_forms_agree(path: Path):
+    """`to_dict` is what `to_yaml` writes, so a caller cannot get two answers.
+
+    Before `to_dict` existed the only way out was pydantic's `model_dump`,
+    which does not strip absence — so the dict form and the file form described
+    the same model with different content, and which one a consumer had
+    depended on which name they happened to reach for.
+    """
+    model = lps.load_model(path)
+    assert pyyaml.safe_load(model.to_yaml()) == model.to_dict()
+    assert lps.load_model(model.to_dict()).model_dump() == model.model_dump()
+
+
+@pytest.mark.parametrize('path', CORPUS, ids=lambda p: p.stem)
 def test_the_dump_is_stable(path: Path):
     """Dumping twice gives the same bytes.
 

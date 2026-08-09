@@ -52,8 +52,8 @@ from lpspec.typeset.format import Entry, Line
 if TYPE_CHECKING:
     import datetime
 
+    from lpspec.language.model import Model
     from lpspec.language.resolution import Namespace
-    from lpspec.language.schema import Model
     from lpspec.typeset.format import Format
     from lpspec.typeset.symbols import Symbols
 

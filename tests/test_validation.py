@@ -6,7 +6,7 @@ import datetime
 
 import pytest
 
-from lpspec.language.schema import Model
+from lpspec.language.model import Model
 from lpspec.language.validation import validate_expressions
 from tests.oracle import linopy, lpspec_linopy, pd
 

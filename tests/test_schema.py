@@ -10,7 +10,7 @@ is a row that stops failing.
 import pytest
 from pydantic import ValidationError
 
-from lpspec.language.schema import Model
+from lpspec.language.model import Model
 
 
 def test_empty_schema():

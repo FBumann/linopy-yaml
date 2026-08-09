@@ -58,7 +58,7 @@ from lpspec.language.where_parser import (
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from lpspec.language.schema import Model
+    from lpspec.language.model import Model
 
 
 class Namespace:

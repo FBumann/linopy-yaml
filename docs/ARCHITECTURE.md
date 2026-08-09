@@ -401,7 +401,7 @@ must stay off the import path of a caller who does not use it.
 | Module | Role |
 |---|---|
 | `language/_yaml.py` | the only place a file is read: YAML 1.2 booleans, duplicate keys refused |
-| `language/schema.py` | pydantic schema incl. `expressions:` / `macros:` / `piecewise:` |
+| `language/model.py` | pydantic schema incl. `expressions:` / `macros:` / `piecewise:` |
 | `language/expression_parser.py`, `language/where_parser.py` | text → core AST; grammar only, dependency-free |
 | `language/expansion.py` | named-expression / macro substitution (pre-dispatch) |
 | `language/resolution.py` | one flat namespace; `NameNode` → typed `Variable`/`Parameter`/`Dimension` nodes |
@@ -489,7 +489,7 @@ suffix**, which is what keeps the three vocabularies from colliding:
 
 | Layer | Suffix | Example |
 |---|---|---|
-| YAML block (`language/schema.py`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
+| YAML block (`language/model.py`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
 | Core AST (`*_parser.py`) | `Node` | `VariableNode`, `DimensionComparisonNode` |
 | Logical plan (`relational/plan.py`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
 

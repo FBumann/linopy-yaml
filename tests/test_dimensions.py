@@ -16,7 +16,7 @@ from tests.conftest import override, schema_of
 from tools import constructs
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import Model
+    from lpspec.language.model import Model
 
 #: A *network* dispatch model: `conftest.DISPATCH_MODEL` plus buses, so
 #: `sum` and per-bus loads are in scope. The dim rules are mostly about

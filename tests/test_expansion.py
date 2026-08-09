@@ -11,7 +11,7 @@ import pytest
 
 from lpspec.language.expansion import parse_and_expand
 from lpspec.language.expression_parser import parse_expression
-from lpspec.language.schema import Model
+from lpspec.language.model import Model
 from lpspec.language.validation import validate_expressions
 from tests.differential import differential
 from tests.oracle import pd
