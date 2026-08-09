@@ -42,6 +42,7 @@ drift from what the engine builds.
 | model | verified | `sum` | `group_sum` | `shift` | `roll` | `where` | `bounds` | `piecewise` | MILP |
 |---|---|---|---|---|---|---|---|---|---|
 | [dispatch](dispatch.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · |
+| [monthly_budget](monthly_budget.md) | · | **✓** | **✓** | · | · | · | **✓** | · | · |
 | [piecewise](piecewise.md) | · | **✓** | · | · | · | · | **✓** | **✓** | · |
 | [storage](storage.md) | · | **✓** | · | · | **✓** | · | **✓** | · | · |
 | [transport](transport.md) | · | · | **✓** | · | · | · | **✓** | · | · |
