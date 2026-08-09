@@ -157,8 +157,19 @@ def _build_grammar() -> pp.ParserElement:
     """Build and return the pyparsing grammar for math expressions."""
     arith = pp.Forward()
 
+    # `implicit-any-lambda` (new in pyrefly 1.2) fires on every parse action in
+    # this grammar, and the fix it wants is not available: a lambda cannot carry
+    # an annotation, and routing the action through a typed callback only moves
+    # the problem — pyparsing hands back `ParseResults`, whose `__getitem__` is
+    # a union wide enough that `t[0]` then fails on its own. That is the handoff
+    # pyproject.toml already calls honest for `explicit-any`. Suppressed per
+    # line rather than switched off, so a lambda anywhere else still has to say
+    # what it takes.
+
     # float, not int: NumberNode.value is declared float, so store one
+    # pyrefly: ignore[implicit-any-lambda]
     integer = pp.Regex(r'-?\d+').set_parse_action(lambda t: NumberNode(float(t[0])))
+    # pyrefly: ignore[implicit-any-lambda]
     real = pp.Regex(r'-?\d+\.\d*([eE][+-]?\d+)?').set_parse_action(lambda t: NumberNode(float(t[0])))
     # Keyword, not Literal: `Literal('inf')` matches a prefix, so it eats the
     # first three characters of `inflow` and the parser then meets `low` where
@@ -174,9 +185,11 @@ def _build_grammar() -> pp.ParserElement:
     arg_list = pp.Optional(pp.DelimitedList(kwarg | pos_arg))
     func_call = (name + pp.Suppress('(') + arg_list + pp.Suppress(')')).set_parse_action(_make_func_call)
 
+    # pyrefly: ignore[implicit-any-lambda]
     name_node = name.copy().set_parse_action(lambda t: NameNode(t[0]))
     atom = func_call | number | name_node | (pp.Suppress('(') + arith + pp.Suppress(')'))
 
+    # pyrefly: ignore[implicit-any-lambda]
     unary = (pp.one_of('+ -') + atom).set_parse_action(lambda t: UnaryOperatorNode(t[0], t[1])) | atom
 
     power = unary + pp.ZeroOrMore(pp.Literal('**') + unary)
@@ -192,6 +205,7 @@ def _build_grammar() -> pp.ParserElement:
 
     # at most one comparison, and only at the top
     comparator = pp.one_of('<= >= ==')
+    # pyrefly: ignore[implicit-any-lambda]
     expr = (arith + comparator + arith).set_parse_action(lambda t: ComparisonNode(t[1], t[0], t[2])) | arith
 
     return expr
