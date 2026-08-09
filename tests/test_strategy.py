@@ -144,6 +144,25 @@ def test_a_variable_that_was_not_kept_names_the_flag():
         runs.primal('p')
 
 
+def test_a_kept_variable_no_slice_could_solve_blames_the_solve_not_keep():
+    """Missing because nothing solved is not missing because nobody asked.
+
+    Both arrive at `primal` as an absent key, and the two fixes are opposite:
+    one is a flag the caller forgot, the other is a model that has no answer.
+    Pointing an infeasible sweep at `keep=` sends them to fix what works.
+    """
+    sources = scenario_sources()
+    sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)  # past total capacity
+    runs = lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), keep=('p',))
+
+    assert len(runs) == 3, 'an unsolvable slice is still a row of the record'
+    assert runs.objective['objective'].is_nan().all()
+    with pytest.raises(lps.LpspecError, match='was kept, but no slice reached a solution') as raised:
+        runs.primal('p')
+    assert 'infeasible' in str(raised.value), 'the message names what the slices actually did'
+    assert 'keep=' not in str(raised.value), 'and does not send the caller to a flag they already set'
+
+
 # ---------------------------------------------------------------------------
 # EachWindow — the coupled case
 # ---------------------------------------------------------------------------
@@ -165,7 +184,10 @@ def test_a_rolling_horizon_carries_state_across_the_seam():
 
     assert runs.keys == [0, 4, 8]
     assert runs.primal('p').height == 3 * 4 * 2
-    assert set(runs.primal('soc').columns) == {'snapshot', 't', 'value'}
+    # the key column says `_start`, because the rows are indexed by `t` and the
+    # global snapshot was dropped — a column called `snapshot` here would join
+    # against real snapshot-indexed data and be wrong
+    assert set(runs.primal('soc').columns) == {'snapshot_start', 't', 'value'}
     assert runs.objective['objective'].to_list() == pytest.approx([2270.0, 2770.0, 2655.0])
 
 
@@ -179,7 +201,7 @@ def test_overlapping_windows_advance_by_step_and_look_ahead_by_length():
     )
     assert runs.keys == [0, 3, 6, 9]
     # the tail window is short rather than padded — 9..11 is three rows, not six
-    assert runs.primal('soc').filter(pl.col('snapshot') == 9).height == 3
+    assert runs.primal('soc').filter(pl.col('snapshot_start') == 9).height == 3
 
 
 #: Six coordinates, three windows of two, whatever the coordinates *are*.
@@ -221,6 +243,32 @@ def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     assert sorted(soc['t'].unique().to_list()) == [0, 1], 'the local index is dense per window'
 
 
+def test_a_window_key_column_never_shadows_the_dimension_it_replaced():
+    """`snapshot_start` holds window starts, and there are no snapshots left.
+
+    `EachWindow` drops the global dimension and re-indexes to `into`, so a key
+    column called `snapshot` would be window starts sitting under the name of
+    the coordinate they are *not* — one that joins cleanly against real
+    snapshot-indexed data and silently keeps a twelfth of it.
+    """
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(),
+        lps.EachWindow('snapshot', length=4, step=4, into='t'),
+        keep=('soc',),
+    )
+    soc = runs.primal('soc')
+    assert 'snapshot' not in soc.columns
+    assert soc.columns[0] == 'snapshot_start'
+    assert runs.objective.columns[0] == 'snapshot_start', 'both frames key the same way'
+    assert sorted(soc['snapshot_start'].unique().to_list()) == [0, 4, 8]
+
+    # EachCoordinate keeps the plain name: there the key really is a coordinate
+    # of that dimension, and the column holds nothing else
+    sweep = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), keep=('p',))
+    assert sweep.objective.columns[0] == 'scenario'
+
+
 def test_the_window_geometry_is_checked_at_construction():
     """`__post_init__` is what earns these two a name on the public surface."""
     with pytest.raises(ValueError, match='exceeds length'):
@@ -242,6 +290,36 @@ def test_a_carry_index_outside_the_slice_is_refused_by_name():
             carry={'soc_initial': ('soc', 99)},
             keep=('soc',),
         )
+
+
+def test_a_carry_index_into_a_multi_dimensional_variable_is_refused():
+    """A row is a coordinate only while the variable has one dimension.
+
+    `p` is over `(t, generator)`, so row 3 is a position in the row-major
+    product — it is *some* generator at *some* t, and which one moves when a
+    generator is added. Nothing in the tuple form can name that cell, so this
+    refuses rather than carrying whichever value the ordering happened to put
+    there.
+    """
+    with pytest.raises(lps.LpspecError, match='row-major product') as raised:
+        lps.solve_over(
+            WINDOW,
+            horizon_sources(),
+            lps.EachWindow('snapshot', length=4, step=4, into='t'),
+            carry={'soc_initial': ('p', 3)},
+            keep=('p',),
+        )
+    assert "['t', 'generator']" in str(raised.value), 'the message names the dims that make it ambiguous'
+
+    # the same variable over one dimension is exactly what the tuple form is for
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(),
+        lps.EachWindow('snapshot', length=4, step=4, into='t'),
+        carry={'soc_initial': ('soc', 3)},
+        keep=('soc',),
+    )
+    assert len(runs) == 3
 
 
 def test_a_carry_reading_an_unkept_variable_points_at_keep():

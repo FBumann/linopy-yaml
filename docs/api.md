@@ -92,6 +92,7 @@ runs = lps.solve_over(
     carry={'soc_initial': ('soc', 23)},
     keep=('p', 'soc'),
 )
+runs.primal('soc')  # (snapshot_start, t, value) — the window, and the index inside it
 ```
 
 | Rule | |
@@ -102,6 +103,9 @@ runs = lps.solve_over(
 | **duals are not exposed** | a window's shadow price is that window's. Concatenating them into a price curve is wrong in a way nothing complains about |
 | `carry` is a copy, never arithmetic | `{parameter: (variable, index)}`. Accumulation — `existing += built` — is a derived variable in the YAML, where the math is reviewable |
 | the carry index is explicit | with `EachWindow(…, 48, 24, …)` the state to carry is at local index 23, not 47. An implicit "last" is correct until overlap is introduced and silently wrong after |
+| **a carried variable has one dimension** | `index` is a *row*, and a row is a coordinate only over one dim — over two it is a position in the row-major product that moves when a coordinate is added. Refused, rather than carrying whichever value the ordering put there |
+| **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`, so the key column is `snapshot_start` and holds where each window began. Naming it `snapshot` would put window starts under the name of the coordinate they are not, and join cleanly against real data |
+| a slice that did not solve | contributes no `primal` rows, so that frame can be shorter than the sweep. `objective` is one row per slice always, and is the record of which slices those were |
 | **a window spans coordinates, not values** | `length=48` is forty-eight snapshots however they are numbered, so the dimension only has to be **orderable** — datetimes, strings and gapped integers all work. `into` is a dense `0..n-1` local index, which is what keeps the seam's `where: "t == 0"` matching, and it has no default because the name belongs to the model |
 | non-positional grouping | *"each calendar month"* has unequal groups, so it is a precomputed column plus `EachCoordinate`. What `EachWindow` uniquely offers is **overlap** |
 | `carry` excludes `executor` | a carried value makes slice *i+1* depend on slice *i*, so the slices cannot run concurrently. Refused rather than one silently winning |

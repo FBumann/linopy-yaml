@@ -169,6 +169,7 @@ class Runs:
 
     key_name: str
     meta: pl.DataFrame
+    kept: tuple[str, ...] = ()
     _primals: dict[str, pl.DataFrame] = field(repr=False, default_factory=dict)
 
     @property
@@ -181,23 +182,40 @@ class Runs:
         return self.meta[self.key_name].to_list()
 
     def primal(self, name: str) -> pl.DataFrame:
-        """One variable's values across every slice, the slice key prepended."""
+        """One variable's values across every slice, the slice key prepended.
+
+        A slice that reached no solution contributes no rows, so this frame can
+        be shorter than the sweep — :attr:`objective` is the record of which
+        slices those were, and it is one row per slice always.
+        """
         if name not in self._primals:
-            kept = ', '.join(repr(k) for k in sorted(self._primals)) or 'nothing'
-            raise LpspecError(
-                f'variable {name!r} was not kept — this run kept {kept}. '
-                f"Name it in keep=(...) : a fold releases each slice's model as it goes, so what "
-                f'is not extracted inside the loop cannot be read afterwards.'
-            )
+            raise LpspecError(_no_primal(name, self.kept, self.meta))
         return self._primals[name]
 
     def __len__(self) -> int:
         return self.meta.height
 
 
-# ---------------------------------------------------------------------------
-# the fold
-# ---------------------------------------------------------------------------
+def _no_primal(name: str, kept: tuple[str, ...], meta: pl.DataFrame) -> str:
+    """Why *name* has no frame — two different failures that read alike.
+
+    A variable nobody asked to keep and a variable every slice failed to solve
+    both arrive here as a missing key, and pointing the second one at ``keep``
+    sends the caller to fix what is not broken.
+    """
+    if name not in kept:
+        listed = ', '.join(repr(k) for k in sorted(kept)) or 'nothing'
+        return (
+            f'variable {name!r} was not kept — this run kept {listed}. '
+            f"Name it in keep=(...) : a fold releases each slice's model as it goes, so what "
+            f'is not extracted inside the loop cannot be read afterwards.'
+        )
+    conditions = ', '.join(sorted(set(meta['termination_condition'].to_list())))
+    return (
+        f'variable {name!r} was kept, but no slice reached a solution to keep it from — '
+        f'all {meta.height} terminated {conditions}. The fold ran; the models did not solve. '
+        f'runs.objective carries the status of each slice.'
+    )
 
 
 def solve_over(
@@ -263,7 +281,12 @@ def solve_over(
                 f'carry needs an ordered axis: {axis!r} has no defined "next" slice for a value to move into. '
                 f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
             )
-        cuts, key_name = axis._slices(sources), axis.dim
+        cuts = axis._slices(sources)
+        # a window is keyed by where it *starts*, and its rows are indexed by
+        # `into` — so the key column cannot be `dim`, which the slice dropped.
+        # Naming it `dim` would put window starts in a column called `snapshot`
+        # next to no snapshots, which joins against real data and is wrong
+        key_name = f'{axis.dim}_start' if isinstance(axis, EachWindow) else axis.dim
     else:
         cuts, key_name = list(axis), 'slice'
     if not cuts:
@@ -319,6 +342,7 @@ def solve_over(
     return Runs(
         key_name=key_name,
         meta=pl.DataFrame(rows),
+        kept=keep,
         _primals={name: pl.concat(frames) for name, frames in primals.items() if frames},
     )
 
@@ -353,13 +377,27 @@ def _carried(
     frames: Mapping[str, pl.DataFrame],
     key: Any,
 ) -> dict[str, Any]:
-    """The next slice's carried parameters, read out of this slice's primals."""
+    """The next slice's carried parameters, read out of this slice's primals.
+
+    ``index`` is a **row** of the tidy frame, and a row is a coordinate only
+    while the variable has one dimension — over two it is a position in the
+    row-major product, which names no cell the caller could have meant. So the
+    tuple form is refused there rather than picking one.
+    """
     state: dict[str, Any] = {}
     for parameter, (variable, index) in carry.items():
         if variable not in frames:
             raise LpspecError(
                 f'carry reads variable {variable!r}, which this run did not keep. '
                 f'Add it to keep=(...) — the carry is read from the same frames.'
+            )
+        dims = [column for column in frames[variable].columns if column != 'value']
+        if index is not None and len(dims) > 1:
+            raise LpspecError(
+                f'carry {parameter!r} <- ({variable!r}, {index}) reads row {index} of a variable over '
+                f'{dims}, where a row is a position in the row-major product and not a coordinate of any '
+                f'one dimension. Carry a variable over a single dimension, or derive the scalar you mean '
+                f'in the YAML, where the oracle can see it.'
             )
         values = frames[variable]['value']
         if index is None:
