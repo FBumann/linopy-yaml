@@ -388,3 +388,49 @@ def test_the_retired_group_sum_names_its_rewrite():
     assert 'sum(<expr>, over=<dim>, group_by=<coord>)' in str(exc.value), (
         'a retired spelling has to name its rewrite, not just fail'
     )
+
+
+class TestVersion:
+    """`version:` — the field, and the policy that gives it meaning (#67).
+
+    The field alone would be cargo cult: what makes it worth carrying is that
+    an unknown version is *refused* rather than interpreted. Everything else
+    here follows from that.
+    """
+
+    def _model(self, **top):
+        return {
+            **top,
+            'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
+            'parameters': {'c': {'dims': ['t']}},
+            'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
+            'constraints': {'r': {'foreach': ['t'], 'expression': 'x <= 1'}},
+            'objectives': {'o': {'sense': 'maximize', 'expression': 'x * c'}},
+        }
+
+    def test_absent_means_zero(self):
+        """Additive by design: every file written before the field stays valid,
+        so adding it needed no migration of examples, ports or fixtures."""
+        assert MathSchema.model_validate(self._model()).version == 0
+
+    def test_zero_is_the_unstable_surface(self):
+        assert MathSchema.model_validate(self._model(version=0)).version == 0
+
+    def test_an_unknown_version_is_refused_not_interpreted(self):
+        """A file from the future must not be read by an older reader — that is
+        the whole reason the field exists, and the only thing it does."""
+        with pytest.raises(ValueError) as exc:
+            MathSchema.model_validate(self._model(version=1))
+
+        message = str(exc.value)
+        assert 'declares version 1' in message
+        assert 'understands [0]' in message, 'the error has to say what this reader can read'
+        assert 'Upgrade lpspec' in message, 'and what to do about it'
+
+    def test_the_version_gates_no_behaviour(self):
+        """Reject-only. Two files differing only in a *declared* supported
+        version must build the same model — the field never selects a surface.
+        """
+        bare = MathSchema.model_validate(self._model())
+        declared = MathSchema.model_validate(self._model(version=0))
+        assert bare.model_dump(exclude={'version'}) == declared.model_dump(exclude={'version'})

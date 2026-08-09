@@ -30,9 +30,38 @@ applied in a different position.
 ## 1. File shape
 
 Eight top-level keys: `dimensions`, `parameters`, `variables`, `constraints`,
-`objectives` (§2), `expressions`, `macros` (§3), `piecewise` (§4). The schema
-accepts any subset, but `check`, `solve` and `write` require an objective —
-there is nothing to optimise without one.
+`objectives` (§2), `expressions`, `macros` (§3), `piecewise` (§4), plus
+`version` (below). The schema accepts any subset, but `check`, `solve` and
+`write` require an objective — there is nothing to optimise without one.
+
+**`version` declares which surface the file is written against.** It is
+optional, and absent means `0`:
+
+<!-- doctest: skip -->
+```yaml
+version: 0
+dimensions: ...
+```
+
+**`0` means unstable, and that is the promise being made.** The surface may
+change in any release; there is no compatibility guarantee, and saying so in
+the file is more honest than silence. What `1` is stays deliberately undecided
+— the only thing decided is that `0` does not become `1` without a changelog
+entry naming what moved.
+
+**A version this reader does not know is a load error, and nothing else.** The
+field gates no behaviour: it never selects an alternative surface, because
+keeping two alive in one codebase is a large permanent cost against an error
+that costs one line. A file from the future is refused rather than
+misinterpreted, which is the whole reason to carry the field:
+
+```
+model declares version 1, and lpspec 0.0.1a75 understands [0].
+Upgrade lpspec, or write the version this file actually targets.
+```
+
+It is a **language** version, not a package one — it moves when the accepted
+YAML surface moves, which most releases do not.
 
 **The schema is closed at every level.** An unrecognised key — top-level or
 inside any declaration — is a load error naming the near miss (`unknown key
