@@ -68,6 +68,12 @@ that list is a second copy of the schema. An empty **list** stays, because a
 list carries cardinality here and zero is one of its values — `foreach: []` is
 a scalar declaration.
 
+The rule lives on the model's **serializer**, so pydantic's own `model_dump`
+carries it too rather than disagreeing with the file. `model_dump_json` is the
+one form that cannot: JSON has no infinity, so an unbounded `-inf` bound
+becomes `null` — which reads as *absent* rather than *unbounded*. YAML spells
+it `-.inf` and reads it back, which is why `to_yaml` is the review form.
+
 **Which solver is a caller's choice, not the file's.** `solver_name` is
 `highs` (ships with the package) or `gurobi` (needs the `[gurobi]` extra), and
 nothing in the YAML names one — the same file means the same model whichever

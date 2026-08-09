@@ -14,7 +14,7 @@ from __future__ import annotations
 from importlib import metadata
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from lpspec.errors import did_you_mean
 from lpspec.language.helpers import BUILTIN_NAMES
@@ -328,7 +328,7 @@ class PiecewiseBlock(_StrictBlock):
 SUPPORTED_VERSIONS: tuple[int, ...] = (0,)
 
 
-def _without_empties(value: Any) -> Any:
+def _without_absence(value: Any) -> Any:
     """Strip what is absent — a null, or a mapping declaring nothing.
 
     An empty **list** is kept, because in this schema a list carries
@@ -341,7 +341,7 @@ def _without_empties(value: Any) -> Any:
     equals a default.
     """
     if isinstance(value, dict):
-        pruned = {k: _without_empties(v) for k, v in value.items()}
+        pruned = {k: _without_absence(v) for k, v in value.items()}
         return {k: v for k, v in pruned.items() if v is not None and v != {}}
     return value
 
@@ -401,24 +401,28 @@ class Model(_StrictBlock):
         )
         raise ValueError(msg)
 
-    def to_dict(self) -> dict[str, Any]:
-        """The model as plain data — what :meth:`to_yaml` writes.
+    @model_serializer(mode='wrap')
+    def _drop_absence(self, handler: Any) -> dict[str, Any]:
+        """Absence is not serialised — a null, or a mapping declaring nothing.
 
-        Whatever a caller reads it back with, it is the same model:
-        ``load_model(m.to_dict())`` and ``load_model(yaml.safe_load(m.to_yaml()))``
-        both reproduce ``m``, and ``tests/test_roundtrip.py`` holds both over the
-        whole corpus.
+        On the *serializer* rather than beside it so there is one answer:
+        ``model_dump``, ``model_dump_json``, :meth:`to_dict` and
+        :meth:`to_yaml` all give the same content. A helper next to them would
+        have left pydantic's own methods disagreeing with the file, and which a
+        consumer got would depend on which name they reached for.
 
-        **Every value is written; only what is absent is dropped** — a null, or
-        a mapping that declares nothing. One mechanical rule, on purpose.
-        Omitting *defaults* reads better and needs a list of which ones are
-        consequential; that list is a second copy of the schema, and it drifted
-        on its first day, keeping ``version`` and ``sense`` while dropping
-        ``dtype``. An empty **list** stays, because a list carries cardinality
-        here and zero is one of its values: ``foreach: []`` is a scalar
-        declaration.
+        **Every value is kept, default or not.** Omitting *defaults* reads
+        better and needs a list of which ones are consequential; that list is a
+        second copy of the schema and it drifted on its first day, keeping
+        ``version`` and ``sense`` while dropping ``dtype``. An empty **list**
+        stays, because a list carries cardinality here and zero is one of its
+        values — ``foreach: []`` is a scalar declaration.
         """
-        return _without_empties(self.model_dump())
+        return _without_absence(handler(self))
+
+    def to_dict(self) -> dict[str, Any]:
+        """The model as plain data. ``load_model(m.to_dict())`` reproduces it."""
+        return self.model_dump()
 
     def to_yaml(self) -> str:
         """The file a reviewer reads — including for a model that never had one.

@@ -67,6 +67,8 @@ def expand_piecewise(schema: Model) -> Model:
         return schema
 
     raw = schema.model_dump()
+    raw.setdefault('variables', {})
+    raw.setdefault('constraints', {})
     for name, pw in schema.piecewise.items():
         frame = _validate_block(schema, name, pw)
         lam, seg = f'{name}_lam', f'{name}_seg'
