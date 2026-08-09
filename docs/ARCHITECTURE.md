@@ -175,6 +175,14 @@ module per output format, so a format is a spelling table rather than a second
 walk that could disagree. `python -m lpspec <format>` is its shell front, one verb per
 entry in `typeset.FORMATS`: a consumer that needs no data needs no runner.
 
+**That front is typeset's, not the package's**, and it is not the start of a
+command line. It exists because rendering a model belongs in a Makefile beside
+`pdflatex`; the rule that keeps it from growing is that **no verb may become a
+second way to spell the source mapping** — `--source name=path` is `lps.solve`'s
+dict with worse errors, and `solve_over`'s axis and `carry` cannot be said in
+flags at all. A shell-driven *solve* would therefore have to arrive as one path
+argument over a run manifest, never as flags.
+
 That claim is enforced twice, because a renderer that imports only `language/`
 still pays for polars if some language module does: a path-scoped import rule
 like the other three fences, plus a check on the **transitive** closure. Two
@@ -199,7 +207,7 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 |---|---|---|---|
 | **load it** | parse and validate, and stop there | `load_schema` → `MathSchema` | no |
 | **show it** | typeset for a paper or a review | `to_latex` · `to_typst` · `to_markdown` (spelling: `SymbolTable`) | no |
-| | drive it from a shell | `python -m lpspec <format>` | no |
+| | render one from a Makefile | `python -m lpspec <format>` — the only shell front, and typeset-only | no |
 | | *watch what a build is doing* | | |
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
 | | *will that solver take it, and how big is it* | | |
@@ -404,7 +412,7 @@ must stay off the import path of a caller who does not use it.
 | `language/piecewise.py` | `piecewise:` → λ-formulation declarations |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_schema` |
 | `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/FBumann/lpspec/blob/main/src/lpspec/typeset/README.md)) |
-| `__main__.py` | `python -m lpspec <format>` — a shell front for the verbs that bind no data |
+| `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `convex:` curvature guard, which is the one check that needs values |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the exception hierarchy; the one module either fenced side may import |
