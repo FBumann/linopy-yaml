@@ -16,13 +16,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from lpspec.errors import LpspecError, NoSolutionError
 
 if TYPE_CHECKING:
     import pandas as pd
     import polars as pl
+    import xarray as xr
 
     from lpspec.relational.engines.polars.executor import PolarsExecutor
     from lpspec.relational.status import SolveStatus
@@ -135,7 +136,7 @@ class Result:
         frame = self._executor._primal(name, self._primal_values)
         return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
 
-    def to_dataarray(self, name: str) -> Any:
+    def to_dataarray(self, name: str) -> xr.DataArray:
         """``primal(name)`` as a labelled :class:`xarray.DataArray`.
 
         The bridge to array post-processing — ``.sel``, resampling, duration
@@ -148,7 +149,7 @@ class Result:
             return frame['value'].to_xarray().rename(name)
         return frame.set_index(dims).to_xarray()['value'].rename(name)
 
-    def to_dataset(self, *names: str) -> Any:
+    def to_dataset(self, *names: str) -> xr.Dataset:
         """Variables as one :class:`xarray.Dataset`; all of them by default.
 
         Costs what it says: each variable arrives dense over its own dims,

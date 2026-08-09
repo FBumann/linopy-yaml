@@ -38,6 +38,9 @@ from lpspec.relational.frames import as_frame
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    import pandas as pd
+    import xarray as xr
+
     from lpspec.language.schema import MathSchema
 
 #: Parquet rather than pickle, and not a knob: measured over 1M rows, zstd is
@@ -168,6 +171,11 @@ class Runs:
     **Duals are not exposed.** A window's shadow price is that window's, and
     concatenating them into a price curve is wrong in a way nothing complains
     about.
+
+    Everything else here is :class:`~lpspec.relational.result.Result`'s reader
+    one dimension wider — same names, same shapes, the slice key prepended. A
+    sweep is where a labelled array earns its keep, and building one out of a
+    slice-keyed frame by hand is the part worth not writing twice.
     """
 
     key_name: str
@@ -194,6 +202,66 @@ class Runs:
         if name not in self._primals:
             raise LpspecError(_no_primal(name, self.kept, self.meta))
         return self._primals[name]
+
+    def to_pandas(self, name: str) -> pd.DataFrame:
+        """:meth:`primal` as a tidy :class:`pandas.DataFrame`.
+
+        Needs pandas, which ships with the ``[linopy]`` extra. Column by column
+        for the same reason ``Result.to_pandas`` does it: polars' own
+        ``to_pandas`` reaches for pyarrow.
+        """
+        import pandas as pd
+
+        frame = self.primal(name)
+        return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
+
+    def to_dataarray(self, name: str) -> xr.DataArray:
+        """:meth:`primal` as a :class:`xarray.DataArray`, the slice key a dimension.
+
+        ``(scenario, snapshot, generator)`` is what a sweep is *for* — ``.sel``
+        a scenario, take a quantile across them, plot the spread. A slice that
+        reached no solution has no rows and so comes back NaN, which is the
+        same answer a masked coordinate gets from ``Result``.
+        """
+        frame = self.to_pandas(name)
+        dims = [column for column in frame.columns if column != 'value']
+        return frame.set_index(dims).to_xarray()['value'].rename(name)
+
+    def to_dataset(self, *names: str) -> xr.Dataset:
+        """Kept variables as one :class:`xarray.Dataset`; all of them by default.
+
+        Costs what it says, and more than ``Result``'s does — each variable
+        arrives dense over its own dims *and* over every slice. Name the few you
+        need, or use :meth:`to_parquet`.
+        """
+        wanted = names or tuple(sorted(self._primals))
+        if not wanted:
+            raise LpspecError(_no_primal('anything', self.kept, self.meta))
+        first, *rest = wanted
+        dataset = self.to_dataarray(first).to_dataset(name=first)
+        for name in rest:
+            dataset[name] = self.to_dataarray(name)
+        return dataset
+
+    def to_parquet(self, directory: str | Path = '.') -> dict[str, Path]:
+        """One parquet file per kept variable, ``(key, dims…, value)``.
+
+        Returns name → path, in :meth:`primal`'s order, so the same sweep
+        writes the same bytes. This is a *copy out* of frames already held — it
+        does not bound what the fold accumulated, which is what ``keep`` is for
+        and what spilling per slice would be (#477). A sweep that kept nothing
+        raises rather than leaving an empty directory behind.
+        """
+        if not self._primals:
+            raise LpspecError(_no_primal('anything', self.kept, self.meta))
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        written: dict[str, Path] = {}
+        for name in sorted(self._primals):
+            path = directory / f'{name}.parquet'
+            self._primals[name].write_parquet(path)
+            written[name] = path
+        return written
 
     def __len__(self) -> int:
         return self.meta.height
@@ -228,6 +296,7 @@ def solve_over(
     *,
     carry: Mapping[str, tuple[str, int | None]] | None = None,
     keep: Sequence[str] = (),
+    key_name: str | None = None,
     executor: Any = None,
     workers_share_fs: bool | None = None,
     solver_options: Mapping[str, Any] | None = None,
@@ -252,6 +321,13 @@ def solve_over(
     ``keep`` names the variables whose primals survive. This is a fold rather
     than a list comprehension: each slice's model is released as the loop goes,
     so peak stays at one slice instead of N.
+
+    ``key_name`` names the column holding the slice key — the same word in
+    :attr:`Runs.objective` and in every frame :meth:`Runs.primal` returns, so
+    the two still join. The class axes derive it (``EachCoordinate('scenario')``
+    keys on ``scenario``; a window keys on ``<dim>_start``, since ``dim`` itself
+    was dropped), but **a hand-built list of cuts has to be told**, for the
+    reason :attr:`EachWindow.into` has no default.
 
     ``executor`` is any :class:`concurrent.futures.Executor`; ``None`` is
     sequential. A ``carry`` makes slices sequential by definition, so the two
@@ -296,16 +372,9 @@ def solve_over(
     # them (and each worker) reading the same YAML again.
     schema = check(model)
     plan: dict[str, tuple[str, str | None, int | None]] = _carry_plan(schema, carry, keep) if carry else {}
+    key_name = _key_column(axis, key_name, schema, keep)
 
-    if isinstance(axis, (EachCoordinate, EachWindow)):
-        cuts = axis._slices(sources)
-        # a window is keyed by where it *starts*, and its rows are indexed by
-        # `into` — so the key column cannot be `dim`, which the slice dropped.
-        # Naming it `dim` would put window starts in a column called `snapshot`
-        # next to no snapshots, which joins against real data and is wrong
-        key_name = f'{axis.dim}_start' if isinstance(axis, EachWindow) else axis.dim
-    else:
-        cuts, key_name = list(axis), 'slice'
+    cuts = axis._slices(sources) if isinstance(axis, (EachCoordinate, EachWindow)) else list(axis)
     if not cuts:
         raise DataError('the axis produced no slices')
 
@@ -386,6 +455,45 @@ def _run_slice(
         }
         frames = {name: result.primal(name) for name in keep} if result.has_primal else {}
         return meta, _encode(frames, {}) if encode_out else frames
+
+
+def _key_column(
+    axis: Axis | Sequence[Cut],
+    key_name: str | None,
+    schema: MathSchema,
+    keep: tuple[str, ...],
+) -> str:
+    """What to call the column holding the slice key.
+
+    The two class axes know: a coordinate sweep keys on the dimension it cut,
+    and a window keys on where it *started* — never on ``dim`` itself, which the
+    slice dropped and re-indexed to ``into``. A column called ``snapshot``
+    holding window starts joins against real snapshot-indexed data and keeps a
+    fraction of it, silently.
+
+    A hand-built list knows neither, so it has to be told, for the same reason
+    :attr:`EachWindow.into` has no default: naming somebody else's axis is
+    guessing at their decision, and ``'slice'`` would be the library's word for
+    the caller's draw, ladder or pathway.
+    """
+    if key_name is None:
+        if isinstance(axis, EachWindow):
+            key_name = f'{axis.dim}_start'
+        elif isinstance(axis, EachCoordinate):
+            key_name = axis.dim
+        else:
+            raise LpspecError(
+                'a hand-built axis needs key_name=: a list of cuts does not say what its keys are '
+                "coordinates of, and 'slice' would be this library naming your axis for you. Pass "
+                "key_name='draw', key_name='period', or whatever the keys actually are."
+            )
+    clashing = sorted(name for name in keep if key_name in getattr(schema.variables.get(name), 'foreach', ()))
+    if clashing:
+        raise LpspecError(
+            f'key_name={key_name!r} is already a dimension of {clashing}, so the slice key would collide '
+            f'with a column those frames already carry. Name it something the model does not use.'
+        )
+    return key_name
 
 
 def _carry_plan(

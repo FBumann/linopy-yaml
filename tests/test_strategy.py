@@ -727,14 +727,97 @@ def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_
     assert all(v == path.read_bytes() for v in crossed), 'an executor we did not ship was assumed local'
 
 
-def test_a_hand_built_axis_needs_no_class():
+# ---------------------------------------------------------------------------
+# reading a sweep back — Result's readers, one dimension wider
+# ---------------------------------------------------------------------------
+
+
+def test_the_readers_mirror_result_with_the_slice_key_as_one_more_dimension():
+    """A sweep is where a labelled array earns its keep.
+
+    `(scenario, snapshot, generator)` is the shape the caller wants — `.sel` a
+    scenario, take a spread across them — and assembling it out of a
+    slice-keyed frame by hand is the part worth not writing twice. Every
+    reader here is `Result`'s under the same name, so knowing one is knowing
+    both.
+    """
+    pytest.importorskip('xarray')
+    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), keep=('p',))
+
+    pandas_frame = runs.to_pandas('p')
+    assert list(pandas_frame.columns) == ['scenario', 'snapshot', 'generator', 'value']
+    assert len(pandas_frame) == 3 * 4 * 2
+
+    array = runs.to_dataarray('p')
+    assert array.name == 'p'
+    assert array.dims == ('scenario', 'snapshot', 'generator')
+    assert array.shape == (3, 4, 2)
+    # the slice key is an ordinary coordinate, which is the whole point
+    assert array.sel(scenario='low', generator='wind').shape == (4,)
+
+    dataset = runs.to_dataset()
+    assert set(dataset.data_vars) == {'p'}
+    assert dataset['p'].dims == ('scenario', 'snapshot', 'generator')
+
+
+def test_to_parquet_writes_one_file_per_kept_variable(tmp_path):
+    """The bridge out for a sweep too wide to want in one array."""
+    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), keep=('p',))
+
+    written = runs.to_parquet(tmp_path / 'sweep')
+    assert set(written) == {'p'}
+    assert pl.read_parquet(written['p']).equals(runs.primal('p'))
+
+
+def test_a_reader_for_an_unkept_variable_fails_the_way_primal_does():
+    """One explanation of what `keep` is, reached through every reader."""
+    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+    for read in (runs.to_pandas, runs.to_dataarray):
+        with pytest.raises(lps.LpspecError, match=r'was not kept .* keep=\(\.\.\.\)'):
+            read('p')
+    # the two that name no variable still refuse, rather than quietly handing
+    # back an empty dataset or an empty directory
+    for read_all in (runs.to_dataset, runs.to_parquet):
+        with pytest.raises(lps.LpspecError, match='was not kept'):
+            read_all()
+
+
+def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
     """`axis` also takes a plain list of `(key, sources, coords)`, so an
-    irregular ladder needs no third constructor on the public surface."""
+    irregular ladder needs no third constructor on the public surface.
+
+    What it cannot do is say what its keys are coordinates *of*, so `key=` is
+    required there — the same argument that leaves `EachWindow.into` without a
+    default. A column called `slice` would be this library naming somebody
+    else's draw.
+    """
     base = scenario_sources()
     cuts = [
         (name, {**base, 'load': base['load'].filter(pl.col('scenario') == name).drop('scenario')}, {})
         for name in ('low', 'high')
     ]
-    runs = lps.solve_over(DISPATCH, base, cuts, keep=('p',))
+
+    with pytest.raises(lps.LpspecError, match='hand-built axis needs key_name='):
+        lps.solve_over(DISPATCH, base, cuts, keep=('p',))
+
+    runs = lps.solve_over(DISPATCH, base, cuts, keep=('p',), key_name='draw')
     assert runs.keys == ['low', 'high']
-    assert runs.meta.columns[0] == 'slice'
+    assert runs.meta.columns[0] == 'draw'
+    assert runs.primal('p').columns[0] == 'draw', 'both frames key the same way, or they stop joining'
+
+
+def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
+    """The derived name is right by default and the caller's word wins.
+
+    The refusal is the narrow one: a key that is already a dimension of a kept
+    variable would collide with a column those frames carry, which polars
+    reports as a duplicate with no idea why. Naming a *dropped* dimension is
+    not refused — that is the caller saying it deliberately, which is a
+    different thing from the library doing it silently.
+    """
+    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), keep=('p',), key_name='case')
+    assert runs.objective.columns[0] == 'case'
+    assert set(runs.primal('p').columns) == {'case', 'snapshot', 'generator', 'value'}
+
+    with pytest.raises(lps.LpspecError, match=r"key_name='generator' is already a dimension of \['p'\]"):
+        lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), keep=('p',), key_name='generator')
