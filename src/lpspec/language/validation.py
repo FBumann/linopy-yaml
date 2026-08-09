@@ -24,7 +24,9 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, assert_never
 
-from lpspec.errors import SchemaError
+from pydantic import ValidationError
+
+from lpspec.errors import SchemaError, schema_error
 from lpspec.language._yaml import read_yaml
 from lpspec.language.dimensions import check_schema
 from lpspec.language.expansion import expand, parse_and_expand, parse_template
@@ -80,11 +82,12 @@ def load_model(model: str | Path | dict[str, Any] | Model) -> Model:
         )
         raise NotImplementedError(msg)
     if isinstance(model, Model):
-        schema = model
-    elif isinstance(model, dict):
-        schema = Model(**model)
-    else:
-        schema = Model(**read_yaml(Path(model)))
+        return model
+    raw = model if isinstance(model, dict) else read_yaml(Path(model))
+    try:
+        schema = Model(**raw)
+    except ValidationError as exc:
+        raise schema_error(exc) from None
     validate_expressions(expand_piecewise(schema))
     return schema
 
