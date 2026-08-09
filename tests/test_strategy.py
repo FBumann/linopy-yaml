@@ -72,7 +72,69 @@ WINDOW = {
     'objectives': {'total': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'}},
 }
 
+#: The same storage, but two of them — so `soc` is over `(t, storage)` and the
+#: carried `soc_initial` over `(storage)`. The carry drops `t` and `storage`
+#: rides along, which is the general shape a scalar carry is a corner of.
+MULTI_STORE = {
+    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'dtype': 'str'}, 'storage': {'dtype': 'str'}},
+    'parameters': {
+        'p_max': {'dims': ['generator']},
+        'cost': {'dims': ['generator']},
+        'load': {'dims': ['t']},
+        'soc_initial': {'dims': ['storage']},
+        'efficiency': {'dims': ['storage']},
+    },
+    'variables': {
+        'p': {'foreach': ['t', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}},
+        # capped well below a window's worth, so a store cannot empty itself
+        # before the seam — otherwise every window ends at zero and carrying
+        # the state is indistinguishable from not carrying it
+        'charge': {'foreach': ['t', 'storage'], 'bounds': {'lower': 0, 'upper': 5}},
+        'discharge': {'foreach': ['t', 'storage'], 'bounds': {'lower': 0, 'upper': 5}},
+        'soc': {'foreach': ['t', 'storage'], 'bounds': {'lower': 0, 'upper': 100}},
+    },
+    'constraints': {
+        'balance': {
+            'foreach': ['t'],
+            'expression': 'sum(p, over=generator) + sum(discharge, over=storage) - sum(charge, over=storage) == load',
+        },
+        'soc_open': {
+            'foreach': ['t', 'storage'],
+            'where': 't == 0',
+            'expression': 'soc == soc_initial + charge * efficiency - discharge',
+        },
+        'soc_step': {
+            'foreach': ['t', 'storage'],
+            'where': 't > 0',
+            'expression': 'soc == shift(soc, over=t, by=1) + charge * efficiency - discharge',
+        },
+    },
+    'objectives': {'total': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'}},
+}
+
+#: A myopic pathway: what a period builds is what the next period already has.
+#: `total` and `existing` are both over `(generator)`, so the carry drops
+#: nothing and the whole vector moves — no index could have said this.
+MYOPIC = {
+    'dimensions': {'generator': {'dtype': 'str'}},
+    'parameters': {
+        'existing': {'dims': ['generator']},
+        'cost': {'dims': ['generator']},
+        'demand': {'dims': []},
+    },
+    'variables': {
+        'build': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 50}},
+        'total': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 200}},
+    },
+    'constraints': {
+        'accumulate': {'foreach': ['generator'], 'expression': 'total == existing + build'},
+        'meet': {'foreach': [], 'expression': 'sum(total, over=generator) >= demand'},
+    },
+    'objectives': {'total_cost': {'sense': 'minimize', 'expression': 'sum(build * cost, over=generator)'}},
+}
+
 GENERATORS = ['wind', 'gas']
+STORES = ['battery', 'pumped']
 STATIC = {
     'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [10.0, 100.0]}),
     'cost': pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 50.0]}),
@@ -85,6 +147,24 @@ def scenario_sources() -> dict[str, object]:
     for scenario, scale in (('low', 1.0), ('mid', 2.0), ('high', 3.0)):
         rows += [{'scenario': scenario, 'snapshot': t, 'value': 5.0 * scale + t} for t in range(4)]
     return {**STATIC, 'load': pl.DataFrame(rows)}
+
+
+def multi_store_sources(periods: int = 12) -> dict[str, object]:
+    return {
+        **horizon_sources(periods),
+        # a real starting level, so there is state worth handing across a seam
+        'soc_initial': pl.DataFrame({'storage': STORES, 'value': [40.0, 20.0]}),
+        'efficiency': pl.DataFrame({'storage': STORES, 'value': [0.9, 0.75]}),
+    }
+
+
+def myopic_sources() -> dict[str, object]:
+    """Three periods of rising demand — `demand` carries the slice key."""
+    return {
+        'cost': pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 50.0]}),
+        'existing': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 0.0]}),
+        'demand': pl.DataFrame({'period': [1, 2, 3], 'value': [10.0, 25.0, 40.0]}),
+    }
 
 
 def horizon_sources(periods: int = 12) -> dict[str, object]:
@@ -292,34 +372,107 @@ def test_a_carry_index_outside_the_slice_is_refused_by_name():
         )
 
 
-def test_a_carry_index_into_a_multi_dimensional_variable_is_refused():
-    """A row is a coordinate only while the variable has one dimension.
+def test_a_carry_collapses_one_dimension_and_every_other_rides_along():
+    """`soc` is over `(t, storage)` and `soc_initial` over `(storage)`.
 
-    `p` is over `(t, generator)`, so row 3 is a position in the row-major
-    product — it is *some* generator at *some* t, and which one moves when a
-    generator is added. Nothing in the tuple form can name that cell, so this
-    refuses rather than carrying whichever value the ordering happened to put
-    there.
+    The two declarations say what is copied: `t` is what the parameter lacks,
+    so `t` is what the index names, and `storage` passes through — both stores
+    are handed forward, each its own level. That is the general case; a scalar
+    `soc_initial` is only the one where nothing is left to ride.
     """
-    with pytest.raises(lps.LpspecError, match='row-major product') as raised:
-        lps.solve_over(
-            WINDOW,
-            horizon_sources(),
-            lps.EachWindow('snapshot', length=4, step=4, into='t'),
-            carry={'soc_initial': ('p', 3)},
-            keep=('p',),
-        )
-    assert "['t', 'generator']" in str(raised.value), 'the message names the dims that make it ambiguous'
-
-    # the same variable over one dimension is exactly what the tuple form is for
+    window = lps.EachWindow('snapshot', length=4, step=4, into='t')
     runs = lps.solve_over(
-        WINDOW,
-        horizon_sources(),
-        lps.EachWindow('snapshot', length=4, step=4, into='t'),
+        MULTI_STORE,
+        multi_store_sources(),
+        window,
         carry={'soc_initial': ('soc', 3)},
-        keep=('soc',),
+        keep=('soc', 'charge', 'discharge'),
     )
-    assert len(runs) == 3
+
+    assert runs.keys == [0, 4, 8]
+    assert set(runs.primal('soc').columns) == {'snapshot_start', 't', 'storage', 'value'}
+
+    def at(name: str, start: int, t: int, store: str) -> float:
+        rows = runs.primal(name).filter(
+            (pl.col('snapshot_start') == start) & (pl.col('t') == t) & (pl.col('storage') == store)
+        )
+        return rows['value'].item()
+
+    # `soc_open` reads the carried level, so each window's opening row is the
+    # *previous* window's t == 3 for that same store, stepped by that store's
+    # own efficiency. Both halves are the claim: the right row, and the right
+    # store — a carry that collapsed `storage` could not satisfy the second
+    efficiency = dict(zip(STORES, [0.9, 0.75], strict=True))
+    for previous, start in ((0, 4), (4, 8)):
+        for store in STORES:
+            opened = at('soc', start, 0, store)
+            expected = (
+                at('soc', previous, 3, store)
+                + at('charge', start, 0, store) * efficiency[store]
+                - at('discharge', start, 0, store)
+            )
+            assert opened == pytest.approx(expected, abs=1e-6)
+
+    # and without the carry every window opens from the original 0 instead
+    fresh = lps.solve_over(MULTI_STORE, multi_store_sources(), window, keep=('soc',))
+    assert not fresh.primal('soc').equals(runs.primal('soc')), 'the carry changed nothing'
+
+
+def test_a_myopic_pathway_carries_a_whole_vector_with_no_index():
+    """Capacity per generator, handed forward as a frame rather than a number.
+
+    `total` and `existing` are both over `(generator)`, so nothing is dropped
+    and there is no coordinate to name — the frame *is* the carry. This is the
+    shape that a row index could never express, and the reason the index is
+    read off the two declarations rather than off the frame.
+    """
+    runs = lps.solve_over(
+        MYOPIC,
+        myopic_sources(),
+        lps.EachCoordinate('period', ordered=True),
+        carry={'existing': ('total', None)},
+        keep=('total', 'build'),
+    )
+
+    assert runs.keys == [1, 2, 3]
+    built = runs.primal('build').filter(pl.col('generator') == 'wind').sort('period')['value'].to_list()
+    total = runs.primal('total').filter(pl.col('generator') == 'wind').sort('period')['value'].to_list()
+    # demand 10 -> 25 -> 40, and each period only builds the increment, because
+    # what the previous period built came back as `existing`
+    assert built == pytest.approx([10.0, 15.0, 15.0])
+    assert total == pytest.approx([10.0, 25.0, 40.0])
+
+
+def test_a_carry_that_cannot_line_up_says_so_before_anything_solves():
+    """Every one of these is answerable from the two declarations alone."""
+    window = lps.EachWindow('snapshot', length=4, step=4, into='t')
+
+    # collapsing two dimensions at once: an index names a coordinate of one
+    with pytest.raises(lps.LpspecError, match=r'would collapse .*at once') as raised:
+        lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('p', 3)}, keep=('p',))
+    assert "['t', 'generator']" in str(raised.value)
+
+    # dropping a dimension without naming a coordinate of it
+    with pytest.raises(lps.LpspecError, match=r"drops 't' and so needs an index"):
+        lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('soc', None)}, keep=('soc',))
+
+    # an index where the two sides already line up
+    with pytest.raises(lps.LpspecError, match='has nothing to index'):
+        lps.solve_over(
+            MYOPIC,
+            myopic_sources(),
+            lps.EachCoordinate('period', ordered=True),
+            carry={'existing': ('total', 0)},
+            keep=('total',),
+        )
+
+    # a parameter over more than the variable is
+    with pytest.raises(lps.LpspecError, match='cannot line up'):
+        lps.solve_over(WINDOW, horizon_sources(), window, carry={'p_max': ('soc', 3)}, keep=('soc',))
+
+    # and a name neither side declares
+    with pytest.raises(lps.LpspecError, match='does not declare'):
+        lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('nope', 3)}, keep=('soc',))
 
 
 def test_a_carry_reading_an_unkept_variable_points_at_keep():
