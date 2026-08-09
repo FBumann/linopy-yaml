@@ -9,6 +9,10 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 REPO = Path(__file__).parent.parent
 PKG = REPO / 'src' / 'lpspec'
@@ -54,6 +58,69 @@ def _all_modules() -> list[Path]:
     return [p for p in PKG.rglob('*.py') if '__pycache__' not in p.parts]
 
 
+def _runtime_nodes(tree: ast.AST) -> Iterator[ast.AST]:
+    """Every node the interpreter can reach — ``if TYPE_CHECKING:`` bodies pruned.
+
+    The lane fences below exist to stop *running* code from needing the
+    oracle's dependencies: that is what breaks a bare install and what would
+    stop ``relational/`` being lifted out. A ``TYPE_CHECKING`` body is erased
+    before any of that — it is not lazy, it is not executed at all — so
+    counting it buys no isolation and costs a public return type, which is how
+    ``to_dataarray`` came to be annotated ``Any`` while its own docstring one
+    line below says it returns an ``xarray.DataArray``.
+
+    This is not a new position: :func:`_module_level_imports` has always read
+    "top-level (non-lazy, non-TYPE_CHECKING)". These walks simply lost the
+    distinction by reaching for :func:`ast.walk`, which sees everything.
+
+    The ``else`` branch of such a guard *does* run, so it stays in.
+    """
+    stack: list[ast.AST] = [tree]
+    while stack:
+        node = stack.pop()
+        yield node
+        if isinstance(node, ast.If) and _is_type_checking(node.test):
+            stack.extend(node.orelse)
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def _is_type_checking(test: ast.expr) -> bool:
+    """``TYPE_CHECKING`` or ``typing.TYPE_CHECKING``, however it was spelled."""
+    if isinstance(test, ast.Name):
+        return test.id == 'TYPE_CHECKING'
+    return isinstance(test, ast.Attribute) and test.attr == 'TYPE_CHECKING'
+
+
+def test_the_lane_fences_see_running_code_and_only_running_code():
+    """The pruner itself, pinned — because both halves have been wrong once.
+
+    Walking everything cost `Result.to_dataarray` its return type: the fence
+    read an erased annotation as a dependency and the method was widened to
+    `Any` to satisfy it. Walking too little would be worse — a lazy
+    `import xarray` in a function body is exactly what the allowlist exists
+    to make deliberate. So the line is *does the interpreter reach it*, and
+    it is checked in both directions rather than described.
+    """
+    erased, executed, otherwise = (
+        'if TYPE_CHECKING:\n    import xarray\n',
+        'def f():\n    import xarray\n',
+        'if TYPE_CHECKING:\n    import xarray\nelse:\n    import linopy\n',
+    )
+
+    def imported(source: str) -> set[str]:
+        return {
+            alias.name
+            for node in _runtime_nodes(ast.parse(source))
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        }
+
+    assert imported(erased) == set(), 'an annotation-only import is not a dependency'
+    assert imported(executed) == {'xarray'}, 'a lazy import inside a function still runs'
+    assert imported(otherwise) == {'linopy'}, 'the else branch of a TYPE_CHECKING guard does run'
+
+
 def test_runtime_lane_never_imports_linopy_or_xarray():
     """Hard rule 3: linopy is the eager/oracle lane only — never a runtime import."""
     offenders = {}
@@ -91,7 +158,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
             continue
         tree = ast.parse(path.read_text())
         bad = set()
-        for node in ast.walk(tree):  # anywhere, at any nesting
+        for node in _runtime_nodes(tree):  # anywhere it can run, at any nesting
             if isinstance(node, ast.Import):
                 bad |= {a.name for a in node.names if a.name.split('.')[0] in FORBIDDEN_RUNTIME}
             elif isinstance(node, ast.ImportFrom) and node.module and node.module.split('.')[0] in FORBIDDEN_RUNTIME:
@@ -125,7 +192,7 @@ def test_engine_is_isolated():
             continue
         tree = ast.parse(path.read_text())
         bad = []
-        for node in ast.walk(tree):  # include lazy imports — the rule is total
+        for node in _runtime_nodes(tree):  # include lazy imports — the rule is total for anything that runs
             if isinstance(node, ast.Import):
                 bad += [
                     a.name

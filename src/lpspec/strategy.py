@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     import pandas as pd
+    import xarray as xr
 
     from lpspec.language.schema import MathSchema
 
@@ -214,7 +215,7 @@ class Runs:
         frame = self.primal(name)
         return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
 
-    def to_dataarray(self, name: str) -> Any:
+    def to_dataarray(self, name: str) -> xr.DataArray:
         """:meth:`primal` as a :class:`xarray.DataArray`, the slice key a dimension.
 
         ``(scenario, snapshot, generator)`` is what a sweep is *for* — ``.sel``
@@ -226,7 +227,7 @@ class Runs:
         dims = [column for column in frame.columns if column != 'value']
         return frame.set_index(dims).to_xarray()['value'].rename(name)
 
-    def to_dataset(self, *names: str) -> Any:
+    def to_dataset(self, *names: str) -> xr.Dataset:
         """Kept variables as one :class:`xarray.Dataset`; all of them by default.
 
         Costs what it says, and more than ``Result``'s does — each variable
