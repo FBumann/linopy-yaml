@@ -160,9 +160,12 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
     Summing the pulled-back term back over `flow` is what forces that, so this
     is deliberately not the pointwise case the tests above cover.
     """
-    import pandas as pd
-
+    # Imported here, not at module scope: every other test in this file is
+    # linopy-free and has to keep running on the bare install. Both names come
+    # from the guarded module, so this one test skips there instead of failing
+    # on a missing pandas.
     from tests.differential import differential
+    from tests.oracle import pd
 
     model = {
         'dimensions': {
