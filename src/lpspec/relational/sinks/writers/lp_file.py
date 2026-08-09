@@ -142,10 +142,9 @@ def _constraint_blocks(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
         _key(pl.lit(1, dtype=pl.Int64)),
         pl.lit('+0 x0').alias('line'),
     )
-    # Redundant for correctness and not for speed: the ordering below subsumes
-    # this, and the bytes are identical without it — but removing it measured
-    # neutral on `transport/l` and ~10% worse on `profiled/l`, because it
-    # pre-orders the largest input and polars' sort exploits ordered runs.
+    # Redundant for correctness — the ordering below subsumes it and the bytes
+    # are identical without it — and kept anyway: whether it is redundant for
+    # *speed* has been measured twice and settled neither time.
     terms = matrix.sort('row', 'col').select(
         _key(pl.col('col').cast(pl.Int64) + 2),
         _term(pl.col('coeff'), pl.col('col')).alias('line'),
