@@ -26,6 +26,7 @@ from lpspec.language.expression_parser import (
     DimensionNode,
     EdgeNode,
     FunctionCallNode,
+    KeywordNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -329,6 +330,13 @@ def _eval_ast(
         msg = f'EdgeNode({node.policy!r}) reached the evaluator: an edge policy is a shift() kwarg, not a value.'
         raise AssertionError(msg)
 
+    if isinstance(node, KeywordNode):
+        msg = (
+            f'KeywordNode({node.value!r}) reached the evaluator. A quoted keyword is '
+            f'consumed by its kwarg during resolution — reaching here means it was written '
+            f'where no kwarg expects one.'
+        )
+        raise AssertionError(msg)
     if isinstance(node, (NameNode, DimensionNode, CoordinateNode)):
         msg = (
             f'{type(node).__name__}({node.name!r}) reached the evaluator. '
@@ -515,7 +523,7 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
 
     Usage in YAML: ``shift(soc, over=snapshot, by=1)``. ``edge`` decides the
     boundary and carries all three policies, so no two keywords can disagree:
-    ``edge=wrap`` is cyclic and vacates nothing, a number is what the vacated
+    ``edge='wrap'`` is cyclic and vacates nothing, a number is what the vacated
     positions contribute, and omitting it leaves them **absent** — which
     propagates and drops the row, what linopy's own v1 convention means by
     ``.shift()``. Nothing is done to the result in that default case on
@@ -528,7 +536,7 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
             return array.roll(amount, roll_coords=False)
         if hasattr(array, 'roll'):
             return array.roll(amount)
-        raise _unsupported('shift(edge=wrap)', array)
+        raise _unsupported("shift(edge='wrap')", array)
     if isinstance(edge, str):
         # `wrap` is the only string the language has, and it is handled above;
         # resolution rejects every other one before a lane sees it.

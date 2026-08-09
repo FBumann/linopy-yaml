@@ -97,7 +97,7 @@ constraints:
   energy_balance:
     foreach: [snapshot, storage]
     expression: >-
-      soc == shift(soc, over=snapshot, by=1, edge=wrap) * (1 - standing_loss)
+      soc == shift(soc, over=snapshot, by=1, edge='wrap') * (1 - standing_loss)
       + p_store * efficiency_store
       - p_dispatch / efficiency_dispatch
 

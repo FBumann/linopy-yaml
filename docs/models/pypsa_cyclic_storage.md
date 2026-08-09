@@ -16,7 +16,7 @@ changes by one token: `shift` vacates the first snapshot and drops that row,
 -    expression: soc == soc_initial + p_store * ... - p_dispatch / ...
    energy_balance:
 -    expression: soc == shift(soc, over=snapshot, by=1) * (1 - standing_loss) + ...
-+    expression: soc == shift(soc, over=snapshot, by=1, edge=wrap) * (1 - standing_loss) + ...
++    expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') * (1 - standing_loss) + ...
 ```
 
 `soc_initial` leaves the instance with it — a cyclic horizon has no seed to
@@ -222,7 +222,7 @@ constraints:
   energy_balance:
     foreach: [snapshot, storage]
     expression: >-
-      soc == shift(soc, over=snapshot, by=1, edge=wrap) * (1 - standing_loss)
+      soc == shift(soc, over=snapshot, by=1, edge='wrap') * (1 - standing_loss)
       + p_store * efficiency_store
       - p_dispatch / efficiency_dispatch
 

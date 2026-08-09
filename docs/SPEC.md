@@ -146,7 +146,7 @@ storage_balance_initial:
 ```
 
 `shift` vacates the first snapshot and a vacated position is absent (§7), so that
-row drops without a `where` saying so. Spelling it `edge=wrap` gated on
+row drops without a `where` saying so. Spelling it `edge='wrap'` gated on
 `where: "snapshot > 0"` builds the same rows here and a *different* model on a
 horizon not starting at 0 — the gate hardcodes the origin, the operator does
 not.
@@ -256,7 +256,7 @@ what an existing `where: "snapshot > 0"` means.
 | dimension argument (`over=`, `into=`) | dimension |
 | where string | parameter, dimension |
 | `bounds.lower` / `.upper` | parameter name, or a number |
-| `shift(x, over=d, by=n, edge=0)` — the `edge` key | `wrap`, or a number; never a dimension |
+| `shift(x, over=d, by=n, edge=0)` — the `edge` key | `'wrap'` **quoted**, or a bare number; never a dimension. A bare word in a kwarg value is a *name to resolve*, and `wrap` is a literal — the same rule §6.1 uses for a `where`, so `over=wrap, edge='wrap'` reads unambiguously even where a dimension is called `wrap` |
 
 `edge` is the one keyword whose *key* is fixed rather than naming a dimension,
 so a dimension called `edge` does not change what it means; the position takes
@@ -416,7 +416,7 @@ arguments are name-checked at load time:
 | `sum(array, over=dim, group_by=coord)` | `over` → the dimension `coord` targets | `coord` is declared on `over` (§2); its values are the group labels, checked against the target dimension at bind time. The membership sum that makes topology data rather than structure; groups with no members contribute nothing |
 | `at(array, onto=dim, by=coord)` | the dimension `coord` targets → `over` | **The adjoint of `sum(group_by=)`, and deliberately the same two arguments**: `(over, by)` names one mapping table and the helper says which way it is walked. `sum(group_by=)` consumes `over` and produces the target; `at` consumes the target and produces `over`, reading one coarse value once per fine label pointing at it. Reads a *variable* as readily as a parameter, which is what a per-component decision gating its flows needs. A fine label whose coordinate is null reads nothing and its row is absent, matching `sum(group_by=)`'s null group |
 | `shift(array, over=dim, by=n)` | value at *t−n* | vacated positions are **absent**: they propagate and drop the row (§6) |
-| `shift(array, over=dim, by=n, edge=wrap)` | value at *t−n*, cyclic | coordinates fixed, values wrap; nothing is vacated |
+| `shift(array, over=dim, by=n, edge='wrap')` | value at *t−n*, cyclic | coordinates fixed, values wrap; nothing is vacated |
 | `shift(array, over=dim, by=n, edge=v)` | value at *t−n* | vacated positions contribute the number **`v`** instead, and the row survives (`0` for a sum, `1` for a product) |
 
 `array` is any node of the right dim set, so `shift` re-indexes a **parameter**
@@ -441,7 +441,7 @@ Four rules govern `edge=`, and all four are law 8 in this position:
   the vacated slot to carry, and inventing one silently turns
   `x <= shift(dt, over=t, by=1)` into `x <= 0`. The error names the three things
   it could have meant: `edge=0`, a `where` masking the coordinate out, or
-  `edge=wrap`.
+  `edge='wrap'`.
 
 Anything composable out of these belongs in `macros:`. Math that is not sayable
 at all goes to a declared `escape:` island

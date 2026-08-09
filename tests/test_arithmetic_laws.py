@@ -124,7 +124,7 @@ LAWS = [
         id='reduction-is-linear-when-every-operand-is-total',
     ),
     pytest.param(
-        'sum(shift(shift(x, over=t, by=1, edge=wrap), over=t, by=-1, edge=wrap), over=f) <= 120',
+        "sum(shift(shift(x, over=t, by=1, edge='wrap'), over=t, by=-1, edge='wrap'), over=f) <= 120",
         'sum(x, over=f) <= 120',
         id='cyclic-shift-is-invertible',
     ),
