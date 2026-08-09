@@ -31,7 +31,7 @@ each `snapshot`, so a coarse quantity is pulled onto a fine one:
 ```yaml
 within_cap:
   foreach: [snapshot, generator]
-  expression: p <= at(p_nom, over=snapshot, by=period)
+  expression: p <= at(p_nom, onto=snapshot, by=period)
 ```
 
 `at` and `group_sum` take the same two arguments because `(over, by)` names one
@@ -148,7 +148,7 @@ variables:
 constraints:
   within_cap:
     foreach: [snapshot, generator]
-    expression: p <= at(p_nom, over=snapshot, by=period)
+    expression: p <= at(p_nom, onto=snapshot, by=period)
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) == load

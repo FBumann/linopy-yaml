@@ -233,10 +233,10 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
             )
 
         if node.name == 'at':
-            over_node = node.kwargs['over']
+            over_node = node.kwargs['onto']
             by_node = node.kwargs['by']
             if not isinstance(over_node, DimensionNode):
-                raise LanguageError(f'{context}: at(over=...) must name a dimension')
+                raise LanguageError(f'{context}: at(onto=...) must name a dimension')
             if not isinstance(by_node, CoordinateNode):
                 raise LanguageError(f'{context}: at(by=...) must name a coordinate')
             _check_dim_rules(node, schema, context)

@@ -1,7 +1,7 @@
 """``at()`` — the pullback, and the models that had no formulation without it.
 
 `group_sum` walks a mapping table from the fine dim into the coarse one; this
-walks it back out. They take the same two arguments on purpose: ``(over, by)``
+walks it back out. They take the same two arguments on purpose: ``(onto, by)``
 names one table, and the helper says which direction.
 
 Two things are checked here that a single-lane test could not reach.
@@ -113,7 +113,7 @@ COMPONENT_GATE = {
         'on': {'foreach': ['component', 't'], 'binary': True},
     },
     'constraints': {
-        'gate': {'foreach': ['flow', 't'], 'expression': 'rate <= at(on, over=flow, by=component) * 10'},
+        'gate': {'foreach': ['flow', 't'], 'expression': 'rate <= at(on, onto=flow, by=component) * 10'},
         'need': {'foreach': ['t'], 'expression': 'sum(rate, over=flow) >= 12'},
     },
     'objectives': {'total': {'sense': 'minimize', 'expression': 'rate * cost + on * oncost'}},
@@ -180,8 +180,8 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'constraints': {
             # the pulled-back term is *summed*, so one `level` label lands in
             # this row once per flow of its component
-            'draw': {'foreach': [], 'expression': 'sum(at(level, over=flow, by=component) * share, over=flow) >= 9'},
-            'link': {'foreach': ['flow'], 'expression': 'take <= at(level, over=flow, by=component)'},
+            'draw': {'foreach': [], 'expression': 'sum(at(level, onto=flow, by=component) * share, over=flow) >= 9'},
+            'link': {'foreach': ['flow'], 'expression': 'take <= at(level, onto=flow, by=component)'},
         },
         'objectives': {'total': {'sense': 'minimize', 'expression': 'level * 1.0 + take * cost'}},
     }

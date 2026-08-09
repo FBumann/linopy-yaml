@@ -197,18 +197,20 @@ class Walk:
             self.saw_wraparound = self.saw_wraparound or wrap
             return self._arithmetic(node.args[0], ctx.translated(dim.name, int(amount.value), wrap=wrap))
 
-        over = node.kwargs['over']
-        assert isinstance(over, DimensionNode)
         if node.name == 'at':
+            onto = node.kwargs['onto']
+            assert isinstance(onto, DimensionNode)
             # Not a reduction: it re-indexes its operand, so like `shift` it
             # emits no operator of its own and the substitution appears at the
             # leaves. Falling through to the summation below rendered it as a
             # sum over the fine dim — the wrong equation, silently.
             by = node.kwargs['by']
             assert isinstance(by, CoordinateNode)
-            mapping = self.format.apply(self.format.upright(by.name), ctx.subscript(over.name))
+            mapping = self.format.apply(self.format.upright(by.name), ctx.subscript(onto.name))
             return self._arithmetic(node.args[0], ctx.pulled_back(by.into, mapping))
 
+        over = node.kwargs['over']
+        assert isinstance(over, DimensionNode)
         domain = self.membership(over.name)
         if node.name == 'group_sum':
             by = node.kwargs['by']

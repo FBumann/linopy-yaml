@@ -155,7 +155,9 @@ class At(Expression):
     ``over`` and its values are labels of dim ``into``; ``GroupSum`` consumes
     ``over`` and produces ``into``, and this consumes ``into`` and produces
     ``over``. The fields are named for the *table*, not for the direction, so
-    the pair reads as one relation rather than two.
+    the pair reads as one relation rather than two. The surface says which end
+    you stand on: ``group_sum(over=)`` consumes a dim, ``at(onto=)`` produces
+    one, and ``by=`` names the map in both.
 
     The join fans out — many ``over`` labels share one ``into`` label — which is
     the same fan-out ``GroupSum`` pays in reverse, so the locality class is

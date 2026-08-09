@@ -463,7 +463,7 @@ def _helper_group_sum(array: Any, mapping: Any, *, into: str) -> Any:
 def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
     """Read *array* through a declared coordinate — the adjoint of a group.
 
-    Usage in YAML: ``at(on, over=flow, by=component)``
+    Usage in YAML: ``at(on, onto=flow, by=component)``
 
     *mapping* is the same one-dimensional array ``group_sum`` takes: the
     coordinate's values over the dim carrying it (``flow`` -> component labels).
@@ -475,7 +475,7 @@ def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
     is the indexer's doing rather than a broadcast we arrange.
     """
     if not isinstance(mapping, xr.DataArray):
-        msg = f'at() coordinate must be an array (got {type(mapping).__name__}). Usage: at(expr, over=dim, by=coord)'
+        msg = f'at() coordinate must be an array (got {type(mapping).__name__}). Usage: at(expr, onto=dim, by=coord)'
         raise TypeError(msg)
     if mapping.ndim != 1:
         msg = f'at() mapping must have exactly one dimension, got {list(mapping.dims)}'
