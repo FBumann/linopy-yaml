@@ -64,15 +64,12 @@ listing them, never a quiet fallback to the default.
 Server, Instant Cloud and WLS need nothing from this package:
 
 ```python
-lps.solve('model.yaml', sources, solver_name='gurobi',
-          solver_options={'ComputeServer': 'srv:61000', 'ServerPassword': '…'})
+options = {'ComputeServer': 'srv:61000', 'ServerPassword': '…'}
+lps.solve('model.yaml', sources, solver_name='gurobi', solver_options=options)
 ```
 
-That works because the sink puts options on the *environment* rather than the
-model. `ComputeServer`, `TokenServer` and `WLSAccessID` can only be set before
-an environment starts — `setParam` on a model refuses them — so a sink that
-forwarded them one step later would lock those users out entirely. HiGHS has no
-server mode, so this is Gurobi's to offer and ours only not to obstruct.
+They are applied when Gurobi's environment is created, which is what
+`ComputeServer`, `TokenServer` and `WLSAccessID` require.
 
 Reading a result:
 
