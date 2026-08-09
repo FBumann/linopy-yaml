@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -364,15 +364,20 @@ class PolarsCompiler:
             if isinstance(e, plan.Parameter):
                 alias = f'__bound {e.name}__'
                 if alias not in joined:
-                    carrier = self.parameter_join(
-                        carrier,
-                        e.name,
-                        v.dims,
-                        alias,
-                        f"bound parameter '{e.name}' of variable '{v.name}'",
-                        # the label frame arrives in label order and `cols` is
-                        # read positionally, so this join may not shuffle it
-                        maintain_order='left',
+                    aligned = self._aligned_bound(carrier, e.name, v, alias)
+                    carrier = (
+                        aligned
+                        if aligned is not None
+                        else self.parameter_join(
+                            carrier,
+                            e.name,
+                            v.dims,
+                            alias,
+                            f"bound parameter '{e.name}' of variable '{v.name}'",
+                            # the label frame arrives in label order and `cols` is
+                            # read positionally, so this join may not shuffle it
+                            maintain_order='left',
+                        )
                     )
                     joined.add(alias)
                 return pl.col(alias).cast(pl.Float64)
@@ -389,6 +394,65 @@ class PolarsCompiler:
 
         lower, upper = walk(v.lower), walk(v.upper)
         return carrier.with_columns(lower.alias('lb'), upper.alias('ub'))
+
+    def _aligned_bound(
+        self, frame: pl.LazyFrame, param: str, v: plan.VariableDeclaration, alias: str
+    ) -> pl.LazyFrame | None:
+        """*frame* with *param* attached **by position**, or ``None`` to join.
+
+        A profile per node, per technology, per hour is dense over the whole
+        variable product — the ordinary shape in energy modelling, and the one
+        the eager lane handles for free: in an array, position *is* the
+        coordinate, so there is nothing to align. Here the same parameter is a
+        full-size frame joined against a full-size coordinate product, which on
+        `profiled/l` is 0.58 s of a 1.27 s build and the whole of why that rung
+        is the one we lose to linopy.
+
+        Position can mean the coordinate here too. The label frame is in label
+        order by construction — not *lexicographic* dim order, which is why
+        sorting the parameter by its dim columns does not match it, but
+        row-major over the product in each dimension's own index order. Sorting
+        the parameter by those ordinals reproduces it exactly, and then the
+        value column is attached rather than joined.
+
+        **Wrong bounds are a wrong model with no error**, so this is refused
+        unless every one of these holds, and each is a fact already computed:
+
+        * the parameter's dims are exactly the variable's, in the same order —
+          fewer dims broadcast, more is already refused, and a different order
+          is a different row-major walk
+        * the variable declares no ``where`` — a mask makes the label frame a
+          subset of the product and position stops lining up
+        * the parameter is dense over that product, its height equal to the
+          product of the cardinalities binding cached
+
+        Duplicate coordinates would break density without changing the height,
+        and are refused before this by ``check_one_row_per_coordinate``.
+        """
+        declaration = self.program.parameter(param)
+        if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
+            return None
+
+        expected = math.prod(self.dimension_cardinality[d] for d in v.dims)
+        table = self.parameters[param]
+        if table.select(pl.len()).collect().item() != expected:
+            return None
+
+        # Collected rather than concatenated horizontally, which would keep the
+        # whole thing lazy and measured a little faster: polars deprecates that
+        # concat's height-padding today and will require equal heights — which
+        # is exactly the precondition checked above — so the natural spelling is
+        # the one that warns until that release lands.
+        ordered = table.sort([pl.col(d).replace_strict(self._ordinals(d), return_dtype=pl.Int64) for d in v.dims])
+        return frame.with_columns(ordered.select(pl.col('value').alias(alias)).collect(engine='streaming')[alias])
+
+    def _ordinals(self, dim: str) -> dict[Any, int]:
+        """Each coordinate of *dim* to its position in that dimension's index.
+
+        The index is what every label is numbered against, so this is the same
+        order :class:`~lpspec.relational.engines.polars.labels.Labeller` walks.
+        """
+        return {value: position for position, value in enumerate(self.dimensions[dim].collect()['val'])}
 
     # ------------------------------------------------------------------
     # expressions → fragments
