@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.71](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.70...v0.0.1-alpha.71) (2026-08-09)
+
+
+### Refactoring
+
+* **language:** group_sum becomes sum(group_by=) ([#491](https://github.com/FBumann/lpspec/issues/491)) ([fb14dd2](https://github.com/FBumann/lpspec/commit/fb14dd2b3c6fda6ef9504546ce859ae12543a142))
+
 ## [0.0.1-alpha.70](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.69...v0.0.1-alpha.70) (2026-08-09)
 
 
