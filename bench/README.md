@@ -193,6 +193,7 @@ verdict off the SQL"), not to cover the language:
 | `nodal` | `(snapshot, node, tech)`, `where: installed > 0` | sparsity as it actually occurs — see below |
 | `transport` | three `group_sum` joins per row | the mapping-table path, where the eager lane must materialise a bus x generator product |
 | `sector` | dense snapshots x dense carriers x sparse portfolio | mixed density in one model — the shape a sector-coupled model actually has, and where the sparsity claim is visible |
+| `storage` | a cyclic `shift` recurrence | the self-join, and the only locality class with no eager cost analogue: xarray shifts an array, we join a term stream against itself on `snapshot.ord - 1` |
 
 **`nodal` is the case worth explaining.** It is dispatch over nodes and
 technologies, and a technology only generates at a node where it is installed:
@@ -228,8 +229,7 @@ Data is generated deterministically (a blake2b digest of the shape seeds the
 RNG — `hash()` is salted per process and would give the two arms different
 numbers), cached under `bench/.cache/`, and feasible by construction.
 
-Storage (`roll`, the bounded-halo self-join) and a MILP through the `highs` solver
-are the next rungs — see docs/benchmarks.md.
+A MILP through the `highs` solver is the next rung — see docs/benchmarks.md.
 
 ## The other question: regressions
 

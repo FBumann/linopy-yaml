@@ -1,0 +1,63 @@
+# The scaling twin of examples/storage.yaml: `store` takes its members from data
+# instead of the single battery the example carries, so the self-join scales on
+# both axes. The math is the example's — dispatch, plus a cyclic state-of-charge
+# recurrence, which is the one locality class whose relational cost has no eager
+# analogue: xarray shifts an array, we join on `snapshot.ord - 1`.
+dimensions:
+  snapshot:
+    dtype: int
+  generator:
+    dtype: str
+  store:
+    dtype: str
+
+parameters:
+  p_max:
+    dims: [generator]
+  cost:
+    dims: [generator]
+  load:
+    dims: [snapshot]
+  e_max:
+    dims: [store]
+  p_store:
+    dims: [store]
+  eta:
+    dims: [store]
+
+variables:
+  p:
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_max
+  charge:
+    foreach: [snapshot, store]
+    bounds:
+      lower: 0
+      upper: p_store
+  discharge:
+    foreach: [snapshot, store]
+    bounds:
+      lower: 0
+      upper: p_store
+  soc:
+    foreach: [snapshot, store]
+    bounds:
+      lower: 0
+      upper: e_max
+
+constraints:
+  power_balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) + sum(discharge, over=store) - sum(charge, over=store) == load
+  # cyclic storage: soc wraps around the snapshot horizon, so every row reaches
+  # the previous one and the first reaches the last
+  soc_balance:
+    foreach: [snapshot, store]
+    expression: soc == shift(soc, over=snapshot, by=1, edge=wrap) + charge * eta - discharge
+
+objectives:
+  total_cost:
+    sense: minimize
+    expression: p * cost
