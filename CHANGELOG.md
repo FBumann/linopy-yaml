@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.68](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.67...v0.0.1-alpha.68) (2026-08-09)
+
+
+### Documentation
+
+* **cli:** the typeset shell front is not a command line under construction ([#483](https://github.com/FBumann/lpspec/issues/483)) ([72b8ced](https://github.com/FBumann/lpspec/commit/72b8cedd25d83ba49dff8dc9e7465a85a30c4dd9))
+
 ## [0.0.1-alpha.67](https://github.com/FBumann/lpspec/compare/v0.0.1-alpha.66...v0.0.1-alpha.67) (2026-08-09)
 
 
