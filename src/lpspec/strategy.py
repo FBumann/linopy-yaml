@@ -30,12 +30,15 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import polars as pl
 
+from lpspec.api import check
 from lpspec.api import solve as _solve
 from lpspec.errors import DataError, LpspecError
 from lpspec.relational.frames import as_frame
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+    from lpspec.language.schema import MathSchema
 
 #: Parquet rather than pickle, and not a knob: measured over 1M rows, zstd is
 #: 8.3x smaller *and* 3x faster than pickling the frame, and still smaller and
@@ -169,6 +172,7 @@ class Runs:
 
     key_name: str
     meta: pl.DataFrame
+    kept: tuple[str, ...] = ()
     _primals: dict[str, pl.DataFrame] = field(repr=False, default_factory=dict)
 
     @property
@@ -181,23 +185,40 @@ class Runs:
         return self.meta[self.key_name].to_list()
 
     def primal(self, name: str) -> pl.DataFrame:
-        """One variable's values across every slice, the slice key prepended."""
+        """One variable's values across every slice, the slice key prepended.
+
+        A slice that reached no solution contributes no rows, so this frame can
+        be shorter than the sweep — :attr:`objective` is the record of which
+        slices those were, and it is one row per slice always.
+        """
         if name not in self._primals:
-            kept = ', '.join(repr(k) for k in sorted(self._primals)) or 'nothing'
-            raise LpspecError(
-                f'variable {name!r} was not kept — this run kept {kept}. '
-                f"Name it in keep=(...) : a fold releases each slice's model as it goes, so what "
-                f'is not extracted inside the loop cannot be read afterwards.'
-            )
+            raise LpspecError(_no_primal(name, self.kept, self.meta))
         return self._primals[name]
 
     def __len__(self) -> int:
         return self.meta.height
 
 
-# ---------------------------------------------------------------------------
-# the fold
-# ---------------------------------------------------------------------------
+def _no_primal(name: str, kept: tuple[str, ...], meta: pl.DataFrame) -> str:
+    """Why *name* has no frame — two different failures that read alike.
+
+    A variable nobody asked to keep and a variable every slice failed to solve
+    both arrive here as a missing key, and pointing the second one at ``keep``
+    sends the caller to fix what is not broken.
+    """
+    if name not in kept:
+        listed = ', '.join(repr(k) for k in sorted(kept)) or 'nothing'
+        return (
+            f'variable {name!r} was not kept — this run kept {listed}. '
+            f"Name it in keep=(...) : a fold releases each slice's model as it goes, so what "
+            f'is not extracted inside the loop cannot be read afterwards.'
+        )
+    conditions = ', '.join(sorted(set(meta['termination_condition'].to_list())))
+    return (
+        f'variable {name!r} was kept, but no slice reached a solution to keep it from — '
+        f'all {meta.height} terminated {conditions}. The fold ran; the models did not solve. '
+        f'runs.objective carries the status of each slice.'
+    )
 
 
 def solve_over(
@@ -215,13 +236,18 @@ def solve_over(
 ) -> Runs:
     """Solve *model* once per slice of *axis* and fold the answers together.
 
-    ``carry`` maps a **parameter** to ``(variable, index)`` — the value of that
-    variable at that row of slice *i* becomes the parameter's value in slice
-    *i+1*, and ``index=None`` means the variable has exactly one row. It is a
-    **copy and never arithmetic**: a myopic pathway accumulates
-    (``existing += built``), and the way to say so is a derived variable in the
-    YAML, where the oracle can see it. The index is explicit because with
+    ``carry`` maps a **parameter** to ``(variable, index)`` — that variable's
+    values in slice *i* become the parameter's in slice *i+1*. **The two
+    declarations say what is copied**: whichever dimension the variable has and
+    the parameter does not is the one the carry collapses, and ``index`` names a
+    coordinate of it. Every other dimension rides along, so a myopic pathway
+    hands a whole capacity vector forward (``('capacity', None)``, nothing
+    dropped) while a rolling horizon hands one row of a time series
+    (``('soc', 23)``, dropping ``t``). The index is explicit because with
     ``EachWindow(48, 24)`` the state to carry sits at 23, not 47.
+
+    It is a **copy and never arithmetic**: accumulation (``existing += built``)
+    is a derived variable in the YAML, where the oracle can see it.
 
     ``keep`` names the variables whose primals survive. This is a fold rather
     than a list comprehension: each slice's model is released as the loop goes,
@@ -252,24 +278,37 @@ def solve_over(
         with ProcessPoolExecutor(4, mp_context=ctx) as pool:
             runs = lps.solve_over(model, sources, axis, keep=('p',), executor=pool)
     """
+    keep = tuple(keep)
     if carry and executor is not None:
         raise LpspecError(
             'carry and executor are mutually exclusive: a carried value makes slice i+1 depend on '
             "slice i's answer, so the slices cannot run concurrently. Drop the executor, or drop the carry."
         )
+    if isinstance(axis, (EachCoordinate, EachWindow)) and carry and not axis.ordered:
+        raise LpspecError(
+            f'carry needs an ordered axis: {axis!r} has no defined "next" slice for a value to move into. '
+            f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
+        )
+    # Everything above and below this line is answerable from the declarations
+    # and the keywords, so it is answered before a single source is read — a
+    # mistyped carry should not cost a scan of every parquet file first. The
+    # schema then rides down to the slices already parsed, rather than each of
+    # them (and each worker) reading the same YAML again.
+    schema = check(model)
+    plan: dict[str, tuple[str, str | None, int | None]] = _carry_plan(schema, carry, keep) if carry else {}
+
     if isinstance(axis, (EachCoordinate, EachWindow)):
-        if carry and not axis.ordered:
-            raise LpspecError(
-                f'carry needs an ordered axis: {axis!r} has no defined "next" slice for a value to move into. '
-                f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
-            )
-        cuts, key_name = axis._slices(sources), axis.dim
+        cuts = axis._slices(sources)
+        # a window is keyed by where it *starts*, and its rows are indexed by
+        # `into` — so the key column cannot be `dim`, which the slice dropped.
+        # Naming it `dim` would put window starts in a column called `snapshot`
+        # next to no snapshots, which joins against real data and is wrong
+        key_name = f'{axis.dim}_start' if isinstance(axis, EachWindow) else axis.dim
     else:
         cuts, key_name = list(axis), 'slice'
     if not cuts:
         raise DataError('the axis produced no slices')
 
-    keep = tuple(keep)
     # the caller's own coords are merged under the axis's, which owns the dim it
     # re-indexed; popped once rather than per slice, so the loop stays pure
     caller_coords = dict(build_kwargs.pop('coords', None) or {})
@@ -284,7 +323,7 @@ def solve_over(
 
     def arguments(sliced: dict[str, Any], coords: dict[str, Any], crosses: bool) -> tuple[Any, ...]:
         return (
-            model,
+            schema,
             _encode(sliced, memo, workers_share_fs=shared) if crosses else dict(sliced),
             {**caller_coords, **coords} or None,
             keep,
@@ -302,8 +341,8 @@ def solve_over(
         for key, sliced, coords in cuts:
             meta, frames = _run_slice(*arguments({**sliced, **state}, coords, False))
             absorb(key, meta, frames)
-            if carry:
-                state = _carried(carry, frames, key)
+            if plan:
+                state = _carried(plan, frames, key)
     else:
         # A thread pool runs in this process, so encoding would be a parquet
         # round trip for a boundary that is not there — 31% of a thread-pool
@@ -319,6 +358,7 @@ def solve_over(
     return Runs(
         key_name=key_name,
         meta=pl.DataFrame(rows),
+        kept=keep,
         _primals={name: pl.concat(frames) for name, frames in primals.items() if frames},
     )
 
@@ -348,35 +388,91 @@ def _run_slice(
         return meta, _encode(frames, {}) if encode_out else frames
 
 
-def _carried(
+def _carry_plan(
+    schema: MathSchema,
     carry: Mapping[str, tuple[str, int | None]],
-    frames: Mapping[str, pl.DataFrame],
-    key: Any,
-) -> dict[str, Any]:
-    """The next slice's carried parameters, read out of this slice's primals."""
-    state: dict[str, Any] = {}
+    keep: tuple[str, ...],
+) -> dict[str, tuple[str, str | None, int | None]]:
+    """Resolve each carry against the schema: what is dropped, and what rides.
+
+    The declaration says which dimensions the two sides have, so it says what a
+    carry *is*: the variable's dims minus the parameter's is the one dimension
+    the carry collapses, and ``index`` names a coordinate of it. Everything else
+    passes through, which is what lets a myopic pathway hand a whole capacity
+    vector forward rather than one number at a time.
+
+    **Nothing here reads data**, which is why it runs before the axis cuts one.
+    Every question is answered by the YAML and the keywords, so a carry that
+    cannot work costs a parse rather than a scan of every source.
+    """
+    plan: dict[str, tuple[str, str | None, int | None]] = {}
     for parameter, (variable, index) in carry.items():
-        if variable not in frames:
+        if parameter not in schema.parameters:
+            raise LpspecError(f'carry writes parameter {parameter!r}, which the model does not declare')
+        if variable not in schema.variables:
+            raise LpspecError(f'carry reads variable {variable!r}, which the model does not declare')
+        if variable not in keep:
             raise LpspecError(
                 f'carry reads variable {variable!r}, which this run did not keep. '
                 f'Add it to keep=(...) — the carry is read from the same frames.'
             )
-        values = frames[variable]['value']
-        if index is None:
-            if values.len() != 1:
-                raise LpspecError(
-                    f'carry {parameter!r} <- {variable!r} used index=None, which means "the only row", '
-                    f'but {variable!r} has {values.len()} rows in slice {key!r}. Name the index.'
-                )
-            picked = values[0]
-        else:
-            if not -values.len() <= index < values.len():
-                raise LpspecError(
-                    f'carry {parameter!r} <- ({variable!r}, {index}) is out of range: '
-                    f'{variable!r} has {values.len()} rows in slice {key!r}'
-                )
-            picked = values[index]
-        state[parameter] = pl.DataFrame({'value': [float(picked)]})
+        over = list(schema.parameters[parameter].dims)
+        source = list(schema.variables[variable].foreach)
+        if missing := [d for d in over if d not in source]:
+            raise LpspecError(
+                f'carry {parameter!r} <- {variable!r} cannot line up: {parameter!r} is over {over}, and '
+                f'{variable!r} is over {source}, which has no {missing}. A carry copies a variable into a '
+                f'parameter, so the parameter cannot be over more than the variable is.'
+            )
+        dropped = [d for d in source if d not in over]
+        if len(dropped) > 1:
+            raise LpspecError(
+                f'carry {parameter!r} <- {variable!r} would collapse {dropped} at once: {variable!r} is over '
+                f'{source} and {parameter!r} over {over}. An index names a coordinate of one dimension, so '
+                f'reduce the others in the YAML — a derived variable is where the oracle can see the math.'
+            )
+        if dropped and index is None:
+            raise LpspecError(
+                f'carry {parameter!r} <- {variable!r} drops {dropped[0]!r} and so needs an index: '
+                f'({variable!r}, <{dropped[0]}>). With overlap the coordinate to carry is the last one you '
+                f'*keep* — EachWindow(length=48, step=24) carries at 23, not 47 — which is why there is no default.'
+            )
+        if not dropped and index is not None:
+            raise LpspecError(
+                f'carry {parameter!r} <- ({variable!r}, {index}) has nothing to index: both are over {over}, '
+                f'so the whole frame is what moves forward. Pass ({variable!r}, None).'
+            )
+        plan[parameter] = (variable, dropped[0] if dropped else None, index)
+    return plan
+
+
+def _carried(
+    plan: Mapping[str, tuple[str, str | None, int | None]],
+    frames: Mapping[str, pl.DataFrame],
+    key: Any,
+) -> dict[str, Any]:
+    """The next slice's carried parameters, read out of this slice's primals.
+
+    ``index`` is a **coordinate** of the dropped dimension, never a row number.
+    That is the same integer for the case this started with — ``into`` is dense
+    ``0..n-1``, so window position and coordinate coincide — and it is the only
+    one of the two that still means something once a second dimension is there.
+    """
+    state: dict[str, Any] = {}
+    for parameter, (variable, dropped, index) in plan.items():
+        frame = frames[variable]
+        if dropped is None:
+            state[parameter] = frame
+            continue
+        picked = frame.filter(pl.col(dropped) == index).drop(dropped)
+        if picked.is_empty():
+            coordinates = frame[dropped].unique().sort().to_list()
+            raise LpspecError(
+                f'carry {parameter!r} <- ({variable!r}, {index}) is out of range: slice {key!r} has no '
+                f'{dropped} == {index}. Its coordinates run {coordinates[0]!r}..{coordinates[-1]!r}, and a '
+                f'short tail window has fewer than a full one.'
+            )
+        state[parameter] = picked
     return state
 
 
