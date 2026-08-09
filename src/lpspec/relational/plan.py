@@ -175,10 +175,10 @@ class Translate(Expression):
     """Re-index along one dimension: the result at coord *t* is ``operand`` at
     coord *t - by*.
 
-    One node for both surface spellings, which differ only in ``wrap``:
-    ``roll`` is ``wrap=True`` (periodic, matching ``xarray.roll``), ``shift``
-    is ``wrap=False``. The node is named for the coordinate map rather than for
-    either spelling, so it does not read as one of the two.
+    One node for the whole of ``shift``, whose ``edge=`` decides ``wrap``:
+    ``edge='wrap'`` is ``wrap=True`` (periodic, matching ``xarray.roll``), and an
+    absent or numeric ``edge=`` is ``wrap=False``. The node is named for the
+    coordinate map rather than for the surface, which is one verb.
 
     ``fill`` decides what an acyclic shift leaves behind. ``None`` — the
     default and what bare ``shift`` lowers to — means the vacated positions are

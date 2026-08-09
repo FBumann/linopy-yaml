@@ -91,8 +91,9 @@ constraints:
 
   # Rung 3 needed two equations here: one seeding the first snapshot from
   # soc_initial, one carrying over every other. Closing the cycle *removes* the
-  # first, and the whole change is `shift` -> `roll`: where `shift` vacates the
-  # first snapshot and drops that row, `roll` wraps it onto the last. The
+  # first, and the whole change is asking for the wrap: where a bare `shift`
+  # vacates the first snapshot and drops that row, `edge='wrap'` puts it onto the
+  # last. The
   # operator is the cycle, so nothing else moves.
   energy_balance:
     foreach: [snapshot, storage]

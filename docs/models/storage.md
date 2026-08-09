@@ -137,10 +137,10 @@ objectives:
 ## What it exercises
 
 `shift(soc, over=snapshot, by=1, edge='wrap')` is the whole of it. One term reaches one position
-back along `snapshot`, and `roll` wraps — the first snapshot reads the last,
-which is what makes the storage cyclic without a boundary condition written
-out by hand. `shift` is the same node with `wrap: false`, where positions
-translated past the edge simply contribute nothing.
+back along `snapshot`, and `edge='wrap'` wraps — the first snapshot reads the
+last, which is what makes the storage cyclic without a boundary condition
+written out by hand. Omitting `edge=` is the same node without the wrap, where
+positions translated past the edge simply contribute nothing.
 
 It is also the one plan shape whose cost is not obviously linear in the model
 size, which is why it is named in *Not measured yet* in
