@@ -105,6 +105,18 @@ class TermFragment:
     a row on the same solver column however they were reshaped, and the
     terminal aggregate that would collapse them has nothing to do.
     """
+    mapping: tuple[tuple[str, ...], ...] = ()
+    """Every operator that moved this fragment's labels, in order.
+
+    A ``GroupSum`` records ``('group', over, coordinate, into)`` and a
+    ``Translate`` ``('shift', dimension, by, wrap)``. Read only to compare two
+    fragments of one variable: identical mappings send a label to the same row,
+    and mappings that differ *only* in a coordinate send it to the same row
+    exactly where those coordinates agree — a question about a dimension table
+    rather than about the model. See :meth:`PolarsCompiler.may_share_a_column`.
+
+    Not a description of the frame, and nothing reads it to build one.
+    """
     presence_dims: tuple[str, ...] | None = None
     """The columns :attr:`presence` is keyed by; ``None`` means :attr:`dims`.
 
@@ -517,7 +529,13 @@ class PolarsCompiler:
         # Constructed rather than `replace`d for exactly that: `presence` has to
         # be *dropped* here, and carrying it would be the silent default.
         return TermFragment(
-            keep, frame, p.is_term, p.survives_dropping(dropped), p.label_dims - dropped, variable=p.variable
+            keep,
+            frame,
+            p.is_term,
+            p.survives_dropping(dropped),
+            p.label_dims - dropped,
+            variable=p.variable,
+            mapping=p.mapping,
         )
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
@@ -545,7 +563,13 @@ class PolarsCompiler:
         # a group is a sum, so §13 applies here as well: absence does not escape
         # it, which is why this constructs rather than `replace`s — see _sum_fragment
         return TermFragment(
-            (*keep, g.into), frame, p.is_term, keyed, _relabel(p.label_dims, g.over, g.into), variable=p.variable
+            (*keep, g.into),
+            frame,
+            p.is_term,
+            keyed,
+            _relabel(p.label_dims, g.over, g.into),
+            variable=p.variable,
+            mapping=(*p.mapping, ('group', g.over, g.coordinate, g.into)),
         )
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
@@ -602,7 +626,13 @@ class PolarsCompiler:
             # quietly gone — a different constraint, which is the shape #239
             # removed from masks and #289 removes from shift.
             presence, presence_dims = self._edge(s, card, vacated=False), (s.dimension,)
-        return replace(p, frame=frame, presence=presence, presence_dims=presence_dims)
+        return replace(
+            p,
+            frame=frame,
+            presence=presence,
+            presence_dims=presence_dims,
+            mapping=(*p.mapping, ('shift', s.dimension, str(s.by), str(s.wrap))),
+        )
 
     def _filled_edge(self, s: plan.Translate, card: int, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated.
@@ -661,6 +691,52 @@ class PolarsCompiler:
     # ------------------------------------------------------------------
     # assembly helpers used by the executor
     # ------------------------------------------------------------------
+
+    def may_share_a_column(self, a: TermFragment, b: TermFragment) -> bool:
+        """Whether two fragments of one variable can put a row on one column.
+
+        **Distinct variables never do.** Labels are dense and assigned one
+        declaration at a time, so two fragments naming different variables draw
+        from disjoint ranges however either was reshaped (#408). What is left is
+        whether two fragments of *one* variable send some label to the same
+        **row**.
+
+        A label's row is decided by what moved it, so equal
+        :attr:`~TermFragment.mapping` means the same row and a certain
+        collision. Mappings that differ **only in a coordinate** — the network
+        shape, ``group_sum(f, by=to) - group_sum(f, by=from)`` — send it to the
+        same row exactly where those coordinates agree, which is a question
+        about a *dimension table*: is there a line whose ends are one bus? The
+        `line` table is forty rows where the matrix is 12.6M.
+
+        Anything else is answered **yes**. A shift on one side and not the
+        other, a reduction that left them over different dims, a product that
+        broadcast one wider — each changes where a label lands in a way this
+        does not model, and the cost of being wrong is a silently wrong model
+        against the cost of a sort.
+        """
+        if a.variable is None or b.variable is None:
+            return True
+        if a.variable != b.variable:
+            return False
+        if a.dims != b.dims or a.label_dims != b.label_dims:
+            return True
+        if len(a.mapping) != len(b.mapping):
+            return True
+        differing = []
+        for one, other in zip(a.mapping, b.mapping, strict=True):
+            if one == other:
+                continue
+            kind, *rest = one
+            if kind != 'group' or other[0] != 'group' or (rest[0], rest[2]) != (other[1], other[3]):
+                return True
+            differing.append((rest[0], rest[1], other[2]))
+        return all(self._coordinates_meet(over, one, other) for over, one, other in differing)
+
+    def _coordinates_meet(self, dimension: str, one: str, other: str) -> bool:
+        """Whether any label of *dimension* carries the same value in both."""
+        table = self.dimensions[dimension]
+        return bool(table.select((pl.col(one) == pl.col(other)).any()).collect().item())
 
     @staticmethod
     def constant_scalar(p: TermFragment) -> pl.LazyFrame:

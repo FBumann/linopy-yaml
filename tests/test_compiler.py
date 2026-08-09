@@ -32,6 +32,8 @@ planner stays free to change underneath them.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import polars as pl
 import pytest
 
@@ -352,6 +354,32 @@ def test_a_variable_and_its_shape_operators_stay_keyed():
         -plan.Variable('p'),
     ):
         assert compiler().expression(node, 'test').terms[0].keyed, node
+
+
+def test_two_fragments_of_one_variable_are_compared_by_what_moved_their_labels():
+    """A shared variable is necessary for a shared column, and not sufficient.
+
+    Two `group_sum`s of one variable through *different* coordinates of one dim
+    reach the same row only where those coordinates agree, which is a question
+    about the dimension table. Everything else answers yes: the cost of being
+    wrong is a model whose sinks disagree, against the cost of a sort.
+    """
+    q = compiler()
+    by_bus = plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus')
+    one = q.expression(by_bus, 'test').terms[0]
+    same = q.expression(by_bus, 'test').terms[0]
+    assert one.mapping == (('group', 'generator', 'bus', 'bus'),)
+    assert q.may_share_a_column(one, same), 'one mapping, so one row — certain'
+
+    plain = q.expression(plan.Variable('p'), 'test').terms[0]
+    assert q.may_share_a_column(one, plain), 'different dims are not modelled'
+
+    shifted = q.expression(plan.Translate(by_bus, 'snapshot', by=1), 'test').terms[0]
+    assert shifted.mapping[-1][0] == 'shift'
+    assert q.may_share_a_column(one, shifted), 'a shift on one side is not modelled'
+
+    other = q.expression(plan.Variable('p'), 'test').terms[0]
+    assert not q.may_share_a_column(one, replace(other, variable='q')), 'distinct variables never share'
 
 
 def test_a_term_names_its_variable_through_every_operator():

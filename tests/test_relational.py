@@ -620,6 +620,62 @@ def test_the_matrix_aggregate_runs_on_what_repeats_and_not_on_what_might():
         assert matrix['coeff'].to_list() == [4.0, 4.0]
 
 
+def _network(self_loop: bool) -> tuple[dict, dict]:
+    """A balance of flows in minus flows out, with or without a line to itself."""
+    model = {
+        'dimensions': {
+            'snapshot': {'dtype': 'int', 'values': [0, 1]},
+            'bus': {'values': ['b0', 'b1']},
+            'line': {'coords': {'from': 'bus', 'to': 'bus'}},
+        },
+        'parameters': {'cap': {'dims': ['line']}, 'load': {'dims': ['snapshot', 'bus']}},
+        'variables': {'f': {'foreach': ['snapshot', 'line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {
+            'balance': {
+                'foreach': ['snapshot', 'bus'],
+                'expression': 'group_sum(f, over=line, by=to) - group_sum(f, over=line, by=from) == load',
+            }
+        },
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(sum(f, over=line), over=snapshot)'}},
+    }
+    ends = ('b0', 'b1') if not self_loop else ('b0', 'b0')
+    sources = {
+        'line': pl.DataFrame({'line': ['l0', 'l1'], 'from': ['b0', ends[0]], 'to': ['b1', ends[1]]}),
+        'cap': pl.DataFrame({'line': ['l0', 'l1'], 'value': [10.0, 10.0]}),
+        'load': pl.DataFrame(
+            {'snapshot': [0, 0, 1, 1], 'bus': ['b0', 'b1', 'b0', 'b1'], 'value': [0.0, 0.0, 0.0, 0.0]}
+        ),
+    }
+    return model, sources
+
+
+def test_two_group_sums_of_one_variable_collide_only_where_the_coordinates_meet():
+    """`by=to` and `by=from` reach one cell exactly on a line to itself.
+
+    Both fragments carry `f`, so counting variables says the aggregate is
+    reachable and every nonzero in the model gets sorted to find out. Which
+    labels they share is decided by the *line* table — two rows here, forty at
+    the `l` rung, against 12.6M nonzeros — so it is asked there.
+
+    The self-loop is the case that must not be optimised away: `l1` leaves and
+    arrives at `b0`, so `+f - f` lands twice on one cell and has to collapse.
+    A matrix holding the same `(row, col)` twice is not a slower model, it is
+    one the sinks disagree about — an LP reader sums the pair and a solver
+    handed duplicate entries is entitled to do either.
+    """
+    for self_loop, expected in ((False, False), (True, True)):
+        model, sources = _network(self_loop)
+        with lps.build(model, sources) as ex:
+            program = lower_program(MathSchema(**model))
+            terms = ex._q.expression(program.constraints[0].lhs, 'test').terms
+            assert len(terms) == 2 and {t.variable for t in terms} == {'f'}
+            assert _needs_aggregate(terms, ex._q.may_share_a_column) is expected, f'self_loop={self_loop}'
+
+            matrix = ex._tables().matrix
+            cells = matrix.select('row', 'col')
+            assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
+
+
 def test_stacking_distinct_variables_asks_for_no_aggregate():
     """The static answer itself, which no end-to-end assertion can reach.
 
@@ -648,10 +704,10 @@ def test_stacking_distinct_variables_asks_for_no_aggregate():
         )
         with PolarsExecutor() as ex:
             ex.build(program, sources)
-            return ex._q.expression(program.constraints[0].lhs, 'test').terms
+            return ex._q.expression(program.constraints[0].lhs, 'test').terms, ex._q.may_share_a_column
 
-    assert not _needs_aggregate(fragments('x + y'))
-    assert _needs_aggregate(fragments('x + 3 * x'))
+    assert not _needs_aggregate(*fragments('x + y'))
+    assert _needs_aggregate(*fragments('x + 3 * x'))
 
 
 def test_the_objective_skips_the_aggregate_only_when_a_column_cannot_repeat():
