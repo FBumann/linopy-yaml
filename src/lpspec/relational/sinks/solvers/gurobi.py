@@ -79,9 +79,20 @@ def build_gurobi(
 
     :func:`~lpspec.relational.sinks.solvers.highs.build_highs`'s seam, drawn
     for its reason: the search is the same work whoever filled the model.
-    ``batch_rows`` is a *nonzero* budget that splits the matrix across calls;
-    it defaults to one call — see
-    :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks` for why.
+    ``batch_rows`` is a *nonzero* budget that splits the matrix across calls,
+    and **defaults to one call, which is the opposite of what the HiGHS sink
+    does with the same knob** — deliberately, because the two hand-offs are not
+    the same kind of work. There a chunk is a numpy slice, so more of them cost
+    almost nothing and the budget buys residency for a tenth of a second.
+    ``addMConstrs`` is a call into the solver, and its cost is per call:
+    measured on `transport/l`, splitting at 1M nonzeros takes the hand-off from
+    6.6 s to 12.2 s to save 0.55 GB, and splitting at 250k takes it to 29.7 s
+    while saving *less*. A caller who has hit a memory ceiling can still ask —
+    that is what the parameter is for — but nobody should pay 5.6 s by default
+    for half a gigabyte on a hand-off that precedes the search.
+
+    See :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks` for what
+    ``None`` means to the reader on the other side.
 
     **The caller owns the model, so the environment follows it.** gurobipy has
     no ``Model.getEnv()``, so a caller handed only the model could never
