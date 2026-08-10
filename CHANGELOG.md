@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.84](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.83...v0.0.1-alpha.84) (2026-08-10)
+
+
+### Features
+
+* **language:** a comparison's constant side may not be sparse ([#554](https://github.com/fluxopt/lpspec/issues/554)) ([20cb72e](https://github.com/fluxopt/lpspec/commit/20cb72e4d841401b084766f9d666fa596a1ff8b8)), closes [#537](https://github.com/fluxopt/lpspec/issues/537) [#549](https://github.com/fluxopt/lpspec/issues/549)
+
 ## [0.0.1-alpha.83](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.82...v0.0.1-alpha.83) (2026-08-10)
 
 
