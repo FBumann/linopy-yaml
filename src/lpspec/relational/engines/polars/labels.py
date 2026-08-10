@@ -28,13 +28,12 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from lpspec.errors import LanguageError
-from lpspec.relational import plan
-from lpspec.relational.engines.polars.compiler import UNIT, ordinal, restrict_by_presence
+from lpspec.relational.engines.polars.compiler import UNIT, ordinal, predicate_dims, restrict_by_presence
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
+    from lpspec.relational import plan
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
 
@@ -75,7 +74,7 @@ def frame(
     at ``dispatch/l``, against ~0.01 s for the verify.
     """
     if where is not None and not restrictions:
-        free = _free_prefix(dims, _predicate_dims(where, _name_dims(compiler)))
+        free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))
         if free:
             factored = _factored(compiler, dims, free, where, label, start)
             if factored is not None:
@@ -155,46 +154,6 @@ def _factored(
     if labelled.height and not labelled.get_column(label).is_sorted():
         labelled = labelled.sort(label)
     return labelled.with_columns(pl.col(label).set_sorted())
-
-
-def _name_dims(compiler: PolarsCompiler) -> dict[str, tuple[str, ...]]:
-    """The dims each name in a where is read through — parameters by their
-    ``dims`` and variables by their ``foreach``. One flat mapping, because the
-    language has one flat namespace and the two cannot collide."""
-    program = compiler.program
-    named: dict[str, tuple[str, ...]] = {p.name: p.dims for p in program.parameters}
-    named.update({v.name: v.dims for v in program.variables})
-    return named
-
-
-def _predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
-    """Which dims *where* reads.
-
-    A parameter is read through its own dims, a variable through its foreach,
-    a dimension comparison through the dim it names, and a constant reads
-    nothing. Anything unrecognised raises: there is no such case today, and a
-    new predicate that forgot to answer here would silently mislabel a model.
-    """
-    if isinstance(where, plan.BooleanConstant):
-        return frozenset()
-    if isinstance(where, plan.DimensionComparison):
-        return frozenset({where.dimension})
-    if isinstance(where, (plan.ParameterComparison, plan.ParameterDefined)):
-        dims = frozenset(name_dims.get(where.parameter, ()))
-        value = getattr(where, 'value', None)
-        if isinstance(value, str) and value in name_dims:
-            dims |= frozenset(name_dims[value])
-        return dims
-    if isinstance(where, plan.VariableDefined):
-        return frozenset(name_dims.get(where.variable, ()))
-    if isinstance(where, (plan.And, plan.Or)):
-        return _predicate_dims(where.left, name_dims) | _predicate_dims(where.right, name_dims)
-    if isinstance(where, plan.Not):
-        return _predicate_dims(where.operand, name_dims)
-    raise LanguageError(
-        f'{type(where).__name__} is a predicate the label planner does not know how to read; '
-        'add it to _predicate_dims before using it in a where'
-    )
 
 
 def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:

@@ -147,14 +147,50 @@ class PolarsCompiler:
     # frames — the masked coordinate product a declaration is instantiated over
     # ------------------------------------------------------------------
 
+    @property
+    def name_dims(self) -> dict[str, tuple[str, ...]]:
+        """The dims each name in a where is read through — parameters by their
+        ``dims`` and variables by their ``foreach``. One flat mapping, because
+        the language has one flat namespace and the two cannot collide."""
+        named: dict[str, tuple[str, ...]] = {p.name: p.dims for p in self.program.parameters}
+        named.update({v.name: v.dims for v in self.program.variables})
+        return named
+
     def frame(self, dims: tuple[str, ...], where: plan.Predicate | None) -> pl.LazyFrame:
         """The masked coordinate product over *dims*: labels, plus the
-        ordinals a caller sorts by so labels follow declaration order."""
+        ordinals a caller sorts by so labels follow declaration order.
+
+        **A mask that has to join restricts by semi-join, not by value join.**
+        The predicate is a function of only the dims it reads, so it is
+        evaluated once over *their* product and the full product is
+        semi-joined against the truth set. Two things fall out: the mask's
+        parameter columns never touch the full product, and a semi-join
+        leaves the left side's row order alone where the value join + filter
+        it replaces did not — which is what keeps labelling's
+        verify-then-sort a verify instead of a sort.
+
+        A predicate that joins nothing — dimension comparisons and constants,
+        detected by ``_predicate`` handing the carrier back unchanged — stays
+        a plain filter: it is pointwise over columns the product already
+        carries, and a filter keeps order too. The direct path also keeps a
+        predicate reading no frame dim at all (scalar parameters have no key
+        to join on) and, defensively, one reading dims outside the frame,
+        whose errors name the full frame rather than the touched subset.
+        """
         out = self._coordinate_product(dims)
         if where is None:
             return out
-        out, condition = self._predicate(out, where, dims)
-        return out.filter(_falsy_if_null(condition))
+        carrier, condition = self._predicate(out, where, dims)
+        if carrier is out:
+            return out.filter(_falsy_if_null(condition))
+        touched = predicate_dims(where, self.name_dims)
+        on = tuple(d for d in dims if d in touched)
+        if not on or not touched <= set(dims):
+            return carrier.filter(_falsy_if_null(condition))
+        keys = self._coordinate_product(on)
+        keyed, keyed_condition = self._predicate(keys, where, on)
+        surviving = keyed.filter(_falsy_if_null(keyed_condition)).select(*on)
+        return out.join(surviving, on=list(on), how='semi')
 
     def _coordinate_product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dim tables: labels and ordinals, nothing else.
@@ -664,6 +700,38 @@ class PolarsCompiler:
 def ordinal(dim: str) -> str:
     """The frame column carrying *dim*'s position in its declared order."""
     return f'__ord {dim}__'
+
+
+def predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
+    """Which dims *where* reads.
+
+    A parameter is read through its own dims, a variable through its foreach,
+    a dimension comparison through the dim it names, and a constant reads
+    nothing. Anything unrecognised raises: there is no such case today, and a
+    new predicate that forgot to answer here would silently mis-restrict or
+    mislabel a model — both :meth:`PolarsCompiler.frame`'s semi-join and the
+    label planner's factored prefix read this answer.
+    """
+    if isinstance(where, plan.BooleanConstant):
+        return frozenset()
+    if isinstance(where, plan.DimensionComparison):
+        return frozenset({where.dimension})
+    if isinstance(where, (plan.ParameterComparison, plan.ParameterDefined)):
+        dims = frozenset(name_dims.get(where.parameter, ()))
+        value = getattr(where, 'value', None)
+        if isinstance(value, str) and value in name_dims:
+            dims |= frozenset(name_dims[value])
+        return dims
+    if isinstance(where, plan.VariableDefined):
+        return frozenset(name_dims.get(where.variable, ()))
+    if isinstance(where, (plan.And, plan.Or)):
+        return predicate_dims(where.left, name_dims) | predicate_dims(where.right, name_dims)
+    if isinstance(where, plan.Not):
+        return predicate_dims(where.operand, name_dims)
+    raise LanguageError(
+        f'{type(where).__name__} is a predicate the mask planner does not know how to read; '
+        'add it to predicate_dims before using it in a where'
+    )
 
 
 def _falsy_if_null(condition: pl.Expr) -> pl.Expr:
