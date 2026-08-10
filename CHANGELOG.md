@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.80](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.79...v0.0.1-alpha.80) (2026-08-10)
+
+
+### Bug Fixes
+
+* **api:** one exception tree, whichever door built the model ([#538](https://github.com/fluxopt/lpspec/issues/538)) ([52cdb8b](https://github.com/fluxopt/lpspec/commit/52cdb8b84d46167ac68e530c9ec71fe8ebf45184)), closes [#527](https://github.com/fluxopt/lpspec/issues/527)
+* **linopy:** extend() passes the borrowed names to its own expansion ([#542](https://github.com/fluxopt/lpspec/issues/542)) ([282a2d3](https://github.com/fluxopt/lpspec/commit/282a2d34ce5dd7e084eeafb499a83df20e362e96))
+
 ## [0.0.1-alpha.79](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.78...v0.0.1-alpha.79) (2026-08-10)
 
 
