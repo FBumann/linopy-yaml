@@ -46,8 +46,10 @@ except ModuleNotFoundError as exc:  # linopy / xarray absent
     raise ModuleNotFoundError(msg) from exc
 
 
+from pydantic import ValidationError
+
 from lpspec._notes import note
-from lpspec.errors import LanguageError
+from lpspec.errors import LanguageError, schema_error
 from lpspec.language._yaml import read_yaml
 from lpspec.language.model import Model
 from lpspec.language.piecewise import expand_piecewise
@@ -155,13 +157,13 @@ def extend(
     """
     path = Path(path)
     with note(f"while extending with YAML '{path}'"):
-        original = _read(path)
+        # linopy dims are Hashable; the language's are names. Passed as
+        # validation context so the extension is checked against the namespace
+        # it will run in — it references variables this model already has, so
+        # it is deliberately not valid alone.
+        known = {n: [str(d) for d in model.variables[n].dims] for n in model.variables}
+        original = _read(path, context={'known_variables': known})
         schema = expand_piecewise(original)
-        validate_expressions(
-            schema,
-            # linopy dims are Hashable; the language's are names
-            known_variables={n: [str(d) for d in model.variables[n].dims] for n in model.variables},
-        )
 
         known = _infer_coords(model)
         if coords is not None:
@@ -195,8 +197,17 @@ def extend(
         build_model(model, schema, dataset, master_coords, dim_coords)
 
 
-def _read(path: Path) -> Model:
-    return Model.model_validate(read_yaml(path))
+def _read(path: Path, context: dict[str, Any] | None = None) -> Model:
+    """Read and validate, giving this package's exception tree.
+
+    Pydantic wraps whatever a validator raises, so without this a caller of the
+    shim would get a ``ValidationError`` where the native lane gives a
+    ``LanguageError`` — the same file, the same mistake, two types.
+    """
+    try:
+        return Model.model_validate(read_yaml(path), context=context)
+    except ValidationError as exc:
+        raise schema_error(exc) from None
 
 
 def _infer_coords(model: linopy.Model) -> dict[str, pd.Index]:

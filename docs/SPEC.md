@@ -194,6 +194,8 @@ Pure AST substitution: they are expanded away before anything consumes the
 model, so they cost nothing at build time. A named expression is a macro with no
 formals.
 
+<!-- a section on its own; `p` is declared elsewhere -->
+<!-- doctest: skip -->
 ```yaml
 expressions:
   total_generation: sum(p, over=generator)
@@ -215,6 +217,8 @@ name-checked at load time even if never called.
 
 N expressions jointly pinned to a breakpoint-indexed piecewise-linear curve.
 
+<!-- a section on its own; the linked expressions live elsewhere -->
+<!-- doctest: skip -->
 ```yaml
 piecewise:
   chp:

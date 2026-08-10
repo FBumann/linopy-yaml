@@ -51,6 +51,7 @@ import yaml
 
 import lpspec as lps
 from lpspec.language.model import Model
+from lpspec.language.validation import load_model
 from lpspec.relational.engines.polars.executor import PolarsExecutor, Result
 
 try:
@@ -283,7 +284,7 @@ def test_yaml_block_validates(block: Block) -> None:
         return
 
     try:
-        Model.model_validate(doc)
+        load_model(doc)
     except Exception as exc:
         pytest.fail(
             f'{block.where} does not validate:\n{exc}\n\n'

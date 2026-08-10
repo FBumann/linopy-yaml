@@ -15,7 +15,7 @@ import math
 from importlib import metadata
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_serializer, model_validator
 
 from lpspec.errors import did_you_mean
 from lpspec.language.helpers import BUILTIN_NAMES
@@ -563,4 +563,34 @@ class Model(_StrictBlock):
         if errors:
             raise ValueError('\n'.join(errors))
 
+        return self
+
+    @model_validator(mode='after')
+    def _validate_expressions(self, info: ValidationInfo) -> Model:
+        """Every expression and where string, checked here rather than beside.
+
+        A ``Model`` built the normal way is valid — which is what makes a
+        constructor safe to offer. Before this, ``Model(**data)`` accepted a
+        constraint naming an undeclared parameter and only ``load_model``
+        caught it, so the type could exist half-checked while looking like the
+        front door.
+
+        The checkers are a layer that reads this one, so they are imported here
+        and declared in ``DELIBERATE_LAZY_IMPORTS``. Expansion runs first
+        because a formulation emits declarations that are language too, and it
+        terminates: an expanded model carries no ``piecewise:`` blocks, so the
+        recursion is one level deep.
+
+        ``known_variables`` arrives through pydantic's validation context, for
+        the one file that is *deliberately* not valid alone: an extension
+        loaded by ``lpspec.linopy.extend`` references variables already on the
+        model it extends. Passing the names in means that file is checked
+        against the namespace it will actually run in, rather than having the
+        check skipped.
+        """
+        from lpspec.language.piecewise import expand_piecewise
+        from lpspec.language.validation import validate_expressions
+
+        known = (info.context or {}).get('known_variables', {})
+        validate_expressions(expand_piecewise(self), known_variables=known)
         return self

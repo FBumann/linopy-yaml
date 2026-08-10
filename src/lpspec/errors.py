@@ -236,22 +236,31 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     return f"unknown {kind} '{name}'. {did_you_mean(name, candidates)}"
 
 
-def schema_error(exc: Any, context: str = '') -> SchemaError:
-    """A pydantic ``ValidationError`` as one of ours.
+def schema_error(exc: Any, context: str = '') -> LanguageError:
+    """A pydantic ``ValidationError`` as one of ours, keeping the class.
 
     Pydantic wraps whatever a validator raises, so a class of our own cannot
     reach the caller from inside the model — the envelope arrives instead,
     carrying ``input_value=`` dumps and a link to pydantic's docs that mean
-    nothing to someone who wrote a YAML file. Unwrapping here is what lets
-    ``except LpspecError`` cover the model, which is what the API promises.
+    nothing to someone who wrote a YAML file.
 
-    The messages themselves are kept: they were written for this audience and
-    only the envelope is discarded.
+    It does keep the original under ``ctx['error']``, so a
+    :class:`DimensionError` raised deep in a validator comes back a
+    ``DimensionError`` rather than being flattened. Anything else — pydantic's
+    own type and shape complaints, or several errors at once — is a
+    :class:`SchemaError`, which is what "the declarations are wrong" means.
     """
+    errors = exc.errors()
     lines = []
-    for error in exc.errors():
+    for error in errors:
         message = str(error.get('msg', '')).removeprefix('Value error, ')
         where = '.'.join(str(part) for part in error.get('loc', ()))
         lines.append(f'{where}: {message}' if where else message)
     body = '\n'.join(lines) or str(exc)
-    return SchemaError(f'{context}: {body}' if context else body)
+    text = f'{context}: {body}' if context else body
+
+    if len(errors) == 1:
+        original = errors[0].get('ctx', {}).get('error')
+        if isinstance(original, LanguageError):
+            return type(original)(text)
+    return SchemaError(text)

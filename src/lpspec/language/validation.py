@@ -47,7 +47,6 @@ from lpspec.language.expression_parser import (
 )
 from lpspec.language.helpers import BUILTINS, unknown_helper_message
 from lpspec.language.model import Model
-from lpspec.language.piecewise import expand_piecewise
 from lpspec.language.resolution import Namespace, resolve_expression, resolve_where
 from lpspec.language.where_parser import parse_where
 
@@ -85,11 +84,9 @@ def load_model(model: str | Path | dict[str, Any] | Model) -> Model:
         return model
     raw = model if isinstance(model, dict) else read_yaml(Path(model))
     try:
-        schema = Model(**raw)
+        return Model(**raw)
     except ValidationError as exc:
         raise schema_error(exc) from None
-    validate_expressions(expand_piecewise(schema))
-    return schema
 
 
 def validate_expressions(
