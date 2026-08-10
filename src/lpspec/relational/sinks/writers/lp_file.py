@@ -133,7 +133,7 @@ def _constraint_blocks(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
         return ((pl.col('row') - lo) * slots + within).alias('key')
 
     rows = model.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
-    matrix = model.matrix.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
+    matrix = model.matrix_block(lo, hi).lazy()
     header = rows.select(
         _key(pl.lit(0, dtype=pl.Int64)),
         pl.concat_str(pl.lit('c').alias('c'), _digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),

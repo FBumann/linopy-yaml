@@ -56,8 +56,18 @@ _MATRIX = ('row', 'col', 'coeff')
 #: :data:`~lpspec.relational.plan.VariableType` and not reaching here fails
 #: where the column is built rather than in whichever sink first compares
 #: against a name it does not know.
+#:
+#: ``col`` is ``Int32`` — the solver's own index width, HiGHS and Gurobi both
+#: being 32-bit indexed, so a count past 2^31 has no sink that could take it
+#: and the strict cast raises there rather than wrapping. The cast sits where
+#: the column is *produced*, inside the per-declaration streaming collect, and
+#: must stay there: narrowing the stacked frame instead allocates the narrow
+#: copy while the wide one is still alive, a transient visible in
+#: `dispatch/l`'s peak RSS. A *label* stays ``Int64``: the arithmetic path
+#: computes it as a position in the full pre-mask coordinate product, which
+#: can pass 2^31 while every survivor fits.
 _DTYPES = {
-    'col': pl.Int64, 'row': pl.Int64,
+    'col': pl.Int32, 'row': pl.Int64,
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
     'sense': pl.String, 'vtype': pl.Enum(get_args(plan.VariableType)),
 }  # fmt: skip
@@ -82,6 +92,7 @@ class PolarsExecutor:
         self._obj: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
         self._matrix: pl.DataFrame | None = None
+        self._matrix_starts: Any = None
         self._n_cols = 0
         self._n_rows = 0
         self._obj_const = 0.0
@@ -115,7 +126,9 @@ class PolarsExecutor:
 
         self._cols = _stack(cols, _COLS)
         self._rows = _stack([r for r, _ in built], _ROWS)
-        self._matrix = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
+        ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
+        self._matrix_starts = _row_starts(ordered, self._n_rows)
+        self._matrix = ordered.select('col', 'coeff')
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -252,7 +265,7 @@ class PolarsExecutor:
             pieces.append(
                 placed.select(
                     'row',
-                    pl.col('var_label').alias('col'),
+                    pl.col('var_label').cast(_DTYPES['col']).alias('col'),
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
@@ -300,7 +313,9 @@ class PolarsExecutor:
         self._obj_sense = o.sense
         if not comp.terms:
             return None
-        pieces = [p.frame.select(pl.col('var_label').alias('col'), pl.col('coeff')) for p in comp.terms]
+        pieces = [
+            p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
+        ]
         stacked = pl.concat(pieces)
         if _needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
             stacked = stacked.group_by('col').agg(pl.col('coeff').sum())
@@ -318,6 +333,7 @@ class PolarsExecutor:
             obj=self._obj,
             rows=self._rows,
             matrix=self._matrix,
+            row_starts=self._matrix_starts,
             column_count=self._n_cols,
             row_count=self._n_rows,
             objective_sense=self._obj_sense,
@@ -468,7 +484,7 @@ class PolarsExecutor:
 
     def close(self) -> None:
         """Drop the built model. Optional — see :class:`Result`."""
-        self._cols = self._obj = self._rows = self._matrix = None
+        self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
         self._variables.clear()
         self._constraints.clear()
         self._blocks.clear()
@@ -572,6 +588,28 @@ def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
     if not matrix['row'].is_sorted():
         return matrix.sort('row')
     return matrix.with_columns(pl.col('row').set_sorted())
+
+
+def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
+    """Each row's first entry in the row-ordered *ordered* — CSR's own index.
+
+    Run-length over the sorted column, then a scatter and a cumulative sum —
+    robust to the model's shape where the obvious alternatives are not:
+    ``bincount`` pays per entry (26 ms to rle's 7 at 10M entries over 100k
+    rows), ``searchsorted`` per row times the log of the entries, and either
+    is the wrong one on some ladder case. Computed *here* so the ``row``
+    column can then be dropped — a select, not a copy, since a polars column
+    is its own buffer. A label repeated once per nonzero is 8 bytes per entry
+    no sink reads: every consumer either slices by these starts or asks
+    :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to spell
+    the labels back out.
+    """
+    import numpy as np
+
+    runs = ordered['row'].rle()
+    starts = np.zeros(row_count + 1, dtype=np.int64)
+    starts[runs.struct.field('value').to_numpy() + 1] = runs.struct.field('len').to_numpy()
+    return np.cumsum(starts, out=starts)
 
 
 def _has_repeated_entry(matrix: pl.DataFrame) -> bool:

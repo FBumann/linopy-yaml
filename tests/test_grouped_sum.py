@@ -296,7 +296,8 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
         generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     )
     with lps.build(BROADCAST_GROUP_SUM, sources) as ex:
-        matrix = ex._tables().matrix.sort('row', 'col')
+        tables = ex._tables()
+        matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 4, 'a column appears twice on a row'
         assert matrix['coeff'].to_list() == [3.0, 5.0, 3.0, 5.0]  # 1.0 + 2.0 merged
 
@@ -320,7 +321,8 @@ def test_sum_over_a_foreach_dim_needs_no_such_collapse():
         generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     )
     with lps.build(model, sources) as ex:
-        matrix = ex._tables().matrix.sort('row', 'col')
+        tables = ex._tables()
+        matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         # one entry per (row, generator-on-that-bus), not one per bus
         assert matrix.height == 6
         assert ex.solve().termination_condition == 'optimal'

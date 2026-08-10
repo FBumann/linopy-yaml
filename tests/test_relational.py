@@ -728,8 +728,8 @@ def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet():
             assert len(terms) == 2 and {t.variable for t in terms} == {'f'}
             assert _needs_aggregate(terms, ex._q.may_share_a_column) is expected, f'self_loop={self_loop}'
 
-            matrix = ex._tables().matrix
-            cells = matrix.select('row', 'col')
+            tables = ex._tables()
+            cells = tables.matrix_block(0, tables.row_count).select('row', 'col')
             assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
 
 
@@ -953,7 +953,9 @@ def test_a_row_with_no_terms_keeps_its_seat_at_any_chunking(solver_name, batch_r
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(sum(p, over=g), over=t)'}},
     }
     with lps.build(model, {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}) as ex:
-        assert sorted(set(ex._tables().matrix['row'].to_list())) == [1, 2], 'row 0 is the orphan under test'
+        tables = ex._tables()
+        occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
+        assert occupied == [1, 2], 'row 0 is the orphan under test'
         solution = ex.solve(batch_rows=batch_rows, solver_name=solver_name)
         assert solution.termination_condition == 'infeasible'
 
@@ -988,9 +990,7 @@ def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
         assert tables.matrix.height == n_g * n_s
 
         def widest(ranges):
-            return max(
-                tables.matrix.filter(pl.col('row').is_between(lo, hi, closed='left')).height for lo, hi in ranges
-            )
+            return max(int(tables.row_starts[hi] - tables.row_starts[lo]) for lo, hi in ranges)
 
         budget = 100
         assert widest(tables.row_chunks_by_nonzeros(budget)) <= budget
