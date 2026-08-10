@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.85](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.84...v0.0.1-alpha.85) (2026-08-10)
+
+
+### Performance
+
+* **engine:** the matrix stops repeating itself — CSR at assembly ([#550](https://github.com/fluxopt/lpspec/issues/550)) ([903c8c2](https://github.com/fluxopt/lpspec/commit/903c8c25ad41efe85b08fd6f8d7cfd375fb358b2))
+
 ## [0.0.1-alpha.84](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.83...v0.0.1-alpha.84) (2026-08-10)
 
 
