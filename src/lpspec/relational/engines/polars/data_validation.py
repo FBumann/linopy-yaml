@@ -71,31 +71,39 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
             )
         return
 
-    for d in p.dims:
-        if d in dimensions:
-            _check_labels(p, frame, d, dimensions)
+    # Every cheap question in one pass over the source: does any coordinate
+    # repeat, does any dim carry a label its index does not know. *Naming* an
+    # offender costs a pass of its own — the duplicate group_by being the
+    # single most expensive step of a large build — so those run only on a
+    # path that is about to raise. The aggregate names use `#` because a dim's
+    # name is an identifier and these must not collide with one.
+    #
+    # `.implode()`: `is_in` against a bare Series of the same dtype is ambiguous
+    # and deprecated in polars — imploding says "this whole collection", not
+    # "element-wise against a list column".
+    known = {d: dimensions[d].select('val').collect()['val'] for d in p.dims if d in dimensions}
+    answers = (
+        frame.select(
+            pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
+            *(pl.col(d).is_in(labels.implode()).all().alias(f'#known {d}') for d, labels in known.items()),
+        )
+        .collect()
+        .row(0, named=True)
+    )
 
-    # The count column sits beside the dims it grouped by, so its name must be
-    # one no dim can have — '#rows' is not a legal identifier, 'n' is.
-    duplicated = frame.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3).collect()
-    if duplicated.height == 0:
+    for d, labels in known.items():
+        if not answers[f'#known {d}']:
+            strangers = frame.filter(~pl.col(d).is_in(labels.implode())).select(pl.col(d).unique()).collect()
+            raise DataError(unknown_labels_message(p.name, d, strangers[d].to_list(), labels.to_list()))
+
+    if not answers['#duplicated']:
         return
+    duplicated = frame.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3).collect()
     shown = '; '.join(
         ', '.join(f'{d}={row[d]!r}' for d in p.dims) + f' ({row["#rows"]} rows)'
         for row in duplicated.iter_rows(named=True)
     )
     raise DataError(duplicate_coordinate_message(p.name, shown, list(p.dims)))
-
-
-def _check_labels(p: plan.ParameterDeclaration, frame: pl.LazyFrame, d: str, dimensions: Dimensions) -> None:
-    """Every label this parameter carries in *d* must be a coordinate of it."""
-    # `.implode()`: `is_in` against a bare Series of the same dtype is ambiguous
-    # and deprecated in polars — imploding says "this whole collection", not
-    # "element-wise against a list column".
-    known = dimensions[d].select('val').collect()['val']
-    strangers = frame.filter(~pl.col(d).is_in(known.implode())).select(pl.col(d).unique()).collect()[d].to_list()
-    if strangers:
-        raise DataError(unknown_labels_message(p.name, d, strangers, known.to_list()))
 
 
 def check_coordinates_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -> None:

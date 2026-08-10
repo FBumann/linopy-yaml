@@ -215,7 +215,10 @@ class _Binder:
             raise DataError(
                 f"index for dimension '{d}' is missing declared coordinate column(s) {missing} (has {available})"
             )
-        labelled = frame.select(d, *names).with_row_index(_ROW_POSITION)
+        # Collected once, because the frame is a scan: every pass over a lazy
+        # view of it re-reads the source (#273). The single-valued check and
+        # the grouping below both read this one collect instead.
+        labelled = frame.select(d, *names).with_row_index(_ROW_POSITION).collect().lazy()
         data_validation.check_coordinates_single_valued(d, names, labelled)
         return (
             labelled.group_by(d)
