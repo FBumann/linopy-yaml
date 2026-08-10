@@ -78,9 +78,19 @@ def expand_piecewise(
     other expression: a link may name a variable the model being extended
     already has, and the frame is the union of the links' dims, so resolution
     has to see those names to compute it.
+
+    A validated *schema* already carries the expansion its own validation
+    built (:class:`Model` expands as a check on the way in), and building it
+    again validates it again — so that one is returned when the namespace
+    matches, and the work below runs only for a namespace the validation
+    never saw.
     """
     if not schema.piecewise:
         return schema
+    if schema._expansion is not None:
+        key, expanded = schema._expansion
+        if key == expansion_key(known_variables):
+            return expanded
 
     raw = schema.model_dump()
     raw.setdefault('variables', {})
@@ -122,6 +132,11 @@ def expand_piecewise(
 
     raw['piecewise'].clear()
     return Model.model_validate(raw, context={'known_variables': known_variables})
+
+
+def expansion_key(known_variables: Mapping[str, Sequence[str]]) -> dict[str, tuple[str, ...]]:
+    """*known_variables* normalised for equality, however its sequences are typed."""
+    return {name: tuple(dims) for name, dims in known_variables.items()}
 
 
 def _validate_block(

@@ -15,7 +15,16 @@ import math
 from importlib import metadata
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    ValidationInfo,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from lpspec.errors import did_you_mean
 from lpspec.language.helpers import BUILTIN_NAMES
@@ -397,6 +406,11 @@ class Model(_StrictBlock):
 
     _label: ClassVar[str] = 'the top level of the file'
 
+    #: The expansion validation already built, so nobody builds it twice: the
+    #: namespace it was expanded against, and the expanded model. Read and
+    #: reused by :func:`~lpspec.language.piecewise.expand_piecewise`.
+    _expansion: tuple[dict[str, tuple[str, ...]], Model] | None = PrivateAttr(default=None)
+
     #: Which language surface this file is written against. Absent means 0, so
     #: the field is additive — every file that predates it stays valid.
     #:
@@ -579,17 +593,22 @@ class Model(_StrictBlock):
 
         An expansion *builds* a ``Model``, which validates itself on the way
         out, so the check below runs only when there was nothing to expand.
-        Calling it either way validated a piecewise model twice.
+        Calling it either way validated a piecewise model twice. The expansion
+        is kept on the instance for the same reason: every consumer of a
+        piecewise model asks for it next, and rebuilding it re-validates it.
 
         ``known_variables`` arrives as pydantic validation context, for the file
         deliberately not valid alone: an extension references variables already
         on the model ``lpspec.linopy.extend`` puts it on. It travels into
         expansion too, since a link may name one of those variables.
         """
-        from lpspec.language.piecewise import expand_piecewise
+        from lpspec.language.piecewise import expand_piecewise, expansion_key
         from lpspec.language.validation import validate_expressions
 
         known = (info.context or {}).get('known_variables', {})
-        if expand_piecewise(self, known_variables=known) is self:
+        expanded = expand_piecewise(self, known_variables=known)
+        if expanded is self:
             validate_expressions(self, known_variables=known)
+        else:
+            self._expansion = (expansion_key(known), expanded)
         return self

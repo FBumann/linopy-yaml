@@ -188,6 +188,46 @@ def test_extend_sees_existing_model_variables(yaml_file, model_with):
         lpspec_linopy.extend(linopy.Model(), yaml_file(text))
 
 
+def test_extend_expands_piecewise_against_the_model_it_joins(yaml_file, model_with):
+    """A piecewise link may name a variable borrowed from the model.
+
+    Expansion re-validates the expanded file, so the borrowed names must
+    travel into it too — an expansion that drops them refuses this exact
+    file with "'p' not found".
+    """
+    m = model_with(p=('g', ['wind', 'solar']))
+    ext = yaml_file(
+        """
+        dimensions:
+          g: {values: [wind, solar]}
+          bp: {dtype: int}
+        parameters:
+          p_bp: {dims: [bp]}
+          cost_bp: {dims: [bp]}
+        variables:
+          op_cost: {foreach: [g], bounds: {lower: 0}}
+        piecewise:
+          cost_curve:
+            over: bp
+            links:
+              - [p, p_bp]
+              - [op_cost, cost_bp]
+        """
+    )
+
+    bp = pd.RangeIndex(3, name='bp')
+    lpspec_linopy.extend(
+        m,
+        ext,
+        data={
+            'p_bp': pd.Series([0.0, 50.0, 100.0], index=bp),
+            'cost_bp': pd.Series([0.0, 40.0, 120.0], index=bp),
+        },
+        coords={'bp': bp},
+    )
+    assert 'cost_curve_link0' in m.constraints
+
+
 # ---------------------------------------------------------------------------
 # loader: master coords and parameter coercion
 # ---------------------------------------------------------------------------

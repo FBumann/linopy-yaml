@@ -153,8 +153,9 @@ def extend(
     """
     path = Path(path)
     with note(f"while extending with YAML '{path}'"):
-        original = load_model(path, known_variables=_variable_dims(model))
-        schema = expand_piecewise(original)
+        known_variables = _variable_dims(model)
+        original = load_model(path, known_variables=known_variables)
+        schema = expand_piecewise(original, known_variables=known_variables)
 
         existing_coords = _infer_coords(model)
         if coords is not None:
