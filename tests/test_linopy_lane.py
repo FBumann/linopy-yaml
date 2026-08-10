@@ -512,3 +512,43 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
     )
     built = lpspec_linopy.build(masked, data=data)  # must not raise
     assert 'x' in built.variables
+
+
+def test_extend_expands_a_piecewise_block_over_the_models_variables(yaml_file, model_with):
+    """A formulation may link variables the extended model already has.
+
+    Expansion resolves link expressions itself, to compute the frame the block
+    is emitted over, so it needs the borrowed names as much as the checkers
+    do. `extend` passes them to `load_model` and has to pass them here too —
+    it calls `expand_piecewise` a second time, and that call is the one that
+    builds what goes onto the model.
+
+    Held at the lane rather than beside the language, because the language
+    layer already accepted this file: the gap was between the two calls, which
+    only a caller of `extend` crosses.
+    """
+    m = model_with(p=('g', ['a']), f=('g', ['a']))
+    path = yaml_file("""
+        dimensions:
+          bp: {dtype: int, values: [0, 1]}
+          g: {dtype: str}
+        parameters:
+          p_bp: {dims: [bp]}
+          f_bp: {dims: [bp]}
+        piecewise:
+          curve:
+            over: bp
+            links:
+              - [p, p_bp]
+              - [f, f_bp]
+    """)
+    lpspec_linopy.extend(
+        m,
+        path,
+        data={
+            'p_bp': pd.Series([0.0, 10.0], index=pd.Index([0, 1], name='bp')),
+            'f_bp': pd.Series([1.0, 8.0], index=pd.Index([0, 1], name='bp')),
+        },
+    )
+    assert 'curve_lam' in m.variables, 'the formulation emitted nothing'
+    assert 'curve_link0' in m.constraints, 'the links did not reach the model'
