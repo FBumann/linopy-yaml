@@ -79,16 +79,27 @@ class ModelTables:
     objective_sense: str
     objective_constant: float
 
-    def row_chunks_by_nonzeros(self, budget: int) -> Iterator[tuple[int, int]]:
+    def _row_chunks_by_nonzeros(self, budget: int) -> Iterator[tuple[int, int]]:
         """Row ranges holding roughly ``budget`` *nonzeros* each.
 
-        A sink that reads ``matrix`` a range at a time pays in nonzeros, not in
-        rows — a range of 100k rows is 900k entries in one model and 10M in
+        A reader that walks ``matrix`` a range at a time pays in nonzeros, not
+        in rows — a range of 100k rows is 900k entries in one model and 10M in
         another, and only the second is a problem. So the width here is the
         average row, and there is deliberately no row-counted twin to reach
-        for by mistake.
+        for by mistake. Private: a consumer takes whole blocks from
+        :meth:`row_blocks` or :meth:`labeled_blocks`, so no caller can pair
+        spans and entries that disagree.
         """
         return chunking.ranges(self.row_count, budget, self.matrix.height / max(1, self.row_count))
+
+    def _span(self, lo: int, hi: int) -> pl.DataFrame:
+        """The matrix entries rows ``[lo, hi)`` own — the CSR arithmetic, once.
+
+        Both block readers slice through here, so how a span is located — and
+        the half-open ``hi`` bound — cannot drift between them.
+        """
+        first = int(self.row_starts[lo])
+        return self.matrix.slice(first, int(self.row_starts[hi]) - first)
 
     def col_chunks(self, budget: int) -> Iterator[tuple[int, int]]:
         """Column ranges of roughly ``budget`` columns each.
@@ -177,26 +188,34 @@ class ModelTables:
         solvers' matrix APIs ask for. A row with no entries takes the next
         row's offset, and so occupies no span.
         """
-        spans = [(0, self.row_count)] if budget is None else self.row_chunks_by_nonzeros(budget)
+        spans = [(0, self.row_count)] if budget is None else self._row_chunks_by_nonzeros(budget)
         for lo, hi in spans:
-            first = int(self.row_starts[lo])
-            entries = self.matrix.slice(first, int(self.row_starts[hi]) - first)
-            yield lo, hi, entries, self.row_starts[lo:hi] - first
+            yield lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo]
 
     def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
         """Rows ``[lo, hi)`` of the matrix with their ``row`` labels spelled out.
 
         The adjoint of what the CSR layout compressed: ``np.repeat`` walks the
-        start offsets back into one label per entry. For the LP writer, which
-        renders labels into text and sorts on them — and for any reader that
-        wants COO — at the cost of one label column per *block*, not per model.
+        start offsets back into one label per entry. For a reader that wants
+        COO — and, through :meth:`labeled_blocks`, for the LP writer — at the
+        cost of one label column per *block*, not per model.
         """
         import numpy as np
 
-        first = int(self.row_starts[lo])
-        entries = self.matrix.slice(first, int(self.row_starts[hi]) - first)
         labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
-        return entries.with_columns(pl.Series('row', labels))
+        return self._span(lo, hi).with_columns(pl.Series('row', labels))
+
+    def labeled_blocks(self, budget: int | None) -> Iterator[tuple[int, int, pl.DataFrame]]:
+        """Each chunk of rows with its entries labeled — the LP writer's reader.
+
+        :meth:`matrix_block`'s budget-iterator form, chunked by the same rule
+        every reader spends (:mod:`~lpspec.relational.chunking`, in nonzeros).
+        One method per consumer shape — solvers take :meth:`row_blocks`, the
+        writer this — so no caller pairs spans and entries that disagree.
+        """
+        spans = [(0, self.row_count)] if budget is None else self._row_chunks_by_nonzeros(budget)
+        for lo, hi in spans:
+            yield lo, hi, self.matrix_block(lo, hi)
 
 
 def _scattered(count: int, at: Any, values: Any, absent: Any) -> Any:
