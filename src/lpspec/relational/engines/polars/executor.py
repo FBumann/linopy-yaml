@@ -93,16 +93,24 @@ class PolarsExecutor:
 
         The compiler comes after the binding, because two of its answers are
         read off the data — a dim's size and whether a parameter is boolean.
+        The variable registry is handed to it apart from the frozen bound data
+        because it is still being filled: a constraint compiled later has to
+        see the variables built before it (see :class:`PolarsCompiler`).
         Declarations are then built one at a time and concatenated at the end:
         their rows are independent, which is what lets the model be four frames
         rather than a graph.
+
+        The matrix leaves here in ``(row, col)`` order, which is what
+        ``ModelTables`` promises its sinks — one reads it a row range at a
+        time, the other renders a row's terms in column order. The stack
+        already has that order: each share leaves sorted and owns the next run
+        of rows, so ascending shares concatenate into an ascending whole, and
+        a ``sort`` here would copy the model's largest frame at the peak of
+        the build to reorder nothing.
         """
 
         self._program = program
         self._bound = bind(program, sources)
-        # The variable frames are passed apart from the bound data on purpose:
-        # they are the one registry still being filled, appearing as each
-        # declaration is built so a constraint compiled afterwards can see them.
         self._compiler = PolarsCompiler(program, self._bound, self._variables)
 
         cols = [self._build_variable(v) for v in program.variables]
@@ -111,12 +119,6 @@ class PolarsExecutor:
 
         self._cols = _stack(cols, _COLS)
         self._rows = _stack([r for r, _ in built], _ROWS)
-        # `(row, col)` is what `ModelTables` promises its sinks: one reads the
-        # matrix a row range at a time, the other renders a row's terms in
-        # column order. The stack already has it — each share leaves sorted and
-        # owns the next run of rows, so ascending shares concatenate into an
-        # ascending whole — and a `sort` here would copy the model's largest
-        # frame at the peak of the build to reorder nothing.
         self._matrix = _stack([m for _, m in built if m is not None], _MATRIX)
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
@@ -125,42 +127,56 @@ class PolarsExecutor:
         assert self._compiler is not None, 'build() has not run'
         return self._compiler
 
-    def _check_no_undefined_divisor(self, name: str, undefined: int, *expressions: plan.Expression) -> None:
-        """A null coefficient means a divisor had no value where the model divided.
+    def _summed_shares(
+        self, pieces: list[pl.LazyFrame], keys: tuple[str, ...], name: str, *expressions: plan.Expression
+    ) -> pl.DataFrame:
+        """The stacked *pieces* with ``coeff`` summed per *keys*, sorted by them
+        — refusing any coefficient an undefined divisor left null.
 
-        *undefined* is the null count the assembling aggregate carried out
-        (``sum`` skips nulls, so an undefined cell would come out zero — the
-        count has to be taken of the coefficients going *in*). Counted there
-        rather than reasoned about from coordinates, because only the terms
-        reaching the matrix know which divisions *survived*: a quotient joins
-        its divisor with a left join (:func:`_join_mul`), so a missing value
-        leaves a null, and if the row was masked out, or the numerator variable
-        does not exist there, the term never gets that far and there is nothing
-        to report.
+        A null coefficient means a divisor had no value where the model
+        divided: a quotient joins its divisor with a left join
+        (:func:`_join_mul`), so a missing value leaves a null — and if the row
+        was masked out, or the numerator variable does not exist there, the
+        term never gets this far and there is nothing to report. That is what
+        keeps the refusal from becoming a wall: sparse data is the ordinary
+        case, and the question is not whether a divisor is dense but whether it
+        is defined wherever the model actually divides by it.
 
-        That is what keeps the refusal from becoming a wall. Sparse data is the
-        ordinary case, and the question is not whether a divisor is dense — it
-        is whether it is defined wherever the model actually divides by it.
+        ``sum`` skips nulls, so an undefined cell would come out zero — the
+        count is taken of the coefficients going *in*, riding the same
+        aggregate as a second column. Named ``#nulls`` because it sits beside
+        key columns: not a legal identifier, so no dim can collide with it.
         """
+        aggregated = (
+            pl.concat(pieces)
+            .group_by(*keys)
+            .agg(pl.col('coeff').sum(), pl.col('coeff').is_null().sum().alias('#nulls'))
+            .sort(*keys)
+            .collect(engine='streaming')
+        )
+        undefined = int(aggregated.get_column('#nulls').sum())
         if undefined:
             params = sorted(plan.divisor_parameters(*expressions))
             raise DataError(f'{name}: {sparse_divisor_message(", ".join(params), undefined)}')
+        return aggregated.drop('#nulls')
 
     # ------------------------------------------------------------------
     # declarations
     # ------------------------------------------------------------------
 
     def _build_variable(self, v: plan.VariableDeclaration) -> pl.DataFrame:
-        """One variable's labelled frame, and its share of ``cols``."""
+        """One variable's labelled frame, and its share of ``cols``.
+
+        The share is sorted by the label, because ``cols`` carries no ``col``
+        of its own: a row's *position* is its solver column index, and the
+        bounds joins say nothing about the order they hand rows back in.
+        """
 
         start = self._n_cols
         labelled, self._n_cols = labels.frame(self._q, v.dims, v.where, 'var_label', start)
         self._variables[v.name] = labelled.lazy()
         self._blocks[v.name] = (start, labelled.height)
 
-        # Sorted by the label, because `cols` carries no `col` of its own: a
-        # row's *position* is its solver column index, and the bounds joins say
-        # nothing about the order they hand rows back in.
         bounded = self._q.bounds(labelled.lazy(), v).sort('var_label')
         cols = bounded.select(
             pl.col('lb').cast(pl.Float64),
@@ -207,7 +223,7 @@ class PolarsExecutor:
         start = self._n_rows
         labelled, self._n_rows = labels.frame(self._q, c.dims, c.where, 'row', start, restrictions)
         frame = labelled.lazy()
-        self._constraints[c.name] = frame  # kept for the dual read-back
+        self._constraints[c.name] = frame
         self._blocks[c.name] = (start, labelled.height)
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
@@ -241,18 +257,7 @@ class PolarsExecutor:
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
-        # A null coefficient means an undefined divisor, and `sum` would read
-        # it as a zero — so the aggregate counts the nulls it collapses, and
-        # the check reads the count. `#nulls` because a column name, not a dim.
-        matrix = (
-            pl.concat(pieces)
-            .group_by('row', 'col')
-            .agg(pl.col('coeff').sum(), pl.col('coeff').is_null().sum().alias('#nulls'))
-            .sort('row', 'col')
-            .collect(engine='streaming')
-        )
-        self._check_no_undefined_divisor(f"constraint '{c.name}'", int(matrix.get_column('#nulls').sum()), c.lhs, c.rhs)
-        return rows, matrix.drop('#nulls')
+        return rows, self._summed_shares(pieces, ('row', 'col'), f"constraint '{c.name}'", c.lhs, c.rhs)
 
     def _build_objective(self, o: plan.ObjectiveDeclaration) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
@@ -276,16 +281,7 @@ class PolarsExecutor:
         if not comp.terms:
             return None
         pieces = [p.frame.select(pl.col('var_label').alias('col'), pl.col('coeff')) for p in comp.terms]
-        # The same null count the constraint aggregate carries, for the same
-        # reason: `sum` would read an undefined divisor as a zero.
-        aggregated = (
-            pl.concat(pieces)
-            .group_by('col')
-            .agg(pl.col('coeff').sum(), pl.col('coeff').is_null().sum().alias('#nulls'))
-            .collect(engine='streaming')
-        )
-        self._check_no_undefined_divisor('objective', int(aggregated.get_column('#nulls').sum()), o.expression)
-        return aggregated.drop('#nulls')
+        return self._summed_shares(pieces, ('col',), 'objective', o.expression)
 
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the executor only supplies the frames
@@ -436,14 +432,16 @@ class PolarsExecutor:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Drop the built model. Optional — see :class:`Result`."""
+        """Drop the built model. Optional — see :class:`Result`.
+
+        ``BoundSources`` is frozen, so it cannot be emptied in place the way
+        the registries can: what frees the bound frames is dropping every
+        reference to them, and the compiler holds one.
+        """
         self._cols = self._obj = self._rows = self._matrix = None
         self._variables.clear()
         self._constraints.clear()
         self._blocks.clear()
-        # `BoundSources` is frozen, so it cannot be emptied in place the way the
-        # registries above can: what frees the bound frames is dropping every
-        # reference to them, and the compiler holds one.
         self._bound = None
         self._compiler = None
 
@@ -507,12 +505,14 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str
     *Having* no dims is not *having nothing to restrict*: a masked scalar
     variable restricts every row of every constraint that names it, all or
     nothing. Reading the empty dims as "skip" is what let one through silently.
+
+    Each restriction is keyed by ``presence_dims`` where the fragment states
+    them — narrower than ``dims`` for an acyclic shift, whose vacated edge
+    lies along one dimension and is silent about the rest.
     """
     out: list[tuple[tuple[str, ...], pl.LazyFrame]] = []
     for p in terms:
         if p.presence is None:
             continue
-        # `presence_dims` is narrower than `dims` for an acyclic shift, whose
-        # vacated edge lies along one dimension and is silent about the rest.
         out.append((p.presence_dims or p.dims, p.presence))
     return out

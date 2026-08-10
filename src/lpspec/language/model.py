@@ -41,8 +41,11 @@ class _StrictBlock(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def _reject_unknown_keys(cls, data: Any) -> Any:
-        # pydantic's own extra='forbid' is the backstop; this runs first only
-        # to name the near-miss, which is what a typo actually needs.
+        """Name the near-miss, which is what a typo actually needs.
+
+        pydantic's own ``extra='forbid'`` is the backstop; this runs first
+        only for the wording.
+        """
         if not isinstance(data, dict):
             return data
         known = set(cls.model_fields)
@@ -267,16 +270,20 @@ class PiecewiseBlock(_StrictBlock):
     *sign* bounds the link by the curve instead of pinning it (at most one
     non-``"=="``, and only with exactly two links).
 
+    ``over`` names the breakpoint dimension. ``convex: true`` takes the
+    pure-LP convex hull, with no binaries; ``active`` names a gating
+    expression that pins the formulation to 0 when it is 0.
+
     Expanded (before building) into plain variables and constraints via the
     λ convex-combination method — see ``lpspec.language.piecewise``.
     """
 
     _label: ClassVar[str] = 'a piecewise declaration'
 
-    over: str  # breakpoint dimension
+    over: str
     links: list[list[str]]
-    convex: bool = False  # True: pure-LP convex hull (no binaries)
-    active: str | None = None  # gating expression: formulation pinned to 0 when 0
+    convex: bool = False
+    active: str | None = None
 
     @model_validator(mode='after')
     def _check_convex_shape(self) -> PiecewiseBlock:
@@ -480,10 +487,18 @@ class Model(_StrictBlock):
 
     @model_validator(mode='after')
     def _validate_references(self) -> Model:
+        """The cross-declaration rules — what one block may say about another.
+
+        Names share one flat namespace, because shadowing would let a new
+        declaration silently change what an existing expression means (see
+        ``resolution.py``). A coordinate's target must be a declared
+        dimension, and must not be the dimension carrying it: grouping a dim
+        into itself is a no-op that would read as a reduction. And bounds
+        look like the expression language but are not it, so their error says
+        what they actually accept.
+        """
         errors = []
 
-        # One flat namespace: shadowing would let a new declaration silently
-        # change what an existing expression means. See resolution.py.
         kinds: list[tuple[str, Iterable[str]]] = [
             ('dimension', self.dimensions),
             ('parameter', self.parameters),
@@ -522,9 +537,6 @@ class Model(_StrictBlock):
             if d not in self.dimensions
         )
 
-        # A coordinate's target must be a declared dimension, and must not be
-        # the dimension carrying it: grouping a dim into itself is a no-op that
-        # would read as a reduction.
         for dname, ddef in self.dimensions.items():
             for cname, target in ddef.coords.items():
                 if target not in self.dimensions:
@@ -545,8 +557,6 @@ class Model(_StrictBlock):
                         f'coordinate so a reader cannot mistake one for the other.'
                     )
 
-        # Bounds look like the expression language but are not it, so the
-        # error says what they actually accept.
         for vname, vdef in self.variables.items():
             for side in ('lower', 'upper'):
                 val = getattr(vdef.bounds, side)

@@ -44,20 +44,29 @@ def _sink(frame: pl.LazyFrame, f: IO[bytes]) -> None:
     concatenation pass would read and rewrite the whole file, which at these
     sizes costs more than producing it did. polars writes through the handle's
     own buffer, so a ``f.write()`` between two sinks lands between them.
+
+    ``maintain_order`` is polars' default and is what #109 rests on, so it is
+    stated rather than inherited: the parameter is documented as unstable, and
+    a default that flips would make the bytes non-reproducible silently.
     """
-    # `maintain_order` is polars' default and is what #109 rests on, so it is
-    # stated rather than inherited: the parameter is documented as unstable,
-    # and a default that flips would make the bytes non-reproducible silently.
     frame.sink_csv(f, include_header=False, quote_style='never', maintain_order=True)
 
 
 def write_lp_file(model: ModelTables, path: str | Path) -> None:
-    """Write the model as LP text."""
+    """Write the model as LP text.
+
+    ``cols`` is positional, so the bounds section's index is added inside the
+    streamed pipeline rather than sorted out of a column the model carried all
+    along.
+
+    The constraint section goes out one row range at a time: a chunk's rendered
+    lines are held until it is sunk, so the whole section at once is what the
+    writer's peak *is*. Ranges ascend and each is internally ordered, so the
+    bytes are the same ones #109 pins.
+    """
 
     path = Path(path)
     objective = model.obj.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')))
-    # `cols` is positional, so the index is added inside the streamed pipeline
-    # rather than sorted out of a column the model carried all along.
     bounds = (
         model.cols.lazy()
         .with_row_index('col')
@@ -79,10 +88,6 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         _sink(objective, f)
 
         f.write(b'\ns.t.\n\n')
-        # One row range at a time: a chunk's rendered lines are held until it
-        # is sunk, so the whole section at once is what the writer's peak *is*.
-        # Ranges ascend and each is internally ordered, so the bytes are the
-        # same ones #109 pins.
         for lo, hi in model.row_chunks_by_nonzeros(EMIT_BUDGET):
             _sink(_constraint_lines(model, lo, hi), f)
 
@@ -117,6 +122,10 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
 
     A row with no terms still needs a line a solver can parse, which is what
     the placeholder is: the left join leaves it null, and nothing else can.
+
+    The exploded list is never empty — every row has a header and a footer at
+    least — and the ``empty_as_null`` kwarg is polars 1.36+, which is why the
+    version floor sits there.
     """
     inside = pl.col('row').is_between(lo, hi, closed='left')
     terms = model.matrix.lazy().filter(inside).group_by('row').agg(_term(pl.col('coeff'), pl.col('col')).alias('terms'))
@@ -132,8 +141,6 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
                 pl.concat_str(pl.col('sense').replace({'==': '='}), pl.lit(' '), _number(pl.col('rhs'))),
             ).alias('line')
         )
-        # never empty — every row has a header and a footer at least. The
-        # kwarg is polars 1.36+, which is why the floor sits there.
         .explode('line', empty_as_null=False)
     )
 

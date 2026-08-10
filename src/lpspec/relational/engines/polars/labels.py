@@ -51,6 +51,9 @@ def frame(
 
     Being semi-joins is also why nothing deduplicates them: a semi-join asks
     whether a key occurs, and a key occurring twice still occurs.
+
+    No dims means the carrier is `UNIT`, which is selected in that case because
+    selecting nothing would drop the one row of the empty coordinate product.
     """
     surviving = compiler.frame(dims, where)
     for on, presence in restrictions:
@@ -58,8 +61,6 @@ def frame(
 
     materialised = (
         surviving.sort([ordinal(d) for d in dims])
-        # No dims means the carrier is `UNIT`: selecting nothing would drop the
-        # one row of the empty coordinate product.
         .select(*(dims or (UNIT,)))
         .with_row_index(label, offset=start)
         .select(*dims, pl.col(label).cast(pl.Int64))

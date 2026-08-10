@@ -169,15 +169,16 @@ class PolarsCompiler:
         depends on that: a label is arithmetic on the ordinals, and
         :func:`lpspec.relational.engines.polars.labels.frame` sorts on them
         before it numbers anything.
+
+        The empty product is one *real* row carrying only :data:`UNIT`, not an
+        empty frame: a ``where`` on a scalar declaration filters this frame,
+        and nothing survives a filter.
         """
         out: pl.LazyFrame | None = None
         for d in dims:
             table = self.dimensions[d].select(pl.col('val').alias(d), pl.col('ord').alias(ordinal(d)))
             out = table if out is None else out.join(table, how='cross')
         if out is None:
-            # The empty cross join's unit is one row, not nothing — and the row
-            # has to be real, since a `where` on a scalar declaration filters
-            # this frame and nothing survives a filter.
             return pl.LazyFrame({UNIT: [0]})
         return out
 
@@ -225,6 +226,11 @@ class PolarsCompiler:
         false, so a coordinate the mask cannot evaluate is dropped by the
         filter rather than by the join. That is the same answer either way, and
         one join strategy is one thing to reason about.
+
+        ``VariableDefined`` is the one atom answered by a join rather than a
+        column test — existence lives in the variable's own frame — keyed by
+        the variable's dims, which the dim rule has already checked are inside
+        this frame.
         """
 
         joined: set[str] = set()
@@ -254,10 +260,6 @@ class PolarsCompiler:
                     return col.is_not_null() & col.cast(pl.Boolean)
                 return col.is_not_null() & col.is_finite()
             if isinstance(p, plan.VariableDefined):
-                # Not a column test: existence lives in the variable's own frame,
-                # so it is joined for rather than read. The join is on the
-                # variable's dims, which the dim rule has already checked are
-                # inside this frame.
                 nonlocal carrier
                 on = list(self.program.variable(p.variable).dims)
                 flag = f'__where defined {p.variable}__'
@@ -368,19 +370,23 @@ class PolarsCompiler:
         return TermFragment(dims, frame, False)
 
     def _variable_fragment(self, name: str) -> TermFragment:
-        """A variable as a term with unit coefficients."""
+        """A variable as a term with unit coefficients.
+
+        Presence is attached only for a masked variable, decided here off the
+        declaration before any data is read: an *unmasked* variable exists at
+        every coordinate of its foreach, so its presence could only ever
+        restrict nothing.
+
+        ``presence_dims`` is stated rather than left implied. It defaults to
+        ``None``, meaning "keyed by dims" — but dims are rewritten downstream
+        (a product broadcasts, a sum drops) while the presence frame is not, so
+        an implied key silently becomes a claim about columns it never had.
+        """
 
         dims = self.program.variable(name).dims
         frame = self.variables[name].select(*dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff'))
-        # An *unmasked* variable exists at every coordinate of its foreach, so
-        # its presence could only ever restrict nothing. Whether one is needed
-        # is decided here, off the declaration, before any data is read.
         masked = self.program.variable(name).where is not None
         presence = self._presence(name, dims) if masked else None
-        # `presence_dims` is stated rather than left implied. It defaults to
-        # None, meaning "keyed by dims" — but dims are rewritten downstream (a
-        # product broadcasts, a sum drops) while this frame is not, so an
-        # implied key silently becomes a claim about columns it never had.
         return TermFragment(dims, frame, True, variable=name, presence=presence, presence_dims=dims if masked else None)
 
     def _presence(self, name: str, dims: tuple[str, ...]) -> pl.LazyFrame:
@@ -391,13 +397,15 @@ class PolarsCompiler:
         indistinguishable at the moment presence is built, and the mask would
         never reach the rows referencing it. The marker column carries the one
         bit that is left: whether the row is there at all.
+
+        The marker is renamed from a real column, never a ``pl.lit()``: a
+        select of literals alone is length 1 whatever it selects from — there
+        is no column to broadcast against — so an absent scalar would come back
+        present.
         """
         frame = self.variables[name]
         if dims:
             return frame.select(*dims)
-        # Renamed from a real column, never `pl.lit()`: a select of literals
-        # alone is length 1 whatever it selects from — there is no column to
-        # broadcast against — so an absent scalar would come back present.
         return frame.select(pl.col('var_label').alias(PRESENT))
 
     def _product(self, a: CompiledExpression, b: CompiledExpression, context: str) -> CompiledExpression:
@@ -433,6 +441,12 @@ class PolarsCompiler:
 
         The rows that carried them stay, and collapse in the terminal
         ``sum(coeff)`` at assembly.
+
+        The result is constructed rather than ``replace``d because ``presence``
+        has to be *dropped*, and carrying it forward would be the silent
+        default: §13 reads a reduction as skipping absent slots rather than
+        propagating them, so summing over a partly-masked dim is well defined
+        and reports nothing.
         """
 
         missing = [d for d in over if d not in p.dims]
@@ -446,10 +460,6 @@ class PolarsCompiler:
         frame = p.frame.select(*keep, *p.carried)
         if scale != 1:
             frame = frame.with_columns(pl.col(p.value_column) * scale)
-        # §13: a reduction *skips* absent slots rather than propagating them, so
-        # summing over a partly-masked dim is well defined and reports nothing.
-        # Constructed rather than `replace`d for exactly that: `presence` has to
-        # be *dropped* here, and carrying it would be the silent default.
         return TermFragment(keep, frame, p.is_term, variable=p.variable)
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
@@ -460,6 +470,10 @@ class PolarsCompiler:
         neither duplicates nor drops a term. Rows that land on one ``into``
         stay separate rows and are added by the terminal aggregate at assembly,
         exactly as ``Sum``'s are.
+
+        A group is a sum, so §13 applies here as well: absence does not escape
+        it, which is why this constructs rather than ``replace``s — see
+        :meth:`_sum_fragment`.
         """
 
         if g.over not in p.dims:
@@ -467,8 +481,6 @@ class PolarsCompiler:
         keep = tuple(x for x in p.dims if x != g.over)
         mapping = self.dimensions[g.over].select(pl.col('val').alias(g.over), pl.col(g.coordinate).alias(g.into))
         frame = p.frame.join(mapping, on=g.over, how='inner').select(*keep, g.into, *p.carried)
-        # a group is a sum, so §13 applies here as well: absence does not escape
-        # it, which is why this constructs rather than `replace`s — see _sum_fragment
         return TermFragment((*keep, g.into), frame, p.is_term, variable=p.variable)
 
     def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
@@ -501,6 +513,15 @@ class PolarsCompiler:
         Both joins are on a dim-table key, so the row count is unchanged and an
         out-of-range ordinal does not join — the zero acyclic promises. No
         window function; this is bounded-halo locality.
+
+        Presence travels through the same remap — it is a coordinate set, and
+        the inner join already drops whatever the edge vacated; under ``fill``
+        the vacated positions are put back (:meth:`_vacated`). An *unmasked*
+        acyclic operand with no fill gains a presence here: nothing was absent
+        before and the edge now is, and without it the vacated slot would
+        merely fail to join, the row surviving with the term quietly gone — a
+        different constraint, which is the shape #239 removed from masks and
+        #289 removes from shift.
         """
 
         if s.dimension not in p.dims:
@@ -528,25 +549,13 @@ class PolarsCompiler:
 
         frame = remap(p.frame, p.carried)
         if not s.wrap and s.fill:
-            # A const fragment reads a missing row as zero, so `fill=0` needs no
-            # rows at all — but `fill=1`, the identity a *product* wants, is only
-            # there if it is written. Lowering guarantees a nonzero fill reaches
-            # here only over a variable-free operand, so this is always the
-            # const branch and never has a `var_label` to invent.
             frame = pl.concat([frame, self._filled_edge(s, card, others, s.fill)], how='vertical_relaxed')
         presence, presence_dims = None, None
         if p.presence is not None:
-            # Presence is a coordinate set, so it travels through the same map,
-            # and the inner join already drops whatever the edge vacated.
             presence = remap(p.presence, [])
             if not s.wrap and s.fill is not None:
                 presence = pl.concat([presence, self._vacated(p, s, card, others)], how='vertical_relaxed').unique()
         elif not s.wrap and s.fill is None:
-            # Nothing was absent before, and the edge now is. `None` here means
-            # "present everywhere", so without this the vacated slot would
-            # merely fail to join and the row would survive with the term
-            # quietly gone — a different constraint, which is the shape #239
-            # removed from masks and #289 removes from shift.
             presence, presence_dims = self._edge(s, card, vacated=False), (s.dimension,)
         return replace(p, frame=frame, presence=presence, presence_dims=presence_dims)
 
@@ -558,6 +567,13 @@ class PolarsCompiler:
         coordinates, so its fill lands at every combination, and a fill that
         appeared only where the parameter was non-sparse would be a second
         answer to the same question.
+
+        Only a *truthy* fill gets here — a const fragment reads a missing row
+        as zero, so ``fill=0`` needs no rows at all, where ``fill=1``, the
+        identity a product wants, is only there if it is written. Lowering
+        guarantees a nonzero fill reaches a translation only over a
+        variable-free operand, so this is always the const branch and never
+        has a ``var_label`` to invent.
         """
         edge = self._edge(s, card, vacated=True)
         for d in others:
@@ -595,13 +611,14 @@ class PolarsCompiler:
         ``fillna`` we apply on top of it.
 
         Only the ``shift`` edge qualifies. A coordinate the variable's own mask
-        removed is genuinely absent, and remapping already dropped it above.
+        removed is genuinely absent, and remapping already dropped it above —
+        so the edge is crossed with the other-dim combinations the variable
+        actually has, one vacated row each: a coordinate it never covers gains
+        nothing from an edge it never sees.
         """
         edge = self._edge(s, card, vacated=True)
         if not others:
             return edge
-        # One vacated row per other-dim combination the variable actually has:
-        # a coordinate it never covers gains nothing from an edge it never sees.
         return p.presence.select(*others).unique().join(edge, how='cross') if p.presence is not None else edge
 
     # ------------------------------------------------------------------
@@ -734,15 +751,22 @@ def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = Fa
     first: both sides may carry ``cval``, and a suffix collision would multiply
     a column by itself. The dims *c* contributes are broadcast, so the label
     says nothing about them.
+
+    A divide joins **left**, so a coordinate the divisor has no value for
+    yields a *null* coefficient instead of silently dropping the term. The row
+    it belongs to may still be masked out downstream, in which case the null
+    goes with it and nothing is reported — which is the point: the question is
+    not "is this divisor dense" but "is it defined where the model divides by
+    it".
+
+    *c* is variable-free, so it contributes no absence: a sparse coefficient
+    zeroes a term, it does not unmake the variable underneath it. The output
+    dims may be wider than ``a.dims``, which is why the presence key travels
+    with the fragment rather than being re-derived from dims here (#345).
     """
     shared = [d for d in a.dims if d in c.dims]
     out_dims = a.dims + tuple(d for d in c.dims if d not in a.dims)
     right = c.frame.rename({'cval': _RHS})
-    # Left for a divide, so a coordinate the divisor has no value for yields a
-    # *null* coefficient instead of silently dropping the term. The row it
-    # belongs to may still be masked out downstream, in which case the null goes
-    # with it and nothing is reported — which is the point: the question is not
-    # "is this divisor dense" but "is it defined where the model divides by it".
     how = 'left' if divide else 'inner'
     joined = a.frame.join(right, on=shared, how=how) if shared else a.frame.join(right, how='cross')
 
@@ -751,8 +775,4 @@ def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = Fa
     out = 'coeff' if is_term else 'cval'
     carried = ['var_label', out] if is_term else [out]
     frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried)
-    # *c* is variable-free, so it contributes no absence: a sparse coefficient
-    # zeroes a term, it does not unmake the variable underneath it. `out_dims`
-    # may be wider than `a.dims`, which is why the presence key travels with the
-    # frame rather than being re-derived from dims here (#345).
     return replace(a, dims=out_dims, frame=frame, is_term=is_term)

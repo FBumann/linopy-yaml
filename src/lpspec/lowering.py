@@ -72,7 +72,11 @@ _SENSES = {'==', '<=', '>='}
 
 
 def lower_program(schema: Model) -> plan.Program:
-    """Compile a validated :class:`Model` into a :class:`Program`."""
+    """Compile a validated :class:`Model` into a :class:`Program`.
+
+    A ``binary:`` variable lowers with fixed 0/1 bounds, matching linopy's
+    ``binary=True``.
+    """
     schema = expand_piecewise(schema)
     ns = Namespace.of(schema)
     parameters = tuple(plan.ParameterDeclaration(name, tuple(pdef.dims)) for name, pdef in schema.parameters.items())
@@ -81,7 +85,6 @@ def lower_program(schema: Model) -> plan.Program:
     for vname, vdef in schema.variables.items():
         variable_type: plan.VariableType
         if vdef.binary:
-            # binary implies fixed 0/1 bounds, matching linopy's binary=True
             variable_type, lower, upper = 'binary', plan.Constant(0.0), plan.Constant(1.0)
         else:
             variable_type = 'integer' if vdef.integer else 'continuous'
@@ -144,17 +147,23 @@ def lower_program(schema: Model) -> plan.Program:
 def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expression:
     """Rewrite one resolved core-AST expression as a plan expression.
 
-    Two rules a helper case relies on, neither of them stated here. The call
+    Three rules this function relies on, none of them stated here. The call
     shape comes from ``helpers.call_shape_error``, which resolution has already
     applied — it is asked again here so an AST that skipped resolution gets the
     language's wording rather than an ``IndexError``. The dim rules come from
     ``dimensions.dims_of`` over the *core AST*: whether an operand carries the
     dim it is being reduced along is a language question, and lowering asks it
-    rather than answering it a second time.
+    rather than answering it a second time. Degree is likewise the language's
+    rule, not the plan's — asked here, answered in ``language/degree.py``, and
+    asked identically by the eager lane.
 
     What stays here is what is genuinely about the plan: which node a call
     becomes, and the shapes a node cannot represent — a ``GroupSum`` groups by
     a declared coordinate, a ``Translate`` distance is an integer literal.
+    ``Sum`` and ``GroupSum`` stay two nodes even though the surface has one
+    verb: reducing a dim away and reducing it into another are different
+    relational shapes, and the executor cases were never the thing the surface
+    was collapsing.
     """
     if isinstance(node, NumberNode):
         return plan.Constant(node.value)
@@ -190,8 +199,6 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
     if isinstance(node, BinaryOperatorNode):
         left = _lower_expr(node.left, schema, context)
         right = _lower_expr(node.right, schema, context)
-        # Degree is the language's rule, not the plan's — asked here, answered
-        # in `language/degree.py`, and asked identically by the eager lane.
         degree.check_binary(node, context)
         match node.op:
             case '+':
@@ -228,9 +235,6 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
                 return plan.Sum(operand, (over_node.name,))
             if not isinstance(by_node, CoordinateNode):
                 raise LanguageError(f'{context}: sum(group_by=...) must name a coordinate')
-            # Still two plan nodes: reducing a dim away and reducing it into
-            # another are different relational shapes, and the executor cases
-            # were never the thing the surface was collapsing.
             return plan.GroupSum(
                 operand,
                 over=over_node.name,
@@ -268,11 +272,6 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             has_var = degree.carries_variable(node.args[0])
             edge = node.kwargs.get('edge')
             wrap = isinstance(edge, EdgeNode)
-            # One kwarg, three policies: `edge='wrap'` is cyclic and vacates
-            # nothing, a number is the value the vacated slots contribute, and
-            # an absent `edge=` leaves them absent. The pair that used to
-            # contradict each other — a cyclic call also asking for a fill —
-            # is unrepresentable rather than refused.
             fill = None if wrap else _translate_fill(edge, context, has_var=has_var)
             if not wrap and fill is None and not has_var:
                 raise LanguageError(_shift_over_data_message(context))
@@ -303,6 +302,12 @@ def _check_dim_rules(node: FunctionCallNode, schema: Model, context: str) -> Non
 
 def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool) -> float | None:
     """The number an ``edge=`` names, or ``None`` for the absence default.
+
+    One kwarg, three policies: ``edge='wrap'`` is cyclic and vacates nothing —
+    the caller sends it straight to the plan and never here, so the pair that
+    used to contradict each other, a cyclic call also asking for a fill, is
+    unrepresentable rather than refused. A number is the value the vacated
+    slots contribute, and an absent ``edge=`` leaves them absent.
 
     **The right fill is positional**, which is linopy v1's own reason for
     refusing to pick one (``convention.rst`` §7): 0 is the identity of a sum and
@@ -359,12 +364,17 @@ def _bound_expression(value: float | str) -> plan.Expression:
 def _lower_where(
     text: str | None, ns: Namespace, context: str, self_variable: str | None = None
 ) -> plan.Predicate | None:
+    """Lower a where string to a plan predicate, ``None`` when there is no mask.
+
+    A predicate that resolves to the constant ``True`` is dropped too: it is
+    equivalent to no mask.
+    """
     node = where_of(text, ns, context, self_variable)
     if node is None:
         return None
     pred = _lower_where_node(node, context)
     if isinstance(pred, plan.BooleanConstant) and pred.value:
-        return None  # True is equivalent to no mask
+        return None
     return pred
 
 

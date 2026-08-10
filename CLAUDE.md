@@ -16,7 +16,7 @@ Four docs, kept short on purpose — **reference pages carry rules, design notes
 - `docs/design/ceiling.md` — what may enter the language: the two tiers, the admissibility test, why sink capability is a second axis.
 - `docs/ROADMAP.md` — why the project exists and where it is going. No work items: those are issues.
 
-A PR that adds, renames, or retires a construct updates `docs/SPEC.md` — **§0 if it changes a law, the section if it changes a detail**. Rationale belongs in the PR description or a code comment, not in a new doc section; historical "this used to work differently" notes belong in git.
+A PR that adds, renames, or retires a construct updates `docs/SPEC.md` — **§0 if it changes a law, the section if it changes a detail**. Rationale belongs in the PR description or a docstring, not in a new doc section; historical "this used to work differently" notes belong in git.
 
 `docs/models/index.md` is the evidence page — what the language can say and how we know the answers are right. Both its tables are generated (`uv run python -m tools.constructs`), the reference table straight from `examples/ports/references.json`, so a published optimum cannot disagree with an asserted one.
 
@@ -90,6 +90,12 @@ lpspec_linopy.extend(m, 'ramp_constraint.yaml', data={...})  # YAML math onto an
   outright; no aliases, no deprecation cycle, no shim. Written down once, in
   *breaking changes are free* in [CONTRIBUTING.md](CONTRIBUTING.md).
 - This package is a **pure consumer** of linopy's public API. Never depend on linopy internals.
+- **No explanatory inline comments.** A `#` comment never explains code: complex logic
+  becomes a helper with a docstring, and a constraint the code cannot show lives in the
+  nearest docstring — measured numbers and issue refs included, so deleting a comment
+  never deletes a fact. Rationale for a *change* goes in the PR description. What stays
+  inline: pragmas (`# pyrefly: ignore[...]` with its reason, `# fmt: skip`), `#:`
+  attribute docs on constants, and section dividers.
 - All validation should happen at load time with clear, actionable error messages.
 - Use `ruff` for linting/formatting, `pyrefly` for type checking, `pytest` for tests.
 - pyrefly runs on the `strict` preset with zero errors and is gated in CI. Keep it
