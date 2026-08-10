@@ -439,10 +439,11 @@ def test_a_dictionary_encoded_source_column_binds_like_a_plain_one():
 
     Any writer that sees a 12M-row table of repeated node names will
     dictionary-encode it, and pandas does it by default for a `Categorical`.
-    polars will not join `Categorical` against `String`, and the dim frames are
-    built from declared coordinate values and are plain — so without a cast the
-    two agree only by luck, and the failure is a schema error from inside a
-    join rather than anything a caller can act on.
+    Each writer's dictionary is its own, and polars will not join dictionaries
+    that disagree — so binding reads a source out of whatever encoding it
+    arrived in and re-encodes every dim column into the one dictionary the
+    dimension declares. Without that, the failure is a schema error from
+    inside a join rather than anything a caller can act on.
     """
     model = {
         'dimensions': {'node': {'dtype': 'str', 'values': ['a', 'b']}},
@@ -461,6 +462,79 @@ def test_a_dictionary_encoded_source_column_binds_like_a_plain_one():
 
     assert from_encoded == pytest.approx(7.0)
     assert from_encoded == pytest.approx(from_plain), 'the encoding changed the model'
+
+
+def test_a_string_dimension_is_enum_encoded_end_to_end():
+    """A string dim's dtype is an ``Enum`` over its labels, build to read-back.
+
+    The categories are the dimension's labels in declaration order, so the
+    dtype *is* the dim frame's authority: every frame carrying the dim speaks
+    one dictionary, a dim column costs a code instead of a string in the
+    frames the executor retains, and a caller's solution frame arrives already
+    dictionary-encoded — `to_pandas` hands over a `pandas.Categorical`.
+    """
+    model = {
+        'dimensions': {'node': {'dtype': 'str', 'values': ['c', 'a', 'b']}},
+        'parameters': {'cap': {'dims': ['node']}},
+        'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {'k': {'foreach': ['node'], 'expression': 'x >= cap'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
+    }
+    cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
+    declared = pl.Enum(['c', 'a', 'b'])
+
+    with lps.build(model, {'cap': cap}) as ex:
+        assert ex._variables['x'].collect_schema()['node'] == declared
+        primal = ex.solve().primal('x')
+
+    assert primal.schema['node'] == declared
+    assert primal['node'].to_list() == ['c', 'a', 'b'], 'read-back follows label order, not source order'
+    assert primal.to_pandas()['node'].dtype == pd.CategoricalDtype(['c', 'a', 'b'], ordered=True)
+
+
+def test_a_where_orders_string_labels_bytewise_not_by_declaration():
+    """`node >= 'b'` keeps {b, c} whatever order the labels were declared in.
+
+    §6.1 orders labels bytewise — the reading the eager lane gets from numpy —
+    and an ``Enum`` orders by declaration, so the two disagree exactly when
+    declaration order is not sorted. Declared c, a, b: declaration order would
+    keep {b} alone, and a label the model never declared would *raise* inside
+    the Enum rather than mask nothing. Both must stay unobservable.
+    """
+    model = {
+        'dimensions': {'node': {'dtype': 'str', 'values': ['c', 'a', 'b']}},
+        'parameters': {'cap': {'dims': ['node']}},
+        'variables': {'x': {'foreach': ['node'], 'where': "node >= 'b'", 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {'k': {'foreach': ['node'], 'where': "node >= 'b'", 'expression': 'x >= cap'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
+    }
+    cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
+
+    with lps.build(model, {'cap': cap}) as ex:
+        assert sorted(ex._variables['x'].collect()['node'].to_list()) == ['b', 'c']
+        assert ex.solve().objective == pytest.approx(5.0)
+
+
+def test_a_where_naming_an_undeclared_label_masks_nothing_in():
+    """A quoted label the dimension does not carry compares equal to nothing.
+
+    Quoting says *label, not name*, so it is never checked against the
+    declarations (§6.1) — the mask is simply false everywhere. An ``Enum``
+    refuses a stranger outright, which is why the comparison happens in
+    ``String`` space rather than in the dictionary.
+    """
+    model = {
+        'dimensions': {'node': {'dtype': 'str', 'values': ['a', 'b']}},
+        'parameters': {'cap': {'dims': ['node']}},
+        'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {'k': {'foreach': ['node'], 'where': "node == 'zzz'", 'expression': 'x >= cap'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
+    }
+    cap = pl.DataFrame({'node': ['a', 'b'], 'value': [1.0, 2.0]})
+
+    with lps.build(model, {'cap': cap}) as ex:
+        assert ex._tables().rows.height == 0, 'the mask holds nowhere, so no constraint row is built'
+        assert ex.solve().objective == pytest.approx(0.0)
 
 
 def test_an_objective_naming_a_variable_twice_sums_its_coefficients():
@@ -1451,5 +1525,6 @@ def test_cols_is_positional_so_a_row_index_is_its_solver_column(where):
         assert tables.cols.height == tables.column_count
 
         labels = ex._variables['x'].collect().sort('var_label')
-        expected = labels.join(pl.DataFrame(caps), on=['i', 'j'], how='left')['value'].to_list()
+        raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(labels['j'].dtype))
+        expected = labels.join(raw, on=['i', 'j'], how='left')['value'].to_list()
         assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'
