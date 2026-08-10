@@ -126,7 +126,7 @@ def build_highs(
                 rub[lo:hi],
                 a.height,
                 starts.astype(np.int32),
-                a['col'].to_numpy().astype(np.int32),
+                a['col'].to_numpy().astype(np.int32, copy=False),
                 a['coeff'].to_numpy(),
             ),
             'rows',

@@ -391,6 +391,26 @@ class Program:
         return _declared(self.constraints, name, 'constraint')
 
 
+def parameters_of(*expressions: Expression) -> frozenset[str]:
+    """Every parameter named anywhere under *expressions*.
+
+    Static, like :func:`divisor_parameters`: which names *can* appear is the
+    plan's to answer, and *where* they must have values is decided by the rows
+    a declaration actually builds.
+    """
+    found: set[str] = set()
+
+    def walk(e: Expression) -> None:
+        if isinstance(e, Parameter):
+            found.add(e.name)
+        for child in children(e):
+            walk(child)
+
+    for e in expressions:
+        walk(e)
+    return frozenset(found)
+
+
 def divisor_parameters(*expressions: Expression) -> frozenset[str]:
     """Parameters appearing anywhere in a divisor position.
 

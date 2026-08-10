@@ -81,7 +81,7 @@ flowchart TB
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file (mps planned)"]
-        TABLES --> DIRECT["sinks/solvers/<br/>COO batches → the solver, chosen by name<br/>highs (ships) · gurobi (extra)"]
+        TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi (extra)"]
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
@@ -326,7 +326,10 @@ what makes it visible in a signature rather than only in a docstring.
 **Tidy tables.** Parameters are `(dims…, value)`; a variable frame is
 `(dims…, var_label)`, one row per *existing* variable; a linear expression is
 `(frame dims…, var_label, coeff)` plus a constant part; constraint rows are
-`(row, sense, rhs)`; the coefficient matrix is COO `(row, col, coeff)`. Masks
+`(row, sense, rhs)`; the coefficient matrix is COO `(row, col, coeff)` while
+declarations build, and lands as CSR at assembly — `(col, coeff)` in row-major
+order plus a `row_starts` offset array, the same three arrays a solver takes,
+at 12 bytes per entry. Masks
 are **row absence** — no NaN sentinels, no `-1` labels. Broadcasting is a join,
 `sum` drops coordinate columns, `sum(group_by=)` joins the dim table and projects a
 declared coordinate in place of the grouped dim. Neither aggregates: both
@@ -344,12 +347,13 @@ in the lane is order-free, which is what lets the query planner rearrange it.
   dimensions' declared ordinals. A contract, not a side effect: it is what makes
   a build reproducible run to run.
 - Variables and constraint rows are the same operation over different frames and
-  it is written once (`labels.frame`), with no second path to disagree with:
-  sort the surviving coordinates on their ordinals, number them from the next
-  free label. A mask, a presence restriction, or neither all take it, so a mask
-  that removes nothing is indistinguishable from no mask. That is why labelling
-  is a module with stated inputs rather than a method among twenty: nothing
-  else about a build can move an index.
+  it is written once (`labels.frame`): number the surviving coordinates by their
+  row-major position in the declared product. A mask that cannot see the leading
+  dims leaves the survivors a *rectangle*, so only the masked suffix is
+  materialised — a guarded shortcut inside that one function, which must reach
+  the integers the general path would have. That is why labelling is a module
+  with stated inputs rather than a method among twenty: nothing else about a
+  build can move an index.
 - The same order comes **back**: `primal` / `dual` / `to_parquet` read the
   label frame, which was numbered in that order, and the LP sink writes it.
 
@@ -370,7 +374,7 @@ the engine holds. The bare-install CI job runs the suite with neither present.
 
 **Sinks are capped, explicitly.** Today every sink expresses the same three
 streams and no more: `cols` (bounds, objective coefficients, integrality),
-`rows`, and `A` in COO. The upgrade path is two further streams — `sos_sets`
+`rows`, and `A` in CSR. The upgrade path is two further streams — `sos_sets`
 and `genconstr` — plus a semi-continuous threshold on `cols`. Unlike the three
 that exist, those two would land *unevenly*, because the destinations differ
 per sink (see "Capability is not the ceiling"); that unevenness is what
@@ -421,7 +425,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/chunking.py` | how a batched pass sizes its chunk: budget ÷ the width of one unit |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
-| `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, no special cases |
+| `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
 | `relational/engines/polars/binding.py` | a caller's sources → `BoundSources`, the frozen frames every query is written against |
 | `relational/engines/polars/executor.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |

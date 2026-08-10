@@ -8,7 +8,12 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from lpspec.errors import DataError, duplicate_coordinate_message, sparse_divisor_message
+from lpspec.errors import (
+    DataError,
+    duplicate_coordinate_message,
+    sparse_divisor_message,
+    uncovered_constant_message,
+)
 from lpspec.language.expression_parser import (
     BinaryOperatorNode,
     ComparisonNode,
@@ -329,6 +334,36 @@ def _validate_coords(
                 f"Master '{dim}' coords: {list(master_coords[dim])}"
             )
             raise DataError(msg)
+
+
+def check_constant_side_covers(name: str, node: Any, schema: Model, dataset: Any, mask: Any) -> None:
+    """A comparison's constant side must have values wherever the row is built.
+
+    The divisor argument, one position over. A missing row is read as 0, and on
+    a side with no variable that zero *is* the bound — `x <= cap` becomes
+    `x <= 0`, which binds rather than vanishing, and the solve reports optimal.
+
+    Keyed to the rows the declaration builds, not to the coordinate product:
+    a `where` that removed the coordinate has already answered the question,
+    which is what makes masking the escape rather than a workaround.
+
+    The relational lane asks the same thing from the other end — it left-joins
+    the constant parts and looks for a null before the fill. Same answer,
+    reached by the shape each lane has to hand.
+    """
+    for side in (node.left, node.right):
+        if _names_of(side, schema.variables):
+            continue
+        params = _names_of(side, schema.parameters)
+        if not params:
+            continue
+        for param in sorted(params):
+            gaps = dataset[param].isnull()
+            if mask is not None:
+                gaps = gaps & mask
+            missing = int(gaps.sum())
+            if missing:
+                raise DataError(uncovered_constant_message(param, missing, name))
 
 
 def check_divisors_cover(name: str, node: Any, schema: Model, dataset: Any, mask: Any, model: Any) -> None:

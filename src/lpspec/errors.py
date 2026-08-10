@@ -115,6 +115,27 @@ def did_you_mean(name: str, known: Iterable[str], *, label: str = 'Declared') ->
     return f'{label}: {", ".join(candidates) or "nothing"}.'
 
 
+def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
+    """Why a constant side may not be sparse — the divisor argument, one position over.
+
+    A missing row is filled with `0` here, and on the constant side of a
+    comparison that zero *is* the bound: `x <= cap` becomes `x <= 0`, the most
+    binding row expressible, built and solved and reported optimal. Nothing
+    about the model said so — a table left sparse is compression, not a claim.
+
+    The three ways out are the ones the language already has, and which is
+    right depends on what was meant, which is why it is not guessed.
+    """
+    return (
+        f"{subject}: parameter '{names}' covers {missing} fewer coordinates than the rows "
+        f'built here. A missing row is read as 0, and on the constant side that zero is a '
+        f'bound rather than an absence — the row still exists, and it binds.\n'
+        f'  Supply the missing rows, if the value is what was meant.\n'
+        f'  Mask them out with a where, if the row should not exist there.\n'
+        f'  Drop the declaration, if the model has no such quantity at all.'
+    )
+
+
 def sparse_divisor_message(name: str, missing: int) -> str:
     """Why a divisor may not be sparse — one wording, both lanes.
 

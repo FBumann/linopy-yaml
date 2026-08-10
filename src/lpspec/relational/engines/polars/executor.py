@@ -27,6 +27,7 @@ from lpspec.errors import (
     LpspecError,
     null_bounds_message,
     sparse_divisor_message,
+    uncovered_constant_message,
 )
 from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
@@ -56,8 +57,18 @@ _MATRIX = ('row', 'col', 'coeff')
 #: :data:`~lpspec.relational.plan.VariableType` and not reaching here fails
 #: where the column is built rather than in whichever sink first compares
 #: against a name it does not know.
+#:
+#: ``col`` is ``Int32`` — the solver's own index width, HiGHS and Gurobi both
+#: being 32-bit indexed, so a count past 2^31 has no sink that could take it
+#: and the strict cast raises there rather than wrapping. The cast sits where
+#: the column is *produced*, inside the per-declaration streaming collect, and
+#: must stay there: narrowing the stacked frame instead allocates the narrow
+#: copy while the wide one is still alive, a transient visible in
+#: `dispatch/l`'s peak RSS. A *label* stays ``Int64``: the arithmetic path
+#: computes it as a position in the full pre-mask coordinate product, which
+#: can pass 2^31 while every survivor fits.
 _DTYPES = {
-    'col': pl.Int64, 'row': pl.Int64,
+    'col': pl.Int32, 'row': pl.Int64,
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
     'sense': pl.String, 'vtype': pl.Enum(get_args(plan.VariableType)),
 }  # fmt: skip
@@ -81,6 +92,7 @@ class PolarsExecutor:
         self._obj: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
         self._matrix: pl.DataFrame | None = None
+        self._matrix_starts: Any = None
         self._n_cols = 0
         self._n_rows = 0
         self._obj_const = 0.0
@@ -108,10 +120,16 @@ class PolarsExecutor:
         already has that order: each share leaves sorted and owns the next run
         of rows, so ascending shares concatenate into an ascending whole, and
         a ``sort`` here would copy the model's largest frame at the peak of
-        the build to reorder nothing. ``set_sorted`` states that promise in
-        the frame itself, once, where the order is established — it is what
-        lets a sink's streaming ``group_by`` walk adjacent runs instead of
-        building a hash table (0.14 s against 0.89 s at 10M nonzeros).
+        the build to reorder nothing. :func:`_in_row_order` therefore *checks*
+        the claim with one linear scan rather than re-establishing it, and
+        states it on the frame — which is what lets a sink's streaming
+        ``group_by`` walk adjacent runs instead of building a hash table
+        (0.14 s against 0.89 s at 10M nonzeros).
+
+        That order is also what :func:`_row_starts` needs to read the CSR
+        index off the ``row`` column, after which the column itself is
+        dropped: a label repeated once per nonzero is 8 bytes per entry no
+        sink reads.
         """
 
         self._program = program
@@ -124,7 +142,9 @@ class PolarsExecutor:
 
         self._cols = _stack(cols, _COLS)
         self._rows = _stack([r for r, _ in built], _ROWS)
-        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX).with_columns(pl.col('row').set_sorted())
+        ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
+        self._matrix_starts = _row_starts(ordered, self._n_rows)
+        self._matrix = ordered.select('col', 'coeff').rechunk()
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -256,6 +276,7 @@ class PolarsExecutor:
         self._blocks[c.name] = (start, labelled.height)
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
+        uncovered: pl.Expr | None = None
         carrier = frame
         for i, (p, sign) in enumerate(consts):
             column = f'__const {i}__'
@@ -266,6 +287,14 @@ class PolarsExecutor:
                 else carrier.join(aggregated, how='cross')
             )
             accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
+            gap = pl.col(column).is_null()
+            uncovered = gap if uncovered is None else uncovered | gap
+
+        if uncovered is not None:
+            gaps = int(carrier.select(uncovered.sum()).collect(engine='streaming').item())
+            if gaps:
+                names = ', '.join(sorted(plan.parameters_of(c.lhs, c.rhs)))
+                raise DataError(uncovered_constant_message(names, gaps, f"constraint '{c.name}'"))
 
         rows = carrier.select(
             'row',
@@ -287,7 +316,7 @@ class PolarsExecutor:
             pieces.append(
                 placed.select(
                     'row',
-                    pl.col('var_label').alias('col'),
+                    pl.col('var_label').cast(_DTYPES['col']).alias('col'),
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
@@ -319,7 +348,9 @@ class PolarsExecutor:
         self._obj_sense = o.sense
         if not comp.terms:
             return None
-        pieces = [p.frame.select(pl.col('var_label').alias('col'), pl.col('coeff')) for p in comp.terms]
+        pieces = [
+            p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
+        ]
         stacked = pl.concat(pieces).collect(engine='streaming')
         self._refuse_undefined_divisors(stacked, 'objective', o.expression)
         if stacked.get_column('col').n_unique() == stacked.height:
@@ -338,6 +369,7 @@ class PolarsExecutor:
             obj=self._obj,
             rows=self._rows,
             matrix=self._matrix,
+            row_starts=self._matrix_starts,
             column_count=self._n_cols,
             row_count=self._n_rows,
             objective_sense=self._obj_sense,
@@ -481,7 +513,7 @@ class PolarsExecutor:
         the registries can: what frees the bound frames is dropping every
         reference to them, and the compiler holds one.
         """
-        self._cols = self._obj = self._rows = self._matrix = None
+        self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
         self._variables.clear()
         self._constraints.clear()
         self._blocks.clear()
@@ -516,6 +548,52 @@ def _spanning(solver: str, quantity: str, values: pl.Series | None, expected: in
             f'describes a different one. This is an engine bug rather than a problem with the '
             f'model — please report it.'
         )
+
+
+def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
+    """*matrix* with ``row`` known to ascend — checked, not assumed.
+
+    Every constraint orders its own share and they are stacked in declaration
+    order, which is ascending row ranges, so the concatenation is ordered by
+    construction. polars cannot see that through a ``concat``, and a sink that
+    finds the flag missing orders the whole matrix again.
+
+    So the claim is verified and then stated. ``is_sorted`` is a linear scan
+    over a column the frame already holds; the sort behind it is the
+    correctness floor and is expected never to run.
+    """
+    if not matrix.height:
+        return matrix
+    if not matrix['row'].is_sorted():
+        return matrix.sort('row')
+    return matrix.with_columns(pl.col('row').set_sorted())
+
+
+def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
+    """Each row's first entry in the row-ordered *ordered* — CSR's own index.
+
+    Run-length over the sorted column, then a scatter and a cumulative sum —
+    robust to the model's shape where the obvious alternatives are not:
+    ``bincount`` pays per entry (26 ms to rle's 7 at 10M entries over 100k
+    rows), ``searchsorted`` per row times the log of the entries, and either
+    is the wrong one on some ladder case. Computed *here* so the ``row``
+    column can then be dropped. A label repeated once per nonzero is 8 bytes
+    per entry no sink reads: every consumer either slices by these starts or
+    asks :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to
+    spell the labels back out.
+
+    The kept matrix is then **rechunked, once**. A streaming collect leaves
+    it in chunks, and a sink slices it per row block — against a chunked
+    frame every block's ``to_numpy`` is a gather-copy, where against one
+    contiguous buffer it is a view (codspeed caught the difference as -6.9%
+    on `profiled-m`, ~150 blocks over 16 chunks).
+    """
+    import numpy as np
+
+    runs = ordered['row'].rle()
+    starts = np.zeros(row_count + 1, dtype=np.int64)
+    starts[runs.struct.field('value').to_numpy() + 1] = runs.struct.field('len').to_numpy()
+    return np.cumsum(starts, out=starts)
 
 
 def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:

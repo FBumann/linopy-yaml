@@ -347,7 +347,26 @@ thing contributes nothing — or a refusal, where no such reading exists.
 | coefficient — `w * x` | zero: the term does not participate, the row survives | `0` is the identity of a sum, so the term contributes nothing |
 | `where` operand | false | a coordinate whose data is missing is not one the model can claim exists |
 | divisor — `x / d` | **refused** at bind *where the model divides by it* | nothing contributes nothing: `0` divides by zero, `1` rescales, dropping rewrites the constraint |
+| a comparison's whole constant side — `x <= cap` | **refused** at bind *where the row is built* | nothing contributes nothing: the fill would *be* the bound, so `x <= 0` binds where the model said nothing |
 | `bounds:` | an error | nothing contributes nothing: unbounded is not bounded-at-zero |
+
+The refusals are keyed to **the rows a declaration builds**, never to the
+coordinate product: a coordinate a `where` already removed asks no question, so
+supplying data only where the model uses it stays the ordinary idiom. That is
+also what makes masking a real remedy rather than a workaround:
+
+<!-- doctest: wrap=constraints -->
+```yaml
+c:
+  foreach: [g]
+  where: cap  # no row where `cap` has none, instead of a row reading `x <= 0`
+  expression: x <= cap
+```
+
+Three answers, and the language does not pick between them: **supply the rows**
+if the value is what was meant, **mask them out** if the row should not exist,
+or **drop the declaration** if the model has no such quantity — which is what a
+framework emitting a dict does (#217).
 
 ### How absence travels
 

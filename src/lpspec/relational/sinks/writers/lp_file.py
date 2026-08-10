@@ -88,8 +88,8 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         _sink(objective, f)
 
         f.write(b'\ns.t.\n\n')
-        for lo, hi in model.row_chunks_by_nonzeros(EMIT_BUDGET):
-            _sink(_constraint_lines(model, lo, hi), f)
+        for lo, hi, entries in model.labeled_blocks(EMIT_BUDGET):
+            _sink(_constraint_lines(model, lo, hi, entries), f)
 
         f.write(b'\nbounds\n')
         _sink(bounds, f)
@@ -104,7 +104,7 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         f.write(b'\nend\n')
 
 
-def _constraint_lines(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
+def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
     """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
     One line per output line rather than one block per row: the pieces are
@@ -136,9 +136,11 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
     global row would put the product one careless model away from overflowing
     ``Int64`` and reordering the file in silence.
 
-    The chunk's entries come from :meth:`ModelTables.matrix_block` — a slice,
-    not a scan — already in ``(row, col)`` order, which is what keeps the
-    union sort cheap: it merges pre-sorted runs rather than permuting them.
+    *entries* is the chunk's own slice of the matrix, handed over by
+    :meth:`ModelTables.labeled_blocks` with its ``row`` labels spelled back
+    out of the CSR starts. It arrives in ``(row, col)`` order, which is what
+    keeps the union sort cheap: it merges pre-sorted runs rather than
+    permuting them.
     """
     slots = model.cols.height + 3
 
@@ -146,7 +148,7 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
         return ((pl.col('row') - lo) * slots + within).alias('key')
 
     rows = model.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
-    matrix = model.matrix_block(lo, hi).lazy()
+    matrix = entries.lazy()
     header = rows.select(
         _key(pl.lit(0, dtype=pl.Int64)),
         pl.concat_str(pl.lit('c').alias('c'), _digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),
