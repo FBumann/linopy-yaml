@@ -145,6 +145,14 @@ def _load(
     else is unaffected: an environment's parameters are the defaults of every
     model built on it, and an unknown name still raises at the same point.
     ``OutputFlag`` leads so a caller can put the log back by passing their own.
+
+    ``vtype`` is passed only when some column is integral: an LP pays 17% of
+    the column hand-off for a vtype array of one repeated letter — 0.46 s
+    against 0.38 s at 10^6 columns — and linopy skips it the same way.
+
+    ``batch_rows`` goes straight through, un-defaulted: one call unless a
+    caller asks otherwise, which is what #434 measured and ``row_blocks`` now
+    states.
     """
     gurobipy = _gurobipy()
     import numpy as np
@@ -154,16 +162,12 @@ def _load(
     m = gurobipy.Model(env=environment)
 
     lb, ub, cost, integral = model.dense_columns(gurobipy.GRB.INFINITY)
-    # an LP pays 17% of the column hand-off for a vtype array of one repeated
-    # letter — 0.46 s against 0.38 s at 10^6 columns. linopy skips it the same way.
     discrete: dict[str, Any] = {'vtype': np.where(integral, 'I', 'C')} if integral.any() else {}
     x = m.addMVar(model.column_count, lb=lb, ub=ub, obj=cost, **discrete)
 
     sense, rhs = model.dense_rows(gurobipy.GRB.INFINITY)
     spelling = _spelled(gurobipy)
     blocks = []
-    # `batch_rows` straight through, un-defaulted: one call unless a caller
-    # asks otherwise, which is what #434 measured and `row_blocks` now states.
     for lo, hi, a, starts in model.row_blocks(batch_rows):
         block = scipy.sparse.csr_matrix(
             (a['coeff'].to_numpy(), a['col'].to_numpy(), np.append(starts, a.height)),
