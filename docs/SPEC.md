@@ -482,9 +482,13 @@ Four rules govern `edge=`, and all four are law 8 in this position:
 - **A bare `shift` over a variable-free expression is a load error.** A
   parameter's missing row is a zero coefficient (§6), so there is no absence for
   the vacated slot to carry, and inventing one silently turns
-  `x <= shift(dt, over=t, by=1)` into `x <= 0`. The error names the three things
-  it could have meant: `edge=0`, a `where` masking the coordinate out, or
-  `edge='wrap'`.
+  `x <= shift(dt, over=t, by=1)` into `x <= 0`. The error names what it could
+  have meant: `edge='wrap'`, `edge=0`, or `edge=0` **together with** a `where`
+  excluding the vacated coordinate — which is how an acyclic recurrence omits
+  its first row. The two are a pair, not a choice: a `where` alone does not
+  lift the refusal, since it is decided on the expression before any mask is
+  read, and `edge=0` alone leaves a row at that coordinate whose bound is the
+  zero.
 
 Anything composable out of these belongs in `macros:`. Math that is not sayable
 at all goes to a declared `escape:` island
