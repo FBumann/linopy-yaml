@@ -171,8 +171,13 @@ def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispa
     assert set(SOLVERS) == {'highs', 'gurobi'}
 
 
-def test_multi_file_composition_reserved(dispatch_yaml):
-    with pytest.raises(NotImplementedError, match='issues/30'):
+def test_a_list_of_models_is_refused(dispatch_yaml):
+    """Composition is merging declarations, not passing several models.
+
+    The message points at the dict, because a caller holding two files has
+    somewhere to go — #30 declined the native merge rather than deferring it.
+    """
+    with pytest.raises(TypeError, match='merge the declarations'):
         lps.check([dispatch_yaml, dispatch_yaml])
 
 

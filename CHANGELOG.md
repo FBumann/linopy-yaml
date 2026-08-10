@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.79](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.78...v0.0.1-alpha.79) (2026-08-10)
+
+
+### Bug Fixes
+
+* **language:** a Model validates itself, however it was built ([#533](https://github.com/fluxopt/lpspec/issues/533)) ([6b987a6](https://github.com/fluxopt/lpspec/commit/6b987a6d1fae6a9c15793cf4cf4ffe1e6bbf09b0))
+
 ## [0.0.1-alpha.78](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.77...v0.0.1-alpha.78) (2026-08-10)
 
 

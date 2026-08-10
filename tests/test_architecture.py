@@ -539,7 +539,17 @@ def test_every_schema_model_is_strict():
 #: could lower. Expansion no longer asks the plan anything, so the cycle is
 #: gone rather than deferred, and a lazy import here is once again only ever
 #: a leftover.
-DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {}
+DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
+    ('language/model.py', 'lpspec.language.piecewise'): (
+        'Model validates its own expressions, and the checkers read Model. Both '
+        'sit in `language/`, so this is one layer calling itself rather than a '
+        'reach across layers.'
+    ),
+    ('language/model.py', 'lpspec.language.validation'): (
+        'Same cycle: validation.py imports Model to build one, and Model calls '
+        'validate_expressions on itself so the type cannot exist half-checked.'
+    ),
+}
 
 
 def test_lazy_intra_package_imports_are_all_declared():
