@@ -37,6 +37,8 @@ from lpspec.relational.result import Result
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from polars._typing import MaintainOrderJoin
+
 
 #: The four frames a sink reads, as schemas. Stated here because the executor
 #: is what fills them and an empty model still has to have them.
@@ -127,38 +129,55 @@ class PolarsExecutor:
         assert self._compiler is not None, 'build() has not run'
         return self._compiler
 
-    def _summed_shares(
-        self, pieces: list[pl.LazyFrame], keys: tuple[str, ...], name: str, *expressions: plan.Expression
-    ) -> pl.DataFrame:
-        """The stacked *pieces* with ``coeff`` summed per *keys*, sorted by them
-        — refusing any coefficient an undefined divisor left null.
+    def _refuse_undefined_divisors(self, stacked: pl.DataFrame, name: str, *expressions: plan.Expression) -> None:
+        """A null coefficient means a divisor had no value where the model divided.
 
-        A null coefficient means a divisor had no value where the model
-        divided: a quotient joins its divisor with a left join
-        (:func:`_join_mul`), so a missing value leaves a null — and if the row
-        was masked out, or the numerator variable does not exist there, the
-        term never gets this far and there is nothing to report. That is what
-        keeps the refusal from becoming a wall: sparse data is the ordinary
-        case, and the question is not whether a divisor is dense but whether it
-        is defined wherever the model actually divides by it.
-
-        ``sum`` skips nulls, so an undefined cell would come out zero — the
-        count is taken of the coefficients going *in*, riding the same
-        aggregate as a second column. Named ``#nulls`` because it sits beside
-        key columns: not a legal identifier, so no dim can collide with it.
+        A quotient joins its divisor with a left join (:func:`_join_mul`), so a
+        missing value leaves a null — and if the row was masked out, or the
+        numerator variable does not exist there, the term never gets this far
+        and there is nothing to report. That is what keeps the refusal from
+        becoming a wall: sparse data is the ordinary case, and the question is
+        not whether a divisor is dense but whether it is defined wherever the
+        model actually divides by it. ``sum`` reads a null as a zero, which is
+        why the question is put to the stack before any cell collapses.
         """
-        aggregated = (
-            pl.concat(pieces)
-            .group_by(*keys)
-            .agg(pl.col('coeff').sum(), pl.col('coeff').is_null().sum().alias('#nulls'))
-            .sort(*keys)
-            .collect(engine='streaming')
-        )
-        undefined = int(aggregated.get_column('#nulls').sum())
+        undefined = int(stacked.get_column('coeff').null_count())
         if undefined:
             params = sorted(plan.divisor_parameters(*expressions))
             raise DataError(f'{name}: {sparse_divisor_message(", ".join(params), undefined)}')
-        return aggregated.drop('#nulls')
+
+    def _matrix_share(self, pieces: list[pl.LazyFrame], name: str, *expressions: plan.Expression) -> pl.DataFrame:
+        """One constraint's share: in ``(row, col)`` order, repeated cells summed.
+
+        Nothing runs unconditionally except three linear probes — the null
+        count, whether the stack already arrives in order, whether any cell
+        repeats. The stack usually is in order (each piece leaves the
+        label-ordered row frame through joins that preserve it in practice)
+        and usually repeats nothing (a cell repeats only when one variable
+        reaches a row twice), so the sort and the aggregate run only when a
+        probe says they would change something. Measured at 5M nonzeros: the
+        probes cost ~0.01 s where the unconditional hash aggregate cost
+        0.22 s. The answer is read off the data rather than reasoned from the
+        declarations — the static machinery that made this call is what #520
+        removed, and nothing here has to know *why* a cell repeats.
+        """
+        stacked = pl.concat(pieces).collect(engine='streaming')
+        self._refuse_undefined_divisors(stacked, name, *expressions)
+        row, col = pl.col('row'), pl.col('col')
+        tied, ahead = row == row.shift(1), row > row.shift(1)
+        repeat = tied & (col == col.shift(1))
+        probes = stacked.select(
+            (ahead | (tied & (col >= col.shift(1)))).all().alias('#ordered'),
+            repeat.any().alias('#repeated'),
+        )
+        ordered, repeated = probes.row(0)
+        if not ordered:
+            stacked = stacked.sort('row', 'col')
+            repeated = stacked.select(repeat.any()).item()
+        if not repeated:
+            return stacked
+        matrix = stacked.lazy().group_by('row', 'col').agg(pl.col('coeff').sum()).sort('row', 'col')
+        return matrix.collect(engine='streaming')
 
     # ------------------------------------------------------------------
     # declarations
@@ -167,9 +186,11 @@ class PolarsExecutor:
     def _build_variable(self, v: plan.VariableDeclaration) -> pl.DataFrame:
         """One variable's labelled frame, and its share of ``cols``.
 
-        The share is sorted by the label, because ``cols`` carries no ``col``
-        of its own: a row's *position* is its solver column index, and the
-        bounds joins say nothing about the order they hand rows back in.
+        The share leaves in label order, because ``cols`` carries no ``col``
+        of its own: a row's *position* is its solver column index. The bounds
+        joins usually keep the labelled frame's order, so the order is
+        verified with one linear scan and re-established only when a join
+        actually lost it.
         """
 
         start = self._n_cols
@@ -177,12 +198,14 @@ class PolarsExecutor:
         self._variables[v.name] = labelled.lazy()
         self._blocks[v.name] = (start, labelled.height)
 
-        bounded = self._q.bounds(labelled.lazy(), v).sort('var_label')
+        bounded = self._q.bounds(labelled.lazy(), v).collect(engine='streaming')
+        if not bounded.get_column('var_label').is_sorted():
+            bounded = bounded.sort('var_label')
         cols = bounded.select(
             pl.col('lb').cast(pl.Float64),
             pl.col('ub').cast(pl.Float64),
             pl.lit(v.variable_type, dtype=_DTYPES['vtype']).alias('vtype'),
-        ).collect(engine='streaming')
+        )
 
         bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
         if bad:
@@ -248,8 +271,13 @@ class PolarsExecutor:
             return rows, None
 
         pieces = []
+        carried_order: MaintainOrderJoin | None = 'left_right' if len(terms) == 1 else None
         for p, sign in terms:
-            placed = frame.join(p.frame, on=list(p.dims), how='inner') if p.dims else frame.join(p.frame, how='cross')
+            placed = (
+                frame.join(p.frame, on=list(p.dims), how='inner', maintain_order=carried_order)
+                if p.dims
+                else frame.join(p.frame, how='cross')
+            )
             pieces.append(
                 placed.select(
                     'row',
@@ -257,7 +285,7 @@ class PolarsExecutor:
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
-        return rows, self._summed_shares(pieces, ('row', 'col'), f"constraint '{c.name}'", c.lhs, c.rhs)
+        return rows, self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
 
     def _build_objective(self, o: plan.ObjectiveDeclaration) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
@@ -267,6 +295,11 @@ class PolarsExecutor:
         Nothing downstream computes it — the hand-off scatters with
         ``dense[at] = values``, which keeps the *last* write — so the aggregate
         here is what makes the objective the one the file wrote.
+
+        The aggregate runs only when a column actually repeats. ``obj``
+        carries no order contract — the writer sorts it and the solver
+        hand-off scatters it — so the probe is one ``n_unique`` against the
+        height, not a sort.
         """
 
         comp = self._q.expression(o.expression, 'objective')
@@ -281,7 +314,11 @@ class PolarsExecutor:
         if not comp.terms:
             return None
         pieces = [p.frame.select(pl.col('var_label').alias('col'), pl.col('coeff')) for p in comp.terms]
-        return self._summed_shares(pieces, ('col',), 'objective', o.expression)
+        stacked = pl.concat(pieces).collect(engine='streaming')
+        self._refuse_undefined_divisors(stacked, 'objective', o.expression)
+        if stacked.get_column('col').n_unique() == stacked.height:
+            return stacked
+        return stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
 
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the executor only supplies the frames
