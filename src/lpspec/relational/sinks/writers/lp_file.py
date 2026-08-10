@@ -127,18 +127,14 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
     least — and the ``empty_as_null`` kwarg is polars 1.36+, which is why the
     version floor sits there.
 
-    ``set_sorted`` on ``row`` states what ``ModelTables`` already promises —
-    the matrix arrives sorted by ``(row, col)`` — and it is what lets the
-    streaming engine group adjacent runs instead of building a hash table:
-    measured at 10M nonzeros, 0.14 s against 0.89 s for the same aggregate
-    unflagged.
+    The chunk's entries come from :meth:`ModelTables.matrix_block` — a slice,
+    not a scan — and carry the matrix's sorted flag, which is what lets the
+    streaming engine group adjacent runs instead of building a hash table.
     """
-    inside = pl.col('row').is_between(lo, hi, closed='left')
-    matrix = model.matrix.lazy().with_columns(pl.col('row').set_sorted())
-    terms = matrix.filter(inside).group_by('row').agg(_term(pl.col('coeff'), pl.col('col')).alias('terms'))
+    terms = model.matrix_block(lo, hi).lazy().group_by('row').agg(_term(pl.col('coeff'), pl.col('col')).alias('terms'))
     return (
         model.rows.lazy()
-        .filter(inside)
+        .filter(pl.col('row').is_between(lo, hi, closed='left'))
         .join(terms, on='row', how='left')
         .sort('row')
         .select(

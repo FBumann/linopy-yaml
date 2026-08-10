@@ -406,9 +406,10 @@ class Model(_StrictBlock):
 
     _label: ClassVar[str] = 'the top level of the file'
 
-    #: The expansion validation already built, so nobody builds it twice: the
-    #: namespace it was expanded against, and the expanded model. Read and
-    #: reused by :func:`~lpspec.language.piecewise.expand_piecewise`.
+    #: The last expansion built from this model: the namespace it was expanded
+    #: against, and the expanded model. Owned entirely — written, read, keyed —
+    #: by :func:`~lpspec.language.piecewise.expand_piecewise`; only the slot
+    #: lives here.
     _expansion: tuple[dict[str, tuple[str, ...]], Model] | None = PrivateAttr(default=None)
 
     #: Which language surface this file is written against. Absent means 0, so
@@ -593,22 +594,20 @@ class Model(_StrictBlock):
 
         An expansion *builds* a ``Model``, which validates itself on the way
         out, so the check below runs only when there was nothing to expand.
-        Calling it either way validated a piecewise model twice. The expansion
-        is kept on the instance for the same reason: every consumer of a
-        piecewise model asks for it next, and rebuilding it re-validates it.
+        Calling it either way validated a piecewise model twice — and for the
+        same reason ``expand_piecewise`` memoises its result on the instance
+        (:attr:`_expansion`): every consumer of a piecewise model asks for
+        the expansion next, and rebuilding it would re-validate it.
 
         ``known_variables`` arrives as pydantic validation context, for the file
         deliberately not valid alone: an extension references variables already
         on the model ``lpspec.linopy.extend`` puts it on. It travels into
         expansion too, since a link may name one of those variables.
         """
-        from lpspec.language.piecewise import expand_piecewise, expansion_key
+        from lpspec.language.piecewise import expand_piecewise
         from lpspec.language.validation import validate_expressions
 
         known = (info.context or {}).get('known_variables', {})
-        expanded = expand_piecewise(self, known_variables=known)
-        if expanded is self:
+        if expand_piecewise(self, known_variables=known) is self:
             validate_expressions(self, known_variables=known)
-        else:
-            self._expansion = (expansion_key(known), expanded)
         return self

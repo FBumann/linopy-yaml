@@ -32,8 +32,6 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable, Mapping, Sequence
 
-    from polars._typing import MaintainOrderJoin
-
     from lpspec.relational.engines.polars.binding import BoundSources
 
 
@@ -81,12 +79,6 @@ class TermFragment:
     ``None`` means "nothing to report" — a constant fragment has no variable, and
     a reduction clears it, because ``sum`` skips absent slots rather than
     propagating them (v1 ``convention.rst`` §13).
-    """
-    variable: str | None = None
-    """The variable whose labels :attr:`frame` carries; ``None`` for a const part.
-
-    An affine fragment holds at most one, because ``Add`` splits into fragments
-    and ``Multiply`` refuses a second — so this is a name, not a set.
     """
     presence_dims: tuple[str, ...] | None = None
     """The columns :attr:`presence` is keyed by; ``None`` means :attr:`dims`.
@@ -196,7 +188,6 @@ class PolarsCompiler:
         frame_dims: tuple[str, ...],
         alias: str,
         subject: str,
-        maintain_order: MaintainOrderJoin | None = None,
     ) -> pl.LazyFrame:
         """Left-join *param* onto *frame*, its value column renamed to *alias*.
 
@@ -209,11 +200,10 @@ class PolarsCompiler:
         about — a null bound is refused by name, and a null in a mask reads as
         false (:func:`_falsy_if_null`) — never a row to drop silently here.
 
-        *maintain_order* is asked for where the result is ordered by
-        construction and something downstream reads it that way. It is not
-        free (+12 ms on a 10M-row join) and it is far cheaper than restoring
-        the order afterwards (~110 ms to sort the same frame), so it is passed
-        deliberately rather than defaulted on.
+        The join always keeps the frame's order: every caller reads the result
+        as ordered by construction, and asking the join for it (+12 ms on a
+        10M-row join) is far cheaper than restoring it afterwards (~110 ms to
+        sort the same frame).
         """
         declaration = self.program.parameter(param)
         extra = set(declaration.dims) - set(frame_dims)
@@ -221,8 +211,8 @@ class PolarsCompiler:
             raise LanguageError(f'{subject} has dims {sorted(extra)} outside the foreach dims {list(frame_dims)}')
         table = self.parameters[param].rename({'value': alias})
         if not declaration.dims:
-            return frame.join(table, how='cross', maintain_order=maintain_order)
-        return frame.join(table, on=list(declaration.dims), how='left', maintain_order=maintain_order)
+            return frame.join(table, how='cross', maintain_order='left')
+        return frame.join(table, on=list(declaration.dims), how='left', maintain_order='left')
 
     # ------------------------------------------------------------------
     # predicates (where masks — row absence)
@@ -260,7 +250,6 @@ class PolarsCompiler:
                     dims,
                     alias,
                     f"where-parameter '{param}'",
-                    maintain_order='left',
                 )
                 joined.add(alias)
             return alias
@@ -290,7 +279,7 @@ class PolarsCompiler:
                     )
                     carrier = carrier.join(marked, on=on, how='left', maintain_order='left')
                     joined.add(flag)
-                return pl.col(flag).fill_null(value=False)
+                return _falsy_if_null(pl.col(flag))
             if isinstance(p, plan.BooleanConstant):
                 return pl.lit(value=p.value)
             if isinstance(p, plan.And):
@@ -331,7 +320,6 @@ class PolarsCompiler:
                         v.dims,
                         alias,
                         f"bound parameter '{e.name}' of variable '{v.name}'",
-                        maintain_order='left',
                     )
                     joined.add(alias)
                 return pl.col(alias).cast(pl.Float64)
@@ -413,7 +401,7 @@ class PolarsCompiler:
         frame = self.variables[name].select(*dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff'))
         masked = self.program.variable(name).where is not None
         presence = self._presence(name, dims) if masked else None
-        return TermFragment(dims, frame, True, variable=name, presence=presence, presence_dims=dims if masked else None)
+        return TermFragment(dims, frame, True, presence=presence, presence_dims=dims if masked else None)
 
     def _presence(self, name: str, dims: tuple[str, ...]) -> pl.LazyFrame:
         """The coordinates a masked variable exists at.
@@ -486,7 +474,7 @@ class PolarsCompiler:
         frame = p.frame.select(*keep, *p.carried)
         if scale != 1:
             frame = frame.with_columns(pl.col(p.value_column) * scale)
-        return TermFragment(keep, frame, p.is_term, variable=p.variable)
+        return TermFragment(keep, frame, p.is_term)
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
         """Relabel dim ``over`` to ``into`` through a declared coordinate.
@@ -504,10 +492,7 @@ class PolarsCompiler:
 
         if g.over not in p.dims:
             raise LanguageError(f"in {context}: GroupSum over '{g.over}' but the expression has dims {list(p.dims)}")
-        keep = tuple(x for x in p.dims if x != g.over)
-        mapping = self.dimensions[g.over].select(pl.col('val').alias(g.over), pl.col(g.coordinate).alias(g.into))
-        frame = p.frame.join(mapping, on=g.over, how='inner').select(*keep, g.into, *p.carried)
-        return TermFragment((*keep, g.into), frame, p.is_term, variable=p.variable)
+        return self._remap_fragment(p, g, consumed=g.over, produced=g.into)
 
     def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
         """Spread ``into`` back out over ``over`` — the adjoint of a group.
@@ -527,10 +512,26 @@ class PolarsCompiler:
 
         if a.into not in p.dims:
             raise LanguageError(f"in {context}: At through '{a.into}' but the expression has dims {list(p.dims)}")
-        keep = tuple(x for x in p.dims if x != a.into)
-        mapping = self.dimensions[a.over].select(pl.col('val').alias(a.over), pl.col(a.coordinate).alias(a.into))
-        frame = p.frame.join(mapping, on=a.into, how='inner').select(*keep, a.over, *p.carried)
-        return TermFragment((*keep, a.over), frame, p.is_term, variable=p.variable)
+        return self._remap_fragment(p, a, consumed=a.into, produced=a.over)
+
+    def _remap_fragment(
+        self, p: TermFragment, node: plan.GroupSum | plan.At, *, consumed: str, produced: str
+    ) -> TermFragment:
+        """Trade dim *consumed* for *produced* through *node*'s coordinate.
+
+        The mapping table is the declared coordinate read as two columns —
+        ``val`` as ``over``, the coordinate as ``into`` — and the rewrite is a
+        single inner equi-join on *consumed*. A group consumes ``over``
+        (:meth:`_group_fragment`); an ``At`` reads the same table backwards
+        (:meth:`_at_fragment`). Written once so the adjoints cannot drift: a
+        change to how the mapping joins is a change to both.
+        """
+        keep = tuple(x for x in p.dims if x != consumed)
+        mapping = self.dimensions[node.over].select(
+            pl.col('val').alias(node.over), pl.col(node.coordinate).alias(node.into)
+        )
+        frame = p.frame.join(mapping, on=consumed, how='inner').select(*keep, produced, *p.carried)
+        return TermFragment((*keep, produced), frame, p.is_term)
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
         """A pointwise remap of the dim through its ord: a row at *o*

@@ -328,29 +328,3 @@ def test_a_bound_carrying_a_variable_is_refused():
     variable = plan.VariableDeclaration('p', ('snapshot', 'generator'), upper=plan.Variable('p'))
     with pytest.raises(LanguageError, match='bounds must be variable-free'):
         compiler().bounds(VARIABLES['p'], variable)
-
-
-# ---------------------------------------------------------------------------
-# the variable a fragment names
-# ---------------------------------------------------------------------------
-
-
-def test_a_term_names_its_variable_through_every_operator():
-    """The name travels, because absence is read off the variable underneath.
-
-    A fragment carries the coordinates its *variable* exists at beside its own
-    rows (`presence`), and which declaration that is has to survive every
-    reshaping for the constraint rows to be restricted by it.
-    """
-    for node in (
-        plan.Variable('p'),
-        plan.Sum(plan.Variable('p'), ('generator',)),
-        plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus'),
-        plan.Translate(plan.Variable('p'), 'snapshot', by=1),
-        plan.Multiply(plan.Variable('p'), plan.Parameter('cost')),
-        plan.Divide(plan.Variable('p'), plan.Parameter('cost')),
-        -plan.Variable('p'),
-    ):
-        assert compiler().expression(node, 'test').terms[0].variable == 'p', node
-
-    assert compiler().expression(plan.Parameter('cost'), 'test').consts[0].variable is None

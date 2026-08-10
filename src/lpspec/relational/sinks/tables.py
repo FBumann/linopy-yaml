@@ -169,29 +169,35 @@ class ModelTables:
         call against 0.89 s in forty on the same matrix (#434). So the caller
         says, and both answers come out of the same code.
 
-        A chunk is a ``slice`` of the matrix located by binary search on the
-        label column — the range is contiguous because ``row`` is dense and the
-        frame arrives sorted, so scanning for it would re-read the whole model
-        once per chunk.
-
-        **Searched in polars rather than through numpy.** Pulling the label
-        column out to search it there is marginally faster and holds a second
-        copy of one column of the model for the whole loop, which is 0.11 GB at
-        `transport/l` — the wrong trade in a pass that exists to stay bounded.
-
         ``starts`` is each row's offset within the block, which is what both
         solvers' matrix APIs ask for. A row with no entries takes the next
         row's offset, and so occupies no span.
         """
         import numpy as np
 
-        label = self.matrix['row']
         spans = [(0, self.row_count)] if budget is None else self.row_chunks_by_nonzeros(budget)
         for lo, hi in spans:
-            first = int(label.search_sorted(lo, 'left'))
-            last = int(label.search_sorted(hi, 'left'))
-            entries = self.matrix.slice(first, last - first)
+            entries = self.matrix_block(lo, hi)
             yield lo, hi, entries, np.searchsorted(entries['row'].to_numpy(), np.arange(lo, hi))
+
+    def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
+        """The matrix entries rows ``[lo, hi)`` own, as a ``slice``.
+
+        Located by binary search on the label column — the range is contiguous
+        because ``row`` is dense and the frame arrives sorted, so scanning for
+        it would re-read the whole model once per chunk. Every chunked reader
+        goes through here so there is one answer to which entries a row range
+        owns.
+
+        **Searched in polars rather than through numpy.** Pulling the label
+        column out to search it there is marginally faster and holds a second
+        copy of one column of the model for the whole loop, which is 0.11 GB at
+        `transport/l` — the wrong trade in a pass that exists to stay bounded.
+        """
+        label = self.matrix['row']
+        first = int(label.search_sorted(lo, 'left'))
+        last = int(label.search_sorted(hi, 'left'))
+        return self.matrix.slice(first, last - first)
 
 
 def _scattered(count: int, at: Any, values: Any, absent: Any) -> Any:

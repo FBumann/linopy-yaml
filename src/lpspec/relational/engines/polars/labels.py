@@ -59,7 +59,7 @@ def frame(
     row-major over the ordinals, which is one arithmetic expression
     (:func:`_row_major`) — and the product is *produced* in that order, a
     filter keeps it, and a semi-join usually does, so the sort that would
-    re-establish it usually permutes nothing. :func:`_in_position_order`
+    re-establish it usually permutes nothing. :func:`in_position_order`
     verifies that linearly and sorts only when the engine emitted another
     order. The unconditional sort this replaces was 0.26 s of a 0.73 s build
     at ``dispatch/l``, against ~0.01 s for the verify.
@@ -69,7 +69,7 @@ def frame(
         surviving = restrict_by_presence(surviving, presence, on)
 
     position = '#position'
-    materialised = _in_position_order(
+    materialised = in_position_order(
         surviving.select(*(dims or (UNIT,)), _row_major(compiler, dims).alias(position)).collect(engine='streaming'),
         position,
     )
@@ -97,13 +97,15 @@ def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
     return position.cast(pl.Int64)
 
 
-def _in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame:
-    """The frame in declaration order, verified rather than re-established.
+def in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame:
+    """The frame ordered by *position*, verified rather than re-established.
 
-    One linear ``is_sorted`` against a single Int64 column, and the sort —
-    also single-key, where sorting the ordinal columns was one key per dim —
-    only when the engine emitted another order. The position column leaves
-    here dropped either way; it was only ever the order's witness.
+    One linear ``is_sorted`` against a single column, and the sort — also
+    single-key, where sorting the ordinal columns was one key per dim — only
+    when the engine emitted another order. The position column leaves here
+    dropped either way; it was only ever the order's witness. The executor's
+    per-variable ``cols`` share leans on the same idiom with ``var_label`` as
+    the witness.
     """
     ordered = materialised.get_column(position).is_sorted()
     return (materialised if ordered else materialised.sort(position)).drop(position)

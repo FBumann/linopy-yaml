@@ -108,7 +108,10 @@ class PolarsExecutor:
         already has that order: each share leaves sorted and owns the next run
         of rows, so ascending shares concatenate into an ascending whole, and
         a ``sort`` here would copy the model's largest frame at the peak of
-        the build to reorder nothing.
+        the build to reorder nothing. ``set_sorted`` states that promise in
+        the frame itself, once, where the order is established — it is what
+        lets a sink's streaming ``group_by`` walk adjacent runs instead of
+        building a hash table (0.14 s against 0.89 s at 10M nonzeros).
         """
 
         self._program = program
@@ -121,7 +124,7 @@ class PolarsExecutor:
 
         self._cols = _stack(cols, _COLS)
         self._rows = _stack([r for r, _ in built], _ROWS)
-        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX)
+        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX).with_columns(pl.col('row').set_sorted())
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -190,7 +193,10 @@ class PolarsExecutor:
         of its own: a row's *position* is its solver column index. The bounds
         joins usually keep the labelled frame's order, so the order is
         verified with one linear scan and re-established only when a join
-        actually lost it.
+        actually lost it (:func:`labels.in_position_order`). Only the label
+        and the two bounds are collected: projecting before the collect keeps
+        the dim columns and the joined bound parameters inside the lazy
+        pipeline instead of materialising them to be dropped.
         """
 
         start = self._n_cols
@@ -198,14 +204,13 @@ class PolarsExecutor:
         self._variables[v.name] = labelled.lazy()
         self._blocks[v.name] = (start, labelled.height)
 
-        bounded = self._q.bounds(labelled.lazy(), v).collect(engine='streaming')
-        if not bounded.get_column('var_label').is_sorted():
-            bounded = bounded.sort('var_label')
-        cols = bounded.select(
-            pl.col('lb').cast(pl.Float64),
-            pl.col('ub').cast(pl.Float64),
-            pl.lit(v.variable_type, dtype=_DTYPES['vtype']).alias('vtype'),
+        bounded = labels.in_position_order(
+            self._q.bounds(labelled.lazy(), v)
+            .select('var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64))
+            .collect(engine='streaming'),
+            'var_label',
         )
+        cols = bounded.with_columns(pl.lit(v.variable_type, dtype=_DTYPES['vtype']).alias('vtype'))
 
         bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
         if bad:
@@ -219,12 +224,13 @@ class PolarsExecutor:
         fragment is aggregated to its own coordinates and left-joined, so a
         coordinate it has no row for contributes zero.
 
-        The terminal ``SUM(coeff) GROUP BY row, col`` is where duplicates from
-        ``Sum`` and ``GroupSum`` — which project rather than aggregate —
-        collapse, and where ``x + 2 * x`` becomes one cell. It runs on every
-        constraint: whether a *particular* one can repeat a cell is a question
-        about how each fragment was reshaped, and asking it is a great deal of
-        machinery to save an aggregate that mostly finds nothing.
+        Duplicates from ``Sum`` and ``GroupSum`` — which project rather than
+        aggregate — and from ``x + 2 * x`` collapse in the terminal
+        ``SUM(coeff) GROUP BY row, col`` of :meth:`_matrix_share`, which runs
+        only when a linear probe over the stacked share finds a repeated
+        cell. Whether a *particular* constraint could repeat one used to be
+        reasoned statically from how each fragment was reshaped; the answer
+        is read off the data instead, which is what #520 removed.
 
         The share leaves ordered by ``(row, col)``, which every sink reads it
         as: a row range at a time, entries ascending within the row.
