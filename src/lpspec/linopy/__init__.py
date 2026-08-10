@@ -46,14 +46,10 @@ except ModuleNotFoundError as exc:  # linopy / xarray absent
     raise ModuleNotFoundError(msg) from exc
 
 
-from pydantic import ValidationError
-
 from lpspec._notes import note
-from lpspec.errors import LanguageError, schema_error
-from lpspec.language._yaml import read_yaml
-from lpspec.language.model import Model
+from lpspec.errors import LanguageError
 from lpspec.language.piecewise import expand_piecewise
-from lpspec.language.validation import validate_expressions
+from lpspec.language.validation import load_model
 from lpspec.linopy.builder import build_model
 from lpspec.linopy.loader import (
     build_dim_coords,
@@ -112,16 +108,16 @@ def build(
 
     Raises
     ------
-    ValueError
-        For any validation failure (missing dimensions, parameters, etc.).
-    pydantic.ValidationError
-        If the YAML structure is invalid.
+    LanguageError
+        The file says something the language does not accept — its structure,
+        its declarations or its expressions.
+    DataError
+        The file is fine; what *data* supplied for it is not.
     """
     path = Path(path)
     with note(f"while loading YAML '{path}'"):
-        original = _read(path)
+        original = load_model(path)
         schema = expand_piecewise(original)
-        validate_expressions(schema)
 
         master_coords = build_master_coords(schema, coords)
         dim_coords = build_dim_coords(schema, coords, master_coords)
@@ -157,25 +153,20 @@ def extend(
     """
     path = Path(path)
     with note(f"while extending with YAML '{path}'"):
-        # linopy dims are Hashable; the language's are names. Passed as
-        # validation context so the extension is checked against the namespace
-        # it will run in — it references variables this model already has, so
-        # it is deliberately not valid alone.
-        known = {n: [str(d) for d in model.variables[n].dims] for n in model.variables}
-        original = _read(path, context={'known_variables': known})
+        original = load_model(path, known_variables=_variable_dims(model))
         schema = expand_piecewise(original)
 
-        known = _infer_coords(model)
+        existing_coords = _infer_coords(model)
         if coords is not None:
-            known.update({k: dim_index_of(v, k) for k, v in coords.items()})
+            existing_coords.update({k: dim_index_of(v, k) for k, v in coords.items()})
 
         # If this YAML declares values: for a dim the model already has, they
         # must match. Silent override would hide real bugs.
         for dim_name, dim_def in schema.dimensions.items():
-            if dim_def.values is None or dim_name not in known:
+            if dim_def.values is None or dim_name not in existing_coords:
                 continue
             declared = pd.Index(dim_def.values, name=dim_name)
-            existing = known[dim_name]
+            existing = existing_coords[dim_name]
             if not declared.equals(existing):
                 msg = (
                     f"Extension declares dimension '{dim_name}' with values "
@@ -187,9 +178,7 @@ def extend(
                 )
                 raise LanguageError(msg)
 
-        # ``known`` is the override, so any dim it covers beats this YAML's
-        # ``values:``. Dims still missing fall through to ``values:`` or raise.
-        master_coords = build_master_coords(schema, known)
+        master_coords = build_master_coords(schema, existing_coords)
         dim_coords = build_dim_coords(schema, coords, master_coords)
         dataset = load_parameters(schema, data, master_coords)
         validate_piecewise_data(original, dataset)
@@ -197,17 +186,15 @@ def extend(
         build_model(model, schema, dataset, master_coords, dim_coords)
 
 
-def _read(path: Path, context: dict[str, Any] | None = None) -> Model:
-    """Read and validate, giving this package's exception tree.
+def _variable_dims(model: linopy.Model) -> dict[str, list[str]]:
+    """The dims of every variable on *model*, as language names.
 
-    Pydantic wraps whatever a validator raises, so without this a caller of the
-    shim would get a ``ValidationError`` where the native lane gives a
-    ``LanguageError`` — the same file, the same mistake, two types.
+    An extension is deliberately not valid alone — it references variables the
+    model already has — so these travel in as validation context and the file
+    is checked against the namespace it will run in. linopy's dims are
+    ``Hashable``; the language's are names.
     """
-    try:
-        return Model.model_validate(read_yaml(path), context=context)
-    except ValidationError as exc:
-        raise schema_error(exc) from None
+    return {n: [str(d) for d in model.variables[n].dims] for n in model.variables}
 
 
 def _infer_coords(model: linopy.Model) -> dict[str, pd.Index]:

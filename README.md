@@ -134,8 +134,7 @@ from lpspec import linopy as lpspec_linopy
 
 lpspec_linopy.extend(m, 'ramp.yaml', data={'ramp_max': network.generators['ramp_max']})
 ```
-<!-- an extension: `p` is declared by the model it extends -->
-<!-- doctest: skip -->
+<!-- doctest: extends=p(snapshot,generator) -->
 ```yaml
 # ramp.yaml — `p` comes from the model; dims are declared here but their
 # coordinates are inferred from it, so no `values:` is needed

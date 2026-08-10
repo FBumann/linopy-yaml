@@ -54,10 +54,17 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 
-def load_model(model: str | Path | dict[str, Any] | Model) -> Model:
+def load_model(
+    model: str | Path | dict[str, Any] | Model,
+    *,
+    known_variables: Mapping[str, Sequence[str]] = MappingProxyType({}),
+) -> Model:
     """Load and validate a model definition — the language's front door.
 
     Accepts a YAML file path, an already-parsed dict, or a ``Model``.
+    ``known_variables`` widens the variable set for the one file that is not
+    valid alone — an extension for ``linopy.extend()``, which references
+    variables already on the model it extends.
     Validation is complete at this point: schema shape, every expression and
     where string, every named expression and macro template — and every
     declaration a formulation emits, since those are language too. That is why
@@ -86,7 +93,7 @@ def load_model(model: str | Path | dict[str, Any] | Model) -> Model:
         return model
     raw = model if isinstance(model, dict) else read_yaml(Path(model))
     try:
-        return Model(**raw)
+        return Model.model_validate(raw, context={'known_variables': known_variables})
     except ValidationError as exc:
         raise schema_error(exc) from None
 

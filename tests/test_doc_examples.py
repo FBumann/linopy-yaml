@@ -24,6 +24,7 @@ Annotations go in an HTML comment on the line before the fence, so they are
 invisible in rendered markdown:
 
     <!-- doctest: wrap=constraints -->   nest the block under that schema key
+    <!-- doctest: extends=p(t,g) -->     a variable, with its dims, from the model it extends
     <!-- doctest: skip -->               excluded, and the reason belongs in a comment
 
 A YAML block with no annotation is validated whole, which means it must
@@ -256,6 +257,24 @@ def _entry_model(section: str) -> Any:
     return args[1] if len(args) == 2 else None
 
 
+_BORROWED = re.compile(r'(?P<name>\w+)\s*(?:\((?P<dims>[^)]*)\))?')
+
+
+def _borrowed(note: str) -> dict[str, list[str]]:
+    """Variables an ``extends=`` block takes from the model it extends.
+
+    Written ``extends=p(snapshot,generator)`` — the dims are part of it because
+    dim checking is a language rule, so a borrowed variable with no dims would
+    have ``shift(over=snapshot)`` fail on the very block that demonstrates it.
+    """
+    if not note.startswith('extends='):
+        return {}
+    return {
+        m['name']: [d.strip() for d in (m['dims'] or '').split(',') if d.strip()]
+        for m in _BORROWED.finditer(note.removeprefix('extends='))
+    }
+
+
 @pytest.mark.parametrize('block', _blocks('yaml'), ids=lambda b: b.where)
 def test_yaml_block_validates(block: Block) -> None:
     """A YAML example must be a thing the schema accepts.
@@ -265,6 +284,11 @@ def test_yaml_block_validates(block: Block) -> None:
     single entry of a section and deliberately omits the declarations around
     it, so it is checked against that section's own model: its *shape* is our
     claim, its cross-references are not.
+
+    An ``extends=`` block is validated *whole* — keys, shapes and expressions —
+    against a namespace widened by the names it borrows, which is what an
+    extension gets from ``linopy.extend()``. It is the narrow form of ``skip``:
+    a typo'd key in one of these is still a failure.
     """
     if block.note == 'skip':
         pytest.skip('explicitly skipped')
@@ -284,7 +308,7 @@ def test_yaml_block_validates(block: Block) -> None:
         return
 
     try:
-        load_model(doc)
+        load_model(doc, known_variables=_borrowed(block.note))
     except Exception as exc:
         pytest.fail(
             f'{block.where} does not validate:\n{exc}\n\n'
@@ -293,6 +317,7 @@ def test_yaml_block_validates(block: Block) -> None:
             '`parameters:` must declare the dims it names — annotate the fence '
             'instead:\n'
             '  <!-- doctest: wrap=<section> -->  a single entry of that section\n'
+            '  <!-- doctest: extends=v(dims) --> a variable borrowed from another model\n'
             '  <!-- doctest: skip -->            not a model, or wrong on purpose'
         )
 

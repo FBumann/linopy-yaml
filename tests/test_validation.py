@@ -135,6 +135,23 @@ class TestValidateExpressions:
             load_model(raw)
         Model.model_validate(raw, context={'known_variables': {'p': ['g']}})
 
+    def test_known_names_reach_a_piecewise_block(self):
+        """A borrowed variable may be what a formulation links.
+
+        Expansion resolves link expressions itself, to compute the frame the
+        block is emitted over, so it needs the widened namespace as much as
+        the checkers downstream do. Without it an extension carrying any
+        ``piecewise:`` block was refused whatever it linked.
+        """
+        raw = {
+            'dimensions': {'bp': {'dtype': 'int', 'values': [0, 1]}},
+            'parameters': {'power_bp': {'dims': ['bp']}, 'fuel_bp': {'dims': ['bp']}},
+            'piecewise': {'curve': {'over': 'bp', 'links': [['p', 'power_bp'], ['f', 'fuel_bp']]}},
+        }
+        with pytest.raises(ValueError, match="'p' not found"):
+            load_model(raw)
+        load_model(raw, known_variables={'p': [], 'f': []})
+
     def test_known_variable_dims_reach_the_objective(self):
         """The dim checker needs an external variable's dims wherever it needs
         the name — objectives included, not just constraints."""
