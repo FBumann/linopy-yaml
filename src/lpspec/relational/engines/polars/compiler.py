@@ -649,12 +649,20 @@ class PolarsCompiler:
             )
 
         frame = remap(p.frame, p.carried)
-        if not s.wrap and s.fill:
-            # A const fragment reads a missing row as zero, so `fill=0` needs no
-            # rows at all — but `fill=1`, the identity a *product* wants, is only
-            # there if it is written. Lowering guarantees a nonzero fill reaches
-            # here only over a variable-free operand, so this is always the
-            # const branch and never has a `var_label` to invent.
+        if not s.wrap and s.fill is not None and not p.is_term:
+            # Every fill over a constant is written, `0` included. The
+            # arithmetic is unchanged — a const fragment reads a missing row as
+            # zero anyway — but the slot now *has* a value, so asking for zero
+            # stops being indistinguishable from having nothing. The presence
+            # branch below has always counted a filled slot as present; this is
+            # the frame agreeing with it.
+            #
+            # Over a *term* there is nothing to write: `edge=0` on a variable
+            # means the vacated slot contributes no term at all (SPEC §7), and
+            # a zero-coefficient entry would be a nonzero in the matrix
+            # standing for a term that is not there. Lowering already refuses
+            # every other numeric edge over a variable, so `0` is the only one
+            # that reaches here.
             frame = pl.concat([frame, self._filled_edge(s, card, others, s.fill)], how='vertical_relaxed')
         presence, presence_dims = None, None
         if p.presence is not None:
