@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import polars as pl
 import pytest
 
 import lpspec as lps
@@ -333,3 +334,57 @@ def test_a_quoted_keyword_outside_a_kwarg_does_not_parse():
         lps.check(_with("x - 'wrap' <= 1"))
 
     assert 'Failed to parse expression' in str(exc.value)
+
+
+def _shift_over_data(where: str | None = None, edge: str | None = None) -> dict[str, object]:
+    shift = f'shift(dt, over=t, by=1, edge={edge})' if edge else 'shift(dt, over=t, by=1)'
+    constraint: dict[str, object] = {'foreach': ['t'], 'expression': f'x <= {shift}'}
+    if where is not None:
+        constraint['where'] = where
+    return {
+        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'parameters': {'dt': {'dims': ['t']}},
+        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'c': constraint},
+        'objectives': {'o': {'sense': 'maximize', 'expression': 'x'}},
+    }
+
+
+def test_the_bare_shift_refusal_names_the_pair_that_actually_omits_the_row():
+    """`edge=` and `where:` are a companion pair here, not a choice.
+
+    Each is wrong alone, which is why listing them as alternatives was the
+    defect: a `where` does not lift the refusal, because it is decided on the
+    expression before any mask is read; and `edge=0` alone leaves a row at the
+    vacated coordinate whose bound is that zero — the silent pinning the
+    refusal exists to prevent.
+
+    Held as behaviour and as wording, because the wording is the only thing
+    standing between a reader and the `edge=0`-alone answer, which builds and
+    solves and is wrong.
+    """
+    with pytest.raises(LanguageError, match='vacated positions') as bare:
+        lps.check(_shift_over_data())
+    with pytest.raises(LanguageError, match='vacated positions') as masked:
+        lps.check(_shift_over_data(where='t > 0'))
+    assert str(bare.value) == str(masked.value), 'a mask lifts the refusal, so it is an alternative after all'
+
+    message = str(bare.value)
+    assert 'where' in message, 'the way to omit the row has to be reachable from the error'
+    assert "edge='wrap'" in message
+    assert 'edge=0 alone' in message, 'the trap has to be named, not just the remedy'
+
+
+def test_edge_zero_alone_binds_the_vacated_row_and_a_where_frees_it():
+    """The measurement the message is built on.
+
+    `edge=0` alone is not a refusal and not an error — it solves, and the
+    answer is wrong in the direction that looks like a tight model.
+    """
+    sources = {'dt': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 1.0, 1.0]})}
+    pinned = lps.solve(_shift_over_data(edge='0'), sources)
+    omitted = lps.solve(_shift_over_data(edge='0', where='t > 0'), sources)
+
+    assert pinned.primal('x')['value'].to_list()[0] == 0.0, 'edge=0 alone should pin the vacated row'
+    assert omitted.primal('x')['value'].to_list()[0] == 5.0, 'the where should omit it entirely'
+    assert omitted.objective > pinned.objective

@@ -336,12 +336,24 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
 
 
 def _shift_over_data_message(context: str) -> str:
+    """The three ways out, one of which is two things at once.
+
+    A `where` is a *companion* to `edge=`, not an alternative to it. This
+    refusal is decided on the expression alone, so a mask does not lift it —
+    but `edge=0` alone leaves a row at the vacated coordinate whose bound is
+    that zero, which is the silent pinning this refusal exists to prevent. The
+    row is omitted only by masking it, and the mask is only reachable once the
+    expression is well-formed. Listing the two as alternatives sent a reader to
+    whichever they read first, and both are wrong on their own.
+    """
     return (
         f'{context}: shift() over a variable-free expression leaves vacated positions with no '
         f'value, and inventing one is what silently pinned a bound to zero. Say which you mean:\n'
-        f'  shift(x, over=d, by=n, edge=0)      the vacated positions contribute zero\n'
-        f'  where: "..."                        mask the vacated coordinate out of the row\n'
-        f"  shift(x, over=d, by=n, edge='wrap')   the dimension really is cyclic"
+        f"  shift(x, over=d, by=n, edge='wrap')   the dimension really is cyclic\n"
+        f'  shift(x, over=d, by=n, edge=0)        the vacated positions contribute zero\n'
+        f'  ...and a where: excluding them        the vacated rows should not exist at all\n'
+        f'A where: alone does not lift this — it is decided on the expression, before any mask '
+        f'is read — and edge=0 alone leaves a row whose bound is that zero.'
     )
 
 
