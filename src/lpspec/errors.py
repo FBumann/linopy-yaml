@@ -1,9 +1,8 @@
 """The exception hierarchy, so that one ``except`` clause covers the package.
 
-Before this module the package raised four unrelated ``ValueError``
-subclasses and a great deal of bare ``ValueError``, which left a caller no
-way to say "this model is the problem" without also catching every
-``ValueError`` pandas or pydantic might raise on the way past.
+One class per kind of wrong, so a caller can say "this model is the problem"
+without also catching every ``ValueError`` pandas or pydantic might raise on
+the way past.
 
 The split that matters is **the model versus the run**:
 
@@ -13,8 +12,8 @@ The split that matters is **the model versus the run**:
 * :class:`DataError` — the file is fine; what was bound to it is not. An
   unbound source, a column that does not carry the declared dims.
 
-Everything subclasses :class:`LpspecError`, which subclasses ``ValueError`` —
-so code that catches ``ValueError`` today keeps working.
+Everything subclasses :class:`LpspecError`, which subclasses ``ValueError``,
+so a caller who catches the built-in still catches these.
 
 ``model.py``'s field validators raise plain ``ValueError``, because pydantic
 collects those into its own ``ValidationError`` and a custom class does not
@@ -205,14 +204,11 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     """``unknown <kind> '<name>'``, plus the near miss or the declared set.
 
     The same shape as the loader's unknown-key error, deliberately: a reader who
-    has met one has met both, and there were already two copies of this idiom in
-    the tree before this one.
+    has met one has met both.
 
-    Written for #298's positional names (`ramp_0`, `ramp_1`) and kept after they
-    were removed, because the shape outlived the cause: `piecewise:` still
-    expands one block into several constraints, and a rule split by regime is
-    conventionally `x` and `x_initial`. What changed is the wording — "named by
-    position" would now be a claim about a surface that no longer exists.
+    It earns the near-miss hint because generated names are close together —
+    `piecewise:` expands one block into several constraints, and a rule split by
+    regime is conventionally `x` and `x_initial`.
 
     Single-line on purpose. These are raised as ``KeyError``, whose ``str`` is
     the *repr* of its argument, so a newline arrives at the reader as a literal
@@ -246,8 +242,8 @@ def schema_error(exc: Any, context: str = '') -> LanguageError:
 
     It does keep the original under ``ctx['error']``, so a
     :class:`DimensionError` raised deep in a validator comes back a
-    ``DimensionError`` rather than being flattened. Anything else — pydantic's
-    own type and shape complaints, or several errors at once — is a
+    ``DimensionError``. Anything else — pydantic's own type and shape
+    complaints, or several errors at once — is a
     :class:`SchemaError`, which is what "the declarations are wrong" means.
     """
     errors = exc.errors()

@@ -245,8 +245,6 @@ class TestLoadParameters:
         ],
     )
     def test_accepted_shapes(self, values, data, select, expected):
-        # the dtype guard runs at construction now, so a fixture has to
-        # declare the labels it actually carries
         dtype = 'int' if isinstance(values[0], int) else 'str'
         s = _schema(dims={'x': {'values': values, 'dtype': dtype}}, params={'a': {'dims': ['x']}})
         ds = loader.load_parameters(s, {'a': data}, loader.build_master_coords(s, None))

@@ -569,11 +569,9 @@ class Model(_StrictBlock):
     def _validate_expressions(self, info: ValidationInfo) -> Model:
         """Every expression and where string, checked here rather than beside.
 
-        A ``Model`` built the normal way is valid — which is what makes a
-        constructor safe to offer. Before this, ``Model(**data)`` accepted a
-        constraint naming an undeclared parameter and only ``load_model``
-        caught it, so the type could exist half-checked while looking like the
-        front door.
+        A ``Model`` that exists is valid, whichever way it was built — a
+        constructor is only safe to offer on that condition, and a type that
+        can exist half-checked while looking like the front door is a trap.
 
         The checkers are a layer that reads this one, so they are imported here
         and declared in ``DELIBERATE_LAZY_IMPORTS``. Expansion runs first
@@ -584,9 +582,8 @@ class Model(_StrictBlock):
         ``known_variables`` arrives through pydantic's validation context, for
         the one file that is *deliberately* not valid alone: an extension
         loaded by ``lpspec.linopy.extend`` references variables already on the
-        model it extends. Passing the names in means that file is checked
-        against the namespace it will actually run in, rather than having the
-        check skipped.
+        model it extends. The names make that file checkable against the
+        namespace it runs in.
         """
         from lpspec.language.piecewise import expand_piecewise
         from lpspec.language.validation import validate_expressions

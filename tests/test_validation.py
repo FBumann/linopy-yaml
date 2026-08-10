@@ -121,18 +121,18 @@ class TestValidateExpressions:
         assert 'exactly one comparison' in msg
 
     def test_known_names_extend_the_namespace(self):
-        """extend() passes names from the existing model; they must validate."""
+        """The same file both ways: undeclared alone, checked as an extension.
+
+        ``extend()`` passes the names its model already carries, so the file
+        is validated against the namespace it runs in.
+        """
         raw = {
             'dimensions': {'g': {'values': ['wind', 'solar']}},
             'parameters': {'p_max': {'dims': ['g']}},
             'constraints': {'cap': {'foreach': ['g'], 'expression': 'p <= p_max'}},
         }
-        # standalone the name is undeclared and the model cannot be built…
         with pytest.raises(ValueError, match="'p' not found"):
             load_model(raw)
-        # …but an extension is checked against the model it extends, so the
-        # names travel in as validation context rather than the check being
-        # skipped
         Model.model_validate(raw, context={'known_variables': {'p': ['g']}})
 
     def test_known_variable_dims_reach_the_objective(self):

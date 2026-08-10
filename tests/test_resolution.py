@@ -71,9 +71,11 @@ def test_dimension_is_not_a_value_in_an_expression():
 
 def test_unknown_where_name_is_an_error():
     """Was: scalar-False mask in the eager lane (a model that builds, solves
-    and is silently empty); a load error in the relational lane."""
-    # the model cannot be built at all now, so lowering never gets a chance —
-    # which is the point: the error moved to the earliest place that can see it
+    and is silently empty).
+
+    The model does not survive construction, so lowering never sees it — the
+    earliest place that can tell is the one that tells.
+    """
     with pytest.raises(LanguageError, match="'typo_name' not found"):
         _schema(**{'variables.p.where': 'typo_name > 0'})
 
