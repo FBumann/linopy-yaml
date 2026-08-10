@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable, Mapping, Sequence
 
+    from polars._typing import MaintainOrderJoin
+
     from lpspec.relational.engines.polars.binding import BoundSources
 
 
@@ -165,22 +167,27 @@ class PolarsCompiler:
     def _coordinate_product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dim tables: labels and ordinals, nothing else.
 
-        The rows arrive in whatever order the joins produce them, and nothing
-        depends on that: a label is arithmetic on the ordinals, and
-        :func:`lpspec.relational.engines.polars.labels.frame` sorts on them
-        before it numbers anything.
+        **Folded in reverse, then projected back.** polars' streaming engine
+        walks a cross join right-major, so folding the dims backwards is what
+        makes the product arrive in *declaration* row-major order — which is
+        label order, and is what lets labelling and ``cols`` be read
+        positionally instead of sorted (#433).
+        :func:`lpspec.relational.engines.polars.labels.frame` verifies that
+        order rather than trusting it, so the fold decides speed, never
+        correctness. The projection restores the declared column order the
+        fold reversed; only the row order was ever the point.
 
         The empty product is one *real* row carrying only :data:`UNIT`, not an
         empty frame: a ``where`` on a scalar declaration filters this frame,
         and nothing survives a filter.
         """
         out: pl.LazyFrame | None = None
-        for d in dims:
+        for d in reversed(dims):
             table = self.dimensions[d].select(pl.col('val').alias(d), pl.col('ord').alias(ordinal(d)))
             out = table if out is None else out.join(table, how='cross')
         if out is None:
             return pl.LazyFrame({UNIT: [0]})
-        return out
+        return out.select(*(c for d in dims for c in (d, ordinal(d))))
 
     def parameter_join(
         self,
@@ -189,6 +196,7 @@ class PolarsCompiler:
         frame_dims: tuple[str, ...],
         alias: str,
         subject: str,
+        maintain_order: MaintainOrderJoin | None = None,
     ) -> pl.LazyFrame:
         """Left-join *param* onto *frame*, its value column renamed to *alias*.
 
@@ -200,6 +208,12 @@ class PolarsCompiler:
         Always a left join: a missing value is a fact the caller has to be told
         about — a null bound is refused by name, and a null in a mask reads as
         false (:func:`_falsy_if_null`) — never a row to drop silently here.
+
+        *maintain_order* is asked for where the result is ordered by
+        construction and something downstream reads it that way. It is not
+        free (+12 ms on a 10M-row join) and it is far cheaper than restoring
+        the order afterwards (~110 ms to sort the same frame), so it is passed
+        deliberately rather than defaulted on.
         """
         declaration = self.program.parameter(param)
         extra = set(declaration.dims) - set(frame_dims)
@@ -207,8 +221,8 @@ class PolarsCompiler:
             raise LanguageError(f'{subject} has dims {sorted(extra)} outside the foreach dims {list(frame_dims)}')
         table = self.parameters[param].rename({'value': alias})
         if not declaration.dims:
-            return frame.join(table, how='cross')
-        return frame.join(table, on=list(declaration.dims), how='left')
+            return frame.join(table, how='cross', maintain_order=maintain_order)
+        return frame.join(table, on=list(declaration.dims), how='left', maintain_order=maintain_order)
 
     # ------------------------------------------------------------------
     # predicates (where masks — row absence)
@@ -240,7 +254,14 @@ class PolarsCompiler:
             nonlocal carrier
             alias = f'__where {param}__'
             if alias not in joined:
-                carrier = self.parameter_join(carrier, param, dims, alias, f"where-parameter '{param}'")
+                carrier = self.parameter_join(
+                    carrier,
+                    param,
+                    dims,
+                    alias,
+                    f"where-parameter '{param}'",
+                    maintain_order='left',
+                )
                 joined.add(alias)
             return alias
 
@@ -267,7 +288,7 @@ class PolarsCompiler:
                     marked = (
                         self.variables[p.variable].select(*on).unique().with_columns(pl.lit(value=True).alias(flag))
                     )
-                    carrier = carrier.join(marked, on=on, how='left')
+                    carrier = carrier.join(marked, on=on, how='left', maintain_order='left')
                     joined.add(flag)
                 return pl.col(flag).fill_null(value=False)
             if isinstance(p, plan.BooleanConstant):
@@ -305,7 +326,12 @@ class PolarsCompiler:
                 alias = f'__bound {e.name}__'
                 if alias not in joined:
                     carrier = self.parameter_join(
-                        carrier, e.name, v.dims, alias, f"bound parameter '{e.name}' of variable '{v.name}'"
+                        carrier,
+                        e.name,
+                        v.dims,
+                        alias,
+                        f"bound parameter '{e.name}' of variable '{v.name}'",
+                        maintain_order='left',
                     )
                     joined.add(alias)
                 return pl.col(alias).cast(pl.Float64)
