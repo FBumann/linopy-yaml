@@ -8,10 +8,18 @@ builds of one model must agree on it integer for integer (docs/ARCHITECTURE.md,
 
 Variables and constraint rows are the same operation over different frames, so
 :func:`frame` is written once; twice is how the two would come to disagree
-about which coordinate gets which index. It is one rule with no special cases:
-sort the surviving coordinates into declaration order and number them from
-*start*. A mask, a restriction, or neither all take the same path, so a mask
-that removes nothing is indistinguishable from no mask — down to the schema.
+about which coordinate gets which index. One rule: sort the surviving
+coordinates into declaration order and number them from *start*. A mask, a
+restriction, or neither all produce the same shape, so a mask that removes
+nothing is indistinguishable from no mask — down to the schema.
+
+The one split kept is *how much product is materialised*, not what a label is.
+A mask that cannot see the leading dims removes the same coordinates under
+every one of their values, so the survivors are a rectangle and only the
+masked suffix needs to exist as rows (:func:`_factored`). Measured on
+`sector/m`: labelling one time-invariantly-masked variable through the full
+product transiently peaked +177 MB and 17 ms where the rectangle costs the
+suffix — a few hundred rows — plus the output.
 """
 
 from __future__ import annotations
@@ -20,12 +28,13 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from lpspec.errors import LanguageError
+from lpspec.relational import plan
 from lpspec.relational.engines.polars.compiler import UNIT, ordinal, restrict_by_presence
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
-    from lpspec.relational import plan
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
 
@@ -47,7 +56,8 @@ def frame(
     *restrictions* are variable-presence frames a constraint row must be
     contained in: absence propagates into a comparison and drops the row (v1
     ``convention.rst`` §6, §12). They are semi-joins, so they can only remove
-    rows.
+    rows. Which rows is not known until data is read, which is why a
+    restriction takes the counted path below whatever the mask looks like.
 
     Being semi-joins is also why nothing deduplicates them: a semi-join asks
     whether a key occurs, and a key occurring twice still occurs.
@@ -64,6 +74,13 @@ def frame(
     order. The unconditional sort this replaces was 0.26 s of a 0.73 s build
     at ``dispatch/l``, against ~0.01 s for the verify.
     """
+    if where is not None and not restrictions:
+        free = _free_prefix(dims, _predicate_dims(where, _name_dims(compiler)))
+        if free:
+            factored = _factored(compiler, dims, free, where, label, start)
+            if factored is not None:
+                return factored, start + factored.height
+
     surviving = compiler.frame(dims, where)
     for on, presence in restrictions:
         surviving = restrict_by_presence(surviving, presence, on)
@@ -79,6 +96,120 @@ def frame(
         .with_columns(pl.col(label).set_sorted())
     )
     return materialised, start + materialised.height
+
+
+def _factored(
+    compiler: PolarsCompiler,
+    dims: tuple[str, ...],
+    free: int,
+    where: plan.Predicate,
+    label: str,
+    start: int,
+) -> pl.DataFrame | None:
+    """Labels for a mask that reads none of the first *free* dims.
+
+    The survivors are a rectangle — the full product of the leading dims
+    against one surviving suffix set — so only the suffix is materialised and
+    ranked (a sort of the set, not of the product: on `dispatch` the
+    generators rather than 10M ``(snapshot, generator)`` pairs). The label is
+    then arithmetic: row-major over the leading dims, times the width of the
+    surviving set, plus a survivor's rank within it — the same number the
+    counted path would have counted, because each leading coordinate sees the
+    same survivors in the same order.
+
+    The prefix has to be *leading* rather than merely absent from the mask: a
+    label follows declaration order, and only a prefix leaves the surviving
+    set contiguous within it.
+
+    ``None`` when nothing survives: the rectangle degenerates and the counted
+    path already answers the empty case with the right columns and dtypes.
+
+    The head product goes on the *left* of the cross join because the
+    streaming engine emits the right side fastest — survivors cycling within
+    each head coordinate is label order, so the verify below permutes nothing.
+    """
+    head, kept = dims[:free], dims[free:]
+    rank = '#rank'
+    survivors = (
+        compiler.frame(kept, where)
+        .sort([ordinal(d) for d in kept])
+        .select(*kept)
+        .with_row_index(rank)
+        .collect(engine='streaming')
+    )
+    width = survivors.height
+    if width == 0:
+        return None
+
+    position = '#position'
+    labelled = (
+        compiler.frame(head, None)
+        .select(*head, _row_major(compiler, head).alias(position))
+        .join(survivors.lazy(), how='cross')
+        .select(
+            *dims,
+            (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(label),
+        )
+        .collect(engine='streaming')
+    )
+    if labelled.height and not labelled.get_column(label).is_sorted():
+        labelled = labelled.sort(label)
+    return labelled.with_columns(pl.col(label).set_sorted())
+
+
+def _name_dims(compiler: PolarsCompiler) -> dict[str, tuple[str, ...]]:
+    """The dims each name in a where is read through — parameters by their
+    ``dims`` and variables by their ``foreach``. One flat mapping, because the
+    language has one flat namespace and the two cannot collide."""
+    program = compiler.program
+    named: dict[str, tuple[str, ...]] = {p.name: p.dims for p in program.parameters}
+    named.update({v.name: v.dims for v in program.variables})
+    return named
+
+
+def _predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
+    """Which dims *where* reads.
+
+    A parameter is read through its own dims, a variable through its foreach,
+    a dimension comparison through the dim it names, and a constant reads
+    nothing. Anything unrecognised raises: there is no such case today, and a
+    new predicate that forgot to answer here would silently mislabel a model.
+    """
+    if isinstance(where, plan.BooleanConstant):
+        return frozenset()
+    if isinstance(where, plan.DimensionComparison):
+        return frozenset({where.dimension})
+    if isinstance(where, (plan.ParameterComparison, plan.ParameterDefined)):
+        dims = frozenset(name_dims.get(where.parameter, ()))
+        value = getattr(where, 'value', None)
+        if isinstance(value, str) and value in name_dims:
+            dims |= frozenset(name_dims[value])
+        return dims
+    if isinstance(where, plan.VariableDefined):
+        return frozenset(name_dims.get(where.variable, ()))
+    if isinstance(where, (plan.And, plan.Or)):
+        return _predicate_dims(where.left, name_dims) | _predicate_dims(where.right, name_dims)
+    if isinstance(where, plan.Not):
+        return _predicate_dims(where.operand, name_dims)
+    raise LanguageError(
+        f'{type(where).__name__} is a predicate the label planner does not know how to read; '
+        'add it to _predicate_dims before using it in a where'
+    )
+
+
+def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
+    """How many leading dims the mask does not read.
+
+    Leading, not merely absent: a label follows declaration order, so only a
+    prefix leaves the surviving set contiguous under each of its coordinates.
+    Returns 0 when the mask reads the first dim — the case that has to count
+    its survivors the slow way — and 0 again when *no* dim is read, where the
+    split would gain nothing over the one-path arithmetic.
+    """
+    free = 0
+    while free < len(dims) and dims[free] not in touched:
+        free += 1
+    return free if free < len(dims) else 0
 
 
 def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:

@@ -105,47 +105,65 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
 
 
 def _constraint_lines(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
-    """The constraint section for rows ``[lo, hi)``, one output line per row.
+    """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
-    A constraint is a header, its terms one per line, then its comparison and
-    right-hand side. So the terms are gathered into a list per row, the header
-    and footer are put on either side of it, and the list is exploded back into
-    lines.
+    One line per output line rather than one block per row: the pieces are
+    built independently and interleaved by sorting, so nothing has to gather a
+    row's terms into a string list first. Gathering was tried — a
+    ``group_by('row')`` into a list column and an explode — and measured 3x
+    this on `sector/m` emit: list-of-strings aggregation pays per element
+    where the union sort permutes one integer key.
 
-    **Both orderings are what #109 pins**: a model must write the same bytes
-    twice. Within a row, the terms come out in column order because the matrix
-    arrives in it (:class:`~lpspec.relational.sinks.tables.ModelTables`) and
-    ``group_by`` documents that within each group the order of rows is
-    preserved — group *order* is what ``maintain_order`` governs, and it does
-    not matter here. The rows are sorted **after** the join, since a join
-    hands groups back in whatever order it finishes them.
+    The bytes are what #109 pins, twice over: a hash join hands back groups in
+    whatever order it finishes them, and no amount of sorting the *rows*
+    afterwards fixes the order *within* one — here every line owns a key, so
+    one sort settles both.
 
-    A row with no terms still needs a line a solver can parse, which is what
-    the placeholder is: the left join leaves it null, and nothing else can.
+    A row with no terms still needs a line a solver can parse, and the
+    anti-join is what a group-by gave for free — anti rather than a count,
+    because the question is whether the row has *a* term and not how many.
 
-    The exploded list is never empty — every row has a header and a footer at
-    least — and the ``empty_as_null`` kwarg is polars 1.36+, which is why the
-    version floor sits there.
+    **The order is one integer, and it is the only other column.** A row's
+    lines occupy ``slots`` consecutive keys and each piece picks one — header
+    first, then the placeholder, then each term at its own column index, then
+    the sense. Sorting one column beats sorting ``(row, ord)``, and carrying
+    nothing else means the sort permutes the rendered text and nothing beside
+    it.
+
+    **Chunk-relative**, because that is what bounds the key. Each range is
+    sunk before the next is built, so only the order *within* one has to
+    hold, and ``row - lo`` is a chunk's height rather than the model's. A
+    global row would put the product one careless model away from overflowing
+    ``Int64`` and reordering the file in silence.
 
     The chunk's entries come from :meth:`ModelTables.matrix_block` — a slice,
-    not a scan — and carry the matrix's sorted flag, which is what lets the
-    streaming engine group adjacent runs instead of building a hash table.
+    not a scan — already in ``(row, col)`` order, which is what keeps the
+    union sort cheap: it merges pre-sorted runs rather than permuting them.
     """
-    terms = model.matrix_block(lo, hi).lazy().group_by('row').agg(_term(pl.col('coeff'), pl.col('col')).alias('terms'))
-    return (
-        model.rows.lazy()
-        .filter(pl.col('row').is_between(lo, hi, closed='left'))
-        .join(terms, on='row', how='left')
-        .sort('row')
-        .select(
-            pl.concat_list(
-                pl.concat_str(pl.lit('c'), _digits(pl.col('row')), pl.lit(':')),
-                pl.col('terms').fill_null(pl.lit(['+0 x0'], dtype=pl.List(pl.String))),
-                pl.concat_str(pl.col('sense').replace({'==': '='}), pl.lit(' '), _number(pl.col('rhs'))),
-            ).alias('line')
-        )
-        .explode('line', empty_as_null=False)
+    slots = model.cols.height + 3
+
+    def _key(within: pl.Expr) -> pl.Expr:
+        return ((pl.col('row') - lo) * slots + within).alias('key')
+
+    rows = model.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
+    matrix = model.matrix_block(lo, hi).lazy()
+    header = rows.select(
+        _key(pl.lit(0, dtype=pl.Int64)),
+        pl.concat_str(pl.lit('c').alias('c'), _digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),
     )
+    placeholder = rows.join(matrix.select('row'), on='row', how='anti').select(
+        _key(pl.lit(1, dtype=pl.Int64)),
+        pl.lit('+0 x0').alias('line'),
+    )
+    terms = matrix.select(
+        _key(pl.col('col').cast(pl.Int64) + 2),
+        _term(pl.col('coeff'), pl.col('col')).alias('line'),
+    )
+    footer = rows.select(
+        _key(pl.lit(slots - 1, dtype=pl.Int64)),
+        pl.concat_str(pl.col('sense').replace({'==': '='}), pl.lit(' '), _number(pl.col('rhs'))).alias('line'),
+    )
+    return pl.concat([header, placeholder, terms, footer]).sort('key').select('line')
 
 
 def _term(coeff: pl.Expr, col: pl.Expr) -> pl.Expr:
