@@ -113,8 +113,11 @@ class PolarsExecutor:
         self._rows = _stack([r for r, _ in built], _ROWS)
         # `(row, col)` is what `ModelTables` promises its sinks: one reads the
         # matrix a row range at a time, the other renders a row's terms in
-        # column order. Stated here, once, rather than re-established by each.
-        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX).sort('row', 'col')
+        # column order. The stack already has it — each share leaves sorted and
+        # owns the next run of rows, so ascending shares concatenate into an
+        # ascending whole — and a `sort` here would copy the model's largest
+        # frame at the peak of the build to reorder nothing.
+        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX)
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -122,24 +125,26 @@ class PolarsExecutor:
         assert self._compiler is not None, 'build() has not run'
         return self._compiler
 
-    def _check_no_undefined_divisor(self, name: str, matrix: pl.DataFrame, *expressions: plan.Expression) -> None:
+    def _check_no_undefined_divisor(self, name: str, undefined: int, *expressions: plan.Expression) -> None:
         """A null coefficient means a divisor had no value where the model divided.
 
-        Read off the assembled matrix rather than reasoned about from
-        coordinates, because only the matrix knows which divisions *survived*.
-        A quotient joins its divisor with a left join (:func:`_join_mul`), so a
-        missing value leaves a null; if the row was masked out, or the numerator
-        variable does not exist there, the term never reaches this frame and
-        there is nothing to report.
+        *undefined* is the null count the assembling aggregate carried out
+        (``sum`` skips nulls, so an undefined cell would come out zero — the
+        count has to be taken of the coefficients going *in*). Counted there
+        rather than reasoned about from coordinates, because only the terms
+        reaching the matrix know which divisions *survived*: a quotient joins
+        its divisor with a left join (:func:`_join_mul`), so a missing value
+        leaves a null, and if the row was masked out, or the numerator variable
+        does not exist there, the term never gets that far and there is nothing
+        to report.
 
         That is what keeps the refusal from becoming a wall. Sparse data is the
         ordinary case, and the question is not whether a divisor is dense — it
         is whether it is defined wherever the model actually divides by it.
         """
-        undefined = matrix.get_column('coeff').is_null().sum()
         if undefined:
             params = sorted(plan.divisor_parameters(*expressions))
-            raise DataError(f'{name}: {sparse_divisor_message(", ".join(params), int(undefined))}')
+            raise DataError(f'{name}: {sparse_divisor_message(", ".join(params), undefined)}')
 
     # ------------------------------------------------------------------
     # declarations
@@ -236,12 +241,18 @@ class PolarsExecutor:
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
-        # A null coefficient means an undefined divisor, and `sum` would read it
-        # as a zero — so the aggregate happens after the check, not before it.
-        stacked = pl.concat(pieces).collect(engine='streaming')
-        self._check_no_undefined_divisor(f"constraint '{c.name}'", stacked, c.lhs, c.rhs)
-        matrix = stacked.group_by('row', 'col').agg(pl.col('coeff').sum()).sort('row', 'col')
-        return rows, matrix
+        # A null coefficient means an undefined divisor, and `sum` would read
+        # it as a zero — so the aggregate counts the nulls it collapses, and
+        # the check reads the count. `#nulls` because a column name, not a dim.
+        matrix = (
+            pl.concat(pieces)
+            .group_by('row', 'col')
+            .agg(pl.col('coeff').sum(), pl.col('coeff').is_null().sum().alias('#nulls'))
+            .sort('row', 'col')
+            .collect(engine='streaming')
+        )
+        self._check_no_undefined_divisor(f"constraint '{c.name}'", int(matrix.get_column('#nulls').sum()), c.lhs, c.rhs)
+        return rows, matrix.drop('#nulls')
 
     def _build_objective(self, o: plan.ObjectiveDeclaration) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
@@ -265,11 +276,16 @@ class PolarsExecutor:
         if not comp.terms:
             return None
         pieces = [p.frame.select(pl.col('var_label').alias('col'), pl.col('coeff')) for p in comp.terms]
-        # A null coefficient means an undefined divisor, and `sum` would read it
-        # as a zero — so the aggregate happens after the check, not before it.
-        stacked = pl.concat(pieces).collect(engine='streaming')
-        self._check_no_undefined_divisor('objective', stacked, o.expression)
-        return stacked.group_by('col').agg(pl.col('coeff').sum())
+        # The same null count the constraint aggregate carries, for the same
+        # reason: `sum` would read an undefined divisor as a zero.
+        aggregated = (
+            pl.concat(pieces)
+            .group_by('col')
+            .agg(pl.col('coeff').sum(), pl.col('coeff').is_null().sum().alias('#nulls'))
+            .collect(engine='streaming')
+        )
+        self._check_no_undefined_divisor('objective', int(aggregated.get_column('#nulls').sum()), o.expression)
+        return aggregated.drop('#nulls')
 
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the executor only supplies the frames
