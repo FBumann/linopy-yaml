@@ -562,21 +562,14 @@ class Model(_StrictBlock):
     def _validate_expressions(self, info: ValidationInfo) -> Model:
         """Every expression and where string, checked here rather than beside.
 
-        A ``Model`` that exists is valid, whichever way it was built — a
-        constructor is only safe to offer on that condition, and a type that
-        can exist half-checked while looking like the front door is a trap.
+        The checkers are a layer above this one, so the imports are local and
+        declared in ``DELIBERATE_LAZY_IMPORTS``. Expansion runs first — a
+        formulation emits declarations that are language too — and terminates,
+        since an expanded model carries no ``piecewise:``.
 
-        The checkers are a layer that reads this one, so they are imported here
-        and declared in ``DELIBERATE_LAZY_IMPORTS``. Expansion runs first
-        because a formulation emits declarations that are language too, and it
-        terminates: an expanded model carries no ``piecewise:`` blocks, so the
-        recursion is one level deep.
-
-        ``known_variables`` arrives through pydantic's validation context, for
-        the one file that is *deliberately* not valid alone: an extension
-        loaded by ``lpspec.linopy.extend`` references variables already on the
-        model it extends. The names make that file checkable against the
-        namespace it runs in.
+        ``known_variables`` arrives as pydantic validation context, for the file
+        deliberately not valid alone: an extension references variables already
+        on the model ``lpspec.linopy.extend`` puts it on.
         """
         from lpspec.language.piecewise import expand_piecewise
         from lpspec.language.validation import validate_expressions
