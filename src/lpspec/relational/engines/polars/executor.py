@@ -27,6 +27,7 @@ from lpspec.errors import (
     LpspecError,
     null_bounds_message,
     sparse_divisor_message,
+    uncovered_constant_message,
 )
 from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars.binding import BoundSources, bind
@@ -221,6 +222,7 @@ class PolarsExecutor:
         self._blocks[c.name] = (start, labelled.height)
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
+        uncovered: pl.Expr | None = None
         carrier = frame
         for i, (p, sign) in enumerate(consts):
             column = f'__const {i}__'
@@ -231,6 +233,14 @@ class PolarsExecutor:
                 else carrier.join(aggregated, how='cross')
             )
             accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
+            gap = pl.col(column).is_null()
+            uncovered = gap if uncovered is None else uncovered | gap
+
+        if uncovered is not None:
+            gaps = int(carrier.select(uncovered.sum()).collect(engine='streaming').item())
+            if gaps:
+                names = ', '.join(sorted(plan.parameters_of(c.lhs, c.rhs)))
+                raise DataError(uncovered_constant_message(names, gaps, f"constraint '{c.name}'"))
 
         rows = carrier.select(
             'row',

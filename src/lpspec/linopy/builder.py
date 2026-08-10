@@ -49,7 +49,7 @@ from lpspec.language.where_parser import (
     WhereNode,
 )
 from lpspec.linopy import semantics
-from lpspec.linopy.loader import check_divisors_cover
+from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
@@ -220,6 +220,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
                 raise LanguageError(msg)
 
             check_divisors_cover(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask, ctx.model)
+            check_constant_side_covers(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask)
 
             lhs = _eval_ast(ast.left, ctx)
             rhs = _eval_ast(ast.right, ctx)
