@@ -236,13 +236,13 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     ``\\n``. The list is not truncated for the same reason the loader does not
     truncate: the answer is usually in it, and a caller reading a solution back
     by name has no other way to discover what the model actually built.
+
+    When one name expanded into several, nearest-match is unhelpful — it picks
+    one sibling and implies the others do not exist — so a prefix hit lists
+    the whole family instead.
     """
     candidates = sorted(known)
 
-    # One name can expand into several: a `piecewise:` block becomes a handful
-    # of constraints, and a rule split by regime is conventionally `x` and
-    # `x_initial`. Nearest-match is unhelpful there — it picks one sibling and
-    # implies the others do not exist — so a prefix hit lists them all.
     family = [c for c in candidates if c.startswith(f'{name}_')]
     if family:
         return (

@@ -32,9 +32,10 @@ if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
 
 
-#: Elements per hand-off chunk. The engine has one batched pass left — this
-#: one — because labels became positional, so this is the sink's own budget
-#: rather than a copy of a build-side knob. Spent through
+#: Elements per hand-off chunk. No *build-side* pass batches any more, labels
+#: having become positional, so this is the sink's own budget rather than a
+#: copy of a build knob — as the LP writer's ``EMIT_BUDGET`` is its. Spent
+#: through
 #: :mod:`~lpspec.relational.chunking`, which asks a caller to state what one
 #: unit costs: a column is one element, a constraint row is as many as it has
 #: nonzeros.
