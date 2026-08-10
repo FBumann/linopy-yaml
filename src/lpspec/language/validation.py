@@ -76,10 +76,12 @@ def load_model(model: str | Path | dict[str, Any] | Model) -> Model:
     """
     if isinstance(model, (list, tuple)):
         msg = (
-            'composing multiple YAML files into one program is not implemented '
-            'yet — track https://github.com/fluxopt/lpspec/issues/30'
+            'a model is one file, one dict or one Model, never a list of them. '
+            'To compose several, merge the declarations into one dict and pass '
+            'that — a native schema merge was declined (#30) because a library '
+            'varying its declarations by data is already how you say this.'
         )
-        raise NotImplementedError(msg)
+        raise TypeError(msg)
     if isinstance(model, Model):
         return model
     raw = model if isinstance(model, dict) else read_yaml(Path(model))
