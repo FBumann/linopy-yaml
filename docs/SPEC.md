@@ -349,7 +349,26 @@ thing contributes nothing — or a refusal, where no such reading exists.
 | coefficient — `w * x` | zero: the term does not participate, the row survives | `0` is the identity of a sum, so the term contributes nothing |
 | `where` operand | false | a coordinate whose data is missing is not one the model can claim exists |
 | divisor — `x / d` | **refused** at bind *where the model divides by it* | nothing contributes nothing: `0` divides by zero, `1` rescales, dropping rewrites the constraint |
+| whole constant side — `x <= cap` | zero, so the row reads `x <= 0` | `0` is still the identity of that sum — but here the sum *is* the bound, so the row binds instead of vanishing |
 | `bounds:` | an error | nothing contributes nothing: unbounded is not bounded-at-zero |
+
+The last two are the same information written two ways and read two ways, and
+the reason is the position, not an accident. `upper: cap` has no reading that
+contributes nothing — unbounded is not bounded-at-zero — so it refuses. `x <=
+cap` does: zero. That zero is a *bound*, and the model still builds, still
+solves, and still reports `optimal`:
+
+<!-- doctest: wrap=constraints -->
+```yaml
+c:
+  foreach: [g]
+  where: cap  # without this, a `g` with no `cap` row gets `x <= 0`
+  expression: x <= cap
+```
+
+`where:` is the whole of the difference — it is one of the four constructs
+above, so masking the coordinate is how a model says *this row should not
+exist*, per coordinate, rather than supplying a value it does not have.
 
 ### How absence travels
 
