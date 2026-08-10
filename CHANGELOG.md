@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.83](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.82...v0.0.1-alpha.83) (2026-08-10)
+
+
+### Bug Fixes
+
+* **engine:** a zero edge writes its rows, like every other fill ([#551](https://github.com/fluxopt/lpspec/issues/551)) ([af1ce64](https://github.com/fluxopt/lpspec/commit/af1ce64802c8e270daef0e148e35ef8740502f82))
+
 ## [0.0.1-alpha.82](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.81...v0.0.1-alpha.82) (2026-08-10)
 
 
