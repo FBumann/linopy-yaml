@@ -23,6 +23,15 @@ if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
 
 
+#: Nonzeros per constraint chunk. A chunk's rendered lines live in memory until
+#: it is sunk, so this is the knob that bounds the writer's peak rather than
+#: its speed. Measured on `transport/l`, chunking at this width takes the
+#: constraint section's peak contribution from +0.88 GB to a fraction of it,
+#: for no change in the bytes. Wider costs memory for nothing; much narrower
+#: pays per-chunk overhead on every range.
+EMIT_BUDGET = 2_000_000
+
+
 def _sink(frame: pl.LazyFrame, f: IO[bytes]) -> None:
     """Append a one-column frame to *f*, one raw line per row.
 
@@ -70,7 +79,12 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         _sink(objective, f)
 
         f.write(b'\ns.t.\n\n')
-        _sink(_constraint_lines(model), f)
+        # One row range at a time: a chunk's rendered lines are held until it
+        # is sunk, so the whole section at once is what the writer's peak *is*.
+        # Ranges ascend and each is internally ordered, so the bytes are the
+        # same ones #109 pins.
+        for lo, hi in model.row_chunks_by_nonzeros(EMIT_BUDGET):
+            _sink(_constraint_lines(model, lo, hi), f)
 
         f.write(b'\nbounds\n')
         _sink(bounds, f)
@@ -85,8 +99,8 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         f.write(b'\nend\n')
 
 
-def _constraint_lines(model: ModelTables) -> pl.LazyFrame:
-    """The whole constraint section, one output line per row of the frame.
+def _constraint_lines(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
+    """The constraint section for rows ``[lo, hi)``, one output line per row.
 
     A constraint is a header, its terms one per line, then its comparison and
     right-hand side. So the terms are gathered into a list per row, the header
@@ -104,9 +118,11 @@ def _constraint_lines(model: ModelTables) -> pl.LazyFrame:
     A row with no terms still needs a line a solver can parse, which is what
     the placeholder is: the left join leaves it null, and nothing else can.
     """
-    terms = model.matrix.lazy().group_by('row').agg(_term(pl.col('coeff'), pl.col('col')).alias('terms'))
+    inside = pl.col('row').is_between(lo, hi, closed='left')
+    terms = model.matrix.lazy().filter(inside).group_by('row').agg(_term(pl.col('coeff'), pl.col('col')).alias('terms'))
     return (
         model.rows.lazy()
+        .filter(inside)
         .join(terms, on='row', how='left')
         .sort('row')
         .select(
