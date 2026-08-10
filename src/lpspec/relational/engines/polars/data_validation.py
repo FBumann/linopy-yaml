@@ -60,6 +60,16 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
     of their own — a dimension derived *from* the parameters is not built yet,
     and would have nothing to answer, the union of what arrived being its
     definition (#350).
+
+    Every cheap question runs in one pass over the source: does any coordinate
+    repeat, does any dim carry a label its index does not know. *Naming* an
+    offender costs a pass of its own — the duplicate ``group_by`` being the
+    single most expensive step of a large build — so those run only on a path
+    that is about to raise. The aggregate names use ``#`` because a dim's name
+    is an identifier and these must not collide with one. ``.implode()`` on the
+    membership test is deliberate: ``is_in`` against a bare Series of the same
+    dtype is ambiguous and deprecated in polars, and imploding says "this whole
+    collection", not "element-wise against a list column".
     """
     if not p.dims:
         rows = frame.select(pl.len()).collect().item()
@@ -71,16 +81,6 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
             )
         return
 
-    # Every cheap question in one pass over the source: does any coordinate
-    # repeat, does any dim carry a label its index does not know. *Naming* an
-    # offender costs a pass of its own — the duplicate group_by being the
-    # single most expensive step of a large build — so those run only on a
-    # path that is about to raise. The aggregate names use `#` because a dim's
-    # name is an identifier and these must not collide with one.
-    #
-    # `.implode()`: `is_in` against a bare Series of the same dtype is ambiguous
-    # and deprecated in polars — imploding says "this whole collection", not
-    # "element-wise against a list column".
     known = {d: dimensions[d].select('val').collect()['val'] for d in p.dims if d in dimensions}
     answers = (
         frame.select(

@@ -111,6 +111,11 @@ class ModelTables:
         in no objective term has no row, and is left free rather than holding
         whatever the allocator returned.
 
+        The bound vectors are rewritten with ``copy=True`` rather than in
+        place because they are views of the frame: rewriting an infinity
+        through one would edit the built model to suit whichever solver asked
+        last.
+
         **Nothing textual crosses into numpy.** A polars ``String`` converts by
         boxing every value as a Python object, so the test against
         ``'continuous'`` is made in polars and only its answer crosses: 0.04 s
@@ -119,10 +124,6 @@ class ModelTables:
         import numpy as np
 
         count = self.column_count
-        # `cols` is already the solver's index, so its three vectors need no
-        # scatter. `copy=True` rather than in place because they are views of
-        # the frame now: rewriting an infinity through one would edit the built
-        # model to suit whichever solver asked last.
         lb = np.nan_to_num(self.cols['lb'].to_numpy(), copy=True, neginf=-infinity, posinf=infinity)
         ub = np.nan_to_num(self.cols['ub'].to_numpy(), copy=True, neginf=-infinity, posinf=infinity)
         integral = self.cols.select(pl.col('vtype') != 'continuous').to_series().to_numpy()

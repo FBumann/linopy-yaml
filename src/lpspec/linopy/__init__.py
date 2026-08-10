@@ -29,6 +29,26 @@ For models declared entirely in YAML, use the native API — it streams::
 
     with lps.solve('model.yaml', {...}) as result:
         result.primal('p')
+
+**Importing this module sets** ``linopy.options['semantics'] = 'v1'`` — this
+lane speaks v1, and the option is global, so importing is what sets it.
+linopy's default is ``legacy``, which fills every absent slot with 0: a masked
+variable contributes zero instead of taking its row with it, and a shift's
+vacated position does the same, where the relational lane drops the row in
+both cases (SPEC §6, §7). Left alone, the two lanes therefore answer the same
+YAML differently — measured at 25.0 against 125.0 on a masked-variable model,
+which is a wrong answer rather than a wrong error. ``tests/oracle.py`` had
+always set this, which is exactly why nothing caught it: the suite proved the
+lanes agree under a configuration the package never shipped. Writing global
+state on import is a real cost — a process importing this module has its own
+linopy arithmetic changed too — but scoping it per call is something linopy's
+own context manager cannot do (``__exit__`` calls ``reset()``, restoring *all*
+options to their defaults rather than to their prior values, so it would
+silently discard a caller's ``display_max_rows``), and given a choice between
+a documented global and a hand-rolled save/restore around every entry point,
+the global is the one a reader can find. The assignment is unguarded because
+the declared linopy floor is a version that has the option — this package does
+not publish ahead of the convention it is written against.
 """
 
 from __future__ import annotations
@@ -41,7 +61,7 @@ try:
     import linopy
     import pandas as pd
     import xarray  # noqa: F401 — guarded here so the message covers it
-except ModuleNotFoundError as exc:  # linopy / xarray absent
+except ModuleNotFoundError as exc:
     msg = 'The linopy compatibility layer requires the [linopy] extra: pip install "lpspec[linopy]"'
     raise ModuleNotFoundError(msg) from exc
 
@@ -61,31 +81,6 @@ from lpspec.linopy.loader import (
 )
 from lpspec.sources import validate_piecewise_data
 
-# **This lane speaks v1, and the option is global, so importing sets it.**
-#
-# linopy's default is `legacy`, which fills every absent slot with 0 — so a
-# masked variable contributes zero instead of taking its row with it, and a
-# shift's vacated position does the same. The relational lane drops the row in
-# both cases (SPEC §6, §7). Left alone, the two lanes therefore answer the same
-# YAML differently: measured at 25.0 against 125.0 on a masked-variable model,
-# which is a wrong answer rather than a wrong error.
-#
-# `tests/oracle.py` has always set this, which is exactly why nothing caught it:
-# the suite proved the lanes agree under a configuration the package never
-# shipped. The setting belongs here, where users get it, and the test harness's
-# copy is now the redundant one.
-#
-# It is global state we are writing on import, and that is a real cost — a
-# process importing this module has its own linopy arithmetic changed too. The
-# alternative was scoping it per call, which linopy's own context manager cannot
-# do (`__exit__` calls `reset()`, restoring *all* options to their defaults
-# rather than to their prior values, so it would silently discard a caller's
-# `display_max_rows`). Given a choice between a documented global and a
-# hand-rolled save/restore around every entry point, the global is the one a
-# reader can find.
-#
-# Unguarded: the declared linopy floor is a version that has the option, because
-# this package does not publish ahead of the convention it is written against.
 linopy.options['semantics'] = 'v1'
 
 __all__ = ['build', 'extend']
@@ -146,6 +141,11 @@ def extend(
     YAML must declare every parameter it uses, and this call must supply that
     parameter's data.
 
+    A dim the model already has may carry ``values:`` in this YAML only if
+    they match — a silent override would hide real bugs, so a mismatch raises.
+    The existing variables' dims are linopy ``Hashable``s where the language's
+    are names, so they are stringified before validation.
+
     Coords precedence (highest first):
 
     1. ``coords=`` kwarg to this call
@@ -159,7 +159,6 @@ def extend(
         schema = expand_piecewise(original)
         validate_expressions(
             schema,
-            # linopy dims are Hashable; the language's are names
             known_variables={n: [str(d) for d in model.variables[n].dims] for n in model.variables},
         )
 
@@ -167,8 +166,6 @@ def extend(
         if coords is not None:
             known.update({k: dim_index_of(v, k) for k, v in coords.items()})
 
-        # If this YAML declares values: for a dim the model already has, they
-        # must match. Silent override would hide real bugs.
         for dim_name, dim_def in schema.dimensions.items():
             if dim_def.values is None or dim_name not in known:
                 continue
@@ -185,8 +182,6 @@ def extend(
                 )
                 raise LanguageError(msg)
 
-        # ``known`` is the override, so any dim it covers beats this YAML's
-        # ``values:``. Dims still missing fall through to ``values:`` or raise.
         master_coords = build_master_coords(schema, known)
         dim_coords = build_dim_coords(schema, coords, master_coords)
         dataset = load_parameters(schema, data, master_coords)
@@ -203,11 +198,12 @@ def _infer_coords(model: linopy.Model) -> dict[str, pd.Index]:
     """Union the coordinates of every variable on ``model``, keyed by dim.
 
     Delegates to ``model.variables.indexes``, linopy's public API for the
-    per-dimension union of coordinates across all variables.
+    per-dimension union of coordinates across all variables. linopy warns when
+    variables carry non-aligned coords and performs an outer join; that outer
+    join is exactly the union wanted here, so the warning is suppressed rather
+    than answered.
     """
     with warnings.catch_warnings():
-        # linopy warns when variables have non-aligned coords and performs an
-        # outer join. That outer join is the union semantics we want here.
         warnings.filterwarnings(
             'ignore',
             message='Coordinates across variables not equal',

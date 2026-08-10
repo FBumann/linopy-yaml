@@ -70,22 +70,23 @@ class Builtin:
         return frozenset(self.edge_kwargs) | frozenset(self.optional_coordinate_kwargs)
 
 
+#: The closed helper set. Two keyword spellings are deliberate. ``sum`` takes
+#: ``group_by`` rather than a bare ``by``: with the grouping folded into
+#: ``sum``, the verb no longer says a regrouping happened, so the keyword has
+#: to — ``sum(x, over=flow, group_by=component)`` reads as what it is. And
+#: ``at`` takes ``onto``, not ``over``: everywhere else ``over=`` is the dim a
+#: helper *consumes*, and this one produces it. One keyword meaning two
+#: directions would be worse than two keywords meaning one each.
 BUILTINS: dict[str, Builtin] = {
     'sum': Builtin(
         1,
         'sum(<expr>, over=<dim>[, group_by=<coord>])',
         dimension_kwargs=('over',),
-        # `group_by` rather than a bare `by`: with the grouping folded into
-        # `sum`, the verb no longer says a regrouping happened, so the keyword
-        # has to. `sum(x, over=flow, group_by=component)` reads as what it is.
         optional_coordinate_kwargs=('group_by',),
     ),
     'at': Builtin(
         1,
         'at(<expr>, onto=<dim>, by=<coord>)',
-        # `onto`, not `over`: everywhere else `over=` is the dim a helper
-        # *consumes*, and this one produces it. One keyword meaning two
-        # directions would be worse than two keywords meaning one each.
         dimension_kwargs=('onto',),
         coordinate_kwargs=('by',),
     ),

@@ -81,7 +81,7 @@ def build(
         the message names the construct and its context.
     """
     schema = load_model(model)
-    program = lower_program(schema)  # strict: no fallback, errors carry the reason
+    program = lower_program(schema)
     ex = PolarsExecutor()
     try:
         ex.build(program, tidy_sources(schema, dict(sources), coords))
@@ -114,8 +114,12 @@ def solve(
     The executor stays attached to the returned :class:`Result`, whose label
     frames back ``result.primal(...)``. Nothing has to be released, though
     ``result.close()`` drops a large model early if you want the memory back.
+
+    The solver sink is resolved before the build, for the reason ``write``
+    checks the suffix first: a caller who named a sink nothing can serve
+    should not pay for a model.
     """
-    solver(solver_name)  # before the build, for the reason `write` checks the suffix first
+    solver(solver_name)
     ex = build(model, sources, **build_kwargs)
     try:
         return ex.solve(solver_options=solver_options, solver_name=solver_name)

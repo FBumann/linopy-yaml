@@ -79,7 +79,8 @@ def build_dim_coords(
     column per declared coordinate. The containment check mirrors the
     relational lane's: a value that is not a label of the target dimension
     would otherwise be dropped by xarray's inner-join alignment, silently
-    losing the term it carries.
+    losing the term it carries. A null value passes the check: it means "this
+    label belongs to no group" — row absence, not a typo.
     """
     coords = coords or {}
     out: dict[str, dict[str, xr.DataArray]] = {}
@@ -119,8 +120,6 @@ def build_dim_coords(
                 raise DataError(msg)
             series = first[cname].reindex(labels)
             known = set(master_coords[target])
-            # a null value means "this label belongs to no group" — row absence,
-            # not a typo; see the relational lane's containment check
             unknown = sorted({str(v) for v in series if not pd.isna(v) and v not in known})[:5]
             if unknown:
                 msg = (
@@ -220,7 +219,11 @@ def _coerce_to_dataarray(
     dims: list[str],
     master_coords: dict[str, pd.Index],
 ) -> xr.DataArray:
-    """Coerce a user-provided value into an xr.DataArray."""
+    """Coerce a user-provided value into an ``xr.DataArray``.
+
+    In the DataFrame branch the two-dims check guarantees flat columns, so
+    ``stack()`` yields a ``Series`` — which is what the ``cast`` asserts.
+    """
     if isinstance(raw, (int, float, np.integer, np.floating)):
         return xr.DataArray(float(raw))
 
@@ -230,7 +233,7 @@ def _coerce_to_dataarray(
             raise DataError(msg)
         series = pd.Series(raw)
         series.index.name = dims[0]
-        raw = series  # fall through to Series handling
+        raw = series
 
     if isinstance(raw, pd.Series):
         if len(dims) != 1:
@@ -257,7 +260,6 @@ def _coerce_to_dataarray(
             raw.index.name = dims[0]
         if raw.columns.name is None:
             raw.columns.name = dims[1]
-        # flat columns (checked above: exactly 2 dims), so stack() gives a Series
         stacked = cast('pd.Series', raw.stack())
         stacked.name = name
         return xr.DataArray.from_series(stacked).unstack()

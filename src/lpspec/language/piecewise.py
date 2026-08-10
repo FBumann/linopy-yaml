@@ -62,7 +62,14 @@ from lpspec.language.resolution import Namespace, resolve_expression
 
 
 def expand_piecewise(schema: Model) -> Model:
-    """Return *schema* with every ``piecewise:`` block expanded away."""
+    """Return *schema* with every ``piecewise:`` block expanded away.
+
+    The adjacency constraint shifts with ``edge=0`` rather than a bare
+    ``shift``: at the first breakpoint the vacated term must contribute zero,
+    giving ``lam <= seg``. Left absent it would propagate and drop that row,
+    leaving the first lambda unconstrained by segment selection — a wrong MILP
+    with no error, which is why #289 kept the escape hatch.
+    """
     if not schema.piecewise:
         return schema
 
@@ -101,20 +108,21 @@ def expand_piecewise(schema: Model) -> Model:
             }
             raw['constraints'][f'{name}_adjacency'] = {
                 'foreach': [*frame, pw.over],
-                # fill=0 rather than a bare shift: at the first breakpoint the
-                # vacated term must contribute zero, giving `lam <= seg`. Left
-                # absent it would propagate and drop that row, leaving the first
-                # lambda unconstrained by segment selection — a wrong MILP with
-                # no error, which is why #289 kept the escape hatch.
                 'expression': f'{lam} <= {seg} + shift({seg}, over={pw.over}, by=1, edge=0)',
             }
 
-    raw['piecewise'].clear()  # every block is now expanded away
+    raw['piecewise'].clear()
     return Model(**raw)
 
 
 def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, ...]:
-    """Check references and infer the frame (union of the links' dims)."""
+    """Check references and infer the frame (union of the links' dims).
+
+    Every name the expansion will emit is checked against what the file
+    already declares — one list per kind rather than one loop per name family,
+    so a new emitted declaration is a name here, not a fourth loop to
+    remember.
+    """
     ctx = f"piecewise '{name}'"
     if pw.over not in schema.dimensions:
         raise PiecewiseExpansionError(f"{ctx}: over references undeclared dimension '{pw.over}'")
@@ -146,9 +154,6 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
             if d not in frame:
                 frame.append(d)
 
-    # Every name the expansion will emit, checked against what the file already
-    # declares. One list per kind rather than one loop per name family: a new
-    # emitted declaration is then a name here, not a fourth loop to remember.
     emitted_constraints = (
         f'{name}_convexity',
         f'{name}_pick',
