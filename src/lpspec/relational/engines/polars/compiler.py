@@ -833,12 +833,9 @@ def _falsy_if_null(condition: pl.Expr) -> pl.Expr:
 def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.Expr:
     """The column a where-comparison on *dimension* reads.
 
-    Against a string label the column is read in ``String`` space, undoing the
-    ``Enum`` binding encoded it as. An ``Enum`` orders by declaration and
-    refuses a label it has never seen; §6.1 orders labels bytewise — the
-    reading the eager lane gets from numpy — and a label the dimension does
-    not carry compares equal to nothing rather than raising. Numbers and dates
-    reach a column that was never encoded, and pass through.
+    A string label is compared in ``String`` space, undoing binding's ``Enum``:
+    §6.1 orders labels bytewise and reads an unknown label as matching nothing,
+    where an ``Enum`` orders by declaration and refuses strangers.
     """
     column = pl.col(dimension)
     return column.cast(pl.String) if isinstance(value, str) else column

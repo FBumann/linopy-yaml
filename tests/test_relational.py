@@ -465,14 +465,8 @@ def test_a_dictionary_encoded_source_column_binds_like_a_plain_one():
 
 
 def test_a_string_dimension_is_enum_encoded_end_to_end():
-    """A string dim's dtype is an ``Enum`` over its labels, build to read-back.
-
-    The categories are the dimension's labels in declaration order, so the
-    dtype *is* the dim frame's authority: every frame carrying the dim speaks
-    one dictionary, a dim column costs a code instead of a string in the
-    frames the executor retains, and a caller's solution frame arrives already
-    dictionary-encoded — `to_pandas` hands over a `pandas.Categorical`.
-    """
+    """A string dim is an ``Enum`` over its labels in declaration order, build
+    to read-back — and `to_pandas` hands over an ordered `pandas.Categorical`."""
     model = {
         'dimensions': {'node': {'dtype': 'str', 'values': ['c', 'a', 'b']}},
         'parameters': {'cap': {'dims': ['node']}},
@@ -493,14 +487,8 @@ def test_a_string_dimension_is_enum_encoded_end_to_end():
 
 
 def test_a_where_orders_string_labels_bytewise_not_by_declaration():
-    """`node >= 'b'` keeps {b, c} whatever order the labels were declared in.
-
-    §6.1 orders labels bytewise — the reading the eager lane gets from numpy —
-    and an ``Enum`` orders by declaration, so the two disagree exactly when
-    declaration order is not sorted. Declared c, a, b: declaration order would
-    keep {b} alone, and a label the model never declared would *raise* inside
-    the Enum rather than mask nothing. Both must stay unobservable.
-    """
+    """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
+    (§6.1). Declared c, a, b so the Enum's declaration order would keep {b} alone."""
     model = {
         'dimensions': {'node': {'dtype': 'str', 'values': ['c', 'a', 'b']}},
         'parameters': {'cap': {'dims': ['node']}},
@@ -516,13 +504,8 @@ def test_a_where_orders_string_labels_bytewise_not_by_declaration():
 
 
 def test_a_where_naming_an_undeclared_label_masks_nothing_in():
-    """A quoted label the dimension does not carry compares equal to nothing.
-
-    Quoting says *label, not name*, so it is never checked against the
-    declarations (§6.1) — the mask is simply false everywhere. An ``Enum``
-    refuses a stranger outright, which is why the comparison happens in
-    ``String`` space rather than in the dictionary.
-    """
+    """A quoted label the dimension does not carry masks everything out (§6.1)
+    — the Enum would refuse the stranger, so the comparison is in String space."""
     model = {
         'dimensions': {'node': {'dtype': 'str', 'values': ['a', 'b']}},
         'parameters': {'cap': {'dims': ['node']}},

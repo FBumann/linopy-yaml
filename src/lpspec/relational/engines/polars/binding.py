@@ -245,31 +245,17 @@ class _Binder:
         self.cardinality[d] = materialised.height
 
     def encode_dimensions(self) -> None:
-        """Every string dimension becomes an ``Enum`` over its own labels — everywhere at once.
+        """Every string dimension becomes an ``Enum`` over its labels, in ordinal order.
 
-        The dim frame is the authority on what a coordinate is, and an ``Enum``
-        is that authority as a dtype: the categories are the dimension's labels
-        in ordinal order, so category order *is* declaration order and every
-        frame carrying the dimension — its own table, a coordinate column
-        targeting it, a parameter keyed by it — speaks one dictionary. Encoding
-        all of them in one pass is what makes the joins downstream meet
-        ``Enum`` against ``Enum`` with equal categories, never by luck.
+        One dictionary per dimension, applied to every frame carrying it, so
+        downstream joins meet ``Enum`` against ``Enum`` with equal categories
+        by construction. A dim column costs a code instead of a string for the
+        model's lifetime — retained label frames -23%, emit 0.90-0.95x, the
+        encode itself ~16 ms per 10M rows (PR #541).
 
-        What it buys, measured at 10M rows with 400 8-char labels (polars
-        1.43): 16 bytes/value down to 2 as a dim column, 647 ms down to 548 on
-        the placement join, 18 ms down to 9 on a ``group_by`` over the dim —
-        and the encode itself is ~16 ms, paid once here on frames binding has
-        already materialised. The bytes are the point rather than the
-        milliseconds: the label frames the executor retains for read-back, and
-        the solution frames handed to a caller, carry their dim columns at a
-        quarter of the width for the model's whole lifetime.
-
-        Running after every check has passed is what makes the strict cast
-        safe: a parameter label was probed against its dimension, a derived
-        dimension is the union of what arrived, and a coordinate value was
-        contained in its target — so a cast that fails here is an engine bug,
-        not a data error, and deserves the loud raise it gets. Nulls in a
-        coordinate column stay null, the same "belongs to no group" they were.
+        Running after every check is what makes the strict cast safe: each
+        label was already probed against its dimension, so a failure here is
+        an engine bug, not a data error.
         """
         materialised = {d: table.collect() for d, table in self.dimensions.items()}
         enums = {d: pl.Enum(f['val']) for d, f in materialised.items() if f.schema['val'] == pl.String}
@@ -303,18 +289,12 @@ class _Binder:
 def _plain_strings(frame: pl.LazyFrame, dims: tuple[str, ...]) -> pl.LazyFrame:
     """Dim columns as plain strings, whatever encoding the source used.
 
-    A dictionary-encoded parquet column reads back as ``Categorical``, which is
-    what pandas writes for any repeated label and what any sane writer produces
-    for a 12M-row table of node names — and each writer's dictionary is its
-    own, so two sources agree about a label only by luck. Binding cannot keep
-    them: the label checks, the derived-dimension union and the containment
-    checks all need every arrival in one dtype before any dimension's own
-    dictionary exists.
-
-    So a source is read *out* of whatever encoding it arrived in here, and
-    :meth:`_Binder.encode_dimensions` re-encodes everything at once — into the
-    ``Enum`` of the dimension it belongs to, which is the one dictionary the
-    dim frame's authority makes canonical.
+    A dictionary-encoded source (pandas ``Categorical``, dictionary parquet)
+    carries a writer's own dictionary, and the label checks and the
+    derived-dimension union need every arrival in one dtype before any
+    dimension's own dictionary exists. So sources are decoded here, and
+    :meth:`_Binder.encode_dimensions` re-encodes everything at once into the
+    dimension's canonical ``Enum``.
     """
     categorical = [d for d, dtype in frame.collect_schema().items() if d in dims and dtype in (pl.Categorical, pl.Enum)]
     if not categorical:
