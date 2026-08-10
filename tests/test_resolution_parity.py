@@ -150,21 +150,22 @@ def test_every_resolved_predicate_is_parity_tested():
     )
 
 
-@pytest.mark.xfail(strict=True, reason='orphaned constraint rows: the lanes disagree — see the docstring')
 def test_a_constraint_row_left_with_no_variables(tmp_path, data, coords):
-    """A masked *variable* can orphan an unmasked *constraint* row, and the
-    lanes then disagree about what the model even is.
+    """A masked *variable* can orphan an unmasked *constraint* row — and both
+    lanes now agree that such a row is not built.
 
-    `where: "snapshot > 0"` on `p` leaves `power_balance` at snapshot 0 with no
-    terms. Both lanes build four constraint labels, but linopy hands the solver
-    three — the orphaned row is dropped, so a constraint the file declares goes
-    unenforced and the model solves `optimal`. The relational lane keeps the
-    row as `0 == 80` and reports `Infeasible`.
+    `where: "snapshot > 0"` on `p` leaves `balance` at snapshot 0 with no
+    terms. This was an xfail: linopy handed the solver three rows of four while
+    the relational lane kept the fourth as `0 == 80` and reported Infeasible —
+    one lane answering a question the other refused.
 
-    Unrelated to name resolution; found by the parity sweep above. The
-    relational reading looks right (the file says the balance holds at every
-    snapshot), but which lane changes is a language decision, so this is pinned
-    rather than fixed here.
+    The rule is now stated at the level the property lives at rather than per
+    provenance, so the lanes reach it independently: linopy's own invariant is
+    the same one (`labels != -1` and at least one var), which is why it needed
+    no shim to agree.
+
+    The omission is asserted too. Dropping a declared row is only defensible
+    because the build says it happened.
     """
     path = _write(tmp_path, **{'variables.p.where': 'snapshot > 0'})
 
@@ -173,6 +174,9 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, data, coords):
 
     with lps.build(path, data, coords=coords) as ex:
         relational_status = ex.solve().termination_condition
+        assert ex.omissions().to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}], (
+            'a dropped row has to be reported, or a declared constraint goes quietly unenforced'
+        )
 
     assert eager_status == relational_status
 
