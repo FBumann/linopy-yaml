@@ -136,7 +136,7 @@ back.
 ```mermaid
 flowchart LR
     Y(["your math, written once<br/>one YAML file"]) --> AST
-    AST["<b>the whole model</b> — <code>MathSchema</code><br/>names typed, dims checked, degree judged<br/><i>before a byte of data is read</i>"]
+    AST["<b>the whole model</b> — <code>Model</code><br/>names typed, dims checked, degree judged<br/><i>before a byte of data is read</i>"]
     AST --> SHOW["<b>show it</b><br/>typeset · CLI<br/><i>no data, no solver</i>"]
     AST --> CHECK["<b>check it</b><br/>parse → expand → validate → lower<br/><i>no data, no solver</i>"]
     AST --> RUN["<b>run it</b><br/>solver · LP file · linopy"]
@@ -151,7 +151,7 @@ flowchart LR
 ```
 
 **Only one arrow carries data, and it arrives after the model is already
-judged.** That is the contract the waist is: `MathSchema` is complete —
+judged.** That is the contract the waist is: `Model` is complete —
 names typed, dims checked, degree decided — before a source is bound, so
 `show it` and `check it` are not cut-down versions of a build, they are the
 same model with the data arrow missing. `check` is the build's own front half
@@ -169,7 +169,7 @@ can build, in one walk of the resolved AST, holding no opinion the lanes do not
 already hold: a `piecewise:` block prints as the λ-formulation it expands to,
 not as the sugar it was written as. How names *print* is the one thing it does
 not read off the model, since a symbol table is presentation — hence a sidecar
-file (`examples/symbols/`) rather than keys on `MathSchema`, and a model with no
+file (`examples/symbols/`) rather than keys on `Model`, and a model with no
 table still renders. It splits the way `relational/sinks/writers/` does, one
 module per output format, so a format is a spelling table rather than a second
 walk that could disagree. `python -m lpspec <format>` is its shell front, one verb per
@@ -205,7 +205,7 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 
 | | you want to | the call | data? |
 |---|---|---|---|
-| **load it** | parse and validate, and stop there | `load_schema` → `MathSchema` | no |
+| **load it** | parse and validate, and stop there | `load_model` → `Model` | no |
 | **show it** | typeset for a paper or a review | `to_latex` · `to_typst` · `to_markdown` (spelling: `SymbolTable`) | no |
 | | render one from a Makefile | `python -m lpspec <format>` — the only shell front, and typeset-only | no |
 | | *watch what a build is doing* | | |
@@ -261,10 +261,10 @@ choice load-bearing in the language's rulebook.
    backend cannot hold its own opinion about what a name refers to. The waist is
    closed from the front too: nothing under `language/` imports `lowering`,
    `sources`, `api` or any consuming subpackage (`LANGUAGE_MAY_IMPORT`), so what
-   a model *means* cannot depend on what is done with it. `load_schema` sits
+   a model *means* cannot depend on what is done with it. `load_model` sits
    inside that fence — parsing and validating is the language's own job, and a
    consumer that binds no data must reach it without reaching a runner; `api.py`
-   re-exports it so callers keep saying `lps.load_schema`.
+   re-exports it so callers keep saying `lps.load_model`.
 2. **The engine knows nothing about linopy, xarray or YAML.** `relational/` goes
    plan → engine → a solver sink → solver, with linopy's semantics as a spec to match
    rather than code to share; it never sees the schema, the AST, or the eager
@@ -286,7 +286,7 @@ choice load-bearing in the language's rulebook.
 4. **Backend-visible YAML files are self-contained.** No Python-side state
    (registries, session objects) may change what a file means.
 5. **The public interface is a declared model, not a Python API.** YAML is what
-   we ship and document; the contract underneath is `MathSchema`, and whether
+   we ship and document; the contract underneath is `Model`, and whether
    that seam is ever blessed is open
    ([#381](https://github.com/fluxopt/lpspec/issues/381)). The Python surface is
    the runner (`api.py`); the plan is internal. The whole of it is
@@ -401,16 +401,16 @@ must stay off the import path of a caller who does not use it.
 | Module | Role |
 |---|---|
 | `language/_yaml.py` | the only place a file is read: YAML 1.2 booleans, duplicate keys refused |
-| `language/schema.py` | pydantic schema incl. `expressions:` / `macros:` / `piecewise:` |
+| `language/model.py` | pydantic schema incl. `expressions:` / `macros:` / `piecewise:` |
 | `language/expression_parser.py`, `language/where_parser.py` | text → core AST; grammar only, dependency-free |
 | `language/expansion.py` | named-expression / macro substitution (pre-dispatch) |
 | `language/resolution.py` | one flat namespace; `NameNode` → typed `Variable`/`Parameter`/`Dimension` nodes |
 | `language/dimensions.py` | static dim-set checking over the resolved AST |
 | `language/degree.py` | degree 1: the ceiling's first clause, asked by both lanes and stated by neither |
 | `language/helpers.py` | the closed set of built-in operators: their *names* and *call shapes* — no registry |
-| `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_schema`, the language's front door |
+| `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_model`, the language's front door |
 | `language/piecewise.py` | `piecewise:` → λ-formulation declarations |
-| `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_schema` |
+| `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_model` |
 | `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/typeset/README.md)) |
 | `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `convex:` curvature guard, which is the one check that needs values |
@@ -489,7 +489,7 @@ suffix**, which is what keeps the three vocabularies from colliding:
 
 | Layer | Suffix | Example |
 |---|---|---|
-| YAML block (`language/schema.py`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
+| YAML block (`language/model.py`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
 | Core AST (`*_parser.py`) | `Node` | `VariableNode`, `DimensionComparisonNode` |
 | Logical plan (`relational/plan.py`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
 
@@ -534,7 +534,7 @@ is the full list, and `tests/test_architecture.py` checks the shape off the path
 
 **Add a consumer of the AST** (a renderer, a checker, a report): a directory
 beside `typeset/`, a fence test naming what it may import, and a walk. It reads
-`language.load_schema` and stops there — if it needs the plan it is a lane, not
+`language.load_model` and stops there — if it needs the plan it is a lane, not
 a consumer, and the ceiling doc is the conversation to have first.
 
 **Add a primitive:** grammar (usually free — `f(x, k=v)` already parses) →

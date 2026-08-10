@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-from lpspec.api import load_schema
+from lpspec.api import load_model
 from lpspec.lowering import lower_program
 from lpspec.relational import plan
 
@@ -66,7 +66,7 @@ def walk(node: Any) -> Iterator[Any]:
 
 def constructs(model: Path) -> set[str]:
     """The set of columns *model* exercises."""
-    schema = load_schema(model)
+    schema = load_model(model)
     program = lower_program(schema)
     nodes = list(walk(program))
     used: set[str] = set()

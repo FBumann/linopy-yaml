@@ -10,17 +10,17 @@ is a row that stops failing.
 import pytest
 from pydantic import ValidationError
 
-from lpspec.language.schema import MathSchema
+from lpspec.language.model import Model
 
 
 def test_empty_schema():
-    s = MathSchema.model_validate({})
+    s = Model.model_validate({})
     assert s.dimensions == {}
     assert s.variables == {}
 
 
 def test_minimal_schema():
-    s = MathSchema.model_validate(
+    s = Model.model_validate(
         {
             'dimensions': {'x': {'values': [1, 2, 3]}},
             'parameters': {'a': {'dims': ['x']}},
@@ -58,7 +58,7 @@ def test_minimal_schema():
 )
 def test_an_undeclared_name_is_rejected(section, body, match):
     with pytest.raises(ValidationError, match=match):
-        MathSchema.model_validate({'dimensions': {'x': {'values': [1]}}, section: body})
+        Model.model_validate({'dimensions': {'x': {'values': [1]}}, section: body})
 
 
 def test_an_omitted_bound_means_unbounded_all_the_way_down():
@@ -72,7 +72,7 @@ def test_an_omitted_bound_means_unbounded_all_the_way_down():
     """
     from lpspec.lowering import _bound_expression
 
-    s = MathSchema.model_validate({'dimensions': {'x': {'values': [1]}}, 'variables': {'v': {'foreach': ['x']}}})
+    s = Model.model_validate({'dimensions': {'x': {'values': [1]}}, 'variables': {'v': {'foreach': ['x']}}})
     bounds = s.variables['v'].bounds
 
     assert (bounds.lower, bounds.upper) == (float('-inf'), float('inf'))
@@ -81,7 +81,7 @@ def test_an_omitted_bound_means_unbounded_all_the_way_down():
 
 
 def test_a_declared_bound_parameter_is_accepted():
-    s = MathSchema.model_validate(
+    s = Model.model_validate(
         {
             'dimensions': {'x': {'values': [1]}},
             'parameters': {'p_max': {'dims': ['x']}},
@@ -99,12 +99,12 @@ def test_a_declared_bound_parameter_is_accepted():
 )
 def test_a_contradictory_declaration_is_rejected(body, match):
     with pytest.raises(ValidationError, match=match):
-        MathSchema.model_validate({'dimensions': {'x': {'values': [1]}}, 'variables': {'v': body}})
+        Model.model_validate({'dimensions': {'x': {'values': [1]}}, 'variables': {'v': body}})
 
 
 def test_invalid_sense():
     with pytest.raises(ValidationError, match=r'minimize|maximize'):
-        MathSchema.model_validate({'objectives': {'obj': {'sense': 'unknown', 'expression': 'v'}}})
+        Model.model_validate({'objectives': {'obj': {'sense': 'unknown', 'expression': 'v'}}})
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +155,7 @@ def test_invalid_sense():
 )
 def test_an_unknown_key_is_rejected(raw, match):
     with pytest.raises(ValidationError, match=match):
-        MathSchema.model_validate(raw)
+        Model.model_validate(raw)
 
 
 def test_a_near_miss_is_named_and_anything_else_lists_the_valid_keys():
@@ -164,10 +164,10 @@ def test_a_near_miss_is_named_and_anything_else_lists_the_valid_keys():
     base = {'dimensions': {'x': {'values': [1]}}}
 
     with pytest.raises(ValidationError, match=r"unknown key 'boundz'.*Did you mean 'bounds'"):
-        MathSchema.model_validate({**base, 'variables': {'v': {'foreach': ['x'], 'boundz': {'lower': 0}}}})
+        Model.model_validate({**base, 'variables': {'v': {'foreach': ['x'], 'boundz': {'lower': 0}}}})
 
     with pytest.raises(ValidationError, match='Valid keys: binary, bounds, foreach, integer, where'):
-        MathSchema.model_validate({**base, 'variables': {'v': {'foreach': ['x'], 'zzzz': 1}}})
+        Model.model_validate({**base, 'variables': {'v': {'foreach': ['x'], 'zzzz': 1}}})
 
 
 # ---------------------------------------------------------------------------
@@ -176,14 +176,14 @@ def test_a_near_miss_is_named_and_anything_else_lists_the_valid_keys():
 
 
 def test_coords_list_is_shorthand_for_a_self_named_mapping():
-    s = MathSchema.model_validate(
+    s = Model.model_validate(
         {'dimensions': {'bus': {'values': ['n']}, 'generator': {'values': ['w'], 'coords': ['bus']}}}
     )
     assert s.dimensions['generator'].coords == {'bus': 'bus'}
 
 
 def test_coords_mapping_allows_two_coordinates_onto_one_dimension():
-    s = MathSchema.model_validate(
+    s = Model.model_validate(
         {
             'dimensions': {
                 'bus': {'values': ['n']},
@@ -221,4 +221,4 @@ def test_coords_mapping_allows_two_coordinates_onto_one_dimension():
 )
 def test_a_coordinate_that_does_not_name_a_target_is_rejected(dimensions, match):
     with pytest.raises(ValidationError, match=match):
-        MathSchema.model_validate({'dimensions': dimensions})
+        Model.model_validate({'dimensions': dimensions})

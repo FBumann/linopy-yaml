@@ -133,7 +133,7 @@ Versioning, the release PR, and how to force a specific version:
 outlives several refactors; one written against internals dies with the next and
 takes its argument with it — four have had to be closed and re-filed for exactly
 that. So write `bounds accept a parameter name or a number, not an expression
-(language/schema.py)`, not a line number inside the loop that enforces it.
+(language/model.py)`, not a line number inside the loop that enforces it.
 
 **`now` is the only order label**, capped at five; everything else is backlog.
 Grouping is sub-issue parentage — a track is a parent issue — because parentage

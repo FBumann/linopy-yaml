@@ -20,11 +20,11 @@ from lpspec.language.expression_parser import (
 )
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 
 def build_master_coords(
-    schema: MathSchema,
+    schema: Model,
     coords: dict[str, Any] | None,
 ) -> dict[str, pd.Index]:
     """Assemble master coordinate indices for every declared dimension.
@@ -68,7 +68,7 @@ def dim_index_of(source: Any, dim_name: str) -> pd.Index:
 
 
 def build_dim_coords(
-    schema: MathSchema,
+    schema: Model,
     coords: dict[str, Any] | None,
     master_coords: dict[str, pd.Index],
 ) -> dict[str, dict[str, xr.DataArray]]:
@@ -142,7 +142,7 @@ def build_dim_coords(
 
 
 def load_parameters(
-    schema: MathSchema,
+    schema: Model,
     data: dict[str, Any] | None,
     master_coords: dict[str, pd.Index],
 ) -> xr.Dataset:
@@ -329,7 +329,7 @@ def _validate_coords(
             raise DataError(msg)
 
 
-def check_divisors_cover(name: str, node: Any, schema: MathSchema, dataset: Any, mask: Any, model: Any) -> None:
+def check_divisors_cover(name: str, node: Any, schema: Model, dataset: Any, mask: Any, model: Any) -> None:
     """A divisor must have a value wherever this declaration divides by it.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check
@@ -373,11 +373,11 @@ def _quotients(node: Any) -> list[Any]:
     return out
 
 
-def _parameter_names(node: Any, schema: MathSchema) -> set[str]:
+def _parameter_names(node: Any, schema: Model) -> set[str]:
     return _names_of(node, schema.parameters)
 
 
-def _variable_names(node: Any, schema: MathSchema) -> set[str]:
+def _variable_names(node: Any, schema: Model) -> set[str]:
     return _names_of(node, schema.variables)
 
 

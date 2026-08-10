@@ -2,7 +2,7 @@ The whole architecture, one model, one stage at a time — run it and read.
 
 model: examples/walkthrough.yaml
 
-[1] YAML text -> validated MathSchema  (schema.py, validation.py)
+[1] YAML text -> validated Model  (schema.py, validation.py)
     dimensions   snapshot, generator
     parameters   p_max, load, cost
     variables    p

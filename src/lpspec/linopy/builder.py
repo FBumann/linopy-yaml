@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     import linopy
     import pandas as pd
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
 
@@ -92,7 +92,7 @@ class EvaluationContext:
     model: linopy.Model
     dataset: xr.Dataset
     master_coords: dict[str, pd.Index]
-    schema: MathSchema
+    schema: Model
     ns: Namespace
     #: dim -> {coordinate name: values as a DataArray over that dim}
     dim_coords: dict[str, dict[str, xr.DataArray]] = field(default_factory=dict)
@@ -100,7 +100,7 @@ class EvaluationContext:
 
 def build_model(
     model: linopy.Model,
-    schema: MathSchema,
+    schema: Model,
     dataset: xr.Dataset,
     master_coords: dict[str, pd.Index],
     dim_coords: dict[str, dict[str, xr.DataArray]] | None = None,

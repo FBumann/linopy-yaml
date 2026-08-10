@@ -18,7 +18,7 @@ Example::
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
-from lpspec.api import build, check, load_schema, solve, write
+from lpspec.api import build, check, load_model, solve, write
 from lpspec.errors import (
     DataError,
     DimensionError,
@@ -27,7 +27,7 @@ from lpspec.errors import (
     PiecewiseExpansionError,
     SchemaError,
 )
-from lpspec.language.schema import MathSchema
+from lpspec.language.model import Model
 from lpspec.typeset import SymbolTable, to_latex, to_markdown, to_typst
 
 __all__ = [
@@ -35,13 +35,13 @@ __all__ = [
     'DimensionError',
     'LanguageError',
     'LpspecError',
-    'MathSchema',
+    'Model',
     'PiecewiseExpansionError',
     'SchemaError',
     'SymbolTable',
     'build',
     'check',
-    'load_schema',
+    'load_model',
     'solve',
     'to_latex',
     'to_markdown',
