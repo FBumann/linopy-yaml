@@ -22,7 +22,7 @@ def test_empty_schema():
 def test_minimal_schema():
     s = Model.model_validate(
         {
-            'dimensions': {'x': {'values': [1, 2, 3]}},
+            'dimensions': {'x': {'values': [1, 2, 3], 'dtype': 'int'}},
             'parameters': {'a': {'dims': ['x']}},
             'variables': {'v': {'foreach': ['x']}},
         }
@@ -58,7 +58,7 @@ def test_minimal_schema():
 )
 def test_an_undeclared_name_is_rejected(section, body, match):
     with pytest.raises(ValidationError, match=match):
-        Model.model_validate({'dimensions': {'x': {'values': [1]}}, section: body})
+        Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, section: body})
 
 
 def test_an_omitted_bound_means_unbounded_all_the_way_down():
@@ -72,7 +72,9 @@ def test_an_omitted_bound_means_unbounded_all_the_way_down():
     """
     from lpspec.lowering import _bound_expression
 
-    s = Model.model_validate({'dimensions': {'x': {'values': [1]}}, 'variables': {'v': {'foreach': ['x']}}})
+    s = Model.model_validate(
+        {'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': {'foreach': ['x']}}}
+    )
     bounds = s.variables['v'].bounds
 
     assert (bounds.lower, bounds.upper) == (float('-inf'), float('inf'))
@@ -83,7 +85,7 @@ def test_an_omitted_bound_means_unbounded_all_the_way_down():
 def test_a_declared_bound_parameter_is_accepted():
     s = Model.model_validate(
         {
-            'dimensions': {'x': {'values': [1]}},
+            'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
             'parameters': {'p_max': {'dims': ['x']}},
             'variables': {'v': {'foreach': ['x'], 'bounds': {'upper': 'p_max'}}},
         }
@@ -99,7 +101,7 @@ def test_a_declared_bound_parameter_is_accepted():
 )
 def test_a_contradictory_declaration_is_rejected(body, match):
     with pytest.raises(ValidationError, match=match):
-        Model.model_validate({'dimensions': {'x': {'values': [1]}}, 'variables': {'v': body}})
+        Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': body}})
 
 
 def test_invalid_sense():
@@ -117,34 +119,47 @@ def test_invalid_sense():
     [
         # strictness lives on the shared `_StrictBlock` base, so no model can
         # opt out of it by omission — one row per model to prove it
-        pytest.param({'dimenzions': {'x': {'values': [1]}}}, "unknown key 'dimenzions' in the top level", id='top'),
+        pytest.param(
+            {'dimenzions': {'x': {'values': [1], 'dtype': 'int'}}},
+            "unknown key 'dimenzions' in the top level",
+            id='top',
+        ),
         pytest.param({'dimensions': {'thing': {'dtypo': 'str'}}}, "unknown key 'dtypo'", id='dimension'),
         pytest.param(
-            {'dimensions': {'x': {'values': [1]}}, 'parameters': {'thing': {'dims': ['x'], 'dtyp': 'float'}}},
+            {
+                'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
+                'parameters': {'thing': {'dims': ['x'], 'dtyp': 'float'}},
+            },
             "unknown key 'dtyp'",
             id='parameter',
         ),
         pytest.param(
-            {'dimensions': {'x': {'values': [1]}}, 'macros': {'thing': {'template': 'a + b', 'arg': ['a']}}},
+            {
+                'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
+                'macros': {'thing': {'template': 'a + b', 'arg': ['a']}},
+            },
             "unknown key 'arg'",
             id='macro',
         ),
         pytest.param(
             {
-                'dimensions': {'x': {'values': [1]}},
+                'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
                 'piecewise': {'thing': {'over': 'x', 'links': [['v', 'p'], ['w', 'q']], 'convx': True}},
             },
             "unknown key 'convx'",
             id='piecewise',
         ),
         pytest.param(
-            {'dimensions': {'x': {'values': [1]}}, 'variables': {'v': {'foreach': ['x'], 'bounds': {'lowerr': 0}}}},
+            {
+                'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
+                'variables': {'v': {'foreach': ['x'], 'bounds': {'lowerr': 0}}},
+            },
             "unknown key 'lowerr' in a bounds block",
             id='nested-bounds',
         ),
         pytest.param(
             {
-                'dimensions': {'x': {'values': [1]}},
+                'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
                 'variables': {'v': {'foreach': ['x']}},
                 'constraints': {'c': {'foreach': ['x'], 'expresion': 'v >= 0'}},
             },
@@ -161,7 +176,7 @@ def test_an_unknown_key_is_rejected(raw, match):
 def test_a_near_miss_is_named_and_anything_else_lists_the_valid_keys():
     """A misspelled key used to be dropped, leaving the variable unbounded —
     so the message has to be good enough to act on without reading the source."""
-    base = {'dimensions': {'x': {'values': [1]}}}
+    base = {'dimensions': {'x': {'values': [1], 'dtype': 'int'}}}
 
     with pytest.raises(ValidationError, match=r"unknown key 'boundz'.*Did you mean 'bounds'"):
         Model.model_validate({**base, 'variables': {'v': {'foreach': ['x'], 'boundz': {'lower': 0}}}})

@@ -21,13 +21,16 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 import yaml as pyyaml
 
-from lpspec.language.model import Model
+from lpspec.language.validation import load_model
+
+if TYPE_CHECKING:
+    from lpspec.language.model import Model
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
@@ -89,7 +92,7 @@ def schema_of(source: str | Path | dict[str, Any], **patch: Any) -> Model:
     ``**`` in the objective".
     """
     raw = raw_of(source)
-    return Model(**(override(raw, **patch) if patch else raw))
+    return load_model(override(raw, **patch) if patch else raw)
 
 
 def raw_of(source: str | Path | dict[str, Any]) -> dict[str, Any]:

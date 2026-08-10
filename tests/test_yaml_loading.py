@@ -6,7 +6,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.language._yaml import read_yaml
-from lpspec.language.model import Model
+from lpspec.language.validation import load_model
 
 MODEL = """dimensions:
   snapshot: {dtype: int, values: [0, 1]}
@@ -51,7 +51,7 @@ def test_real_booleans_still_parse(tmp_path):
     """The narrowed resolver must not break `binary:` / `integer:` / `convex:`."""
     path = _write(tmp_path, MODEL.replace('    bounds: {lower: 0, upper: 100}', '    binary: true\n    integer: false'))
 
-    schema = Model(**read_yaml(path))
+    schema = load_model(read_yaml(path))
 
     assert schema.variables['p'].binary is True
     assert schema.variables['p'].integer is False
@@ -62,7 +62,7 @@ def test_the_loader_yields_plain_types(tmp_path):
     raw = read_yaml(_write(tmp_path, MODEL))
     assert type(raw) is dict
 
-    schema = Model(**raw)
+    schema = load_model(raw)
     assert type(schema.dimensions['generator'].values) is list
     assert all(type(v) is str for v in schema.dimensions['generator'].values)
     assert type(schema.variables['p'].foreach) is list

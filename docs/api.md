@@ -53,6 +53,27 @@ pandas / xarray, which ship with the `[linopy]` extra. The only build knob is
 `coords`; **`solver_options` is not a build knob** and is forwarded verbatim to
 the solver.
 
+**Every verb takes the model four ways**: a path, a `str`, a `dict`, or a
+`Model`. `check`, `build`, `solve` and `write` share one first argument, so a
+framework that emits declarations never writes a temporary file to run them:
+
+```python
+model = {'dimensions': ..., 'variables': ..., 'constraints': ..., 'objectives': ...}
+
+lps.solve(model, sources)  # a dict runs like a file
+checked = lps.load_model(model)  # ...or validate once and keep it
+checked.to_yaml()  # the review copy — a dict-built model still gets a file
+lps.solve(checked, sources)  # a Model is passed through, not revalidated
+```
+
+**This is the supported path for a framework**, and it is the one closing #29
+and #30 chose: a library composing optional features emits *data*, not YAML
+text, and never merges files. What keeps it honest is the last two lines — a
+generated model that cannot show you a file is the failure mode hard rule 5
+exists to prevent, so `to_yaml()` is not a convenience here, it is the
+condition. Hand-written math still starts as a file; nothing about this path
+asks it not to.
+
 **A `Model` goes back out two ways, and they agree.** `to_dict()` is the model
 as data; `to_yaml()` is that dict as the file hard rule 5 says you review and
 diff — which a model built as a *dict*, the way a framework emits one, would

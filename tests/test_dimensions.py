@@ -135,42 +135,37 @@ def test_broadcast_is_legal_when_one_side_contains_the_other():
 def test_stray_dim_in_a_constraint_is_rejected():
     """The rule that matters most: a dim the foreach does not declare
     multiplies the rows this constraint builds."""
-    schema = _schema(**{'constraints.stray': {'foreach': ['snapshot'], 'expression': 'p <= p_max'}})
     with pytest.raises(DimensionError, match=r"carries dims \['generator'\] that are not in foreach"):
-        check_schema(schema)
+        _schema(**{'constraints.stray': {'foreach': ['snapshot'], 'expression': 'p <= p_max'}})
 
 
 def test_foreach_dim_the_equation_never_uses_is_rejected():
-    schema = _schema(
-        **{
-            'constraints.unused': {
-                'foreach': ['snapshot', 'generator', 'bus'],
-                'expression': 'p <= p_max',
-            }
-        }
-    )
     with pytest.raises(DimensionError, match=r"does not carry \['bus'\]"):
-        check_schema(schema)
+        _schema(
+            **{
+                'constraints.unused': {
+                    'foreach': ['snapshot', 'generator', 'bus'],
+                    'expression': 'p <= p_max',
+                }
+            }
+        )
 
 
 def test_where_dim_outside_the_frame_is_rejected():
     """SPEC §6.3 documented an `any()` reduction here — a mask that fails
     *open*, silently including everything."""
-    schema = _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'load > 0'}})
     with pytest.raises(DimensionError, match=r"where-parameter 'load' has dims \['bus', 'snapshot'\]"):
-        check_schema(schema)
+        _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'load > 0'}})
 
 
 def test_where_comparison_on_a_dim_outside_the_frame_is_rejected():
-    schema = _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'snapshot > 0'}})
     with pytest.raises(DimensionError, match="where-comparison on dimension 'snapshot'"):
-        check_schema(schema)
+        _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'snapshot > 0'}})
 
 
 def test_bound_parameter_dim_outside_foreach_is_rejected():
-    schema = _schema(**{'variables.cap': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 'load'}}})
     with pytest.raises(DimensionError, match=r"bounds.upper parameter 'load' has dims \['bus', 'snapshot'\]"):
-        check_schema(schema)
+        _schema(**{'variables.cap': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 'load'}}})
 
 
 def test_checking_needs_no_data():

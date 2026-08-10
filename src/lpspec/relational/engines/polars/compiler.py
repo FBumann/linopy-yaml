@@ -873,26 +873,19 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     without this each stream would be summed over its own coordinates.
 
     That is the difference between ``sum(x + size, over=f)`` and
-    ``sum(x, over=f) + sum(size, over=f)``, and under absence they are not the
-    same question: the first sums where the summand exists, the second sums each
-    operand over its own domain. Distributing one into the other would mean
-    reading the absent ``size`` as a zero, which is the reading v1 exists to
+    ``sum(x, over=f) + sum(size, over=f)``: the first sums where the summand
+    exists, the second sums each operand over its own domain. Distributing one
+    into the other reads the absent ``size`` as a zero, the reading v1 exists to
     remove (SPEC §6, §7).
 
-    Applied only where the key columns are dims the fragment carries. A
-    restriction naming a dim a fragment does not have cannot speak about it, and
-    a constant part lacking the summed dims is refused by ``_sum_fragment``
-    before it gets here.
+    Applied only where the key columns are dims the fragment carries — a
+    restriction naming a dim a fragment lacks cannot speak about it.
 
-    **A fragment is never restricted by its own presence**, which is the whole
-    of what the *other* in "each one's absence says nothing about the other"
-    means. A fragment's rows and its presence are built from one frame and
-    rewritten in step — a product joins the rows and leaves the coordinates, a
-    translation remaps both, a fill adds to both — so the rows are inside the
-    coordinates by construction and the join can only return them all. Under a
-    mask over a single term, which is the ordinary case, that made the whole
-    pass a semi-join of a frame against itself: 0.31 s over 10M rows on
-    `dispatch/l`, returning the 10M it was given.
+    **A fragment is never restricted by its own presence.** Its rows and its
+    presence are built from one frame and rewritten in step, so the rows are
+    inside the coordinates by construction and the join can only return them
+    all. Under a mask over a single term, the ordinary case, that made the pass
+    a semi-join of a frame against itself: 0.31 s over 10M rows on `dispatch/l`.
 
     The restriction is a **semi-join, so the presence frame is not deduplicated
     first**. A semi-join asks whether a key occurs, and occurring twice is still
