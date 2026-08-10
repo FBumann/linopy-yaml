@@ -212,7 +212,9 @@ class PolarsExecutor:
         actually lost it (:func:`labels.in_position_order`). Only the label
         and the two bounds are collected: projecting before the collect keeps
         the dim columns and the joined bound parameters inside the lazy
-        pipeline instead of materialising them to be dropped.
+        pipeline instead of materialising them to be dropped. The label is
+        then projected away too, having been the order's witness and nothing
+        else — ``cols`` is the three columns a sink reads.
         """
 
         start = self._n_cols
@@ -226,7 +228,7 @@ class PolarsExecutor:
             .collect(engine='streaming'),
             'var_label',
         )
-        cols = bounded.with_columns(pl.lit(v.variable_type, dtype=_DTYPES['vtype']).alias('vtype'))
+        cols = bounded.select('lb', 'ub', pl.lit(v.variable_type, dtype=_DTYPES['vtype']).alias('vtype'))
 
         bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
         if bad:

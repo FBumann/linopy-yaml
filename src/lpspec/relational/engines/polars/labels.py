@@ -151,9 +151,7 @@ def _factored(
         )
         .collect(engine='streaming')
     )
-    if labelled.height and not labelled.get_column(label).is_sorted():
-        labelled = labelled.sort(label)
-    return labelled.with_columns(pl.col(label).set_sorted())
+    return in_position_order(labelled, label).with_columns(pl.col(label).set_sorted())
 
 
 def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
@@ -192,10 +190,13 @@ def in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame
 
     One linear ``is_sorted`` against a single column, and the sort — also
     single-key, where sorting the ordinal columns was one key per dim — only
-    when the engine emitted another order. The position column leaves here
-    dropped either way; it was only ever the order's witness. The executor's
-    per-variable ``cols`` share leans on the same idiom with ``var_label`` as
-    the witness.
+    when the engine emitted another order. The witness column stays; a caller
+    that has no further use for it projects it away, and one of the three
+    (:meth:`PolarsExecutor._build_variable`'s ``cols`` share) has to.
+
+    All three orderings in the lane go through here, which is the point: a
+    second copy of "check before you sort" is a second thing to get backwards.
     """
-    ordered = materialised.get_column(position).is_sorted()
-    return (materialised if ordered else materialised.sort(position)).drop(position)
+    if materialised.get_column(position).is_sorted():
+        return materialised
+    return materialised.sort(position)

@@ -966,7 +966,7 @@ def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
             return max(int(tables.row_starts[hi] - tables.row_starts[lo]) for lo, hi in ranges)
 
         budget = 100
-        assert widest(tables._row_chunks_by_nonzeros(budget)) <= budget
+        assert widest(tables._spans(budget)) <= budget
 
         # the same budget spent as if a row cost one element puts every entry
         # in one chunk — 2x the budget here, and unbounded in general, because

@@ -31,7 +31,7 @@ from lpspec.errors import did_you_mean, schema_error
 from lpspec.language.helpers import BUILTIN_NAMES
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
 
 class _StrictBlock(BaseModel):
@@ -364,6 +364,28 @@ def _without_absence(value: Any) -> Any:
     return value
 
 
+def _in_our_tree(validate: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """Run *validate*, raising this package's exception tree.
+
+    Pydantic reports every failure as a ``ValidationError`` carrying an
+    ``input_value=`` dump and a link to its own docs — neither of which means
+    anything to someone who wrote a YAML file, and neither of which is the type
+    ``docs/api.md`` tells a caller to catch. Both of :class:`Model`'s validating
+    doors go through here so they cannot answer differently.
+
+    ``__init__`` is deliberately *not* wrapped the same way. Defining one makes
+    pydantic route validation through it, so every after-validator runs twice —
+    the first time with ``context=None``, which silently drops
+    ``known_variables`` and refuses every ``extend()`` file. The constructor
+    keeps pydantic's own error; ``lps.load_model`` is the door this package
+    documents, and it goes through here.
+    """
+    try:
+        return validate(*args, **kwargs)
+    except ValidationError as exc:
+        raise schema_error(exc) from None
+
+
 def _is_absent(value: Any) -> bool:
     """Whether a serialised value says *nothing is here*.
 
@@ -434,40 +456,19 @@ class Model(_StrictBlock):
     macros: dict[str, MacroBlock] = {}
     piecewise: dict[str, PiecewiseBlock] = {}
 
-    # `typing.override` is 3.12+ and this package supports 3.11, so the
-    # decorator the rule asks for cannot be imported.
+    # The two doors below cannot carry `typing.override`, which is 3.12+ where
+    # this package supports 3.11 — hence the suppression on each.
     @classmethod
     # pyrefly: ignore[missing-override-decorator]
     def model_validate(cls, *args: Any, **kwargs: Any) -> Model:
-        """Validate, raising this package's exception tree.
+        """Validate a mapping — see :func:`_in_our_tree` for what it raises."""
+        return _in_our_tree(super().model_validate, *args, **kwargs)
 
-        Pydantic reports every failure as a ``ValidationError`` carrying an
-        ``input_value=`` dump and a link to its own docs — neither of which
-        means anything to someone who wrote a YAML file, and neither of which
-        is the type ``docs/api.md`` tells a caller to catch.
-
-        ``__init__`` is deliberately *not* wrapped the same way. Defining one
-        makes pydantic route validation through it, so every after-validator
-        runs twice — the first time with ``context=None``, which silently
-        drops ``known_variables`` and refuses every ``extend()`` file. The
-        constructor keeps pydantic's own error; ``lps.load_model`` is the door
-        this package documents, and it goes through here.
-        """
-        try:
-            return super().model_validate(*args, **kwargs)
-        except ValidationError as exc:
-            raise schema_error(exc) from None
-
-    # `typing.override` is 3.12+ and this package supports 3.11, so the
-    # decorator the rule asks for cannot be imported.
     @classmethod
     # pyrefly: ignore[missing-override-decorator]
     def model_validate_json(cls, *args: Any, **kwargs: Any) -> Model:
-        """As :meth:`__init__`, for the door that takes JSON."""
-        try:
-            return super().model_validate_json(*args, **kwargs)
-        except ValidationError as exc:
-            raise schema_error(exc) from None
+        """The same door, for JSON."""
+        return _in_our_tree(super().model_validate_json, *args, **kwargs)
 
     @field_validator('version')
     @classmethod
