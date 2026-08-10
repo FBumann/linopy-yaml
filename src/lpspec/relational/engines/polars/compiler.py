@@ -304,7 +304,7 @@ class PolarsCompiler:
                         f"where-comparison on dimension '{p.dimension}' is outside the foreach dims "
                         f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
                     )
-                return _compare(pl.col(p.dimension), p.op, p.value)
+                return _compare(_dimension_column(p.dimension, p.value), p.op, p.value)
             if isinstance(p, plan.ParameterDefined):
                 col = pl.col(join_param(p.parameter))
                 if p.parameter in self.boolean_parameters:
@@ -828,6 +828,17 @@ def _falsy_if_null(condition: pl.Expr) -> pl.Expr:
     """*condition* with null read as false: a missing parameter row must
     exclude the coordinate rather than propagate. Masks are row absence."""
     return condition.fill_null(value=False)
+
+
+def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.Expr:
+    """The column a where-comparison on *dimension* reads.
+
+    A string label is compared in ``String`` space, undoing binding's ``Enum``:
+    §6.1 orders labels bytewise and reads an unknown label as matching nothing,
+    where an ``Enum`` orders by declaration and refuses strangers.
+    """
+    column = pl.col(dimension)
+    return column.cast(pl.String) if isinstance(value, str) else column
 
 
 def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
