@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.81](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.80...v0.0.1-alpha.81) (2026-08-10)
+
+
+### Bug Fixes
+
+* **language:** the bare-shift refusal names a pair, not three alternatives ([#540](https://github.com/fluxopt/lpspec/issues/540)) ([96bbbaa](https://github.com/fluxopt/lpspec/commit/96bbbaa29650dc0476e80f4408532f469c0242a7))
+
+
+### Performance
+
+* **engine:** a string dimension speaks its own Enum, everywhere at once ([#541](https://github.com/fluxopt/lpspec/issues/541)) ([8517945](https://github.com/fluxopt/lpspec/commit/8517945d603f17ce89f79c112eda6fc602968d16))
+
 ## [0.0.1-alpha.80](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.79...v0.0.1-alpha.80) (2026-08-10)
 
 
