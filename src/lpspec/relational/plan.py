@@ -301,10 +301,21 @@ class DimensionDeclaration:
     labels of. The executor checks that containment once the dim tables exist,
     which is what keeps a mistyped label from silently dropping its terms in
     the inner join that places them.
+
+    ``labels`` are the inline label spaces: index columns the dimension owns
+    outright, with no target and therefore no containment to check. They ride
+    the dim table for selection and rendering; resolution refuses to group
+    into one, so no expression node ever reaches them.
     """
 
     name: str
     coordinates: tuple[tuple[str, str], ...] = ()
+    labels: tuple[str, ...] = ()
+
+    @property
+    def carried(self) -> list[str]:
+        """Every coordinate column the dimension's index source must supply."""
+        return sorted([*(c for c, _ in self.coordinates), *self.labels])
 
 
 @dataclass(frozen=True)
