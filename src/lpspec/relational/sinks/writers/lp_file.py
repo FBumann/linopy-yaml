@@ -84,8 +84,8 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         # so sorting the whole model at once is what the writer's peak *is*;
         # ranges are ascending and each is internally sorted, so the bytes are
         # the same ones #109 pins.
-        for lo, hi in model.row_chunks_by_nonzeros(EMIT_BUDGET):
-            _sink(_constraint_blocks(model, lo, hi), f)
+        for lo, hi, entries in model.labeled_blocks(EMIT_BUDGET):
+            _sink(_constraint_blocks(model, lo, hi, entries), f)
 
         f.write(b'\nbounds\n')
         _sink(bounds, f)
@@ -100,7 +100,7 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         f.write(b'\nend\n')
 
 
-def _constraint_blocks(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
+def _constraint_blocks(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
     """Every constraint line, as one sorted stream of ``(key, line)``.
 
     One line per output line rather than one block per row: the pieces are
@@ -133,7 +133,7 @@ def _constraint_blocks(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
         return ((pl.col('row') - lo) * slots + within).alias('key')
 
     rows = model.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
-    matrix = model.matrix.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
+    matrix = entries.lazy()
     header = rows.select(
         _key(pl.lit(0, dtype=pl.Int64)),
         pl.concat_str(pl.lit('c').alias('c'), _digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),

@@ -81,7 +81,7 @@ flowchart TB
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file (mps planned)"]
-        TABLES --> DIRECT["sinks/solvers/<br/>COO batches → the solver, chosen by name<br/>highs (ships) · gurobi (extra)"]
+        TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi (extra)"]
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
@@ -326,7 +326,10 @@ what makes it visible in a signature rather than only in a docstring.
 **Tidy tables.** Parameters are `(dims…, value)`; a variable frame is
 `(dims…, var_label)`, one row per *existing* variable; a linear expression is
 `(frame dims…, var_label, coeff)` plus a constant part; constraint rows are
-`(row, sense, rhs)`; the coefficient matrix is COO `(row, col, coeff)`. Masks
+`(row, sense, rhs)`; the coefficient matrix is COO `(row, col, coeff)` while
+declarations build, and lands as CSR at assembly — `(col, coeff)` in row-major
+order plus a `row_starts` offset array, the same three arrays a solver takes,
+at 12 bytes per entry. Masks
 are **row absence** — no NaN sentinels, no `-1` labels. Broadcasting is a join,
 `sum` drops coordinate columns, `sum(group_by=)` joins the dim table and projects a
 declared coordinate in place of the grouped dim. Neither aggregates: both
@@ -371,7 +374,7 @@ the engine holds. The bare-install CI job runs the suite with neither present.
 
 **Sinks are capped, explicitly.** Today every sink expresses the same three
 streams and no more: `cols` (bounds, objective coefficients, integrality),
-`rows`, and `A` in COO. The upgrade path is two further streams — `sos_sets`
+`rows`, and `A` in CSR. The upgrade path is two further streams — `sos_sets`
 and `genconstr` — plus a semi-continuous threshold on `cols`. Unlike the three
 that exist, those two would land *unevenly*, because the destinations differ
 per sink (see "Capability is not the ceiling"); that unevenness is what
