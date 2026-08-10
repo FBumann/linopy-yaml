@@ -128,7 +128,7 @@ class PolarsExecutor:
         self._rows = _stack([r for r, _ in built], _ROWS)
         ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
         self._matrix_starts = _row_starts(ordered, self._n_rows)
-        self._matrix = ordered.select('col', 'coeff')
+        self._matrix = ordered.select('col', 'coeff').rechunk()
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -598,11 +598,16 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
     ``bincount`` pays per entry (26 ms to rle's 7 at 10M entries over 100k
     rows), ``searchsorted`` per row times the log of the entries, and either
     is the wrong one on some ladder case. Computed *here* so the ``row``
-    column can then be dropped — a select, not a copy, since a polars column
-    is its own buffer. A label repeated once per nonzero is 8 bytes per entry
-    no sink reads: every consumer either slices by these starts or asks
-    :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to spell
-    the labels back out.
+    column can then be dropped. A label repeated once per nonzero is 8 bytes
+    per entry no sink reads: every consumer either slices by these starts or
+    asks :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to
+    spell the labels back out.
+
+    The kept matrix is then **rechunked, once**. A streaming collect leaves
+    it in chunks, and a sink slices it per row block — against a chunked
+    frame every block's ``to_numpy`` is a gather-copy, where against one
+    contiguous buffer it is a view (codspeed caught the difference as -6.9%
+    on `profiled-m`, ~150 blocks over 16 chunks).
     """
     import numpy as np
 
