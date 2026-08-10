@@ -336,23 +336,24 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
 
 
 def _shift_over_data_message(context: str) -> str:
-    """The two ways out, and deliberately not a third.
+    """The three ways out, one of which is two things at once.
 
-    A `where` masking the vacated coordinate reads like a remedy and is not
-    one: this refusal is decided on the expression alone, so a mask changes
-    nothing about it. Advertising it sent the reader off to write a predicate,
-    get the same error back, and conclude they had written the mask wrong.
-
-    Honouring one would mean proving a predicate excludes exactly the vacated
-    coordinates, which is not decidable in general — `t > 0` is provable,
-    `t > t_start` is not — and a rule that held for literals only would
-    surprise worse than no rule.
+    A `where` is a *companion* to `edge=`, not an alternative to it. This
+    refusal is decided on the expression alone, so a mask does not lift it —
+    but `edge=0` alone leaves a row at the vacated coordinate whose bound is
+    that zero, which is the silent pinning this refusal exists to prevent. The
+    row is omitted only by masking it, and the mask is only reachable once the
+    expression is well-formed. Listing the two as alternatives sent a reader to
+    whichever they read first, and both are wrong on their own.
     """
     return (
         f'{context}: shift() over a variable-free expression leaves vacated positions with no '
         f'value, and inventing one is what silently pinned a bound to zero. Say which you mean:\n'
+        f"  shift(x, over=d, by=n, edge='wrap')   the dimension really is cyclic\n"
         f'  shift(x, over=d, by=n, edge=0)        the vacated positions contribute zero\n'
-        f"  shift(x, over=d, by=n, edge='wrap')   the dimension really is cyclic"
+        f'  ...and a where: excluding them        the vacated rows should not exist at all\n'
+        f'A where: alone does not lift this — it is decided on the expression, before any mask '
+        f'is read — and edge=0 alone leaves a row whose bound is that zero.'
     )
 
 
