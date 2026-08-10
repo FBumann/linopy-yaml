@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.78](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.77...v0.0.1-alpha.78) (2026-08-10)
+
+
+### Refactoring
+
+* **api:** Model, and a model that can be written back out ([#522](https://github.com/fluxopt/lpspec/issues/522)) ([ccefd98](https://github.com/fluxopt/lpspec/commit/ccefd9863a4dd71ee0a25ac9f89bc5f484856581))
+
 ## [0.0.1-alpha.77](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.76...v0.0.1-alpha.77) (2026-08-09)
 
 
