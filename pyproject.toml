@@ -39,7 +39,10 @@ dependencies = [
     # work at the solver boundary, not a dataframe dependency.
     "numpy>=1.26",
     "pyparsing>=3.1",
-    "pydantic>=2.0",
+    # 2.1 is where a validator's own exception reaches `ctx['error']` as the
+    # object rather than its str, which `errors.schema_error` unwraps to keep
+    # the documented class. 2.0 flattens every model error to SchemaError.
+    "pydantic>=2.1",
     "pyyaml>=6.0",
     "highspy>=1.10",
 ]
