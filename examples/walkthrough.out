@@ -40,7 +40,7 @@ model: examples/walkthrough.yaml
     ┌──────────┬───────────┬───────────┐
     │ snapshot ┆ generator ┆ var_label │
     │ ---      ┆ ---       ┆ ---       │
-    │ i64      ┆ str       ┆ i64       │
+    │ i64      ┆ enum      ┆ i64       │
     ╞══════════╪═══════════╪═══════════╡
     │ 0        ┆ wind      ┆ 0         │
     │ 0        ┆ solar     ┆ 1         │
@@ -70,14 +70,14 @@ model: examples/walkthrough.yaml
     ┌──────────┬───────────┬───────┐
     │ snapshot ┆ generator ┆ value │
     │ ---      ┆ ---       ┆ ---   │
-    │ i64      ┆ str       ┆ f64   │
+    │ i64      ┆ enum      ┆ f64   │
     ╞══════════╪═══════════╪═══════╡
-    │ 0        ┆ gas       ┆ 0.0   │
-    │ 0        ┆ solar     ┆ 0.0   │
     │ 0        ┆ wind      ┆ 80.0  │
-    │ 1        ┆ gas       ┆ 0.0   │
-    │ 1        ┆ solar     ┆ 60.0  │
+    │ 0        ┆ solar     ┆ 0.0   │
+    │ 0        ┆ gas       ┆ 0.0   │
     │ 1        ┆ wind      ┆ 60.0  │
+    │ 1        ┆ solar     ┆ 60.0  │
+    │ 1        ┆ gas       ┆ 0.0   │
     └──────────┴───────────┴───────┘
 
 [7] and what the language refuses  (validation.py, lowering.py)

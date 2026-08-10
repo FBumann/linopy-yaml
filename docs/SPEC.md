@@ -439,6 +439,13 @@ only spelling, since the language orders and compares coordinates and never
 interprets them. Calendar arithmetic, resampling and timezone conversion stay
 data prep.
 
+**String labels order bytewise**, whatever order the dimension declared them
+in. Declaration order is a different axis — it is what `shift` walks and what
+a label follows — and a `where` never reads it: `node >= 'b'` means the same
+thing however the nodes were listed. A label the dimension does not carry
+compares equal to nothing, so the mask is false there rather than an error —
+quoting already said *label, not name*, and a label is data.
+
 ## 7. Operators
 
 The built-in set is **closed** — no Python registry, so the operators are
