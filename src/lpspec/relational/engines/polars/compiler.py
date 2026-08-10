@@ -593,6 +593,17 @@ class PolarsCompiler:
         there is no column to remap — so it is widened first
         (:meth:`_widen`, which changes no answer) and travels full-width
         after.
+
+        Every fill over a *constant* is written, ``0`` included (#551): the
+        arithmetic is unchanged — a const fragment reads a missing row as zero
+        anyway — but the slot now has a value, so asking for zero stops being
+        indistinguishable from having nothing, which is what the presence
+        branch already said (a filled slot counts as present). Over a *term*
+        there is nothing to write: ``edge=0`` on a variable means the vacated
+        slot contributes no term at all (SPEC §7), and a zero-coefficient
+        entry would be a matrix nonzero standing for a term that is not there.
+        Lowering refuses every other numeric edge over a variable, so ``0`` is
+        the only one that reaches here.
         """
 
         if s.dimension not in p.dims:
@@ -627,7 +638,7 @@ class PolarsCompiler:
             )
 
         frame = remap(p.frame, p.carried)
-        if not s.wrap and s.fill:
+        if not s.wrap and s.fill is not None and not p.is_term:
             frame = pl.concat([frame, self._filled_edge(s, card, others, s.fill)], how='vertical_relaxed')
         presence, presence_dims = None, None
         if p.presence is not None:

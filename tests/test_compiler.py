@@ -328,3 +328,36 @@ def test_a_bound_carrying_a_variable_is_refused():
     variable = plan.VariableDeclaration('p', ('snapshot', 'generator'), upper=plan.Variable('p'))
     with pytest.raises(LanguageError, match='bounds must be variable-free'):
         compiler().bounds(VARIABLES['p'], variable)
+
+
+def test_a_zero_edge_writes_its_rows_like_any_other_fill():
+    """`edge=0` over a constant leaves a row, not a gap.
+
+    The arithmetic is the same either way — a const fragment reads a missing
+    row as zero — so nothing about the model changes here. What changes is that
+    the vacated slot *has* a value, so "I asked for zero" and "there was
+    nothing here" stop looking alike downstream. They were already telling
+    different stories: the presence branch counts a filled slot as present,
+    while the frame had no row for it.
+
+    Over a *term* there is still nothing to write: `edge=0` on a variable means
+    the vacated slot contributes no term (SPEC §7), and a zero-coefficient
+    entry would be a nonzero in the matrix standing for a term that is absent.
+    """
+    snapshots = pl.LazyFrame({'val': [0, 1, 2], 'ord': [0, 1, 2]})
+    sources = BoundSources(
+        parameters={'load': pl.LazyFrame({'snapshot': [0, 1, 2], 'value': [10.0, 20.0, 30.0]})},
+        dimensions={'snapshot': snapshots},
+        cardinality={'snapshot': 3},
+        boolean_parameters=frozenset(),
+    )
+    q = PolarsCompiler(PROGRAM, sources, VARIABLES)
+    shifted = plan.Translate(plan.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)
+
+    rows = q.expression(shifted, 'test').consts[0].frame.collect().sort('snapshot')
+    assert rows['snapshot'].to_list() == [0, 1, 2], 'the vacated snapshot has no row, so its zero is invisible'
+    assert rows['cval'].to_list() == [0.0, 10.0, 20.0], 'the fill is the value at the vacated slot'
+
+    bare = plan.Translate(plan.Parameter('load'), 'snapshot', 1, wrap=False, fill=None)
+    vacated = q.expression(bare, 'test').consts[0].frame.collect()
+    assert vacated['snapshot'].to_list() == [1, 2], 'a bare shift vacates, and that is a gap on purpose'
