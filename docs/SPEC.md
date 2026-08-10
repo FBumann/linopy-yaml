@@ -477,9 +477,9 @@ Four rules govern `edge=`, and all four are law 8 in this position:
 - **A bare `shift` over a variable-free expression is a load error.** A
   parameter's missing row is a zero coefficient (§6), so there is no absence for
   the vacated slot to carry, and inventing one silently turns
-  `x <= shift(dt, over=t, by=1)` into `x <= 0`. The error names the three things
-  it could have meant: `edge=0`, a `where` masking the coordinate out, or
-  `edge='wrap'`.
+  `x <= shift(dt, over=t, by=1)` into `x <= 0`. The error names the two things
+  it could have meant: `edge=0` or `edge='wrap'`. A `where` is not among them —
+  the refusal is decided on the expression, before any mask is read.
 
 Anything composable out of these belongs in `macros:`. Math that is not sayable
 at all goes to a declared `escape:` island

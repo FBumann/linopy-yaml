@@ -333,3 +333,39 @@ def test_a_quoted_keyword_outside_a_kwarg_does_not_parse():
         lps.check(_with("x - 'wrap' <= 1"))
 
     assert 'Failed to parse expression' in str(exc.value)
+
+
+def _shift_over_data(where: str | None = None) -> dict[str, object]:
+    constraint: dict[str, object] = {'foreach': ['t'], 'expression': 'x <= shift(dt, over=t, by=1)'}
+    if where is not None:
+        constraint['where'] = where
+    return {
+        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'parameters': {'dt': {'dims': ['t']}},
+        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'c': constraint},
+        'objectives': {'o': {'sense': 'maximize', 'expression': 'x'}},
+    }
+
+
+def test_a_bare_shift_over_data_offers_only_remedies_that_work():
+    """The refusal names `edge=`, and deliberately not a `where`.
+
+    A mask reads like the third way out and is not one: this is decided on the
+    expression, so a `where` excluding exactly the vacated coordinate changes
+    nothing. The message used to offer it, which sent a reader off to write a
+    predicate, get the identical error back, and conclude the mask was wrong.
+
+    Held as two halves — the mask really does not rescue it, and the message
+    really does not claim otherwise — because either alone would let the advice
+    come back.
+    """
+    with pytest.raises(LanguageError, match='vacated positions') as bare:
+        lps.check(_shift_over_data())
+    with pytest.raises(LanguageError, match='vacated positions') as masked:
+        lps.check(_shift_over_data(where='t > 0'))
+
+    assert str(bare.value) == str(masked.value), 'a mask changes the outcome, so the advice would be real'
+    assert 'where' not in str(bare.value), 'the message offers a remedy that does nothing'
+    for remedy in ('edge=0', "edge='wrap'"):
+        assert remedy in str(bare.value), f'{remedy} is a way out and has to be named'

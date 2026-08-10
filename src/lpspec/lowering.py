@@ -336,11 +336,22 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
 
 
 def _shift_over_data_message(context: str) -> str:
+    """The two ways out, and deliberately not a third.
+
+    A `where` masking the vacated coordinate reads like a remedy and is not
+    one: this refusal is decided on the expression alone, so a mask changes
+    nothing about it. Advertising it sent the reader off to write a predicate,
+    get the same error back, and conclude they had written the mask wrong.
+
+    Honouring one would mean proving a predicate excludes exactly the vacated
+    coordinates, which is not decidable in general — `t > 0` is provable,
+    `t > t_start` is not — and a rule that held for literals only would
+    surprise worse than no rule.
+    """
     return (
         f'{context}: shift() over a variable-free expression leaves vacated positions with no '
         f'value, and inventing one is what silently pinned a bound to zero. Say which you mean:\n'
-        f'  shift(x, over=d, by=n, edge=0)      the vacated positions contribute zero\n'
-        f'  where: "..."                        mask the vacated coordinate out of the row\n'
+        f'  shift(x, over=d, by=n, edge=0)        the vacated positions contribute zero\n'
         f"  shift(x, over=d, by=n, edge='wrap')   the dimension really is cyclic"
     )
 
