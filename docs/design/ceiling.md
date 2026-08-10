@@ -182,13 +182,14 @@ bounds-as-expressions (#31).
 
 Whatever genuinely is not data (variable port counts, runtime-unknown component
 types) belongs in a thin layer emitting **more rows or more templates, never
-per-instance YAML** — but **that layer has nothing *supported* to call**. A seam
-does exist: `api.load_model` accepts `dict | Model`, so a programmatically
-built model already goes through validation, expansion, resolution and dim
-checking. It is just undocumented and unversioned, while rule 5 refuses a Python
-modeling API and this section forbids generated YAML. Composition therefore
-forces that contract earlier than the roadmap has it: not a general modeling API,
-but a narrow, versioned way to emit declarations. Should anything ever be
-blessed, it is the schema level and not the plan level — that much is settled;
-what is not is whether to bless the seam at all, and namespacing (#29) or a
-native schema merge (#30) is what would force the question.
+per-instance YAML** — and that layer has a supported thing to call. Every
+verb takes `str | Path | dict | Model`, so a programmatically built model goes
+through validation, expansion, resolution and dim checking exactly as a file
+does, and `Model.to_yaml` gives it the review copy rule 5 requires.
+
+That is the whole of the blessed contract, and it is at the schema level rather
+than the plan level. It is a narrow way to emit *declarations*, not a Python
+modeling API — which rule 5 still refuses, and which is why this section still
+forbids generated YAML text. Namespacing (#29) and a native schema merge (#30)
+were closed against it: a library composing optional features varies its
+declarations by data, and a dict is already how you say that.
