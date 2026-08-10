@@ -388,3 +388,40 @@ def test_edge_zero_alone_binds_the_vacated_row_and_a_where_frees_it():
     assert pinned.primal('x')['value'].to_list()[0] == 0.0, 'edge=0 alone should pin the vacated row'
     assert omitted.primal('x')['value'].to_list()[0] == 5.0, 'the where should omit it entirely'
     assert omitted.objective > pinned.objective
+
+
+NESTED_SHIFTS = {
+    'same-dim': 'shift(shift(p, over=t, by=1), over=t, by=1)',
+    'cross-dim': 'shift(shift(p, over=t, by=1), over=g, by=1)',
+    'cross-dim-reversed': 'shift(shift(p, over=g, by=1), over=t, by=1)',
+    'triple-mixed': 'shift(shift(shift(p, over=t, by=1), over=g, by=1), over=t, by=1)',
+    'inner-fill': 'shift(shift(p, over=t, by=1, edge=0), over=t, by=1)',
+    'outer-wrap': "shift(shift(p, over=t, by=1), over=t, by=1, edge='wrap')",
+}
+
+
+@pytest.mark.parametrize('rhs', NESTED_SHIFTS.values(), ids=list(NESTED_SHIFTS))
+def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
+    """A shift over a shift, in every arrangement of edge and dimension.
+
+    `shift` takes any node of the right dim set (SPEC §7), so nesting is inside
+    what the language accepts — and the eager lane always built it. The
+    relational lane raised a raw `polars.ColumnNotFoundError` instead, because
+    an acyclic inner shift leaves a presence narrower than the fragment and the
+    outer one projected the fragment's dims onto it.
+
+    The coefficient and the `+ 1` are what make the row bind: without them
+    every variable sits at its upper bound and the lanes agree on an answer
+    neither of them computed from the shift.
+    """
+    model = {
+        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2, 3, 4]}, 'g': {'dtype': 'str', 'values': ['a', 'b']}},
+        'parameters': {'c': {'dims': ['g']}},
+        'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'k': {'foreach': ['t', 'g'], 'expression': f'p <= 0.5 * {rhs} + 1'}},
+        'objectives': {'o': {'sense': 'maximize', 'expression': 'p * c'}},
+    }
+    data = {'c': pd.Series([1.0, 2.0], index=pd.Index(['a', 'b'], name='g'))}
+    with differential(model, data) as run:
+        primal = run.result.primal('p')['value'].to_numpy()
+        assert not np.allclose(primal, 5.0), 'nothing binds, so the lanes would agree on an unconstrained model'

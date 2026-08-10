@@ -631,13 +631,21 @@ class PolarsCompiler:
         if s.wrap:
             moved = (moved % card + card) % card
 
-        def remap(source: pl.LazyFrame, carried: list[str]) -> pl.LazyFrame:
+        def remap(source: pl.LazyFrame, carried: list[str], source_dims: tuple[str, ...] | None = None) -> pl.LazyFrame:
+            """*source*, with ``s.dimension`` moved by ``s.by``.
+
+            ``source_dims`` is the caller's, because a presence frame need not
+            carry the fragment's: an acyclic shift's presence speaks only about
+            the dim it vacated, so projecting the fragment's dims onto it asks
+            for columns it never had.
+            """
+            kept = [d for d in (source_dims if source_dims is not None else p.dims) if d != s.dimension]
             return (
                 source.join(incoming, on=s.dimension, how='inner')
                 .drop(s.dimension)
                 .with_columns(moved.alias(_ORD_OUT))
                 .join(outgoing, on=_ORD_OUT, how='inner')
-                .select(*others, s.dimension, *carried)
+                .select(*kept, s.dimension, *carried)
             )
 
         frame = remap(p.frame, p.carried)
@@ -651,10 +659,23 @@ class PolarsCompiler:
         presence, presence_dims = None, None
         if p.presence is not None:
             # Presence is a coordinate set, so it travels through the same map,
-            # and the inner join already drops whatever the edge vacated.
-            presence = remap(p.presence, [])
+            # and the inner join already drops whatever the edge vacated. Its
+            # dims travel with it: a nested shift arrives here with a presence
+            # narrower than the fragment, and forgetting that had the row set
+            # joined on a column the presence does not carry.
+            presence_dims = p.presence_dims
+            source = p.presence
+            if presence_dims is not None and s.dimension not in presence_dims:
+                # A shift along a dim the presence is silent about cannot remap
+                # it — there is no column to join on. Widening to the
+                # fragment's dims changes no meaning (a presence says nothing
+                # about the dims it omits) and puts the column there.
+                source = self._widen(source, presence_dims, p.dims)
+                presence_dims = None
+            presence = remap(source, [], presence_dims)
             if not s.wrap and s.fill is not None:
                 presence = pl.concat([presence, self._vacated(p, s, card, others)], how='vertical_relaxed').unique()
+                presence_dims = None
         elif not s.wrap and s.fill is None:
             # Nothing was absent before, and the edge now is. `None` here means
             # "present everywhere", so without this the vacated slot would
@@ -669,6 +690,18 @@ class PolarsCompiler:
             presence_dims=presence_dims,
             mapping=(*p.mapping, ('shift', s.dimension, str(s.by), str(s.wrap))),
         )
+
+    def _widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
+        """*presence* over every dim in *want*, saying the same thing.
+
+        A presence frame is silent about the dims it omits, which reads as
+        "present at all of them" — so the widening is a cross join with those
+        dimensions' own tables, and it changes no answer.
+        """
+        for d in want:
+            if d not in have:
+                presence = presence.join(self.dimensions[d].select(pl.col('val').alias(d)), how='cross')
+        return presence.select(*want)
 
     def _filled_edge(self, s: plan.Translate, card: int, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated.
