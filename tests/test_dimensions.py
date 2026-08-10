@@ -16,7 +16,7 @@ from tests.conftest import override, schema_of
 from tools import constructs
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 #: A *network* dispatch model: `conftest.DISPATCH_MODEL` plus buses, so
 #: `sum` and per-bus loads are in scope. The dim rules are mostly about
@@ -44,11 +44,11 @@ BASE = {
 }
 
 
-def _schema(**overrides) -> MathSchema:
+def _schema(**overrides) -> Model:
     return schema_of(BASE, **overrides)
 
 
-def _dims(expr: str, schema: MathSchema | None = None) -> frozenset[str]:
+def _dims(expr: str, schema: Model | None = None) -> frozenset[str]:
     s = schema or _schema()
     return dims_of(expression_of(expr, s, Namespace.of(s), 't'), s, 't')
 

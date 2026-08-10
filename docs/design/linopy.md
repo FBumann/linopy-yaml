@@ -67,7 +67,7 @@ lpspec_linopy.extend(m, 'ramp.yaml', data={...})  # mutates m in place
 Both are *pure producers*: YAML in, model out, nothing retained. `build` returns
 a plain `linopy.Model` — no accessor, no attached schema, no patched attributes
 — so nothing is lost across `pickle`, `deepcopy` or `to_netcdf`. To inspect the
-math, re-read the file with `lps.load_schema`.
+math, re-read the file with `lps.load_model`.
 
 `extend` may reference variables already on the model (they come from the model
 argument, not from Python-side history), while the YAML must still declare every

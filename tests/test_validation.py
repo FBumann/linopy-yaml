@@ -6,19 +6,19 @@ import datetime
 
 import pytest
 
-from lpspec.language.schema import MathSchema
+from lpspec.language.model import Model
 from lpspec.language.validation import validate_expressions
 from tests.oracle import linopy, lpspec_linopy, pd
 
 
-def _schema(**overrides) -> MathSchema:
+def _schema(**overrides) -> Model:
     base = {
         'dimensions': {'g': {'values': ['wind', 'solar']}},
         'parameters': {'p_max': {'dims': ['g']}},
         'variables': {'p': {'foreach': ['g']}},
     }
     base.update(overrides)
-    return MathSchema.model_validate(base)
+    return Model.model_validate(base)
 
 
 class TestValidateExpressions:
@@ -129,7 +129,7 @@ class TestValidateExpressions:
 
     def test_known_names_extend_the_namespace(self):
         """extend() passes names from the existing model; they must validate."""
-        schema = MathSchema.model_validate(
+        schema = Model.model_validate(
             {
                 'dimensions': {'g': {'values': ['wind', 'solar']}},
                 'parameters': {'p_max': {'dims': ['g']}},
@@ -148,7 +148,7 @@ class TestValidateExpressions:
     def test_known_variable_dims_reach_the_objective(self):
         """The dim checker needs an external variable's dims wherever it needs
         the name — objectives included, not just constraints."""
-        schema = MathSchema.model_validate(
+        schema = Model.model_validate(
             {
                 'dimensions': {'g': {'values': ['wind', 'solar']}},
                 'parameters': {'cost': {'dims': ['g']}},
@@ -219,11 +219,11 @@ class TestDimensionKwargs:
     """
 
     @staticmethod
-    def _schema(expression: str, foreach: list[str] | None = None) -> MathSchema:
+    def _schema(expression: str, foreach: list[str] | None = None) -> Model:
         # `or` would turn an explicit [] into ['snapshot']; a scalar constraint
         # is a legitimate thing to ask for
         foreach = ['snapshot'] if foreach is None else foreach
-        return MathSchema.model_validate(
+        return Model.model_validate(
             {
                 'dimensions': {
                     'snapshot': {'dtype': 'int'},
@@ -266,7 +266,7 @@ class TestDimensionKwargs:
 
     def test_macro_formals_are_not_mistaken_for_dimensions(self):
         """A formal in a dim position is legal inside the template body."""
-        schema = MathSchema.model_validate(
+        schema = Model.model_validate(
             {
                 'dimensions': {'generator': {'values': ['wind']}},
                 'parameters': {'cost': {'dims': ['generator']}},
@@ -411,16 +411,16 @@ class TestVersion:
     def test_absent_means_zero(self):
         """Additive by design: every file written before the field stays valid,
         so adding it needed no migration of examples, ports or fixtures."""
-        assert MathSchema.model_validate(self._model()).version == 0
+        assert Model.model_validate(self._model()).version == 0
 
     def test_zero_is_the_unstable_surface(self):
-        assert MathSchema.model_validate(self._model(version=0)).version == 0
+        assert Model.model_validate(self._model(version=0)).version == 0
 
     def test_an_unknown_version_is_refused_not_interpreted(self):
         """A file from the future must not be read by an older reader — that is
         the whole reason the field exists, and the only thing it does."""
         with pytest.raises(ValueError) as exc:
-            MathSchema.model_validate(self._model(version=1))
+            Model.model_validate(self._model(version=1))
 
         message = str(exc.value)
         assert 'declares version 1' in message
@@ -431,6 +431,6 @@ class TestVersion:
         """Reject-only. Two files differing only in a *declared* supported
         version must build the same model — the field never selects a surface.
         """
-        bare = MathSchema.model_validate(self._model())
-        declared = MathSchema.model_validate(self._model(version=0))
+        bare = Model.model_validate(self._model())
+        declared = Model.model_validate(self._model(version=0))
         assert bare.model_dump(exclude={'version'}) == declared.model_dump(exclude={'version'})

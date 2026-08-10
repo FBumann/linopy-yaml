@@ -66,13 +66,13 @@ from lpspec.language.where_parser import (
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 _SENSES = {'==', '<=', '>='}
 
 
-def lower_program(schema: MathSchema) -> plan.Program:
-    """Compile a validated :class:`MathSchema` into a :class:`Program`."""
+def lower_program(schema: Model) -> plan.Program:
+    """Compile a validated :class:`Model` into a :class:`Program`."""
     schema = expand_piecewise(schema)
     ns = Namespace.of(schema)
     parameters = tuple(plan.ParameterDeclaration(name, tuple(pdef.dims)) for name, pdef in schema.parameters.items())
@@ -141,7 +141,7 @@ def lower_program(schema: MathSchema) -> plan.Program:
 # ---------------------------------------------------------------------------
 
 
-def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.Expression:
+def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expression:
     """Rewrite one resolved core-AST expression as a plan expression.
 
     Two rules a helper case relies on, neither of them stated here. The call
@@ -289,7 +289,7 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
     assert_never(node)
 
 
-def _check_dim_rules(node: FunctionCallNode, schema: MathSchema, context: str) -> None:
+def _check_dim_rules(node: FunctionCallNode, schema: Model, context: str) -> None:
     """Apply the language's dim rules to a helper call, discarding the dim set.
 
     Lowering wants the *raise*, not the answer: ``dimensions`` decides whether

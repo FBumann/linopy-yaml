@@ -174,7 +174,7 @@ table and a single `sum(group_by=)` balance. **Topology is data, not structure**
 wiring a specific system is rows in a connectivity table, never generated YAML,
 so structure is bounded by the number of component *types* while cardinality
 lives entirely in data. Schema merge is therefore a pure **compose-then-build**
-step producing one `MathSchema` before a single lower/stream pass (`linopy.extend`
+step producing one `Model` before a single lower/stream pass (`linopy.extend`
 is a linopy-lane shim; native merge is #30). Namespacing via qualified names is
 the missing primitive (#29) — the port/flow surface stays deliberately shared, as
 the coupling contract between templates — and signs and bidirectional flows need
@@ -183,7 +183,7 @@ bounds-as-expressions (#31).
 Whatever genuinely is not data (variable port counts, runtime-unknown component
 types) belongs in a thin layer emitting **more rows or more templates, never
 per-instance YAML** — but **that layer has nothing *supported* to call**. A seam
-does exist: `api.load_schema` accepts `dict | MathSchema`, so a programmatically
+does exist: `api.load_model` accepts `dict | Model`, so a programmatically
 built model already goes through validation, expansion, resolution and dim
 checking. It is just undocumented and unversioned, while rule 5 refuses a Python
 modeling API and this section forbids generated YAML. Composition therefore

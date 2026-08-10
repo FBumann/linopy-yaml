@@ -50,7 +50,7 @@ import pytest
 import yaml
 
 import lpspec as lps
-from lpspec.language.schema import MathSchema
+from lpspec.language.model import Model
 from lpspec.relational.engines.polars.executor import PolarsExecutor, Result
 
 try:
@@ -80,7 +80,7 @@ ROOTS: dict[str, Any] = {
     'lpspec_linopy': linopy_lane,
     'result': Result,
     'ex': PolarsExecutor,
-    'schema': MathSchema,
+    'schema': Model,
 }
 
 # Every root an example may name, whether or not this install can resolve it.
@@ -251,7 +251,7 @@ def test_readme_example_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 def _entry_model(section: str) -> Any:
     """The per-entry model behind a schema section, e.g. constraints -> ConstraintDef."""
-    args = get_args(MathSchema.model_fields[section].annotation)
+    args = get_args(Model.model_fields[section].annotation)
     return args[1] if len(args) == 2 else None
 
 
@@ -259,7 +259,7 @@ def _entry_model(section: str) -> Any:
 def test_yaml_block_validates(block: Block) -> None:
     """A YAML example must be a thing the schema accepts.
 
-    Whole-section blocks go through ``MathSchema`` — including ``piecewise:``,
+    Whole-section blocks go through ``Model`` — including ``piecewise:``,
     which is why this catches a sign on three links. A ``wrap=`` block shows a
     single entry of a section and deliberately omits the declarations around
     it, so it is checked against that section's own model: its *shape* is our
@@ -273,7 +273,7 @@ def test_yaml_block_validates(block: Block) -> None:
 
     if block.note.startswith('wrap='):
         section = block.note.removeprefix('wrap=')
-        assert section in MathSchema.model_fields, f'{block.where}: wrap={section!r} is not a schema section'
+        assert section in Model.model_fields, f'{block.where}: wrap={section!r} is not a schema section'
         model = _entry_model(section)
         for name, entry in doc.items():
             try:
@@ -283,7 +283,7 @@ def test_yaml_block_validates(block: Block) -> None:
         return
 
     try:
-        MathSchema.model_validate(doc)
+        Model.model_validate(doc)
     except Exception as exc:
         pytest.fail(
             f'{block.where} does not validate:\n{exc}\n\n'
@@ -331,7 +331,7 @@ def test_every_block_is_covered() -> None:
         if block.lang == 'python':
             continue  # every python block is parsed and name-checked
         keys = yaml.safe_load(block.code)
-        if not isinstance(keys, dict) or not set(keys) <= set(MathSchema.model_fields):
+        if not isinstance(keys, dict) or not set(keys) <= set(Model.model_fields):
             unhandled.append(block.where)
     assert not unhandled, (
         'these YAML blocks are neither whole schema sections nor annotated, so '

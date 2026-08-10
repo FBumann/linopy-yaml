@@ -16,10 +16,12 @@ The split that matters is **the model versus the run**:
 Everything subclasses :class:`LpspecError`, which subclasses ``ValueError`` —
 so code that catches ``ValueError`` today keeps working.
 
-One gap, on purpose: ``schema.py``'s field validators keep raising plain
-``ValueError``, because pydantic collects those into its own
-``pydantic.ValidationError`` (itself a ``ValueError``) and a custom class
-would not survive the trip.
+``model.py``'s field validators raise plain ``ValueError``, because pydantic
+collects those into its own ``ValidationError`` and a custom class does not
+survive the trip. :func:`schema_error` turns one back into a
+:class:`SchemaError` at the API boundary, so a caller sees one tree rather than
+two — the class was always named for exactly that case ("unknown key, bad
+dtype") and simply was not wired to it.
 
 Deliberately dependency-free: the relational engine imports this module and
 nothing else from the package (docs/ARCHITECTURE.md, hard rule 2).
@@ -28,7 +30,7 @@ nothing else from the package (docs/ARCHITECTURE.md, hard rule 2).
 from __future__ import annotations
 
 import difflib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -48,7 +50,18 @@ class LanguageError(LpspecError):
 
 
 class SchemaError(LanguageError):
-    """A declaration is malformed: unknown key, bad dtype, colliding name."""
+    """**The declarations themselves are wrong**, before any expression is read.
+
+    An unknown key, a bad ``dtype``, a duplicate YAML key, two objectives, a
+    version this reader does not know. Distinct from a bare
+    :class:`LanguageError`, which is declarations that are fine saying
+    something the language rejects — an undeclared name in an expression, a
+    dim rule, degree 2.
+
+    Every failure of schema validation arrives as this, including the ones
+    pydantic raises: :func:`schema_error` unwraps its ``ValidationError`` so a
+    caller sees one tree rather than two.
+    """
 
 
 class DimensionError(LanguageError):
@@ -221,3 +234,24 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
         )
 
     return f"unknown {kind} '{name}'. {did_you_mean(name, candidates)}"
+
+
+def schema_error(exc: Any, context: str = '') -> SchemaError:
+    """A pydantic ``ValidationError`` as one of ours.
+
+    Pydantic wraps whatever a validator raises, so a class of our own cannot
+    reach the caller from inside the model — the envelope arrives instead,
+    carrying ``input_value=`` dumps and a link to pydantic's docs that mean
+    nothing to someone who wrote a YAML file. Unwrapping here is what lets
+    ``except LpspecError`` cover the model, which is what the API promises.
+
+    The messages themselves are kept: they were written for this audience and
+    only the envelope is discarded.
+    """
+    lines = []
+    for error in exc.errors():
+        message = str(error.get('msg', '')).removeprefix('Value error, ')
+        where = '.'.join(str(part) for part in error.get('loc', ()))
+        lines.append(f'{where}: {message}' if where else message)
+    body = '\n'.join(lines) or str(exc)
+    return SchemaError(f'{context}: {body}' if context else body)
