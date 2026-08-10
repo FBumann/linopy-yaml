@@ -577,22 +577,8 @@ class PolarsCompiler:
         out-of-range ordinal does not join — the zero acyclic promises. No
         window function; this is bounded-halo locality.
 
-        Presence travels through the same remap — it is a coordinate set, and
-        the inner join already drops whatever the edge vacated; under ``fill``
-        the vacated positions are put back (:meth:`_vacated`). An *unmasked*
-        acyclic operand with no fill gains a presence here: nothing was absent
-        before and the edge now is, and without it the vacated slot would
-        merely fail to join, the row surviving with the term quietly gone — a
-        different constraint, which is the shape #239 removed from masks and
-        #289 removes from shift.
-
-        Its dims travel with it: a *nested* shift arrives here with a presence
-        narrower than the fragment (``presence_dims``), and forgetting that
-        had the row set joined on a column the presence does not carry (#546).
-        When this shift moves a dim that narrow presence is silent about,
-        there is no column to remap — so it is widened first
-        (:meth:`_widen`, which changes no answer) and travels full-width
-        after.
+        What happens to the operand's *presence* is the intricate half and is
+        :func:`travelled_presence` below, which owns all three of its cases.
 
         Every fill over a *constant* is written, ``0`` included (#551): the
         arithmetic is unchanged — a const fragment reads a missing row as zero
@@ -637,22 +623,52 @@ class PolarsCompiler:
                 .select(*kept, s.dimension, *carried)
             )
 
+        def travelled_presence() -> tuple[pl.LazyFrame | None, tuple[str, ...] | None]:
+            """Where the variable exists after the shift, and what keys it.
+
+            Three outcomes, and only the first two are about an operand that
+            already had a presence. It **travels**: a coordinate set goes
+            through the same map the rows did, and the inner join drops
+            whatever the edge vacated. Under a fill the vacated positions go
+            back in (:meth:`_vacated`), which is the whole of what a fill does
+            here — a filled slot counts as present.
+
+            A narrow presence has to be widened first when this shift moves a
+            dim it is silent about: there is no column to remap otherwise, and
+            joining the row set on a column the presence never had is #546.
+            Widening changes no answer (:meth:`_widen`), and what comes back
+            is full-width, so the key goes with it.
+
+            The third outcome is an operand that had **no** presence at all:
+            nothing was absent before and the acyclic edge now is. Without
+            this the vacated slot would merely fail to join and the row would
+            survive with its term quietly gone — a different constraint, which
+            is the shape #239 removed from masks and #289 from shift. It is
+            keyed by the one dimension it speaks about, which is why
+            :attr:`TermFragment.presence_dims` exists: keying it by the
+            fragment's dims would materialise the whole coordinate product to
+            name an edge, and doing so measured 1.15-1.21x of build over two
+            interleaved runs on an 8760x200 ramp — the shape this branch is
+            for, and one no case in `bench/` covers, `storage` being cyclic.
+            """
+            if p.presence is None:
+                if s.wrap or s.fill is not None:
+                    return None, None
+                return self._edge(s, card, vacated=False), (s.dimension,)
+
+            source, keyed_by = p.presence, p.presence_dims
+            if keyed_by is not None and s.dimension not in keyed_by:
+                source, keyed_by = self._widen(source, keyed_by, p.dims), None
+            moved_presence = remap(source, [], keyed_by)
+            if s.wrap or s.fill is None:
+                return moved_presence, keyed_by
+            vacated = self._vacated(p, s, card, others)
+            return pl.concat([moved_presence, vacated], how='vertical_relaxed').unique(), None
+
         frame = remap(p.frame, p.carried)
         if not s.wrap and s.fill is not None and not p.is_term:
             frame = pl.concat([frame, self._filled_edge(s, card, others, s.fill)], how='vertical_relaxed')
-        presence, presence_dims = None, None
-        if p.presence is not None:
-            presence_dims = p.presence_dims
-            source = p.presence
-            if presence_dims is not None and s.dimension not in presence_dims:
-                source = self._widen(source, presence_dims, p.dims)
-                presence_dims = None
-            presence = remap(source, [], presence_dims)
-            if not s.wrap and s.fill is not None:
-                presence = pl.concat([presence, self._vacated(p, s, card, others)], how='vertical_relaxed').unique()
-                presence_dims = None
-        elif not s.wrap and s.fill is None:
-            presence, presence_dims = self._edge(s, card, vacated=False), (s.dimension,)
+        presence, presence_dims = travelled_presence()
         return replace(p, frame=frame, presence=presence, presence_dims=presence_dims)
 
     def _widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
