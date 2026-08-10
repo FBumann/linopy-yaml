@@ -113,10 +113,9 @@ def validate_expressions(
         The schema to validate.
     known_variables : Mapping[str, Sequence[str]]
         Variables valid in addition to those declared in *schema*, mapped to
-        their dims — used by ``linopy.extend()``, where expressions may
-        reference variables already present on the model. The dims are needed
-        for the same reason the names are: dim checking is a language rule. Parameters get no such widening: a
-        YAML file declares every parameter it uses (hard rule 5).
+        their dims — used by ``linopy.extend()``, whose expressions may
+        reference variables already on the model. Parameters get no such
+        widening: a YAML file declares every parameter it uses (hard rule 5).
 
     Raises
     ------

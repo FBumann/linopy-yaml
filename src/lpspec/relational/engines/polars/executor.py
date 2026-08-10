@@ -520,37 +520,30 @@ def _needs_aggregate(
     Named for the answer, not the condition: an inverted test here is a wrong
     model rather than a slow one.
 
-    Two things can put a label twice into the stack, and they are asked
-    separately. A single fragment that is not
+    Two things can put a label twice into the stack, asked separately. A
+    fragment that is not
     :attr:`~lpspec.relational.engines.polars.compiler.TermFragment.keyed`
     already holds one twice on its own. Whether a *pair* can is *may_share*,
-    which answers no for distinct variables — ``x + 2 * x`` is one column and
-    ``x + y`` is two, because labels are dense and assigned a declaration at a
-    time — and then asks whether two fragments of one variable send some label
-    to one **row**. For the network shape,
-    ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``, that
-    happens only where a line's two ends are one bus. See
+    which answers no for distinct variables and otherwise asks whether two
+    fragments of one variable send a label to one **row** — for
+    ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``, only
+    where a line's two ends are one bus. See
     :meth:`~lpspec.relational.engines.polars.compiler.PolarsCompiler.may_share_a_column`.
-
-    That second half is what makes the ordinary multi-term constraint free.
-    ``reserve_up + reserve_down <= p_max`` stacks two fragments, and reading
-    only their count says the aggregate is reachable — which on the `fleet`
-    rungs means sorting every nonzero in the model to collapse nothing.
+    That second half is what makes the ordinary multi-term constraint free:
+    reading only a fragment count says the aggregate is reachable for
+    ``reserve_up + reserve_down <= p_max``, which on the `fleet` rungs sorts
+    every nonzero in the model to collapse nothing.
 
     *projected* is what the two call sites do not share. The matrix keeps a
-    fragment's dims: a constraint's ``row`` is a function of dims that include
-    them, so ``keyed`` — one row per ``(dims…, var_label)`` — carries straight
-    into ``(row, col)``. The objective keeps only ``var_label``, so it has to
-    ask the stronger question the shape operators already ask when they drop a
-    dim: does the key survive losing *all* of them? It does exactly when
-    ``var_label`` determines every dim the fragment still carries.
-
-    That distinction is the whole bug this argument exists to prevent.
-    ``p * cost`` is keyed on ``(snapshot, generator, var_label)`` and every one
-    of those dims is the variable's own, so a column cannot repeat and the
-    aggregate is dead weight. ``y * w`` — ``y`` over buses, ``w`` over
-    snapshots — is just as keyed, but ``snapshot`` arrived by broadcast, so one
-    column holds a row per snapshot and their *sum* is the coefficient.
+    fragment's dims, so ``keyed`` — one row per ``(dims…, var_label)`` —
+    carries straight into ``(row, col)``. The objective keeps only
+    ``var_label``, so it asks the stronger question: does the key survive
+    losing *all* dims? It does exactly when ``var_label`` determines every dim
+    the fragment still carries. ``p * cost`` is keyed on dims that are all the
+    variable's own, so a column cannot repeat; ``y * w`` — ``y`` over buses,
+    ``w`` over snapshots — is just as keyed, but ``snapshot`` arrived by
+    broadcast, so one column holds a row per snapshot and their *sum* is the
+    coefficient.
 
     Worth 2-4x of build time on the matrix and little on the objective, but the
     argument is the same at both, so it is written once. On the duckdb engine

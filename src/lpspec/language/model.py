@@ -374,25 +374,18 @@ class Model(_StrictBlock):
     data, :meth:`to_yaml` for the file a reviewer reads. In goes through
     ``lps.load_model``, which takes a path, a dict or a ``Model``.
 
-    **Everything else on this class is pydantic's**, because this is a
-    ``BaseModel`` and inherits its whole surface — twenty-seven public names,
-    a dozen of them deprecated v1 aliases (``dict``, ``json``, ``parse_obj``).
-    They are not a contract this package keeps. Two are worth knowing about:
+    **Everything else on this class is pydantic's** and not a contract this
+    package keeps — the inherited surface is twenty-seven public names, a dozen
+    of them deprecated v1 aliases. Two are worth knowing about:
 
-    * ``model_json_schema()`` produces a complete Draft 2020-12 document with
-      no help from us, which is most of a machine-readable YAML surface. It
-      describes the *shape* pydantic validates and not the language, so it
-      accepts a constraint naming an undeclared parameter.
-    * ``model_construct()`` **skips validation entirely** — not the fields, not
-      the shape. So the guarantee this class offers is that a model built the
-      normal way is valid, not that a ``Model`` is valid. Overriding it to
-      raise would trade a documented escape hatch for a surprise, so it stays.
-
-    Pydantic earns its place here: forty-seven field declarations get types,
-    defaults, nested blocks, unknown-key rejection and multi-error aggregation
-    for free, and the alternative is several hundred lines of hand-written
-    checking whose failure mode is silently accepting a wrong model — the one
-    outcome this package spends the most effort avoiding.
+    * ``model_json_schema()`` gives a Draft 2020-12 document for free, which is
+      most of a machine-readable YAML surface. It describes the *shape*
+      pydantic validates, not the language, so it accepts a constraint naming
+      an undeclared parameter.
+    * ``model_construct()`` **skips validation entirely**, so the guarantee is
+      that a model built the normal way is valid, not that a ``Model`` is.
+      Overriding it to raise would trade a documented escape hatch for a
+      surprise.
     """
 
     _label: ClassVar[str] = 'the top level of the file'
