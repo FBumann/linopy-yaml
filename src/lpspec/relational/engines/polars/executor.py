@@ -121,15 +121,11 @@ class PolarsExecutor:
         of rows, so ascending shares concatenate into an ascending whole, and
         a ``sort`` here would copy the model's largest frame at the peak of
         the build to reorder nothing. :func:`_in_row_order` therefore *checks*
-        the claim with one linear scan rather than re-establishing it, and
-        states it on the frame — which is what lets a sink's streaming
-        ``group_by`` walk adjacent runs instead of building a hash table
-        (0.14 s against 0.89 s at 10M nonzeros).
+        the claim with one linear scan rather than re-establishing it.
 
-        That order is also what :func:`_row_starts` needs to read the CSR
-        index off the ``row`` column, after which the column itself is
-        dropped: a label repeated once per nonzero is 8 bytes per entry no
-        sink reads.
+        That order is what :func:`_row_starts` reads the CSR index off, after
+        which the ``row`` column itself is dropped: a label repeated once per
+        nonzero is 8 bytes per entry no sink reads.
         """
 
         self._program = program
@@ -555,18 +551,18 @@ def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
 
     Every constraint orders its own share and they are stacked in declaration
     order, which is ascending row ranges, so the concatenation is ordered by
-    construction. polars cannot see that through a ``concat``, and a sink that
-    finds the flag missing orders the whole matrix again.
+    construction. What makes it worth *checking* is :func:`_row_starts`, which
+    reads one run per row off this column and scatters the lengths by value: a
+    row whose entries arrived in two runs would have the first overwritten and
+    the CSR spans would be silently wrong. So this is the correctness floor of
+    the layout, not a speed choice.
 
-    So the claim is verified and then stated. ``is_sorted`` is a linear scan
-    over a column the frame already holds; the sort behind it is the
-    correctness floor and is expected never to run.
+    ``is_sorted`` is a linear scan over a column the frame already holds; the
+    sort behind it is expected never to run.
     """
-    if not matrix.height:
-        return matrix
-    if not matrix['row'].is_sorted():
+    if matrix.height and not matrix['row'].is_sorted():
         return matrix.sort('row')
-    return matrix.with_columns(pl.col('row').set_sorted())
+    return matrix
 
 
 def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
