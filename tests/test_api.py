@@ -11,6 +11,7 @@ dataframe library beyond the engine's own. The tests that exercise the bridges
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import textwrap
@@ -20,6 +21,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from lpspec.language.model import Model
 from tests.conftest import schema_of, solve_lp_file
 
 
@@ -380,3 +382,48 @@ def test_to_dataset_defaults_to_every_variable():
     assert sorted(ds['p'].dims) == ['generator', 'snapshot']
     assert list(ds['shed'].dims) == ['snapshot']  # keeps its own dims
     assert set(subset.data_vars) == {'shed'}
+
+
+@pytest.mark.parametrize(
+    ('mistake', 'raw'),
+    [
+        pytest.param('unknown key', {'dimensionz': {}}, id='unknown-key'),
+        pytest.param('bad dtype', {'dimensions': {'g': {'dtype': 'complex'}}}, id='bad-dtype'),
+        pytest.param('unknown version', {'version': 99}, id='unknown-version'),
+        pytest.param(
+            'undeclared name',
+            {
+                'dimensions': {'g': {'dtype': 'str', 'values': ['a']}},
+                'constraints': {'c': {'foreach': ['g'], 'expression': 'nope <= 1'}},
+            },
+            id='undeclared-name',
+        ),
+    ],
+)
+def test_a_wrong_model_raises_one_tree(mistake: str, raw: dict[str, object], tmp_path):
+    """Every documented door answers with `LpspecError` (#527).
+
+    Model checking happens in two places — pydantic's validators and the
+    language checkers — and they failed differently, so `except LpspecError`,
+    the thing `docs/api.md` tells a caller to write, missed the majority of
+    model mistakes and a caller had no way to know which.
+
+    `Model.__init__` is *not* in this list, and cannot be: defining one makes
+    pydantic route validation through it, which runs every after-validator
+    twice and the first time with no context, breaking `extend()`.
+    """
+    doors = {
+        'lps.load_model': lambda: lps.load_model(raw),
+        'lps.check': lambda: lps.check(raw),
+        'lps.solve': lambda: lps.solve(raw, {}),
+        'lps.write': lambda: lps.write(raw, {}, str(tmp_path / 'm.lp')),
+        'Model.model_validate': lambda: Model.model_validate(raw),
+        'Model.model_validate_json': lambda: Model.model_validate_json(json.dumps(raw)),
+    }
+    for door, call in doors.items():
+        with pytest.raises(lps.LpspecError):
+            call()
+        try:
+            call()
+        except lps.LpspecError as exc:
+            assert 'errors.pydantic.dev' not in str(exc), f"{door}: {mistake} leaks pydantic's envelope"

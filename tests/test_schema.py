@@ -8,8 +8,8 @@ is a row that stops failing.
 """
 
 import pytest
-from pydantic import ValidationError
 
+from lpspec.errors import SchemaError
 from lpspec.language.model import Model
 
 
@@ -57,7 +57,7 @@ def test_minimal_schema():
     ],
 )
 def test_an_undeclared_name_is_rejected(section, body, match):
-    with pytest.raises(ValidationError, match=match):
+    with pytest.raises(SchemaError, match=match):
         Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, section: body})
 
 
@@ -100,12 +100,12 @@ def test_a_declared_bound_parameter_is_accepted():
     ],
 )
 def test_a_contradictory_declaration_is_rejected(body, match):
-    with pytest.raises(ValidationError, match=match):
+    with pytest.raises(SchemaError, match=match):
         Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': body}})
 
 
 def test_invalid_sense():
-    with pytest.raises(ValidationError, match=r'minimize|maximize'):
+    with pytest.raises(SchemaError, match=r'minimize|maximize'):
         Model.model_validate({'objectives': {'obj': {'sense': 'unknown', 'expression': 'v'}}})
 
 
@@ -169,7 +169,7 @@ def test_invalid_sense():
     ],
 )
 def test_an_unknown_key_is_rejected(raw, match):
-    with pytest.raises(ValidationError, match=match):
+    with pytest.raises(SchemaError, match=match):
         Model.model_validate(raw)
 
 
@@ -178,10 +178,10 @@ def test_a_near_miss_is_named_and_anything_else_lists_the_valid_keys():
     so the message has to be good enough to act on without reading the source."""
     base = {'dimensions': {'x': {'values': [1], 'dtype': 'int'}}}
 
-    with pytest.raises(ValidationError, match=r"unknown key 'boundz'.*Did you mean 'bounds'"):
+    with pytest.raises(SchemaError, match=r"unknown key 'boundz'.*Did you mean 'bounds'"):
         Model.model_validate({**base, 'variables': {'v': {'foreach': ['x'], 'boundz': {'lower': 0}}}})
 
-    with pytest.raises(ValidationError, match='Valid keys: binary, bounds, foreach, integer, where'):
+    with pytest.raises(SchemaError, match='Valid keys: binary, bounds, foreach, integer, where'):
         Model.model_validate({**base, 'variables': {'v': {'foreach': ['x'], 'zzzz': 1}}})
 
 
@@ -235,5 +235,5 @@ def test_coords_mapping_allows_two_coordinates_onto_one_dimension():
     ],
 )
 def test_a_coordinate_that_does_not_name_a_target_is_rejected(dimensions, match):
-    with pytest.raises(ValidationError, match=match):
+    with pytest.raises(SchemaError, match=match):
         Model.model_validate({'dimensions': dimensions})
