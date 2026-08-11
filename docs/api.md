@@ -152,12 +152,47 @@ runs = lps.solve_over(
 runs.primal('soc')  # (snapshot_start, t, value) — the window, and the index inside it
 ```
 
-**`Runs` reads like `Result`, one dimension wider** — `primal`, `to_pandas`,
-`to_dataarray`, `to_dataset`, `to_parquet`, under the same names and with the
-slice key prepended. `runs.to_dataarray('p')` is `(scenario, snapshot,
-generator)`, which is what a sweep is *for*: `.sel` one scenario, take a spread
-across them, plot the band. What is missing against `Result` is `dual`, and
-that is [a decision](#solving-one-model-many-times), not an omission.
+**`Runs` reads like `Result`, one dimension wider** — `primal`, `dual`,
+`to_pandas`, `to_dataarray`, `to_dataset`, `to_parquet`, under the same names
+and with the slice key prepended. That extra dimension is **named by you, not
+by the library**: `EachCoordinate('scenario')` keys on `scenario` and
+`EachCoordinate('draw')` on `draw`, a window on `<dim>_start`, and `key_name=`
+overrides either. So `runs.to_dataarray('p')` on a scenario sweep is
+`(scenario, snapshot, generator)`, which is what a sweep is *for*: `.sel` one
+scenario, take a spread across them, plot the band.
+
+**`stitch=` is how you ask for the answer over real coordinates**, and it is a
+keyword on the readers rather than a reader of its own:
+
+```python
+runs.primal('soc')  # (snapshot_start, t, value) — keyed by slice
+runs.primal('soc', stitch=True)  # (snapshot, value)          — the answer
+runs.dual('balance', stitch=True)  # the same, for a price
+```
+
+A flag rather than a method because what has to be undone is a property of the
+*axis*, not of the quantity — so duals get it for free, and a name that is both
+a variable and a constraint (which the language permits) is never dispatched
+on. `to_pandas` and `to_dataarray` take it too.
+
+**Every axis answers it.** For `EachWindow` it is the answer a rolling horizon
+is *for*: the overlap dropped and the global coordinate restored, each window
+contributing the `step` coordinates it owns — the final one included, which can
+hold no more and so keeps all of it. `snapshot_start + t` would not do, because
+a window spans coordinates rather than values and there is nothing to add for a
+datetime or a string axis. For `EachCoordinate` and a hand-built axis nothing
+was re-indexed, the key column already *is* a coordinate, and the frame comes
+back unchanged.
+
+**Keyed is the default**, because stitching is lossy: it keeps only what each
+window owns and drops the lookahead rows the sweep solved. A default that
+discarded computed answers would also key differently from `objective`, which
+is one row per slice always, and the two would stop joining. For the same
+reason `to_dataset` and `to_parquet` have no `stitch` — a bulk export of what
+the sweep holds is the wrong place to lose rows.
+
+Per slice is a partition of a frame you already have, so there is no reader for
+it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
 
 | Rule | |
 |---|---|
@@ -175,7 +210,7 @@ that is [a decision](#solving-one-model-many-times), not an omission.
 | **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`, so the key column is `snapshot_start` and holds where each window began. Naming it `snapshot` would put window starts under the name of the coordinate they are not, and join cleanly against real data |
 | a slice that did not solve | contributes no `primal` rows, so that frame can be shorter than the sweep. `objective` is one row per slice always, and is the record of which slices those were |
 | **the lookahead is `t >= step`** | overlapping windows return every row they solved, including the tail the next window recomputes. Keeping only what each window owns is one clause and no special case — `runs.primal('soc').filter(pl.col('t') < step)` — because the final window can never hold more than `step` rows |
-| the readers hold what the fold accumulated | `to_parquet` copies out frames already in memory and bounds nothing; spilling per slice, which would, is [#477](https://github.com/fluxopt/lpspec/issues/477) |
+| **a sweep's memory grows with its answer** | each slice's *model* is released as the fold goes, so build peak stays at one slice — but the extracted frames accumulate, and nothing bounds them. `to_parquet` copies out frames already in memory: a bridge, not a bound. Whether to bound it, and how, is [#610](https://github.com/fluxopt/lpspec/issues/610) |
 | **a window spans coordinates, not values** | `length=48` is forty-eight snapshots however they are numbered, so the dimension only has to be **orderable** — datetimes, strings and gapped integers all work. `into` is a dense `0..n-1` local index, which is what keeps the seam's `where: "t == 0"` matching, and it has no default because the name belongs to the model |
 | non-positional grouping | *"each calendar month"* has unequal groups, so it is a precomputed column plus `EachCoordinate`. What `EachWindow` uniquely offers is **overlap** |
 | `carry` excludes `executor` | a carried value makes slice *i+1* depend on slice *i*, so the slices cannot run concurrently. Refused rather than one silently winning |

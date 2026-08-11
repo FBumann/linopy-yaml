@@ -171,12 +171,25 @@ def myopic_sources() -> dict[str, object]:
 
 
 def horizon_sources(periods: int = 12) -> dict[str, object]:
+    """A load profile of any length — the pattern repeats past twelve."""
     load = [5.0, 9.0, 30.0, 40.0, 6.0, 8.0, 35.0, 45.0, 7.0, 10.0, 25.0, 50.0]
     return {
         **STATIC,
-        'load': pl.DataFrame({'snapshot': range(periods), 'value': load[:periods]}),
+        'load': pl.DataFrame({'snapshot': range(periods), 'value': [load[t % len(load)] for t in range(periods)]}),
         'soc_initial': pl.DataFrame({'value': [0.0]}),
     }
+
+
+#: Window geometries whose *tail* differs — the only place a windowing rule
+#: goes wrong. Between them these cover a final window of one, a final window
+#: of ``step``, a horizon shorter than a single window, and a tail that divides
+#: exactly so there is no short window at all.
+GEOMETRIES = [
+    pytest.param(periods, length, step, id=f'n{periods}-l{length}-s{step}')
+    for periods in (1, 2, 5, 7, 12)
+    for length in (1, 2, 3, 6)
+    for step in range(1, length + 1)
+]
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +296,120 @@ def test_overlapping_windows_advance_by_step_and_look_ahead_by_length():
     )
 
 
+def test_stitch_drops_the_overlap_and_restores_the_global_coordinate():
+    """The answer a rolling horizon is for, without the caller doing arithmetic."""
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(12),
+        lps.EachWindow('snapshot', length=6, step=3, into='t'),
+        carry={'soc_initial': ('soc', 2)},
+    )
+    stitched = runs.primal('soc', original_index=True)
+    assert stitched.columns == ['snapshot', 'value'], 'the slice bookkeeping is gone'
+    assert stitched['snapshot'].to_list() == list(range(12)), 'and every coordinate is present once'
+    # every window kept exactly the `step` coordinates it owns, out of 21 solved
+    assert runs.primal('soc').height == 21
+
+
+@pytest.mark.parametrize(('periods', 'length', 'step'), GEOMETRIES)
+def test_a_window_geometry_covers_every_coordinate_exactly_once(periods, length, step):
+    """A stitched sweep reproduces the coordinate list, whatever the tail."""
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(periods),
+        lps.EachWindow('snapshot', length=length, step=step, into='t'),
+    )
+    assert runs.primal('soc', original_index=True)['snapshot'].to_list() == list(range(periods)), (
+        'the original index must reproduce the coordinate list, whatever the tail'
+    )
+    assert runs.primal('soc')['snapshot_start'].n_unique() == len(range(0, periods, step)), 'one slice per window start'
+
+
+@pytest.mark.parametrize(('periods', 'length', 'step'), GEOMETRIES)
+def test_a_carry_at_step_minus_one_is_in_range_for_every_geometry(periods, length, step):
+    """A non-final window always holds at least ``step`` coordinates.
+
+    It can still be shorter than ``length`` — 10 coordinates at ``length=6,
+    step=3`` gives a window at 6 holding four — but never shorter than
+    ``step``, since a later window starting ``step`` on means that many were
+    left. So the carry api.md recommends, the last row each window *keeps*,
+    can never fall off the end of the window it reads from.
+    """
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(periods),
+        lps.EachWindow('snapshot', length=length, step=step, into='t'),
+        carry={'soc_initial': ('soc', step - 1)},
+    )
+    assert runs.primal('soc', original_index=True)['snapshot'].to_list() == list(range(periods)), (
+        'a carry at step - 1 is in range for every geometry, so the sweep completes'
+    )
+
+
+def test_stitch_keeps_the_whole_of_the_final_short_window():
+    """A tail window holds at most `step`, so the owning rule keeps all of it.
+
+    12 coordinates at length 6 step 5 leaves a final window of two. Dropping
+    `t >= step` uniformly would be right for it too; the risk is a rule that
+    drops the tail because it is not a full window, and it must not.
+    """
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(12),
+        lps.EachWindow('snapshot', length=6, step=5, into='t'),
+    )
+    assert runs.keys == [0, 5, 10], 'three windows, the last of two coordinates'
+    assert runs.primal('soc', original_index=True)['snapshot'].to_list() == list(range(12)), (
+        'the short tail window is kept whole, not dropped for being short'
+    )
+
+
+def test_stitching_an_axis_that_re_indexed_nothing_changes_nothing():
+    """A caller handed an axis should not have to ask which kind it is."""
+    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+    assert runs.primal('p', original_index=True).equals(runs.primal('p')), (
+        'an axis that re-indexed nothing has nothing to restore'
+    )
+    assert runs.dual('balance', original_index=True).equals(runs.dual('balance')), (
+        'and that holds for duals too, since it is a property of the axis'
+    )
+
+
+def test_duals_stitch_the_same_way_primals_do():
+    """A window's price at a coordinate is the owning window's, not a blend.
+
+    The reason `stitch` is a flag on the readers rather than a reader of its
+    own: what has to be undone is a property of the *axis*, so a dual needs no
+    second implementation — and a name that is both a variable and a
+    constraint, which the language permits, is never dispatched on.
+    """
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(12),
+        lps.EachWindow('snapshot', length=6, step=3, into='t'),
+        carry={'soc_initial': ('soc', 2)},
+    )
+    keyed, stitched = runs.dual('balance'), runs.dual('balance', original_index=True)
+    assert keyed.columns == ['snapshot_start', 't', 'value']
+    assert stitched.columns == ['snapshot', 'value']
+    assert stitched['snapshot'].to_list() == list(range(12)), 'one price per coordinate'
+    assert keyed.height > stitched.height, 'the overlap is priced twice before the index collapses it'
+
+
+def test_keyed_is_the_default_because_stitching_drops_rows():
+    """The default may not silently discard answers the sweep computed."""
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(12),
+        lps.EachWindow('snapshot', length=6, step=3, into='t'),
+        carry={'soc_initial': ('soc', 2)},
+    )
+    assert runs.primal('soc').height == 21, 'keyed keeps every row every window solved'
+    assert runs.primal('soc', original_index=True).height == 12, 'only the rows each window owns'
+    # keyed by the same column as `objective`, so the two still join
+    assert runs.objective.join(runs.primal('soc'), on=runs.key_name).height == 21
+
+
 #: Six coordinates, three windows of two, whatever the coordinates *are*.
 #:
 #: `length` and `step` count coordinates rather than coordinate values, and
@@ -320,6 +447,25 @@ def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     soc = runs.primal('soc')
     assert soc.height == 6
     assert sorted(soc['t'].unique().to_list()) == [0, 1], 'the local index is dense per window'
+
+
+@pytest.mark.parametrize('coordinates', COORDINATE_TYPES)
+def test_stitch_recovers_coordinates_no_arithmetic_could(coordinates):
+    """`snapshot_start + t` is meaningless for a datetime or a string axis.
+
+    The window→coordinate mapping is the axis's to keep, and stitching is the
+    only way back to it: nothing the caller holds could reconstruct these.
+    """
+    runs = lps.solve_over(
+        WINDOW,
+        {
+            **STATIC,
+            'load': pl.DataFrame({'snapshot': coordinates, 'value': [10.0] * 6}),
+            'soc_initial': pl.DataFrame({'value': [0.0]}),
+        },
+        lps.EachWindow('snapshot', length=2, step=2, into='t'),
+    )
+    assert runs.primal('soc', original_index=True)['snapshot'].to_list() == coordinates
 
 
 def test_a_window_key_column_never_shadows_the_dimension_it_replaced():
