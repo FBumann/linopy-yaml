@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.90](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.89...v0.0.1-alpha.90) (2026-08-11)
+
+
+### Refactoring
+
+* **engine:** ask the data, not the declarations ([#520](https://github.com/fluxopt/lpspec/issues/520)) ([17f8e5d](https://github.com/fluxopt/lpspec/commit/17f8e5d0f79072bbaffc7df5d174e17ca24387a7))
+
 ## [0.0.1-alpha.89](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.88...v0.0.1-alpha.89) (2026-08-11)
 
 
