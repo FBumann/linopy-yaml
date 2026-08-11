@@ -388,19 +388,21 @@ class PolarsExecutor:
         here is what makes the objective the one the file wrote.
 
         The aggregate runs only when a column actually repeats, and the probe
-        matches how the stack arrives. A lone term leaves the label-ordered
-        variable frame through order-keeping joins (:func:`_join_mul`), so one
-        linear pass answers sortedness and adjacent repeats together — 44 ms
-        of ``n_unique`` down to ~6 ms at 10M terms on `dispatch/l`. Only a
-        stack that really is unordered — several terms concatenated, or a
-        join that shuffled — pays the hash count, where adjacency proves
-        nothing. ``obj`` carries no order contract (the writer sorts it and
-        the solver hand-off scatters it), so nothing re-establishes order
-        here; but when the probe has just witnessed it, that is stated with
-        ``set_sorted`` and the writer's sort becomes a no-op.
+        is the ``n_unique`` hash count — the *only* sound probe here, because
+        the stack arrives unordered and adjacency then proves nothing. Buying
+        order to probe linearly was tried and is a dead end, twice over: the
+        mul join's ``maintain_order`` held the label order on some shapes and
+        lost it on others that differ only in data (`dispatch/l` kept it,
+        `nodal` and `profiled` did not — all three the same lone masked
+        ``p * cost``), so no static gate can say when the tax will pay; and
+        where it was paid for nothing, the objective phase tripled
+        (`profiled/l` 40 → 147 ms) while the best case had shrunk to a wash
+        (69 + 6 ordered against 32 + 42 plain). ``obj`` carries no order
+        contract anyway — the writer sorts it and the solver hand-off
+        scatters it.
         """
 
-        comp = self._q.expression(o.expression, 'objective', keep_order=True)
+        comp = self._q.expression(o.expression, 'objective')
         for p in comp.consts:
             if p.dims:
                 raise LanguageError(
@@ -416,15 +418,9 @@ class PolarsExecutor:
         ]
         stacked = pl.concat(pieces).collect(engine='streaming')
         self._refuse_undefined_divisors(stacked, 'objective', o.expression)
-        col = pl.col('col')
-        unordered, tied = stacked.select(
-            (col < col.shift(1)).any().alias('#unordered'),
-            (col == col.shift(1)).any().alias('#tied'),
-        ).row(0)
-        repeated = tied if not unordered else stacked.get_column('col').n_unique() != stacked.height
-        if repeated:
-            return stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
-        return stacked if unordered else stacked.with_columns(col.set_sorted())
+        if stacked.get_column('col').n_unique() == stacked.height:
+            return stacked
+        return stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
 
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the executor only supplies the frames
