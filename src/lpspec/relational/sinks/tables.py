@@ -1,12 +1,10 @@
 """What every sink reads, and nothing more.
 
-Four frames plus the scalars a writer needs to size its batching. A sink that
-needs a fifth thing states it here, where both sides can see it.
-
-Also the *projections* of them more than one sink needs — the dense column and
-row vectors, and the matrix a block at a time. They belong to the contract
-rather than to either solver, because two sinks computing them separately could
-disagree about the model they loaded — the one thing neither may do.
+Four frames plus the scalars a writer needs to size its batching, and the
+projections more than one sink needs — the dense column and row vectors, the
+matrix a block at a time. Those belong to the contract rather than to either
+solver: two sinks computing them separately could disagree about the model
+they loaded, which is the one thing neither may do.
 """
 
 from __future__ import annotations
@@ -48,25 +46,20 @@ SENSE_CODES = {'<=': 0, '>=': 1, '==': 2}
 class ModelTables:
     """The built model, as a sink sees it.
 
-    ``cols`` (lb, ub, vtype), ``obj`` (col, coeff), ``rows`` (row, sense,
-    rhs) and ``matrix`` in CSR: ``(col, coeff)`` in row-major order, with
+    ``cols`` (lb, ub, vtype), ``obj`` (col, coeff), ``rows`` (row, sense, rhs)
+    and ``matrix`` in CSR: ``(col, coeff)`` in row-major order, with
     ``row_starts[r] : row_starts[r + 1]`` the half-open span row ``r`` owns.
-    The scalars are what a sink cannot cheaply recover; the objective constant
-    lives outside the frames because it has no column to attach to.
+    The objective constant lives outside the frames, having no column to
+    attach to.
 
     ``col`` and ``row`` are dense ``0..n-1``, so they *are* the solver's own
-    indices and no sink builds a mapping.
-
-    **``cols`` carries no ``col``, and ``matrix`` carries no ``row``** — for
-    the same reason at two granularities. A ``cols`` row's position is its
-    index; a matrix entry's row is where it sits between two starts. Both are
-    what the solvers' own matrix APIs take, so nothing here is a private
-    compression a sink first has to undo — and a row label repeated per
-    nonzero would hold 8 more bytes per entry for the model's whole lifetime.
-    :meth:`matrix_block` spells the labels back out for the one consumer that
-    renders them. ``obj`` stays sparse in the index and keeps its ``col``: it
-    only looks dense on models where every variable has a cost (0.71 of
-    ``cols`` on `transport`).
+    indices and no sink builds a mapping. **``cols`` carries no ``col`` and
+    ``matrix`` no ``row``**: a ``cols`` row's position is its index and a
+    matrix entry's row is where it sits between two starts, which is what both
+    solvers' matrix APIs take — where a row label per nonzero would hold
+    8 bytes an entry for the model's lifetime. :meth:`matrix_block` spells them
+    back out for the one consumer that renders them. ``obj`` keeps its ``col``,
+    being genuinely sparse (0.71 of ``cols`` on `transport`).
     """
 
     cols: pl.DataFrame
@@ -82,23 +75,17 @@ class ModelTables:
     def _spans(self, budget: int | None) -> Iterator[tuple[int, int]]:
         """The row ranges a block reader walks — one rule, for both of them.
 
-        A reader that walks ``matrix`` a range at a time pays in nonzeros, not
-        in rows: a range of 100k rows is 900k entries in one model and 10M in
-        another, and only the second is a problem. So the width is the average
-        row, and there is deliberately no row-counted twin to reach for by
-        mistake.
+        Width is the average row, since a reader pays in nonzeros: 100k rows is
+        900k entries in one model and 10M in another. There is deliberately no
+        row-counted twin to reach for by mistake.
 
-        **``budget=None`` is one span, and that is a real answer rather than a
-        degenerate one.** Whether splitting pays is a property of the API being
-        fed, not of the model: HiGHS takes a chunk at a time and its budget
-        bounds the temporary, while Gurobi's ``addMConstr`` charges about 42 ns
-        per *model column* per call whatever the block holds — 0.23 s in one
-        call against 0.89 s in forty on the same matrix (#434). So the caller
-        says, and both answers come out of the same code.
+        ``budget=None`` is one span, and a real answer: whether splitting pays
+        is a property of the API being fed, not the model. HiGHS takes a chunk
+        at a time and its budget bounds the temporary; Gurobi's ``addMConstr``
+        charges ~42 ns per *model column* per call whatever the block holds —
+        0.23 s in one call against 0.89 s in forty on the same matrix (#434).
 
-        Private: a consumer takes whole blocks from :meth:`row_blocks` or
-        :meth:`labeled_blocks`, so no caller can pair spans and entries that
-        disagree.
+        Private, so no caller can pair spans and entries that disagree.
         """
         if budget is None:
             return iter([(0, self.row_count)])
@@ -107,8 +94,8 @@ class ModelTables:
     def _span(self, lo: int, hi: int) -> pl.DataFrame:
         """The matrix entries rows ``[lo, hi)`` own — the CSR arithmetic, once.
 
-        Both block readers slice through here, so how a span is located — and
-        the half-open ``hi`` bound — cannot drift between them.
+        Both block readers slice through here, so how a span is located, and
+        the half-open ``hi`` bound, cannot drift between them.
         """
         first = int(self.row_starts[lo])
         return self.matrix.slice(first, int(self.row_starts[hi]) - first)
@@ -116,9 +103,8 @@ class ModelTables:
     def col_chunks(self, budget: int) -> Iterator[tuple[int, int]]:
         """Column ranges of roughly ``budget`` columns each.
 
-        Width 1, because a column *is* one row of the batch a sink hands over —
-        stated rather than assumed, which is the bargain
-        :mod:`~lpspec.relational.chunking` asks for.
+        Width 1: a column *is* one row of the batch a sink hands over, stated
+        rather than assumed (:mod:`~lpspec.relational.chunking`).
         """
         return chunking.ranges(self.column_count, budget, 1.0)
 
@@ -126,24 +112,21 @@ class ModelTables:
         """``(lb, ub, cost, integral)`` as numpy vectors over the solver's index.
 
         *infinity* is the solver's own spelling of an absent bound — the one
-        thing the two disagree on — so it is asked for rather than assumed and
-        the vectors come back ready to hand over unedited.
+        thing the two disagree on — so it is asked for and the vectors come
+        back ready to hand over unedited.
 
-        ``col`` is dense ``0..n-1``, so it *is* the position a value has to end
-        up at — and ``cols`` already arrives in that order, one row per column,
-        so its three vectors are the frame's own and nothing is scattered.
-        Only ``cost`` still is, because ``obj`` is genuinely sparse: a variable
-        in no objective term has no row, and is left free rather than holding
-        whatever the allocator returned.
+        ``cols`` already arrives one row per column in ``col`` order, so its
+        three vectors are the frame's own. Only ``cost`` is scattered, ``obj``
+        being genuinely sparse: a variable in no objective term is left free
+        rather than holding whatever the allocator returned.
 
-        The bound vectors are rewritten with ``copy=True`` rather than in
-        place because they are views of the frame: rewriting an infinity
-        through one would edit the built model to suit whichever solver asked
-        last.
+        The bound vectors are rewritten with ``copy=True``, being views of the
+        frame — in place, an infinity would edit the built model to suit
+        whichever solver asked last.
 
-        **Nothing textual crosses into numpy.** A polars ``String`` converts by
+        **Nothing textual crosses into numpy**: a polars ``String`` converts by
         boxing every value as a Python object, so the test against
-        ``'continuous'`` is made in polars and only its answer crosses: 0.04 s
+        ``'continuous'`` is made in polars and only its answer crosses — 0.04 s
         against 0.95 s at 10M columns.
         """
         import numpy as np
@@ -158,20 +141,15 @@ class ModelTables:
     def dense_rows(self, infinity: float) -> DenseRows:
         """``(sense, rhs)`` as numpy vectors over the solver's row index.
 
-        The row half of :meth:`dense_columns`, and for the same reason: ``row``
-        is dense ``0..n-1``, so it *is* the position a value belongs at, and a
-        chunk of rows is then a slice rather than a search. Sorting the row
-        frame and filtering it once per chunk read the same 6M rows nine times
-        over on `fleet/l`, to hand each of them over once.
+        The row half of :meth:`dense_columns`: a chunk of rows is a slice
+        rather than a search. Sorting and filtering the row frame once per
+        chunk read the same 6M rows nine times over on `fleet/l`.
 
-        It stops at the sense rather than at bounds because that is where the
-        two solvers part: HiGHS wants a row's ``lower``/``upper`` and Gurobi its
-        comparison and right-hand side, and both are this pair spelled
-        differently. :data:`SENSE_CODES` is the spelling neither owns.
-
-        A row with no entry is left with a comparison nothing can fail —
-        ``>=`` against ``-infinity`` — rather than the ``== 0`` that would be a
-        real equality the model never stated.
+        It stops at the sense because that is where the two solvers part —
+        HiGHS wants ``lower``/``upper``, Gurobi a comparison and right-hand
+        side, both this pair spelled differently. A row with no entry gets a
+        comparison nothing can fail (``>=`` against ``-infinity``) rather than
+        the ``== 0`` that would be an equality the model never stated.
         """
         sided = self.rows.select(
             'row',
@@ -199,10 +177,9 @@ class ModelTables:
     def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
         """Rows ``[lo, hi)`` of the matrix with their ``row`` labels spelled out.
 
-        The adjoint of what the CSR layout compressed: ``np.repeat`` walks the
-        start offsets back into one label per entry. For a reader that wants
-        COO — and, through :meth:`labeled_blocks`, for the LP writer — at the
-        cost of one label column per *block*, not per model.
+        The adjoint of what CSR compressed — ``np.repeat`` walks the start
+        offsets back into one label per entry — at the cost of one label column
+        per *block*, not per model.
         """
         import numpy as np
 
@@ -212,10 +189,9 @@ class ModelTables:
     def labeled_blocks(self, budget: int | None) -> Iterator[tuple[int, int, pl.DataFrame]]:
         """Each chunk of rows with its entries labeled — the LP writer's reader.
 
-        :meth:`matrix_block`'s budget-iterator form, over :meth:`_spans` like
-        its solver-side twin. One method per consumer shape — solvers take
-        :meth:`row_blocks`, the writer this — so no caller pairs spans and
-        entries that disagree.
+        :meth:`matrix_block`'s budget-iterator form. One method per consumer
+        shape — solvers take :meth:`row_blocks`, the writer this — so no caller
+        pairs spans and entries that disagree.
         """
         for lo, hi in self._spans(budget):
             yield lo, hi, self.matrix_block(lo, hi)
@@ -224,11 +200,10 @@ class ModelTables:
 def solver_vector(values: Any) -> pl.Series:
     """One quantity a solver produced, in its own index — every sink's read-back.
 
-    Carried as a series rather than a ``(label, value)`` frame because the label
-    would be the position: the read-back takes a declaration's share by slicing,
-    so an index column beside it is an ``arange`` nothing reads — 8 bytes a
-    column, for as long as the result is held. The same argument took ``col``
-    off ``cols`` (#433); this is its other half.
+    A series rather than a ``(label, value)`` frame: the read-back takes a
+    declaration's share by slicing, so an index column beside it is an
+    ``arange`` nothing reads — 8 bytes a column for as long as the result is
+    held. The argument that took ``col`` off ``cols`` (#433).
     """
     import numpy as np
 

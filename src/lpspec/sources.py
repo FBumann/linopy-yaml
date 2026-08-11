@@ -1,24 +1,18 @@
 """Bind runtime data to a validated schema.
 
-The language says what a parameter *is* — its dims, its dtype — and never
-where its values come from. This module is the other half: it takes what the
-caller actually passed (parquet paths, or any table exposing the Arrow
-PyCapsule protocol) and produces the tidy frames the engine reads by name.
+The language says what a parameter *is* — its dims, its dtype — and never where
+its values come from. This is the other half: what the caller passed (parquet
+paths, or any table exposing the Arrow PyCapsule protocol) becomes the tidy
+frames the engine reads by name. The shapes themselves are recognised in
+:mod:`lpspec.relational.frames`, so no dataframe library beyond the engine's
+own is a dependency of either lane.
 
-It lives here rather than in ``lowering.py`` because it is not lowering.
-Lowering turns an AST into a plan and touches no data at all; this touches
-only data and knows nothing about expressions. That ``api.build`` calls them
-on consecutive lines is not a reason to put them in one file.
+Not lowering, which turns an AST into a plan and touches no data; this touches
+only data and knows nothing about expressions.
 
-The shapes themselves are recognised in :mod:`lpspec.relational.frames`,
-so no dataframe library beyond the engine's own is a dependency of either lane.
-
-The ``piecewise:`` curvature guard lives here for the same reason. It is the
-one check a schema cannot answer — convexity is a property of the breakpoint
-*values* — so it belongs with the data rather than with the expansion that
-emits the declarations (:mod:`lpspec.language.piecewise`). Keeping it here is
-also what leaves that expansion inside ``language/``: this is the module that
-already knows what shape a caller's table is in.
+The ``piecewise:`` curvature guard lives here because convexity is a property
+of the breakpoint *values* — the one check a schema cannot answer — and this is
+the module that already knows what shape a caller's table is in.
 """
 
 from __future__ import annotations
@@ -96,22 +90,17 @@ def tidy_sources(
 def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
     """Data-time guard for ``convex: true`` blocks (SPEC §3.6).
 
-    The hull relaxation is silently wrong for curves of mixed curvature, and
-    ill-defined when the x-breakpoints are not strictly monotone — with the
-    breakpoint values in hand (which the schema never has), both are
-    checkable. *values* maps parameter names to whatever its lane holds: the
-    tidy ``pyarrow.Table`` / parquet path of :func:`tidy_sources`, or the
-    linopy lane's ``xr.Dataset``. Blocks whose parameters are missing, or
-    bound to a path (not readable in process), are skipped; a missing
-    parameter errors elsewhere.
+    The hull relaxation is silently wrong for mixed curvature and ill-defined
+    when the x-breakpoints are not strictly monotone; both are checkable once
+    the breakpoint values are in hand, which the schema never has. *values*
+    maps parameter names to whatever its lane holds — :func:`tidy_sources`'
+    frames and paths, or the linopy lane's ``xr.Dataset`` — and blocks whose
+    parameters are missing or bound to a path are skipped. Called by both
+    lanes, which is why it sits beside ``tidy_sources``.
 
-    Both lanes call this, which is why it sits beside ``tidy_sources`` rather
-    than inside either of them.
-
-    Only the convex curvature check needs xarray — the broadcast over dims is
-    what asks for it — so the import waits until a ``convex: true`` block is
-    actually found. A convex block carries exactly two links, which is what
-    the pair unpack relies on.
+    Only the curvature check needs xarray, for the broadcast over dims, so the
+    import waits until a ``convex: true`` block is found. Such a block carries
+    exactly two links, which the pair unpack relies on.
     """
     import numpy as np
 
@@ -157,18 +146,15 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
 def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) -> Any:
     """One source as a DataArray indexed by its declared dims.
 
-    Two shapes reach here: the linopy lane hands over its ``xr.Dataset``
-    entries directly, and the relational lane hands over the tidy frames
-    :func:`tidy_sources` normalised. The hop out costs no dependency the
-    caller has not taken — asking for a curvature check already requires
-    xarray, which brings pandas — but the check still wants to be numpy-only
-    (issue #27), which would retire this function.
+    Two shapes reach here — the linopy lane's ``xr.Dataset`` entries and the
+    relational lane's tidy frames. Raises ``KeyError`` when there is nothing to
+    lay out in process (a parquet path, or no ``value`` column), which the
+    caller reads as "skip".
 
-    Raises ``KeyError`` when there is nothing to lay out in process — the
-    value is a parquet path, or not a frame with a ``value`` column — and the
-    caller reads that as "skip". The frame crosses to pandas column by column
-    through numpy: a whole-frame conversion would reach for pyarrow, and this
-    check already costs the caller xarray without adding a third library.
+    The frame crosses to pandas column by column through numpy: a whole-frame
+    conversion would reach for pyarrow, and this check already costs the caller
+    xarray without adding a third library. Issue #27 would make it numpy-only
+    and retire this function.
     """
     import xarray as xr
 

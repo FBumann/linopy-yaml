@@ -1,19 +1,17 @@
 """The ``highs`` solver: COO batches straight into HiGHS.
 
-The default, and the only one whose dependency ships with the package. No
-float→text→parse round trip — that is why this exists beside
-:mod:`~lpspec.relational.sinks.writers.lp_file`. Columns and rows arrive as
-numpy slices, in batches.
+The default, and the only one whose dependency ships with the package. Columns
+and rows arrive as numpy slices, in batches, with no float→text→parse round
+trip — which is why this exists beside
+:mod:`~lpspec.relational.sinks.writers.lp_file`.
 
-**Nothing textual crosses into numpy.** A polars ``String`` column converts by
-boxing every value as a Python object, so a row's ``'<='`` becomes a
-:data:`~lpspec.relational.sinks.tables.SENSE_CODES` byte before it is read here
-— the same rule
-:meth:`~lpspec.relational.sinks.tables.ModelTables.dense_columns` states for
-the column vectors, where it was measured.
+**Nothing textual crosses into numpy**: a row's ``'<='`` becomes a
+:data:`~lpspec.relational.sinks.tables.SENSE_CODES` byte before it is read
+here, the rule
+:meth:`~lpspec.relational.sinks.tables.ModelTables.dense_columns` measured.
 
-``highspy`` is imported inside the function: it is an optional dependency, and
-importing this module must stay free for callers that only write LP files.
+``highspy`` is imported inside the function, being optional: importing this
+module stays free for callers that only write LP files.
 """
 
 from __future__ import annotations
@@ -84,15 +82,14 @@ def build_highs(
 ) -> Any:
     """Load the model into a :class:`highspy.Highs` and stop there.
 
-    The hand-off without the simplex. :func:`solve_highs` is this plus
-    ``run()``, and the seam exists because the two are different questions: the
-    simplex is the same work whoever filled the model, so a measurement that
-    includes it says nothing about the lane that filled it. `bench/` ends here,
-    and linopy's ``Model.to_highspy()`` is the same seam on that side.
+    The hand-off without the simplex, which is the same work whoever filled the
+    model — so a measurement including it says nothing about the lane that
+    filled it. `bench/` ends here, as linopy's ``Model.to_highspy()`` does on
+    that side.
 
     ``batch_rows`` is the budget in *elements*, spent through
-    :mod:`~lpspec.relational.chunking` so a chunk's width is stated rather than
-    assumed. The parameter stays so tests can force ragged chunks.
+    :mod:`~lpspec.relational.chunking`; the parameter stays so tests can force
+    ragged chunks.
     """
     import highspy
     import numpy as np
@@ -144,15 +141,15 @@ def solve_highs(
 ) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
     """Feed the model to HiGHS and solve it.
 
-    Returns ``(status, objective, primal, dual)`` as the solver's own
-    vectors, positional in the solver's index — which *is* our label, densely
-    assigned — so there is nothing to key them by and nothing to join.
+    Returns ``(status, objective, primal, dual)`` as the solver's own vectors,
+    positional in the solver's index — which *is* our label — so there is
+    nothing to key them by and nothing to join.
 
-    Either can be ``None``, for different reasons. No primal means the solve
-    left nothing worth reading. No dual is narrower: a mixed-integer model has
-    none at all, and neither does a run stopped short of a simplex basis. HiGHS
-    hands back full-length vectors of zeros either way, and returning them
-    would only make them reachable.
+    Either can be ``None``, for different reasons: no primal means the solve
+    left nothing worth reading, while no dual is narrower, a mixed-integer
+    model having none at all and neither does a run stopped short of a simplex
+    basis. HiGHS hands back full-length vectors of zeros either way, and
+    returning them would only make them reachable.
     """
     import highspy
 
@@ -174,9 +171,8 @@ def _loaded(h: Any, status: Any, what: str) -> None:
     """Raise unless the solver accepted the batch.
 
     HiGHS reports a rejected batch by return value and carries on with an empty
-    model, so an unchecked call turns a malformed handoff into a confident
-    answer to a different problem — an unconstrained one, if it was the rows
-    that were refused.
+    model, so an unchecked call turns a malformed hand-off into a confident
+    answer to a different problem — an unconstrained one, if it was the rows.
     """
     import highspy
 

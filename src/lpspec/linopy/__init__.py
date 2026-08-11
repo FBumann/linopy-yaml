@@ -30,24 +30,21 @@ For models declared entirely in YAML, use the native API — it streams::
     with lps.solve('model.yaml', {...}) as result:
         result.primal('p')
 
-**Importing this module sets** ``linopy.options['semantics'] = 'v1'`` — this
-lane speaks v1, and the option is global, so importing is what sets it.
-linopy's default is ``legacy``, which fills every absent slot with 0: a masked
-variable contributes zero instead of taking its row with it, and a shift's
-vacated position does the same, where the relational lane drops the row in
-both cases (SPEC §6, §7). Left alone, the two lanes therefore answer the same
-YAML differently — 25.0 against 125.0 on a masked-variable model, a wrong
-answer rather than a wrong error. It is set on *import* rather than in
-``tests/oracle.py`` so that the suite proves the lanes agree under the
-configuration the package ships. Writing global state on import is a real cost — a process importing this module has its own
-linopy arithmetic changed too — but scoping it per call is something linopy's
-own context manager cannot do (``__exit__`` calls ``reset()``, restoring *all*
-options to their defaults rather than to their prior values, so it would
-silently discard a caller's ``display_max_rows``), and given a choice between
-a documented global and a hand-rolled save/restore around every entry point,
-the global is the one a reader can find. The assignment is unguarded because
-the declared linopy floor is a version that has the option — this package does
-not publish ahead of the convention it is written against.
+**Importing this module sets** ``linopy.options['semantics'] = 'v1'``. This
+lane speaks v1 and the option is global, so importing is what sets it.
+linopy's ``legacy`` default fills every absent slot with 0, where the
+relational lane drops the row (SPEC §6, §7) — left alone the two lanes answer
+the same YAML 25.0 against 125.0 on a masked-variable model, a wrong answer
+rather than a wrong error.
+
+Writing global state on import is a real cost, a process importing this module
+having its own linopy arithmetic changed too. Scoping it per call is what
+linopy's context manager cannot do: ``__exit__`` calls ``reset()``, restoring
+*all* options to their defaults rather than their prior values, so it would
+silently discard a caller's ``display_max_rows``. Between a documented global
+and a hand-rolled save/restore around every entry point, the global is the one
+a reader can find. Unguarded, the declared linopy floor being a version that
+has the option.
 """
 
 from __future__ import annotations
