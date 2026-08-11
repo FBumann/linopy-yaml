@@ -1,9 +1,8 @@
 """The exception hierarchy, so that one ``except`` clause covers the package.
 
-Before this module the package raised four unrelated ``ValueError``
-subclasses and a great deal of bare ``ValueError``, which left a caller no
-way to say "this model is the problem" without also catching every
-``ValueError`` pandas or pydantic might raise on the way past.
+One class per kind of wrong, so a caller can say "this model is the problem"
+without also catching every ``ValueError`` pandas or pydantic might raise on
+the way past.
 
 The split that matters is **the model versus the run**:
 
@@ -13,13 +12,15 @@ The split that matters is **the model versus the run**:
 * :class:`DataError` — the file is fine; what was bound to it is not. An
   unbound source, a column that does not carry the declared dims.
 
-Everything subclasses :class:`LpspecError`, which subclasses ``ValueError`` —
-so code that catches ``ValueError`` today keeps working.
+Everything subclasses :class:`LpspecError`, which subclasses ``ValueError``,
+so a caller who catches the built-in still catches these.
 
-One gap, on purpose: ``schema.py``'s field validators keep raising plain
-``ValueError``, because pydantic collects those into its own
-``pydantic.ValidationError`` (itself a ``ValueError``) and a custom class
-would not survive the trip.
+``model.py``'s field validators raise plain ``ValueError``, because pydantic
+collects those into its own ``ValidationError`` and a custom class does not
+survive the trip. :func:`schema_error` turns one back into a
+:class:`SchemaError` at the API boundary, so a caller sees one tree rather than
+two — the class was always named for exactly that case ("unknown key, bad
+dtype") and simply was not wired to it.
 
 Deliberately dependency-free: the relational engine imports this module and
 nothing else from the package (docs/ARCHITECTURE.md, hard rule 2).
@@ -28,7 +29,7 @@ nothing else from the package (docs/ARCHITECTURE.md, hard rule 2).
 from __future__ import annotations
 
 import difflib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -36,6 +37,15 @@ if TYPE_CHECKING:
 
 class LpspecError(ValueError):
     """Base class for every error this package raises on purpose."""
+
+
+class LpspecWarning(UserWarning):
+    """Advice from ``check``: the model loads and solves, and reads wrong.
+
+    A warning rather than an error because the reading may be deliberate —
+    ``extend()`` splits one model across files, and what looks unused in the
+    base file may be an axis in an extension this check never sees.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +58,18 @@ class LanguageError(LpspecError):
 
 
 class SchemaError(LanguageError):
-    """A declaration is malformed: unknown key, bad dtype, colliding name."""
+    """**The declarations themselves are wrong**, before any expression is read.
+
+    An unknown key, a bad ``dtype``, a duplicate YAML key, two objectives, a
+    version this reader does not know. Distinct from a bare
+    :class:`LanguageError`, which is declarations that are fine saying
+    something the language rejects — an undeclared name in an expression, a
+    dim rule, degree 2.
+
+    Every failure of schema validation arrives as this, including the ones
+    pydantic raises: :func:`schema_error` unwraps its ``ValidationError`` so a
+    caller sees one tree rather than two.
+    """
 
 
 class DimensionError(LanguageError):
@@ -101,6 +122,27 @@ def did_you_mean(name: str, known: Iterable[str], *, label: str = 'Declared') ->
     if near:
         return f"Did you mean '{near[0]}'?"
     return f'{label}: {", ".join(candidates) or "nothing"}.'
+
+
+def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
+    """Why a constant side may not be sparse — the divisor argument, one position over.
+
+    A missing row is filled with `0` here, and on the constant side of a
+    comparison that zero *is* the bound: `x <= cap` becomes `x <= 0`, the most
+    binding row expressible, built and solved and reported optimal. Nothing
+    about the model said so — a table left sparse is compression, not a claim.
+
+    The three ways out are the ones the language already has, and which is
+    right depends on what was meant, which is why it is not guessed.
+    """
+    return (
+        f"{subject}: parameter '{names}' covers {missing} fewer coordinates than the rows "
+        f'built here. A missing row is read as 0, and on the constant side that zero is a '
+        f'bound rather than an absence — the row still exists, and it binds.\n'
+        f'  Supply the missing rows, if the value is what was meant.\n'
+        f'  Mask them out with a where, if the row should not exist there.\n'
+        f'  Drop the declaration, if the model has no such quantity at all.'
+    )
 
 
 def sparse_divisor_message(name: str, missing: int) -> str:
@@ -192,27 +234,24 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     """``unknown <kind> '<name>'``, plus the near miss or the declared set.
 
     The same shape as the loader's unknown-key error, deliberately: a reader who
-    has met one has met both, and there were already two copies of this idiom in
-    the tree before this one.
+    has met one has met both.
 
-    Written for #298's positional names (`ramp_0`, `ramp_1`) and kept after they
-    were removed, because the shape outlived the cause: `piecewise:` still
-    expands one block into several constraints, and a rule split by regime is
-    conventionally `x` and `x_initial`. What changed is the wording — "named by
-    position" would now be a claim about a surface that no longer exists.
+    It earns the near-miss hint because generated names are close together —
+    `piecewise:` expands one block into several constraints, and a rule split by
+    regime is conventionally `x` and `x_initial`.
 
     Single-line on purpose. These are raised as ``KeyError``, whose ``str`` is
     the *repr* of its argument, so a newline arrives at the reader as a literal
     ``\\n``. The list is not truncated for the same reason the loader does not
     truncate: the answer is usually in it, and a caller reading a solution back
     by name has no other way to discover what the model actually built.
+
+    When one name expanded into several, nearest-match is unhelpful — it picks
+    one sibling and implies the others do not exist — so a prefix hit lists
+    the whole family instead.
     """
     candidates = sorted(known)
 
-    # One name can expand into several: a `piecewise:` block becomes a handful
-    # of constraints, and a rule split by regime is conventionally `x` and
-    # `x_initial`. Nearest-match is unhelpful there — it picks one sibling and
-    # implies the others do not exist — so a prefix hit lists them all.
     family = [c for c in candidates if c.startswith(f'{name}_')]
     if family:
         return (
@@ -221,3 +260,33 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
         )
 
     return f"unknown {kind} '{name}'. {did_you_mean(name, candidates)}"
+
+
+def schema_error(exc: Any, context: str = '') -> LanguageError:
+    """A pydantic ``ValidationError`` as one of ours, keeping the class.
+
+    Pydantic wraps whatever a validator raises, so a class of our own cannot
+    reach the caller from inside the model — the envelope arrives instead,
+    carrying ``input_value=`` dumps and a link to pydantic's docs that mean
+    nothing to someone who wrote a YAML file.
+
+    It does keep the original under ``ctx['error']``, so a
+    :class:`DimensionError` raised deep in a validator comes back a
+    ``DimensionError``. Anything else — pydantic's own type and shape
+    complaints, or several errors at once — is a
+    :class:`SchemaError`, which is what "the declarations are wrong" means.
+    """
+    errors = exc.errors()
+    lines = []
+    for error in errors:
+        message = str(error.get('msg', '')).removeprefix('Value error, ')
+        where = '.'.join(str(part) for part in error.get('loc', ()))
+        lines.append(f'{where}: {message}' if where else message)
+    body = '\n'.join(lines) or str(exc)
+    text = f'{context}: {body}' if context else body
+
+    if len(errors) == 1:
+        original = errors[0].get('ctx', {}).get('error')
+        if isinstance(original, LanguageError):
+            return type(original)(text)
+    return SchemaError(text)

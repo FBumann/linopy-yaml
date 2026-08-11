@@ -24,6 +24,7 @@ Annotations go in an HTML comment on the line before the fence, so they are
 invisible in rendered markdown:
 
     <!-- doctest: wrap=constraints -->   nest the block under that schema key
+    <!-- doctest: extends=p(t,g) -->     a variable, with its dims, from the model it extends
     <!-- doctest: skip -->               excluded, and the reason belongs in a comment
 
 A YAML block with no annotation is validated whole, which means it must
@@ -50,7 +51,8 @@ import pytest
 import yaml
 
 import lpspec as lps
-from lpspec.language.schema import MathSchema
+from lpspec.language.model import Model
+from lpspec.language.validation import load_model
 from lpspec.relational.engines.polars.executor import PolarsExecutor, Result
 
 try:
@@ -80,7 +82,7 @@ ROOTS: dict[str, Any] = {
     'lpspec_linopy': linopy_lane,
     'result': Result,
     'ex': PolarsExecutor,
-    'schema': MathSchema,
+    'schema': Model,
 }
 
 # Every root an example may name, whether or not this install can resolve it.
@@ -251,19 +253,42 @@ def test_readme_example_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 def _entry_model(section: str) -> Any:
     """The per-entry model behind a schema section, e.g. constraints -> ConstraintDef."""
-    args = get_args(MathSchema.model_fields[section].annotation)
+    args = get_args(Model.model_fields[section].annotation)
     return args[1] if len(args) == 2 else None
+
+
+_BORROWED = re.compile(r'(?P<name>\w+)\s*(?:\((?P<dims>[^)]*)\))?')
+
+
+def _borrowed(note: str) -> dict[str, list[str]]:
+    """Variables an ``extends=`` block takes from the model it extends.
+
+    Written ``extends=p(snapshot,generator)`` — the dims are part of it because
+    dim checking is a language rule, so a borrowed variable with no dims would
+    have ``shift(over=snapshot)`` fail on the very block that demonstrates it.
+    """
+    if not note.startswith('extends='):
+        return {}
+    return {
+        m['name']: [d.strip() for d in (m['dims'] or '').split(',') if d.strip()]
+        for m in _BORROWED.finditer(note.removeprefix('extends='))
+    }
 
 
 @pytest.mark.parametrize('block', _blocks('yaml'), ids=lambda b: b.where)
 def test_yaml_block_validates(block: Block) -> None:
     """A YAML example must be a thing the schema accepts.
 
-    Whole-section blocks go through ``MathSchema`` — including ``piecewise:``,
+    Whole-section blocks go through ``Model`` — including ``piecewise:``,
     which is why this catches a sign on three links. A ``wrap=`` block shows a
     single entry of a section and deliberately omits the declarations around
     it, so it is checked against that section's own model: its *shape* is our
     claim, its cross-references are not.
+
+    An ``extends=`` block is validated *whole* — keys, shapes and expressions —
+    against a namespace widened by the names it borrows, which is what an
+    extension gets from ``linopy.extend()``. It is the narrow form of ``skip``:
+    a typo'd key in one of these is still a failure.
     """
     if block.note == 'skip':
         pytest.skip('explicitly skipped')
@@ -273,7 +298,7 @@ def test_yaml_block_validates(block: Block) -> None:
 
     if block.note.startswith('wrap='):
         section = block.note.removeprefix('wrap=')
-        assert section in MathSchema.model_fields, f'{block.where}: wrap={section!r} is not a schema section'
+        assert section in Model.model_fields, f'{block.where}: wrap={section!r} is not a schema section'
         model = _entry_model(section)
         for name, entry in doc.items():
             try:
@@ -283,7 +308,7 @@ def test_yaml_block_validates(block: Block) -> None:
         return
 
     try:
-        MathSchema.model_validate(doc)
+        load_model(doc, known_variables=_borrowed(block.note))
     except Exception as exc:
         pytest.fail(
             f'{block.where} does not validate:\n{exc}\n\n'
@@ -292,6 +317,7 @@ def test_yaml_block_validates(block: Block) -> None:
             '`parameters:` must declare the dims it names — annotate the fence '
             'instead:\n'
             '  <!-- doctest: wrap=<section> -->  a single entry of that section\n'
+            '  <!-- doctest: extends=v(dims) --> a variable borrowed from another model\n'
             '  <!-- doctest: skip -->            not a model, or wrong on purpose'
         )
 
@@ -331,7 +357,7 @@ def test_every_block_is_covered() -> None:
         if block.lang == 'python':
             continue  # every python block is parsed and name-checked
         keys = yaml.safe_load(block.code)
-        if not isinstance(keys, dict) or not set(keys) <= set(MathSchema.model_fields):
+        if not isinstance(keys, dict) or not set(keys) <= set(Model.model_fields):
             unhandled.append(block.where)
     assert not unhandled, (
         'these YAML blocks are neither whole schema sections nor annotated, so '

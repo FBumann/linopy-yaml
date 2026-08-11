@@ -156,4 +156,4 @@ which is why the construct matrix reads it from the surface declaration.
 
 ---
 
-[`examples/piecewise.yaml`](https://github.com/FBumann/lpspec/blob/main/examples/piecewise.yaml) · back to [all models](index.md)
+[`examples/piecewise.yaml`](https://github.com/fluxopt/lpspec/blob/main/examples/piecewise.yaml) · back to [all models](index.md)

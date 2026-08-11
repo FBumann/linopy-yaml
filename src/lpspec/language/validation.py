@@ -24,7 +24,9 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, assert_never
 
-from lpspec.errors import SchemaError
+from pydantic import ValidationError
+
+from lpspec.errors import SchemaError, schema_error
 from lpspec.language._yaml import read_yaml
 from lpspec.language.dimensions import check_schema
 from lpspec.language.expansion import expand, parse_and_expand, parse_template
@@ -36,6 +38,7 @@ from lpspec.language.expression_parser import (
     DimensionNode,
     EdgeNode,
     FunctionCallNode,
+    KeywordNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -43,19 +46,25 @@ from lpspec.language.expression_parser import (
     VariableNode,
 )
 from lpspec.language.helpers import BUILTINS, unknown_helper_message
-from lpspec.language.piecewise import expand_piecewise
+from lpspec.language.model import Model
 from lpspec.language.resolution import Namespace, resolve_expression, resolve_where
-from lpspec.language.schema import MathSchema
 from lpspec.language.where_parser import parse_where
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 
-def load_schema(model: str | Path | dict[str, Any] | MathSchema) -> MathSchema:
+def load_model(
+    model: str | Path | dict[str, Any] | Model,
+    *,
+    known_variables: Mapping[str, Sequence[str]] = MappingProxyType({}),
+) -> Model:
     """Load and validate a model definition — the language's front door.
 
-    Accepts a YAML file path, an already-parsed dict, or a ``MathSchema``.
+    Accepts a YAML file path, an already-parsed dict, or a ``Model``.
+    ``known_variables`` widens the variable set for the one file that is not
+    valid alone — an extension for ``linopy.extend()``, which references
+    variables already on the model it extends.
     Validation is complete at this point: schema shape, every expression and
     where string, every named expression and macro template — and every
     declaration a formulation emits, since those are language too. That is why
@@ -74,22 +83,23 @@ def load_schema(model: str | Path | dict[str, Any] | MathSchema) -> MathSchema:
     """
     if isinstance(model, (list, tuple)):
         msg = (
-            'composing multiple YAML files into one program is not implemented '
-            'yet — track https://github.com/FBumann/lpspec/issues/30'
+            'a model is one file, one dict or one Model, never a list of them. '
+            'To compose several, merge the declarations into one dict and pass '
+            'that — a native schema merge was declined (#30) because a library '
+            'varying its declarations by data is already how you say this.'
         )
-        raise NotImplementedError(msg)
-    if isinstance(model, MathSchema):
-        schema = model
-    elif isinstance(model, dict):
-        schema = MathSchema(**model)
-    else:
-        schema = MathSchema(**read_yaml(Path(model)))
-    validate_expressions(expand_piecewise(schema))
-    return schema
+        raise TypeError(msg)
+    if isinstance(model, Model):
+        return model
+    raw = model if isinstance(model, dict) else read_yaml(Path(model))
+    try:
+        return Model.model_validate(raw, context={'known_variables': known_variables})
+    except ValidationError as exc:
+        raise schema_error(exc) from None
 
 
 def validate_expressions(
-    schema: MathSchema,
+    schema: Model,
     *,
     known_variables: Mapping[str, Sequence[str]] = MappingProxyType({}),
 ) -> None:
@@ -104,18 +114,23 @@ def validate_expressions(
       declared dimensions;
     - where strings parse *and* resolve — an unknown name in a where is an
       error, not a silently-empty mask;
-    - every dim rule (``dimensions.check_schema``), once names resolve.
+    - macro formals may shadow model names but not a declared dimension —
+      ``over=snapshot`` under a formal ``snapshot`` cannot say which it means;
+    - every dim rule (``dimensions.check_schema``), once names resolve. Dim
+      rules are language rules, not backend rules, so they run here rather
+      than at either entry point — ``linopy.build``/``extend`` and
+      ``api.load_model`` all arrive through this function, and a lane that
+      could skip them would be a lane with a different language (hard rule 3).
 
     Parameters
     ----------
-    schema : MathSchema
+    schema : Model
         The schema to validate.
     known_variables : Mapping[str, Sequence[str]]
         Variables valid in addition to those declared in *schema*, mapped to
-        their dims — used by ``linopy.extend()``, where expressions may
-        reference variables already present on the model. The dims are needed
-        for the same reason the names are: dim checking is a language rule. Parameters get no such widening: a
-        YAML file declares every parameter it uses (hard rule 5).
+        their dims — used by ``linopy.extend()``, whose expressions may
+        reference variables already on the model. Parameters get no such
+        widening: a YAML file declares every parameter it uses (hard rule 5).
 
     Raises
     ------
@@ -135,8 +150,6 @@ def validate_expressions(
         except ValueError as e:
             errors.append(str(e) if str(e).startswith(context) else f'{context}: {e}')
             continue
-        # Formals may shadow model names but not a declared dimension:
-        # `over=snapshot` under a formal `snapshot` cannot say which it means.
         formals = {*macro.args, *macro.kwargs}
         errors.extend(
             f"{context}: formal '{f}' collides with declared dimension '{f}'. "
@@ -158,15 +171,6 @@ def validate_expressions(
 
     for vname, vdef in schema.variables.items():
         _check_where(vdef.where, ns, f"Variable '{vname}'", errors)
-        if not vdef.foreach and vdef.where is not None:
-            # A scalar variable's presence is `select()` over no dims, which
-            # polars collapses to no rows, so absence cannot reach the rows
-            # that reference it (#340).
-            errors.append(
-                f"Variable '{vname}': a scalar variable (foreach: []) may not have a where. "
-                f'Its absence could not reach the constraints that use it (#340). '
-                f'Put the condition on those constraints, or give the variable a dimension of size 1.'
-            )
 
     for cname, cdef in schema.constraints.items():
         context = f"Constraint '{cname}'"
@@ -204,10 +208,6 @@ def validate_expressions(
     if errors:
         raise SchemaError('\n'.join(errors))
 
-    # Dim rules are language rules, not backend rules, so they run here rather
-    # than at either entry point — linopy.build/extend and api.load_schema all
-    # arrive through this function, and a lane that could skip them would be a
-    # lane with a different language (hard rule 3).
     check_schema(schema, known_variables)
 
 
@@ -221,7 +221,7 @@ _DTYPE_TYPES: dict[str, tuple[type, ...]] = {
 }
 
 
-def _check_dimension_values(schema: MathSchema, errors: list[str]) -> None:
+def _check_dimension_values(schema: Model, errors: list[str]) -> None:
     """Reject a declared coordinate that is not the dtype the file declares.
 
     YAML resolves unquoted scalars by shape, and a coerced label does not join
@@ -242,7 +242,7 @@ def _check_dimension_values(schema: MathSchema, errors: list[str]) -> None:
 
 def _parse_expand(
     expression: str,
-    schema: MathSchema,
+    schema: Model,
     context: str,
     errors: list[str],
 ) -> ArithmeticNode | ComparisonNode | None:
@@ -282,9 +282,14 @@ def _check_template_names(
     Not resolution: a formal has no kind until the call site substitutes an
     argument for it, so the body cannot be typed. This catches the free names
     that are *not* formals, which is what makes an uncalled macro still fail
-    at load time.
+    at load time. A closed keyword names nothing, so there is nothing to check
+    it against; a dimension kwarg accepts a formal as well as a declared
+    dimension, since the call site may bind one to it.
     """
     if isinstance(node, (NumberNode, VariableNode, ParameterNode, DimensionNode, CoordinateNode, EdgeNode)):
+        return
+
+    if isinstance(node, KeywordNode):
         return
 
     if isinstance(node, NameNode):
@@ -313,7 +318,6 @@ def _check_template_names(
             errors.append(f'{context}: {unknown_helper_message(node.name)}')
         for arg in node.args:
             _check_template_names(arg, template, context, ns, formals, errors)
-        # a formal may be bound to a dimension at the call site (ROADMAP 5c)
         known_dims = ns.dimensions | formals
         for kwarg in builtin.dimension_kwargs if builtin else ():
             value = node.kwargs.get(kwarg)

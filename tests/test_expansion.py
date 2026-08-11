@@ -11,8 +11,8 @@ import pytest
 
 from lpspec.language.expansion import parse_and_expand
 from lpspec.language.expression_parser import parse_expression
-from lpspec.language.schema import MathSchema
-from lpspec.language.validation import validate_expressions
+from lpspec.language.model import Model
+from lpspec.language.validation import load_model
 from tests.differential import differential
 from tests.oracle import pd
 
@@ -27,7 +27,7 @@ def make_schema(
     expressions: dict[str, str] | None = None,
     macros: dict | None = None,
     **overrides,
-) -> MathSchema:
+) -> Model:
     base = {
         'dimensions': {
             'snapshot': {'dtype': 'int'},
@@ -62,7 +62,7 @@ def make_schema(
     if macros is not None:
         base['macros'] = macros
     base.update(overrides)
-    return MathSchema(**base)
+    return load_model(base)
 
 
 # ---------------------------------------------------------------------------
@@ -85,15 +85,13 @@ def test_named_expressions_nest():
 
 
 def test_named_expression_cycle_raises():
-    schema = make_schema({'a': 'b + 1', 'b': 'a + 1'})
     with pytest.raises(ValueError, match='circular expression reference: a -> b -> a'):
-        parse_and_expand('a', schema)
+        make_schema({'a': 'b + 1', 'b': 'a + 1'})
 
 
 def test_named_expression_no_comparison():
-    schema = make_schema({'bad': 'p == load'})
     with pytest.raises(ValueError, match='must not contain a comparison'):
-        parse_and_expand('bad + 1', schema)
+        make_schema({'bad': 'p == load'})
 
 
 def test_name_collision_rejected_at_schema_level():
@@ -109,9 +107,8 @@ def test_expand_handles_comparison_at_top():
 
 
 def test_validation_reports_bad_named_expression():
-    schema = make_schema({'broken': 'sum(nope, over=generator)'})
     with pytest.raises(ValueError, match="Named expression 'broken'"):
-        validate_expressions(schema)
+        make_schema({'broken': 'sum(nope, over=generator)'})
 
 
 # ---------------------------------------------------------------------------
@@ -165,14 +162,13 @@ def test_macro_arity_errors():
 
 
 def test_macro_cycle_raises():
-    schema = make_schema(
-        macros={
-            'loop_a': {'template': 'loop_b() + 1'},
-            'loop_b': {'template': 'loop_a() + 1'},
-        }
-    )
     with pytest.raises(ValueError, match='circular macro reference'):
-        parse_and_expand('loop_a()', schema)
+        make_schema(
+            macros={
+                'loop_a': {'template': 'loop_b() + 1'},
+                'loop_b': {'template': 'loop_a() + 1'},
+            }
+        )
 
 
 def test_macro_collisions_rejected():
@@ -185,7 +181,7 @@ def test_macro_collisions_rejected():
     with pytest.raises(ValueError, match="collides with the built-in helper 'sum'"):
         make_schema(macros={'sum': {'args': ['a'], 'template': 'a'}})
     with pytest.raises(ValueError, match="collides with the built-in helper 'sum'"):
-        MathSchema(dimensions={'sum': {'values': [1]}})
+        Model(dimensions={'sum': {'values': [1]}})
 
 
 def test_duplicate_formals_rejected():
@@ -196,13 +192,11 @@ def test_duplicate_formals_rejected():
 def test_macro_templates_validated_even_when_unused():
     # schema-local macros make load-time validation complete: a typo in a
     # template the model never calls is still caught
-    schema = make_schema(macros={'unused': {'args': ['x'], 'template': 'x * cots'}})
     with pytest.raises(ValueError, match=r"Macro 'unused'.*'cots' not found"):
-        validate_expressions(schema)
+        make_schema(macros={'unused': {'args': ['x'], 'template': 'x * cots'}})
 
-    schema = make_schema(macros={'bad': {'args': ['a', 'b'], 'template': 'a == b'}})
     with pytest.raises(ValueError, match='must not contain a comparison'):
-        validate_expressions(schema)
+        make_schema(macros={'bad': {'args': ['a', 'b'], 'template': 'a == b'}})
 
 
 # ---------------------------------------------------------------------------
@@ -262,16 +256,15 @@ def test_a_macro_and_a_named_expression_mean_the_same_on_both_lanes():
 
 def test_unknown_helper_rejected_at_load_time_with_the_rewrite():
     """An unknown helper fails validation, before either backend is chosen."""
-    schema = make_schema(
-        constraints={
-            'c': {
-                'foreach': ['snapshot'],
-                'expression': 'my_python_helper(p) <= load',
-            }
-        }
-    )
     with pytest.raises(ValueError) as exc:
-        validate_expressions(schema)
+        make_schema(
+            constraints={
+                'c': {
+                    'foreach': ['snapshot'],
+                    'expression': 'my_python_helper(p) <= load',
+                }
+            }
+        )
 
     message = str(exc.value)
     assert 'my_python_helper' in message

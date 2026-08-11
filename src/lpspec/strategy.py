@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     import pandas as pd
     import xarray as xr
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 #: Parquet rather than pickle, and not a knob: measured over 1M rows, zstd is
 #: 8.3x smaller *and* 3x faster than pickling the frame, and still smaller and
@@ -288,7 +288,7 @@ class Runs:
         return self.meta.height
 
 
-def _nothing_to_read(kind: str, name: str, held: dict[str, pl.DataFrame], meta: pl.DataFrame) -> str:
+def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], meta: pl.DataFrame) -> str:
     """Why *name* has no frame.
 
     A sweep keeps everything every slice produced, so there is only one way to
@@ -517,7 +517,7 @@ def _prices(result: Any, model: Any) -> tuple[dict[str, Any], str | None]:
 def _key_column(
     axis: Axis | Sequence[Cut],
     key_name: str | None,
-    schema: MathSchema,
+    schema: Model,
 ) -> str:
     """What to call the column holding the slice key.
 
@@ -555,7 +555,7 @@ def _key_column(
 
 
 def _carry_plan(
-    schema: MathSchema,
+    schema: Model,
     carry: Mapping[str, tuple[str, int | None]],
 ) -> dict[str, tuple[str, str | None, int | None]]:
     """Resolve each carry against the schema: what is dropped, and what rides.

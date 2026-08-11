@@ -8,14 +8,26 @@ build:
   tools:
     python: "3.13"
   jobs:
+    # asdf put three network operations in front of every build — a plugin-repo
+    # clone, a version resolution, a shim rewrite — and a stall in any of them
+    # is indistinguishable from a hung build, which is what it looked like.
+    # The official installer is one request for the same result. Unpinned, to
+    # match `astral-sh/setup-uv` in the workflows: uv floats there or nowhere.
     pre_create_environment:
-      - asdf plugin add uv
-      - asdf install uv latest
-      - asdf global uv latest
+      - curl -LsSf https://astral.sh/uv/install.sh | sh
     create_environment:
-      - uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
+      # by path rather than on PATH: each job runs in its own shell, so what the
+      # installer appended to the profile is not in scope here
+      - $HOME/.local/bin/uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
     # The `docs` group only — the site needs no lpspec install. Nothing in
     # mkdocs.yml imports the package (no mkdocstrings, no notebooks to execute),
     # so a build here proves the docs, not the wheel.
+    #
+    # Spelled out rather than `python.install: {method: uv}`, which RTD grew in
+    # April 2026: both flags are load-bearing and that form documents neither.
+    # `--no-default-groups` is what keeps `dev` out, and `dev` resolves linopy
+    # from a git branch; `--no-install-project` is the second sentence above. A
+    # `groups:` key that lowers to a plain `uv sync --group docs` reinstates
+    # both, and RTD does not say whether it does.
     install:
-      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" uv sync --no-default-groups --group docs --no-install-project
+      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" $HOME/.local/bin/uv sync --no-default-groups --group docs --no-install-project

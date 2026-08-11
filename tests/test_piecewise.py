@@ -329,6 +329,20 @@ def test_expansion_emits_the_lambda_declarations():
     }
 
 
+def test_a_validated_model_expands_once():
+    """Validation already built the expansion, so asking again returns it.
+
+    One object from both calls is the observable form of "once is enough": a
+    second ``Model`` would be a second full validation of every emitted
+    declaration. The cache is the (namespace, expansion) pair rather than a
+    memo on the schema alone, so a namespace the validation never saw still
+    expands fresh.
+    """
+    schema = schema_of(NONCONVEX_YAML)
+    assert expand_piecewise(schema) is expand_piecewise(schema)
+    assert expand_piecewise(schema, known_variables={'w': ['snapshot']}) is not expand_piecewise(schema)
+
+
 def test_the_adjacency_row_survives_at_the_first_breakpoint(nonconvex_inputs):
     """The reason ``shift`` kept an escape hatch when it started meaning absence.
 

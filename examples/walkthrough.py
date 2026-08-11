@@ -74,12 +74,12 @@ def main() -> None:
     print(f'\nmodel: {MODEL.relative_to(HERE.parent)}')
 
     # ------------------------------------------------------------------
-    banner(1, 'YAML text -> validated MathSchema', 'schema.py, validation.py')
+    banner(1, 'YAML text -> validated Model', 'schema.py, validation.py')
     # Parses the file, type-checks it against the pydantic schema, and
     # name-checks every expression, where string, named expression and macro
     # template — used or not. After this call the model is known to be
     # well-formed; no data has been touched.
-    schema = lps.load_schema(MODEL)
+    schema = lps.load_model(MODEL)
     print(f'    dimensions   {", ".join(schema.dimensions)}')
     print(f'    parameters   {", ".join(schema.parameters)}')
     print(f'    variables    {", ".join(schema.variables)}')

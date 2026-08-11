@@ -1,0 +1,22 @@
+# The notation docs/models/monthly_budget.md uses, written down.
+#
+# `month` gets a set of its own because it is a dimension like any other — the
+# page's whole argument is that grouping time is the same construct as grouping
+# generators onto buses, and notation that treated it as special would undercut
+# that before the reader reached the equation.
+
+dimensions:
+  snapshot: {index: t, set: "\\mathcal{T}"}
+  month: {index: m, set: "\\mathcal{M}"}
+  generator: {index: g, set: "\\mathcal{G}"}
+
+names:
+  cost: "c"
+  load: "\\ell"
+  p_max: "\\bar p"
+  monthly_cap: "\\bar E"  # E for energy: a cap on a sum over time, not on a rate
+
+descriptions:
+  snapshot: dispatch periods, each falling in one month
+  month: the grouping the budget is stated over
+  generator: generating units

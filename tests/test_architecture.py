@@ -274,7 +274,7 @@ def test_typeset_reads_the_language_and_reaches_no_engine():
     any model the lanes can build, from one walk, holding no opinion they do
     not already hold. That claim is only worth anything if it *cannot* reach
     the plan, a sink, a solver or a dataframe — so ``import lpspec.typeset``
-    must not drag in an engine. It used to, through ``api.load_schema``, and
+    must not drag in an engine. It used to, through ``api.load_model``, and
     nothing failed; the module map said otherwise and no test read it.
 
     Membership is off the path, like the other three, so a new renderer cannot
@@ -355,7 +355,7 @@ def test_typesets_import_closure_needs_no_third_party_engine():
 PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
-    'load it': {'load_schema', 'MathSchema'},
+    'load it': {'load_model', 'Model'},
     'show it': {'to_latex', 'to_markdown', 'to_typst', 'SymbolTable'},
     'catch it': {
         'LpspecError',
@@ -587,7 +587,7 @@ def test_every_schema_model_is_strict():
     """A schema model that inherits BaseModel directly silently drops unknown
     keys, which turns a typo into a different model. Strictness lives on
     ``_StrictBlock``, so the check is that nothing bypasses it."""
-    tree = ast.parse((PKG / 'language' / 'schema.py').read_text())
+    tree = ast.parse((PKG / 'language' / 'model.py').read_text())
     loose = [
         node.name
         for node in tree.body
@@ -607,7 +607,17 @@ def test_every_schema_model_is_strict():
 #: could lower. Expansion no longer asks the plan anything, so the cycle is
 #: gone rather than deferred, and a lazy import here is once again only ever
 #: a leftover.
-DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {}
+DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
+    ('language/model.py', 'lpspec.language.piecewise'): (
+        'Model validates its own expressions, and the checkers read Model. Both '
+        'sit in `language/`, so this is one layer calling itself rather than a '
+        'reach across layers.'
+    ),
+    ('language/model.py', 'lpspec.language.validation'): (
+        'Same cycle: validation.py imports Model to build one, and Model calls '
+        'validate_expressions on itself so the type cannot exist half-checked.'
+    ),
+}
 
 
 def test_lazy_intra_package_imports_are_all_declared():

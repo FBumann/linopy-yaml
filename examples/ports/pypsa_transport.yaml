@@ -43,9 +43,9 @@ constraints:
   nodal_balance:
     foreach: [snapshot, bus]
     expression: >-
-      group_sum(p, over=generator, by=bus)
-      + group_sum(f, over=link, by=to)
-      - group_sum(f, over=link, by=from)
+      sum(p, over=generator, group_by=bus)
+      + sum(f, over=link, group_by=to)
+      - sum(f, over=link, group_by=from)
       == load
 
 objectives:

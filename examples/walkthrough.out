@@ -2,7 +2,7 @@ The whole architecture, one model, one stage at a time — run it and read.
 
 model: examples/walkthrough.yaml
 
-[1] YAML text -> validated MathSchema  (schema.py, validation.py)
+[1] YAML text -> validated Model  (schema.py, validation.py)
     dimensions   snapshot, generator
     parameters   p_max, load, cost
     variables    p
@@ -40,7 +40,7 @@ model: examples/walkthrough.yaml
     ┌──────────┬───────────┬───────────┐
     │ snapshot ┆ generator ┆ var_label │
     │ ---      ┆ ---       ┆ ---       │
-    │ i64      ┆ str       ┆ i64       │
+    │ i64      ┆ enum      ┆ i64       │
     ╞══════════╪═══════════╪═══════════╡
     │ 0        ┆ wind      ┆ 0         │
     │ 0        ┆ solar     ┆ 1         │
@@ -70,14 +70,14 @@ model: examples/walkthrough.yaml
     ┌──────────┬───────────┬───────┐
     │ snapshot ┆ generator ┆ value │
     │ ---      ┆ ---       ┆ ---   │
-    │ i64      ┆ str       ┆ f64   │
+    │ i64      ┆ enum      ┆ f64   │
     ╞══════════╪═══════════╪═══════╡
-    │ 0        ┆ gas       ┆ 0.0   │
-    │ 0        ┆ solar     ┆ 0.0   │
     │ 0        ┆ wind      ┆ 80.0  │
-    │ 1        ┆ gas       ┆ 0.0   │
-    │ 1        ┆ solar     ┆ 60.0  │
+    │ 0        ┆ solar     ┆ 0.0   │
+    │ 0        ┆ gas       ┆ 0.0   │
     │ 1        ┆ wind      ┆ 60.0  │
+    │ 1        ┆ solar     ┆ 60.0  │
+    │ 1        ┆ gas       ┆ 0.0   │
     └──────────┴───────────┴───────┘
 
 [7] and what the language refuses  (validation.py, lowering.py)
@@ -85,11 +85,11 @@ model: examples/walkthrough.yaml
     a helper that is not in the closed built-in set:
     caught by check() as SchemaError
       Constraint 'cumulative': Unknown helper function 'cumsum'.
-      Available: ['group_sum', 'shift', 'sum']
+      Available: ['at', 'shift', 'sum']
       Define 'cumsum' as a macro under 'macros:' if it composes built-ins; if the math is not sayable in the language, use a declared escape.
 
     variable x variable — above the degree-1 ceiling:
     caught by check() as LanguageError
-      objective 'total_cost': both factors of a product contain variables, which is degree 2. Multiply the variable by a parameter instead, or model the curve with a piecewise: block — see ROADMAP, "The degree axis".
+      objective 'total_cost': both factors of a product contain variables, which is degree 2. Multiply the variable by a parameter instead, or model the curve with a piecewise: block — see docs/design/ceiling.md.
 
 docs/ARCHITECTURE.md has the rules these stages enforce.

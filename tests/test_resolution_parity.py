@@ -8,6 +8,9 @@ pass, each of these built a model on one lane and raised on the other.
 
 from __future__ import annotations
 
+import datetime
+from copy import deepcopy
+
 import polars as pl
 import pytest
 import yaml as pyyaml
@@ -84,7 +87,7 @@ ACCEPTED = [
 #: sweep masks ``variables.p.where`` on the dispatch model, and a bare variable
 #: name fits neither slot: in a variable's own where it is a self-reference
 #: (rejected at load), and on ``balance`` it spans a dim the constraint does not
-#: (a DimensionError, correctly — reducing it needs ROADMAP Track 1 item 6).
+#: (a DimensionError, correctly — reducing it needs an `all`-reduction, #469).
 #: Mapped rather than skipped so the coverage guard below still names a test.
 COVERED_ELSEWHERE = {
     'VariableDefinedNode': ('tests/test_relational.py::test_a_bare_variable_name_in_a_where_asks_whether_it_exists'),
@@ -147,21 +150,22 @@ def test_every_resolved_predicate_is_parity_tested():
     )
 
 
-@pytest.mark.xfail(strict=True, reason='orphaned constraint rows: the lanes disagree — see the docstring')
 def test_a_constraint_row_left_with_no_variables(tmp_path, data, coords):
-    """A masked *variable* can orphan an unmasked *constraint* row, and the
-    lanes then disagree about what the model even is.
+    """A masked *variable* can orphan an unmasked *constraint* row — and both
+    lanes now agree that such a row is not built.
 
-    `where: "snapshot > 0"` on `p` leaves `power_balance` at snapshot 0 with no
-    terms. Both lanes build four constraint labels, but linopy hands the solver
-    three — the orphaned row is dropped, so a constraint the file declares goes
-    unenforced and the model solves `optimal`. The relational lane keeps the
-    row as `0 == 80` and reports `Infeasible`.
+    `where: "snapshot > 0"` on `p` leaves `balance` at snapshot 0 with no
+    terms. This was an xfail: linopy handed the solver three rows of four while
+    the relational lane kept the fourth as `0 == 80` and reported Infeasible —
+    one lane answering a question the other refused.
 
-    Unrelated to name resolution; found by the parity sweep above. The
-    relational reading looks right (the file says the balance holds at every
-    snapshot), but which lane changes is a language decision, so this is pinned
-    rather than fixed here.
+    The rule is now stated at the level the property lives at rather than per
+    provenance, so the lanes reach it independently: linopy's own invariant is
+    the same one (`labels != -1` and at least one var), which is why it needed
+    no shim to agree.
+
+    The omission is asserted too. Dropping a declared row is only defensible
+    because the build says it happened.
     """
     path = _write(tmp_path, **{'variables.p.where': 'snapshot > 0'})
 
@@ -170,6 +174,9 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, data, coords):
 
     with lps.build(path, data, coords=coords) as ex:
         relational_status = ex.solve().termination_condition
+        assert ex.omissions().to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}], (
+            'a dropped row has to be reported, or a declared constraint goes quietly unenforced'
+        )
 
     assert eager_status == relational_status
 
@@ -250,3 +257,97 @@ def test_the_empty_coordinate_builds_on_both_lanes(tmp_path):
         assert result.primal('x').sort('f')['value'].to_list() == [0.0, 30.0, 100.0]
 
     assert eager == relational == 360.0
+
+
+@pytest.mark.parametrize(
+    ('threshold', 'rows', 'objective'),
+    [
+        (999.0, 0, 600.0),
+        (10.0, 1, 360.0),
+    ],
+    ids=['masked out', 'masked in'],
+)
+def test_a_masked_scalar_variable_takes_its_row_with_it(tmp_path, threshold, rows, objective):
+    """Absence spreads through arithmetic at no dimension either (#340).
+
+    Was: the relational lane kept `budget_row` and enforced `sum(x) <= budget`
+    — a constraint the language says should not exist — because a scalar
+    variable's presence was `select()` over no dims, and polars cannot hold a
+    frame with rows and no columns. Present and absent collapsed to the same
+    `(0, 0)` at the moment presence was built, so nothing downstream could
+    restrict on it. Later refused at load instead, which traded a silent wrong
+    answer for a loud divergence; this is the answer.
+
+    The two rungs are the whole property: the mask is data, so the *same file*
+    must drop the row or keep it depending only on what `budget` turns out to
+    be.
+    """
+    model = deepcopy(SCALAR_ROW_MODEL)
+    model['variables']['slack']['where'] = f'budget > {threshold}'
+    path = tmp_path / 'm.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    data = {'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
+
+    m = lpspec_linopy.build(path, data=data)
+    m.solve(solver_name='highs')
+    eager = float(m.objective.value)
+
+    with lps.solve(path, data) as result:
+        relational = result.objective
+        # The row is gone, not slackened: a dropped constraint has no dual.
+        assert result.dual('budget_row').height == rows
+
+    assert eager == relational == objective
+
+
+DATETIME_MODEL = {
+    'dimensions': {'snapshot': {'dtype': 'datetime'}, 'generator': {'dtype': 'str'}},
+    'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['snapshot']}},
+    'variables': {
+        'p': {'foreach': ['snapshot', 'generator'], 'where': "snapshot > '2030-01-02'", 'bounds': {'lower': 0}}
+    },
+    'constraints': {
+        'bal': {
+            'foreach': ['snapshot'],
+            'where': "snapshot > '2030-01-02'",
+            'expression': 'sum(p, over=generator) == load',
+        }
+    },
+    'objectives': {'total': {'sense': 'minimize', 'expression': 'p * cost'}},
+}
+
+
+def test_a_datetime_boundary_is_sayable_on_both_lanes(tmp_path):
+    """A quoted ISO date in a `where`, which had no spelling at all (#460).
+
+    `snapshot > 2030-01-01` and its quoted form both failed to parse, and
+    `snapshot > 0` parsed into a comparison against the *epoch* — so a datetime
+    dimension was usable exactly as long as nothing about the model was
+    conditional on time. There was no way to name a boundary.
+    """
+    path = tmp_path / 'm.yaml'
+    path.write_text(pyyaml.safe_dump(DATETIME_MODEL))
+    days = [datetime.date(2030, 1, d) for d in (1, 2, 3)]
+    frames = {
+        'cost': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [1.0, 5.0]}),
+        'load': pl.DataFrame({'snapshot': days, 'value': [10.0, 20.0, 30.0]}),
+        'snapshot': pl.DataFrame({'snapshot': days}),
+        'generator': pl.DataFrame({'generator': ['wind', 'gas']}),
+    }
+    eager_data = {
+        'cost': pd.Series({'wind': 1.0, 'gas': 5.0}),
+        'load': pd.Series([10.0, 20.0, 30.0], index=pd.Index(days, name='snapshot')),
+    }
+    coords = {'snapshot': pd.Index(days, name='snapshot'), 'generator': pd.Index(['wind', 'gas'], name='generator')}
+
+    m = lpspec_linopy.build(path, data=eager_data, coords=coords)
+    m.solve(solver_name='highs')
+    eager = float(m.objective.value)
+
+    with lps.solve(path, frames) as result:
+        relational = result.objective
+        # only the third day survives the boundary, and it keeps its dtype
+        assert result.primal('p')['snapshot'].dtype in (pl.Date, pl.Datetime('us'))
+        assert result.primal('p').height == 2
+
+    assert eager == relational == 30.0

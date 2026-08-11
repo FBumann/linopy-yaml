@@ -39,7 +39,10 @@ dependencies = [
     # work at the solver boundary, not a dataframe dependency.
     "numpy>=1.26",
     "pyparsing>=3.1",
-    "pydantic>=2.0",
+    # 2.1 is where a validator's own exception reaches `ctx['error']` as the
+    # object rather than its str, which `errors.schema_error` unwraps to keep
+    # the documented class. 2.0 flattens every model error to SchemaError.
+    "pydantic>=2.1",
     "pyyaml>=6.0",
     "highspy>=1.10",
 ]
@@ -90,7 +93,7 @@ gurobi = [
 ]
 
 [project.urls]
-repository = "https://github.com/FBumann/lpspec"
+repository = "https://github.com/fluxopt/lpspec"
 
 [tool.hatch.version]
 source = "vcs"
@@ -155,8 +158,8 @@ docs = [
 dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "ruff==0.16.0",
-    "pyrefly==1.1.1",
+    "ruff==0.16.1",
+    "pyrefly==1.2.0",
     "pre-commit==4.6.1",
     # the shim and the oracle, by reference: the pins live in the extra above,
     # so they cannot drift from what a user installing `lpspec[linopy]` gets
@@ -257,6 +260,13 @@ preset = "strict"
 #                  in the ParseResults handoff.
 #   deprecated   — currently only fires on typeshed's `contextlib.contextmanager`
 #                  overload.
+#
+# `implicit-any-lambda` is left on and suppressed per line in the two grammars.
+# A lambda takes no annotation, and giving the parse action a typed callback
+# only moves the error: pyparsing returns `ParseResults`, whose `__getitem__`
+# is a union, so the body fails where the parameter used to. That is the same
+# handoff `explicit-any` is unpromoted for. Kept on rather than switched off so
+# a lambda outside those grammars still has to say what it takes.
 [tool.pyrefly.errors]
 implicit-import = true
 missing-import = true

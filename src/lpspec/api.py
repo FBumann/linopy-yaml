@@ -28,11 +28,13 @@ Example::
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from lpspec.language.validation import load_schema
-from lpspec.lowering import lower_program
+from lpspec.errors import LpspecWarning
+from lpspec.language.validation import load_model
+from lpspec.lowering import advice, lower_program
 from lpspec.relational.engines.polars.executor import PolarsExecutor
 from lpspec.relational.sinks import solver, writer
 from lpspec.sources import tidy_sources
@@ -40,30 +42,37 @@ from lpspec.sources import tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
     from lpspec.relational.result import Result
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a
 #: consumer that binds no data (``typeset``) must be able to reach it without
-#: reaching the runner. Callers keep saying ``lps.load_schema``.
-__all__ = ['build', 'check', 'load_schema', 'solve', 'write']
+#: reaching the runner. Callers keep saying ``lps.load_model``.
+__all__ = ['build', 'check', 'load_model', 'solve', 'write']
 
 
-def check(model: str | Path | dict[str, Any] | MathSchema) -> MathSchema:
+def check(model: str | Path | dict[str, Any] | Model) -> Model:
     """Compile-check a model without data: parse, expand, validate, lower.
 
     Lowering needs no sources, so this works on a bare YAML file — the CI
     verb for model repositories. Raises :class:`LanguageError` when the model
     uses a construct outside the streaming language, ``ValueError`` for
     schema/expression problems. Returns the validated schema.
+
+    Advice that stops short of an error — a declared dimension nothing uses as
+    an axis, say — is issued as :class:`~lpspec.errors.LpspecWarning`, here
+    and only here: ``check`` is the explicit gate, so the advice never costs a
+    build or a solve.
     """
-    schema = load_schema(model)
-    lower_program(schema)
+    schema = load_model(model)
+    program = lower_program(schema)
+    for note in advice(program):
+        warnings.warn(note, LpspecWarning, stacklevel=2)
     return schema
 
 
 def build(
-    model: str | Path | dict[str, Any] | MathSchema,
+    model: str | Path | dict[str, Any] | Model,
     sources: Mapping[str, Any],
     *,
     coords: dict[str, Any] | None = None,
@@ -80,8 +89,8 @@ def build(
         If the model uses a construct outside the streaming language —
         the message names the construct and its context.
     """
-    schema = load_schema(model)
-    program = lower_program(schema)  # strict: no fallback, errors carry the reason
+    schema = load_model(model)
+    program = lower_program(schema)
     ex = PolarsExecutor()
     try:
         ex.build(program, tidy_sources(schema, dict(sources), coords))
@@ -92,7 +101,7 @@ def build(
 
 
 def solve(
-    model: str | Path | dict[str, Any] | MathSchema,
+    model: str | Path | dict[str, Any] | Model,
     sources: Mapping[str, Any],
     solver_options: Mapping[str, Any] | None = None,
     solver_name: str = 'highs',
@@ -114,8 +123,12 @@ def solve(
     The executor stays attached to the returned :class:`Result`, whose label
     frames back ``result.primal(...)``. Nothing has to be released, though
     ``result.close()`` drops a large model early if you want the memory back.
+
+    The solver sink is resolved before the build, for the reason ``write``
+    checks the suffix first: a caller who named a sink nothing can serve
+    should not pay for a model.
     """
-    solver(solver_name)  # before the build, for the reason `write` checks the suffix first
+    solver(solver_name)
     ex = build(model, sources, **build_kwargs)
     try:
         return ex.solve(solver_options=solver_options, solver_name=solver_name)
@@ -125,7 +138,7 @@ def solve(
 
 
 def write(
-    model: str | Path | dict[str, Any] | MathSchema,
+    model: str | Path | dict[str, Any] | Model,
     sources: Mapping[str, Any],
     out: str | Path,
     **build_kwargs: Any,

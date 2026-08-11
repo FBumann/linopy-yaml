@@ -1,9 +1,10 @@
 name: CodSpeed
 
-# Cost, in the same terms as ci.yml and bench.yml: one billed job, ~3 minutes,
-# on a free runner, with no secret to manage. CodSpeed is free for public
-# repositories, so this is the cheapest way to run `bench/regressions/` and the
-# only one that runs unasked.
+# Cost, in the same terms as ci.yml and bench.yml: one free-runner job per pull
+# request, plus a metered macro-runner job per merge and per `trigger:bench`
+# label. No secret to manage either way — the wiring is OIDC. CodSpeed itself is
+# free for public repositories; the macro runner is the one thing here that is
+# not, and it is fenced accordingly.
 #
 # **It measures the suite that already exists.** `bench/` is one pytest-benchmark
 # suite, and `--codspeed` swaps in CodSpeed's `benchmark` fixture where
@@ -19,18 +20,68 @@ name: CodSpeed
 # service stores the number for every commit on `main`, so a pull request gets
 # the comparison for one pass.
 #
-# `memory`, and only `memory`. `walltime` wants CodSpeed's bare-metal runners,
-# which are metered — and a free runner's clock is the noise bench.yml already
-# refuses to gate on, so paying for a machine to measure it is not what cheap
-# means. `simulation` is CodSpeed's usual default and is wrong here for a
-# different reason: it runs the workload under an emulator at a large multiple
-# of real time, and polars is multi-threaded native code — the slowdown lands on
-# the rungs and the thread count lands on the instruction count.
+# **Two instruments, and each gets the runner it needs.** `memory` tracks
+# allocations, which a free runner counts as well as any other, so it runs on
+# every event. `walltime` measures a clock, and a shared clock is the noise
+# bench.yml already refuses to gate on — so it goes on CodSpeed's bare-metal
+# `codspeed-macro` runner or it is not worth running. Do not substitute a free
+# runner for the macro one: that produces a series nobody can read.
+#
+# **Both live in this one file, and that is load-bearing rather than tidy.**
+# CodSpeed aggregates a commit's results per workflow, so splitting walltime
+# into its own file separates the two instruments into two series and the
+# per-commit view stops being one thing. linopy's workflow carries the same
+# note; it is the reason neither of us split them.
+#
+# This job was memory-only for a while, and the reason is worth keeping. Macro
+# runners are *"only available for organizations and not for personal
+# accounts"* (CodSpeed docs), and the repository was owned by a user — so #493
+# added a walltime job that queued against a label nothing answered and sat
+# until it timed out. Moving to the fluxopt org (#500) is the entire difference;
+# nothing about the job below was wrong.
+#
+# **One setting outside this file has to be right.** A public repository has to
+# allow the runners under Organization Settings > Actions > Runner groups >
+# Default. Without it the job queues exactly as it did in #493, and the symptom
+# is indistinguishable from that one — so check there first, before reading
+# anything here as broken.
+#
+# That machine is metered, which is the whole of why this is fenced: every merge
+# to `main` that changes code, a pull request only when somebody applies
+# `trigger:bench` — the label bench.yml is already driven by. Bare metal should
+# not run fork code unasked either. The one merge that does not qualify is the
+# release commit; see `paths-ignore` under `on:`.
+#
+# What it buys is the signal the tree has nowhere else. bench.yml gates on
+# memory, this job's other half measures memory, and the wall-clock ladder is a
+# thing a contributor runs by hand on an idle laptop — so build CPU time was
+# **measured nowhere automatic**. Every merge is one point in a series, and
+# merges here are squashes, so a step names the pull request that caused it
+# without anybody bisecting.
+#
+# `simulation` is CodSpeed's usual default and is wrong here whatever the
+# runner: it runs the workload under an emulator at a large multiple of real
+# time, and polars is multi-threaded native code — the slowdown lands on the
+# rungs and the thread count lands on the instruction count.
 #
 # Not a gate, on purpose. `continue-on-error` keeps it out of the merge
 # decision and no branch ruleset names it; bench.yml stays the thing that fails
 # a pull request. This one is a report that arrives without being asked, which
 # is worth having precisely because it is not worth blocking on.
+#
+# There is a third switch, and it is the one not visible from this file:
+# CodSpeed's own check reports through the app, not through this workflow, so
+# neither line above reaches it. It is set to **not fail on a regression** in
+# the project's CodSpeed settings, which is what makes its verdict match the
+# intent above rather than contradict it.
+#
+# That is a measurement decision, not a preference. bench.yml gates memory at
+# 20% because identical code spreads 5.6% on `dispatch-m` and 16% on the
+# smallest workload; a threshold under that reports noise as a finding. The app
+# failed a bench-only pull request at -12.96% and a changelog-only one at
+# -9.22%, both inside that band and neither touching src/ — which is the
+# `10% gate would cry wolf` line in bench.yml, arriving from a second instrument.
+# Restore a failing threshold only alongside a number bench.yml would recognise.
 #
 # **Nothing is measured until a maintainer connects the repository to the
 # CodSpeed GitHub app.** Until then the job runs and uploads nothing. The wiring
@@ -39,14 +90,65 @@ name: CodSpeed
 on:
   push:
     branches: [main]
-  # required for a report to have somewhere to land
+    # **Only what cannot change what the benchmark executes.** A merge that
+    # leaves the built model, the workload and the installed versions identical
+    # would spend a metered macro run reproducing the previous commit's number.
+    # The release commit is the standing case — release-please writes CHANGELOG
+    # and manifest and touches no source, the git tag being the version — and at
+    # the alpha cadence those are a large share of merges.
+    #
+    # That principle is the whole of the list, and it excludes some entries that
+    # look obviously safe. `pyproject.toml` and `uv.lock` decide which polars is
+    # installed, and a floor moving under us is precisely what this series is for.
+    # `bench/` is the workload. This file is the instrument. None of the three
+    # may be added here however documentation-shaped a particular diff to them is.
+    #
+    # **Config is listed by path, never by extension.** `**.md` is safe because
+    # no markdown in this tree reaches a build; `**.yaml` would not be, because
+    # `bench/models/*.yaml` *are* the benchmarked models and `examples/**` and
+    # `tests/golden/model.yaml` are models too. An extension glob cannot tell a
+    # tool's configuration from a program's input, so the config entries below
+    # are named one by one and a new one earns its line by being read.
+    #
+    # `paths-ignore` skips only when *every* changed file matches, and merges here
+    # are squashes, so a pull request touching docs and `src/` together is still
+    # measured. The failure mode to watch is the reverse: a path added to this
+    # list that turns out to reach the build hides a regression in silence.
+    #
+    # A skipped commit has no number, which the concurrency note below calls a
+    # hole the next pull request falls into. It is not one for these paths: the
+    # hole sits at a commit whose executable tree is identical to its parent, so
+    # the fallback compares against the same code it would have. The cost is
+    # cosmetic and worth naming because it reads like a fault — a pull request
+    # merged after one of these is footnoted `unexpected-base`.
+    paths-ignore:
+      - '**.md'
+      - docs/**
+      - LICENSE
+      - .gitignore
+      - mkdocs.yml
+      - .readthedocs.yaml
+      - .pre-commit-config.yaml
+      - .github/dependabot.yml
+      - .release-please-config.json
+      - .release-please-manifest.json
+  # required for a report to have somewhere to land. `labeled` is on the list
+  # because the default triple stops at `reopened`, and without it applying
+  # `trigger:bench` to an open pull request would re-trigger nothing — the
+  # walltime job below would be reachable only by pushing another commit.
   pull_request:
-  # CodSpeed dispatches this itself to backfill a baseline for existing commits
+    types: [opened, synchronize, reopened, labeled]
+  # CodSpeed dispatches this itself to backfill a baseline for existing commits.
+  # Only the memory job takes it — see the `if:` on walltime for why the metered
+  # instrument declines a trigger somebody else fires.
   workflow_dispatch:
 
+# `main` may not cancel: CodSpeed keeps one number per commit and reads a pull
+# request against its own merge base, so a dropped run is a hole the next PR
+# falls into. The cost is that a burst of N merges takes N metered runs.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   memory:
@@ -85,7 +187,68 @@ jobs:
       # individually and its guidance is to stay under ~2M of them, which polars
       # may or may not respect at `m`. Widen it on evidence from this job rather
       # than on a guess made before it ever ran.
+      #
+      # **One thread, because peak is max simultaneous liveness and that is a
+      # race.** Unpinned, this measures the runner: at 1/4/8 threads `transport/s`
+      # peaks at 176/194/216 MB with run-to-run spread 1.5/3.2/3.6%. Not the peak
+      # a caller sees — `bench.yml` and `docs/benchmarks.md` own that one; this
+      # job needs a comparable series instead, and pays realism for it. Steps the
+      # series where it lands. Memory only: walltime measures multi-threaded
+      # native code and its macro runner is already stable.
       - uses: CodSpeedHQ/action@v5
+        env:
+          POLARS_MAX_THREADS: 1
         with:
           mode: memory
           run: uv run --no-sync pytest bench --arms lpspec --sizes s --skip-gate --codspeed
+
+  walltime:
+    name: Wall time (macro runner)
+    # Two events reach the macro runner and no others: a push that landed on
+    # `main`, and a pull request carrying the label bench.yml already uses.
+    # Metered minutes are the reason it is not automatic on pull requests, and
+    # bare metal not running fork code unasked is the second.
+    #
+    # Written as an allowlist rather than `event_name != 'pull_request'`, which
+    # is what linopy has and what this job shipped with. That form also admits
+    # `workflow_dispatch` — and this workflow is dispatched *by CodSpeed*, which
+    # backfills baselines on its own schedule and against whatever ref it likes.
+    # The memory job is free and should take those; walltime is the metered one
+    # and must not. The `push` arm names the ref too, so adding a branch to the
+    # trigger above widens the free instrument and not this one.
+    if: >-
+      ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' &&
+           contains(github.event.pull_request.labels.*.name, 'trigger:bench')) }}
+    # **Not a free runner.** `walltime` on a shared clock is the noise bench.yml
+    # refuses to gate on; measuring it there would produce a series nobody could
+    # read. This is the one metered thing in the tree, which is why it is fenced
+    # to merges and to a label somebody types.
+    runs-on: codspeed-macro
+    timeout-minutes: 30
+    continue-on-error: true
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - run: uv sync --no-default-groups --group codspeed
+
+      # `m l`, where the memory job takes `s`. That job is capped by CodSpeed's
+      # ~2M-allocation guidance; this one is not capped by anything except the
+      # meter, and `s` is short enough that per-run overhead is a large share of
+      # what gets recorded. `l` earned its slot when #520 showed the two rungs
+      # answering differently: fixed per-declaration overhead read as -5..-10%
+      # at `m` and amortized to ±4% at `l`, where peak — the product claim —
+      # moved the other way. A rung the meter pays for exists to catch exactly
+      # that divergence.
+      - uses: CodSpeedHQ/action@v5
+        with:
+          mode: walltime
+          run: uv run --no-sync pytest bench --arms lpspec --sizes m l --skip-gate --codspeed

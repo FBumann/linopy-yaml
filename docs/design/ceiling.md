@@ -2,10 +2,11 @@
 
 **What may enter the language, and what may never.** The structure that holds
 it is [ARCHITECTURE](../ARCHITECTURE.md); the rules a model must obey are
-[SPEC §0](../SPEC.md#0-the-laws); what is planned or refused is
-[ROADMAP](../ROADMAP.md). This page is the argument in between: the test a
+[SPEC §0](../SPEC.md#0-the-laws); why the project exists and where it is going
+is [ROADMAP](../ROADMAP.md). This page is the argument in between: the test a
 candidate primitive has to pass, why capability is a second axis rather than
-part of the ceiling, and what composition would force.
+part of the ceiling, [what has been refused and why](#deliberate-non-primitives),
+and what composition would force.
 
 It is a claim, so it carries evidence — math a ported model needed and this
 language could not state becomes a ledger row in
@@ -13,7 +14,7 @@ language could not state becomes a ledger row in
 
 ## Two tiers, and the ceiling
 
-**Primitives** (operators, `sum`, `group_sum`, `roll`/`shift`, `where`
+**Primitives** (operators, `sum`, `sum(group_by=)`, `shift`, `where`
 predicates) set the expressive ceiling, and each costs the full two-backend tax:
 eager implementation, plan node + locality class, executor case, lowering case,
 differential tests, SPEC entry. **`macros:` / `expressions:`** are pure AST
@@ -40,7 +41,7 @@ made for a while. Nothing about `variable × variable` is non-relational or
 non-local — a coordinate-aligned product is a pointwise self-join. Degree 1 is
 where the language *is*, not where it must stay: what actually gates quadratic is
 **what a sink can ingest**, which is the second axis below, and the sequence is
-[ROADMAP Track 3](../ROADMAP.md#track-3--capabilities-and-the-degree-line). The
+[Track 3](https://github.com/fluxopt/lpspec/issues/472). The
 same is true of SOS, indicator and semi-continuous. Read this page as the
 *streamability* closure and nothing more.
 
@@ -103,7 +104,7 @@ generation — because there is no "before" for it to happen in.
 **Outside the plan is not outside the engine**, and the difference is the whole
 of decomposition. A plan cannot contain a loop; a *process* may loop over plans,
 each with its shape fixed before its own data. Rolling horizon is that shape and
-is in scope ([ROADMAP Track 2](../ROADMAP.md#track-2--the-operational-surface)); so are
+is in scope ([Track 2](https://github.com/fluxopt/lpspec/issues/471)); so are
 Benders and successive substitution. Nor does appending a cut cost the label
 contract the way removal would: `var_label` is a `ROW_NUMBER()` over the rows
 surviving the `where` mask, so adding *rows* moves no column and renumbers no
@@ -141,17 +142,39 @@ so capability is not a flat set. The whole-Hessian handoff is an implementation
 difference, not a rule-4 violation.
 
 Making this a declared per-sink capability set, with `check` taking an optional
-sink, is [ROADMAP Track 3](../ROADMAP.md#track-3--capabilities-and-the-degree-line).
+sink, is [Track 3](https://github.com/fluxopt/lpspec/issues/472).
+
+## Deliberate non-primitives
+
+The admissibility test above says what *may* enter. This is what has been asked
+for and refused, with the reason and the rewrite — so a request that has already
+been answered is answered once rather than re-argued. Parity with another tool
+is not by itself a reason to add anything.
+
+| Request | Why | Instead |
+|---|---|---|
+| Data prep — resampling, clustering, IO, units | not math | preprocess; pass a parameter |
+| Arbitrary array ops (`merge`, `reindex`) | unbounded; xarray with extra steps | data prep |
+| Domain helpers (`reduce_carrier_dim`) | encodes one domain into the language | component libraries over generic primitives |
+| Normalisation (`x / sum(x)`) | a *variable divisor* is rational, not polynomial — no sink takes it at any degree | state the ratio as a constraint, or fix the denominator |
+| Conditionals, iteration, data-dependent structure **inside one plan** | destroys the closed AST | `where` masks + `foreach` dims. A *process* may loop over plans |
+| A Python API for constructing models | hard rule 5 — the model is the file you review and diff | YAML. Whether Python may *emit* declarations is [#381](https://github.com/fluxopt/lpspec/issues/381) |
+
+Genuinely unsayable math goes to a declared `escape:` island
+([#38](https://github.com/fluxopt/lpspec/issues/38)) — named in the file,
+bounded by the preceding `where`, terminal, and billed against a label budget
+before any Python runs. It buys back *relational* and *local*; it cannot buy
+back degree, since it returns affine COO rows either way.
 
 ## Composition (component libraries)
 
 A component library is a fixed set of parametrised templates agreeing on a
 port/flow convention, merged into one program, wired through a data connectivity
-table and a single `group_sum` balance. **Topology is data, not structure** —
+table and a single `sum(group_by=)` balance. **Topology is data, not structure** —
 wiring a specific system is rows in a connectivity table, never generated YAML,
 so structure is bounded by the number of component *types* while cardinality
 lives entirely in data. Schema merge is therefore a pure **compose-then-build**
-step producing one `MathSchema` before a single lower/stream pass (`linopy.extend`
+step producing one `Model` before a single lower/stream pass (`linopy.extend`
 is a linopy-lane shim; native merge is #30). Namespacing via qualified names is
 the missing primitive (#29) — the port/flow surface stays deliberately shared, as
 the coupling contract between templates — and signs and bidirectional flows need
@@ -159,13 +182,14 @@ bounds-as-expressions (#31).
 
 Whatever genuinely is not data (variable port counts, runtime-unknown component
 types) belongs in a thin layer emitting **more rows or more templates, never
-per-instance YAML** — but **that layer has nothing *supported* to call**. A seam
-does exist: `api.load_schema` accepts `dict | MathSchema`, so a programmatically
-built model already goes through validation, expansion, resolution and dim
-checking. It is just undocumented and unversioned, while rule 5 refuses a Python
-modeling API and this section forbids generated YAML. Composition therefore
-forces that contract earlier than the roadmap has it: not a general modeling API,
-but a narrow, versioned way to emit declarations. Should anything ever be
-blessed, it is the schema level and not the plan level — that much is settled;
-what is not is whether to bless the seam at all, and namespacing (#29) or a
-native schema merge (#30) is what would force the question.
+per-instance YAML** — and that layer has a supported thing to call. Every
+verb takes `str | Path | dict | Model`, so a programmatically built model goes
+through validation, expansion, resolution and dim checking exactly as a file
+does, and `Model.to_yaml` gives it the review copy rule 5 requires.
+
+That is the whole of the blessed contract, and it is at the schema level rather
+than the plan level. It is a narrow way to emit *declarations*, not a Python
+modeling API — which rule 5 still refuses, and which is why this section still
+forbids generated YAML text. Namespacing (#29) and a native schema merge (#30)
+were closed against it: a library composing optional features varies its
+declarations by data, and a dict is already how you say that.

@@ -5,13 +5,13 @@ this file in the same PR. The language is [docs/SPEC.md](SPEC.md); what may
 enter it is [docs/design/ceiling.md](design/ceiling.md); plans and refusals
 are [docs/ROADMAP.md](ROADMAP.md); measured results are
 [docs/benchmarks.md](benchmarks.md), produced by the harness in
-[bench/](https://github.com/FBumann/lpspec/blob/main/bench/README.md) — which is
+[bench/](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — which is
 also how a claim here gets falsified.
 
 `python examples/walkthrough.py` executes the pipeline below stage by stage
 and prints what each one produces — the same public calls `lps.solve` makes,
 so the demonstration cannot drift from the code. Its output is committed as
-[examples/walkthrough.out](https://github.com/FBumann/lpspec/blob/main/examples/walkthrough.out) and asserted line for line
+[examples/walkthrough.out](https://github.com/fluxopt/lpspec/blob/main/examples/walkthrough.out) and asserted line for line
 (`tests/test_walkthrough.py`), so reading it is the same as running it — and a
 stage that starts telling a different story shows up as a diff in that file.
 
@@ -22,7 +22,7 @@ property makes everything else legal: the whole model can be compiled — to eag
 xarray/linopy calls, or to a logical plan executed relationally and streamed to a
 sink — with both paths provably meaning the same thing. Every rule below protects
 it. (A *declared* memory ceiling is not something we have; see
-[Track 4](ROADMAP.md#track-4--the-memory-axis).)
+[the memory axis](ROADMAP.md#where-it-is-going).)
 
 **Four directories, four fences.** One produces the AST; three consume it and
 know nothing of each other. Each box below is a directory, and its subtitle is
@@ -81,7 +81,7 @@ flowchart TB
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file (mps planned)"]
-        TABLES --> DIRECT["sinks/solvers/<br/>COO batches → the solver, chosen by name<br/>highs (ships) · gurobi (extra)"]
+        TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi (extra)"]
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
@@ -136,7 +136,7 @@ back.
 ```mermaid
 flowchart LR
     Y(["your math, written once<br/>one YAML file"]) --> AST
-    AST["<b>the whole model</b> — <code>MathSchema</code><br/>names typed, dims checked, degree judged<br/><i>before a byte of data is read</i>"]
+    AST["<b>the whole model</b> — <code>Model</code><br/>names typed, dims checked, degree judged<br/><i>before a byte of data is read</i>"]
     AST --> SHOW["<b>show it</b><br/>typeset · CLI<br/><i>no data, no solver</i>"]
     AST --> CHECK["<b>check it</b><br/>parse → expand → validate → lower<br/><i>no data, no solver</i>"]
     AST --> RUN["<b>run it</b><br/>solver · LP file · linopy"]
@@ -151,7 +151,7 @@ flowchart LR
 ```
 
 **Only one arrow carries data, and it arrives after the model is already
-judged.** That is the contract the waist is: `MathSchema` is complete —
+judged.** That is the contract the waist is: `Model` is complete —
 names typed, dims checked, degree decided — before a source is bound, so
 `show it` and `check it` are not cut-down versions of a build, they are the
 same model with the data arrow missing. `check` is the build's own front half
@@ -169,11 +169,19 @@ can build, in one walk of the resolved AST, holding no opinion the lanes do not
 already hold: a `piecewise:` block prints as the λ-formulation it expands to,
 not as the sugar it was written as. How names *print* is the one thing it does
 not read off the model, since a symbol table is presentation — hence a sidecar
-file (`examples/symbols/`) rather than keys on `MathSchema`, and a model with no
+file (`examples/symbols/`) rather than keys on `Model`, and a model with no
 table still renders. It splits the way `relational/sinks/writers/` does, one
 module per output format, so a format is a spelling table rather than a second
 walk that could disagree. `python -m lpspec <format>` is its shell front, one verb per
 entry in `typeset.FORMATS`: a consumer that needs no data needs no runner.
+
+**That front is typeset's, not the package's**, and it is not the start of a
+command line. It exists because rendering a model belongs in a Makefile beside
+`pdflatex`; the rule that keeps it from growing is that **no verb may become a
+second way to spell the source mapping** — `--source name=path` is `lps.solve`'s
+dict with worse errors, and `solve_over`'s axis and `carry` cannot be said in
+flags at all. A shell-driven *solve* would therefore have to arrive as one path
+argument over a run manifest, never as flags.
 
 That claim is enforced twice, because a renderer that imports only `language/`
 still pays for polars if some language module does: a path-scoped import rule
@@ -197,9 +205,9 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 
 | | you want to | the call | data? |
 |---|---|---|---|
-| **load it** | parse and validate, and stop there | `load_schema` → `MathSchema` | no |
+| **load it** | parse and validate, and stop there | `load_model` → `Model` | no |
 | **show it** | typeset for a paper or a review | `to_latex` · `to_typst` · `to_markdown` (spelling: `SymbolTable`) | no |
-| | drive it from a shell | `python -m lpspec <format>` | no |
+| | render one from a Makefile | `python -m lpspec <format>` — the only shell front, and typeset-only | no |
 | | *watch what a build is doing* | | |
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
 | | *will that solver take it, and how big is it* | | |
@@ -272,10 +280,10 @@ choice load-bearing in the language's rulebook.
    backend cannot hold its own opinion about what a name refers to. The waist is
    closed from the front too: nothing under `language/` imports `lowering`,
    `sources`, `api` or any consuming subpackage (`LANGUAGE_MAY_IMPORT`), so what
-   a model *means* cannot depend on what is done with it. `load_schema` sits
+   a model *means* cannot depend on what is done with it. `load_model` sits
    inside that fence — parsing and validating is the language's own job, and a
    consumer that binds no data must reach it without reaching a runner; `api.py`
-   re-exports it so callers keep saying `lps.load_schema`.
+   re-exports it so callers keep saying `lps.load_model`.
 2. **The engine knows nothing about linopy, xarray or YAML.** `relational/` goes
    plan → engine → a solver sink → solver, with linopy's semantics as a spec to match
    rather than code to share; it never sees the schema, the AST, or the eager
@@ -297,9 +305,9 @@ choice load-bearing in the language's rulebook.
 4. **Backend-visible YAML files are self-contained.** No Python-side state
    (registries, session objects) may change what a file means.
 5. **The public interface is a declared model, not a Python API.** YAML is what
-   we ship and document; the contract underneath is `MathSchema`, and whether
+   we ship and document; the contract underneath is `Model`, and whether
    that seam is ever blessed is open
-   ([#381](https://github.com/FBumann/lpspec/issues/381)). The Python surface is
+   ([#381](https://github.com/fluxopt/lpspec/issues/381)). The Python surface is
    the runner (`api.py`) and the driver over it (`strategy.py`); the plan is
    internal. The whole of it is
    [nineteen names](#the-python-surface), pinned by a test — so the surface grows
@@ -338,9 +346,12 @@ what makes it visible in a signature rather than only in a docstring.
 **Tidy tables.** Parameters are `(dims…, value)`; a variable frame is
 `(dims…, var_label)`, one row per *existing* variable; a linear expression is
 `(frame dims…, var_label, coeff)` plus a constant part; constraint rows are
-`(row, sense, rhs)`; the coefficient matrix is COO `(row, col, coeff)`. Masks
+`(row, sense, rhs)`; the coefficient matrix is COO `(row, col, coeff)` while
+declarations build, and lands as CSR at assembly — `(col, coeff)` in row-major
+order plus a `row_starts` offset array, the same three arrays a solver takes,
+at 12 bytes per entry. Masks
 are **row absence** — no NaN sentinels, no `-1` labels. Broadcasting is a join,
-`sum` drops coordinate columns, `group_sum` joins the dim table and projects a
+`sum` drops coordinate columns, `sum(group_by=)` joins the dim table and projects a
 declared coordinate in place of the grouped dim. Neither aggregates: both
 rewrite a fragment's dim tuple, and duplicates collapse in the terminal
 `SUM(coeff) GROUP BY row, col` at assembly.
@@ -356,15 +367,15 @@ in the lane is order-free, which is what lets the query planner rearrange it.
   dimensions' declared ordinals. A contract, not a side effect: it is what makes
   a build reproducible run to run.
 - Variables and constraint rows are the same operation over different frames and
-  it is written once (`Labeller.frame`), which reaches the number three ways
-  depending on how much of the product survives the mask — arithmetic, factored,
-  counted — and they must agree integer for integer. That agreement is why
-  labelling is a module with stated inputs rather than three methods among
-  twenty: nothing else about a build can move an index.
-- The same order comes **back**: `primal` / `dual` / `to_parquet` sort on the
-  label before handing rows over, the order the LP sink writes. Stated at the
-  read rather than assumed, because a `where` decides which rows survive and a
-  join decides nothing about the order they arrive in.
+  it is written once (`labels.frame`): number the surviving coordinates by their
+  row-major position in the declared product. A mask that cannot see the leading
+  dims leaves the survivors a *rectangle*, so only the masked suffix is
+  materialised — a guarded shortcut inside that one function, which must reach
+  the integers the general path would have. That is why labelling is a module
+  with stated inputs rather than a method among twenty: nothing else about a
+  build can move an index.
+- The same order comes **back**: `primal` / `dual` / `to_parquet` read the
+  label frame, which was numbered in that order, and the LP sink writes it.
 
 **The plan is affine-by-design.** No node introduces variables or constraints as
 a side effect of an expression; formulations are model *transformations*.
@@ -383,11 +394,11 @@ the engine holds. The bare-install CI job runs the suite with neither present.
 
 **Sinks are capped, explicitly.** Today every sink expresses the same three
 streams and no more: `cols` (bounds, objective coefficients, integrality),
-`rows`, and `A` in COO. The upgrade path is two further streams — `sos_sets`
+`rows`, and `A` in CSR. The upgrade path is two further streams — `sos_sets`
 and `genconstr` — plus a semi-continuous threshold on `cols`. Unlike the three
 that exist, those two would land *unevenly*, because the destinations differ
 per sink (see "Capability is not the ceiling"); that unevenness is what
-[Track 3](ROADMAP.md#track-3--capabilities-and-the-degree-line) exists to make declared rather
+[Track 3](https://github.com/fluxopt/lpspec/issues/472) exists to make declared rather
 than discovered at solve time.
 
 **A sink is one of two things, and the directory says which.** A **solver**
@@ -413,18 +424,18 @@ must stay off the import path of a caller who does not use it.
 | Module | Role |
 |---|---|
 | `language/_yaml.py` | the only place a file is read: YAML 1.2 booleans, duplicate keys refused |
-| `language/schema.py` | pydantic schema incl. `expressions:` / `macros:` / `piecewise:` |
+| `language/model.py` | pydantic schema incl. `expressions:` / `macros:` / `piecewise:` |
 | `language/expression_parser.py`, `language/where_parser.py` | text → core AST; grammar only, dependency-free |
 | `language/expansion.py` | named-expression / macro substitution (pre-dispatch) |
 | `language/resolution.py` | one flat namespace; `NameNode` → typed `Variable`/`Parameter`/`Dimension` nodes |
 | `language/dimensions.py` | static dim-set checking over the resolved AST |
 | `language/degree.py` | degree 1: the ceiling's first clause, asked by both lanes and stated by neither |
 | `language/helpers.py` | the closed set of built-in operators: their *names* and *call shapes* — no registry |
-| `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_schema`, the language's front door |
+| `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_model`, the language's front door |
 | `language/piecewise.py` | `piecewise:` → λ-formulation declarations |
-| `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_schema` |
-| `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/FBumann/lpspec/blob/main/src/lpspec/typeset/README.md)) |
-| `__main__.py` | `python -m lpspec <format>` — a shell front for the verbs that bind no data |
+| `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_model` |
+| `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/typeset/README.md)) |
+| `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `convex:` curvature guard, which is the one check that needs values |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the exception hierarchy; the one module either fenced side may import |
@@ -435,13 +446,13 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/chunking.py` | how a batched pass sizes its chunk: budget ÷ the width of one unit |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
-| `relational/engines/polars/labels.py` | which coordinate gets which solver index; three routes to one number, which must agree |
+| `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
 | `relational/engines/polars/binding.py` | a caller's sources → `BoundSources`, the frozen frames every query is written against |
 | `relational/engines/polars/executor.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
 | `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued coords |
 | `relational/sinks/tables.py` | what every sink reads and no more — the four frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
-| `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/FBumann/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
+| `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
 | `linopy/__init__.py` | opt-in shim: `build` / `extend` on a `linopy.Model` |
 | `linopy/loader.py` | data coercion to `xr.Dataset`, master coords |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
@@ -484,7 +495,7 @@ emits declarations, and declarations are language.
 
 The test cuts the other way too, which is what keeps it from swallowing
 everything. `lowering.py` legitimately refuses **plan shapes** — `shift(by=)`
-must be an integer literal, `group_sum(by=)` a declared coordinate — because
+must be an integer literal, `sum(group_by=)` a declared coordinate — because
 those are about what a plan node can represent, and a second opinion about them
 is not a bug, it is the other lane's own business. What a consumer may not do is
 state a rule about the *language* that another consumer then has to restate.
@@ -502,7 +513,7 @@ suffix**, which is what keeps the three vocabularies from colliding:
 
 | Layer | Suffix | Example |
 |---|---|---|
-| YAML block (`language/schema.py`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
+| YAML block (`language/model.py`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
 | Core AST (`*_parser.py`) | `Node` | `VariableNode`, `DimensionComparisonNode` |
 | Logical plan (`relational/plan.py`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
 
@@ -542,12 +553,12 @@ read back by joining labels to coordinates.
 extra and imported inside the function), or one in `writers/` keyed by suffix in
 `WRITERS`. Nothing above it changes — no method on the executor, no branch in
 `api.py`, no name on the Python surface. The
-[README](https://github.com/FBumann/lpspec/blob/main/src/lpspec/relational/sinks/README.md)
+[README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md)
 is the full list, and `tests/test_architecture.py` checks the shape off the path.
 
 **Add a consumer of the AST** (a renderer, a checker, a report): a directory
 beside `typeset/`, a fence test naming what it may import, and a walk. It reads
-`language.load_schema` and stops there — if it needs the plan it is a lane, not
+`language.load_model` and stops there — if it needs the plan it is a lane, not
 a consumer, and the ceiling doc is the conversation to have first.
 
 **Add a primitive:** grammar (usually free — `f(x, k=v)` already parses) →

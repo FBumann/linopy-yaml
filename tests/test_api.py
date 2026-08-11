@@ -11,6 +11,7 @@ dataframe library beyond the engine's own. The tests that exercise the bridges
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import textwrap
@@ -20,6 +21,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from lpspec.language.model import Model
 from tests.conftest import schema_of, solve_lp_file
 
 
@@ -118,10 +120,10 @@ def test_runtime_is_linopy_free(dispatch_yaml):
     assert 'LINOPY_FREE_OK' in out.stdout
 
 
-def test_check_and_load_schema_need_no_data(dispatch_yaml):
+def test_check_and_load_model_need_no_data(dispatch_yaml):
     """The model stands for itself: the schema is read from the file when
     wanted, never carried on a built model."""
-    for schema in (lps.check(dispatch_yaml), lps.load_schema(dispatch_yaml)):
+    for schema in (lps.check(dispatch_yaml), lps.load_model(dispatch_yaml)):
         assert schema.variables['p'].foreach == ['snapshot', 'generator']
         assert schema.parameters['load'].dims == ['snapshot']
 
@@ -130,7 +132,7 @@ def test_check_and_load_schema_need_no_data(dispatch_yaml):
     ('expression', 'match'),
     [
         ('sum(p ** 2, over=generator)', r"operator '\*\*'"),
-        # the CI verb enforces degree 1 with no data bound (ROADMAP, degree axis)
+        # the CI verb enforces degree 1 with no data bound (docs/design/ceiling.md)
         ('sum(p * p, over=generator)', 'degree 2'),
     ],
 )
@@ -171,8 +173,13 @@ def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispa
     assert set(SOLVERS) == {'highs', 'gurobi'}
 
 
-def test_multi_file_composition_reserved(dispatch_yaml):
-    with pytest.raises(NotImplementedError, match='issues/30'):
+def test_a_list_of_models_is_refused(dispatch_yaml):
+    """Composition is merging declarations, not passing several models.
+
+    The message points at the dict, because a caller holding two files has
+    somewhere to go — #30 declined the native merge rather than deferring it.
+    """
+    with pytest.raises(TypeError, match='merge the declarations'):
         lps.check([dispatch_yaml, dispatch_yaml])
 
 
@@ -251,7 +258,7 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
     so `objective` was a snapshot while `primal` was live — one result
     disagreeing with itself after a second solve, silently and with plausible
     numbers. Nothing supported re-binds data yet, so the bound has to be moved
-    the way the planned in-place update will (ROADMAP 2c: `changeColsBounds`
+    the way the planned in-place update will (#382: `changeColsBounds`
     against labels that are already solver indices).
     """
     key = ['snapshot', 'generator']  # a read is a join, so compare on coordinates
@@ -375,3 +382,48 @@ def test_to_dataset_defaults_to_every_variable():
     assert sorted(ds['p'].dims) == ['generator', 'snapshot']
     assert list(ds['shed'].dims) == ['snapshot']  # keeps its own dims
     assert set(subset.data_vars) == {'shed'}
+
+
+@pytest.mark.parametrize(
+    ('mistake', 'raw'),
+    [
+        pytest.param('unknown key', {'dimensionz': {}}, id='unknown-key'),
+        pytest.param('bad dtype', {'dimensions': {'g': {'dtype': 'complex'}}}, id='bad-dtype'),
+        pytest.param('unknown version', {'version': 99}, id='unknown-version'),
+        pytest.param(
+            'undeclared name',
+            {
+                'dimensions': {'g': {'dtype': 'str', 'values': ['a']}},
+                'constraints': {'c': {'foreach': ['g'], 'expression': 'nope <= 1'}},
+            },
+            id='undeclared-name',
+        ),
+    ],
+)
+def test_a_wrong_model_raises_one_tree(mistake: str, raw: dict[str, object], tmp_path):
+    """Every documented door answers with `LpspecError` (#527).
+
+    Model checking happens in two places — pydantic's validators and the
+    language checkers — and they failed differently, so `except LpspecError`,
+    the thing `docs/api.md` tells a caller to write, missed the majority of
+    model mistakes and a caller had no way to know which.
+
+    `Model.__init__` is *not* in this list, and cannot be: defining one makes
+    pydantic route validation through it, which runs every after-validator
+    twice and the first time with no context, breaking `extend()`.
+    """
+    doors = {
+        'lps.load_model': lambda: lps.load_model(raw),
+        'lps.check': lambda: lps.check(raw),
+        'lps.solve': lambda: lps.solve(raw, {}),
+        'lps.write': lambda: lps.write(raw, {}, str(tmp_path / 'm.lp')),
+        'Model.model_validate': lambda: Model.model_validate(raw),
+        'Model.model_validate_json': lambda: Model.model_validate_json(json.dumps(raw)),
+    }
+    for door, call in doors.items():
+        with pytest.raises(lps.LpspecError):
+            call()
+        try:
+            call()
+        except lps.LpspecError as exc:
+            assert 'errors.pydantic.dev' not in str(exc), f"{door}: {mistake} leaks pydantic's envelope"

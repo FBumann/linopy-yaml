@@ -8,7 +8,12 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from lpspec.errors import DataError, duplicate_coordinate_message, sparse_divisor_message
+from lpspec.errors import (
+    DataError,
+    duplicate_coordinate_message,
+    sparse_divisor_message,
+    uncovered_constant_message,
+)
 from lpspec.language.expression_parser import (
     BinaryOperatorNode,
     ComparisonNode,
@@ -20,11 +25,11 @@ from lpspec.language.expression_parser import (
 )
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 
 def build_master_coords(
-    schema: MathSchema,
+    schema: Model,
     coords: dict[str, Any] | None,
 ) -> dict[str, pd.Index]:
     """Assemble master coordinate indices for every declared dimension.
@@ -68,7 +73,7 @@ def dim_index_of(source: Any, dim_name: str) -> pd.Index:
 
 
 def build_dim_coords(
-    schema: MathSchema,
+    schema: Model,
     coords: dict[str, Any] | None,
     master_coords: dict[str, pd.Index],
 ) -> dict[str, dict[str, xr.DataArray]]:
@@ -79,7 +84,12 @@ def build_dim_coords(
     column per declared coordinate. The containment check mirrors the
     relational lane's: a value that is not a label of the target dimension
     would otherwise be dropped by xarray's inner-join alignment, silently
-    losing the term it carries.
+    losing the term it carries. A null value passes the check: it means "this
+    label belongs to no group" — row absence, not a typo.
+
+    Only a *targeted* coordinate is checked. An inline label coordinate
+    declares its own label space, so there is no dimension for its values to
+    be contained in and nothing the check could ask.
     """
     coords = coords or {}
     out: dict[str, dict[str, xr.DataArray]] = {}
@@ -108,7 +118,8 @@ def build_dim_coords(
         first = source.drop_duplicates(subset=[dim_name]).set_index(dim_name)
         counts = source.groupby(dim_name, sort=False)[sorted(dim_def.coords)].nunique()
         out[dim_name] = {}
-        for cname, target in dim_def.coords.items():
+        targeted = dim_def.targeted
+        for cname in dim_def.coords:
             if (counts[cname] > 1).any():
                 offending = sorted(counts.index[counts[cname] > 1].astype(str))[:5]
                 msg = (
@@ -118,19 +129,19 @@ def build_dim_coords(
                 )
                 raise DataError(msg)
             series = first[cname].reindex(labels)
-            known = set(master_coords[target])
-            # a null value means "this label belongs to no group" — row absence,
-            # not a typo; see the relational lane's containment check
-            unknown = sorted({str(v) for v in series if not pd.isna(v) and v not in known})[:5]
-            if unknown:
-                msg = (
-                    f"Dimension '{dim_name}' coordinate '{cname}' has value(s) that are "
-                    f"not '{target}' coordinates: {', '.join(unknown)}. Every value must "
-                    f"be a declared '{target}' label — otherwise "
-                    f'group_sum(over={dim_name}, by={cname}) drops those terms and the '
-                    f'model builds and solves without them.'
-                )
-                raise DataError(msg)
+            if cname in targeted:
+                target = targeted[cname]
+                known = set(master_coords[target])
+                unknown = sorted({str(v) for v in series if not pd.isna(v) and v not in known})[:5]
+                if unknown:
+                    msg = (
+                        f"Dimension '{dim_name}' coordinate '{cname}' has value(s) that are "
+                        f"not '{target}' coordinates: {', '.join(unknown)}. Every value must "
+                        f"be a declared '{target}' label — otherwise "
+                        f'sum(over={dim_name}, group_by={cname}) drops those terms and the '
+                        f'model builds and solves without them.'
+                    )
+                    raise DataError(msg)
             out[dim_name][cname] = xr.DataArray(
                 series.to_numpy(),
                 dims=[dim_name],
@@ -142,7 +153,7 @@ def build_dim_coords(
 
 
 def load_parameters(
-    schema: MathSchema,
+    schema: Model,
     data: dict[str, Any] | None,
     master_coords: dict[str, pd.Index],
 ) -> xr.Dataset:
@@ -220,7 +231,11 @@ def _coerce_to_dataarray(
     dims: list[str],
     master_coords: dict[str, pd.Index],
 ) -> xr.DataArray:
-    """Coerce a user-provided value into an xr.DataArray."""
+    """Coerce a user-provided value into an ``xr.DataArray``.
+
+    In the DataFrame branch the two-dims check guarantees flat columns, so
+    ``stack()`` yields a ``Series`` — which is what the ``cast`` asserts.
+    """
     if isinstance(raw, (int, float, np.integer, np.floating)):
         return xr.DataArray(float(raw))
 
@@ -230,7 +245,7 @@ def _coerce_to_dataarray(
             raise DataError(msg)
         series = pd.Series(raw)
         series.index.name = dims[0]
-        raw = series  # fall through to Series handling
+        raw = series
 
     if isinstance(raw, pd.Series):
         if len(dims) != 1:
@@ -257,7 +272,6 @@ def _coerce_to_dataarray(
             raw.index.name = dims[0]
         if raw.columns.name is None:
             raw.columns.name = dims[1]
-        # flat columns (checked above: exactly 2 dims), so stack() gives a Series
         stacked = cast('pd.Series', raw.stack())
         stacked.name = name
         return xr.DataArray.from_series(stacked).unstack()
@@ -329,7 +343,37 @@ def _validate_coords(
             raise DataError(msg)
 
 
-def check_divisors_cover(name: str, node: Any, schema: MathSchema, dataset: Any, mask: Any, model: Any) -> None:
+def check_constant_side_covers(name: str, node: Any, schema: Model, dataset: Any, mask: Any) -> None:
+    """A comparison's constant side must have values wherever the row is built.
+
+    The divisor argument, one position over. A missing row is read as 0, and on
+    a side with no variable that zero *is* the bound — `x <= cap` becomes
+    `x <= 0`, which binds rather than vanishing, and the solve reports optimal.
+
+    Keyed to the rows the declaration builds, not to the coordinate product:
+    a `where` that removed the coordinate has already answered the question,
+    which is what makes masking the escape rather than a workaround.
+
+    The relational lane asks the same thing from the other end — it left-joins
+    the constant parts and looks for a null before the fill. Same answer,
+    reached by the shape each lane has to hand.
+    """
+    for side in (node.left, node.right):
+        if _names_of(side, schema.variables):
+            continue
+        params = _names_of(side, schema.parameters)
+        if not params:
+            continue
+        for param in sorted(params):
+            gaps = dataset[param].isnull()
+            if mask is not None:
+                gaps = gaps & mask
+            missing = int(gaps.sum())
+            if missing:
+                raise DataError(uncovered_constant_message(param, missing, name))
+
+
+def check_divisors_cover(name: str, node: Any, schema: Model, dataset: Any, mask: Any, model: Any) -> None:
     """A divisor must have a value wherever this declaration divides by it.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check
@@ -349,11 +393,11 @@ def check_divisors_cover(name: str, node: Any, schema: MathSchema, dataset: Any,
     out — silently, and identically on both lanes until #312.
     """
     for quotient in _quotients(node):
-        params = _parameter_names(quotient.right, schema)
+        params = _names_of(quotient.right, schema.parameters)
         if not params:
             continue
         needed = mask
-        for variable in _variable_names(quotient.left, schema):
+        for variable in _names_of(quotient.left, schema.variables):
             present = model.variables[variable].labels != -1
             needed = present if needed is None else (needed & present)
         for param in sorted(params):
@@ -371,14 +415,6 @@ def _quotients(node: Any) -> list[Any]:
     for child in _children(node):
         out.extend(_quotients(child))
     return out
-
-
-def _parameter_names(node: Any, schema: MathSchema) -> set[str]:
-    return _names_of(node, schema.parameters)
-
-
-def _variable_names(node: Any, schema: MathSchema) -> set[str]:
-    return _names_of(node, schema.variables)
 
 
 def _names_of(node: Any, declared: Any) -> set[str]:

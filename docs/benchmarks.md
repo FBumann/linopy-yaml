@@ -24,8 +24,8 @@ you actually use.
 
 ## How to reproduce it
 
-Read straight off [`latest.json`](https://github.com/FBumann/lpspec/blob/main/bench/results/latest.json) and
-[`density.jsonl`](https://github.com/FBumann/lpspec/blob/main/bench/results/density.jsonl), each carrying the machine
+Read straight off [`latest.json`](https://github.com/fluxopt/lpspec/blob/main/bench/results/latest.json) and
+[`density.jsonl`](https://github.com/fluxopt/lpspec/blob/main/bench/results/density.jsonl), each carrying the machine
 fingerprint, the library versions and the commit that produced it. Two files
 because a run *replaces* its output: one narrower than the tables it publishes
 would leave them unprovenanced while still looking complete.
@@ -41,7 +41,7 @@ uv run python -m bench.plot  # the figures above, and the chart page's numbers
 ```
 
 The results committed today are the `.jsonl` the runner before
-[#448](https://github.com/FBumann/lpspec/pull/448) wrote; both readers take
+[#448](https://github.com/fluxopt/lpspec/pull/448) wrote; both readers take
 either, so the figures regenerate against the tree as it stands rather than
 only after the next full ladder.
 
@@ -68,7 +68,7 @@ under 0.4 are a different quantity wearing the same name, and are not mixed in.
 
 *This lane replaced a duckdb engine, and the three-way comparison that decided
 it — speed against a settable memory ceiling — is in
-[#189](https://github.com/FBumann/lpspec/pull/189) and in git. It is not
+[#189](https://github.com/fluxopt/lpspec/pull/189) and in git. It is not
 re-measured here: duckdb is no longer a dependency, and a column nobody can
 re-run is a claim with a shelf life.*
 
@@ -350,7 +350,7 @@ its order of magnitude, not its second digit**, and treat anything within 5% of
 **Gurobi is the slowest destination for both arms — and the only one we lead
 across the board.** 5.7s against 6.5s on `dispatch`, where `highs` is 0.46s
 against 0.76s. gurobipy's ingestion is a per-row and per-column cost neither
-lane can route around ([#434](https://github.com/FBumann/lpspec/pull/434)), so
+lane can route around ([#434](https://github.com/fluxopt/lpspec/pull/434)), so
 it is a constant added to both; what is left showing is the build in front of
 it, which is ours.
 
@@ -435,7 +435,7 @@ scaling one". That does not survive re-measurement: peak is **0.68-0.78x across
 four orders of magnitude**, 0.73x at the top rung.
 
 Two things moved it and only one is us. `cols` became positional
-([#433](https://github.com/FBumann/lpspec/pull/433)) and took ~20% off this
+([#433](https://github.com/fluxopt/lpspec/pull/433)) and took ~20% off this
 case. The rest is that the earlier reading came from a run *this section itself
 flagged as noisy* — it recorded linopy at 38.5 s and 106.2 s for the same rung.
 The old number was a conclusion drawn across the noise floor.
@@ -494,7 +494,7 @@ Wall time behaves throughout: our advantage grows as the model thins, 1.0x to
 What each sink can ingest, measured against the shipped solvers rather than
 assumed. The architectural reading is in
 [docs/design/ceiling.md](design/ceiling.md#capability-is-not-the-ceiling); the plan is
-[ROADMAP Track 3](ROADMAP.md#track-3--capabilities-and-the-degree-line).
+[Track 3](https://github.com/fluxopt/lpspec/issues/472).
 
 | | `lp_file` | HiGHS direct | Gurobi direct |
 |---|---|---|---|
@@ -554,9 +554,11 @@ In rough order of what would change a decision:
   costs what the first did. It follows from there being no process-wide state
   and no lifetime to leak, and every rung here is a single build in a fresh
   process — which is exactly why none of them tests it.
-- **`storage` — `roll`, the bounded-halo self-join.** The one plan shape in the
-  language whose cost is not obviously linear in the model, and no case
-  exercises it.
+- **`storage` — the cyclic `shift` recurrence.** The one plan shape in the
+  language whose cost is not obviously linear in the model. The case now exists
+  — `bench/models/storage.yaml`, held at `dispatch`'s width on `dispatch`'s
+  ladder so the two read against each other — but every number on this page
+  predates it, so it is unmeasured here rather than unwritten.
 - **A MILP**, where solve time dwarfs build and the build ratio stops mattering.
 - **A hand-written highspy/CSR arm** as the speed-of-light floor. Without one,
   every ratio here has linopy as its only denominator.
@@ -567,7 +569,7 @@ mask-density sweep.
 
 ## Method
 
-Recorded in [`bench/README.md`](https://github.com/FBumann/lpspec/blob/main/bench/README.md) — one process per
+Recorded in [`bench/README.md`](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — one process per
 measurement, `ru_maxrss` rather than a tracker, import excluded from
 `wall_seconds` and teardown included, and a parity gate that aborts the run
 before anything is timed if the two lanes disagree. Failures are results and are

@@ -1,14 +1,20 @@
-"""group_sum: the transport YAML through both backends, and what coordinates buy.
+"""sum: the transport YAML through both backends, and what coordinates buy.
 
 Three-way differential on examples/transport.yaml:
-  1. eager lpspec_linopy.build + solve (group_sum via linopy groupby)
+  1. eager lpspec_linopy.build + solve (sum via linopy groupby)
   2. lowered Program -> PolarsExecutor -> the `highs` solver, plus the LP file
   3. hand-built indicator-matrix linopy model (an independent oracle that
-     involves no group_sum at all)
+     involves no sum at all)
+
+Plus ``examples/monthly_budget.yaml``, which is the same primitive over *time*:
+a coordinate on ``snapshot`` groups it into months exactly as a coordinate on
+``generator`` groups onto buses. The gallery page quotes its dual and prints
+its snapshot index, so a test has to hold both.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -56,7 +62,7 @@ def test_transport_yaml_agrees_with_an_independent_oracle(transport_data):
     gens, lines, load = transport_data
     data, coords = _inputs(gens, lines, load)
 
-    # indicator matrices, no group_sum involved — an oracle for the oracle
+    # indicator matrices, no sum involved — an oracle for the oracle
     independent = transport_eager_objective(gens, lines, load)
     assert np.isfinite(independent)
 
@@ -77,7 +83,7 @@ def _flatten(expr):
     return [expr]
 
 
-def test_group_sum_lowers_to_one_node_per_injection_term():
+def test_sum_lowers_to_one_node_per_injection_term():
     program = lower_program(schema_of(TRANSPORT_YAML))
 
     (c,) = program.constraints
@@ -92,13 +98,13 @@ def test_group_sum_lowers_to_one_node_per_injection_term():
     [
         # an undeclared dim, or a coordinate the dim does not declare, is caught
         # in resolution before lowering ever sees the call
-        ('group_sum(p, over=nope, by=bus)', r'over=nope\) does not name a declared dimension'),
-        ('group_sum(p, over=generator, by=nope)', r"by=nope\) does not name a coordinate of 'generator'"),
+        ('sum(p, over=nope, group_by=bus)', r'over=nope\) does not name a declared dimension'),
+        ('sum(p, over=generator, group_by=nope)', r"group_by=nope\) does not name a coordinate of 'generator'"),
         # a coordinate declared on a *different* dim is not in scope either
-        ('group_sum(p, over=generator, by=to)', r"by=to\) does not name a coordinate of 'generator'"),
+        ('sum(p, over=generator, group_by=to)', r"group_by=to\) does not name a coordinate of 'generator'"),
     ],
 )
-def test_a_name_group_sum_cannot_resolve_is_refused(expression, match):
+def test_a_name_sum_cannot_resolve_is_refused(expression, match):
     with pytest.raises(LanguageError, match=match):
         resolved(expression, schema_of(TRANSPORT_YAML))
 
@@ -108,7 +114,7 @@ def test_grouping_an_expression_that_lacks_the_dim_is_refused():
     lowering raises it by asking `dimensions`, not by restating it."""
     schema = schema_of(TRANSPORT_YAML)
     with pytest.raises(LanguageError, match='but the expression'):
-        _lower_expr(resolved('group_sum(f, over=generator, by=bus)', schema), schema, 't')
+        _lower_expr(resolved('sum(f, over=generator, group_by=bus)', schema), schema, 't')
 
 
 # ---------------------------------------------------------------------------
@@ -161,8 +167,6 @@ def test_a_parameter_carrying_a_coordinate_twice_is_refused(transport_data):
 
     The relational lane used to resolve it into a sum, silently, which is a
     divergence between two lanes that are supposed to accept the same thing.
-    Refusing it is also what lets the assembly skip its terminal aggregate:
-    every parameter being keyed is the premise that argument rests on.
     """
     gens, lines, load = transport_data
     doubled = pd.concat([gens, gens.head(1)])
@@ -198,7 +202,7 @@ variables:
 constraints:
   meet:
     foreach: [g]
-    expression: group_sum(x, over=item, by=grp) >= target
+    expression: sum(x, over=item, group_by=grp) >= target
 objectives:
   obj:
     sense: minimize
@@ -230,7 +234,7 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
 
     Row absence is the language's idiom for "not present" everywhere else —
     an absent parameter row is a structural zero — and a coordinate is the one
-    place it used to be an error. `i2` belongs to no group, so `group_sum`
+    place it used to be an error. `i2` belongs to no group, so `sum`
     places its terms nowhere and only `i0`/`i1` can meet the target of 3.
     """
     path = tmp_path / 'partial.yaml'
@@ -259,7 +263,7 @@ BROADCAST_GROUP_SUM = {
     'constraints': {
         'cap': {
             'foreach': ['snapshot', 'bus'],
-            'expression': 'group_sum(x * w, over=generator, by=bus) <= limit',
+            'expression': 'sum(x * w, over=generator, group_by=bus) <= limit',
         }
     },
     'objectives': {'o': {'sense': 'maximize', 'expression': 'x'}},
@@ -276,10 +280,10 @@ BROADCAST_SOURCES = {
 }
 
 
-def test_group_sum_over_a_broadcast_dim_still_collapses_its_terms():
+def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     """The variable does not carry the grouped dim, so a group holds it twice.
 
-    `group_sum(x * w, over=generator, by=bus)` with `x` indexed by snapshot
+    `sum(x * w, over=generator, group_by=bus)` with `x` indexed by snapshot
     alone: `generator` reaches the fragment by broadcast from `w`, so two
     generators on one bus put the *same* `var_label` on one row. Nothing after
     this point can tell them apart — a solver handed a row with a column twice
@@ -290,7 +294,8 @@ def test_group_sum_over_a_broadcast_dim_still_collapses_its_terms():
         generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     )
     with lps.build(BROADCAST_GROUP_SUM, sources) as ex:
-        matrix = ex._tables().matrix.sort('row', 'col')
+        tables = ex._tables()
+        matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 4, 'a column appears twice on a row'
         assert matrix['coeff'].to_list() == [3.0, 5.0, 3.0, 5.0]  # 1.0 + 2.0 merged
 
@@ -299,14 +304,14 @@ def test_group_sum_over_a_broadcast_dim_still_collapses_its_terms():
     assert result.objective == pytest.approx(6.0)  # 3x <= 9 at b1, two snapshots
 
 
-def test_group_sum_over_a_foreach_dim_needs_no_such_collapse():
+def test_sum_over_a_foreach_dim_needs_no_such_collapse():
     """The counterpart: when the variable carries the grouped dim, each merged
     row has its own label and there is nothing to add."""
     model = override(
         BROADCAST_GROUP_SUM,
         **{
             'variables.x.foreach': ['snapshot', 'generator'],
-            'constraints.cap.expression': 'group_sum(x * w, over=generator, by=bus) <= limit',
+            'constraints.cap.expression': 'sum(x * w, over=generator, group_by=bus) <= limit',
         },
     )
     sources = dict(
@@ -314,7 +319,8 @@ def test_group_sum_over_a_foreach_dim_needs_no_such_collapse():
         generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     )
     with lps.build(model, sources) as ex:
-        matrix = ex._tables().matrix.sort('row', 'col')
+        tables = ex._tables()
+        matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         # one entry per (row, generator-on-that-bus), not one per bus
         assert matrix.height == 6
         assert ex.solve().termination_condition == 'optimal'
@@ -325,9 +331,8 @@ def test_group_sum_over_a_foreach_dim_needs_no_such_collapse():
 # ---------------------------------------------------------------------------
 
 #: `y` is indexed by bus and `w` by snapshot, so `y * w` holds one row per
-#: (bus, snapshot) and one *column* per bus. The fragment is legitimately
-#: keyed on `(dims…, var_label)`; it is the objective's projection down to
-#: `(col, coeff)` that drops the dims and merges those rows.
+#: (bus, snapshot) and one *column* per bus. It is the objective's projection
+#: down to `(col, coeff)` that drops the dims and merges those rows.
 BROADCAST_OBJECTIVE = {
     'dimensions': {'snapshot': {'dtype': 'int', 'values': [0, 1, 2, 3]}, 'bus': {'dtype': 'str'}},
     'parameters': {'w': {'dims': ['snapshot']}, 'floor': {'dims': ['bus']}},
@@ -347,10 +352,10 @@ BROADCAST_OBJECTIVE_SOURCES = {
 def test_an_objective_term_carrying_dims_is_still_summed_per_column():
     """A coefficient is the *sum* over the dims the objective projects away.
 
-    `keyed` is about `(dims…, var_label)`. The matrix keeps those dims — a
-    constraint row is a function of dims that include the fragment's — so the
-    key carries into `(row, col)`. The objective drops them, and a fragment
-    that still carries one then holds several rows per column.
+    The matrix keeps a fragment's dims — a constraint row is a function of dims
+    that include them — so one row there is one `(row, col)` cell. The
+    objective drops them, and a fragment that still carries one then holds
+    several rows per column.
 
     Nothing downstream would fix it: the hand-off scatters with
     `dense[at] = values`, which keeps the last write rather than accumulating,
@@ -373,17 +378,136 @@ def test_the_broadcast_objective_agrees_with_the_eager_lane():
         assert run.oracle == pytest.approx(6666.0)
 
 
-def test_an_objective_whose_dims_are_all_the_variables_own_still_skips_it():
-    """The counterpart, and the reason the test is `label_dims` not `dims`.
+def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
+    """The counterpart: a projection that merges nothing must change nothing.
 
-    `p * cost` reaches the objective carrying `(snapshot, generator)` — it is
-    never wrapped in a `sum` — and both are `p`'s own dims, so `var_label`
-    determines them and no column can repeat. Refusing every fragment that
-    merely *has* dims would be sound and would re-enable the aggregate on every
-    model in `bench/`, which is the whole optimisation (#161).
+    `y * floor` reaches the objective carrying `bus` alone — `y`'s own dim — so
+    each column holds exactly one row and the sum over it is that row. The
+    aggregate must not turn a coefficient into anything but itself.
     """
     model = override(BROADCAST_OBJECTIVE, **{'objectives.c.expression': 'y * floor'})
     with lps.build(model, BROADCAST_OBJECTIVE_SOURCES) as ex:
         obj = ex._tables().obj.sort('col')
         assert obj.height == 3
         assert obj['coeff'].to_list() == [1.0, 2.0, 3.0]  # floor itself, un-summed
+
+
+# ---------------------------------------------------------------------------
+# the same construct, grouping time
+# ---------------------------------------------------------------------------
+
+MONTHLY_YAML = Path('examples/monthly_budget.yaml')
+MONTHLY_PAGE = Path('docs/models/monthly_budget.md')
+
+
+def _monthly_sources():
+    """Six snapshots over three calendar months, wind capped in the first.
+
+    The `month` column is data prep — one polars expression — which is the
+    page's whole point: the language never learns what a calendar is.
+    """
+    import datetime as dt
+
+    hours = [dt.datetime(2030, 1, 1) + dt.timedelta(days=15 * i) for i in range(6)]
+    index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
+    months = sorted(set(index['month']))
+    gens = ['wind', 'gas']
+    return (
+        index,
+        months,
+        {
+            'snapshot': index,
+            'month': pl.DataFrame({'month': months}),
+            'p_max': pl.DataFrame({'generator': gens, 'value': [10.0, 100.0]}),
+            'cost': pl.DataFrame({'generator': gens, 'value': [1.0, 50.0]}),
+            'load': pl.DataFrame({'snapshot': hours, 'value': [20.0] * 6}),
+            'monthly_cap': pl.DataFrame(
+                {
+                    'month': [m for m in months for _ in gens],
+                    'generator': gens * len(months),
+                    'value': [5.0 if (m == months[0] and g == 'wind') else 1e4 for m in months for g in gens],
+                }
+            ),
+        },
+    )
+
+
+def test_a_monthly_budget_binds_and_prices_itself():
+    """The number the gallery page quotes, held by a test.
+
+    January caps wind at 5 where three snapshots could carry 30, so the cap
+    binds and its shadow price is the cost of covering that energy with gas
+    instead — 50 against 1. February and March are slack and price at zero,
+    which is what distinguishes a binding budget from a decorative one.
+    """
+    index, _months, sources = _monthly_sources()
+    with lps.solve(MONTHLY_YAML, sources) as result:
+        assert result.is_ok
+        wind = (
+            result.primal('p')
+            .filter(pl.col('generator') == 'wind')
+            .join(index, on='snapshot')
+            .group_by('month')
+            .agg(pl.col('value').sum())
+            .sort('month')
+        )
+        # 3 snapshots in Jan (capped at 5), 1 in Feb, 2 in Mar — unequal groups
+        assert wind['value'].to_list() == pytest.approx([5.0, 10.0, 20.0])
+
+        duals = result.dual('monthly_budget').filter(pl.col('generator') == 'wind').sort('month')
+        assert duals['value'].to_list() == pytest.approx([-49.0, 0.0, 0.0])
+
+
+def test_the_monthly_grouping_is_a_column_and_nothing_else():
+    """Re-grouping the same snapshots re-states the budget, model untouched.
+
+    Quarters instead of months: one different column in the snapshot index,
+    and the constraint now spans three-month blocks. That is the claim the
+    page makes about weeks, seasons and representative periods, checked once.
+    """
+    index, _months, sources = _monthly_sources()
+    quarters = index.with_columns(pl.lit('2030-Q1').alias('month')).select('snapshot', 'month')
+    regrouped = {
+        **sources,
+        'snapshot': quarters,
+        'month': pl.DataFrame({'month': ['2030-Q1']}),
+        'monthly_cap': pl.DataFrame({'month': ['2030-Q1'] * 2, 'generator': ['wind', 'gas'], 'value': [5.0, 1e4]}),
+    }
+    with lps.solve(MONTHLY_YAML, regrouped) as result:
+        assert result.is_ok
+        assert result.dual('monthly_budget').height == 2, 'one row per group, and there is now one group'
+        wind = result.primal('p').filter(pl.col('generator') == 'wind')['value'].sum()
+        assert wind == pytest.approx(5.0), 'the cap now binds across the whole quarter'
+
+
+def test_a_mistyped_month_is_a_typo_and_not_a_new_group():
+    """Why the target of a coordinate has to be a declared dimension.
+
+    Without one there is nothing to check the snapshot index against, and
+    `2030-3` beside `2030-03` would quietly become a fourth group with a budget
+    of its own — the model then solves a smaller problem and says nothing. The
+    same check catches a generator assigned to a bus that does not exist.
+    """
+    index, _months, sources = _monthly_sources()
+    typo = index.with_columns(
+        pl.when(pl.col('month') == '2030-03').then(pl.lit('2030-3')).otherwise(pl.col('month')).alias('month')
+    )
+    with pytest.raises(DataError, match=r"coordinate 'month' has value\(s\) that are not 'month' coordinates"):
+        lps.solve(MONTHLY_YAML, {**sources, 'snapshot': typo})
+
+
+def test_the_index_the_page_prints_is_the_index_it_solves():
+    """The frame printed on the page is the frame these tests build.
+
+    `test_doc_examples.py` sweeps `python` and `yaml` fences and runs neither,
+    so a pasted *output* block is the one kind of doc claim nothing checks —
+    change the timestamps here and the page would keep printing the old ones.
+    Defaults are restored while formatting, so a contributor's `POLARS_FMT_*`
+    environment cannot fail this.
+    """
+    index, _months, _sources = _monthly_sources()
+    fences = re.findall(r'^```text\n(.*?)^```', MONTHLY_PAGE.read_text(), re.MULTILINE | re.DOTALL)
+    printed = [block for block in fences if block.startswith('shape: (')]
+    assert len(printed) == 1, 'the page prints exactly one frame'
+    with pl.Config(restore_defaults=True):
+        assert printed[0].rstrip('\n') == str(index)

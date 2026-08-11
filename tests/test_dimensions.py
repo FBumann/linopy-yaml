@@ -16,10 +16,10 @@ from tests.conftest import override, schema_of
 from tools import constructs
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 #: A *network* dispatch model: `conftest.DISPATCH_MODEL` plus buses, so
-#: `group_sum` and per-bus loads are in scope. The dim rules are mostly about
+#: `sum` and per-bus loads are in scope. The dim rules are mostly about
 #: expressions that carry a dim their frame does not, which needs three dims to
 #: state at all.
 BASE = {
@@ -37,18 +37,18 @@ BASE = {
     'constraints': {
         'balance': {
             'foreach': ['snapshot', 'bus'],
-            'expression': 'group_sum(p, over=generator, by=bus) == load',
+            'expression': 'sum(p, over=generator, group_by=bus) == load',
         }
     },
     'objectives': {'total': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'}},
 }
 
 
-def _schema(**overrides) -> MathSchema:
+def _schema(**overrides) -> Model:
     return schema_of(BASE, **overrides)
 
 
-def _dims(expr: str, schema: MathSchema | None = None) -> frozenset[str]:
+def _dims(expr: str, schema: Model | None = None) -> frozenset[str]:
     s = schema or _schema()
     return dims_of(expression_of(expr, s, Namespace.of(s), 't'), s, 't')
 
@@ -72,8 +72,8 @@ def test_the_base_model_typechecks():
         ('p * cost', {'snapshot', 'generator'}),
         ('sum(p, over=generator)', {'snapshot'}),
         ('sum(p * cost, over=generator)', {'snapshot'}),
-        ('group_sum(p, over=generator, by=bus)', {'snapshot', 'bus'}),
-        ('shift(p, over=snapshot, by=1, edge=wrap)', {'snapshot', 'generator'}),
+        ('sum(p, over=generator, group_by=bus)', {'snapshot', 'bus'}),
+        ("shift(p, over=snapshot, by=1, edge='wrap')", {'snapshot', 'generator'}),
     ],
 )
 def test_dim_inference(expr, expected):
@@ -87,15 +87,15 @@ def test_sum_over_an_absent_dim_is_an_error_not_a_noop():
         _dims('sum(p, over=bus)')
 
 
-def test_group_sum_requires_the_grouped_dim():
-    with pytest.raises(DimensionError, match=r'group_sum\(over=generator\) but the expression has dims'):
-        _dims('group_sum(load, over=generator, by=bus)')
+def test_sum_requires_the_grouped_dim():
+    with pytest.raises(DimensionError, match=r'sum\(over=generator, group_by=\.\.\.\) but the expression has dims'):
+        _dims('sum(load, over=generator, group_by=bus)')
 
 
-def test_group_sum_into_a_dim_the_operand_already_carries():
+def test_sum_into_a_dim_the_operand_already_carries():
     """`(inner - {over}) | {into}` is a union, and a union absorbs a collision.
 
-    `group_sum(load, over=generator, by=bus)` -- with `load` already carrying
+    `sum(load, over=generator, group_by=bus)` -- with `load` already carrying
     `bus` -- asks for `bus` twice: once as the operand's own dim, once as the
     group its terms are placed into. The union returns one, so the rule reports
     a shape neither lane can build. The eager lane makes an xarray object with
@@ -106,12 +106,12 @@ def test_group_sum_into_a_dim_the_operand_already_carries():
     why the rule lives here rather than in either executor.
     """
     with pytest.raises(DimensionError, match='already carries'):
-        _dims('group_sum(load * p, over=generator, by=bus)')
+        _dims('sum(load * p, over=generator, group_by=bus)')
 
 
 def test_roll_requires_the_dim():
     with pytest.raises(DimensionError, match='shift\\(over=snapshot\\) but the expression has dims'):
-        _dims('shift(cost, over=snapshot, by=1, edge=wrap)')
+        _dims("shift(cost, over=snapshot, by=1, edge='wrap')")
 
 
 def test_an_outer_product_is_legal_and_carries_both_dim_sets():
@@ -135,42 +135,37 @@ def test_broadcast_is_legal_when_one_side_contains_the_other():
 def test_stray_dim_in_a_constraint_is_rejected():
     """The rule that matters most: a dim the foreach does not declare
     multiplies the rows this constraint builds."""
-    schema = _schema(**{'constraints.stray': {'foreach': ['snapshot'], 'expression': 'p <= p_max'}})
     with pytest.raises(DimensionError, match=r"carries dims \['generator'\] that are not in foreach"):
-        check_schema(schema)
+        _schema(**{'constraints.stray': {'foreach': ['snapshot'], 'expression': 'p <= p_max'}})
 
 
 def test_foreach_dim_the_equation_never_uses_is_rejected():
-    schema = _schema(
-        **{
-            'constraints.unused': {
-                'foreach': ['snapshot', 'generator', 'bus'],
-                'expression': 'p <= p_max',
-            }
-        }
-    )
     with pytest.raises(DimensionError, match=r"does not carry \['bus'\]"):
-        check_schema(schema)
+        _schema(
+            **{
+                'constraints.unused': {
+                    'foreach': ['snapshot', 'generator', 'bus'],
+                    'expression': 'p <= p_max',
+                }
+            }
+        )
 
 
 def test_where_dim_outside_the_frame_is_rejected():
     """SPEC §6.3 documented an `any()` reduction here — a mask that fails
     *open*, silently including everything."""
-    schema = _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'load > 0'}})
     with pytest.raises(DimensionError, match=r"where-parameter 'load' has dims \['bus', 'snapshot'\]"):
-        check_schema(schema)
+        _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'load > 0'}})
 
 
 def test_where_comparison_on_a_dim_outside_the_frame_is_rejected():
-    schema = _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'snapshot > 0'}})
     with pytest.raises(DimensionError, match="where-comparison on dimension 'snapshot'"):
-        check_schema(schema)
+        _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'snapshot > 0'}})
 
 
 def test_bound_parameter_dim_outside_foreach_is_rejected():
-    schema = _schema(**{'variables.cap': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 'load'}}})
     with pytest.raises(DimensionError, match=r"bounds.upper parameter 'load' has dims \['bus', 'snapshot'\]"):
-        check_schema(schema)
+        _schema(**{'variables.cap': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 'load'}}})
 
 
 def test_checking_needs_no_data():

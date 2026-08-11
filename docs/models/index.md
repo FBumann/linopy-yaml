@@ -39,9 +39,11 @@ Read off the resolved plan of each model rather than its text, so it cannot
 drift from what the engine builds.
 
 <!-- constructs:begin -->
-| model | verified | `sum` | `group_sum` | `shift` | `roll` | `where` | `bounds` | `piecewise` | MILP |
+| model | verified | `sum` | `sum(group_by)` | `shift` | `shift(edge='wrap')` | `where` | `bounds` | `piecewise` | MILP |
 |---|---|---|---|---|---|---|---|---|---|
 | [dispatch](dispatch.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · |
+| [monthly_budget](monthly_budget.md) | · | **✓** | **✓** | · | · | · | **✓** | · | · |
+| [multi_period](multi_period.md) | · | **✓** | · | · | · | · | **✓** | · | · |
 | [piecewise](piecewise.md) | · | **✓** | · | · | · | · | **✓** | **✓** | · |
 | [storage](storage.md) | · | **✓** | · | · | **✓** | · | **✓** | · | · |
 | [transport](transport.md) | · | · | **✓** | · | · | · | **✓** | · | · |
@@ -120,7 +122,7 @@ dual solution, and lpspec refuses to invent one — which is what the `·` rows
 are.
 
 Adding a port is four files and five rules:
-[CONTRIBUTING.md](https://github.com/FBumann/lpspec/blob/main/CONTRIBUTING.md#adding-a-ported-model).
+[CONTRIBUTING.md](https://github.com/fluxopt/lpspec/blob/main/CONTRIBUTING.md#adding-a-ported-model).
 
 ## The ladder
 
@@ -153,7 +155,7 @@ the ceiling puts it.
 
 **Rung 4 made the model smaller**, which is the ladder paying off in the
 direction nobody plans for. Closing the horizon deletes rung 3's boundary
-equation outright: `roll` is cyclic already, so the wrap onto the last snapshot
+equation outright: `edge='wrap'` is cyclic already, so the wrap onto the last snapshot
 is what it does unguarded, and the *acyclic* case is the one needing an extra
 clause. Two rungs written a day apart, differing by one deleted `where`, is a
 sharper statement about the language than either alone.
@@ -161,12 +163,12 @@ sharper statement about the language than either alone.
 ## Ledger — what a port could not say
 
 Feeds [ROADMAP](../ROADMAP.md), with the verdict
-[CLAUDE.md](https://github.com/FBumann/lpspec/blob/main/CLAUDE.md) asks for:
+[CLAUDE.md](https://github.com/fluxopt/lpspec/blob/main/CLAUDE.md) asks for:
 macro, primitive, or escape.
 
 | Port | What could not be said | Worked around by | Verdict |
 |---|---|---|---|
-| PyPSA rung 1 | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/FBumann/lpspec/issues/31). A second model asking for it |
+| PyPSA rung 1 | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/lpspec/issues/31). A second model asking for it |
 | PyPSA unit commitment | `min_up_time` — a unit that starts must stay up for *T* snapshots | left at 0, so the constraint is not written | **split verdict**, below |
 | Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut, which is how every serious TSP code works | [MTZ](tsp_mtz.md), O(n²) and static | **refused, and correctly**: a solve loop is an algorithm, not a model |
 
@@ -199,6 +201,6 @@ models. Since lazy generation is what every serious TSP code actually does,
 "lpspec can express TSP" and "lpspec is a good way to solve a large TSP" are
 different sentences and only the first is true.
 
-An earlier draft of this ledger said DFJ was refused for having a
-data-dependent row count. That was wrong — the cycle basis has one too — and
-the corpus is where it got caught.
+A data-dependent row count is not what rules DFJ out: the cycle basis has one
+and is ordinary. What the corpus is for is catching exactly that kind of
+mis-attribution, where a data-size wall reads as a ceiling.

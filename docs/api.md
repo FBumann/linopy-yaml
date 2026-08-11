@@ -6,7 +6,7 @@ nineteen names that load, check, build, solve and read one back. The surface is
 pinned by a test and the reasoning behind its size is
 [ARCHITECTURE](ARCHITECTURE.md#the-python-surface).
 
-Six verbs — `check`, `load_schema`, `build`, `solve`, `solve_over`, `write` — and the
+Six verbs — `check`, `load_model`, `build`, `solve`, `solve_over`, `write` — and the
 exception tree rooted at `LpspecError`: `LanguageError` (with `SchemaError`,
 `DimensionError`, `PiecewiseExpansionError`) for the model, `DataError` for what
 was bound to it.
@@ -15,7 +15,9 @@ was bound to it.
 import lpspec as lps
 
 lps.check('model.yaml')  # parse → validate → lower, no data bound
-schema = lps.load_schema('model.yaml')  # MathSchema
+model = lps.load_model('model.yaml')  # Model — the declared math
+model.to_dict()  # ...and back out, as data
+model.to_yaml()  # ...or as the file a reviewer reads
 
 result = lps.solve('model.yaml', sources, solver_options={'time_limit': 60})
 # ...or solver_name='gurobi', the other solver sink — same model either way
@@ -41,6 +43,7 @@ executor when one build should feed more than one sink:
 ```python
 ex = lps.build('model.yaml', sources)
 ex.write('model.lp')
+ex.omissions()  # rows a constraint declared but did not build, and why it matters
 result = ex.solve()
 ```
 
@@ -51,6 +54,52 @@ pandas / xarray, which ship with the `[linopy]` extra. The only build knob is
 `coords`; **`solver_options` is not a build knob** and is forwarded verbatim to
 the solver.
 
+**Every verb takes the model four ways**: a path, a `str`, a `dict`, or a
+`Model`. `check`, `build`, `solve` and `write` share one first argument, so a
+framework that emits declarations never writes a temporary file to run them:
+
+```python
+model = {'dimensions': ..., 'variables': ..., 'constraints': ..., 'objectives': ...}
+
+lps.solve(model, sources)  # a dict runs like a file
+checked = lps.load_model(model)  # ...or validate once and keep it
+checked.to_yaml()  # the review copy — a dict-built model still gets a file
+lps.solve(checked, sources)  # a Model is passed through, not revalidated
+```
+
+**This is the supported path for a framework**, and it is the one closing #29
+and #30 chose: a library composing optional features emits *data*, not YAML
+text, and never merges files. What keeps it honest is the last two lines — a
+generated model that cannot show you a file is the failure mode hard rule 5
+exists to prevent, so `to_yaml()` is not a convenience here, it is the
+condition. Hand-written math still starts as a file; nothing about this path
+asks it not to.
+
+**A `Model` goes back out two ways, and they agree.** `to_dict()` is the model
+as data; `to_yaml()` is that dict as the file hard rule 5 says you review and
+diff — which a model built as a *dict*, the way a framework emits one, would
+otherwise never have. `tests/test_roundtrip.py` holds `load → out → load` for
+both forms over every example and every port, holds that the two forms match,
+and holds that dumping twice gives the same bytes, since a review copy that
+changes per run is a diff nobody can read.
+
+**Every value is written; only what is absent is dropped** — a null, an
+infinite bound, or a mapping that declares nothing. One mechanical rule, on purpose: omitting
+*defaults* reads better but needs a list of which ones are consequential, and
+that list is a second copy of the schema. An empty **list** stays, because a
+list carries cardinality here and zero is one of its values — `foreach: []` is
+a scalar declaration.
+
+An infinite bound is in that list because it is not a bound — it is the
+unbounded side, which is exactly what omitting the bound already means. That
+also makes JSON lossless: JSON has no infinity, so anything reaching
+`model_dump_json` as `inf` came back as `null` and read as absent regardless.
+
+The rule lives on the model's **serializer**, so `model_dump`, `model_dump_json`,
+`to_dict` and `to_yaml` all give the same content — a helper beside them would
+have left pydantic's own methods describing the model differently from the
+file.
+
 **Which solver is a caller's choice, not the file's.** `solver_name` is
 `highs` (ships with the package) or `gurobi` (needs the `[gurobi]` extra), and
 nothing in the YAML names one — the same file means the same model whichever
@@ -59,6 +108,17 @@ takes it. Options travel in the chosen solver's own vocabulary,
 forwarding verbatim is the contract and translating names would mean holding an
 opinion about every option either one has. A name outside the two is an error
 listing them, never a quiet fallback to the default.
+
+**Gurobi's remote and licensing options travel the same way**, so Compute
+Server, Instant Cloud and WLS need nothing from this package:
+
+```python
+options = {'ComputeServer': 'srv:61000', 'ServerPassword': '…'}
+lps.solve('model.yaml', sources, solver_name='gurobi', solver_options=options)
+```
+
+They are applied when Gurobi's environment is created, which is what
+`ComputeServer`, `TokenServer` and `WLSAccessID` require.
 
 Reading a result:
 
@@ -115,7 +175,7 @@ that is [a decision](#solving-one-model-many-times), not an omission.
 | **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`, so the key column is `snapshot_start` and holds where each window began. Naming it `snapshot` would put window starts under the name of the coordinate they are not, and join cleanly against real data |
 | a slice that did not solve | contributes no `primal` rows, so that frame can be shorter than the sweep. `objective` is one row per slice always, and is the record of which slices those were |
 | **the lookahead is `t >= step`** | overlapping windows return every row they solved, including the tail the next window recomputes. Keeping only what each window owns is one clause and no special case — `runs.primal('soc').filter(pl.col('t') < step)` — because the final window can never hold more than `step` rows |
-| the readers hold what the fold accumulated | `to_parquet` copies out frames already in memory and bounds nothing; spilling per slice, which would, is [#477](https://github.com/FBumann/lpspec/issues/477) |
+| the readers hold what the fold accumulated | `to_parquet` copies out frames already in memory and bounds nothing; spilling per slice, which would, is [#477](https://github.com/fluxopt/lpspec/issues/477) |
 | **a window spans coordinates, not values** | `length=48` is forty-eight snapshots however they are numbered, so the dimension only has to be **orderable** — datetimes, strings and gapped integers all work. `into` is a dense `0..n-1` local index, which is what keeps the seam's `where: "t == 0"` matching, and it has no default because the name belongs to the model |
 | non-positional grouping | *"each calendar month"* has unequal groups, so it is a precomputed column plus `EachCoordinate`. What `EachWindow` uniquely offers is **overlap** |
 | `carry` excludes `executor` | a carried value makes slice *i+1* depend on slice *i*, so the slices cannot run concurrently. Refused rather than one silently winning |

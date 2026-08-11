@@ -54,13 +54,13 @@ dimensions:
 
 ```yaml
 - expression: >-
-    group_sum(p, over=generator, by=bus)
-    + group_sum(f, over=line, by=to)
-    - group_sum(f, over=line, by=from)
+    sum(p, over=generator, group_by=bus)
+    + sum(f, over=line, group_by=to)
+    - sum(f, over=line, group_by=from)
     == load
 ```
 
-`group_sum` sums along a coordinate, landing the result on the dimension that
+`sum(group_by=)` sums along a coordinate, landing the result on the dimension that
 coordinate points at. The same `f` is summed twice through two different
 coordinates — once as inflow, once as outflow.
 
@@ -70,10 +70,10 @@ dimension. → [transport](models/transport.md)
 ## 4. `shift` reaches along an axis
 
 ```yaml
-- expression: soc == shift(soc, over=snapshot, by=1, edge=wrap) + charge * 0.9 - discharge
+- expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
 ```
 
-One operator, and `edge=` says what happens at the boundary. `edge=wrap` is
+One operator, and `edge=` says what happens at the boundary. `edge='wrap'` is
 cyclic — the first snapshot reads the last, which is what makes a battery
 cyclic without writing the boundary condition out. Omit `edge` and positions
 translated past the edge are **absent**, so the row they would have fed is not
@@ -127,7 +127,7 @@ Worth knowing before you start, rather than after:
 
 - **Bounds take a name or a number, never arithmetic.** `upper: p_max` is
   fine; `upper: -rating` is not. This one has bitten a real port —
-  [#31](https://github.com/FBumann/lpspec/issues/31), and the workaround is to
+  [#31](https://github.com/fluxopt/lpspec/issues/31), and the workaround is to
   ship the negated column as data.
 - **Every expression is affine in the variables.** Degree 1, always: no
   variable times variable. That is the ceiling the whole design is built

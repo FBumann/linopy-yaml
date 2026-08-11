@@ -94,11 +94,35 @@ def _is_missing(value: Any) -> bool:
     return value is None or (isinstance(value, float) and value != value)
 
 
-def labels_frame(dname: str, values: object) -> pl.LazyFrame:
-    """A one-column index frame from a plain sequence of labels."""
+#: The declared dimension dtypes (SPEC §2), as the column an index becomes.
+#: Read only when there are no labels to infer from — polars decides the rest,
+#: and a cast over labels that exist could change how §6.1 compares them.
+_DECLARED: dict[str, pl.DataType] = {
+    'int': pl.Int64(),
+    'float': pl.Float64(),
+    'str': pl.String(),
+    'datetime': pl.Datetime('us'),
+}
+
+
+def labels_frame(dname: str, values: object, dtype: str = 'str') -> pl.LazyFrame:
+    """A one-column index frame from a plain sequence of labels.
+
+    **An empty index takes the dimension's declared dtype.** polars infers
+    ``Null`` from no labels, and a ``Null`` key joins against nothing — so a
+    parameter with the right dtype and no rows fails to bind against the
+    dimension it belongs to. The declaration is the only thing that knows, and
+    it always answers: ``dtype`` defaults to ``str``.
+
+    An empty index is not a corner case for a driver that grows one. A Benders
+    cut set starts empty, and so does any dimension whose members a caller
+    appends to between solves.
+    """
 
     try:
         labels: list[Any] = list(values)  # pyrefly: ignore[bad-argument-type]  — `values` is whatever a caller passed
+        if not labels:
+            return pl.LazyFrame(schema={dname: _DECLARED[dtype]})
         return pl.LazyFrame({dname: labels})
     except (TypeError, pl.exceptions.PolarsError) as exc:
         raise DataError(

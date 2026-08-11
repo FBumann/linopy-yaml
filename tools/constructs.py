@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-from lpspec.api import load_schema
+from lpspec.api import load_model
 from lpspec.lowering import lower_program
 from lpspec.relational import plan
 
@@ -45,7 +45,7 @@ REF_BEGIN, REF_END = '<!-- references:begin -->', '<!-- references:end -->'
 
 #: Column order is the order a reader meets these in docs/SPEC.md, not alphabetical
 #: and not by how many models happen to use them.
-COLUMNS = ('sum', 'group_sum', 'shift', 'roll', 'where', 'bounds', 'piecewise', 'MILP')
+COLUMNS = ('sum', 'sum(group_by)', 'shift', "shift(edge='wrap')", 'where', 'bounds', 'piecewise', 'MILP')
 
 
 def walk(node: Any) -> Iterator[Any]:
@@ -66,7 +66,7 @@ def walk(node: Any) -> Iterator[Any]:
 
 def constructs(model: Path) -> set[str]:
     """The set of columns *model* exercises."""
-    schema = load_schema(model)
+    schema = load_model(model)
     program = lower_program(schema)
     nodes = list(walk(program))
     used: set[str] = set()
@@ -75,13 +75,13 @@ def constructs(model: Path) -> set[str]:
         if isinstance(node, plan.Sum):
             used.add('sum')
         elif isinstance(node, plan.GroupSum):
-            used.add('group_sum')
+            used.add('sum(group_by)')
         elif isinstance(node, plan.Translate):
             # Split rather than one `roll / shift` column: the two spellings are
             # the acyclic and cyclic boundary, and which a model reaches for is
             # the distinction #330 was about. `wrap` is what the node keeps them
             # apart by.
-            used.add('roll' if node.wrap else 'shift')
+            used.add("shift(edge='wrap')" if node.wrap else 'shift')
 
     if any(isinstance(n, plan.Predicate) for n in nodes):
         used.add('where')
