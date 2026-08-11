@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.86](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.85...v0.0.1-alpha.86) (2026-08-11)
+
+
+### Features
+
+* **language:** a coordinate may declare its own label space ([#557](https://github.com/fluxopt/lpspec/issues/557)) ([220fd8a](https://github.com/fluxopt/lpspec/commit/220fd8a54d6d66c9ac45c8a899bcda870b5a3307))
+* **language:** a row with no variable terms is not built, and is reported ([#561](https://github.com/fluxopt/lpspec/issues/561)) ([4cf2ea5](https://github.com/fluxopt/lpspec/commit/4cf2ea5b19f14e00732169719f86126e097341cb)), closes [#556](https://github.com/fluxopt/lpspec/issues/556)
+
 ## [0.0.1-alpha.85](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.84...v0.0.1-alpha.85) (2026-08-10)
 
 
