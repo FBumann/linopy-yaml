@@ -209,7 +209,7 @@ def children(expression: Expression) -> tuple[Expression, ...]:
         return (expression.left, expression.right)
     if isinstance(expression, Divide):
         return (expression.numerator, expression.divisor)
-    if isinstance(expression, (Sum, GroupSum, Translate)):
+    if isinstance(expression, (Sum, GroupSum, At, Translate)):
         return (expression.operand,)
     return ()
 

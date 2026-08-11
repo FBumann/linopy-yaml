@@ -18,12 +18,15 @@ from lpspec.language.model import Model
 from lpspec.language.resolution import Namespace
 from lpspec.lowering import _lower_expr, _lower_where, lower_program
 from lpspec.relational.plan import (
+    At,
     DimensionComparison,
+    Divide,
     Parameter,
     ParameterComparison,
     ParameterDefined,
     Sum,
     Variable,
+    divisor_parameters,
 )
 from lpspec.sources import tidy_sources
 from tests.conftest import resolved, schema_of
@@ -174,3 +177,22 @@ def test_an_unnamed_index_still_binds_positionally():
 def test_an_index_name_outside_the_declared_dims_is_an_error():
     with pytest.raises(DataError, match='do not match its declared dims'):
         _tidy_cap(['banana', 'to_bus'])
+
+
+def test_a_divisor_under_a_pullback_is_still_named():
+    """`children` has to descend through every node, or a refusal loses its name.
+
+    `divisor_parameters` is what turns "a coefficient came out null" into a
+    message naming the parameter the caller has to fix, and it finds those names
+    by walking `children`. `At` was missing from that walk, so a quotient inside
+    `at(...)` reported an uncovered divisor with an empty list where the name
+    belongs — the refusal still fired, and stopped saying what to do about it.
+
+    Asked of the walk directly rather than through a build: the walk is static,
+    and a test that needed data to reach it would be testing the assembly.
+    """
+    quotient = Divide(Variable('x'), Parameter('rate'))
+    pulled = At(quotient, over='flow', coordinate='component', into='component')
+
+    assert divisor_parameters(pulled) == frozenset({'rate'})
+    assert divisor_parameters(Sum(pulled, ('flow',))) == frozenset({'rate'})
