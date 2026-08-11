@@ -1,0 +1,32 @@
+# The feasibility subproblem: how far from dispatchable is this capacity?
+#
+# lpspec hands back no Farkas ray for an infeasible solve — `dual` needs a
+# readable status — so a feasibility cut cannot be read off the infeasible
+# subproblem. This is the standard answer and, here, the only one: minimise the
+# violation instead. Its optimum is zero exactly when `strict_sub` is feasible,
+# and its capacity duals are the subgradient the cut needs.
+dimensions:
+  snapshot: {dtype: int}
+  generator: {values: [wind, gas]}
+parameters:
+  load: {dims: [snapshot]}
+  avail: {dims: [snapshot, generator]}
+  cap_hat: {dims: [generator]}
+variables:
+  p:
+    foreach: [snapshot, generator]
+    bounds: {lower: 0}
+  short:
+    foreach: [snapshot]
+    bounds: {lower: 0}
+constraints:
+  capacity:
+    foreach: [snapshot, generator]
+    expression: p <= cap_hat * avail
+  balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) + short >= load
+objectives:
+  total_violation:
+    sense: minimize
+    expression: short
