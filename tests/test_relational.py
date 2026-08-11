@@ -1629,3 +1629,39 @@ def test_a_mask_or_a_sparse_bound_keeps_the_join():
 
     holey = {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
     assert _aligned_for(DENSE_BOUND_MODEL, holey) == {'avail': False}
+
+
+def test_an_empty_index_keeps_the_dimension_s_declared_dtype():
+    """polars infers `Null` from no labels, and a `Null` key joins nothing.
+
+    A dimension whose members a caller appends to between solves starts empty —
+    a Benders cut set is the motivating case — and the parameter bound to it
+    carries the right dtype from the first call. Only the declaration knows
+    what the column should be, and it always answers: `dtype` defaults to `str`.
+    """
+    model = {
+        'dimensions': {'cut': {'dtype': 'int'}},
+        'parameters': {'c': {'dims': ['cut']}},
+        'variables': {'x': {'foreach': ['cut'], 'bounds': {'lower': 0}}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'x * c'}},
+    }
+    empty = pl.DataFrame(schema={'cut': pl.Int64, 'value': pl.Float64})
+    with lps.build(model, {'c': empty}, coords={'cut': []}) as ex:
+        assert ex._tables().column_count == 0
+
+    grown = pl.DataFrame({'cut': [0, 1], 'value': [1.0, 2.0]})
+    with lps.build(model, {'c': grown}, coords={'cut': [0, 1]}) as ex:
+        assert ex._tables().column_count == 2
+
+
+def test_an_empty_index_of_a_string_dimension_is_a_string_column():
+    """The default `dtype` carries the same weight as a declared one."""
+    model = {
+        'dimensions': {'cut': {}},
+        'parameters': {'c': {'dims': ['cut']}},
+        'variables': {'x': {'foreach': ['cut'], 'bounds': {'lower': 0}}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'x * c'}},
+    }
+    empty = pl.DataFrame(schema={'cut': pl.String, 'value': pl.Float64})
+    with lps.build(model, {'c': empty}, coords={'cut': []}) as ex:
+        assert ex._tables().column_count == 0
