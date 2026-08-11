@@ -121,18 +121,10 @@ class Divide(Expression):
 
 @dataclass(frozen=True)
 class Sum(Expression):
-    """Sum ``operand`` over the named dims, removing them from the result.
-
-    A bare string for ``over`` is tolerated and wrapped into a one-tuple, so
-    ``Sum(operand, "generator")`` means the single dim rather than its letters.
-    """
+    """Sum ``operand`` over the named dims, removing them from the result."""
 
     operand: Expression
     over: tuple[str, ...]
-
-    def __post_init__(self) -> None:
-        if isinstance(self.over, str):
-            object.__setattr__(self, 'over', (self.over,))
 
 
 @dataclass(frozen=True)
@@ -155,17 +147,14 @@ class GroupSum(Expression):
 class At(Expression):
     """Read ``operand`` through a coordinate — the adjoint of :class:`GroupSum`.
 
-    Same mapping table, walked the other way. ``coordinate`` is carried by dim
-    ``over`` and its values are labels of dim ``into``; ``GroupSum`` consumes
-    ``over`` and produces ``into``, and this consumes ``into`` and produces
-    ``over``. The fields are named for the *table*, not for the direction, so
-    the pair reads as one relation rather than two. The surface says which end
-    you stand on: ``sum(over=)`` consumes a dim, ``at(onto=)`` produces
-    one, and ``by=`` names the map in both.
+    Same mapping table, walked the other way: ``GroupSum`` consumes ``over``
+    and produces ``into``, this consumes ``into`` and produces ``over``. The
+    fields are named for the *table* rather than the direction, so the pair
+    reads as one relation; the surface says which end you stand on
+    (``sum(over=)`` consumes, ``at(onto=)`` produces, ``by=`` names the map).
 
-    The join fans out — many ``over`` labels share one ``into`` label — which is
-    the same fan-out ``GroupSum`` pays in reverse, so the locality class is
-    unchanged: one equi-join against a mapping table already in the frame.
+    The join fans out, many ``over`` labels sharing one ``into`` — the fan-out
+    ``GroupSum`` pays in reverse, so the locality class is unchanged.
     """
 
     operand: Expression
@@ -176,20 +165,16 @@ class At(Expression):
 
 @dataclass(frozen=True)
 class Translate(Expression):
-    """Re-index along one dimension: the result at coord *t* is ``operand`` at
-    coord *t - by*.
+    """Re-index along one dimension: the result at *t* is ``operand`` at *t - by*.
 
     One node for the whole of ``shift``, whose ``edge=`` decides ``wrap``:
-    ``edge='wrap'`` is ``wrap=True`` (periodic, matching ``xarray.roll``), and an
-    absent or numeric ``edge=`` is ``wrap=False``. The node is named for the
-    coordinate map rather than for the surface, which is one verb.
+    ``edge='wrap'`` is periodic (``xarray.roll``), absent or numeric is not.
 
-    ``fill`` decides what an acyclic shift leaves behind. ``None`` — the
-    default and what bare ``shift`` lowers to — means the vacated positions are
-    **absent**, so they propagate and drop the row, which is what linopy v1
-    means by ``.shift()``. A number means they are present and contribute it,
-    which is the ``.fillna(0)`` escape hatch spelled in the language. It is
-    always ``None`` when ``wrap`` is true, since a cyclic map vacates nothing.
+    ``fill`` decides what an acyclic shift leaves behind. ``None``, what bare
+    ``shift`` lowers to, leaves the vacated positions **absent** so they
+    propagate and drop the row — linopy v1's ``.shift()``. A number makes them
+    present and contribute it, the ``.fillna(0)`` escape hatch spelled in the
+    language. Always ``None`` under ``wrap``, a cyclic map vacating nothing.
     """
 
     operand: Expression
@@ -202,9 +187,9 @@ class Translate(Expression):
 def children(expression: Expression) -> tuple[Expression, ...]:
     """The sub-expressions of *expression* — the structural half of any walk.
 
-    Both halves of :func:`divisor_parameters` recurse over this tree and differ
-    only in what they do at the leaves. Enumerating the children once is how a
-    node added later reaches both of them rather than one.
+    Every walk over a plan expression recurses through here and differs only in
+    what it does at the leaves. Enumerating the children once is how a node
+    added later reaches all of them rather than one.
     """
     if isinstance(expression, Negate):
         return (expression.operand,)
@@ -301,14 +286,14 @@ class DimensionDeclaration:
     """A dimension and the coordinates its labels carry.
 
     ``coordinates`` maps a coordinate name to the dimension its values are
-    labels of. The executor checks that containment once the dim tables exist,
-    which is what keeps a mistyped label from silently dropping its terms in
-    the inner join that places them.
+    labels of, checked for containment once the dim tables exist — which keeps
+    a mistyped label from silently dropping its terms in the join that places
+    them.
 
     ``labels`` are the inline label spaces: index columns the dimension owns
-    outright, with no target and therefore no containment to check. They ride
-    the dim table for selection and rendering; resolution refuses to group
-    into one, so no expression node ever reaches them.
+    outright, with no target and so nothing to check. They ride the dim table
+    for selection and rendering, and resolution refuses to group into one, so
+    no expression node reaches them.
     """
 
     name: str
@@ -403,12 +388,7 @@ class Program:
 
 
 def parameters_of(*expressions: Expression) -> frozenset[str]:
-    """Every parameter named anywhere under *expressions*.
-
-    Static, like :func:`divisor_parameters`: which names *can* appear is the
-    plan's to answer, and *where* they must have values is decided by the rows
-    a declaration actually builds.
-    """
+    """Every parameter named anywhere under *expressions*."""
     found: set[str] = set()
 
     def walk(e: Expression) -> None:
@@ -425,26 +405,15 @@ def parameters_of(*expressions: Expression) -> frozenset[str]:
 def divisor_parameters(*expressions: Expression) -> frozenset[str]:
     """Parameters appearing anywhere in a divisor position.
 
-    Static, like every other question this module answers: which names *can*
-    reach a divisor is decided by the plan, and *where* they must have values is
-    decided by the rows a declaration actually builds. Splitting it that way
-    keeps the coverage check off parameters that can never need it, and off the
-    coordinates a ``where`` already removed.
+    Static, like :func:`parameters_of`: which names *can* reach a divisor is
+    the plan's to answer, and *where* they must have values is decided by the
+    rows a declaration builds.
     """
-
     found: set[str] = set()
 
-    def names(e: Expression) -> None:
-        """Every parameter under *e*, wherever it sits."""
-        if isinstance(e, Parameter):
-            found.add(e.name)
-        for child in children(e):
-            names(child)
-
     def walk(e: Expression) -> None:
-        """Every divisor under *e*, whose parameters are the answer."""
         if isinstance(e, Divide):
-            names(e.divisor)
+            found.update(parameters_of(e.divisor))
         for child in children(e):
             walk(child)
 

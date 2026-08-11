@@ -1,16 +1,15 @@
 """Typst. The format that compiles without a toolchain.
 
 Here to keep :mod:`lpspec.typeset.format` honest: a seam with one
-implementation behind it is a shape, not an abstraction, and Typst's syntax
-differs from LaTeX's in every respect that matters — ``sum_(…)`` not
-``\\sum_{…}``, ``cal(T)`` not ``\\mathcal{T}``, function-call grouping instead
-of brace groups, a term list instead of a ``description`` environment. If the
-walk needed changing to accommodate it, the split was in the wrong place.
+implementation behind it is a shape, not an abstraction. Typst's syntax differs
+from LaTeX's in every respect that matters — ``sum_(…)``, ``cal(T)``,
+function-call grouping instead of brace groups, a term list instead of a
+``description`` environment — so if the walk needed changing to accommodate it,
+the split was in the wrong place.
 
-Practical difference: the compiler is one self-contained binary (a pip wheel,
-so the suite compiles every example without apt), and multi-letter identifiers
-in math are upright by default, which is why names go through ``italic("…")``
-rather than being emitted bare.
+Practically: the compiler is one self-contained binary (a pip wheel, so the
+suite compiles every example without apt), and multi-letter identifiers in math
+are upright by default, which is why names go through ``italic("…")``.
 """
 
 from __future__ import annotations
@@ -38,9 +37,8 @@ def _raw(text: str) -> str:
 class TypstFormat:
     """See :class:`lpspec.typeset.format.Format`.
 
-    The cyclic operators spell with ``.o``, Typst's circled modifier —
-    ``minus.circle`` is not a thing, which the compile gate caught on the
-    first run.
+    The cyclic operators spell with ``.o``, Typst's circled modifier;
+    ``minus.circle`` does not compile.
     """
 
     suffix: ClassVar[str] = '.typ'
@@ -110,9 +108,6 @@ class TypstFormat:
     def fraction(self, numerator: str, denominator: str) -> str:
         return f'frac({numerator}, {denominator})'
 
-    def power(self, base: str, exponent: str) -> str:
-        return f'{base}^({exponent})'
-
     def summation(self, domain: str, body: str) -> str:
         return f'sum_({domain}) {body}'
 
@@ -144,10 +139,7 @@ class TypstFormat:
         return f'{numbering}$ {body} $'
 
     def glossary(self, title: str, entries: list[Entry]) -> str:
-        rows = '\n'.join(
-            f'/ {self.math(e.symbol)}: {e.name}{e.detail}' + (f' --- {e.description}' if e.description else '')
-            for e in entries
-        )
+        rows = '\n'.join(f'/ {self.math(e.symbol)}: {e.meaning}' for e in entries)
         return f'== {title}\n{rows}'
 
     def section(self, title: str, body: str) -> str:

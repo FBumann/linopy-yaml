@@ -22,14 +22,14 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
-import polars as pl
-
 from lpspec.errors import LpspecError
-from lpspec.relational.sinks.tables import SENSE_CODES
+from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    import polars as pl
 
     from lpspec.relational.sinks.tables import ModelTables
 
@@ -85,11 +85,10 @@ def build_gurobi(
 
     **The caller owns the model, so the environment follows it.** gurobipy has
     no ``Model.getEnv()``, so a caller handed only the model could never
-    release the licence it holds; a finalizer disposes the environment when
-    the model is collected, which under refcounting is when the caller drops
-    it. That is one thing to own rather than two, and it is why this returns a
-    model rather than a pair. (linopy's equivalent — a solver model detached
-    from its `Solver` — leaves the environment to gurobipy to free whenever.)
+    release the licence it holds; a finalizer disposes the environment when the
+    model is collected, which under refcounting is when the caller drops it.
+    One thing to own rather than two, which is why this returns a model rather
+    than a pair.
     """
     m, _x, _blocks, environment = _load(model, batch_rows, solver_options)
     weakref.finalize(m, environment.dispose)
@@ -119,7 +118,7 @@ def solve_gurobi(
         status = _status_of(m)
         if not status.is_readable:
             return status, float('nan'), None, None
-        return status, m.ObjVal, _vector(x.X), _duals(model.row_count, blocks)
+        return status, m.ObjVal, solver_vector(x.X), _duals(model.row_count, blocks)
     finally:
         m.dispose()
         environment.dispose()
@@ -132,27 +131,21 @@ def _load(
 ) -> tuple[Any, Any, list[Any], Any]:
     """The model, the handles to read it back, and the environment to release.
 
-    ``x.X`` and ``block.Pi`` are numpy arrays; ``getVars()`` / ``getConstrs()``
-    would build one Python object per column and row to reach the same numbers.
-    The environment comes back because gurobipy has no ``Model.getEnv()``, and
-    whoever disposes the model has to dispose it too.
+    ``x.X`` and ``block.Pi`` are numpy arrays; ``getVars()``/``getConstrs()``
+    would build one Python object per column and row for the same numbers.
 
     **Options go on the environment, not the model.** A licence parameter —
     ``WLSAccessID``, ``ComputeServer``, ``TokenServer`` — can only be set
-    before an environment starts, and ``setParam`` on the model refuses it
-    with *unable to modify parameter after environment started*. So a
-    Compute-Server or WLS user could not reach this sink at all. Everything
-    else is unaffected: an environment's parameters are the defaults of every
-    model built on it, and an unknown name still raises at the same point.
-    ``OutputFlag`` leads so a caller can put the log back by passing their own.
+    before an environment starts, and ``setParam`` on the model refuses it,
+    so a Compute-Server or WLS user could not reach this sink at all. Nothing
+    else is affected: an environment's parameters are the defaults of every
+    model built on it. ``OutputFlag`` leads so a caller can put the log back.
 
-    ``vtype`` is passed only when some column is integral: an LP pays 17% of
-    the column hand-off for a vtype array of one repeated letter — 0.46 s
-    against 0.38 s at 10^6 columns — and linopy skips it the same way.
-
-    ``batch_rows`` goes straight through, un-defaulted: one call unless a
-    caller asks otherwise, which is what #434 measured and ``row_blocks`` now
-    states.
+    ``vtype`` is passed only when some column is integral — an LP pays 17% of
+    the column hand-off for an array of one repeated letter (0.46 s against
+    0.38 s at 10^6 columns), and linopy skips it the same way. ``batch_rows``
+    goes straight through un-defaulted: one call unless a caller asks
+    otherwise (#434).
     """
     gurobipy = _gurobipy()
     import numpy as np
@@ -191,11 +184,10 @@ _GUROBI_SENSE = {'<=': 'LESS_EQUAL', '>=': 'GREATER_EQUAL', '==': 'EQUAL'}
 def _spelled(gurobipy: Any) -> Any:
     """:data:`SENSE_CODES` as the characters ``addMConstr`` wants, by code.
 
-    Built from the mapping rather than written out in its order, so the two
-    cannot come to disagree: a wrong order here is a model whose comparisons
-    are silently permuted, which every solver would answer confidently. A
-    sense added to :data:`SENSE_CODES` and not to :data:`_GUROBI_SENSE` raises
-    instead.
+    Built from the mapping rather than written out in its order: a wrong order
+    is a model whose comparisons are silently permuted, which every solver
+    answers confidently. A sense added to :data:`SENSE_CODES` and not to
+    :data:`_GUROBI_SENSE` raises instead.
     """
     import numpy as np
 
@@ -260,12 +252,4 @@ def _duals(row_count: int, blocks: list[Any]) -> pl.Series | None:
             f'positional, so a short vector would drop rows silently. This is an '
             f'engine bug rather than a problem with the model — please report it.'
         )
-    return _vector(values)
-
-
-def _vector(values: Any) -> pl.Series:
-    """One quantity the solver produced, in its own index — see
-    :func:`~lpspec.relational.sinks.solvers.highs._vector`."""
-    import numpy as np
-
-    return pl.Series('value', np.asarray(values, dtype=np.float64))
+    return solver_vector(values)

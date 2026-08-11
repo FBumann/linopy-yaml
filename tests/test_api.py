@@ -247,7 +247,7 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
     assert result.primal('p').height == height  # still there, no close in sight
 
     result.close()
-    with pytest.raises(AssertionError):
+    with pytest.raises(lps.LpspecError, match='this result was closed'):
         result.primal('p')
 
 
@@ -427,3 +427,24 @@ def test_a_wrong_model_raises_one_tree(mistake: str, raw: dict[str, object], tmp
             call()
         except lps.LpspecError as exc:
             assert 'errors.pydantic.dev' not in str(exc), f"{door}: {mistake} leaks pydantic's envelope"
+
+
+def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs):
+    """`close` releases the model the readers join against, and they should say so.
+
+    The status gate cannot notice: closing frees the model, not the solve, so
+    `is_readable` stays true and the reader used to fall through to a bare
+    `AssertionError` from the executor. Frames read before the close are their
+    own data and stay valid, which is the half worth stating in the message.
+    """
+    sources, coords = dispatch_frame_inputs
+    sol = lps.solve(dispatch_yaml, sources, coords=coords)
+    frame = sol.primal('p')
+    objective = sol.objective
+    sol.close()
+
+    assert frame.height > 0, 'a frame read before the close is its own data'
+    assert sol.objective == objective, 'and the outcome needs no model to report'
+    for read in (lambda: sol.primal('p'), lambda: sol.dual('power_balance')):
+        with pytest.raises(lps.LpspecError, match='this result was closed'):
+            read()

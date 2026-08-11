@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.0.1-alpha.95](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.94...v0.0.1-alpha.95) (2026-08-11)
+
+
+### Bug Fixes
+
+* **engine:** a returned frame speaks String, so it joins the caller's own ([#593](https://github.com/fluxopt/lpspec/issues/593)) ([69b9ad2](https://github.com/fluxopt/lpspec/commit/69b9ad21f2772232c3d19245b764dbebf231f1ea))
+
+## [0.0.1-alpha.94](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.93...v0.0.1-alpha.94) (2026-08-11)
+
+
+### Refactoring
+
+* one answer per question ([#589](https://github.com/fluxopt/lpspec/issues/589)) ([8a831cc](https://github.com/fluxopt/lpspec/commit/8a831cc86f1089654ba22b3773e70852911b9c49))
+
+## [0.0.1-alpha.93](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.92...v0.0.1-alpha.93) (2026-08-11)
+
+
+### Bug Fixes
+
+* **api:** a closed result says it was closed ([#587](https://github.com/fluxopt/lpspec/issues/587)) ([45cc1d0](https://github.com/fluxopt/lpspec/commit/45cc1d0f68364d8a7ca591cc2d2c3b37ae884837))
+
 ## [0.0.1-alpha.92](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.91...v0.0.1-alpha.92) (2026-08-11)
 
 

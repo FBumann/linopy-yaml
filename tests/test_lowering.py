@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import lpspec as lps
 from lpspec.errors import DataError, DimensionError, LanguageError
 from lpspec.language.model import Model
 from lpspec.language.resolution import Namespace
@@ -175,8 +176,16 @@ def test_an_unnamed_index_still_binds_positionally():
 
 
 def test_an_index_name_outside_the_declared_dims_is_an_error():
-    with pytest.raises(DataError, match='do not match its declared dims'):
-        _tidy_cap(['banana', 'to_bus'])
+    """Refused by binding, which asks it of a parquet path as well as a frame.
+
+    ``tidy_sources`` only ever sees the in-memory half, so asking there too
+    would be a second wording of one defect covering fewer sources.
+    """
+    import pandas as pd
+
+    index = pd.MultiIndex.from_tuples(list(CAPS), names=['banana', 'to_bus'])
+    with pytest.raises(DataError, match='is missing columns'):
+        lps.build(Model(**NETWORK), {'cap': pd.Series(list(CAPS.values()), index=index)})
 
 
 def test_a_divisor_under_a_pullback_is_still_named():

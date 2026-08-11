@@ -1,9 +1,9 @@
 """Model builder: schema + data → linopy Model.
 
-Also holds the eager evaluation of every built-in helper. The helper *names*
-are the language (``helpers.py``, imported by the linopy-free lane); these
-xarray/linopy evaluations are this backend's private business, mirrored on
-the relational side by lowering cases and SQL rather than shared code.
+Also the eager evaluation of every built-in helper. The helper *names* are the
+language (``helpers.py``, imported by the linopy-free lane); these
+xarray/linopy evaluations are this backend's private business, mirrored on the
+relational side by lowering cases rather than shared code.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ from lpspec.language.where_parser import (
     WhereNode,
 )
 from lpspec.linopy import semantics
-from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover
+from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover, gaps_under
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
@@ -84,9 +84,8 @@ _PREDICATE_OPS: dict[str, Callable[[Any, Any], Any]] = {
 class EvaluationContext:
     """Everything expression evaluation needs to resolve names.
 
-    Grows with the expression language (sub-expression scopes, slice
-    bindings, ...) — extend this instead of adding parameters to
-    ``_eval_ast`` and every helper-facing seam.
+    Extend this rather than adding parameters to ``_eval_ast`` and every
+    helper-facing seam.
     """
 
     model: linopy.Model
@@ -155,23 +154,18 @@ def _build_variables(ctx: EvaluationContext) -> None:
 def _check_bounds_are_defined(name: str, vdef: Any, dataset: xr.Dataset, mask: Any) -> None:
     """Refuse a bound with no value, at build, as the native lane does.
 
-    Without it the NaN travels into linopy and surfaces two phases later, from
-    inside its IO layer: ``ValueError: Continuous Variable x contains nan's in
-    field(s) ['upper']``, raised at solve or write, naming neither the YAML nor
-    the fix. ``build()`` had already returned a model that could not be used.
+    Otherwise the NaN travels into linopy and surfaces two phases later from
+    inside its IO layer — ``Continuous Variable x contains nan's in field(s)
+    ['upper']``, raised at solve or write, naming neither the YAML nor the fix,
+    from a ``build()`` that had already returned.
 
-    Checked against the variable's own mask for the reason every other absence
-    check is: a coordinate the variable does not occupy needs no bound, and
-    supplying data only where the variable exists is the ordinary idiom.
+    Checked against the variable's own mask: a coordinate the variable does not
+    occupy needs no bound, and supplying data only where it exists is the
+    ordinary idiom.
     """
-    missing = 0
-    for bound in (vdef.bounds.lower, vdef.bounds.upper):
-        if not isinstance(bound, str):
-            continue
-        gaps = dataset[bound].isnull()
-        if mask is not None:
-            gaps = gaps & mask
-        missing += int(gaps.sum())
+    missing = sum(
+        gaps_under(dataset[bound], mask) for bound in (vdef.bounds.lower, vdef.bounds.upper) if isinstance(bound, str)
+    )
     if missing:
         raise DataError(null_bounds_message(name, missing))
 
@@ -259,21 +253,17 @@ def _build_objectives(ctx: EvaluationContext) -> None:
 def _objective_expression(node: ArithmeticNode, ctx: EvaluationContext) -> Any:
     """*node* as a scalar: each additive term summed over the dims it carries.
 
-    An objective has no ``foreach``, so every dim it names is summed (SPEC §2).
-    *Which* dims are summed is per term, not per objective. In
+    An objective has no ``foreach``, so every dim it names is summed (SPEC §2)
+    — but *which* dims, per term rather than per objective. In
     ``x[i] * a[i] + y[j] * b[j]`` the first term has ``|i|`` summands and the
-    second ``|j|``; neither is repeated because its sibling names a dim it does
-    not carry. Adding the two operands first — what linopy's ``+`` does —
+    second ``|j|``. Adding the operands first, as linopy's ``+`` does,
     broadcasts both to ``(i, j)`` and counts each term once per coordinate of
-    the other, so an objective that spans a sparse and a dense variable comes
-    out multiplied rather than summed.
+    the other, so an objective spanning a sparse and a dense variable comes out
+    multiplied rather than summed.
 
-    The relational lane never had the problem: an expression there is a set of
-    term fragments, each keeping its own dims until the objective sums it. This
-    reproduces that by distributing the sum over addition, which is what hard
-    rule 3 requires of the two lanes (#197). ``.sum()`` with no dim argument
-    reduces everything a term carries; a bare constant has nothing to reduce
-    and no ``.sum`` to call.
+    The relational lane never had the problem, an expression there being term
+    fragments that each keep their own dims. Distributing the sum over addition
+    reproduces that, which is what hard rule 3 requires (#197).
     """
     total: Any = None
     for term in _additive_terms(node, ctx):
@@ -285,16 +275,14 @@ def _objective_expression(node: ArithmeticNode, ctx: EvaluationContext) -> Any:
 def _additive_terms(node: ArithmeticNode, ctx: EvaluationContext) -> list[Any]:
     """*node* as a list of terms to be summed, multiplication distributed.
 
-    Only the operators that distribute are walked. Everything else is one
-    opaque term evaluated the ordinary way — a helper call has already reduced
-    whatever it reduces, and its result broadcasts like any other operand.
+    Only the operators that distribute are walked; everything else is one
+    opaque term, a helper call having already reduced whatever it reduces.
     Distribution is what keeps ``(x[i] * a[i] + y[j] * b[j]) * c[k]`` two terms
     rather than one broadcast to ``(i, j, k)``.
 
-    Degree 1 is what makes distributing safe: ``degree.check_binary`` — the
-    language's verdict, not linopy's — has already refused the one product
-    that would not survive it, and a divisor carries no variables, so it is a
-    single value applied to each term.
+    Degree 1 makes it safe: ``degree.check_binary`` has already refused the one
+    product that would not survive, and a divisor carries no variables, so it
+    is a single value applied to each term.
     """
     if isinstance(node, UnaryOperatorNode) and node.op in {'+', '-'}:
         terms = _additive_terms(node.operand, ctx)
@@ -330,9 +318,7 @@ def _eval_ast(
 
     Binary nodes go through ``degree.check_binary`` first: ``**``, a quadratic
     product and a variable divisor are all refused by ``language/degree.py``,
-    the same verdict the relational lane asks for — this lane used to keep a
-    hand-copy of the ``**`` message and leave ``x * y`` to fail as whatever
-    linopy raised.
+    the same verdict the relational lane asks for and in the same sentence.
 
     Unknown helper names were rejected by ``validation.py`` at load time; the
     guard on ``_HELPERS`` covers hand-built calls that skipped it.
@@ -405,9 +391,8 @@ def _eval_ast(
 def _coordinate_array(by: CoordinateNode, ctx: EvaluationContext) -> Any:
     """The declared coordinate ``by`` as an array over the dimension carrying it.
 
-    Looked up rather than evaluated as an operand, because the coordinate
-    lives on the dimension, not in the parameter dataset — the helper that
-    takes it still sees a plain mapping array.
+    Looked up rather than evaluated as an operand: the coordinate lives on the
+    dimension, not in the parameter dataset.
     """
     try:
         return ctx.dim_coords[by.dimension][by.name]
@@ -441,17 +426,14 @@ def _helper_sum(array: Any, *, over: str) -> Any:
 def _helper_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
     """Sum *array* through a declared coordinate, producing dimension *into*.
 
-    Usage in YAML: ``sum(p, over=generator, group_by=bus)``
-
-    *mapping* is the coordinate's values as a one-dimensional array over the
-    dim being grouped (``generator`` → bus labels), supplied by the caller from
-    ``EvaluationContext.dim_coords``. That dim is summed out; a new dimension
-    named *into* holds the group labels.
+    YAML: ``sum(p, over=generator, group_by=bus)``. *mapping* is the
+    coordinate's values as a one-dimensional array over the dim being grouped,
+    from ``EvaluationContext.dim_coords``; that dim is summed out and *into*
+    holds the group labels.
 
     A null coordinate says the label belongs to no group, so its terms
-    contribute nowhere. The relational lane gets that for free — a NULL group
-    key joins no constraint row — but linopy refuses to group by NaN at all,
-    so the members are dropped before grouping rather than after.
+    contribute nowhere. linopy refuses to group by NaN at all, so those members
+    are dropped before grouping rather than after.
     """
     if not isinstance(mapping, xr.DataArray):
         msg = (
@@ -477,20 +459,17 @@ def _helper_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
 def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
     """Read *array* through a declared coordinate — the adjoint of a group.
 
-    Usage in YAML: ``at(on, onto=flow, by=component)``
+    YAML: ``at(on, onto=flow, by=component)``. *mapping* is the same
+    one-dimensional array ``sum`` takes; grouping sums *along* it, this indexes
+    *through* it, so the operand must carry ``into`` and the result carries the
+    mapping's own dim.
 
-    *mapping* is the same one-dimensional array ``sum`` takes: the
-    coordinate's values over the dim carrying it (``flow`` -> component labels).
-    Grouping sums *along* it; this indexes *through* it, so the operand must
-    carry ``into`` and the result carries the mapping's own dim instead.
+    xarray's vectorised selection is the pullback exactly — one ``into`` label
+    read once per fine label pointing at it — so the fan-out is the indexer's
+    doing rather than a broadcast arranged here.
 
-    That is xarray's vectorised selection, which is the pullback exactly: one
-    ``into`` label is read once per fine label pointing at it, so the fan-out
-    is the indexer's doing rather than a broadcast we arrange.
-
-    A null coordinate says this fine label belongs to no coarse one, so it
-    reads nothing and its row is absent — the same reading ``sum`` gives a
-    null group, and the relational lane gets it free from an inner join.
+    A null coordinate reads nothing and its row is absent, the same reading
+    ``sum`` gives a null group.
     """
     if not isinstance(mapping, xr.DataArray):
         msg = f'at() coordinate must be an array (got {type(mapping).__name__}). Usage: at(expr, onto=dim, by=coord)'
@@ -528,18 +507,16 @@ def _translation(over: str, by: float) -> Mapping[Hashable, int]:
 def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None = None) -> Any:
     """Translate *array* along one dimension — the value at *t - by*.
 
-    Usage in YAML: ``shift(soc, over=snapshot, by=1)``. ``edge`` decides the
-    boundary and carries all three policies, so no two keywords can disagree:
-    ``edge='wrap'`` is cyclic and vacates nothing, a number is what the vacated
-    positions contribute, and omitting it leaves them **absent** — which
-    propagates and drops the row, what linopy's own v1 convention means by
-    ``.shift()``. Nothing is done to the result in that default case on
-    purpose: the whole point of #289 was to stop holding linopy off its own
-    answer.
+    YAML: ``shift(soc, over=snapshot, by=1)``. ``edge`` carries all three
+    policies so no two keywords can disagree: ``edge='wrap'`` is cyclic and
+    vacates nothing, a number is what the vacated positions contribute, and
+    omitting it leaves them **absent**, which propagates and drops the row.
+    Nothing is done to the result in that default case — linopy v1 already
+    gives that answer (#289).
 
-    A DataArray shift always fills — absence is not representable in data, so
+    A DataArray shift always fills, absence not being representable in data, so
     lowering refuses a bare shift over a variable-free operand and that branch
-    is only ever reached under a numeric ``edge=``.
+    is only reached under a numeric ``edge=``.
     """
     amount = _translation(over, by)
     if edge == EDGE_WRAP:
@@ -584,16 +561,13 @@ def evaluate_where(
 ) -> xr.DataArray:
     """Evaluate a **resolved** where AST against a parameter dataset.
 
-    Takes a node, not a string: resolution (``resolution.resolve_where``) has
-    already decided what every name refers to, so this function performs no
-    lookups and cannot disagree with the relational lane about scoping. It
-    lives here rather than in ``where_parser.py`` because it is xarray-only —
-    the relational lane reads the same AST through lowering and never wants
-    this code.
+    A node, not a string: resolution has already decided what every name refers
+    to, so this performs no lookups and cannot disagree with the relational lane
+    about scoping. It lives here rather than in ``where_parser.py`` because it
+    is xarray-only.
 
-    Always returns a boolean DataArray mask. The no-mask case comes back
-    0-dimensional, so callers combine masks with ``&``/``|`` without case
-    analysis.
+    Always a boolean DataArray. The no-mask case comes back 0-dimensional, so
+    callers combine with ``&``/``|`` without case analysis.
     """
     if node is None:
         return xr.DataArray(True)

@@ -62,9 +62,9 @@ def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
 def _series_to_frame(series: Any, dims: Sequence[str]) -> Any:
     """A pandas Series with its index promoted to columns.
 
-    Levels the caller named are left alone and bind by name: renaming them to
-    *dims* transposes the data when two dims share a label space, and nothing
-    downstream can catch that.
+    Levels the caller named bind by name: renaming them to *dims* transposes
+    the data when two dims share a label space, which nothing downstream can
+    catch.
     """
     if any(n is None for n in series.index.names):
         series = series.rename_axis(dims)
@@ -76,8 +76,7 @@ def _from_pandas(frame: Any) -> pl.LazyFrame:
 
     A whole-frame conversion needs pyarrow for anything Arrow-backed, which
     strings are by default on pandas 3. Object arrays go through a list so
-    numpy's float ``nan`` becomes a null rather than a string; the test is on
-    the numpy dtype, since that is what polars sees.
+    numpy's float ``nan`` becomes a null rather than a string.
     """
     columns: dict[str, Any] = {}
     for name in frame.columns:

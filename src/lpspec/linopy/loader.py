@@ -17,14 +17,16 @@ from lpspec.errors import (
 from lpspec.language.expression_parser import (
     BinaryOperatorNode,
     ComparisonNode,
-    FunctionCallNode,
     NameNode,
     ParameterNode,
-    UnaryOperatorNode,
     VariableNode,
+    children,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from lpspec.language.expression_parser import ExpressionNode
     from lpspec.language.model import Model
 
 
@@ -343,7 +345,21 @@ def _validate_coords(
             raise DataError(msg)
 
 
-def check_constant_side_covers(name: str, node: Any, schema: Model, dataset: Any, mask: Any) -> None:
+def gaps_under(array: Any, mask: Any) -> int:
+    """How many slots of *array* are null where *mask* still admits the row.
+
+    The eager lane's one way of asking "is this parameter defined where it is
+    needed" — a bound, a divisor and a constant side all ask it, and a second
+    spelling is a second chance to forget the mask and refuse a model whose
+    ``where`` had already answered. ``None`` means nothing narrows the question.
+    """
+    missing = array.isnull()
+    if mask is not None:
+        missing = missing & mask
+    return int(missing.sum())
+
+
+def check_constant_side_covers(name: str, node: ComparisonNode, schema: Model, dataset: Any, mask: Any) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
     The divisor argument, one position over. A missing row is read as 0, and on
@@ -365,15 +381,12 @@ def check_constant_side_covers(name: str, node: Any, schema: Model, dataset: Any
         if not params:
             continue
         for param in sorted(params):
-            gaps = dataset[param].isnull()
-            if mask is not None:
-                gaps = gaps & mask
-            missing = int(gaps.sum())
+            missing = gaps_under(dataset[param], mask)
             if missing:
                 raise DataError(uncovered_constant_message(param, missing, name))
 
 
-def check_divisors_cover(name: str, node: Any, schema: Model, dataset: Any, mask: Any, model: Any) -> None:
+def check_divisors_cover(name: str, node: ExpressionNode, schema: Model, dataset: Any, mask: Any, model: Any) -> None:
     """A divisor must have a value wherever this declaration divides by it.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check
@@ -401,37 +414,24 @@ def check_divisors_cover(name: str, node: Any, schema: Model, dataset: Any, mask
             present = model.variables[variable].labels != -1
             needed = present if needed is None else (needed & present)
         for param in sorted(params):
-            gaps = dataset[param].isnull()
-            if needed is not None:
-                gaps = gaps & needed
-            missing = int(gaps.sum())
+            missing = gaps_under(dataset[param], needed)
             if missing:
                 raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
 
 
-def _quotients(node: Any) -> list[Any]:
+def _quotients(node: ExpressionNode) -> list[BinaryOperatorNode]:
     """Every division node under *node*."""
     out = [node] if isinstance(node, BinaryOperatorNode) and node.op == '/' else []
-    for child in _children(node):
+    for child in children(node):
         out.extend(_quotients(child))
     return out
 
 
-def _names_of(node: Any, declared: Any) -> set[str]:
+def _names_of(node: ExpressionNode, declared: Iterable[str]) -> set[str]:
     """Declared names under *node*, whether the AST is resolved or not."""
     found: set[str] = set()
     if isinstance(node, (NameNode, ParameterNode, VariableNode)) and node.name in declared:
         found.add(node.name)
-    for child in _children(node):
+    for child in children(node):
         found |= _names_of(child, declared)
     return found
-
-
-def _children(node: Any) -> tuple[Any, ...]:
-    if isinstance(node, (ComparisonNode, BinaryOperatorNode)):
-        return (node.left, node.right)
-    if isinstance(node, UnaryOperatorNode):
-        return (node.operand,)
-    if isinstance(node, FunctionCallNode):
-        return (*node.args, *node.kwargs.values())
-    return ()

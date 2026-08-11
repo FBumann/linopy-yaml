@@ -108,27 +108,17 @@ class PolarsExecutor:
     def build(self, program: plan.Program, sources: Mapping[str, Any]) -> None:
         """Bind *sources*, then build every declaration into the model frames.
 
-        The compiler comes after the binding, because two of its answers are
-        read off the data — a dim's size and whether a parameter is boolean.
-        The variable registry is handed to it apart from the frozen bound data
-        because it is still being filled: a constraint compiled later has to
-        see the variables built before it (see :class:`PolarsCompiler`).
-        Declarations are then built one at a time and concatenated at the end:
-        their rows are independent, which is what lets the model be four frames
-        rather than a graph.
+        The compiler comes after binding, two of its answers being read off the
+        data — a dim's size, whether a parameter is boolean. Declarations build
+        one at a time and concatenate at the end; their rows are independent,
+        which is what lets the model be four frames rather than a graph.
 
-        The matrix leaves here in ``(row, col)`` order, which is what
-        ``ModelTables`` promises its sinks — one reads it a row range at a
-        time, the other renders a row's terms in column order. The stack
-        already has that order: each share leaves sorted and owns the next run
-        of rows, so ascending shares concatenate into an ascending whole, and
-        a ``sort`` here would copy the model's largest frame at the peak of
-        the build to reorder nothing. :func:`_in_row_order` therefore *checks*
-        the claim with one linear scan rather than re-establishing it.
-
-        That order is what :func:`_row_starts` reads the CSR index off, after
-        which the ``row`` column itself is dropped: a label repeated once per
-        nonzero is 8 bytes per entry no sink reads.
+        The matrix leaves in ``(row, col)`` order, as ``ModelTables`` promises
+        its sinks. The stack already has it — each share leaves sorted and owns
+        the next run of rows — so :func:`_in_row_order` *checks* with one
+        linear scan rather than sorting the model's largest frame at the peak
+        of the build. :func:`_row_starts` reads the CSR index off that order,
+        after which ``row`` is dropped: 8 bytes per entry no sink reads.
         """
 
         self._program = program
@@ -154,14 +144,11 @@ class PolarsExecutor:
     def _refuse_undefined_divisors(self, stacked: pl.DataFrame, name: str, *expressions: plan.Expression) -> None:
         """A null coefficient means a divisor had no value where the model divided.
 
-        A quotient joins its divisor with a left join (:func:`_join_mul`), so a
-        missing value leaves a null — and if the row was masked out, or the
-        numerator variable does not exist there, the term never gets this far
-        and there is nothing to report. That is what keeps the refusal from
-        becoming a wall: sparse data is the ordinary case, and the question is
-        not whether a divisor is dense but whether it is defined wherever the
-        model actually divides by it. ``sum`` reads a null as a zero, which is
-        why the question is put to the stack before any cell collapses.
+        A quotient left-joins its divisor (:func:`_join_mul`), so a missing
+        value leaves a null — and a term whose row was masked out, or whose
+        numerator variable is absent, never gets this far. That is what keeps
+        the refusal from becoming a wall on ordinary sparse data. Asked of the
+        stack before any cell collapses, since ``sum`` reads a null as zero.
         """
         undefined = int(stacked.get_column('coeff').null_count())
         if undefined:
@@ -172,25 +159,20 @@ class PolarsExecutor:
         """One constraint's share: in ``(row, col)`` order, repeated cells summed.
 
         Nothing runs unconditionally except three linear probes — the null
-        count, whether the stack already arrives in order, whether any cell
-        repeats. The stack usually is in order (each piece leaves the
-        label-ordered row frame through joins that preserve it in practice)
-        and usually repeats nothing (a cell repeats only when one variable
-        reaches a row twice), so the sort and the aggregate run only when a
-        probe says they would change something. At 10M entries they cost 5 ms
-        where the unconditional hash aggregate costs 325 ms. The answer is
-        read off the data rather than reasoned from the declarations — the
-        static machinery that made this call is what #520 removed, and
-        nothing here has to know *why* a cell repeats.
+        count, whether the stack arrives in order, whether any cell repeats. It
+        usually is in order and usually repeats nothing (a cell repeats only
+        when one variable reaches a row twice), so the sort and the aggregate
+        run only when a probe says they would change something: 5 ms at 10M
+        entries against 325 ms for the unconditional hash aggregate. Read off
+        the data, so nothing here knows *why* a cell repeats (#520).
 
         **That 5 ms is why the share is rechunked first.** A streaming collect
-        returns its morsels as chunks — 104 of them for `dispatch/l`'s share —
-        and ``shift(1)`` pays at every boundary where ``is_sorted`` does not,
-        so probing the share as it arrives costs 28 ms against 12 ms for the
-        rechunk and the probe together (#576). The rechunk is not an extra
-        copy: the assembly needs a contiguous matrix anyway (#550) and this
-        moves that one earlier. The objective's stack is deliberately left
-        fragmented — measured, and it costs peak for no wall.
+        returns morsels as chunks — 104 of them for `dispatch/l`'s share — and
+        ``shift(1)`` pays at every boundary where ``is_sorted`` does not: 28 ms
+        to probe as it arrives against 12 ms for rechunk and probe together
+        (#576). Not an extra copy, since the assembly needs a contiguous matrix
+        anyway (#550). The objective's stack is left fragmented — measured, and
+        it costs peak for no wall.
         """
         stacked = pl.concat(pieces).collect(engine='streaming').rechunk()
         self._refuse_undefined_divisors(stacked, name, *expressions)
@@ -217,16 +199,16 @@ class PolarsExecutor:
     def _build_variable(self, v: plan.VariableDeclaration) -> pl.DataFrame:
         """One variable's labelled frame, and its share of ``cols``.
 
-        The share leaves in label order, because ``cols`` carries no ``col``
-        of its own: a row's *position* is its solver column index. The bounds
-        joins usually keep the labelled frame's order, so the order is
-        verified with one linear scan and re-established only when a join
-        actually lost it (:func:`labels.in_position_order`). Only the label
-        and the two bounds are collected: projecting before the collect keeps
-        the dim columns and the joined bound parameters inside the lazy
-        pipeline instead of materialising them to be dropped. The label is
-        then projected away too, having been the order's witness and nothing
-        else — ``cols`` is the three columns a sink reads.
+        The share leaves in label order, ``cols`` carrying no ``col`` of its
+        own: a row's *position* is its solver column index. The bounds joins
+        usually keep that order, so it is verified with one linear scan and
+        re-established only when a join lost it
+        (:func:`labels.in_position_order`).
+
+        Only the label and the two bounds are collected, keeping the dim
+        columns and joined bound parameters inside the lazy pipeline rather
+        than materialising them to be dropped. The label then goes too, having
+        been the order's witness and nothing else.
         """
 
         start = self._n_cols
@@ -255,20 +237,14 @@ class PolarsExecutor:
         coordinate it has no row for contributes zero.
 
         Duplicates from ``Sum`` and ``GroupSum`` — which project rather than
-        aggregate — and from ``x + 2 * x`` collapse in the terminal
-        ``SUM(coeff) GROUP BY row, col`` of :meth:`_matrix_share`, which runs
-        only when a linear probe over the stacked share finds a repeated
-        cell. Whether a *particular* constraint could repeat one used to be
-        reasoned statically from how each fragment was reshaped; the answer
-        is read off the data instead, which is what #520 removed.
+        aggregate — and from ``x + 2 * x`` collapse in :meth:`_matrix_share`'s
+        terminal ``SUM(coeff) GROUP BY row, col``, read off the data rather
+        than reasoned from how the fragments were reshaped (#520). The share
+        leaves in ``(row, col)`` order, which is how every sink reads it.
 
-        The share leaves ordered by ``(row, col)``, which every sink reads it
-        as: a row range at a time, entries ascending within the row.
-
-        The labelled frame is kept for the dual read-back, and its block is
-        narrowed when rows go termless: a row whose every term vanished is not
-        built, so the run of labels this declaration owns is what survived
-        rather than what it declared (#561).
+        The labelled frame is kept for the dual read-back, and its block
+        narrows when rows go termless: the run of labels a declaration owns is
+        what survived, not what it declared (#561).
         """
 
         lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs")
@@ -348,19 +324,16 @@ class PolarsExecutor:
     ) -> tuple[pl.DataFrame, pl.DataFrame, int]:
         """Rows that kept no variable term are not built, and the block closes up.
 
-        A row with no variables is not a constraint — it asserts something about
-        constants, which the solver cannot act on. Three different provenances
+        A row with no variables is not a constraint — it asserts something
+        about constants, which the solver cannot act on. Three provenances
         reach that shape (an absent variable, an empty reduction, a missing
-        coefficient) and the language used to answer them differently, so the
-        same row meant different things depending on how it emptied. This is the
-        rule at the level the property lives at.
+        coefficient) and all three drop the row, so the rule is stated once
+        here rather than per provenance.
 
-        Labels are dense, and the dual read-back reads a block by position, so a
-        dropped row cannot leave a gap: the survivors are renumbered from
-        *start* and the row counter rewinds to match.
-
-        Costs one `n_unique` on a frame already in memory when nothing is
-        dropped, which is every correct model.
+        Labels are dense and the dual read-back reads a block by position, so a
+        dropped row may not leave a gap: survivors renumber from *start* and
+        the row counter rewinds. Costs one ``n_unique`` on an in-memory frame
+        when nothing is dropped, which is every correct model.
         """
         kept = matrix.get_column('row').unique()
         if kept.len() == rows.height:
@@ -387,19 +360,16 @@ class PolarsExecutor:
         ``dense[at] = values``, which keeps the *last* write — so the aggregate
         here is what makes the objective the one the file wrote.
 
-        The aggregate runs only when a column actually repeats, and the probe
-        is the ``n_unique`` hash count — the *only* sound probe here, because
-        the stack arrives unordered and adjacency then proves nothing. Buying
-        order to probe linearly was tried and is a dead end, twice over: the
-        mul join's ``maintain_order`` held the label order on some shapes and
-        lost it on others that differ only in data (`dispatch/l` kept it,
-        `nodal` and `profiled` did not — all three the same lone masked
+        The aggregate runs only when a column repeats, probed by ``n_unique``
+        — the only sound probe here, the stack arriving unordered so adjacency
+        proves nothing. Buying order to probe linearly is a dead end twice
+        over: the mul join's ``maintain_order`` holds the label order on some
+        shapes and loses it on others differing only in data (`dispatch/l`
+        keeps it, `nodal` and `profiled` do not, all three the same lone masked
         ``p * cost``), so no static gate can say when the tax will pay; and
-        where it was paid for nothing, the objective phase tripled
-        (`profiled/l` 40 → 147 ms) while the best case had shrunk to a wash
-        (69 + 6 ordered against 32 + 42 plain). ``obj`` carries no order
-        contract anyway — the writer sorts it and the solver hand-off
-        scatters it.
+        paid for nothing it triples the objective phase (`profiled/l` 40 →
+        147 ms) against a best case that is a wash (69 + 6 against 32 + 42).
+        ``obj`` carries no order contract anyway.
         """
 
         comp = self._q.expression(o.expression, 'objective')
@@ -444,16 +414,14 @@ class PolarsExecutor:
     def omissions(self) -> pl.DataFrame:
         """``(constraint, rows_not_built)`` — every row that lost all its terms.
 
-        A row with no variable terms is not built (SPEC §6), and a build that
-        said nothing about it would leave a declared constraint unenforced with
-        no way to notice. This is that record: empty for a model whose every
-        declared row reached the solver, one line per constraint otherwise.
+        A row with no variable terms is not built (SPEC §6), so without this
+        record a declared constraint could go unenforced with no way to notice.
+        Empty for a model whose every declared row reached the solver.
 
-        Counts rather than coordinates, deliberately. The label of a row that
-        was not built does not exist, so naming *which* coordinates went would
-        mean holding the pre-drop frame — memory proportional to the omission,
-        on the path this package measures hardest. A count is enough to be
-        noticed, which is the whole job.
+        Counts rather than coordinates: the label of an unbuilt row does not
+        exist, so naming which went would mean holding the pre-drop frame —
+        memory proportional to the omission, on the path this package measures
+        hardest.
         """
         return pl.DataFrame(
             {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
@@ -463,11 +431,9 @@ class PolarsExecutor:
     def write(self, path: str | Path) -> None:
         """Sink the built model to a file; the **suffix** picks the writer.
 
-        ``.lp`` today, ``.mps`` planned — an unknown suffix is an error naming
-        both sets. The caller names an output rather than a writer, which is
-        the one place this differs from :meth:`solve`: a file's format is a
-        property of the file, where which solver runs is not a property of
-        anything but the call.
+        The caller names an output rather than a writer, unlike :meth:`solve`:
+        a file's format is a property of the file, where which solver runs is a
+        property of nothing but the call.
         """
         path = Path(path)
         sinks.writer(path.suffix.lower())(self._tables(), path)
@@ -481,16 +447,14 @@ class PolarsExecutor:
         """Sink the built model straight into a solver and solve it.
 
         ``solver_name`` picks the sink — ``highs``, which ships with the
-        package, or ``gurobi``, which needs the ``[gurobi]`` extra. Spelled
-        the way linopy spells it, and a *caller's* choice at the call: no YAML
-        file can express it, because a model means the same thing whoever
-        solves it.
+        package, or ``gurobi``, needing the ``[gurobi]`` extra. A *caller's*
+        choice at the call, spelled linopy's way: no YAML file can express it,
+        a model meaning the same thing whoever solves it.
 
-        ``solver_options`` is forwarded verbatim to that solver, the way
-        linopy's is — ``{'time_limit': 60, 'mip_rel_gap': 0.01}``, and so
-        named in the solver's own vocabulary. ``batch_rows`` is the hand-off
-        budget in elements, and defaults to the sink's own — see
-        :data:`~lpspec.relational.sinks.highs.HANDOFF_BUDGET`.
+        ``solver_options`` is forwarded verbatim in the solver's own vocabulary
+        (``{'time_limit': 60, 'mip_rel_gap': 0.01}``). ``batch_rows`` is the
+        hand-off budget in elements, defaulting to the sink's own
+        (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
         """
         status, objective, primal, dual = sinks.solver(solver_name)(self._tables(), batch_rows, solver_options)
         _spanning(solver_name, 'primal', primal, self._n_cols)
@@ -507,13 +471,12 @@ class PolarsExecutor:
         """The tidy solution of variable *name*: ``(dims…, value)``.
 
         A slice, never a dense array and never a join. *values* is the solver's
-        column vector, held by the :class:`Result` that asks — the labels are
-        the build's and shared, the values are one solve's and are not.
+        column vector, held by the :class:`Result` that asks — labels are the
+        build's and shared, values are one solve's and are not.
 
-        **In label order**, which is the order the label frame was built in: a
-        label *is* row-major position in the coordinate product, so this hands
-        the caller back the model's own order rather than the order a hash join
-        happened to finish in.
+        **In label order**: a label *is* row-major position in the coordinate
+        product, so the caller gets the model's own order rather than the order
+        a hash join happened to finish in.
         """
         assert self._program is not None
         assert values is not None, 'no solve has stored a primal'
@@ -528,21 +491,38 @@ class PolarsExecutor:
     ) -> pl.LazyFrame:
         """One declaration's coordinates in label order, beside its values.
 
-        **The order is not re-established here, because it was never lost.**
-        :func:`~lpspec.relational.engines.polars.labels.frame` numbers a sorted
-        frame, so it hands back a label-ascending one and this reads the
-        ordering rather than imposing it.
+        **The order is not re-established here, because it was never lost**:
+        :func:`labels.frame` numbers a sorted frame and hands back a
+        label-ascending one.
 
         The declaration owns a contiguous, dense run of labels
         (:attr:`_blocks`) and the solver's vector is positional in the same
-        index, so its coordinates and its values line up by construction. The
-        slice is attached as a column rather than concatenated as a frame so
-        that a length that does not match raises instead of padding with nulls
-        — though :func:`_spanning` has already refused a vector that does not
-        span the model.
+        index, so coordinates and values line up by construction. The slice is
+        attached as a column rather than concatenated as a frame, so a
+        mismatched length raises instead of padding with nulls.
+
+        **Dim columns leave in ``String``**, where the build holds them as
+        ``pl.Enum`` (#541). That encoding is internal and every gram of its win
+        is upstream of here, but a returned frame is something a caller *joins
+        against their own data* — and polars refuses ``Enum`` against
+        ``String`` with a message about dtypes that names nothing about the
+        cause. Two frames of one sweep will not even concatenate when their
+        slices bound different members.
+
+        The cast sits inside this projection rather than after it, so the
+        string column is produced once instead of widened from an Enum that
+        also exists: +7.2 ms and +5.0 MB over 1M rows on `dispatch/m`.
+        Declaration order is the *row* order and survives, never having been
+        the dtype's to carry.
         """
         start, height = self._blocks[name]
-        return coordinates.select(*dims).with_columns(values.slice(start, height))
+        labelled = coordinates.select(*dims).with_columns(values.slice(start, height))
+        return labelled.with_columns(pl.col(d).cast(pl.String) for d in self._string_dims(dims))
+
+    def _string_dims(self, dims: tuple[str, ...]) -> list[str]:
+        """Those of *dims* the binder encoded as ``Enum`` — its string ones."""
+        assert self._bound is not None, 'build() has not run'
+        return [d for d in dims if self._bound.is_enum_encoded(d)]
 
     def _primal(self, name: str, values: pl.Series | None) -> pl.DataFrame:
         return self._solution_frame(name, values).collect(engine='streaming')
@@ -615,15 +595,14 @@ class PolarsExecutor:
 def _spanning(solver: str, quantity: str, values: pl.Series | None, expected: int) -> None:
     """Refuse a solver vector that does not span the model.
 
-    Reading a solution back is positional, so a vector of the wrong length is
-    an answer about a *different* model rather than a short answer about this
-    one. Checked here, where the solver hands it over, rather than where it is
-    read: the objective comes back from the solver directly, so a `Result`
-    built on a broken vector would report a plausible number and only fail if
-    someone asked for a coordinate.
+    Reading a solution back is positional, so a wrong length is an answer about
+    a *different* model. Checked where the solver hands it over rather than
+    where it is read: the objective comes back directly, so a ``Result`` built
+    on a broken vector would report a plausible number and only fail if someone
+    asked for a coordinate.
 
-    ``None`` is not a wrong length. A mixed-integer model has no duals at all,
-    and neither does a run stopped short of a simplex basis.
+    ``None`` is not a wrong length — a mixed-integer model has no duals, and
+    neither does a run stopped short of a simplex basis.
     """
     if values is not None and len(values) != expected:
         raise LpspecError(
@@ -637,16 +616,12 @@ def _spanning(solver: str, quantity: str, values: pl.Series | None, expected: in
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
     """*matrix* with ``row`` known to ascend — checked, not assumed.
 
-    Every constraint orders its own share and they are stacked in declaration
-    order, which is ascending row ranges, so the concatenation is ordered by
-    construction. What makes it worth *checking* is :func:`_row_starts`, which
-    reads one run per row off this column and scatters the lengths by value: a
-    row whose entries arrived in two runs would have the first overwritten and
-    the CSR spans would be silently wrong. So this is the correctness floor of
-    the layout, not a speed choice.
-
-    ``is_sorted`` is a linear scan over a column the frame already holds; the
-    sort behind it is expected never to run.
+    Ordered by construction, each constraint's share sorted and stacked in
+    ascending row ranges. Worth *checking* because :func:`_row_starts` reads one
+    run per row off this column and scatters the lengths by value: a row whose
+    entries arrived in two runs would have the first overwritten and the CSR
+    spans would be silently wrong. The correctness floor of the layout, not a
+    speed choice — ``is_sorted`` is a linear scan and the sort never runs.
     """
     if matrix.height and not matrix['row'].is_sorted():
         return matrix.sort('row')
@@ -656,21 +631,18 @@ def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
 def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
     """Each row's first entry in the row-ordered *ordered* — CSR's own index.
 
-    Run-length over the sorted column, then a scatter and a cumulative sum —
-    robust to the model's shape where the obvious alternatives are not:
-    ``bincount`` pays per entry (26 ms to rle's 7 at 10M entries over 100k
-    rows), ``searchsorted`` per row times the log of the entries, and either
-    is the wrong one on some ladder case. Computed *here* so the ``row``
-    column can then be dropped. A label repeated once per nonzero is 8 bytes
-    per entry no sink reads: every consumer either slices by these starts or
-    asks :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to
-    spell the labels back out.
+    Run-length, scatter, cumulative sum — robust to the model's shape where the
+    alternatives are not: ``bincount`` pays per entry (26 ms to rle's 7 at 10M
+    entries over 100k rows) and ``searchsorted`` per row times log entries.
+    Computed here so ``row`` can then be dropped, since every consumer either
+    slices by these starts or asks
+    :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to spell
+    the labels back out.
 
-    The kept matrix is then **rechunked, once**. A streaming collect leaves
-    it in chunks, and a sink slices it per row block — against a chunked
-    frame every block's ``to_numpy`` is a gather-copy, where against one
-    contiguous buffer it is a view (codspeed caught the difference as -6.9%
-    on `profiled-m`, ~150 blocks over 16 chunks).
+    The kept matrix is then **rechunked, once**: a sink slices it per row
+    block, and against a chunked frame every block's ``to_numpy`` is a
+    gather-copy where against one contiguous buffer it is a view (-6.9% on
+    `profiled-m`, ~150 blocks over 16 chunks).
     """
     import numpy as np
 
@@ -694,26 +666,20 @@ def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame
 def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str, ...], pl.LazyFrame]]:
     """The presence frames a constraint's rows have to be contained in.
 
-    Absence propagates into a comparison and drops the row there (v1
-    ``convention.rst`` §6 and §12): ``x + y >= 10`` is not ``x >= 10`` where
-    ``y`` is masked, it is no constraint at all. A term whose variable is absent
-    therefore restricts the row set rather than merely contributing nothing.
+    Absence propagates into a comparison and drops the row (v1
+    ``convention.rst`` §6, §12): ``x + y >= 10`` where ``y`` is masked is not
+    ``x >= 10``, it is no constraint at all.
 
-    Only *variable* absence counts. A sparse parameter is a compressed dense
-    array whose missing rows mean a zero coefficient (SPEC §8), which is why the
-    fragment carries :attr:`~lpspec.relational.engines.polars.compiler.TermFragment.presence`
-    separately from its frame, and why this reads that rather than the frame.
-
-    A fragment with nothing to restrict is skipped: an unmasked variable exists
-    at every coordinate of its foreach, so its presence would remove nothing.
+    Only *variable* absence counts — a sparse parameter's missing rows mean a
+    zero coefficient (SPEC §8) — which is why the fragment carries
+    :attr:`TermFragment.presence` separately from its frame, and why this reads
+    that. A fragment with nothing to restrict is skipped, an unmasked variable
+    existing at every coordinate of its foreach.
 
     *Having* no dims is not *having nothing to restrict*: a masked scalar
-    variable restricts every row of every constraint that names it, all or
-    nothing. Reading the empty dims as "skip" is what let one through silently.
-
+    variable restricts every row of every constraint naming it, all or nothing.
     Each restriction is keyed by ``presence_dims`` where the fragment states
-    them — narrower than ``dims`` for an acyclic shift, whose vacated edge
-    lies along one dimension and is silent about the rest.
+    them — narrower than ``dims`` for an acyclic shift.
     """
     out: list[tuple[tuple[str, ...], pl.LazyFrame]] = []
     for p in terms:
