@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.95](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.94...v0.0.1-alpha.95) (2026-08-11)
+
+
+### Bug Fixes
+
+* **engine:** a returned frame speaks String, so it joins the caller's own ([#593](https://github.com/fluxopt/lpspec/issues/593)) ([69b9ad2](https://github.com/fluxopt/lpspec/commit/69b9ad21f2772232c3d19245b764dbebf231f1ea))
+
 ## [0.0.1-alpha.94](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.93...v0.0.1-alpha.94) (2026-08-11)
 
 
