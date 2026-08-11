@@ -334,6 +334,11 @@ def solve_over(
     peak stays at one slice however many there are; what accumulates is the
     answer, which is what the caller asked for.
 
+    **The last slice carries nothing**, there being no next slice to read it.
+    A short tail window can hold fewer coordinates than the carry index names,
+    and computing a value nothing will use would fail an otherwise complete
+    sweep at the final slice.
+
     **A process pool must not use the ``fork`` start method.** polars' thread
     pool does not survive a fork, and a forked worker hangs rather than
     failing. This cannot be enforced here — a remote executor has no start
@@ -404,11 +409,12 @@ def solve_over(
 
     if executor is None:
         state: dict[str, Any] = {}
-        for key, sliced, coords in cuts:
+        last = len(cuts) - 1
+        for position, (key, sliced, coords) in enumerate(cuts):
             meta, frames, priced, reason = _run_slice(*arguments({**sliced, **state}, coords, False))
             no_duals = no_duals or reason
             absorb(key, meta, frames, priced)
-            if plan:
+            if plan and position < last:
                 state = _carried(plan, frames, key)
     else:
         crosses = _crosses_a_process(executor)

@@ -366,6 +366,24 @@ def test_a_carry_index_outside_the_slice_is_refused_by_name():
         )
 
 
+def test_a_short_tail_window_does_not_have_to_hold_the_carry_index():
+    """Nothing reads the last slice's carry, so it is never computed.
+
+    12 coordinates at length 6 step 5 leaves a final window of two, which
+    cannot answer `t == 4`. Computing a value no later slice will read would
+    fail a sweep that had already solved every window.
+    """
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(12),
+        lps.EachWindow('snapshot', length=6, step=5, into='t'),
+        carry={'soc_initial': ('soc', 4)},
+    )
+    assert runs.keys == [0, 5, 10]
+    assert runs.objective['termination_condition'].to_list() == ['optimal'] * 3
+    assert runs.primal('soc').filter(pl.col('snapshot_start') == 10).height == 2
+
+
 def test_a_carry_collapses_one_dimension_and_every_other_rides_along():
     """`soc` is over `(t, storage)` and `soc_initial` over `(storage)`.
 
