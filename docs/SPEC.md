@@ -370,6 +370,19 @@ if the value is what was meant, **mask them out** if the row should not exist,
 or **drop the declaration** if the model has no such quantity — which is what a
 framework emitting a dict does (#217).
 
+### A row with no variable terms is not built
+
+Whatever emptied it. A masked variable takes the row with it (law 7), a
+reduction over an absent set contributes `0`, and a missing parameter row is a
+zero coefficient (law 8) — three ways to reach one shape, *a row asserting
+something about constants only*, and the shape decides, not the provenance.
+Such a row constrains nothing a solver can act on.
+
+It is **reported**, never silent: `omissions()` on the executor gives
+`(constraint, rows_not_built)`, empty for a model whose every declared row was
+built. A declared constraint that goes unenforced is a thing the caller has to
+be able to see.
+
 ### How absence travels
 
 **Through arithmetic it spreads** (law 7), taking the row with it: `x + y >= 10`
