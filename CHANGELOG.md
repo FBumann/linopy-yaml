@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.100](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.99...v0.0.1-alpha.100) (2026-08-11)
+
+
+### Documentation
+
+* **agents:** a reader can tell the maintainer's voice from an agent's ([#605](https://github.com/fluxopt/lpspec/issues/605)) ([b987971](https://github.com/fluxopt/lpspec/commit/b98797149cc4e5e61931de7ba2ffae0ede7bbb65))
+
 ## [0.0.1-alpha.99](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.98...v0.0.1-alpha.99) (2026-08-11)
 
 
