@@ -70,11 +70,15 @@ In the tree nothing is marked: `Co-Authored-By: Claude …` is the record.
   assert runs.keys == ['high', 'low', 'mid'], 'keys come back sorted, not in data order'
   ```
 
+- **A sequence of cases is parametrized, and the `id` is the label.** Five
+  `pytest.raises` blocks in one test hide four failures behind the first and
+  keep their labels in the source; five `pytest.param(..., id='…')` print the
+  case that failed and select with `-k`.
 - **Two comments are not explanation, and stay where the eye lands**: a **case
-  label** in a sequence of cases (`pytest.raises` blocks, parametrize entries,
-  branches of a dispatch), and a **one-line justification of a line that reads
-  as a mistake** — a bare `except BaseException`, a magic literal, a deliberate
-  no-op. Moving either into a docstring puts it where the reader is not.
+  label** where parametrizing would distort the test, and a **one-line
+  justification of a line that reads as a mistake** — a bare
+  `except BaseException`, a magic literal, a deliberate no-op. Moving either
+  into a docstring puts it where the reader is not.
 
 ## Docstrings
 
