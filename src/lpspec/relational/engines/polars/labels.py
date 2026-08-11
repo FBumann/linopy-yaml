@@ -123,9 +123,18 @@ def _factored(
     ``None`` when nothing survives: the rectangle degenerates and the counted
     path already answers the empty case with the right columns and dtypes.
 
-    The head product goes on the *left* of the cross join because the
-    streaming engine emits the right side fastest — survivors cycling within
-    each head coordinate is label order, so the verify below permutes nothing.
+    **The survivors go on the left of the cross join**, which is the side the
+    streaming engine cycles fastest: survivors turning over within each head
+    coordinate is label order, so :func:`in_position_order` below verifies and
+    permutes nothing. With the operands the other way round it sorted the whole
+    variable frame on every build — a million rows on `dispatch/m`, and the
+    reason that case read 45% slower than main.
+
+    Which side cycles is an implementation detail of a dependency and is
+    asserted nowhere: the verify is what makes it safe to exploit, and what
+    would turn a change in polars back into a sort rather than into wrong
+    labels. If this is ever rearranged, re-measure rather than reason — the
+    comment this replaces argued the opposite and was wrong.
     """
     head, kept = dims[:free], dims[free:]
     rank = '#rank'
@@ -142,9 +151,8 @@ def _factored(
 
     position = '#position'
     labelled = (
-        compiler.frame(head, None)
-        .select(*head, _row_major(compiler, head).alias(position))
-        .join(survivors.lazy(), how='cross')
+        survivors.lazy()
+        .join(compiler.frame(head, None).select(*head, _row_major(compiler, head).alias(position)), how='cross')
         .select(
             *dims,
             (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(label),
