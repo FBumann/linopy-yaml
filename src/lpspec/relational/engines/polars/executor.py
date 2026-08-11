@@ -177,13 +177,22 @@ class PolarsExecutor:
         label-ordered row frame through joins that preserve it in practice)
         and usually repeats nothing (a cell repeats only when one variable
         reaches a row twice), so the sort and the aggregate run only when a
-        probe says they would change something. Measured at 5M nonzeros: the
-        probes cost ~0.01 s where the unconditional hash aggregate cost
-        0.22 s. The answer is read off the data rather than reasoned from the
-        declarations — the static machinery that made this call is what #520
-        removed, and nothing here has to know *why* a cell repeats.
+        probe says they would change something. At 10M entries they cost 5 ms
+        where the unconditional hash aggregate costs 325 ms. The answer is
+        read off the data rather than reasoned from the declarations — the
+        static machinery that made this call is what #520 removed, and
+        nothing here has to know *why* a cell repeats.
+
+        **That 5 ms is why the share is rechunked first.** A streaming collect
+        returns its morsels as chunks — 104 of them for `dispatch/l`'s share —
+        and ``shift(1)`` pays at every boundary where ``is_sorted`` does not,
+        so probing the share as it arrives costs 28 ms against 12 ms for the
+        rechunk and the probe together (#576). The rechunk is not an extra
+        copy: the assembly needs a contiguous matrix anyway (#550) and this
+        moves that one earlier. The objective's stack is deliberately left
+        fragmented — measured, and it costs peak for no wall.
         """
-        stacked = pl.concat(pieces).collect(engine='streaming')
+        stacked = pl.concat(pieces).collect(engine='streaming').rechunk()
         self._refuse_undefined_divisors(stacked, name, *expressions)
         row, col = pl.col('row'), pl.col('col')
         tied, ahead = row == row.shift(1), row > row.shift(1)
