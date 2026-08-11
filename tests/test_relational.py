@@ -38,7 +38,7 @@ from lpspec.relational.plan import (
     VariableDeclaration,
 )
 from lpspec.relational.sinks import SOLVERS
-from tests.conftest import by_coord, solve_lp_file
+from tests.conftest import by_coord, override, solve_lp_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, transport_eager_objective, xr
 
@@ -1546,3 +1546,113 @@ def test_cols_is_positional_so_a_row_index_is_its_solver_column(where):
         raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(labels['j'].dtype))
         expected = labels.join(raw, on=['i', 'j'], how='left')['value'].to_list()
         assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'
+
+
+#: A bound parameter dense over the whole variable product — a profile per
+#: node, per hour. `p`'s upper bound spans exactly `p`'s foreach, so alignment
+#: is positional rather than a join (compiler `_aligned_bound`).
+DENSE_BOUND_MODEL = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}, 'n': {'values': ['a', 'b']}},
+    'parameters': {'avail': {'dims': ['t', 'n']}, 'cost': {'dims': ['n']}},
+    'variables': {'p': {'foreach': ['t', 'n'], 'bounds': {'lower': 0, 'upper': 'avail'}}},
+    'constraints': {'cap': {'foreach': ['t'], 'expression': 'sum(p, over=n) <= 100'}},
+    'objectives': {'total': {'sense': 'maximize', 'expression': 'sum(p * cost, over=n)'}},
+}
+
+#: The same numbers the oracle sees, with the coordinates deliberately out of
+#: order — a positional attach that skipped the sort would pair every
+#: coordinate with another one's bound.
+SHUFFLED_BOUND = pl.DataFrame(
+    {
+        't': [2, 0, 1, 2, 0, 1],
+        'n': ['b', 'b', 'a', 'a', 'a', 'b'],
+        'value': [6.0, 2.0, 3.0, 5.0, 1.0, 4.0],
+    }
+)
+FLAT_COST = pl.DataFrame({'n': ['a', 'b'], 'value': [1.0, 1.0]})
+
+
+def _aligned_for(model, data):
+    """Which bound parameters took the positional path building *model*."""
+    from lpspec.relational.engines.polars import compiler as compiler_module
+
+    real = compiler_module.PolarsCompiler._aligned_bound
+    seen = {}
+
+    def spy(self, frame, param, v, alias):
+        out = real(self, frame, param, v, alias)
+        seen[param] = out is not None
+        return out
+
+    compiler_module.PolarsCompiler._aligned_bound = spy
+    try:
+        lps.build(model, data).close()
+    except LpspecError:
+        pass  # the decision is recorded while the plan is built, before it runs
+    finally:
+        compiler_module.PolarsCompiler._aligned_bound = real
+    return seen
+
+
+#: One dimension, so the oracle can take it: the eager loader wants a
+#: `pd.Series` for a 1-D parameter and refuses a polars frame for a 2-D one.
+FLAT_MODEL = {
+    'dimensions': {'n': {'values': ['a', 'b', 'c']}},
+    'parameters': {'avail': {'dims': ['n']}, 'cost': {'dims': ['n']}},
+    'variables': {'p': {'foreach': ['n'], 'bounds': {'lower': 0, 'upper': 'avail'}}},
+    'constraints': {'cap': {'foreach': [], 'expression': 'sum(p, over=n) <= 100'}},
+    'objectives': {'total': {'sense': 'maximize', 'expression': 'sum(p * cost, over=n)'}},
+}
+
+
+def test_a_bound_dense_over_the_product_is_attached_by_position_not_joined():
+    """The shape xarray gets for free: position *is* the coordinate.
+
+    `avail` spans exactly `p`'s foreach and has a row per coordinate, so the
+    label frame and the parameter describe the same product — and the label
+    frame is in label order by construction. Sorting the parameter by the
+    dimension ordinals reproduces that order, so the value column is attached
+    rather than joined, which on `profiled/l` is most of a 0.58 s join.
+
+    Checked against the oracle, because a misaligned bound is a different model
+    rather than an error.
+    """
+    data = {'avail': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'cost': pd.Series({'a': 1.0, 'b': 1.0, 'c': 1.0})}
+
+    assert _aligned_for(FLAT_MODEL, data) == {'avail': True}
+    with differential(FLAT_MODEL, data, lp=True) as run:
+        # every p at its own upper bound; the cap of 100 never binds
+        assert run.result.objective == pytest.approx(1 + 2 + 3, rel=RTOL)
+
+
+def test_the_positional_attach_sorts_rather_than_trusting_the_source_order():
+    """The same numbers arriving shuffled must give the same model.
+
+    A parameter's rows come in whatever order its source had. Attaching without
+    sorting would be right only for a file that happened to be written in label
+    order and silently wrong for every other one — which is the failure this
+    whole path has to be gated against.
+    """
+    shuffled = {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}
+    assert _aligned_for(DENSE_BOUND_MODEL, shuffled) == {'avail': True}
+
+    with lps.solve(DENSE_BOUND_MODEL, shuffled) as result:
+        assert result.objective == pytest.approx(1 + 2 + 3 + 4 + 5 + 6, rel=RTOL)
+        got = result.primal('p').sort('t', 'n')['value'].to_list()
+        assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
+
+
+def test_a_mask_or_a_sparse_bound_keeps_the_join():
+    """Both ways position stops meaning the coordinate, refused by the gate.
+
+    A `where` makes the label frame a subset of the product, and a parameter
+    with a missing row makes the *parameter* one — either way the two sides no
+    longer line up row for row, and attaching would pair a coordinate with
+    another coordinate's bound. Neither is a shape the join cannot handle, so
+    the gate declines and nothing else changes.
+    """
+    masked = override(DENSE_BOUND_MODEL, **{'variables.p.where': 't > 0'})
+    assert _aligned_for(masked, {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}) == {'avail': False}
+
+    holey = {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
+    assert _aligned_for(DENSE_BOUND_MODEL, holey) == {'avail': False}
