@@ -453,35 +453,46 @@ def test_a_myopic_pathway_carries_a_whole_vector_with_no_index():
     assert total == pytest.approx([10.0, 25.0, 40.0]), 'demand 10 -> 25 -> 40 is met exactly'
 
 
-def test_a_carry_that_cannot_line_up_says_so_before_anything_solves():
+#: The five ways a carry cannot line up. Each `id` is the case, so a failure
+#: names it rather than a line number: `-k collapses-two-dimensions`.
+_WINDOW_AXIS = lps.EachWindow('snapshot', length=4, step=4, into='t')
+_PERIOD_AXIS = lps.EachCoordinate('period', ordered=True)
+UNSOUND_CARRIES = [
+    pytest.param(
+        WINDOW, horizon_sources, _WINDOW_AXIS, {'soc_initial': ('p', 3)},
+        r'would collapse .*at once', "['t', 'generator']",
+        id='collapses-two-dimensions-where-an-index-names-one',
+    ),
+    pytest.param(
+        WINDOW, horizon_sources, _WINDOW_AXIS, {'soc_initial': ('soc', None)},
+        r"drops 't' and so needs an index", None,
+        id='drops-a-dimension-without-naming-a-coordinate',
+    ),
+    pytest.param(
+        MYOPIC, myopic_sources, _PERIOD_AXIS, {'existing': ('total', 0)},
+        'has nothing to index', None,
+        id='indexes-two-sides-that-already-line-up',
+    ),
+    pytest.param(
+        WINDOW, horizon_sources, _WINDOW_AXIS, {'p_max': ('soc', 3)},
+        'cannot line up', None,
+        id='parameter-over-more-than-the-variable',
+    ),
+    pytest.param(
+        WINDOW, horizon_sources, _WINDOW_AXIS, {'soc_initial': ('nope', 3)},
+        'does not declare', None,
+        id='a-name-neither-side-declares',
+    ),
+]  # fmt: skip
+
+
+@pytest.mark.parametrize(('model', 'sources', 'axis', 'carry', 'expected', 'names'), UNSOUND_CARRIES)
+def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(model, sources, axis, carry, expected, names):
     """Every one of these is answerable from the two declarations alone."""
-    window = lps.EachWindow('snapshot', length=4, step=4, into='t')
-
-    # collapsing two dimensions at once: an index names a coordinate of one
-    with pytest.raises(lps.LpspecError, match=r'would collapse .*at once') as raised:
-        lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('p', 3)})
-    assert "['t', 'generator']" in str(raised.value)
-
-    # dropping a dimension without naming a coordinate of it
-    with pytest.raises(lps.LpspecError, match=r"drops 't' and so needs an index"):
-        lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('soc', None)})
-
-    # an index where the two sides already line up
-    with pytest.raises(lps.LpspecError, match='has nothing to index'):
-        lps.solve_over(
-            MYOPIC,
-            myopic_sources(),
-            lps.EachCoordinate('period', ordered=True),
-            carry={'existing': ('total', 0)},
-        )
-
-    # a parameter over more than the variable is
-    with pytest.raises(lps.LpspecError, match='cannot line up'):
-        lps.solve_over(WINDOW, horizon_sources(), window, carry={'p_max': ('soc', 3)})
-
-    # and a name neither side declares
-    with pytest.raises(lps.LpspecError, match='does not declare'):
-        lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('nope', 3)})
+    with pytest.raises(lps.LpspecError, match=expected) as raised:
+        lps.solve_over(model, sources(), axis, carry=carry)
+    if names is not None:
+        assert names in str(raised.value), 'the message names the dimensions it could not choose between'
 
 
 def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
