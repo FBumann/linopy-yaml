@@ -1,8 +1,8 @@
 site_name: lpspec
 site_description: Self-documenting optimisation models — declarative LP/MILP, built relationally and handed straight to the solver
 site_url: https://lpspec.readthedocs.io/en/latest/
-repo_url: https://github.com/FBumann/lpspec
-repo_name: FBumann/lpspec
+repo_url: https://github.com/fluxopt/lpspec
+repo_name: fluxopt/lpspec
 edit_uri: edit/main/docs/
 strict: true
 
@@ -46,6 +46,8 @@ nav:
           - storage: models/storage.md
           - transport: models/transport.md
           - piecewise: models/piecewise.md
+          - monthly budget: models/monthly_budget.md
+          - multi-period: models/multi_period.md
           - walkthrough: models/walkthrough.md
       - The PyPSA ladder:
           - rung 1 — transport: models/pypsa_transport.md
@@ -64,6 +66,11 @@ nav:
       - Language: SPEC.md
       - Python API: api.md
       - Benchmarks: benchmarks.md
+      # A source file, not a generated page: mkdocs copies it through and the
+      # nav links it like any other. It is the same data as the figures on the
+      # page above, with a cursor — which is the whole reason it is reachable
+      # from the nav rather than from one link mid-paragraph.
+      - Benchmarks (interactive): benchmarks-scaling.html
   - Design notes:
       - Architecture: ARCHITECTURE.md
       - The ceiling: design/ceiling.md
@@ -163,7 +170,7 @@ extra_css:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/FBumann/lpspec
+      link: https://github.com/fluxopt/lpspec
       name: lpspec on GitHub
     - icon: simple/pypi
       link: https://pypi.org/project/lpspec/

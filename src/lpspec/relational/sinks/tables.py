@@ -62,8 +62,17 @@ MATRIX = ('row', 'col', 'coeff')
 #: added to :data:`~lpspec.relational.plan.VariableType` and not reaching here
 #: fails where the column is built rather than in whichever sink first compares
 #: against a name it does not know.
+#:
+#: ``col`` is ``Int32`` — the solver's own index width, HiGHS and Gurobi both
+#: being 32-bit indexed, so a count past 2^31 has no sink that could take it
+#: and the strict cast raises there rather than wrapping. An engine casts where
+#: the column is *produced*, not on the stacked frame: narrowing afterwards
+#: allocates the narrow copy while the wide one is still alive, a transient
+#: visible in `dispatch/l`'s peak RSS. A *label* stays ``Int64``: it is a
+#: position in the full pre-mask coordinate product, which can pass 2^31 while
+#: every survivor fits.
 DTYPES = {
-    'col': pl.Int64, 'row': pl.Int64,
+    'col': pl.Int32, 'row': pl.Int64,
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
     'sense': pl.String, 'vtype': pl.Enum(get_args(plan.VariableType)),
 }  # fmt: skip
@@ -72,44 +81,107 @@ DTYPES = {
 VTYPE = DTYPES['vtype']
 
 
+def compress_rows(matrix: pl.DataFrame, row_count: int) -> tuple[pl.DataFrame, npt.NDArray[np.int64]]:
+    """A ``(row, col, coeff)`` matrix as the CSR pair `ModelTables` takes.
+
+    Here rather than in an engine because it is the *contract's* layout: both
+    engines stack their constraints' shares in declaration order, which is
+    ascending row ranges, and both then owe a sink the same compressed form.
+    Two engines compressing separately could disagree about which entries a row
+    owns — the one thing neither may do.
+
+    ``row`` is known to ascend, and that is **checked rather than assumed**.
+    polars cannot see the ordering through a ``concat``, and a sink that finds
+    the flag missing orders the whole matrix again; ``is_sorted`` is a linear
+    scan over a column the frame already holds, and the sort behind it is the
+    correctness floor, expected never to run.
+
+    The starts are a run-length over that sorted column, then a scatter and a
+    cumulative sum — robust to the model's shape where the obvious alternatives
+    are not: ``bincount`` pays per entry (26 ms to rle's 7 at 10M entries over
+    100k rows), ``searchsorted`` per row times the log of the entries, and
+    either is the wrong one on some ladder case. Computed here so ``row`` can
+    then be dropped: a label repeated once per nonzero is 8 bytes per entry no
+    sink reads, since every consumer either slices by these starts or asks
+    :meth:`ModelTables.matrix_block` to spell the labels back out.
+
+    The kept matrix is then **rechunked, once**. A streaming collect leaves it
+    in chunks, and a sink slices it per row block — against a chunked frame
+    every block's ``to_numpy`` is a gather-copy, where against one contiguous
+    buffer it is a view (codspeed caught the difference as -6.9% on
+    `profiled-m`, ~150 blocks over 16 chunks).
+    """
+    import numpy as np
+
+    if not matrix.height:
+        ordered = matrix
+    elif not matrix['row'].is_sorted():
+        ordered = matrix.sort('row')
+    else:
+        ordered = matrix.with_columns(pl.col('row').set_sorted())
+
+    runs = ordered['row'].rle()
+    starts = np.zeros(row_count + 1, dtype=np.int64)
+    starts[runs.struct.field('value').to_numpy() + 1] = runs.struct.field('len').to_numpy()
+    return ordered.select('col', 'coeff').rechunk(), np.cumsum(starts, out=starts)
+
+
 @dataclass(frozen=True)
 class ModelTables:
     """The built model, as a sink sees it.
 
     ``cols`` (lb, ub, vtype), ``obj`` (col, coeff), ``rows`` (row, sense,
-    rhs) and ``matrix`` in COO (row, col, coeff). The scalars are what a sink
-    cannot cheaply recover; the objective constant lives outside the frames
-    because it has no column to attach to.
+    rhs) and ``matrix`` in CSR: ``(col, coeff)`` in row-major order, with
+    ``row_starts[r] : row_starts[r + 1]`` the half-open span row ``r`` owns.
+    The scalars are what a sink cannot cheaply recover; the objective constant
+    lives outside the frames because it has no column to attach to.
 
     ``col`` and ``row`` are dense ``0..n-1``, so they *are* the solver's own
     indices and no sink builds a mapping.
 
-    **``cols`` carries no ``col``.** It holds one row per column, in label
-    order, so a row's position is its index and the column would be the frame's
-    own row number. Every other frame is sparse in the index and keeps it —
-    ``obj`` most of all, which looks dense on models where every variable has a
-    cost and is not (0.71 of ``cols`` on `transport`).
+    **``cols`` carries no ``col``, and ``matrix`` carries no ``row``** — for
+    the same reason at two granularities. A ``cols`` row's position is its
+    index; a matrix entry's row is where it sits between two starts. Both are
+    what the solvers' own matrix APIs take, so nothing here is a private
+    compression a sink first has to undo — and a row label repeated per
+    nonzero would hold 8 more bytes per entry for the model's whole lifetime.
+    :meth:`matrix_block` spells the labels back out for the one consumer that
+    renders them. ``obj`` stays sparse in the index and keeps its ``col``: it
+    only looks dense on models where every variable has a cost (0.71 of
+    ``cols`` on `transport`).
     """
 
     cols: pl.DataFrame
     obj: pl.DataFrame
     rows: pl.DataFrame
     matrix: pl.DataFrame
+    row_starts: npt.NDArray[np.int64]
     column_count: int
     row_count: int
     objective_sense: str
     objective_constant: float
 
-    def row_chunks_by_nonzeros(self, budget: int) -> Iterator[tuple[int, int]]:
+    def _row_chunks_by_nonzeros(self, budget: int) -> Iterator[tuple[int, int]]:
         """Row ranges holding roughly ``budget`` *nonzeros* each.
 
-        A sink that reads ``matrix`` a range at a time pays in nonzeros, not in
-        rows — a range of 100k rows is 900k entries in one model and 10M in
+        A reader that walks ``matrix`` a range at a time pays in nonzeros, not
+        in rows — a range of 100k rows is 900k entries in one model and 10M in
         another, and only the second is a problem. So the width here is the
         average row, and there is deliberately no row-counted twin to reach
-        for by mistake.
+        for by mistake. Private: a consumer takes whole blocks from
+        :meth:`row_blocks` or :meth:`labeled_blocks`, so no caller can pair
+        spans and entries that disagree.
         """
         return chunking.ranges(self.row_count, budget, self.matrix.height / max(1, self.row_count))
+
+    def _span(self, lo: int, hi: int) -> pl.DataFrame:
+        """The matrix entries rows ``[lo, hi)`` own — the CSR arithmetic, once.
+
+        Both block readers slice through here, so how a span is located — and
+        the half-open ``hi`` bound — cannot drift between them.
+        """
+        first = int(self.row_starts[lo])
+        return self.matrix.slice(first, int(self.row_starts[hi]) - first)
 
     def col_chunks(self, budget: int) -> Iterator[tuple[int, int]]:
         """Column ranges of roughly ``budget`` columns each.
@@ -191,30 +263,41 @@ class ModelTables:
         call against 0.89 s in forty on the same matrix (#434). So the caller
         says, and both answers come out of the same code.
 
-        The matrix is ordered once, and a chunk is then a ``slice`` of it
-        located by binary search on the label column — the range is contiguous
-        because ``row`` is dense and the frame is sorted, so scanning for it
-        would re-read the whole model once per chunk.
-
-        **Searched in polars rather than through numpy.** Pulling the label
-        column out to search it there is marginally faster and holds a second
-        copy of one column of the model for the whole loop, which is 0.11 GB at
-        `transport/l` — the wrong trade in a pass that exists to stay bounded.
+        A chunk is a ``slice``: ``row_starts`` already says where every row's
+        entries sit, so nothing is sorted and nothing is searched.
 
         ``starts`` is each row's offset within the block, which is what both
         solvers' matrix APIs ask for. A row with no entries takes the next
         row's offset, and so occupies no span.
         """
+        spans = [(0, self.row_count)] if budget is None else self._row_chunks_by_nonzeros(budget)
+        for lo, hi in spans:
+            yield lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo]
+
+    def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
+        """Rows ``[lo, hi)`` of the matrix with their ``row`` labels spelled out.
+
+        The adjoint of what the CSR layout compressed: ``np.repeat`` walks the
+        start offsets back into one label per entry. For a reader that wants
+        COO — and, through :meth:`labeled_blocks`, for the LP writer — at the
+        cost of one label column per *block*, not per model.
+        """
         import numpy as np
 
-        ordered = self.matrix.sort('row')
-        label = ordered['row']
-        spans = [(0, self.row_count)] if budget is None else self.row_chunks_by_nonzeros(budget)
+        labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
+        return self._span(lo, hi).with_columns(pl.Series('row', labels))
+
+    def labeled_blocks(self, budget: int | None) -> Iterator[tuple[int, int, pl.DataFrame]]:
+        """Each chunk of rows with its entries labeled — the LP writer's reader.
+
+        :meth:`matrix_block`'s budget-iterator form, chunked by the same rule
+        every reader spends (:mod:`~lpspec.relational.chunking`, in nonzeros).
+        One method per consumer shape — solvers take :meth:`row_blocks`, the
+        writer this — so no caller pairs spans and entries that disagree.
+        """
+        spans = [(0, self.row_count)] if budget is None else self._row_chunks_by_nonzeros(budget)
         for lo, hi in spans:
-            first = int(label.search_sorted(lo, 'left'))
-            last = int(label.search_sorted(hi, 'left'))
-            entries = ordered.slice(first, last - first)
-            yield lo, hi, entries, np.searchsorted(entries['row'].to_numpy(), np.arange(lo, hi))
+            yield lo, hi, self.matrix_block(lo, hi)
 
 
 def _scattered(count: int, at: Any, values: Any, absent: Any) -> Any:

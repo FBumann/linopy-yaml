@@ -15,12 +15,16 @@ from __future__ import annotations
 import subprocess
 import sys
 import textwrap
+from typing import TYPE_CHECKING
 
 import pytest
 
 from lpspec.errors import DataError, LanguageError
-from lpspec.language.schema import MathSchema
+from lpspec.language.validation import load_model
 from tests.oracle import builder, linopy, loader, lpspec_linopy, pd, xr
+
+if TYPE_CHECKING:
+    from lpspec.language.model import Model
 
 
 @pytest.fixture
@@ -189,18 +193,18 @@ def test_extend_sees_existing_model_variables(yaml_file, model_with):
 # ---------------------------------------------------------------------------
 
 
-def _schema(dims=None, params=None) -> MathSchema:
+def _schema(dims=None, params=None) -> Model:
     raw = {}
     if dims:
         raw['dimensions'] = dims
     if params:
         raw['parameters'] = params
-    return MathSchema.model_validate(raw)
+    return load_model(raw)
 
 
 class TestBuildMasterCoords:
     def test_from_yaml_values(self):
-        mc = loader.build_master_coords(_schema(dims={'x': {'values': [1, 2, 3]}}), None)
+        mc = loader.build_master_coords(_schema(dims={'x': {'values': [1, 2, 3], 'dtype': 'int'}}), None)
         assert list(mc['x']) == [1, 2, 3]
 
     def test_from_coords_kwarg(self):
@@ -208,7 +212,7 @@ class TestBuildMasterCoords:
         assert list(mc['x']) == [10, 20]
 
     def test_coords_overrides_yaml(self):
-        mc = loader.build_master_coords(_schema(dims={'x': {'values': [1, 2]}}), {'x': [99]})
+        mc = loader.build_master_coords(_schema(dims={'x': {'values': [1, 2], 'dtype': 'int'}}), {'x': [99]})
         assert list(mc['x']) == [99]
 
     def test_missing_raises(self):
@@ -241,22 +245,26 @@ class TestLoadParameters:
         ],
     )
     def test_accepted_shapes(self, values, data, select, expected):
-        s = _schema(dims={'x': {'values': values}}, params={'a': {'dims': ['x']}})
+        dtype = 'int' if isinstance(values[0], int) else 'str'
+        s = _schema(dims={'x': {'values': values, 'dtype': dtype}}, params={'a': {'dims': ['x']}})
         ds = loader.load_parameters(s, {'a': data}, loader.build_master_coords(s, None))
         assert float(ds['a'].sel(**select)) == expected
 
     def test_missing_required_raises(self):
-        s = _schema(dims={'x': {'values': [1]}}, params={'a': {'dims': ['x']}})
+        s = _schema(dims={'x': {'values': [1], 'dtype': 'int'}}, params={'a': {'dims': ['x']}})
         with pytest.raises(ValueError, match='required'):
             loader.load_parameters(s, {}, loader.build_master_coords(s, None))
 
     def test_unknown_keys_raises(self):
-        s = _schema(dims={'x': {'values': [1]}})
+        s = _schema(dims={'x': {'values': [1], 'dtype': 'int'}})
         with pytest.raises(ValueError, match='not declared'):
             loader.load_parameters(s, {'extra': 1}, loader.build_master_coords(s, None))
 
     def test_unexpected_dims_raises(self):
-        s = _schema(dims={'x': {'values': [1]}, 'y': {'values': [2]}}, params={'a': {'dims': ['x']}})
+        s = _schema(
+            dims={'x': {'values': [1], 'dtype': 'int'}, 'y': {'values': [2], 'dtype': 'int'}},
+            params={'a': {'dims': ['x']}},
+        )
         da = xr.DataArray([[1]], dims=['x', 'y'], coords={'x': [1], 'y': [2]})
         with pytest.raises(ValueError, match='unexpected dimensions'):
             loader.load_parameters(s, {'a': da}, loader.build_master_coords(s, None))
@@ -504,3 +512,43 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
     )
     built = lpspec_linopy.build(masked, data=data)  # must not raise
     assert 'x' in built.variables
+
+
+def test_extend_expands_a_piecewise_block_over_the_models_variables(yaml_file, model_with):
+    """A formulation may link variables the extended model already has.
+
+    Expansion resolves link expressions itself, to compute the frame the block
+    is emitted over, so it needs the borrowed names as much as the checkers
+    do. `extend` passes them to `load_model` and has to pass them here too —
+    it calls `expand_piecewise` a second time, and that call is the one that
+    builds what goes onto the model.
+
+    Held at the lane rather than beside the language, because the language
+    layer already accepted this file: the gap was between the two calls, which
+    only a caller of `extend` crosses.
+    """
+    m = model_with(p=('g', ['a']), f=('g', ['a']))
+    path = yaml_file("""
+        dimensions:
+          bp: {dtype: int, values: [0, 1]}
+          g: {dtype: str}
+        parameters:
+          p_bp: {dims: [bp]}
+          f_bp: {dims: [bp]}
+        piecewise:
+          curve:
+            over: bp
+            links:
+              - [p, p_bp]
+              - [f, f_bp]
+    """)
+    lpspec_linopy.extend(
+        m,
+        path,
+        data={
+            'p_bp': pd.Series([0.0, 10.0], index=pd.Index([0, 1], name='bp')),
+            'f_bp': pd.Series([1.0, 8.0], index=pd.Index([0, 1], name='bp')),
+        },
+    )
+    assert 'curve_lam' in m.variables, 'the formulation emitted nothing'
+    assert 'curve_link0' in m.constraints, 'the links did not reach the model'

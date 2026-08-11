@@ -49,6 +49,7 @@ from lpspec.language.expression_parser import (
     EdgeNode,
     ExpressionNode,
     FunctionCallNode,
+    KeywordNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -60,24 +61,24 @@ from lpspec.language.expression_parser import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from lpspec.language.schema import MacroBlock, MathSchema
+    from lpspec.language.model import MacroBlock, Model
 
 #: Backstop against pathological nesting the cycle check cannot see.
 _MAX_DEPTH = 50
 
 
-def parse_and_expand(text: str, schema: MathSchema, context: str = 'expression') -> ExpressionNode:
+def parse_and_expand(text: str, schema: Model, context: str = 'expression') -> ExpressionNode:
     """Parse *text* and expand named sub-expressions and macros to core AST."""
     return expand(parse_expression(text), schema, context)
 
 
 @overload
-def expand(node: ArithmeticNode, schema: MathSchema, context: str = ...) -> ArithmeticNode: ...
+def expand(node: ArithmeticNode, schema: Model, context: str = ...) -> ArithmeticNode: ...
 @overload
-def expand(node: ComparisonNode, schema: MathSchema, context: str = ...) -> ComparisonNode: ...
+def expand(node: ComparisonNode, schema: Model, context: str = ...) -> ComparisonNode: ...
 
 
-def expand(node: ExpressionNode, schema: MathSchema, context: str = 'expression') -> ExpressionNode:
+def expand(node: ExpressionNode, schema: Model, context: str = 'expression') -> ExpressionNode:
     """Expand all named sub-expressions and macro calls under *node*.
 
     Expansion never changes the shape of the root: a comparison stays a
@@ -116,7 +117,8 @@ def _descend(node: ArithmeticNode, recurse: Callable[[ArithmeticNode], Arithmeti
     the other four cases is how the two drift apart.
     """
     if isinstance(
-        node, NumberNode | NameNode | VariableNode | ParameterNode | DimensionNode | CoordinateNode | EdgeNode
+        node,
+        NumberNode | NameNode | VariableNode | ParameterNode | DimensionNode | CoordinateNode | EdgeNode | KeywordNode,
     ):
         return node
     if isinstance(node, UnaryOperatorNode):
@@ -134,7 +136,7 @@ def _descend(node: ArithmeticNode, recurse: Callable[[ArithmeticNode], Arithmeti
 
 def _expand(
     node: ArithmeticNode,
-    schema: MathSchema,
+    schema: Model,
     context: str,
     stack: tuple[str, ...],
 ) -> ArithmeticNode:
@@ -158,11 +160,10 @@ def _expand(
         _cycle(node.name, 'macro')
         return _expand_macro(node, schema, context, stack)
 
-    # a plain name or an ordinary helper call — only the children can expand
     return _descend(node, lambda child: _expand(child, schema, context, stack))
 
 
-def _parse_named(name: str, schema: MathSchema, context: str) -> ArithmeticNode:
+def _parse_named(name: str, schema: Model, context: str) -> ArithmeticNode:
     body = parse_expression(schema.expressions[name])
     if isinstance(body, ComparisonNode):
         msg = (
@@ -175,10 +176,17 @@ def _parse_named(name: str, schema: MathSchema, context: str) -> ArithmeticNode:
 
 def _expand_macro(
     call: FunctionCallNode,
-    schema: MathSchema,
+    schema: Model,
     context: str,
     stack: tuple[str, ...],
 ) -> ArithmeticNode:
+    """Expand one macro call to its substituted, fully expanded body.
+
+    Call-by-value: arguments are expanded before substitution, so they may
+    themselves use named expressions and macros. The substituted body is then
+    expanded again, since a template may reference named expressions or other
+    macros of its own.
+    """
     macro = schema.macros[call.name]
     signature = macro_signature(call.name, macro)
     if len(call.args) != len(macro.args):
@@ -195,15 +203,12 @@ def _expand_macro(
         )
         raise SchemaError(msg)
 
-    # call-by-value: arguments are expanded before substitution, so they may
-    # themselves use named expressions and macros
     bindings = {
         **{formal: _expand(arg, schema, context, stack) for formal, arg in zip(macro.args, call.args, strict=False)},
         **{formal: _expand(call.kwargs[formal], schema, context, stack) for formal in macro.kwargs},
     }
     body = parse_template(call.name, macro, context)
     substituted = _substitute(body, bindings)
-    # the body may reference named expressions or other macros
     return _expand(substituted, schema, context, (*stack, call.name))
 
 

@@ -11,7 +11,7 @@ module is the seam a caller uses: the contract, and the two lookups.
 """
 
 from lpspec.relational.sinks.solvers import SOLVERS, solver
-from lpspec.relational.sinks.tables import COLS, DTYPES, MATRIX, OBJ, ROWS, VTYPE, ModelTables
+from lpspec.relational.sinks.tables import COLS, DTYPES, MATRIX, OBJ, ROWS, VTYPE, ModelTables, compress_rows
 from lpspec.relational.sinks.writers import PLANNED_WRITERS, WRITERS, writer
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
     'VTYPE',
     'WRITERS',
     'ModelTables',
+    'compress_rows',
     'solver',
     'writer',
 ]

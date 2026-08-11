@@ -7,7 +7,7 @@ a :class:`~lpspec.relational.plan.Program`. It lives on the language side —
 the engine subpackage stays free of YAML knowledge, and this module never
 imports the eager builder.
 
-Covered: foreach, where, arithmetic (+ - * /), sum, group_sum, shift,
+Covered: foreach, where, arithmetic (+ - * /), sum, sum, shift,
 comparison, and binary/integer variables (variable_type). Constructs with no
 lowering raise :class:`~lpspec.errors.LanguageError` naming
 the construct and its rewrite — never a pointer to another backend: the two
@@ -40,6 +40,7 @@ from lpspec.language.expression_parser import (
     DimensionNode,
     EdgeNode,
     FunctionCallNode,
+    KeywordNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -65,13 +66,17 @@ from lpspec.language.where_parser import (
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 _SENSES = {'==', '<=', '>='}
 
 
-def lower_program(schema: MathSchema) -> plan.Program:
-    """Compile a validated :class:`MathSchema` into a :class:`Program`."""
+def lower_program(schema: Model) -> plan.Program:
+    """Compile a validated :class:`Model` into a :class:`Program`.
+
+    A ``binary:`` variable lowers with fixed 0/1 bounds, matching linopy's
+    ``binary=True``.
+    """
     schema = expand_piecewise(schema)
     ns = Namespace.of(schema)
     parameters = tuple(plan.ParameterDeclaration(name, tuple(pdef.dims)) for name, pdef in schema.parameters.items())
@@ -80,7 +85,6 @@ def lower_program(schema: MathSchema) -> plan.Program:
     for vname, vdef in schema.variables.items():
         variable_type: plan.VariableType
         if vdef.binary:
-            # binary implies fixed 0/1 bounds, matching linopy's binary=True
             variable_type, lower, upper = 'binary', plan.Constant(0.0), plan.Constant(1.0)
         else:
             variable_type = 'integer' if vdef.integer else 'continuous'
@@ -130,7 +134,8 @@ def lower_program(schema: MathSchema) -> plan.Program:
     )
 
     dimensions = tuple(
-        plan.DimensionDeclaration(dname, tuple(ddef.coords.items())) for dname, ddef in schema.dimensions.items()
+        plan.DimensionDeclaration(dname, tuple(ddef.targeted.items()), tuple(ddef.labels))
+        for dname, ddef in schema.dimensions.items()
     )
     return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions)
 
@@ -140,20 +145,26 @@ def lower_program(schema: MathSchema) -> plan.Program:
 # ---------------------------------------------------------------------------
 
 
-def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.Expression:
+def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expression:
     """Rewrite one resolved core-AST expression as a plan expression.
 
-    Two rules a helper case relies on, neither of them stated here. The call
+    Three rules this function relies on, none of them stated here. The call
     shape comes from ``helpers.call_shape_error``, which resolution has already
     applied — it is asked again here so an AST that skipped resolution gets the
     language's wording rather than an ``IndexError``. The dim rules come from
     ``dimensions.dims_of`` over the *core AST*: whether an operand carries the
     dim it is being reduced along is a language question, and lowering asks it
-    rather than answering it a second time.
+    rather than answering it a second time. Degree is likewise the language's
+    rule, not the plan's — asked here, answered in ``language/degree.py``, and
+    asked identically by the eager lane.
 
     What stays here is what is genuinely about the plan: which node a call
     becomes, and the shapes a node cannot represent — a ``GroupSum`` groups by
     a declared coordinate, a ``Translate`` distance is an integer literal.
+    ``Sum`` and ``GroupSum`` stay two nodes even though the surface has one
+    verb: reducing a dim away and reducing it into another are different
+    relational shapes, and the executor cases were never the thing the surface
+    was collapsing.
     """
     if isinstance(node, NumberNode):
         return plan.Constant(node.value)
@@ -168,6 +179,12 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
         msg = f'EdgeNode({node.policy!r}) reached lowering: an edge policy is a shift() kwarg, not a value.'
         raise AssertionError(msg)
 
+    if isinstance(node, KeywordNode):
+        msg = (
+            f'KeywordNode({node.value!r}) reached lowering. A quoted keyword is consumed '
+            f'by its kwarg during resolution (docs/ARCHITECTURE.md hard rule 1).'
+        )
+        raise AssertionError(msg)
     if isinstance(node, (NameNode, DimensionNode, CoordinateNode)):
         msg = (
             f'{type(node).__name__}({node.name!r}) reached lowering. Expressions '
@@ -183,8 +200,6 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
     if isinstance(node, BinaryOperatorNode):
         left = _lower_expr(node.left, schema, context)
         right = _lower_expr(node.right, schema, context)
-        # Degree is the language's rule, not the plan's — asked here, answered
-        # in `language/degree.py`, and asked identically by the eager lane.
         degree.check_binary(node, context)
         match node.op:
             case '+':
@@ -214,18 +229,29 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
             over_node = node.kwargs['over']
             if not isinstance(over_node, DimensionNode):
                 raise LanguageError(f'{context}: sum(over=...) must name a dimension')
+            by_node = node.kwargs.get('group_by')
             _check_dim_rules(node, schema, context)
-            return plan.Sum(_lower_expr(node.args[0], schema, context), (over_node.name,))
+            operand = _lower_expr(node.args[0], schema, context)
+            if by_node is None:
+                return plan.Sum(operand, (over_node.name,))
+            if not isinstance(by_node, CoordinateNode):
+                raise LanguageError(f'{context}: sum(group_by=...) must name a coordinate')
+            return plan.GroupSum(
+                operand,
+                over=over_node.name,
+                coordinate=by_node.name,
+                into=by_node.into,
+            )
 
-        if node.name == 'group_sum':
-            over_node = node.kwargs['over']
+        if node.name == 'at':
+            over_node = node.kwargs['onto']
             by_node = node.kwargs['by']
             if not isinstance(over_node, DimensionNode):
-                raise LanguageError(f'{context}: group_sum(over=...) must name a dimension')
+                raise LanguageError(f'{context}: at(onto=...) must name a dimension')
             if not isinstance(by_node, CoordinateNode):
-                raise LanguageError(f'{context}: group_sum(by=...) must name a coordinate')
+                raise LanguageError(f'{context}: at(by=...) must name a coordinate')
             _check_dim_rules(node, schema, context)
-            return plan.GroupSum(
+            return plan.At(
                 _lower_expr(node.args[0], schema, context),
                 over=over_node.name,
                 coordinate=by_node.name,
@@ -247,11 +273,6 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
             has_var = degree.carries_variable(node.args[0])
             edge = node.kwargs.get('edge')
             wrap = isinstance(edge, EdgeNode)
-            # One kwarg, three policies: `edge=wrap` is cyclic and vacates
-            # nothing, a number is the value the vacated slots contribute, and
-            # an absent `edge=` leaves them absent. The pair that used to
-            # contradict each other — a cyclic call also asking for a fill —
-            # is unrepresentable rather than refused.
             fill = None if wrap else _translate_fill(edge, context, has_var=has_var)
             if not wrap and fill is None and not has_var:
                 raise LanguageError(_shift_over_data_message(context))
@@ -268,7 +289,7 @@ def _lower_expr(node: ArithmeticNode, schema: MathSchema, context: str) -> plan.
     assert_never(node)
 
 
-def _check_dim_rules(node: FunctionCallNode, schema: MathSchema, context: str) -> None:
+def _check_dim_rules(node: FunctionCallNode, schema: Model, context: str) -> None:
     """Apply the language's dim rules to a helper call, discarding the dim set.
 
     Lowering wants the *raise*, not the answer: ``dimensions`` decides whether
@@ -282,6 +303,12 @@ def _check_dim_rules(node: FunctionCallNode, schema: MathSchema, context: str) -
 
 def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool) -> float | None:
     """The number an ``edge=`` names, or ``None`` for the absence default.
+
+    One kwarg, three policies: ``edge='wrap'`` is cyclic and vacates nothing —
+    the caller sends it straight to the plan and never here, so the pair that
+    used to contradict each other, a cyclic call also asking for a fill, is
+    unrepresentable rather than refused. A number is the value the vacated
+    slots contribute, and an absent ``edge=`` leaves them absent.
 
     **The right fill is positional**, which is linopy v1's own reason for
     refusing to pick one (``convention.rst`` §7): 0 is the identity of a sum and
@@ -315,12 +342,24 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
 
 
 def _shift_over_data_message(context: str) -> str:
+    """The three ways out, one of which is two things at once.
+
+    A `where` is a *companion* to `edge=`, not an alternative to it. This
+    refusal is decided on the expression alone, so a mask does not lift it —
+    but `edge=0` alone leaves a row at the vacated coordinate whose bound is
+    that zero, which is the silent pinning this refusal exists to prevent. The
+    row is omitted only by masking it, and the mask is only reachable once the
+    expression is well-formed. Listing the two as alternatives sent a reader to
+    whichever they read first, and both are wrong on their own.
+    """
     return (
         f'{context}: shift() over a variable-free expression leaves vacated positions with no '
         f'value, and inventing one is what silently pinned a bound to zero. Say which you mean:\n'
-        f'  shift(x, over=d, by=n, edge=0)      the vacated positions contribute zero\n'
-        f'  where: "..."                        mask the vacated coordinate out of the row\n'
-        f'  shift(x, over=d, by=n, edge=wrap)   the dimension really is cyclic'
+        f"  shift(x, over=d, by=n, edge='wrap')   the dimension really is cyclic\n"
+        f'  shift(x, over=d, by=n, edge=0)        the vacated positions contribute zero\n'
+        f'  ...and a where: excluding them        the vacated rows should not exist at all\n'
+        f'A where: alone does not lift this — it is decided on the expression, before any mask '
+        f'is read — and edge=0 alone leaves a row whose bound is that zero.'
     )
 
 
@@ -338,12 +377,17 @@ def _bound_expression(value: float | str) -> plan.Expression:
 def _lower_where(
     text: str | None, ns: Namespace, context: str, self_variable: str | None = None
 ) -> plan.Predicate | None:
+    """Lower a where string to a plan predicate, ``None`` when there is no mask.
+
+    A predicate that resolves to the constant ``True`` is dropped too: it is
+    equivalent to no mask.
+    """
     node = where_of(text, ns, context, self_variable)
     if node is None:
         return None
     pred = _lower_where_node(node, context)
     if isinstance(pred, plan.BooleanConstant) and pred.value:
-        return None  # True is equivalent to no mask
+        return None
     return pred
 
 
@@ -380,3 +424,78 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
         )
 
     assert_never(node)
+
+
+# ---------------------------------------------------------------------------
+# check-time advice
+# ---------------------------------------------------------------------------
+
+
+def advice(program: plan.Program) -> list[str]:
+    """Modeling advice ``check`` surfaces as warnings — never errors.
+
+    One rule today: **everything under ``dimensions:`` should be an axis** —
+    something is indexed by it, or an aggregation lands terms on it. A
+    declared dimension with neither is not part of the model's dimensionality;
+    it is either a label space wearing a dimension's clothes (say it inline on
+    the dimension that carries it, and the file reads as the model is) or dead
+    weight. Advice rather than an error because ``extend()`` legitimately
+    splits one model across files, and a base file's label space may become a
+    real axis in an extension this check never sees.
+    """
+    axes: set[str] = set()
+    for declaration in (*program.parameters, *program.variables, *program.constraints):
+        axes.update(declaration.dims)
+    expressions = [program.objective.expression]
+    expressions.extend(side for c in program.constraints for side in (c.lhs, c.rhs))
+    for e in expressions:
+        axes |= _produced_axes(e)
+
+    targeted = {target: (d.name, cname) for d in program.dimensions for cname, target in d.coordinates}
+    notes: list[str] = []
+    for d in program.dimensions:
+        if d.name in axes:
+            continue
+        if d.name in targeted:
+            owner, cname = targeted[d.name]
+            notes.append(
+                f"dimension '{d.name}' is never an axis: nothing is indexed by it and nothing "
+                f"aggregates into it — it only serves as the target of coordinate '{cname}' on "
+                f"'{owner}'. That is a label space, not a dimension of this model; declare it "
+                f'inline instead:\n'
+                f'  dimensions:\n'
+                f'    {owner}:\n'
+                f'      coords:\n'
+                f'        {cname}: {{dtype: str}}'
+            )
+        else:
+            notes.append(
+                f"dimension '{d.name}' is never used: nothing is indexed by it, nothing "
+                f'aggregates into it, and no coordinate targets it. Remove it — or keep it '
+                f'knowingly, if an extension file supplies the use.'
+            )
+    return notes
+
+
+def _produced_axes(e: plan.Expression) -> set[str]:
+    """The axes an expression *creates*, beyond what its declarations index.
+
+    ``group_by=`` lands terms on its target and ``at()`` spreads onto its fine
+    dimension, so both are axes even when no declaration is indexed by them —
+    an objective may group into a dimension and then implicitly sum it away.
+    """
+    out: set[str] = set()
+    if isinstance(e, plan.GroupSum):
+        out.add(e.into)
+    if isinstance(e, plan.At):
+        out.add(e.over)
+    children: tuple[plan.Expression, ...] = ()
+    if isinstance(e, (plan.Negate, plan.Sum, plan.GroupSum, plan.At, plan.Translate)):
+        children = (e.operand,)
+    elif isinstance(e, (plan.Add, plan.Multiply)):
+        children = (e.left, e.right)
+    elif isinstance(e, plan.Divide):
+        children = (e.numerator, e.divisor)
+    for child in children:
+        out |= _produced_axes(child)
+    return out

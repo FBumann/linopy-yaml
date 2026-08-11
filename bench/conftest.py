@@ -70,7 +70,27 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 #: Fingerprinted into every result file. The published tables name these, and a
 #: number measured against a different polars is a different number.
-TRACKED = ('lpspec', 'linopy', 'highspy', 'polars', 'pandas', 'numpy', 'xarray', 'pyarrow')
+#:
+#: `pytest-benchmem` is one of them: a fix to its isolated pass moves `rss`
+#: without a line of lpspec changing, so a result file that does not name the
+#: version that measured it cannot be compared across such a release.
+#:
+#: `gurobipy` and `scipy` for the same reason one level out: the `gurobi` sink
+#: is measurable now, and a published ratio through a solver has to say which
+#: solver — scipy being what carries the matrix into it.
+TRACKED = (
+    'lpspec',
+    'linopy',
+    'highspy',
+    'gurobipy',
+    'scipy',
+    'polars',
+    'pandas',
+    'numpy',
+    'xarray',
+    'pyarrow',
+    'pytest-benchmem',
+)
 
 
 # `optionalhook` because this is pytest-benchmark's hook and pytest-benchmark is

@@ -26,6 +26,7 @@ from lpspec.language.expression_parser import (
     DimensionNode,
     EdgeNode,
     FunctionCallNode,
+    KeywordNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -48,7 +49,7 @@ from lpspec.language.where_parser import (
     WhereNode,
 )
 from lpspec.linopy import semantics
-from lpspec.linopy.loader import check_divisors_cover
+from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
@@ -56,7 +57,7 @@ if TYPE_CHECKING:
     import linopy
     import pandas as pd
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
 
@@ -91,7 +92,7 @@ class EvaluationContext:
     model: linopy.Model
     dataset: xr.Dataset
     master_coords: dict[str, pd.Index]
-    schema: MathSchema
+    schema: Model
     ns: Namespace
     #: dim -> {coordinate name: values as a DataArray over that dim}
     dim_coords: dict[str, dict[str, xr.DataArray]] = field(default_factory=dict)
@@ -99,7 +100,7 @@ class EvaluationContext:
 
 def build_model(
     model: linopy.Model,
-    schema: MathSchema,
+    schema: Model,
     dataset: xr.Dataset,
     master_coords: dict[str, pd.Index],
     dim_coords: dict[str, dict[str, xr.DataArray]] | None = None,
@@ -219,6 +220,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
                 raise LanguageError(msg)
 
             check_divisors_cover(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask, ctx.model)
+            check_constant_side_covers(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask)
 
             lhs = _eval_ast(ast.left, ctx)
             rhs = _eval_ast(ast.right, ctx)
@@ -329,6 +331,13 @@ def _eval_ast(
         msg = f'EdgeNode({node.policy!r}) reached the evaluator: an edge policy is a shift() kwarg, not a value.'
         raise AssertionError(msg)
 
+    if isinstance(node, KeywordNode):
+        msg = (
+            f'KeywordNode({node.value!r}) reached the evaluator. A quoted keyword is '
+            f'consumed by its kwarg during resolution — reaching here means it was written '
+            f'where no kwarg expects one.'
+        )
+        raise AssertionError(msg)
     if isinstance(node, (NameNode, DimensionNode, CoordinateNode)):
         msg = (
             f'{type(node).__name__}({node.name!r}) reached the evaluator. '
@@ -360,14 +369,20 @@ def _eval_ast(
             raise NameError(unknown_helper_message(node.name))
         helper = _HELPERS[node.name]
         args = [_eval_ast(a, ctx) for a in node.args]
-        if node.name == 'group_sum':
+        if node.name == 'at':
+            # same lookup as the grouping sum for the same reason: the
+            # coordinate lives on the dimension rather than in the parameter
+            # dataset
+            by = node.kwargs['by']
+            assert isinstance(by, CoordinateNode)
+            return _helper_at(args[0], _coordinate_array(by, ctx), into=by.into)
+        if (by := node.kwargs.get('group_by')) is not None:
             # the coordinate lives on the dimension, not in the parameter
             # dataset, so it is looked up here rather than evaluated as an
             # operand — the helper still sees a plain mapping array
-            by = node.kwargs['by']
             assert isinstance(by, CoordinateNode)
-            return _helper_group_sum(args[0], _coordinate_array(by, ctx), into=by.into)
-        kwargs = {}
+            return _helper_grouped_sum(args[0], _coordinate_array(by, ctx), into=by.into)
+        kwargs: dict[str, Any] = {}
         for k, v in node.kwargs.items():
             if isinstance(v, DimensionNode):
                 kwargs[k] = v.name
@@ -419,10 +434,10 @@ def _helper_sum(array: Any, *, over: str) -> Any:
     return array
 
 
-def _helper_group_sum(array: Any, mapping: Any, *, into: str) -> Any:
+def _helper_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
     """Sum *array* through a declared coordinate, producing dimension *into*.
 
-    Usage in YAML: ``group_sum(p, over=generator, by=bus)``
+    Usage in YAML: ``sum(p, over=generator, group_by=bus)``
 
     *mapping* is the coordinate's values as a one-dimensional array over the
     dim being grouped (``generator`` → bus labels), supplied by the caller from
@@ -431,12 +446,12 @@ def _helper_group_sum(array: Any, mapping: Any, *, into: str) -> Any:
     """
     if not isinstance(mapping, xr.DataArray):
         msg = (
-            f'group_sum() coordinate must be an array (got '
-            f'{type(mapping).__name__}). Usage: group_sum(expr, over=dim, by=coord)'
+            f'sum(group_by=) coordinate must be an array (got '
+            f'{type(mapping).__name__}). Usage: sum(expr, over=dim, group_by=coord)'
         )
         raise TypeError(msg)
     if mapping.ndim != 1:
-        msg = f'group_sum() mapping must have exactly one dimension, got {list(mapping.dims)}'
+        msg = f'sum(group_by=) mapping must have exactly one dimension, got {list(mapping.dims)}'
         raise LanguageError(msg)
 
     group = mapping.rename(into)
@@ -451,7 +466,40 @@ def _helper_group_sum(array: Any, mapping: Any, *, into: str) -> Any:
         array = array.isel({dim: present.to_numpy()})
     if isinstance(array, xr.DataArray) or hasattr(array, 'groupby'):
         return array.groupby(group).sum()
-    raise _unsupported('group_sum()', array)
+    raise _unsupported('sum(group_by=)', array)
+
+
+def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
+    """Read *array* through a declared coordinate — the adjoint of a group.
+
+    Usage in YAML: ``at(on, onto=flow, by=component)``
+
+    *mapping* is the same one-dimensional array ``sum`` takes: the
+    coordinate's values over the dim carrying it (``flow`` -> component labels).
+    Grouping sums *along* it; this indexes *through* it, so the operand must
+    carry ``into`` and the result carries the mapping's own dim instead.
+
+    That is xarray's vectorised selection, which is the pullback exactly: one
+    ``into`` label is read once per fine label pointing at it, so the fan-out
+    is the indexer's doing rather than a broadcast we arrange.
+    """
+    if not isinstance(mapping, xr.DataArray):
+        msg = f'at() coordinate must be an array (got {type(mapping).__name__}). Usage: at(expr, onto=dim, by=coord)'
+        raise TypeError(msg)
+    if mapping.ndim != 1:
+        msg = f'at() mapping must have exactly one dimension, got {list(mapping.dims)}'
+        raise LanguageError(msg)
+
+    # A null coordinate says this fine label belongs to no coarse one, so it
+    # reads nothing and its row is absent — the same reading sum gives a
+    # null group, and the relational lane gets it free from an inner join.
+    present = mapping.notnull()
+    if not bool(present.all()):
+        dim = str(mapping.dims[0])
+        mapping = mapping.isel({dim: present.to_numpy()})
+    if isinstance(array, xr.DataArray) or hasattr(array, 'sel'):
+        return array.sel({into: mapping.rename(into)})
+    raise _unsupported('at()', array)
 
 
 def _unsupported(call: str, array: Any) -> TypeError:
@@ -476,7 +524,7 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
 
     Usage in YAML: ``shift(soc, over=snapshot, by=1)``. ``edge`` decides the
     boundary and carries all three policies, so no two keywords can disagree:
-    ``edge=wrap`` is cyclic and vacates nothing, a number is what the vacated
+    ``edge='wrap'`` is cyclic and vacates nothing, a number is what the vacated
     positions contribute, and omitting it leaves them **absent** — which
     propagates and drops the row, what linopy's own v1 convention means by
     ``.shift()``. Nothing is done to the result in that default case on
@@ -489,7 +537,7 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
             return array.roll(amount, roll_coords=False)
         if hasattr(array, 'roll'):
             return array.roll(amount)
-        raise _unsupported('shift(edge=wrap)', array)
+        raise _unsupported("shift(edge='wrap')", array)
     if isinstance(edge, str):
         # `wrap` is the only string the language has, and it is handled above;
         # resolution rejects every other one before a lane sees it.
@@ -513,7 +561,7 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
 #: that would make the differential tests a comparison of dialects.
 _HELPERS: dict[str, Callable[..., Any]] = {
     'sum': _helper_sum,
-    'group_sum': _helper_group_sum,
+    'at': _helper_at,
     'shift': _helper_shift,
 }
 

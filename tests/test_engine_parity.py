@@ -71,12 +71,20 @@ def using(engine: str):
 
 
 def _frames(tables) -> dict[str, pl.DataFrame]:
+    """The four frames in a form two engines can be compared entry for entry.
+
+    `matrix` is asked for its `row` labels back (`matrix_block`) rather than
+    read as the CSR pair it is stored as. Comparing `row_starts` alone would
+    pass on two engines that agree about how many entries each row owns and
+    disagree about which — and comparing the compressed frame alone would pass
+    on two that put the same entries under different rows.
+    """
     return {
         # `cols` is positional — one row per column in label order — so
         # sorting it would hide exactly the disagreement this compares
         'cols': tables.cols,
         'rows': tables.rows.sort('row'),
-        'matrix': tables.matrix.sort('row', 'col'),
+        'matrix': tables.matrix_block(0, tables.row_count).sort('row', 'col'),
         'obj': tables.obj.sort('col'),
     }
 
@@ -114,10 +122,14 @@ def test_both_engines_produce_the_declared_schema(model, sources):
     the other holds an `Enum`, and an `obj.coeff` typed `DECIMAL(2,1)` because
     SQL reads `1.0` as a decimal — a different number from the double the plan
     holds, and one that overflows above 9.9.
+
+    `matrix` is checked against `(col, coeff)` rather than `sinks.MATRIX`: the
+    frame a sink reads is CSR, so `row` was compressed into `row_starts` and is
+    not a column on either engine.
     """
     from lpspec.relational import sinks
 
-    declared = {'cols': sinks.COLS, 'obj': sinks.OBJ, 'rows': sinks.ROWS, 'matrix': sinks.MATRIX}
+    declared = {'cols': sinks.COLS, 'obj': sinks.OBJ, 'rows': sinks.ROWS, 'matrix': ('col', 'coeff')}
     for name in ENGINES:
         with using(name), lps.build(ROOT / model, sources) as ex:
             tables = ex._tables()

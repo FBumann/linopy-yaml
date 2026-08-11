@@ -13,12 +13,16 @@ Example::
     result.objective
     result.primal('p')  # tidy polars.DataFrame
     result.to_dataarray('p')  # labelled, for array post-processing
+
+``__version__`` reads the installed metadata: the git tag is the source of
+truth, and hatch-vcs bakes it in at build time. A source tree with nothing
+installed reads ``0.0.0``.
 """
 
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
-from lpspec.api import build, check, load_schema, solve, write
+from lpspec.api import build, check, load_model, solve, write
 from lpspec.errors import (
     DataError,
     DimensionError,
@@ -27,7 +31,7 @@ from lpspec.errors import (
     PiecewiseExpansionError,
     SchemaError,
 )
-from lpspec.language.schema import MathSchema
+from lpspec.language.model import Model
 from lpspec.typeset import SymbolTable, to_latex, to_markdown, to_typst
 
 __all__ = [
@@ -35,13 +39,13 @@ __all__ = [
     'DimensionError',
     'LanguageError',
     'LpspecError',
-    'MathSchema',
+    'Model',
     'PiecewiseExpansionError',
     'SchemaError',
     'SymbolTable',
     'build',
     'check',
-    'load_schema',
+    'load_model',
     'solve',
     'to_latex',
     'to_markdown',
@@ -50,7 +54,6 @@ __all__ = [
 ]
 
 try:
-    # the git tag is the source of truth; hatch-vcs bakes it into the metadata
     __version__ = _installed_version('lpspec')
-except _PackageNotFoundError:  # running from a source tree with nothing installed
+except _PackageNotFoundError:
     __version__ = '0.0.0'

@@ -21,11 +21,10 @@ bare-install job runs the whole suite with none of them present.
 things and nothing else — the shim below, and the `to_pandas` / `to_dataarray`
 bridges out of a result.
 
-**The last leak is closed.** The public exception tree used to be rooted at
-`LinopyYamlError`, left over from when this package was called `linopy-yaml`, so
-every traceback on the pure-polars path named a library that path never loads.
-It is `LpspecError` now, with no alias
-([#389](https://github.com/FBumann/lpspec/issues/389)).
+**Nothing on the product path names linopy, including in a traceback.** The
+public exception tree is rooted at `LpspecError`, with no alias
+([#389](https://github.com/fluxopt/lpspec/issues/389)) — a name from this
+extra has no business reaching a caller who never installed it.
 
 ## 2. It is the oracle
 
@@ -68,7 +67,7 @@ lpspec_linopy.extend(m, 'ramp.yaml', data={...})  # mutates m in place
 Both are *pure producers*: YAML in, model out, nothing retained. `build` returns
 a plain `linopy.Model` — no accessor, no attached schema, no patched attributes
 — so nothing is lost across `pickle`, `deepcopy` or `to_netcdf`. To inspect the
-math, re-read the file with `lps.load_schema`.
+math, re-read the file with `lps.load_model`.
 
 `extend` may reference variables already on the model (they come from the model
 argument, not from Python-side history), while the YAML must still declare every
@@ -85,7 +84,7 @@ oracle an oracle, and a construct outside the language is a load error naming
 the rewrite, never a redirection to the other path.
 
 What differs is what each will take as *data*, which is a wart rather than a
-design ([#60](https://github.com/FBumann/lpspec/issues/60)):
+design ([#60](https://github.com/fluxopt/lpspec/issues/60)):
 
 | | product path (`sources=`) | shim (`data=` / `coords=`) |
 |---|---|---|
@@ -106,7 +105,7 @@ solver layer. The first is data prep
 ([SPEC §11](../SPEC.md#11-out-of-scope)), the second is
 [hard rule 5](../ARCHITECTURE.md#hard-rules) — the model is the file you review
 and diff — and the third is
-[#106](https://github.com/FBumann/lpspec/issues/106), where we adopt linopy's
+[#106](https://github.com/fluxopt/lpspec/issues/106), where we adopt linopy's
 *design* for declared solver capabilities without adopting its code.
 
 Where linopy is genuinely ahead, and why none of it is a ceiling question, is the

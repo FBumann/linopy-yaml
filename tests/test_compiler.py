@@ -32,6 +32,8 @@ planner stays free to change underneath them.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import polars as pl
 import pytest
 
@@ -234,7 +236,7 @@ def test_sum_over_an_absent_dim_scales_by_that_dims_cardinality():
     assert '3' in query(compiled.terms[0].frame)
 
 
-def test_group_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
+def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
     node = plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus')
     fragment = compiler().expression(node, 'test').terms[0]
     assert fragment.dims == ('snapshot', 'bus')
@@ -340,7 +342,7 @@ def test_a_variable_and_its_shape_operators_stay_keyed():
     """A term keeps one row per (dims…, var_label) through every operator.
 
     `Sum` drops a coordinate column, but the rows it merges came from distinct
-    coordinates and so carry distinct labels; `group_sum` and `roll` join a dim
+    coordinates and so carry distinct labels; `sum` and `roll` join a dim
     table one-to-one. None of them can put a variable on a row twice.
     """
     for node in (
@@ -352,6 +354,32 @@ def test_a_variable_and_its_shape_operators_stay_keyed():
         -plan.Variable('p'),
     ):
         assert compiler().expression(node, 'test').terms[0].keyed, node
+
+
+def test_two_fragments_of_one_variable_are_compared_by_what_moved_their_labels():
+    """A shared variable is necessary for a shared column, and not sufficient.
+
+    Two `sum`s of one variable through *different* coordinates of one dim
+    reach the same row only where those coordinates agree, which is a question
+    about the dimension table. Everything else answers yes: the cost of being
+    wrong is a model whose sinks disagree, against the cost of a sort.
+    """
+    q = compiler()
+    by_bus = plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus')
+    one = q.expression(by_bus, 'test').terms[0]
+    same = q.expression(by_bus, 'test').terms[0]
+    assert one.mapping == (('group', 'generator', 'bus', 'bus'),)
+    assert q.may_share_a_column(one, same), 'one mapping, so one row — certain'
+
+    plain = q.expression(plan.Variable('p'), 'test').terms[0]
+    assert q.may_share_a_column(one, plain), 'different dims are not modelled'
+
+    shifted = q.expression(plan.Translate(by_bus, 'snapshot', by=1), 'test').terms[0]
+    assert shifted.mapping[-1][0] == 'shift'
+    assert q.may_share_a_column(one, shifted), 'a shift on one side is not modelled'
+
+    other = q.expression(plan.Variable('p'), 'test').terms[0]
+    assert not q.may_share_a_column(one, replace(other, variable='q')), 'distinct variables never share'
 
 
 def test_a_term_names_its_variable_through_every_operator():
@@ -395,7 +423,7 @@ def test_a_sum_that_drops_nothing_leaves_a_constant_part_keyed():
     assert compiler().expression(scaled, 'test').terms[0].keyed
 
 
-def test_group_sum_over_a_broadcast_dim_is_not_keyed():
+def test_sum_over_a_broadcast_dim_is_not_keyed():
     """Which dim is grouped decides whether the key survives.
 
     `generator` is `p`'s own, so grouping it merges rows with distinct labels.
@@ -433,3 +461,36 @@ def test_group_sum_over_a_broadcast_dim_is_not_keyed():
         into='bus',
     )
     assert not lonely.expression(node, 'test').terms[0].keyed
+
+
+def test_a_zero_edge_writes_its_rows_like_any_other_fill():
+    """`edge=0` over a constant leaves a row, not a gap.
+
+    The arithmetic is the same either way — a const fragment reads a missing
+    row as zero — so nothing about the model changes here. What changes is that
+    the vacated slot *has* a value, so "I asked for zero" and "there was
+    nothing here" stop looking alike downstream. They were already telling
+    different stories: the presence branch counts a filled slot as present,
+    while the frame had no row for it.
+
+    Over a *term* there is still nothing to write: `edge=0` on a variable means
+    the vacated slot contributes no term (SPEC §7), and a zero-coefficient
+    entry would be a nonzero in the matrix standing for a term that is absent.
+    """
+    snapshots = pl.LazyFrame({'val': [0, 1, 2], 'ord': [0, 1, 2]})
+    sources = BoundSources(
+        parameters={'load': pl.LazyFrame({'snapshot': [0, 1, 2], 'value': [10.0, 20.0, 30.0]})},
+        dimensions={'snapshot': snapshots},
+        cardinality={'snapshot': 3},
+        boolean_parameters=frozenset(),
+    )
+    q = PolarsCompiler(PROGRAM, sources, VARIABLES)
+    shifted = plan.Translate(plan.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)
+
+    rows = q.expression(shifted, 'test').consts[0].frame.collect().sort('snapshot')
+    assert rows['snapshot'].to_list() == [0, 1, 2], 'the vacated snapshot has no row, so its zero is invisible'
+    assert rows['cval'].to_list() == [0.0, 10.0, 20.0], 'the fill is the value at the vacated slot'
+
+    bare = plan.Translate(plan.Parameter('load'), 'snapshot', 1, wrap=False, fill=None)
+    vacated = q.expression(bare, 'test').consts[0].frame.collect()
+    assert vacated['snapshot'].to_list() == [1, 2], 'a bare shift vacates, and that is a gap on purpose'

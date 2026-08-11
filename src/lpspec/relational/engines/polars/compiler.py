@@ -21,15 +21,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import LanguageError
+from lpspec.errors import LanguageError, LpspecError
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    import datetime
+    from collections.abc import Callable, Mapping, Sequence
 
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
@@ -47,6 +48,12 @@ _ORD_OUT = '__ord out__'
 #: unit needs a column to exist in, and every path drops it by selecting the
 #: dims and the label instead.
 UNIT = '__unit__'
+
+#: The same trick for a *scalar* declaration's presence frame. It is distinct
+#: from :data:`UNIT` rather than reusing it because the two meet: the empty
+#: coordinate product already carries ``UNIT``, and the restriction below cross
+#: joins a presence into it.
+PRESENT = '__present__'
 
 
 @dataclass(frozen=True)
@@ -97,6 +104,18 @@ class TermFragment:
     disjoint label ranges*: two fragments naming different variables cannot put
     a row on the same solver column however they were reshaped, and the
     terminal aggregate that would collapse them has nothing to do.
+    """
+    mapping: tuple[tuple[str, ...], ...] = ()
+    """Every operator that moved this fragment's labels, in order.
+
+    A ``GroupSum`` records ``('group', over, coordinate, into)`` and a
+    ``Translate`` ``('shift', dimension, by, wrap)``. Read only to compare two
+    fragments of one variable: identical mappings send a label to the same row,
+    and mappings that differ *only* in a coordinate send it to the same row
+    exactly where those coordinates agree — a question about a dimension table
+    rather than about the model. See :meth:`PolarsCompiler.may_share_a_column`.
+
+    Not a description of the frame, and nothing reads it to build one.
     """
     presence_dims: tuple[str, ...] | None = None
     """The columns :attr:`presence` is keyed by; ``None`` means :attr:`dims`.
@@ -285,7 +304,7 @@ class PolarsCompiler:
                         f"where-comparison on dimension '{p.dimension}' is outside the foreach dims "
                         f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
                     )
-                return _compare(pl.col(p.dimension), p.op, p.value)
+                return _compare(_dimension_column(p.dimension, p.value), p.op, p.value)
             if isinstance(p, plan.ParameterDefined):
                 col = pl.col(join_param(p.parameter))
                 if p.parameter in self.boolean_parameters:
@@ -345,15 +364,20 @@ class PolarsCompiler:
             if isinstance(e, plan.Parameter):
                 alias = f'__bound {e.name}__'
                 if alias not in joined:
-                    carrier = self.parameter_join(
-                        carrier,
-                        e.name,
-                        v.dims,
-                        alias,
-                        f"bound parameter '{e.name}' of variable '{v.name}'",
-                        # the label frame arrives in label order and `cols` is
-                        # read positionally, so this join may not shuffle it
-                        maintain_order='left',
+                    aligned = self._aligned_bound(carrier, e.name, v, alias)
+                    carrier = (
+                        aligned
+                        if aligned is not None
+                        else self.parameter_join(
+                            carrier,
+                            e.name,
+                            v.dims,
+                            alias,
+                            f"bound parameter '{e.name}' of variable '{v.name}'",
+                            # the label frame arrives in label order and `cols` is
+                            # read positionally, so this join may not shuffle it
+                            maintain_order='left',
+                        )
                     )
                     joined.add(alias)
                 return pl.col(alias).cast(pl.Float64)
@@ -370,6 +394,81 @@ class PolarsCompiler:
 
         lower, upper = walk(v.lower), walk(v.upper)
         return carrier.with_columns(lower.alias('lb'), upper.alias('ub'))
+
+    def _aligned_bound(
+        self, frame: pl.LazyFrame, param: str, v: plan.VariableDeclaration, alias: str
+    ) -> pl.LazyFrame | None:
+        """*frame* with *param* attached **by position**, or ``None`` to join.
+
+        A profile per node, per technology, per hour is dense over the whole
+        variable product — the ordinary shape in energy modelling, and the one
+        the eager lane handles for free: in an array, position *is* the
+        coordinate, so there is nothing to align. Here the same parameter is a
+        full-size frame joined against a full-size coordinate product, which on
+        `profiled/l` is 0.58 s of a 1.27 s build and the whole of why that rung
+        is the one we lose to linopy.
+
+        Position can mean the coordinate here too. The label frame is in label
+        order by construction — not *lexicographic* dim order, which is why
+        sorting the parameter by its dim columns does not match it, but
+        row-major over the product in each dimension's own index order. Sorting
+        the parameter by those ordinals reproduces it exactly, and then the
+        value column is attached rather than joined.
+
+        **Wrong bounds are a wrong model with no error**, so this is refused
+        unless every one of these holds, and each is a fact already computed:
+
+        * the parameter's dims are exactly the variable's, in the same order —
+          fewer dims broadcast, more is already refused, and a different order
+          is a different row-major walk
+        * the variable declares no ``where`` — a mask makes the label frame a
+          subset of the product and position stops lining up
+        * the parameter is dense over that product, its height equal to the
+          product of the cardinalities binding cached
+
+        Duplicate coordinates would break density without changing the height,
+        and are refused before this by ``check_one_row_per_coordinate``.
+        """
+        declaration = self.program.parameter(param)
+        if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
+            return None
+
+        cards = [self.dimension_cardinality[d] for d in v.dims]
+        expected = math.prod(cards)
+        table = self.parameters[param]
+        if table.select(pl.len()).collect().item() != expected:
+            return None
+
+        stride = 1
+        strides: list[int] = []
+        for card in reversed(cards):
+            strides.insert(0, stride)
+            stride *= card
+        position = sum(
+            (self._ordinal_of(d) * step for d, step in zip(v.dims, strides, strict=True)),
+            start=pl.lit(0, dtype=pl.Int64),
+        )
+        pairs = table.select(position.alias('__at__'), pl.col('value')).collect(engine='streaming')
+        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs['value'], expected)))
+
+    def _ordinal_of(self, dim: str) -> pl.Expr:
+        """A parameter's *dim* column as that dimension's ordinal.
+
+        The index is what every label is numbered against, so this is the same
+        order :class:`~lpspec.relational.engines.polars.labels.Labeller` walks.
+
+        **Free for a string dimension**, which is most of them: binding encodes
+        those as an ``Enum`` over the labels *in ordinal order*
+        (``_Binder.encode_dimensions``), so the physical code already is the
+        ordinal and no lookup happens at all. Every other dtype pays a
+        dictionary built from the dimension table — the small side, one entry
+        per label rather than per row.
+        """
+        column = pl.col(dim)
+        if self.dimensions[dim].collect_schema()['val'] == pl.Enum:
+            return column.to_physical().cast(pl.Int64)
+        labels = self.dimensions[dim].select('val').collect()['val']
+        return column.replace_strict({value: at for at, value in enumerate(labels)}, return_dtype=pl.Int64)
 
     # ------------------------------------------------------------------
     # expressions → fragments
@@ -401,6 +500,8 @@ class PolarsCompiler:
             if isinstance(e, plan.GroupSum):
                 inner = _propagate_absence(ev(e.operand))
                 return _map_fragments(inner, lambda p: self._group_fragment(p, e, context))
+            if isinstance(e, plan.At):
+                return _map_fragments(ev(e.operand), lambda p: self._at_fragment(p, e, context))
             if isinstance(e, plan.Translate):
                 return _map_fragments(ev(e.operand), lambda p: self._translate_fragment(p, e, context))
             raise LanguageError(f'unsupported expression node {type(e).__name__} in {context}')
@@ -426,7 +527,7 @@ class PolarsCompiler:
         # costs `_label_frame` both of its arithmetic paths. Whether it is
         # needed is decided here, off the declaration, before any data is read.
         masked = self.program.variable(name).where is not None
-        presence = self.variables[name].select(*dims) if masked else None
+        presence = self._presence(name, dims) if masked else None
         # `presence_dims` is stated rather than left implied. It defaults to
         # None, meaning "keyed by dims" — but dims are rewritten downstream (a
         # product broadcasts, a sum drops) while this frame is not, so an
@@ -440,6 +541,23 @@ class PolarsCompiler:
             presence=presence,
             presence_dims=dims if masked else None,
         )
+
+    def _presence(self, name: str, dims: tuple[str, ...]) -> pl.LazyFrame:
+        """The coordinates a masked variable exists at.
+
+        A **scalar** declaration has none, and `select()` over no dims is the
+        empty frame polars cannot represent — so present and absent would become
+        indistinguishable at the moment presence is built, and the mask would
+        never reach the rows referencing it. The marker column carries the one
+        bit that is left: whether the row is there at all.
+        """
+        frame = self.variables[name]
+        if dims:
+            return frame.select(*dims)
+        # Renamed from a real column, never `pl.lit()`: a select of literals
+        # alone is length 1 whatever it selects from — there is no column to
+        # broadcast against — so an absent scalar would come back present.
+        return frame.select(pl.col('var_label').alias(PRESENT))
 
     def _product(self, a: CompiledExpression, b: CompiledExpression, context: str) -> CompiledExpression:
         """``a * b``, with the variable-carrying side normalised to the left."""
@@ -493,7 +611,13 @@ class PolarsCompiler:
         # Constructed rather than `replace`d for exactly that: `presence` has to
         # be *dropped* here, and carrying it would be the silent default.
         return TermFragment(
-            keep, frame, p.is_term, p.survives_dropping(dropped), p.label_dims - dropped, variable=p.variable
+            keep,
+            frame,
+            p.is_term,
+            p.survives_dropping(dropped),
+            p.label_dims - dropped,
+            variable=p.variable,
+            mapping=p.mapping,
         )
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
@@ -507,7 +631,7 @@ class PolarsCompiler:
         into one ``into``, and whether that merges two rows carrying the same
         ``var_label`` depends on where ``over`` came from. If the variable
         carries it, the merged rows have distinct labels and the key survives.
-        If it arrived by broadcast — ``group_sum(x * w, over=generator)`` with
+        If it arrived by broadcast — ``sum(x * w, over=generator)`` with
         ``x`` indexed by snapshot alone — they do not, and the terminal
         aggregate has to run.
         """
@@ -521,7 +645,47 @@ class PolarsCompiler:
         # a group is a sum, so §13 applies here as well: absence does not escape
         # it, which is why this constructs rather than `replace`s — see _sum_fragment
         return TermFragment(
-            (*keep, g.into), frame, p.is_term, keyed, _relabel(p.label_dims, g.over, g.into), variable=p.variable
+            (*keep, g.into),
+            frame,
+            p.is_term,
+            keyed,
+            _relabel(p.label_dims, g.over, g.into),
+            variable=p.variable,
+            mapping=(*p.mapping, ('group', g.over, g.coordinate, g.into)),
+        )
+
+    def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
+        """Spread ``into`` back out over ``over`` — the adjoint of a group.
+
+        The same mapping table as :meth:`_group_fragment`, joined on the other
+        column. Grouping reads one row per ``over`` label and lands it on one
+        ``into``; this reads one row per ``into`` and lands it on *every*
+        ``over`` sharing it, so the join **fans out**. That is the fan-out a
+        group pays in reverse, and it is still one equi-join against a mapping
+        table the frame already holds — pointwise, so the locality class does
+        not move.
+
+        **The key claim has to weaken, and that is the whole difference.** A
+        group merges labels; a pullback *duplicates* one — the same
+        ``var_label`` now appears at every fine coordinate of its component. So
+        the label no longer spans a dim the frame carries, and any later
+        reduction can bring two copies into one row. ``keyed=False`` is what
+        makes the terminal aggregate run and add them, rather than the frame
+        silently holding a cell twice.
+        """
+
+        if a.into not in p.dims:
+            raise LanguageError(f"in {context}: At through '{a.into}' but the expression has dims {list(p.dims)}")
+        keep = tuple(x for x in p.dims if x != a.into)
+        mapping = self.dimensions[a.over].select(pl.col('val').alias(a.over), pl.col(a.coordinate).alias(a.into))
+        frame = p.frame.join(mapping, on=a.into, how='inner').select(*keep, a.over, *p.carried)
+        return TermFragment(
+            (*keep, a.over),
+            frame,
+            p.is_term,
+            keyed=False,
+            label_dims=p.label_dims - {a.into},
+            variable=p.variable,
         )
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
@@ -547,30 +711,59 @@ class PolarsCompiler:
         if s.wrap:
             moved = (moved % card + card) % card
 
-        def remap(source: pl.LazyFrame, carried: list[str]) -> pl.LazyFrame:
+        def remap(source: pl.LazyFrame, carried: list[str], source_dims: tuple[str, ...] | None = None) -> pl.LazyFrame:
+            """*source*, with ``s.dimension`` moved by ``s.by``.
+
+            ``source_dims`` is the caller's, because a presence frame need not
+            carry the fragment's: an acyclic shift's presence speaks only about
+            the dim it vacated, so projecting the fragment's dims onto it asks
+            for columns it never had.
+            """
+            kept = [d for d in (source_dims if source_dims is not None else p.dims) if d != s.dimension]
             return (
                 source.join(incoming, on=s.dimension, how='inner')
                 .drop(s.dimension)
                 .with_columns(moved.alias(_ORD_OUT))
                 .join(outgoing, on=_ORD_OUT, how='inner')
-                .select(*others, s.dimension, *carried)
+                .select(*kept, s.dimension, *carried)
             )
 
         frame = remap(p.frame, p.carried)
-        if not s.wrap and s.fill:
-            # A const fragment reads a missing row as zero, so `fill=0` needs no
-            # rows at all — but `fill=1`, the identity a *product* wants, is only
-            # there if it is written. Lowering guarantees a nonzero fill reaches
-            # here only over a variable-free operand, so this is always the
-            # const branch and never has a `var_label` to invent.
+        if not s.wrap and s.fill is not None and not p.is_term:
+            # Every fill over a constant is written, `0` included. The
+            # arithmetic is unchanged — a const fragment reads a missing row as
+            # zero anyway — but the slot now *has* a value, so asking for zero
+            # stops being indistinguishable from having nothing. The presence
+            # branch below has always counted a filled slot as present; this is
+            # the frame agreeing with it.
+            #
+            # Over a *term* there is nothing to write: `edge=0` on a variable
+            # means the vacated slot contributes no term at all (SPEC §7), and
+            # a zero-coefficient entry would be a nonzero in the matrix
+            # standing for a term that is not there. Lowering already refuses
+            # every other numeric edge over a variable, so `0` is the only one
+            # that reaches here.
             frame = pl.concat([frame, self._filled_edge(s, card, others, s.fill)], how='vertical_relaxed')
         presence, presence_dims = None, None
         if p.presence is not None:
             # Presence is a coordinate set, so it travels through the same map,
-            # and the inner join already drops whatever the edge vacated.
-            presence = remap(p.presence, [])
+            # and the inner join already drops whatever the edge vacated. Its
+            # dims travel with it: a nested shift arrives here with a presence
+            # narrower than the fragment, and forgetting that had the row set
+            # joined on a column the presence does not carry.
+            presence_dims = p.presence_dims
+            source = p.presence
+            if presence_dims is not None and s.dimension not in presence_dims:
+                # A shift along a dim the presence is silent about cannot remap
+                # it — there is no column to join on. Widening to the
+                # fragment's dims changes no meaning (a presence says nothing
+                # about the dims it omits) and puts the column there.
+                source = self._widen(source, presence_dims, p.dims)
+                presence_dims = None
+            presence = remap(source, [], presence_dims)
             if not s.wrap and s.fill is not None:
                 presence = pl.concat([presence, self._vacated(p, s, card, others)], how='vertical_relaxed').unique()
+                presence_dims = None
         elif not s.wrap and s.fill is None:
             # Nothing was absent before, and the edge now is. `None` here means
             # "present everywhere", so without this the vacated slot would
@@ -578,7 +771,25 @@ class PolarsCompiler:
             # quietly gone — a different constraint, which is the shape #239
             # removed from masks and #289 removes from shift.
             presence, presence_dims = self._edge(s, card, vacated=False), (s.dimension,)
-        return replace(p, frame=frame, presence=presence, presence_dims=presence_dims)
+        return replace(
+            p,
+            frame=frame,
+            presence=presence,
+            presence_dims=presence_dims,
+            mapping=(*p.mapping, ('shift', s.dimension, str(s.by), str(s.wrap))),
+        )
+
+    def _widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
+        """*presence* over every dim in *want*, saying the same thing.
+
+        A presence frame is silent about the dims it omits, which reads as
+        "present at all of them" — so the widening is a cross join with those
+        dimensions' own tables, and it changes no answer.
+        """
+        for d in want:
+            if d not in have:
+                presence = presence.join(self.dimensions[d].select(pl.col('val').alias(d)), how='cross')
+        return presence.select(*want)
 
     def _filled_edge(self, s: plan.Translate, card: int, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated.
@@ -638,6 +849,53 @@ class PolarsCompiler:
     # assembly helpers used by the executor
     # ------------------------------------------------------------------
 
+    def may_share_a_column(self, a: TermFragment, b: TermFragment) -> bool:
+        """Whether two fragments of one variable can put a row on one column.
+
+        **Distinct variables never do.** Labels are dense and assigned one
+        declaration at a time, so two fragments naming different variables draw
+        from disjoint ranges however either was reshaped (#408). What is left is
+        whether two fragments of *one* variable send some label to the same
+        **row**.
+
+        A label's row is decided by what moved it, so equal
+        :attr:`~TermFragment.mapping` means the same row and a certain
+        collision. Mappings that differ **only in a coordinate** — the network
+        shape, ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``
+        — send it to the
+        same row exactly where those coordinates agree, which is a question
+        about a *dimension table*: is there a line whose ends are one bus? The
+        `line` table is forty rows where the matrix is 12.6M.
+
+        Anything else is answered **yes**. A shift on one side and not the
+        other, a reduction that left them over different dims, a product that
+        broadcast one wider — each changes where a label lands in a way this
+        does not model, and the cost of being wrong is a silently wrong model
+        against the cost of a sort.
+        """
+        if a.variable is None or b.variable is None:
+            return True
+        if a.variable != b.variable:
+            return False
+        if a.dims != b.dims or a.label_dims != b.label_dims:
+            return True
+        if len(a.mapping) != len(b.mapping):
+            return True
+        differing = []
+        for one, other in zip(a.mapping, b.mapping, strict=True):
+            if one == other:
+                continue
+            kind, *rest = one
+            if kind != 'group' or other[0] != 'group' or (rest[0], rest[2]) != (other[1], other[3]):
+                return True
+            differing.append((rest[0], rest[1], other[2]))
+        return all(self._coordinates_meet(over, one, other) for over, one, other in differing)
+
+    def _coordinates_meet(self, dimension: str, one: str, other: str) -> bool:
+        """Whether any label of *dimension* carries the same value in both."""
+        table = self.dimensions[dimension]
+        return bool(table.select((pl.col(one) == pl.col(other)).any()).collect().item())
+
     @staticmethod
     def constant_scalar(p: TermFragment) -> pl.LazyFrame:
         """The const fragment summed per coordinate: ``(dims…, cval)``.
@@ -656,7 +914,7 @@ def _ordinal(dim: str) -> str:
 
 
 def _relabel(label_dims: frozenset[str], over: str, into: str) -> frozenset[str]:
-    """*label_dims* after ``group_sum`` swaps *over* for *into*: the projected
+    """*label_dims* after ``sum`` swaps *over* for *into*: the projected
     coordinate is label-determined exactly when the dim it replaces was."""
     if over not in label_dims:
         return label_dims
@@ -693,8 +951,19 @@ def _falsy_if_null(condition: pl.Expr) -> pl.Expr:
     return condition.fill_null(value=False)
 
 
-def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str) -> pl.Expr:
-    """One where-comparison. A string and a float are both literals here."""
+def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.Expr:
+    """The column a where-comparison on *dimension* reads.
+
+    A string label is compared in ``String`` space, undoing binding's ``Enum``:
+    §6.1 orders labels bytewise and reads an unknown label as matching nothing,
+    where an ``Enum`` orders by declaration and refuses strangers.
+    """
+    column = pl.col(dimension)
+    return column.cast(pl.String) if isinstance(value, str) else column
+
+
+def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
+    """One where-comparison. A string, a float and a date are all literals here."""
 
     literal = pl.lit(value)
     match op:
@@ -712,6 +981,20 @@ def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str) -
             return column >= literal
 
 
+def restrict_by_presence(frame: pl.LazyFrame, presence: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
+    """Keep only the rows of *frame* that *presence* admits.
+
+    Keyed by *on* this is a semi-join. A **scalar** declaration has no key to
+    join on — its presence is at most one row, saying only whether it exists —
+    so the question becomes a cross join instead: every row survives a present
+    scalar, and none survives an absent one, which is what makes absence spread
+    through arithmetic (SPEC §7) at no dimension.
+    """
+    if on:
+        return frame.join(presence.select(list(on)), on=list(on), how='semi')
+    return frame.join(presence.select(PRESENT), how='cross').drop(PRESENT)
+
+
 def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     """Restrict every fragment to where the *whole* expression exists.
 
@@ -722,26 +1005,19 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     without this each stream would be summed over its own coordinates.
 
     That is the difference between ``sum(x + size, over=f)`` and
-    ``sum(x, over=f) + sum(size, over=f)``, and under absence they are not the
-    same question: the first sums where the summand exists, the second sums each
-    operand over its own domain. Distributing one into the other would mean
-    reading the absent ``size`` as a zero, which is the reading v1 exists to
+    ``sum(x, over=f) + sum(size, over=f)``: the first sums where the summand
+    exists, the second sums each operand over its own domain. Distributing one
+    into the other reads the absent ``size`` as a zero, the reading v1 exists to
     remove (SPEC §6, §7).
 
-    Applied only where the key columns are dims the fragment carries. A
-    restriction naming a dim a fragment does not have cannot speak about it, and
-    a constant part lacking the summed dims is refused by ``_sum_fragment``
-    before it gets here.
+    Applied only where the key columns are dims the fragment carries — a
+    restriction naming a dim a fragment lacks cannot speak about it.
 
-    **A fragment is never restricted by its own presence**, which is the whole
-    of what the *other* in "each one's absence says nothing about the other"
-    means. A fragment's rows and its presence are built from one frame and
-    rewritten in step — a product joins the rows and leaves the coordinates, a
-    translation remaps both, a fill adds to both — so the rows are inside the
-    coordinates by construction and the join can only return them all. Under a
-    mask over a single term, which is the ordinary case, that made the whole
-    pass a semi-join of a frame against itself: 0.31 s over 10M rows on
-    `dispatch/l`, returning the 10M it was given.
+    **A fragment is never restricted by its own presence.** Its rows and its
+    presence are built from one frame and rewritten in step, so the rows are
+    inside the coordinates by construction and the join can only return them
+    all. Under a mask over a single term, the ordinary case, that made the pass
+    a semi-join of a frame against itself: 0.31 s over 10M rows on `dispatch/l`.
 
     The restriction is a **semi-join, so the presence frame is not deduplicated
     first**. A semi-join asks whether a key occurs, and occurring twice is still
@@ -759,7 +1035,7 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
                 continue
             on = list(source.presence_dims or source.dims)
             if all(d in p.dims for d in on):
-                frame = frame.join(source.presence.select(on), on=on, how='semi')
+                frame = restrict_by_presence(frame, source.presence, on)
         return p if frame is p.frame else replace(p, frame=frame)
 
     return _map_fragments(compiled, restrict)
@@ -815,3 +1091,19 @@ def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = Fa
     # may be wider than `a.dims`, which is why the presence key travels with the
     # frame rather than being re-derived from dims here (#345).
     return replace(a, dims=out_dims, frame=frame, is_term=is_term, keyed=a.keyed and c.keyed)
+
+
+def _scattered(at: pl.Series, values: pl.Series, size: int) -> Any:
+    """*values* moved to the positions *at* names, one pass, order checked."""
+    import numpy as np
+
+    indices = at.to_numpy()
+    written = np.zeros(size, dtype=bool)
+    written[indices] = True
+    if not written.all():
+        msg = 'a parameter passed the density gate but does not cover the coordinate product'
+        raise LpspecError(msg)
+
+    out = np.empty(size, dtype=np.float64)
+    out[indices] = values.to_numpy()
+    return out

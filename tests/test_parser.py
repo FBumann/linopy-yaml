@@ -112,3 +112,30 @@ def test_and_binds_tighter_than_or():
     node = parse_where('a OR b AND c')
     assert isinstance(node, OrNode)
     assert isinstance(node.right, AndNode)
+
+
+@pytest.mark.parametrize(
+    ('text', 'value', 'quoted'),
+    [
+        ("g == 'wind'", 'wind', True),
+        ('g == "wind"', 'wind', True),
+        ("g == 'combined-cycle'", 'combined-cycle', True),
+        ("g == 'CCGT 400MW'", 'CCGT 400MW', True),
+        ("t > '2030-01-01'", '2030-01-01', True),
+        ("g == 'it\\'s'", "it's", True),
+        # a bare word still parses, and still means "resolve me" rather than "label"
+        ('g == wind', 'wind', False),
+    ],
+    ids=['single', 'double', 'hyphen', 'space', 'date', 'escaped quote', 'bare'],
+)
+def test_a_quoted_right_hand_side_is_a_label(text, value, quoted):
+    """Without quoting, any label carrying a hyphen, space or colon was
+    unsayable — `combined-cycle`, `IT-north`, `CCGT 400MW` (#460).
+
+    The flag is the whole point: a bare word may name a declaration and is
+    refused for that ambiguity, so quoting is what says "label, not name".
+    """
+    node = parse_where(text)
+    assert isinstance(node, UnresolvedComparisonNode)
+    assert node.value == value
+    assert node.quoted is quoted

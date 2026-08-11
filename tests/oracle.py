@@ -74,7 +74,7 @@ linopy.options['semantics'] = 'v1'
 # re-exports the *real* ``linopy`` above, so the shim needs a name that cannot
 # be confused with it. ``lpspec_linopy`` names the module it actually is, which
 # also keeps it unambiguous if a second non-streaming execution mode ever
-# lands (ROADMAP Track 5) and "eager" stops picking out one thing.
+# lands and "eager" stops picking out one thing.
 from lpspec import linopy as lpspec_linopy  # noqa: E402  — must follow the guard above
 from lpspec.linopy import builder, loader  # noqa: E402
 

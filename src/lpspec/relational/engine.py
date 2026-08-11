@@ -24,6 +24,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Literal
 
+import polars as pl
+
 from lpspec.errors import LpspecError
 from lpspec.relational import sinks
 from lpspec.relational.result import Result
@@ -31,8 +33,6 @@ from lpspec.relational.result import Result
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
-
-    import polars as pl
 
     from lpspec.relational import plan
 
@@ -54,6 +54,11 @@ class Engine(ABC):
     #: declaration's share of a solver vector is a slice of it — which is what
     #: :meth:`_read_back` relies on instead of a join.
     _blocks: dict[str, tuple[int, int]]
+
+    #: ``name -> rows not built``, because every term they had vanished. Empty
+    #: for a model whose every declared row reached the solver. Filled by the
+    #: engine, read by :meth:`omissions`.
+    _omitted: dict[str, int]
 
     @property
     @abstractmethod
@@ -78,6 +83,25 @@ class Engine(ABC):
         """Drop the built model. Optional for a caller — see `Result`."""
 
     # -- sinks: written against ModelTables, so neither engine owns them ---
+
+    def omissions(self) -> pl.DataFrame:
+        """``(constraint, rows_not_built)`` — every row that lost all its terms.
+
+        A row with no variable terms is not built (SPEC §6), and a build that
+        said nothing about it would leave a declared constraint unenforced with
+        no way to notice. This is that record: empty for a model whose every
+        declared row reached the solver, one line per constraint otherwise.
+
+        Counts rather than coordinates, deliberately. The label of a row that
+        was not built does not exist, so naming *which* coordinates went would
+        mean holding the pre-drop frame — memory proportional to the omission,
+        on the path this package measures hardest. A count is enough to be
+        noticed, which is the whole job.
+        """
+        return pl.DataFrame(
+            {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
+            schema={'constraint': pl.String, 'rows_not_built': pl.UInt32},
+        )
 
     def write(self, path: str | Path) -> None:
         """Sink the built model to a file; the **suffix** picks the writer.

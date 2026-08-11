@@ -190,8 +190,8 @@ To keep releasing 0.1.x after `main` moves to 0.2, cut a `0.1.x` branch and run
 Don't cut a release for this — install from the ref:
 
 ```bash
-uv add "lpspec @ git+ssh://git@github.com/FBumann/lpspec@feat/some-branch"
-uv add "lpspec @ git+https://github.com/FBumann/lpspec@d09aab6"
+uv add "lpspec @ git+ssh://git@github.com/fluxopt/lpspec@feat/some-branch"
+uv add "lpspec @ git+https://github.com/fluxopt/lpspec@d09aab6"
 ```
 
 Every tagged build also attaches its wheel and sdist to the GitHub release.

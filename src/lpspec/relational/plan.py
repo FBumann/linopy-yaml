@@ -25,6 +25,9 @@ from lpspec.errors import LanguageError, unknown_name_message
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+if TYPE_CHECKING:
+    import datetime
+
 ConstraintSense = Literal['==', '<=', '>=']
 ObjectiveSense = Literal['min', 'max']
 ComparisonOperator = Literal['==', '!=', '<=', '>=', '<', '>']
@@ -148,14 +151,37 @@ class GroupSum(Expression):
 
 
 @dataclass(frozen=True)
+class At(Expression):
+    """Read ``operand`` through a coordinate — the adjoint of :class:`GroupSum`.
+
+    Same mapping table, walked the other way. ``coordinate`` is carried by dim
+    ``over`` and its values are labels of dim ``into``; ``GroupSum`` consumes
+    ``over`` and produces ``into``, and this consumes ``into`` and produces
+    ``over``. The fields are named for the *table*, not for the direction, so
+    the pair reads as one relation rather than two. The surface says which end
+    you stand on: ``sum(over=)`` consumes a dim, ``at(onto=)`` produces
+    one, and ``by=`` names the map in both.
+
+    The join fans out — many ``over`` labels share one ``into`` label — which is
+    the same fan-out ``GroupSum`` pays in reverse, so the locality class is
+    unchanged: one equi-join against a mapping table already in the frame.
+    """
+
+    operand: Expression
+    over: str
+    coordinate: str
+    into: str
+
+
+@dataclass(frozen=True)
 class Translate(Expression):
     """Re-index along one dimension: the result at coord *t* is ``operand`` at
     coord *t - by*.
 
-    One node for both surface spellings, which differ only in ``wrap``:
-    ``roll`` is ``wrap=True`` (periodic, matching ``xarray.roll``), ``shift``
-    is ``wrap=False``. The node is named for the coordinate map rather than for
-    either spelling, so it does not read as one of the two.
+    One node for the whole of ``shift``, whose ``edge=`` decides ``wrap``:
+    ``edge='wrap'`` is ``wrap=True`` (periodic, matching ``xarray.roll``), and an
+    absent or numeric ``edge=`` is ``wrap=False``. The node is named for the
+    coordinate map rather than for the surface, which is one verb.
 
     ``fill`` decides what an acyclic shift leaves behind. ``None`` — the
     default and what bare ``shift`` lowers to — means the vacated positions are
@@ -186,7 +212,7 @@ def children(expression: Expression) -> tuple[Expression, ...]:
         return (expression.left, expression.right)
     if isinstance(expression, Divide):
         return (expression.numerator, expression.divisor)
-    if isinstance(expression, (Sum, GroupSum, Translate)):
+    if isinstance(expression, (Sum, GroupSum, At, Translate)):
         return (expression.operand,)
     return ()
 
@@ -218,7 +244,9 @@ class DimensionComparison(Predicate):
 
     dimension: str
     op: ComparisonOperator
-    value: float | str
+    #: ``datetime`` widens this: a datetime dimension's boundary is a date,
+    #: and comparing one to a number reads it as an epoch offset (#460).
+    value: float | str | datetime.date
 
 
 @dataclass(frozen=True)
@@ -276,10 +304,21 @@ class DimensionDeclaration:
     labels of. The executor checks that containment once the dim tables exist,
     which is what keeps a mistyped label from silently dropping its terms in
     the inner join that places them.
+
+    ``labels`` are the inline label spaces: index columns the dimension owns
+    outright, with no target and therefore no containment to check. They ride
+    the dim table for selection and rendering; resolution refuses to group
+    into one, so no expression node ever reaches them.
     """
 
     name: str
     coordinates: tuple[tuple[str, str], ...] = ()
+    labels: tuple[str, ...] = ()
+
+    @property
+    def carried(self) -> list[str]:
+        """Every coordinate column the dimension's index source must supply."""
+        return sorted([*(c for c, _ in self.coordinates), *self.labels])
 
 
 @dataclass(frozen=True)
@@ -428,6 +467,26 @@ def free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
         free += 1
     # every remaining dim is masked-or-not; the split only helps if something is left
     return free if free < len(dims) else 0
+
+
+def parameters_of(*expressions: Expression) -> frozenset[str]:
+    """Every parameter named anywhere under *expressions*.
+
+    Static, like :func:`divisor_parameters`: which names *can* appear is the
+    plan's to answer, and *where* they must have values is decided by the rows
+    a declaration actually builds.
+    """
+    found: set[str] = set()
+
+    def walk(e: Expression) -> None:
+        if isinstance(e, Parameter):
+            found.add(e.name)
+        for child in children(e):
+            walk(child)
+
+    for e in expressions:
+        walk(e)
+    return frozenset(found)
 
 
 def divisor_parameters(*expressions: Expression) -> frozenset[str]:

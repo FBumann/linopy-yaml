@@ -55,19 +55,31 @@ class _Labels(Mapping[str, 'pl.LazyFrame']):
         self._tables = tables
         self._label = label
         self._frames: dict[str, pl.LazyFrame] = {}
+        #: dim -> the ``Enum`` binding encoded it as, for the cast on the way
+        #: out. Filled by `DuckExecutor.build`, empty until then.
+        self.enums: dict[str, pl.Enum] = {}
 
     def __getitem__(self, name: str) -> pl.LazyFrame:
-        """The frame, **in label order** — which the read-back reads rather than imposes.
+        """The frame, **in label order and in binding's dtypes** — read, not imposed.
 
         `Engine._read_back` stopped sorting once every labelling path produced
         an ordered frame. polars' paths do and verify it; a SQL relation
         promises no order at all, and two of the three here are views over a
         cross join. So the order is asked for on the way out, where it is paid
         only by a caller that reads a solution back.
+
+        The ``Enum`` is restored on the same trip. A string dimension is an
+        ``Enum`` over its labels in ordinal order (`binding.encode_dimensions`),
+        which crosses into duckdb as a plain ``VARCHAR`` and would come back as
+        one — so a caller reading the same model back would get a different
+        dtype, and a *different sort order*, depending on which engine built it.
+        Declaration order is the model's order; alphabetical is nobody's.
         """
         if name not in self._frames:
             sql = f'SELECT * FROM {q(self._tables[name])} ORDER BY {q(self._label)}'
-            self._frames[name] = self._con.execute(sql).pl().lazy()
+            frame = self._con.execute(sql).pl()
+            casts = [pl.col(d).cast(e) for d, e in self.enums.items() if d in frame.columns]
+            self._frames[name] = (frame.with_columns(casts) if casts else frame).lazy()
         return self._frames[name]
 
     def __iter__(self) -> Iterator[str]:
@@ -93,6 +105,7 @@ class DuckExecutor(Engine):
     _obj: pl.DataFrame | None
     _rows: pl.DataFrame | None
     _matrix: pl.DataFrame | None
+    _matrix_starts: Any
     _con: duckdb.DuckDBPyConnection
 
     def __init__(self) -> None:
@@ -109,6 +122,8 @@ class DuckExecutor(Engine):
         #: the contiguous run of labels each declaration was given — what
         #: `Engine._read_back` slices a solver vector by, on both engines
         self._blocks: dict[str, tuple[int, int]] = {}
+        self._omitted: dict[str, int] = {}
+        self._matrix_starts: Any = None
         #: `(head, kept, ranked table, width)` when the last label frame
         #: factored — `None` otherwise. Read only by `_repeating_bounds`.
         self._rectangle: tuple[tuple[str, ...], tuple[str, ...], str, int] | None = None
@@ -177,7 +192,10 @@ class DuckExecutor(Engine):
         self._program = program
         self._name_dims = plan.name_dims(program)
         bound = bind(program, sources)
-        dims = {n: self._register(f'dim_{n}', f.collect()) for n, f in bound.dimensions.items()}
+        materialised = {n: f.collect() for n, f in bound.dimensions.items()}
+        enums = {n: f.schema['val'] for n, f in materialised.items() if isinstance(f.schema['val'], pl.Enum)}
+        self._var_labels.enums = self._row_labels.enums = enums
+        dims = {n: self._register(f'dim_{n}', f) for n, f in materialised.items()}
         params = {n: self._register(f'par_{n}', f.collect()) for n, f in bound.parameters.items()}
         self._compiler = DuckCompiler(
             program, dims, params, bound.cardinality, bound.boolean_parameters, self._var_tables
@@ -189,7 +207,8 @@ class DuckExecutor(Engine):
 
         self._cols = _stack(cols, _COLS)
         self._rows = _stack([r for r, _ in built], _ROWS)
-        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX)
+        stacked = _stack([m for _, m in built if m is not None], _MATRIX)
+        self._matrix, self._matrix_starts = sinks.compress_rows(stacked, self._n_rows)
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -243,11 +262,17 @@ class DuckExecutor(Engine):
         carrier = self._q.frame(dims, where)
         for on, presence in restrictions:
             keep = ', '.join(f'l.{q(c)}' for c in carrier.columns)
-            on_sql = ' AND '.join(f'l.{q(d)} IS NOT DISTINCT FROM r.{q(d)}' for d in on)
-            carrier = Rel(
-                f'SELECT {keep} FROM {carrier.alias("l")} WHERE EXISTS '
+            # A scalar variable is present or it is not, with no key to match
+            # on: the restriction is then whether the presence relation has any
+            # row at all, and it removes every row of the carrier or none.
+            exists = (
                 f'(SELECT 1 FROM (SELECT DISTINCT {", ".join(q(d) for d in on)} FROM {presence.alias("p")}) AS r '
-                f'WHERE {on_sql})',
+                f'WHERE {" AND ".join(f"l.{q(d)} IS NOT DISTINCT FROM r.{q(d)}" for d in on)})'
+                if on
+                else f'(SELECT 1 FROM {presence.alias("p")})'
+            )
+            carrier = Rel(
+                f'SELECT {keep} FROM {carrier.alias("l")} WHERE EXISTS {exists}',
                 carrier.columns,
             )
         return self._counted(carrier, dims, label, start)
@@ -443,7 +468,11 @@ class DuckExecutor(Engine):
         rows = self._fetch(f'SELECT row, {lit(c.sense)} AS sense, ({total})::DOUBLE AS rhs FROM {carrier.alias("r")}')
 
         if not terms:
-            return rows, None
+            self._omitted[c.name] = rows.height
+            self._blocks[c.name] = (start, 0)
+            self._n_rows = start
+            self._row_tables[c.name] = self._relation(f'SELECT * FROM {q(name)} WHERE false', 'lbl', materialise=False)
+            return rows.clear(), None
 
         pieces = []
         for p, sign in terms:
@@ -453,17 +482,57 @@ class DuckExecutor(Engine):
             else:
                 join = f'{frame.alias("l")} CROSS JOIN {p.rel.alias("r")}'
             pieces.append(
-                f'SELECT l.row AS row, r.var_label AS col, ({lit(sign)} * r.coeff)::DOUBLE AS coeff FROM {join}'
+                f'SELECT l.row AS row, r.var_label::INTEGER AS col, ({lit(sign)} * r.coeff)::DOUBLE AS coeff FROM {join}'
             )
         stacked = ' UNION ALL '.join(f'({s})' for s in pieces)
         if not _needs_aggregate([f for f, _ in terms]):
-            return rows, self._fetch(stacked)
-        # `sum` over `(row, col)` is the terminal aggregate — where duplicates
-        # from Sum and GroupSum, which project rather than aggregate, collapse.
-        # Unordered: every sink sorts the matrix into the order it needs
-        # (`lp_file` by `(row, col)`, `solver_direct` by `row`), so an ORDER BY
-        # here is a second sort of the largest frame in the model for nothing.
-        return rows, self._fetch(f'SELECT row, col, sum(coeff) AS coeff FROM ({stacked}) GROUP BY row, col')
+            matrix = self._fetch(stacked)
+        else:
+            # `sum` over `(row, col)` is the terminal aggregate — where duplicates
+            # from Sum and GroupSum, which project rather than aggregate, collapse.
+            # Unordered: every sink sorts the matrix into the order it needs
+            # (`lp_file` by `(row, col)`, `solver_direct` by `row`), so an ORDER BY
+            # here is a second sort of the largest frame in the model for nothing.
+            matrix = self._fetch(f'SELECT row, col, sum(coeff) AS coeff FROM ({stacked}) GROUP BY row, col')
+        rows, matrix, self._n_rows = self._drop_termless_rows(c.name, name, rows, matrix, start)
+        return rows, matrix
+
+    def _drop_termless_rows(
+        self, constraint: str, labels: str, rows: pl.DataFrame, matrix: pl.DataFrame, start: int
+    ) -> tuple[pl.DataFrame, pl.DataFrame, int]:
+        """Rows that kept no variable term are not built, and the block closes up.
+
+        The polars engine's twin, and the reason it is written twice rather
+        than shared: the frames are polars on both sides, but the *label
+        relation* is a SQL table here, so the renumbering that follows the drop
+        is a window over that table rather than a `replace_strict` on a frame.
+        The rule itself is the language's (SPEC §6) and must not differ — a row
+        with no variables asserts something about constants, which the solver
+        cannot act on.
+
+        Labels are dense, and the dual read-back reads a block by position, so
+        a dropped row cannot leave a gap: the survivors are renumbered from
+        *start* and the row counter rewinds to match.
+        """
+        kept = matrix.get_column('row').unique()
+        if kept.len() == rows.height:
+            return rows, matrix, start + rows.height
+
+        surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
+        renumber = surviving.select('row').with_row_index('__new__', offset=start)
+        self._omitted[constraint] = rows.height - surviving.height
+        self._blocks[constraint] = (start, surviving.height)
+        remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
+        rows = surviving.with_columns(pl.col('row').replace_strict(remap))
+        matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
+        survivors = ', '.join(str(int(r)) for r in kept.sort())
+        self._row_tables[constraint] = self._relation(
+            f'SELECT * REPLACE ((ROW_NUMBER() OVER (ORDER BY row) - 1 + {start})::BIGINT AS row) '
+            f'FROM {q(labels)} WHERE row IN ({survivors})',
+            'lbl',
+            materialise=True,
+        )
+        return rows, matrix, start + surviving.height
 
     def _build_objective(self, o: plan.ObjectiveDeclaration) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms."""
@@ -479,7 +548,7 @@ class DuckExecutor(Engine):
         self._obj_sense = o.sense
         if not comp.terms:
             return None
-        pieces = [f'(SELECT var_label AS col, coeff FROM {p.rel.alias("o")})' for p in comp.terms]
+        pieces = [f'(SELECT var_label::INTEGER AS col, coeff FROM {p.rel.alias("o")})' for p in comp.terms]
         stacked = ' UNION ALL '.join(pieces)
         if _needs_aggregate(comp.terms, projected=True):
             return self._fetch(f'SELECT col, sum(coeff) AS coeff FROM ({stacked}) GROUP BY col')
@@ -499,6 +568,7 @@ class DuckExecutor(Engine):
             obj=self._obj,
             rows=self._rows,
             matrix=self._matrix,
+            row_starts=self._matrix_starts,
             column_count=self._n_cols,
             row_count=self._n_rows,
             objective_sense=self._obj_sense,
@@ -507,10 +577,11 @@ class DuckExecutor(Engine):
 
     def close(self) -> None:
         """Drop the built model. Calling twice is not an error."""
-        self._cols = self._obj = self._rows = self._matrix = None
+        self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
         self._var_labels.clear()
         self._row_labels.clear()
         self._blocks.clear()
+        self._omitted.clear()
         self._compiler = None
         self._con.close()
 

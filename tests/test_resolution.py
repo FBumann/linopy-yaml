@@ -17,10 +17,10 @@ from lpspec.lowering import lower_program
 from tests.conftest import DISPATCH_MODEL, schema_of
 
 if TYPE_CHECKING:
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 
-def _schema(**overrides) -> MathSchema:
+def _schema(**overrides) -> Model:
     return schema_of(DISPATCH_MODEL, **overrides)
 
 
@@ -71,35 +71,33 @@ def test_dimension_is_not_a_value_in_an_expression():
 
 def test_unknown_where_name_is_an_error():
     """Was: scalar-False mask in the eager lane (a model that builds, solves
-    and is silently empty); a load error in the relational lane."""
-    schema = _schema(**{'variables.p.where': 'typo_name > 0'})
-    with pytest.raises(ValueError, match="'typo_name' not found"):
-        validate_expressions(schema)
+    and is silently empty).
+
+    The model does not survive construction, so lowering never sees it — the
+    earliest place that can tell is the one that tells.
+    """
     with pytest.raises(LanguageError, match="'typo_name' not found"):
-        lower_program(schema)
+        _schema(**{'variables.p.where': 'typo_name > 0'})
 
 
 def test_parameter_vs_parameter_where_comparison_is_an_error():
     """Was: a parameter comparison in the eager lane, a comparison against the
     string 'cost' in the relational one."""
-    schema = _schema(**{'variables.p.where': 'p_max > cost'})
     with pytest.raises(ValueError, match='compares two parameters'):
-        validate_expressions(schema)
+        _schema(**{'variables.p.where': 'p_max > cost'})
 
 
 def test_dimension_vs_dimension_where_comparison_is_an_error():
     """Was: silently empty. The RHS read as the string 'snapshot', so the mask
     compared generator coordinates against another dimension's *name*, matched
     nothing, and the block built with zero rows on both lanes."""
-    schema = _schema(**{'variables.p.where': 'generator == snapshot'})
     with pytest.raises(ValueError, match='compares against dimension'):
-        validate_expressions(schema)
+        _schema(**{'variables.p.where': 'generator == snapshot'})
 
 
 def test_where_cannot_reference_a_variable():
-    schema = _schema(**{'variables.p.where': 'p > 0'})
     with pytest.raises(ValueError, match='built before variables exist'):
-        validate_expressions(schema)
+        _schema(**{'variables.p.where': 'p > 0'})
 
 
 def test_string_literal_rhs_still_works():
@@ -152,9 +150,8 @@ def test_macro_formal_may_shadow_a_parameter():
 
 
 def test_macro_formal_may_not_shadow_a_dimension():
-    schema = _schema(**{'macros.agg': {'args': ['x'], 'kwargs': ['generator'], 'template': 'sum(x, over=generator)'}})
     with pytest.raises(ValueError, match="formal 'generator' collides with declared dimension"):
-        validate_expressions(schema)
+        _schema(**{'macros.agg': {'args': ['x'], 'kwargs': ['generator'], 'template': 'sum(x, over=generator)'}})
 
 
 # ---------------------------------------------------------------------------

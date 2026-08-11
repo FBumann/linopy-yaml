@@ -84,8 +84,8 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         # so sorting the whole model at once is what the writer's peak *is*;
         # ranges are ascending and each is internally sorted, so the bytes are
         # the same ones #109 pins.
-        for lo, hi in model.row_chunks_by_nonzeros(EMIT_BUDGET):
-            _sink(_constraint_blocks(model, lo, hi), f)
+        for lo, hi, entries in model.labeled_blocks(EMIT_BUDGET):
+            _sink(_constraint_blocks(model, lo, hi, entries), f)
 
         f.write(b'\nbounds\n')
         _sink(bounds, f)
@@ -100,14 +100,8 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         f.write(b'\nend\n')
 
 
-#: Sort keys placing a row's header before its terms and its sense after them.
-#: A term sorts on its own column index, which is why the footer has to outrank
-#: every column a model could have.
-_HEADER, _PLACEHOLDER, _FOOTER = -2, -1, 2**62
-
-
-def _constraint_blocks(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
-    """Every constraint line, as one sorted stream of ``(row, ord, line)``.
+def _constraint_blocks(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+    """Every constraint line, as one sorted stream of ``(key, line)``.
 
     One line per output line rather than one block per row: the pieces are
     built independently and interleaved by sorting, so nothing has to gather a
@@ -120,30 +114,46 @@ def _constraint_blocks(model: ModelTables, lo: int, hi: int) -> pl.LazyFrame:
     question is whether the row has *a* term and not how many, so the matrix
     goes in as it is. Distinguishing its repeated ``row`` values would be a
     hash pass over every nonzero in the chunk to reach the same answer.
+
+    **The order is one integer, and it is the only other column.** A row's lines
+    occupy ``slots`` consecutive keys and each piece picks one — header first,
+    then the placeholder, then each term at its own column index, then the
+    sense. Sorting one column beats sorting ``(row, ord)``, and carrying nothing
+    else means the sort permutes the rendered text and nothing beside it.
+
+    **Chunk-relative**, because that is what bounds the key. Each range is sunk
+    before the next is built, so only the order *within* one has to hold, and
+    ``row - lo`` is a chunk's height rather than the model's. A global row would
+    put the product one careless model away from overflowing ``Int64`` and
+    reordering the file in silence.
     """
+    slots = model.cols.height + 3
+
+    def _key(within: pl.Expr) -> pl.Expr:
+        return ((pl.col('row') - lo) * slots + within).alias('key')
+
     rows = model.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
-    matrix = model.matrix.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
+    matrix = entries.lazy()
     header = rows.select(
-        'row',
-        pl.lit(_HEADER, dtype=pl.Int64).alias('ord'),
+        _key(pl.lit(0, dtype=pl.Int64)),
         pl.concat_str(pl.lit('c').alias('c'), _digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),
     )
     placeholder = rows.join(matrix.select('row'), on='row', how='anti').select(
-        'row',
-        pl.lit(_PLACEHOLDER, dtype=pl.Int64).alias('ord'),
+        _key(pl.lit(1, dtype=pl.Int64)),
         pl.lit('+0 x0').alias('line'),
     )
+    # Redundant for correctness — the ordering below subsumes it and the bytes
+    # are identical without it — and kept anyway: whether it is redundant for
+    # *speed* has been measured twice and settled neither time.
     terms = matrix.sort('row', 'col').select(
-        'row',
-        pl.col('col').cast(pl.Int64).alias('ord'),
+        _key(pl.col('col').cast(pl.Int64) + 2),
         _term(pl.col('coeff'), pl.col('col')).alias('line'),
     )
     footer = rows.select(
-        'row',
-        pl.lit(_FOOTER, dtype=pl.Int64).alias('ord'),
+        _key(pl.lit(slots - 1, dtype=pl.Int64)),
         pl.concat_str(pl.col('sense').replace({'==': '='}), pl.lit(' '), _number(pl.col('rhs'))).alias('line'),
     )
-    return pl.concat([header, placeholder, terms, footer]).sort('row', 'ord').select('line')
+    return pl.concat([header, placeholder, terms, footer]).sort('key').select('line')
 
 
 def _term(coeff: pl.Expr, col: pl.Expr) -> pl.Expr:

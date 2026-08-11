@@ -3,6 +3,14 @@
 Parses strings like ``sum(p * cost, over=generator) == load`` into an AST
 that can be evaluated against a namespace of linopy variables and xarray
 parameters.
+
+``ArithmeticNode`` is the arithmetic-only union: every nested expression
+position (operands, args, kwargs) accepts it and nothing else, and
+``ComparisonNode`` appears only at the top of a parsed expression. The node
+dataclasses reference the union in their annotations before it is defined,
+which works only because ``from __future__ import annotations`` makes
+annotations strings — removing that future-import requires reordering the
+definitions.
 """
 
 from __future__ import annotations
@@ -68,7 +76,7 @@ class DimensionNode:
 class CoordinateNode:
     """A resolved reference to a coordinate declared on a dimension.
 
-    Only legal in helper kwarg *values* (``group_sum(x, over=line, by=to)``).
+    Only legal in helper kwarg *values* (``sum(x, over=line, group_by=to)``).
     Like :class:`DimensionNode` this names a coordinate space, not data — but it
     is scoped to the dimension carrying it, so ``name`` alone is meaningless
     without the sibling ``over=`` dimension. ``dimension`` records that binding
@@ -82,8 +90,21 @@ class CoordinateNode:
 
 
 @dataclass
+class KeywordNode:
+    """A quoted closed keyword in a kwarg value — ``shift(..., edge='wrap')``.
+
+    Unresolved on purpose: which keywords a kwarg accepts is the helper's
+    business, so this only records *that* the author wrote a literal rather
+    than a name. ``resolution.py`` turns it into the typed node the kwarg
+    wants, or reports it as not one of that kwarg's keywords.
+    """
+
+    value: str
+
+
+@dataclass
 class EdgeNode:
-    """A resolved edge policy for ``shift(x, over=d, by=n, edge=wrap)``.
+    """A resolved edge policy for ``shift(x, over=d, by=n, edge='wrap')``.
 
     Only legal as the value of ``shift``'s ``edge=`` kwarg. Like
     :class:`DimensionNode` and :class:`CoordinateNode` this names neither data
@@ -117,13 +138,6 @@ class FunctionCallNode:
     kwargs: dict[str, ArithmeticNode] = field(default_factory=dict)
 
 
-# An arithmetic-only AST node — no comparison. Nested expression positions
-# (operands, args, kwargs) only accept this; ComparisonNode appears only at the
-# top of a parsed expression.
-# NOTE: the dataclasses above reference `ArithmeticNode` in their annotations
-# before this line — that works only because `from __future__ import
-# annotations` makes annotations strings. Don't remove that future-import
-# unless you also reorder these definitions.
 ArithmeticNode = (
     NumberNode
     | NameNode
@@ -132,6 +146,7 @@ ArithmeticNode = (
     | DimensionNode
     | CoordinateNode
     | EdgeNode
+    | KeywordNode
     | UnaryOperatorNode
     | BinaryOperatorNode
     | FunctionCallNode
@@ -154,33 +169,46 @@ ExpressionNode = ArithmeticNode | ComparisonNode
 
 
 def _build_grammar() -> pp.ParserElement:
-    """Build and return the pyparsing grammar for math expressions."""
+    """Build and return the pyparsing grammar for math expressions.
+
+    Every numeric literal is stored as ``float``, since ``NumberNode.value``
+    is declared ``float``. ``inf`` is a ``pp.Keyword``, not a ``pp.Literal``:
+    a ``Literal`` matches a prefix, so it would eat the first three characters
+    of ``inflow`` and leave the parser meeting ``low`` where it expects the
+    end of the expression.
+
+    A quoted value is a **closed keyword**, never a model name — the same
+    rule a ``where`` uses, where quoting says "literal, not something to
+    resolve" — and the grammar admits it only in a kwarg value: a string has
+    no meaning in arithmetic, so allowing it there would only create an error
+    to report later. A comparison appears at most once, and only at the top.
+    """
     arith = pp.Forward()
 
-    # float, not int: NumberNode.value is declared float, so store one
+    # pyrefly: ignore[implicit-any-lambda]
     integer = pp.Regex(r'-?\d+').set_parse_action(lambda t: NumberNode(float(t[0])))
+    # pyrefly: ignore[implicit-any-lambda]
     real = pp.Regex(r'-?\d+\.\d*([eE][+-]?\d+)?').set_parse_action(lambda t: NumberNode(float(t[0])))
-    # Keyword, not Literal: `Literal('inf')` matches a prefix, so it eats the
-    # first three characters of `inflow` and the parser then meets `low` where
-    # it expects the end of the expression. `where_parser.py` had this right
-    # from the start — every keyword there is a `CaselessKeyword`.
     inf_literal = (pp.Keyword('.inf') | pp.Keyword('inf')).set_parse_action(lambda: NumberNode(float('inf')))
     number = real | inf_literal | integer
 
     name = pp.Regex(r'[a-zA-Z_][a-zA-Z0-9_]*')
 
-    kwarg = (name + pp.Suppress('=') + (arith | name)).set_parse_action(lambda t: (t[0], t[1]))
+    quoted = (pp.QuotedString("'") | pp.QuotedString('"')).set_parse_action(lambda t: KeywordNode(str(t[0])))
+    kwarg = (name + pp.Suppress('=') + (quoted | arith | name)).set_parse_action(lambda t: (t[0], t[1]))
     pos_arg = arith
     arg_list = pp.Optional(pp.DelimitedList(kwarg | pos_arg))
     func_call = (name + pp.Suppress('(') + arg_list + pp.Suppress(')')).set_parse_action(_make_func_call)
 
+    # pyrefly: ignore[implicit-any-lambda]
     name_node = name.copy().set_parse_action(lambda t: NameNode(t[0]))
     atom = func_call | number | name_node | (pp.Suppress('(') + arith + pp.Suppress(')'))
 
+    # pyrefly: ignore[implicit-any-lambda]
     unary = (pp.one_of('+ -') + atom).set_parse_action(lambda t: UnaryOperatorNode(t[0], t[1])) | atom
 
     power = unary + pp.ZeroOrMore(pp.Literal('**') + unary)
-    power.set_parse_action(_make_right_assoc)  # right-associative
+    power.set_parse_action(_make_right_assoc)
 
     mul_div = power + pp.ZeroOrMore(pp.one_of('* /') + power)
     mul_div.set_parse_action(_make_left_assoc)
@@ -190,16 +218,19 @@ def _build_grammar() -> pp.ParserElement:
 
     arith <<= add_sub
 
-    # at most one comparison, and only at the top
     comparator = pp.one_of('<= >= ==')
+    # pyrefly: ignore[implicit-any-lambda]
     expr = (arith + comparator + arith).set_parse_action(lambda t: ComparisonNode(t[1], t[0], t[2])) | arith
 
     return expr
 
 
 def _make_func_call(tokens: pp.ParseResults) -> FunctionCallNode:
-    """Build a FunctionCallNode from parsed tokens."""
-    # a ParseResults element is untyped; the grammar guarantees an identifier here
+    """Build a FunctionCallNode from parsed tokens.
+
+    A ParseResults element is untyped, so the callee is cast; the grammar
+    guarantees an identifier in position 0.
+    """
     name = cast('str', tokens[0])
     args = []
     kwargs = {}
@@ -228,11 +259,13 @@ def _make_left_assoc(tokens: pp.ParseResults) -> Any:
 
 
 def _make_right_assoc(tokens: pp.ParseResults) -> Any:
-    """Fold tokens into right-associative BinaryOperatorNode chain (for **)."""
+    """Fold tokens into right-associative BinaryOperatorNode chain (for **).
+
+    Right-associative: ``a ** b ** c`` is ``a ** (b ** c)``.
+    """
     items = list(tokens)
     if len(items) == 1:
         return items[0]
-    # Right-associative: a ** b ** c = a ** (b ** c)
     result = items[-1]
     i = len(items) - 3
     while i >= 0:
@@ -250,12 +283,12 @@ def parse_expression(text: str) -> ExpressionNode:
     """Parse a math expression string into an AST.
 
     Returns one of: NumberNode, NameNode, UnaryOperatorNode, BinaryOperatorNode,
-    ComparisonNode, or FunctionCallNode.
+    ComparisonNode, or FunctionCallNode. With ``parse_all`` and a single
+    top-level alternative, element 0 of the parse result is the root node.
     """
     try:
         result = _GRAMMAR.parse_string(text, parse_all=True)
     except pp.ParseException as e:
         msg = f'Failed to parse expression: {text!r}\n{e}'
         raise SchemaError(msg) from e
-    # parseAll with a single top-level alternative: element 0 is the root node
     return cast('ExpressionNode', result[0])

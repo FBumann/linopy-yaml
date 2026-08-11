@@ -14,7 +14,7 @@ The rules::
     -x, +x                  -> same dims as x
     a + b, a * b, a / b     -> every dim either side carries (set union)
     sum(x, over=d)          -> x's dims without d;  error if x has no d
-    group_sum(x, over=d, by=c)
+    sum(x, over=d, group_by=c)
                             -> x's dims without d, plus the dim c targets;
                                error if x has no d, or d declares no coord c
     shift(x, over=d, by=n)  -> same dims as x;      error if x has no d
@@ -49,6 +49,7 @@ from lpspec.language.expression_parser import (
     EdgeNode,
     ExpressionNode,
     FunctionCallNode,
+    KeywordNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -73,12 +74,12 @@ from lpspec.language.where_parser import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 
 def dims_of(
     node: ExpressionNode,
-    schema: MathSchema,
+    schema: Model,
     context: str,
     external: Mapping[str, Sequence[str]] = MappingProxyType({}),
 ) -> frozenset[str]:
@@ -95,10 +96,21 @@ def dims_of(
 
 def _dims(
     node: ArithmeticNode,
-    schema: MathSchema,
+    schema: Model,
     context: str,
     external: Mapping[str, Sequence[str]],
 ) -> frozenset[str]:
+    """The recursive worker under :func:`dims_of`.
+
+    A binary operator takes the *union* of its sides, deliberately without a
+    subset check: an outer product is legitimate when the frame declares the
+    result — the convex-piecewise epigraph multiplies a per-segment slope by
+    a per-snapshot variable and wants one row per (snapshot, generator,
+    segment). What must not be silent is the *declaration* disagreeing, and
+    ``dims == foreach`` in :func:`check_schema` catches that at the point
+    where model size is actually decided. A variable absent from the schema
+    is one already on the model, with its dims in ``external``.
+    """
     if isinstance(node, NumberNode):
         return frozenset()
 
@@ -108,9 +120,9 @@ def _dims(
     if isinstance(node, VariableNode):
         if node.name in schema.variables:
             return frozenset(schema.variables[node.name].foreach)
-        return frozenset(external[node.name])  # a variable already on the model
+        return frozenset(external[node.name])
 
-    if isinstance(node, (NameNode, DimensionNode, CoordinateNode, EdgeNode)):
+    if isinstance(node, (NameNode, KeywordNode, DimensionNode, CoordinateNode, EdgeNode)):
         msg = f'{type(node).__name__} reached the dim checker; resolve the expression first.'
         raise AssertionError(msg)
 
@@ -118,12 +130,6 @@ def _dims(
         return _dims(node.operand, schema, context, external)
 
     if isinstance(node, BinaryOperatorNode):
-        # Union, not subset. An outer product is legitimate when the frame
-        # declares the result — the convex-piecewise epigraph multiplies a
-        # per-segment slope by a per-snapshot variable and wants one row per
-        # (snapshot, generator, segment). What must not be silent is the
-        # *declaration* disagreeing, and `dims == foreach` catches that at the
-        # point where model size is actually decided.
         return _dims(node.left, schema, context, external) | _dims(node.right, schema, context, external)
 
     if isinstance(node, FunctionCallNode):
@@ -134,38 +140,39 @@ def _dims(
 
 def _dims_call(
     node: FunctionCallNode,
-    schema: MathSchema,
+    schema: Model,
     context: str,
     external: Mapping[str, Sequence[str]],
 ) -> frozenset[str]:
+    """The dim rule of one helper call.
+
+    ``group_by`` reduces the ``over`` dim *into* another rather than away:
+    the terms land on the dim the coordinate targets instead of on nothing.
+    ``at`` is the adjoint of ``sum``, and deliberately takes the same two
+    arguments — ``(over, by)`` names one mapping table, and which way it is
+    walked is the helper: ``sum`` consumes the dim that *declares* the
+    coordinate, ``at`` the dim it *targets*.
+    """
     if node.name == 'sum':
         inner = _dims(node.args[0], schema, context, external)
         over = node.kwargs['over']
         assert isinstance(over, DimensionNode)
+        by = node.kwargs.get('group_by')
+        verb = f'sum(over={over.name}, group_by=...)' if by is not None else f'sum(over={over.name})'
         if over.name not in inner:
             raise DimensionError(
-                f'{context}: sum(over={over.name}) but the expression has dims '
+                f'{context}: {verb} but the expression has dims '
                 f'{sorted(inner)}. Summing over a dim the operand does not carry '
                 f'is a no-op that builds and solves wrong — drop the sum, or fix '
                 f'the dim.'
             )
-        return inner - {over.name}
+        if by is None:
+            return inner - {over.name}
 
-    if node.name == 'group_sum':
-        inner = _dims(node.args[0], schema, context, external)
-        over = node.kwargs['over']
-        by = node.kwargs['by']
-        assert isinstance(over, DimensionNode)
         assert isinstance(by, CoordinateNode)
-        if over.name not in inner:
-            raise DimensionError(
-                f'{context}: group_sum(over={over.name}) but the expression has dims '
-                f'{sorted(inner)}. Grouping a dim the operand does not carry cannot '
-                f'place its terms — drop the group_sum, or fix the dim.'
-            )
         if by.into in inner - {over.name}:
             raise DimensionError(
-                f"{context}: group_sum(over={over.name}, by={by.name}) targets '{by.into}', "
+                f"{context}: sum(over={over.name}, group_by={by.name}) targets '{by.into}', "
                 f'which the expression already carries ({sorted(inner)}). The result would '
                 f"need '{by.into}' twice — once as the operand's own dim and once as the "
                 f'group it is placed into — and neither lane can represent that: the union '
@@ -173,6 +180,28 @@ def _dims_call(
                 f'or group into a dimension the operand does not have.'
             )
         return (inner - {over.name}) | {by.into}
+
+    if node.name == 'at':
+        inner = _dims(node.args[0], schema, context, external)
+        over = node.kwargs['onto']
+        by = node.kwargs['by']
+        assert isinstance(over, DimensionNode)
+        assert isinstance(by, CoordinateNode)
+        if by.into not in inner:
+            raise DimensionError(
+                f'{context}: at(onto={over.name}, by={by.name}) reads through '
+                f"'{by.into}', which the expression does not carry (dims "
+                f'{sorted(inner)}). A pullback needs the coarse dim to read *from* — '
+                f'sum is the direction that produces it.'
+            )
+        if over.name in inner - {by.into}:
+            raise DimensionError(
+                f'{context}: at(onto={over.name}, by={by.name}) places terms onto '
+                f"'{over.name}', which the expression already carries ({sorted(inner)}). "
+                f"The result would need '{over.name}' twice — once as the operand's own "
+                f'dim and once as the dim it is spread onto. Sum over one of the two first.'
+            )
+        return (inner - {by.into}) | {over.name}
 
     if node.name == 'shift':
         inner = _dims(node.args[0], schema, context, external)
@@ -192,7 +221,7 @@ def _dims_call(
 
 
 def check_schema(
-    schema: MathSchema,
+    schema: Model,
     external: Mapping[str, Sequence[str]] = MappingProxyType({}),
 ) -> None:
     """Check every declaration's dim rules. Raises :class:`DimensionError`.
@@ -243,7 +272,7 @@ def check_schema(
 
 def _check_where_dims(
     node: WhereNode | None,
-    schema: MathSchema,
+    schema: Model,
     frame: frozenset[str],
     context: str,
 ) -> None:

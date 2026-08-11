@@ -6,19 +6,19 @@ import datetime
 
 import pytest
 
-from lpspec.language.schema import MathSchema
-from lpspec.language.validation import validate_expressions
+from lpspec.language.model import Model
+from lpspec.language.validation import load_model, validate_expressions
 from tests.oracle import linopy, lpspec_linopy, pd
 
 
-def _schema(**overrides) -> MathSchema:
+def _schema(**overrides) -> Model:
     base = {
         'dimensions': {'g': {'values': ['wind', 'solar']}},
         'parameters': {'p_max': {'dims': ['g']}},
         'variables': {'p': {'foreach': ['g']}},
     }
     base.update(overrides)
-    return MathSchema.model_validate(base)
+    return load_model(base)
 
 
 class TestValidateExpressions:
@@ -30,27 +30,24 @@ class TestValidateExpressions:
         validate_expressions(schema)
 
     def test_unknown_name_in_constraint(self):
-        schema = _schema(
-            constraints={'cap': {'foreach': ['g'], 'expression': 'q <= p_max'}},
-        )
         with pytest.raises(ValueError, match="'q' not found") as exc_info:
-            validate_expressions(schema)
+            _schema(
+                constraints={'cap': {'foreach': ['g'], 'expression': 'q <= p_max'}},
+            )
         assert "Constraint 'cap'" in str(exc_info.value)
         assert 'p_max' in str(exc_info.value)
 
     def test_constraint_without_comparison(self):
-        schema = _schema(
-            constraints={'cap': {'foreach': ['g'], 'expression': 'p + p_max'}},
-        )
         with pytest.raises(ValueError, match='exactly one comparison'):
-            validate_expressions(schema)
+            _schema(
+                constraints={'cap': {'foreach': ['g'], 'expression': 'p + p_max'}},
+            )
 
     def test_objective_with_comparison(self):
-        schema = _schema(
-            objectives={'cost': {'expression': 'sum(p, over=g) <= 5'}},
-        )
         with pytest.raises(ValueError, match='must not contain a comparison'):
-            validate_expressions(schema)
+            _schema(
+                objectives={'cost': {'expression': 'sum(p, over=g) <= 5'}},
+            )
 
     def test_a_file_written_against_the_old_equations_surface_is_told_the_rewrite(self):
         """``equations:`` is gone, and the refusal names what to write instead.
@@ -72,40 +69,37 @@ class TestValidateExpressions:
             _schema(objectives={'cost': {'equations': [{'expression': 'sum(p, over=g)'}]}})
 
     def test_unknown_helper(self):
-        schema = _schema(
-            objectives={'cost': {'expression': 'frobnicate(p, over=g)'}},
-        )
         with pytest.raises(ValueError, match="Unknown helper function 'frobnicate'"):
-            validate_expressions(schema)
+            _schema(
+                objectives={'cost': {'expression': 'frobnicate(p, over=g)'}},
+            )
 
     def test_malformed_where_string(self):
-        schema = _schema(
-            constraints={
-                'cap': {
-                    'foreach': ['g'],
-                    'where': 'p_max >',
-                    'expression': 'p <= p_max',
-                }
-            },
-        )
         with pytest.raises(ValueError, match='Failed to parse where string'):
-            validate_expressions(schema)
+            _schema(
+                constraints={
+                    'cap': {
+                        'foreach': ['g'],
+                        'where': 'p_max >',
+                        'expression': 'p <= p_max',
+                    }
+                },
+            )
 
     def test_unknown_name_in_where_is_an_error(self):
         """It used to evaluate to False, which built an empty model in the
         eager lane and raised in the relational one — one language, two
         answers. Resolution makes it a load error for both."""
-        schema = _schema(
-            constraints={
-                'cap': {
-                    'foreach': ['g'],
-                    'where': 'not_a_param > 0',
-                    'expression': 'p <= p_max',
-                }
-            },
-        )
         with pytest.raises(ValueError, match="'not_a_param' not found"):
-            validate_expressions(schema)
+            _schema(
+                constraints={
+                    'cap': {
+                        'foreach': ['g'],
+                        'where': 'not_a_param > 0',
+                        'expression': 'p <= p_max',
+                    }
+                },
+            )
 
     def test_dim_name_kwarg_not_flagged(self):
         """Keyword-arg names are dimension names, not data references."""
@@ -115,47 +109,60 @@ class TestValidateExpressions:
         validate_expressions(schema)
 
     def test_multiple_errors_collected(self):
-        schema = _schema(
-            constraints={
-                'a': {'foreach': ['g'], 'expression': 'q <= 1'},
-                'b': {'foreach': ['g'], 'expression': 'p + 1'},
-            },
-        )
         with pytest.raises(ValueError) as exc_info:
-            validate_expressions(schema)
+            _schema(
+                constraints={
+                    'a': {'foreach': ['g'], 'expression': 'q <= 1'},
+                    'b': {'foreach': ['g'], 'expression': 'p + 1'},
+                },
+            )
         msg = str(exc_info.value)
         assert "'q' not found" in msg
         assert 'exactly one comparison' in msg
 
     def test_known_names_extend_the_namespace(self):
-        """extend() passes names from the existing model; they must validate."""
-        schema = MathSchema.model_validate(
-            {
-                'dimensions': {'g': {'values': ['wind', 'solar']}},
-                'parameters': {'p_max': {'dims': ['g']}},
-                'constraints': {
-                    'cap': {
-                        'foreach': ['g'],
-                        'expression': 'p <= p_max',
-                    }
-                },
-            }
-        )
+        """The same file both ways: undeclared alone, checked as an extension.
+
+        ``extend()`` passes the names its model already carries, so the file
+        is validated against the namespace it runs in.
+        """
+        raw = {
+            'dimensions': {'g': {'values': ['wind', 'solar']}},
+            'parameters': {'p_max': {'dims': ['g']}},
+            'constraints': {'cap': {'foreach': ['g'], 'expression': 'p <= p_max'}},
+        }
         with pytest.raises(ValueError, match="'p' not found"):
-            validate_expressions(schema)
-        validate_expressions(schema, known_variables={'p': ['g']})
+            load_model(raw)
+        Model.model_validate(raw, context={'known_variables': {'p': ['g']}})
+
+    def test_known_names_reach_a_piecewise_block(self):
+        """A borrowed variable may be what a formulation links.
+
+        Expansion resolves link expressions itself, to compute the frame the
+        block is emitted over, so it needs the widened namespace as much as
+        the checkers downstream do. Without it an extension carrying any
+        ``piecewise:`` block was refused whatever it linked.
+        """
+        raw = {
+            'dimensions': {'bp': {'dtype': 'int', 'values': [0, 1]}},
+            'parameters': {'power_bp': {'dims': ['bp']}, 'fuel_bp': {'dims': ['bp']}},
+            'piecewise': {'curve': {'over': 'bp', 'links': [['p', 'power_bp'], ['f', 'fuel_bp']]}},
+        }
+        with pytest.raises(ValueError, match="'p' not found"):
+            load_model(raw)
+        load_model(raw, known_variables={'p': [], 'f': []})
 
     def test_known_variable_dims_reach_the_objective(self):
         """The dim checker needs an external variable's dims wherever it needs
         the name — objectives included, not just constraints."""
-        schema = MathSchema.model_validate(
+        Model.model_validate(
             {
                 'dimensions': {'g': {'values': ['wind', 'solar']}},
                 'parameters': {'cost': {'dims': ['g']}},
                 'objectives': {'total': {'expression': 'sum(p * cost, over=g)'}},
-            }
+            },
+            context={'known_variables': {'p': ['g']}},
         )
-        validate_expressions(schema, known_variables={'p': ['g']})
 
 
 class TestLoadTimeIntegration:
@@ -212,18 +219,18 @@ class TestLoadTimeIntegration:
 
 
 class TestDimensionKwargs:
-    """ROADMAP 5c: a dim kwarg that names nothing is a silent no-op, not an error.
+    """A dim kwarg that names nothing is a silent no-op, not an error.
 
     ``sum(p, over=snapshto)`` used to build a model that solved and was wrong —
     both lanes agree on the no-op, so nothing downstream caught it.
     """
 
     @staticmethod
-    def _schema(expression: str, foreach: list[str] | None = None) -> MathSchema:
+    def _schema(expression: str, foreach: list[str] | None = None) -> Model:
         # `or` would turn an explicit [] into ['snapshot']; a scalar constraint
         # is a legitimate thing to ask for
         foreach = ['snapshot'] if foreach is None else foreach
-        return MathSchema.model_validate(
+        return load_model(
             {
                 'dimensions': {
                     'snapshot': {'dtype': 'int'},
@@ -243,13 +250,13 @@ class TestDimensionKwargs:
             validate_expressions(self._schema('sum(p, over=snapshto) == load'))
         assert 'sum(over=snapshto)' in str(ei.value)
 
-    def test_group_sum_over_typo_is_rejected(self):
+    def test_grouped_sum_over_typo_is_rejected(self):
         with pytest.raises(ValueError, match='does not name a declared dimension'):
-            validate_expressions(self._schema('group_sum(p, over=generatr, by=zone) == load'))
+            validate_expressions(self._schema('sum(p, over=generatr, group_by=zone) == load'))
 
-    def test_group_sum_coordinate_typo_is_rejected(self):
+    def test_sum_coordinate_typo_is_rejected(self):
         with pytest.raises(ValueError, match="does not name a coordinate of 'generator'"):
-            validate_expressions(self._schema('group_sum(p, over=generator, by=zne) == load'))
+            validate_expressions(self._schema('sum(p, over=generator, group_by=zne) == load'))
 
     def test_shift_over_dim_is_checked(self):
         with pytest.raises(ValueError, match='does not name a declared dimension'):
@@ -258,15 +265,15 @@ class TestDimensionKwargs:
     def test_declared_dimensions_still_pass(self):
         for expression, foreach in (
             ('sum(p, over=generator) == load', ['snapshot']),
-            ('group_sum(p, over=generator, by=zone) == load', ['snapshot', 'bus']),
-            ('shift(p, over=snapshot, by=1, edge=wrap) == load', ['snapshot', 'generator']),
+            ('sum(p, over=generator, group_by=zone) == load', ['snapshot', 'bus']),
+            ("shift(p, over=snapshot, by=1, edge='wrap') == load", ['snapshot', 'generator']),
             ('shift(p, over=snapshot, by=1) == load', ['snapshot', 'generator']),
         ):
             validate_expressions(self._schema(expression, foreach))
 
     def test_macro_formals_are_not_mistaken_for_dimensions(self):
         """A formal in a dim position is legal inside the template body."""
-        schema = MathSchema.model_validate(
+        schema = load_model(
             {
                 'dimensions': {'generator': {'values': ['wind']}},
                 'parameters': {'cost': {'dims': ['generator']}},
@@ -297,9 +304,8 @@ class TestDimensionKwargs:
         resolved to another type failed to join the user's data — and row
         absence is the structural zero, so the model solved a smaller problem.
         """
-        schema = _schema(dimensions={'g': {'dtype': dtype, 'values': values}})
         with pytest.raises(ValueError, match=match):
-            validate_expressions(schema)
+            _schema(dimensions={'g': {'dtype': dtype, 'values': values}})
 
     @pytest.mark.parametrize(
         ('dtype', 'values'),
@@ -313,15 +319,121 @@ class TestDimensionKwargs:
     def test_a_coordinate_of_the_declared_dtype_passes(self, dtype, values):
         validate_expressions(_schema(dimensions={'g': {'dtype': dtype, 'values': values}}))
 
+    @pytest.mark.parametrize(
+        ('dtype', 'where', 'match'),
+        [
+            ('datetime', 'g > 0', 'compares against the epoch'),
+            ('str', 'g > 3', 'matches no label'),
+            ('int', "g > 'x'", 'matches nothing'),
+            ('datetime', "g > 'not-a-date'", 'is not an ISO date'),
+        ],
+    )
+    def test_a_where_comparison_must_match_the_declared_dtype(self, dtype, where, match):
+        """The same guard as above, one construct over — and this one was
+        silent (#460).
+
+        `_check_dimension_values` guarded a dimension's declared `values:`
+        against its dtype; a `where` comparison against that same dimension had
+        no such guard. polars compares a datetime column to an integer as an
+        offset from the epoch, so `snapshot > 0` quietly meant "after
+        1970-01-01" and dropped every earlier coordinate — and row absence is
+        the structural zero, so the model solved a smaller problem with no
+        error anywhere.
+        """
+        with pytest.raises(ValueError, match=match):
+            _schema(dimensions={'g': {'dtype': dtype}}, variables={'p': {'foreach': ['g'], 'where': where}})
+
+    @pytest.mark.parametrize(
+        ('dtype', 'where'),
+        [
+            ('datetime', "g > '2030-01-01'"),
+            ('datetime', "g >= '2030-01-01T06:00'"),
+            ('str', "g == 'combined-cycle'"),
+            ('int', 'g > 3'),
+            ('float', 'g > 3.5'),
+        ],
+    )
+    def test_a_where_comparison_of_the_declared_dtype_passes(self, dtype, where):
+        validate_expressions(
+            _schema(dimensions={'g': {'dtype': dtype}}, variables={'p': {'foreach': ['g'], 'where': where}})
+        )
+
     def test_a_second_objective_is_a_load_error(self):
         """Was: `lowering` took the last declaration and dropped the rest, so a
         file declaring cost and emissions solved for emissions without a word.
         """
-        schema = _schema(
-            objectives={
-                'cost': {'sense': 'minimize', 'expression': 'sum(p, over=g)'},
-                'emissions': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
-            },
-        )
         with pytest.raises(ValueError, match='2 objectives declared'):
-            validate_expressions(schema)
+            _schema(
+                objectives={
+                    'cost': {'sense': 'minimize', 'expression': 'sum(p, over=g)'},
+                    'emissions': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
+                },
+            )
+
+
+def test_the_retired_group_sum_names_its_rewrite():
+    """`group_sum` is gone, and the error is the whole migration story.
+
+    There is no alias and no deprecation cycle (CONTRIBUTING, *breaking changes
+    are free*), so a file written against the old spelling has to be told what
+    the new one is at load — the error is what is checked, unlike a shim.
+    """
+    with pytest.raises(ValueError) as exc:
+        _schema(
+            dimensions={'g': {'dtype': 'str', 'coords': ['bus']}, 'bus': {'dtype': 'str'}},
+            parameters={'c': {'dims': ['g']}, 'cap': {'dims': ['bus']}},
+            variables={'p': {'foreach': ['g']}},
+            constraints={'x': {'foreach': ['bus'], 'expression': 'group_sum(p, over=g, by=bus) <= cap'}},
+            objectives={'o': {'sense': 'minimize', 'expression': 'p * c'}},
+        )
+
+    assert 'no longer a helper' in str(exc.value)
+    assert 'sum(<expr>, over=<dim>, group_by=<coord>)' in str(exc.value), (
+        'a retired spelling has to name its rewrite, not just fail'
+    )
+
+
+class TestVersion:
+    """`version:` — the field, and the policy that gives it meaning (#67).
+
+    The field alone would be cargo cult: what makes it worth carrying is that
+    an unknown version is *refused* rather than interpreted. Everything else
+    here follows from that.
+    """
+
+    def _model(self, **top):
+        return {
+            **top,
+            'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
+            'parameters': {'c': {'dims': ['t']}},
+            'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
+            'constraints': {'r': {'foreach': ['t'], 'expression': 'x <= 1'}},
+            'objectives': {'o': {'sense': 'maximize', 'expression': 'x * c'}},
+        }
+
+    def test_absent_means_zero(self):
+        """Additive by design: every file written before the field stays valid,
+        so adding it needed no migration of examples, ports or fixtures."""
+        assert load_model(self._model()).version == 0
+
+    def test_zero_is_the_unstable_surface(self):
+        assert load_model(self._model(version=0)).version == 0
+
+    def test_an_unknown_version_is_refused_not_interpreted(self):
+        """A file from the future must not be read by an older reader — that is
+        the whole reason the field exists, and the only thing it does."""
+        with pytest.raises(ValueError) as exc:
+            load_model(self._model(version=1))
+
+        message = str(exc.value)
+        assert 'declares version 1' in message
+        assert 'understands [0]' in message, 'the error has to say what this reader can read'
+        assert 'Upgrade lpspec' in message, 'and what to do about it'
+
+    def test_the_version_gates_no_behaviour(self):
+        """Reject-only. Two files differing only in a *declared* supported
+        version must build the same model — the field never selects a surface.
+        """
+        bare = load_model(self._model())
+        declared = load_model(self._model(version=0))
+        assert bare.model_dump(exclude={'version'}) == declared.model_dump(exclude={'version'})

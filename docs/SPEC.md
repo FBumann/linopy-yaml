@@ -2,7 +2,7 @@
 
 What a YAML file may contain and what it means. *Why* it is shaped this way:
 [docs/ARCHITECTURE.md](ARCHITECTURE.md). What is planned or refused:
-[docs/ROADMAP.md](ROADMAP.md). A worked example: [README](https://github.com/FBumann/lpspec/blob/main/README.md#example).
+[docs/ROADMAP.md](ROADMAP.md). A worked example: [README](https://github.com/fluxopt/lpspec/blob/main/README.md#example).
 
 ## 0. The laws
 
@@ -30,9 +30,38 @@ applied in a different position.
 ## 1. File shape
 
 Eight top-level keys: `dimensions`, `parameters`, `variables`, `constraints`,
-`objectives` (§2), `expressions`, `macros` (§3), `piecewise` (§4). The schema
-accepts any subset, but `check`, `solve` and `write` require an objective —
-there is nothing to optimise without one.
+`objectives` (§2), `expressions`, `macros` (§3), `piecewise` (§4), plus
+`version` (below). The schema accepts any subset, but `check`, `solve` and
+`write` require an objective — there is nothing to optimise without one.
+
+**`version` declares which surface the file is written against.** It is
+optional, and absent means `0`:
+
+<!-- doctest: skip -->
+```yaml
+version: 0
+dimensions: ...
+```
+
+**`0` means unstable, and that is the promise being made.** The surface may
+change in any release; there is no compatibility guarantee, and saying so in
+the file is more honest than silence. What `1` is stays deliberately undecided
+— the only thing decided is that `0` does not become `1` without a changelog
+entry naming what moved.
+
+**A version this reader does not know is a load error, and nothing else.** The
+field gates no behaviour: it never selects an alternative surface, because
+keeping two alive in one codebase is a large permanent cost against an error
+that costs one line. A file from the future is refused rather than
+misinterpreted, which is the whole reason to carry the field:
+
+```
+model declares version 1, and lpspec 0.0.1a75 understands [0].
+Upgrade lpspec, or write the version this file actually targets.
+```
+
+It is a **language** version, not a package one — it moves when the accepted
+YAML surface moves, which most releases do not.
 
 **The schema is closed at every level.** An unrecognised key — top-level or
 inside any declaration — is a load error naming the near miss (`unknown key
@@ -56,7 +85,7 @@ for a parameter's `dims: []`, one column for a variable's `foreach: []`, one row
 for a constraint's. That is the ordinary reading of a product over nothing, not
 a special case, so a dummy dimension of size 1 is never how a scalar is written.
 One gap: a scalar **variable** may not carry a `where`
-([#340](https://github.com/FBumann/lpspec/issues/340)) — put the condition on
+([#340](https://github.com/fluxopt/lpspec/issues/340)) — put the condition on
 the constraints that use it.
 
 **`dimensions`** — the master coordinate index. Every dimension named anywhere
@@ -67,30 +96,65 @@ be of the declared `dtype` — `values: [2024-01-01]` under the default
 `dtype: str` is a load error, because YAML resolved it to a date and a date
 does not join `'2024-01-01'` in the data.
 
-`coords` declares non-index coordinates the dimension's labels carry — a
-generator's bus, a line's endpoints, a snapshot's month — mapping each
-coordinate name to **the dimension its values are labels of**. Written as a
-list when the two names coincide, or as a mapping when they do not:
+**A dimension and a coordinate are different things, and the file keeps them
+apart.** A **dimension** is an axis of the model: something is indexed by it
+(`dims`, `foreach`) or an aggregation lands terms on it (`group_by=`, `at()`).
+A **coordinate** is a label a dimension's members carry — a generator's bus, a
+snapshot's period — structure, never data: it is not legal in a value position,
+and a *value* riding a dimension is what a parameter is. The block invariant
+follows: **everything under `dimensions:` is an axis.** If `b` is single-valued
+per `a`, `b` is a coordinate of `a`, not a dimension — a `foreach` product over
+functionally dependent dims cut back by a mask is the shape `coords` exists to
+replace. `check` warns about a declared dimension that is never an axis.
 
-```yaml
-dimensions:
-  bus: {dtype: str}
-  generator:
-    coords: [bus]  # same as {bus: bus}
-  line:
-    coords: {from: bus, to: bus}  # two coordinates onto one dimension
-```
+`coords` declares the labels, and the shape of each entry's value says which of
+two kinds it is:
 
-The target must be a declared dimension, must not be the dimension carrying the
-coordinate, and a coordinate must not be named after a *different* dimension. A
-coordinate is single-valued per label, and its non-null values are checked
-against the target once data is bound (§8) — the check that makes `group_sum`
-safe. A **partial** coordinate is legal: null says the label belongs to no group
-(a generator on no bus, a line with one open end) and `group_sum` places its
-terms nowhere, while an unknown *non-null* value is a typo and an error. A
-dimension declaring `coords` needs an index source carrying those columns; they
-are never inferred from the parameters that use the dimension, since inferring
-would let a mistyped label extend the label space instead of being rejected.
+- **A string names a target dimension — the groupable kind.** The coordinate's
+  values are labels of that dimension, which is what `sum(group_by=)` and
+  `at()` land terms on. Written as a list when the two names coincide, or as a
+  mapping when they do not:
+
+  ```yaml
+  dimensions:
+    bus: {dtype: str}
+    generator:
+      coords: [bus]  # same as {bus: bus}
+    line:
+      coords: {from: bus, to: bus}  # two coordinates onto one dimension
+  ```
+
+  The target must be a declared dimension, must not be the dimension carrying
+  the coordinate, and a coordinate must not be named after a *different*
+  dimension. Non-null values are checked against the target once data is bound
+  (§8) — the check that makes `sum(group_by=)` safe. A **partial** coordinate
+  is legal: null says the label belongs to no group (a generator on no bus, a
+  line with one open end) and `sum(group_by=)` places its terms nowhere, while
+  an unknown *non-null* value is a typo and an error.
+
+- **A mapping declares an inline label space — the selection-only kind.** It
+  owns its values, targets nothing, and puts no entry under `dimensions:`,
+  because a label space nothing aggregates into is not part of the model's
+  dimensionality:
+
+  ```yaml
+  dimensions:
+    snapshot:
+      dtype: int
+      coords:
+        period: {dtype: int}  # a label on snapshot — nothing else
+  ```
+
+  An inline coordinate's name joins the flat namespace (law 3). Grouping into
+  one is refused with the rewrite: declare the axis and target it
+  (`period: {...}` under `dimensions:`, `coords: {period: period}` on
+  `snapshot`) — a one-word promotion, made the day the model genuinely gains
+  the axis.
+
+Either kind is single-valued per label, and a dimension declaring `coords`
+needs an index source carrying those columns; they are never inferred from the
+parameters that use the dimension, since inferring would let a mistyped label
+extend the label space instead of being rejected.
 
 **`parameters`** — declared shape only; data binds by name at run time (§8).
 `dims` required (`[]` is a scalar); `dtype` ∈ {`float`, `int`, `bool`, `str`},
@@ -109,7 +173,7 @@ Omitting a bound means unbounded on that side — non-negativity is written, not
 assumed. Bounds are
 a *narrower* language than expressions (a name or a number, never arithmetic) and
 the error says so rather than reporting a parse failure; expressions there are
-[#31](https://github.com/FBumann/lpspec/issues/31). A bound parameter's dims must
+[#31](https://github.com/fluxopt/lpspec/issues/31). A bound parameter's dims must
 not exceed `foreach`.
 
 **Equal bounds pin a variable**, which is how one declaration covers a quantity
@@ -146,7 +210,7 @@ storage_balance_initial:
 ```
 
 `shift` vacates the first snapshot and a vacated position is absent (§7), so that
-row drops without a `where` saying so. Spelling it `edge=wrap` gated on
+row drops without a `where` saying so. Spelling it `edge='wrap'` gated on
 `where: "snapshot > 0"` builds the same rows here and a *different* model on a
 horizon not starting at 0 — the gate hardcodes the origin, the operator does
 not.
@@ -166,6 +230,13 @@ model, so they cost nothing at build time. A named expression is a macro with no
 formals.
 
 ```yaml
+dimensions:
+  generator:
+    dtype: str
+variables:
+  p:
+    foreach: [generator]
+
 expressions:
   total_generation: sum(p, over=generator)
 macros:
@@ -186,6 +257,8 @@ name-checked at load time even if never called.
 
 N expressions jointly pinned to a breakpoint-indexed piecewise-linear curve.
 
+<!-- the linked expressions and their parameters live elsewhere -->
+<!-- doctest: skip -->
 ```yaml
 piecewise:
   chp:
@@ -256,7 +329,7 @@ what an existing `where: "snapshot > 0"` means.
 | dimension argument (`over=`, `into=`) | dimension |
 | where string | parameter, dimension |
 | `bounds.lower` / `.upper` | parameter name, or a number |
-| `shift(x, over=d, by=n, edge=0)` — the `edge` key | `wrap`, or a number; never a dimension |
+| `shift(x, over=d, by=n, edge=0)` — the `edge` key | `'wrap'` **quoted**, or a bare number; never a dimension. A bare word in a kwarg value is a *name to resolve*, and `wrap` is a literal — the same rule §6.1 uses for a `where`, so `over=wrap, edge='wrap'` reads unambiguously even where a dimension is called `wrap` |
 
 `edge` is the one keyword whose *key* is fixed rather than naming a dimension,
 so a dimension called `edge` does not change what it means; the position takes
@@ -278,7 +351,8 @@ name-checked, so **every node's dim set is computable before any data is bound**
 | `-x`, `+x` | `dims(x)` | |
 | `a + b`, `a * b`, `a / b` | `dims(a) ∪ dims(b)` | |
 | `sum(x, over=d)` | `dims(x) − {d}` | if `d ∉ dims(x)` |
-| `group_sum(x, over=d, by=c)` | `(dims(x) − {d}) ∪ {target(c)}` | unless `d ∈ dims(x)`, or `d` declares no coordinate `c` |
+| `sum(x, over=d, group_by=c)` | `(dims(x) − {d}) ∪ {target(c)}` | unless `d ∈ dims(x)`, or `d` declares no coordinate `c` |
+| `at(x, onto=d, by=c)` | `(dims(x) − {target(c)}) ∪ {d}` | unless `target(c) ∈ dims(x)`, or `d` declares no coordinate `c`, or `d ∈ dims(x)` already |
 | `shift(x, over=d, by=n)` | `dims(x)` | if `d ∉ dims(x)` |
 
 Binary operators **union**: an outer product is legitimate when the frame
@@ -310,7 +384,39 @@ thing contributes nothing — or a refusal, where no such reading exists.
 | coefficient — `w * x` | zero: the term does not participate, the row survives | `0` is the identity of a sum, so the term contributes nothing |
 | `where` operand | false | a coordinate whose data is missing is not one the model can claim exists |
 | divisor — `x / d` | **refused** at bind *where the model divides by it* | nothing contributes nothing: `0` divides by zero, `1` rescales, dropping rewrites the constraint |
+| a comparison's whole constant side — `x <= cap` | **refused** at bind *where the row is built* | nothing contributes nothing: the fill would *be* the bound, so `x <= 0` binds where the model said nothing |
 | `bounds:` | an error | nothing contributes nothing: unbounded is not bounded-at-zero |
+
+The refusals are keyed to **the rows a declaration builds**, never to the
+coordinate product: a coordinate a `where` already removed asks no question, so
+supplying data only where the model uses it stays the ordinary idiom. That is
+also what makes masking a real remedy rather than a workaround:
+
+<!-- doctest: wrap=constraints -->
+```yaml
+c:
+  foreach: [g]
+  where: cap  # no row where `cap` has none, instead of a row reading `x <= 0`
+  expression: x <= cap
+```
+
+Three answers, and the language does not pick between them: **supply the rows**
+if the value is what was meant, **mask them out** if the row should not exist,
+or **drop the declaration** if the model has no such quantity — which is what a
+framework emitting a dict does (#217).
+
+### A row with no variable terms is not built
+
+Whatever emptied it. A masked variable takes the row with it (law 7), a
+reduction over an absent set contributes `0`, and a missing parameter row is a
+zero coefficient (law 8) — three ways to reach one shape, *a row asserting
+something about constants only*, and the shape decides, not the provenance.
+Such a row constrains nothing a solver can act on.
+
+It is **reported**, never silent: `omissions()` on the executor gives
+`(constraint, rows_not_built)`, empty for a model whose every declared row was
+built. A declared constraint that goes unenforced is a thing the caller has to
+be able to see.
 
 ### How absence travels
 
@@ -365,7 +471,8 @@ where_expr ::= atom | "NOT" where_expr | where_expr ("AND"|"OR") where_expr
             |  "(" where_expr ")"
 atom       ::= NAME | NAME COMPARATOR value | "True" | "False"
 COMPARATOR ::= "<=" | ">=" | "==" | "!=" | "<" | ">"
-value      ::= NUMBER | NAME_OR_STRING
+value      ::= NUMBER | QUOTED | NAME_OR_STRING
+QUOTED     ::= "'" chars "'" | '"' chars '"'
 ```
 
 | Surface | Names a… | Meaning |
@@ -387,6 +494,27 @@ would compare a coordinate column against another declaration's name and mask
 everything out. An undeclared *bare* name is a load error, and a mask dim outside `foreach` is
 one too (§5.2).
 
+**Quote a label that is not an identifier**, and quote a date. A bare RHS word
+has to look like a name, so `combined-cycle`, `IT-north` and `CCGT 400MW` are
+only sayable in quotes — and quoting is also what says *label, not name*, so a
+quoted word is never read as a declaration and never a near-miss error.
+
+**A comparison is checked against the declared `dtype`**, and this is the one
+place it matters most: a `datetime` dimension compared to a number is compared
+against the **epoch**, so `snapshot > 0` would silently mean "after 1970-01-01".
+That is a load error naming the fix. A datetime boundary is a quoted ISO date —
+`snapshot > '2030-01-01'`, or `'2030-01-01T06:00'` with a time — which is the
+only spelling, since the language orders and compares coordinates and never
+interprets them. Calendar arithmetic, resampling and timezone conversion stay
+data prep.
+
+**String labels order bytewise**, whatever order the dimension declared them
+in. Declaration order is a different axis — it is what `shift` walks and what
+a label follows — and a `where` never reads it: `node >= 'b'` means the same
+thing however the nodes were listed. A label the dimension does not carry
+compares equal to nothing, so the mask is false there rather than an error —
+quoting already said *label, not name*, and a label is data.
+
 ## 7. Operators
 
 The built-in set is **closed** — no Python registry, so the operators are
@@ -397,9 +525,10 @@ arguments are name-checked at load time:
 | Operator | Result | Notes |
 |---|---|---|
 | `sum(array, over=dim)` | `dim` collapses | `array` must carry `dim` |
-| `group_sum(array, over=dim, by=coord)` | `over` → the dimension `coord` targets | `coord` is declared on `over` (§2); its values are the group labels, checked against the target dimension at bind time. The membership sum that makes topology data rather than structure; groups with no members contribute nothing |
+| `sum(array, over=dim, group_by=coord)` | `over` → the dimension `coord` targets | `coord` is declared on `over` (§2); its values are the group labels, checked against the target dimension at bind time. The membership sum that makes topology data rather than structure; groups with no members contribute nothing |
+| `at(array, onto=dim, by=coord)` | the dimension `coord` targets → `over` | **The adjoint of `sum(group_by=)`, and deliberately the same two arguments**: `(over, by)` names one mapping table and the helper says which way it is walked. `sum(group_by=)` consumes `over` and produces the target; `at` consumes the target and produces `over`, reading one coarse value once per fine label pointing at it. Reads a *variable* as readily as a parameter, which is what a per-component decision gating its flows needs. A fine label whose coordinate is null reads nothing and its row is absent, matching `sum(group_by=)`'s null group |
 | `shift(array, over=dim, by=n)` | value at *t−n* | vacated positions are **absent**: they propagate and drop the row (§6) |
-| `shift(array, over=dim, by=n, edge=wrap)` | value at *t−n*, cyclic | coordinates fixed, values wrap; nothing is vacated |
+| `shift(array, over=dim, by=n, edge='wrap')` | value at *t−n*, cyclic | coordinates fixed, values wrap; nothing is vacated |
 | `shift(array, over=dim, by=n, edge=v)` | value at *t−n* | vacated positions contribute the number **`v`** instead, and the row survives (`0` for a sum, `1` for a product) |
 
 `array` is any node of the right dim set, so `shift` re-indexes a **parameter**
@@ -422,13 +551,17 @@ Four rules govern `edge=`, and all four are law 8 in this position:
 - **A bare `shift` over a variable-free expression is a load error.** A
   parameter's missing row is a zero coefficient (§6), so there is no absence for
   the vacated slot to carry, and inventing one silently turns
-  `x <= shift(dt, over=t, by=1)` into `x <= 0`. The error names the three things
-  it could have meant: `edge=0`, a `where` masking the coordinate out, or
-  `edge=wrap`.
+  `x <= shift(dt, over=t, by=1)` into `x <= 0`. The error names what it could
+  have meant: `edge='wrap'`, `edge=0`, or `edge=0` **together with** a `where`
+  excluding the vacated coordinate — which is how an acyclic recurrence omits
+  its first row. The two are a pair, not a choice: a `where` alone does not
+  lift the refusal, since it is decided on the expression before any mask is
+  read, and `edge=0` alone leaves a row at that coordinate whose bound is the
+  zero.
 
 Anything composable out of these belongs in `macros:`. Math that is not sayable
 at all goes to a declared `escape:` island
-([#38](https://github.com/FBumann/lpspec/issues/38)): named in the file,
+([#38](https://github.com/fluxopt/lpspec/issues/38)): named in the file,
 bounded by the preceding `where` mask, terminal (it yields a constraint, never a
 sub-expression), and billed against a label budget before any Python runs.
 
@@ -502,8 +635,8 @@ language: nothing there changes what a file means.
 | Not here | Instead |
 |---|---|
 | time-series processing (resample, cluster, interpolate, align), file IO, units | data prep; pass a parameter |
-| solver breadth | two solver sinks — HiGHS, which ships, and Gurobi via the `[gurobi]` extra — chosen with `solver_name` at the call, never in the file; LP files for everything else ([#106](https://github.com/FBumann/lpspec/issues/106)) |
-| SOS and indicator constraints | planned, as a *sink capability* rather than a language question — the default solver has no such concept, `lp_file` and Gurobi do ([#23](https://github.com/FBumann/lpspec/issues/23), [ROADMAP Track 3](ROADMAP.md#track-3--capabilities-and-the-degree-line)). `piecewise:` (§4) covers SOS2's usual purpose today |
+| solver breadth | two solver sinks — HiGHS, which ships, and Gurobi via the `[gurobi]` extra — chosen with `solver_name` at the call, never in the file; LP files for everything else ([#106](https://github.com/fluxopt/lpspec/issues/106)) |
+| SOS and indicator constraints | planned, as a *sink capability* rather than a language question — the default solver has no such concept, `lp_file` and Gurobi do ([#23](https://github.com/fluxopt/lpspec/issues/23), [Track 3](https://github.com/fluxopt/lpspec/issues/472)). `piecewise:` (§4) covers SOS2's usual purpose today |
 | multi-objective | one objective — declaring a second is a load error (§2); weight them into one expression |
 | schema migrations | — |
 | arbitrary array ops (`merge`, `reindex`, `apply_ufunc`) | data prep, or a declared `escape:` island — the closed AST is what makes streaming possible |
@@ -516,4 +649,4 @@ readable `.yaml` representation and will not get one: the *math* side is
 feasible, but expression and where strings come back as anonymous arrays, so the
 round-trip is functional and not reviewable — which is the whole point of the
 file. Whether Python may *emit* declarations at all is a separate and open
-question ([#381](https://github.com/FBumann/lpspec/issues/381)).
+question ([#381](https://github.com/fluxopt/lpspec/issues/381)).

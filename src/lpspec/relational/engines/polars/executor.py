@@ -26,6 +26,7 @@ from lpspec.errors import (
     LpspecError,
     null_bounds_message,
     sparse_divisor_message,
+    uncovered_constant_message,
 )
 from lpspec.relational import plan, sinks
 from lpspec.relational.binding import BoundSources, bind
@@ -34,7 +35,9 @@ from lpspec.relational.engines.polars.compiler import PolarsCompiler, TermFragme
 from lpspec.relational.engines.polars.labels import Labeller
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
+
+    from polars._typing import MaintainOrderJoin
 
 
 #: The four frames a sink reads, and their dtypes — both stated by
@@ -54,11 +57,13 @@ class PolarsExecutor(Engine):
         self._bound: BoundSources | None = None
         self._var_frames: dict[str, pl.LazyFrame] = {}
         self._row_frames: dict[str, pl.LazyFrame] = {}
+        self._omitted: dict[str, int] = {}
         self._blocks: dict[str, tuple[int, int]] = {}
         self._cols: pl.DataFrame | None = None
         self._obj: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
         self._matrix: pl.DataFrame | None = None
+        self._matrix_starts: Any = None
         self._n_cols = 0
         self._n_rows = 0
         self._obj_const = 0.0
@@ -92,7 +97,8 @@ class PolarsExecutor(Engine):
 
         self._cols = _stack(cols, _COLS)
         self._rows = _stack([r for r, _ in built], _ROWS)
-        self._matrix = _stack([m for _, m in built if m is not None], _MATRIX)
+        stacked = _stack([m for _, m in built if m is not None], _MATRIX)
+        self._matrix, self._matrix_starts = sinks.compress_rows(stacked, self._n_rows)
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -172,6 +178,18 @@ class PolarsExecutor(Engine):
         The terminal aggregate is where duplicates from ``Sum`` and
         ``GroupSum`` — which project rather than aggregate — collapse, and it
         is skipped where nothing can (:func:`_needs_aggregate`).
+
+        **Either way the share leaves ordered by ``row``.** Every sink reads
+        the matrix a row range at a time, so one that is handed an unordered
+        matrix orders it — a second pass over a finished frame, and a second
+        copy of it while the solver's own model is resident. Ordering it here
+        happens inside the pipeline that is already materialising the rows.
+
+        A lone term gets the order from its *join*: the row frame is in label
+        order and ``maintain_order='left'`` keeps it, for less than sorting the
+        result costs. Several terms are several ordered runs stacked, and runs
+        are not an order, so those sort — which is why only the lone term asks
+        the join for anything, a stack having paid for the order regardless.
         """
 
         lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs")
@@ -191,9 +209,10 @@ class PolarsExecutor(Engine):
         labelled, self._n_rows = self._label.frame(c.dims, c.where, 'row', start, restrictions)
         frame = labelled.lazy()
         self._row_frames[c.name] = frame  # kept for the dual read-back
-        self._blocks[c.name] = (start, labelled.height)
+        self._blocks[c.name] = (start, labelled.height)  # narrowed if rows go termless
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
+        uncovered: pl.Expr | None = None
         carrier = frame
         for i, (p, sign) in enumerate(consts):
             column = f'__const {i}__'
@@ -204,6 +223,14 @@ class PolarsExecutor(Engine):
                 else carrier.join(aggregated, how='cross')
             )
             accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
+            gap = pl.col(column).is_null()
+            uncovered = gap if uncovered is None else uncovered | gap
+
+        if uncovered is not None:
+            gaps = int(carrier.select(uncovered.sum()).collect(engine='streaming').item())
+            if gaps:
+                names = ', '.join(sorted(plan.parameters_of(c.lhs, c.rhs)))
+                raise DataError(uncovered_constant_message(names, gaps, f"constraint '{c.name}'"))
 
         rows = carrier.select(
             'row',
@@ -212,22 +239,33 @@ class PolarsExecutor(Engine):
         ).collect(engine='streaming')
 
         if not terms:
-            return rows, None
+            self._omitted[c.name] = rows.height
+            self._blocks[c.name] = (start, 0)
+            self._n_rows = start
+            self._row_frames[c.name] = self._row_frames[c.name].clear()
+            return rows.clear(), None
 
         pieces = []
+        carried_order: MaintainOrderJoin | None = 'left' if len(terms) == 1 else None
         for p, sign in terms:
-            placed = frame.join(p.frame, on=list(p.dims), how='inner') if p.dims else frame.join(p.frame, how='cross')
+            placed = (
+                frame.join(p.frame, on=list(p.dims), how='inner', maintain_order=carried_order)
+                if p.dims
+                else frame.join(p.frame, how='cross')
+            )
             pieces.append(
                 placed.select(
                     'row',
-                    pl.col('var_label').alias('col'),
+                    pl.col('var_label').cast(_DTYPES['col']).alias('col'),
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
         stacked = pl.concat(pieces)
-        if not _needs_aggregate([fragment for fragment, _ in terms]):
-            matrix = stacked.collect(engine='streaming')
+        if not _needs_aggregate([fragment for fragment, _ in terms], self._q.may_share_a_column):
+            ordered = stacked if len(pieces) == 1 else stacked.sort('row')
+            matrix = ordered.collect(engine='streaming')
             self._check_no_undefined_divisor(f"constraint '{c.name}'", matrix, c.lhs, c.rhs)
+            rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, start)
             return rows, matrix
 
         # The aggregate is reachable, but "reachable" is all the fragments can
@@ -239,7 +277,43 @@ class PolarsExecutor(Engine):
         self._check_no_undefined_divisor(f"constraint '{c.name}'", matrix, c.lhs, c.rhs)
         if _has_repeated_entry(matrix):
             matrix = matrix.group_by('row', 'col').agg(pl.col('coeff').sum()).sort('row', 'col')
+        rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, start)
         return rows, matrix
+
+    def _drop_termless_rows(
+        self, name: str, rows: pl.DataFrame, matrix: pl.DataFrame, start: int
+    ) -> tuple[pl.DataFrame, pl.DataFrame, int]:
+        """Rows that kept no variable term are not built, and the block closes up.
+
+        A row with no variables is not a constraint — it asserts something about
+        constants, which the solver cannot act on. Three different provenances
+        reach that shape (an absent variable, an empty reduction, a missing
+        coefficient) and the language used to answer them differently, so the
+        same row meant different things depending on how it emptied. This is the
+        rule at the level the property lives at.
+
+        Labels are dense, and the dual read-back reads a block by position, so a
+        dropped row cannot leave a gap: the survivors are renumbered from
+        *start* and the row counter rewinds to match.
+
+        Costs one `n_unique` on a frame already in memory when nothing is
+        dropped, which is every correct model.
+        """
+        kept = matrix.get_column('row').unique()
+        if kept.len() == rows.height:
+            return rows, matrix, start + rows.height
+
+        surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
+        renumber = surviving.select('row').with_row_index('__new__', offset=start)
+        self._omitted[name] = rows.height - surviving.height
+        self._blocks[name] = (start, surviving.height)
+        remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
+        rows = surviving.with_columns(pl.col('row').replace_strict(remap))
+        matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
+        self._row_frames[name] = (
+            self._row_frames[name].filter(pl.col('row').is_in(kept)).with_columns(pl.col('row').replace_strict(remap))
+        )
+        return rows, matrix, start + surviving.height
 
     def _build_objective(self, o: plan.ObjectiveDeclaration) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
@@ -267,9 +341,11 @@ class PolarsExecutor(Engine):
         self._obj_sense = o.sense
         if not comp.terms:
             return None
-        pieces = [p.frame.select(pl.col('var_label').alias('col'), pl.col('coeff')) for p in comp.terms]
+        pieces = [
+            p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
+        ]
         stacked = pl.concat(pieces)
-        if _needs_aggregate(comp.terms, projected=True):
+        if _needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
             stacked = stacked.group_by('col').agg(pl.col('coeff').sum())
         return stacked.collect(engine='streaming')
 
@@ -285,6 +361,7 @@ class PolarsExecutor(Engine):
             obj=self._obj,
             rows=self._rows,
             matrix=self._matrix,
+            row_starts=self._matrix_starts,
             column_count=self._n_cols,
             row_count=self._n_rows,
             objective_sense=self._obj_sense,
@@ -295,9 +372,10 @@ class PolarsExecutor(Engine):
 
     def close(self) -> None:
         """Drop the built model. Optional — see :class:`Result`."""
-        self._cols = self._obj = self._rows = self._matrix = None
+        self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
         self._var_frames.clear()
         self._row_frames.clear()
+        self._omitted.clear()
         self._blocks.clear()
         # `BoundSources` is frozen, so it cannot be emptied in place the way the
         # registries above can: what frees the bound frames is dropping every
@@ -329,39 +407,41 @@ def _spanning(solver: str, quantity: str, values: pl.Series | None, expected: in
         )
 
 
-def _needs_aggregate(terms: Sequence[TermFragment], *, projected: bool = False) -> bool:
+def _needs_aggregate(
+    terms: Sequence[TermFragment],
+    may_share: Callable[[TermFragment, TermFragment], bool],
+    *,
+    projected: bool = False,
+) -> bool:
     """Whether stacking *terms* can put two rows on one solver column.
 
     Named for the answer, not the condition: an inverted test here is a wrong
     model rather than a slow one.
 
-    Two things can put a label twice into the stack, and they are asked
-    separately. A single fragment that is not
+    Two things can put a label twice into the stack, asked separately. A
+    fragment that is not
     :attr:`~lpspec.relational.engines.polars.compiler.TermFragment.keyed`
-    already holds one twice on its own. Two fragments collide only if they
-    carry the *same* variable — ``x + 2 * x`` is one row each and one column —
-    because labels are dense and assigned a declaration at a time, so distinct
-    variables cannot reach a shared one however either fragment was reshaped.
-
-    That second half is what makes the ordinary multi-term constraint free.
-    ``reserve_up + reserve_down <= p_max`` stacks two fragments, and reading
-    only their count says the aggregate is reachable — which on the `fleet`
-    rungs means sorting every nonzero in the model to collapse nothing.
+    already holds one twice on its own. Whether a *pair* can is *may_share*,
+    which answers no for distinct variables and otherwise asks whether two
+    fragments of one variable send a label to one **row** — for
+    ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``, only
+    where a line's two ends are one bus. See
+    :meth:`~lpspec.relational.engines.polars.compiler.PolarsCompiler.may_share_a_column`.
+    That second half is what makes the ordinary multi-term constraint free:
+    reading only a fragment count says the aggregate is reachable for
+    ``reserve_up + reserve_down <= p_max``, which on the `fleet` rungs sorts
+    every nonzero in the model to collapse nothing.
 
     *projected* is what the two call sites do not share. The matrix keeps a
-    fragment's dims: a constraint's ``row`` is a function of dims that include
-    them, so ``keyed`` — one row per ``(dims…, var_label)`` — carries straight
-    into ``(row, col)``. The objective keeps only ``var_label``, so it has to
-    ask the stronger question the shape operators already ask when they drop a
-    dim: does the key survive losing *all* of them? It does exactly when
-    ``var_label`` determines every dim the fragment still carries.
-
-    That distinction is the whole bug this argument exists to prevent.
-    ``p * cost`` is keyed on ``(snapshot, generator, var_label)`` and every one
-    of those dims is the variable's own, so a column cannot repeat and the
-    aggregate is dead weight. ``y * w`` — ``y`` over buses, ``w`` over
-    snapshots — is just as keyed, but ``snapshot`` arrived by broadcast, so one
-    column holds a row per snapshot and their *sum* is the coefficient.
+    fragment's dims, so ``keyed`` — one row per ``(dims…, var_label)`` —
+    carries straight into ``(row, col)``. The objective keeps only
+    ``var_label``, so it asks the stronger question: does the key survive
+    losing *all* dims? It does exactly when ``var_label`` determines every dim
+    the fragment still carries. ``p * cost`` is keyed on dims that are all the
+    variable's own, so a column cannot repeat; ``y * w`` — ``y`` over buses,
+    ``w`` over snapshots — is just as keyed, but ``snapshot`` arrived by
+    broadcast, so one column holds a row per snapshot and their *sum* is the
+    coefficient.
 
     Worth 2-4x of build time on the matrix and little on the objective, but the
     argument is the same at both, so it is written once. On the duckdb engine
@@ -370,8 +450,7 @@ def _needs_aggregate(terms: Sequence[TermFragment], *, projected: bool = False) 
     """
     if any(not t.survives_dropping(set(t.dims) if projected else set()) for t in terms):
         return True
-    carried = [t.variable for t in terms]
-    return len(set(carried)) != len(carried)
+    return any(may_share(a, b) for i, a in enumerate(terms) for b in terms[i + 1 :])
 
 
 def _has_repeated_entry(matrix: pl.DataFrame) -> bool:
@@ -421,10 +500,14 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str
     the presence frames are read — so it costs ``Labeller.frame`` both of its
     arithmetic paths. An unmasked variable's presence is its whole coordinate
     product and would remove nothing, so it never gets to impose that cost.
+
+    *Having* no dims is not *having nothing to restrict*: a masked scalar
+    variable restricts every row of every constraint that names it, all or
+    nothing. Reading the empty dims as "skip" is what let one through silently.
     """
     out: list[tuple[tuple[str, ...], pl.LazyFrame]] = []
     for p in terms:
-        if p.presence is None or not p.dims:
+        if p.presence is None:
             continue
         # `presence_dims` is narrower than `dims` for an acyclic shift, whose
         # vacated edge lies along one dimension and is silent about the rest.

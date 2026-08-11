@@ -23,15 +23,15 @@ Four docs, kept short on purpose — **reference pages carry rules, design notes
 - `docs/SPEC.md` — the language reference: what a YAML file may contain and what it means. It opens with **§0, the ten laws**; every section below elaborates one.
 - `docs/ARCHITECTURE.md` — how it fits together, the hard rules, the module map. Update it in any PR that changes structure.
 - `docs/design/ceiling.md` — what may enter the language: the two tiers, the admissibility test, why sink capability is a second axis.
-- `docs/ROADMAP.md` — what we build toward and what we have decided never to build.
+- `docs/ROADMAP.md` — why the project exists and where it is going. No work items: those are issues.
 
-A PR that adds, renames, or retires a construct updates `docs/SPEC.md` — **§0 if it changes a law, the section if it changes a detail**. Rationale belongs in the PR description or a code comment, not in a new doc section; historical "this used to work differently" notes belong in git.
+A PR that adds, renames, or retires a construct updates `docs/SPEC.md` — **§0 if it changes a law, the section if it changes a detail**. Rationale belongs in the PR description or a docstring, not in a new doc section; historical "this used to work differently" notes belong in git.
 
 `docs/models/index.md` is the evidence page — what the language can say and how we know the answers are right. Both its tables are generated (`uv run python -m tools.constructs`), the reference table straight from `examples/ports/references.json`, so a published optimum cannot disagree with an asserted one.
 
 Everything under `docs/` is also published as an mkdocs-material site (`mkdocs.yml`), built from those same files. Two rules: **a new page under `docs/` needs a `nav:` entry** or `mkdocs build --strict` fails in CI, and **a link to anything outside `docs/` is written as a full GitHub URL**, never as `../CONTRIBUTING.md` — the relative form resolves in the repo and 404s on the site, silently. Links inside `docs/` stay relative. `tests/test_docs_site.py` enforces both; see *the docs* in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Before proposing a new language feature**, triage it: **macro, primitive, or escape?** Most requests are compositions (macro, free); a genuinely new shape earns a primitive only if it clears the expressive ceiling in `docs/design/ceiling.md` (degree 1 ∩ relational ∩ local); unsayable math goes to a declared `escape:` island (#38) rather than into the language. Check the deliberate non-primitives in `docs/ROADMAP.md` first — parity with another tool is not by itself a reason to add anything.
+**Before proposing a new language feature**, triage it: **macro, primitive, or escape?** Most requests are compositions (macro, free); a genuinely new shape earns a primitive only if it clears the expressive ceiling in `docs/design/ceiling.md` (degree 1 ∩ relational ∩ local); unsayable math goes to a declared `escape:` island (#38) rather than into the language. Check the deliberate non-primitives in `docs/design/ceiling.md` first — parity with another tool is not by itself a reason to add anything.
 
 ## Common Commands
 
@@ -99,6 +99,12 @@ lpspec_linopy.extend(m, 'ramp_constraint.yaml', data={...})  # YAML math onto an
   outright; no aliases, no deprecation cycle, no shim. Written down once, in
   *breaking changes are free* in [CONTRIBUTING.md](CONTRIBUTING.md).
 - This package is a **pure consumer** of linopy's public API. Never depend on linopy internals.
+- **No explanatory inline comments.** A `#` comment never explains code: complex logic
+  becomes a helper with a docstring, and a constraint the code cannot show lives in the
+  nearest docstring — measured numbers and issue refs included, so deleting a comment
+  never deletes a fact. Rationale for a *change* goes in the PR description. What stays
+  inline: pragmas (`# pyrefly: ignore[...]` with its reason, `# fmt: skip`), `#:`
+  attribute docs on constants, and section dividers.
 - All validation should happen at load time with clear, actionable error messages.
 - Use `ruff` for linting/formatting, `pyrefly` for type checking, `pytest` for tests.
 - pyrefly runs on the `strict` preset with zero errors and is gated in CI. Keep it

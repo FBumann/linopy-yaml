@@ -81,7 +81,7 @@ Three rules, each enforced, so none has to be remembered:
 - **Inside `docs/`, link relatively.** `../SPEC.md`, `models/index.md`. mkdocs
   resolves and validates these; a dead one fails the build.
 - **Outside `docs/`, write the full GitHub URL** —
-  `https://github.com/FBumann/lpspec/blob/main/bench/README.md`, not
+  `https://github.com/fluxopt/lpspec/blob/main/bench/README.md`, not
   `../bench/README.md`. The site has no file above `docs/` to resolve to, and
   mkdocs does *not* flag the relative form: it ships as a silent 404. This is
   the same convention the model pages already use to link at their `.yaml`.
@@ -127,6 +127,21 @@ the two required checks above. Approvals are not required, but the PR is.
 Versioning, the release PR, and how to force a specific version:
 [RELEASING.md](RELEASING.md).
 
+## Filing issues
+
+**Cite behaviour and a file, not a private symbol and a line range.** An issue
+outlives several refactors; one written against internals dies with the next and
+takes its argument with it — four have had to be closed and re-filed for exactly
+that. So write `bounds accept a parameter name or a number, not an expression
+(language/model.py)`, not a line number inside the loop that enforces it.
+
+**`now` is the only order label**, capped at five; everything else is backlog.
+Grouping is sub-issue parentage — a track is a parent issue — because parentage
+is structural where a label mirroring a list is a copy that drifts.
+`blocked:upstream` and `blocked:decision` say what an issue waits on. A
+`decision` closes by *resolution*, not by work: on yes it becomes `roadmap`, on
+no it becomes a row in the deliberate non-primitives table.
+
 ## Breaking changes are free
 
 **The project is `0.0.1aN` until the first official release, and holds no
@@ -156,7 +171,7 @@ declared `escape:` island rather than into the language.
 
 Read, in order:
 
-1. [the deliberate non-primitives in docs/ROADMAP.md](docs/ROADMAP.md) — parity with
+1. [the deliberate non-primitives](docs/design/ceiling.md#deliberate-non-primitives) — parity with
    another tool is not by itself a reason to add anything, and several
    plausible-sounding features are refused there on purpose;
 2. [the ceiling in docs/design/ceiling.md](docs/design/ceiling.md#two-tiers-and-the-ceiling) —

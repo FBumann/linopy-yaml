@@ -27,6 +27,7 @@ goes through :func:`q`, which quotes it. Nothing is interpolated raw.
 
 from __future__ import annotations
 
+import datetime
 import math
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
@@ -49,7 +50,12 @@ def q(name: str) -> str:
 
 
 def lit(value: object) -> str:
-    """A Python value as a SQL literal, quoted if it is a string."""
+    """A Python value as a SQL literal, quoted if it is a string.
+
+    Dates and timestamps are spelled ISO and cast, not `repr`-ed: `repr` of a
+    `datetime.date` is `datetime.date(2030, 1, 3)`, which SQL reads as a call
+    to its own `DATE` function and rejects for the arity.
+    """
     if isinstance(value, str):
         return "'" + value.replace("'", "''") + "'"
     if isinstance(value, bool):
@@ -64,6 +70,10 @@ def lit(value: object) -> str:
         # polars engine multiplies by. Decimal also propagates: a coefficient
         # built from one stays decimal all the way into `obj`.
         return f'{value!r}::DOUBLE'
+    if isinstance(value, datetime.datetime):
+        return f"'{value.isoformat(sep=' ')}'::TIMESTAMP"
+    if isinstance(value, datetime.date):
+        return f"'{value.isoformat()}'::DATE"
     return repr(value)
 
 
@@ -329,6 +339,12 @@ class DuckCompiler:
                     tuple(self._group_fragment(p, expr, context) for p in inner.consts),
                 )
             )
+        if isinstance(expr, plan.At):
+            inner = self.expression(expr.operand, context)
+            return CompiledExpression(
+                tuple(self._at_fragment(p, expr, context) for p in inner.terms),
+                tuple(self._at_fragment(p, expr, context) for p in inner.consts),
+            )
         if isinstance(expr, plan.Translate):
             inner = self.expression(expr.operand, context)
             return CompiledExpression(
@@ -408,6 +424,35 @@ class DuckCompiler:
         )
         keyed = p.keyed and g.over in p.label_dims
         return TermFragment((*keep, g.into), rel, p.is_term, keyed, _relabel(p.label_dims, g.over, g.into))
+
+    def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
+        """Spread ``into`` back out over ``over`` — the adjoint of a group.
+
+        The same mapping table as `_group_fragment`, joined on the other
+        column: grouping reads one row per ``over`` label and lands it on one
+        ``into``, and this reads one row per ``into`` and lands it on *every*
+        ``over`` sharing it. The join fans out, which is the fan-out a group
+        pays in reverse and still one equi-join against a dim table.
+
+        **The key claim has to weaken, and that is the whole difference.** A
+        pullback duplicates a ``var_label`` across every fine coordinate of its
+        component, so the label no longer spans a dim the frame carries and a
+        later reduction can bring two copies into one row. ``keyed=False`` is
+        what makes the terminal aggregate run and add them, rather than the
+        frame silently holding a cell twice.
+        """
+        if a.into not in p.dims:
+            raise LanguageError(f"in {context}: At through '{a.into}' but the expression has dims {list(p.dims)}")
+        keep = tuple(x for x in p.dims if x != a.into)
+        carried = ', '.join(f'l.{q(c)}' for c in p.carried)
+        kept = ''.join(f'l.{q(d)}, ' for d in keep)
+        rel = Rel(
+            f'SELECT {kept}r.val AS {q(a.over)}, {carried} '
+            f'FROM {p.rel.alias("l")} JOIN {q(self.dimensions[a.over])} AS r '
+            f'ON l.{q(a.into)} = r.{q(a.coordinate)}',
+            (*keep, a.over, *p.carried),
+        )
+        return TermFragment((*keep, a.over), rel, p.is_term, keyed=False, label_dims=p.label_dims - {a.into})
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
         """A pointwise remap of the dim through its ord.
@@ -511,7 +556,7 @@ def _relabel(label_dims: frozenset[str], over: str, into: str) -> frozenset[str]
     return (label_dims - {over}) | {into} if over in label_dims else label_dims
 
 
-def _compare(column: str, op: plan.ComparisonOperator, value: float | str) -> str:
+def _compare(column: str, op: plan.ComparisonOperator, value: float | str | datetime.date) -> str:
     if op == '!=':
         return f'({column} IS DISTINCT FROM {lit(value)})'
     return f'({column} {op if op != "==" else "="} {lit(value)})'

@@ -207,8 +207,9 @@ verdict off the SQL"), not to cover the language:
 |---|---|---|
 | `dispatch` | pointwise bounds + one `sum` per row | raw throughput, and the case a dense eager broadcast is best at — so our worst ratio |
 | `nodal` | `(snapshot, node, tech)`, `where: installed > 0` | sparsity as it actually occurs — see below |
-| `transport` | three `group_sum` joins per row | the mapping-table path, where the eager lane must materialise a bus x generator product |
+| `transport` | three `sum(group_by=)` joins per row | the mapping-table path, where the eager lane must materialise a bus x generator product |
 | `sector` | dense snapshots x dense carriers x sparse portfolio | mixed density in one model — the shape a sector-coupled model actually has, and where the sparsity claim is visible |
+| `storage` | a cyclic `shift` recurrence | the self-join, and the only locality class with no eager cost analogue: xarray shifts an array, we join a term stream against itself on `snapshot.ord - 1` |
 
 **`nodal` is the case worth explaining.** It is dispatch over nodes and
 technologies, and a technology only generates at a node where it is installed:
@@ -244,8 +245,7 @@ Data is generated deterministically (a blake2b digest of the shape seeds the
 RNG — `hash()` is salted per process and would give the two arms different
 numbers), cached under `bench/.cache/`, and feasible by construction.
 
-Storage (`roll`, the bounded-halo self-join) and a MILP through the `highs` solver
-are the next rungs — see docs/benchmarks.md.
+A MILP through the `highs` solver is the next rung — see docs/benchmarks.md.
 
 ## The other question: regressions
 
@@ -331,4 +331,5 @@ linopy lane's `data=`/`coords=` shapes. Nothing else: the parametrization reads
 | `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |
-| `profile_build.py` | where the time goes inside one build — a profiler, not a benchmark |
+| `profile_build.py` | which *query* inside one build spends the time — a profiler, not a benchmark. Wraps every collect, so read its shares and not its seconds |
+| `profile_phases.py` | which *phase*, in seconds comparable to a real run. Hoists the parse, the lowering and the parquet read out of the loop and reuses one binding, which takes the spread from 12-55% down to a few percent — the difference between a 10% change being visible and not |

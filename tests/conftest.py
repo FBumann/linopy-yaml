@@ -27,7 +27,10 @@ import numpy as np
 import pytest
 import yaml as pyyaml
 
-from lpspec.language.schema import MathSchema
+from lpspec.language.validation import load_model
+
+if TYPE_CHECKING:
+    from lpspec.language.model import Model
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -140,8 +143,8 @@ def override(base: dict[str, Any], **patch: Any) -> dict[str, Any]:
     return raw
 
 
-def schema_of(source: str | Path | dict[str, Any], **patch: Any) -> MathSchema:
-    """A ``MathSchema`` from a YAML path, YAML text, or a raw dict.
+def schema_of(source: str | Path | dict[str, Any], **patch: Any) -> Model:
+    """A ``Model`` from a YAML path, YAML text, or a raw dict.
 
     ``Path`` means a file, ``str`` means the YAML itself — the distinction is
     the type, never a guess about the content. ``**patch`` applies
@@ -149,7 +152,7 @@ def schema_of(source: str | Path | dict[str, Any], **patch: Any) -> MathSchema:
     ``**`` in the objective".
     """
     raw = raw_of(source)
-    return MathSchema(**(override(raw, **patch) if patch else raw))
+    return load_model(override(raw, **patch) if patch else raw)
 
 
 def raw_of(source: str | Path | dict[str, Any]) -> dict[str, Any]:

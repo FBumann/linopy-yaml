@@ -32,11 +32,11 @@ from lpspec.relational.frames import as_frame, labels_frame
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 
 def tidy_sources(
-    schema: MathSchema,
+    schema: Model,
     data: dict[str, object],
     coords: dict[str, Any] | None = None,
 ) -> dict[str, object]:
@@ -57,7 +57,7 @@ def tidy_sources(
             raise DataError(f"no data provided for parameter '{pname}'")
         obj = data[pname]
         if isinstance(obj, (str, Path)):
-            sources[pname] = obj  # parquet path — the executor reads it directly
+            sources[pname] = obj
             continue
         table = as_frame(obj, pdef.dims)
         if table is None:
@@ -95,7 +95,7 @@ def tidy_sources(
     return sources
 
 
-def validate_piecewise_data(schema: MathSchema, values: Mapping[str, Any] | Any) -> None:
+def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
     """Data-time guard for ``convex: true`` blocks (SPEC §3.6).
 
     The hull relaxation is silently wrong for curves of mixed curvature, and
@@ -109,13 +109,18 @@ def validate_piecewise_data(schema: MathSchema, values: Mapping[str, Any] | Any)
 
     Both lanes call this, which is why it sits beside ``tidy_sources`` rather
     than inside either of them.
+
+    Only the convex curvature check needs xarray — the broadcast over dims is
+    what asks for it — so the import waits until a ``convex: true`` block is
+    actually found. A convex block carries exactly two links, which is what
+    the pair unpack relies on.
     """
     import numpy as np
 
     for name, pw in schema.piecewise.items():
         if not pw.convex:
             continue
-        try:  # only convex curvature checks need xarray (broadcast over dims)
+        try:
             import xarray as xr
         except ImportError as exc:
             msg = (
@@ -125,7 +130,7 @@ def validate_piecewise_data(schema: MathSchema, values: Mapping[str, Any] | Any)
             )
             raise ModuleNotFoundError(msg) from exc
         ctx = f"piecewise '{name}'"
-        (x_link, y_link) = pw.links  # convex requires exactly two links
+        (x_link, y_link) = pw.links
         try:
             xa = _as_dataarray(schema, x_link[1], values)
             ya = _as_dataarray(schema, y_link[1], values)
@@ -151,7 +156,7 @@ def validate_piecewise_data(schema: MathSchema, values: Mapping[str, Any] | Any)
                 )
 
 
-def _as_dataarray(schema: MathSchema, pname: str, values: Mapping[str, Any] | Any) -> Any:
+def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) -> Any:
     """One source as a DataArray indexed by its declared dims.
 
     Two shapes reach here: the linopy lane hands over its ``xr.Dataset``
@@ -160,6 +165,12 @@ def _as_dataarray(schema: MathSchema, pname: str, values: Mapping[str, Any] | An
     caller has not taken — asking for a curvature check already requires
     xarray, which brings pandas — but the check still wants to be numpy-only
     (issue #27), which would retire this function.
+
+    Raises ``KeyError`` when there is nothing to lay out in process — the
+    value is a parquet path, or not a frame with a ``value`` column — and the
+    caller reads that as "skip". The frame crosses to pandas column by column
+    through numpy: a whole-frame conversion would reach for pyarrow, and this
+    check already costs the caller xarray without adding a third library.
     """
     import xarray as xr
 
@@ -171,12 +182,9 @@ def _as_dataarray(schema: MathSchema, pname: str, values: Mapping[str, Any] | An
     dims = list(schema.parameters[pname].dims)
     frame = as_frame(obj, tuple(dims))
     if frame is None or not dims or 'value' not in frame.collect_schema().names():
-        raise KeyError(pname)  # a parquet path, or nothing to lay out: skip
+        raise KeyError(pname)
     import pandas as pd
 
-    # column by column through numpy: a whole-frame conversion would reach for
-    # pyarrow, and this check already costs the caller xarray without adding a
-    # third library to it
     tidy = frame.select([*dims, 'value']).collect()
     columns = {name: tidy[name].to_numpy() for name in tidy.columns}
     return xr.DataArray.from_series(pd.DataFrame(columns).set_index(dims)['value'])

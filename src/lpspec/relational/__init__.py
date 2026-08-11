@@ -10,7 +10,7 @@ plans) is the only contract with the rest of the package. Engine dependencies
 (polars, highspy) are imported lazily so the core package stays lean.
 
 **Two layers, and the directory says which is which.** ``plan.py``,
-``engine.py``, ``sinks/``, ``status.py``, ``chunking.py`` and ``frames.py`` are
+``sinks/``, ``status.py``, ``chunking.py``, ``result.py`` and ``frames.py`` are
 the contract: what a model *is*, what an engine answers to, what a sink reads.
 ``engines/`` holds implementations of that contract, one per directory. The
 split was made when a second engine was priced (``bench/duckdb-spike.md``) —

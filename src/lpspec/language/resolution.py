@@ -17,6 +17,8 @@ formals are the one scope, and may not collide with a declared dimension.
 
 from __future__ import annotations
 
+import datetime
+import re
 from typing import TYPE_CHECKING, assert_never
 
 from lpspec.errors import LanguageError
@@ -30,6 +32,7 @@ from lpspec.language.expression_parser import (
     EdgeNode,
     ExpressionNode,
     FunctionCallNode,
+    KeywordNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -55,7 +58,7 @@ from lpspec.language.where_parser import (
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from lpspec.language.schema import MathSchema
+    from lpspec.language.model import Model
 
 
 class Namespace:
@@ -65,7 +68,7 @@ class Namespace:
     walk through several stores.
     """
 
-    __slots__ = ('coordinates', 'dimensions', 'parameters', 'variables')
+    __slots__ = ('coordinates', 'dimensions', 'dtypes', 'labels', 'parameters', 'variables')
 
     def __init__(
         self,
@@ -73,16 +76,31 @@ class Namespace:
         parameters: Iterable[str],
         dimensions: Iterable[str],
         coordinates: Mapping[str, Mapping[str, str]] | None = None,
+        dtypes: Mapping[str, str] | None = None,
+        labels: Mapping[str, Iterable[str]] | None = None,
     ) -> None:
         self.variables = frozenset(variables)
         self.parameters = frozenset(parameters)
         self.dimensions = frozenset(dimensions)
-        #: dim -> {coordinate name: target dim}. Scoped, so it is not part of
-        #: :meth:`kind` — a coordinate name is only meaningful under its dim.
+        #: name -> declared dtype, for dimensions, parameters and inline label
+        #: coordinates alike. A where comparison is the one place a *literal*
+        #: meets a declared type, and comparing the wrong one is silent: polars
+        #: reads a datetime against an integer as an epoch offset and drops
+        #: rows, and row absence is the structural zero. Empty when a caller
+        #: builds a namespace by hand, which only widens what is accepted.
+        self.dtypes: dict[str, str] = dict(dtypes or {})
+        #: dim -> {coordinate name: target dim} — the groupable kind only.
+        #: Scoped, so it is not part of :meth:`kind` — a coordinate name is
+        #: only meaningful under its dim.
         self.coordinates: dict[str, dict[str, str]] = {d: dict(c) for d, c in (coordinates or {}).items()}
+        #: dim -> inline label-coordinate names — selection-only spaces that
+        #: target no dimension. Kept apart from :attr:`coordinates` so that
+        #: naming one in a ``group_by``/``at`` produces the promotion rewrite
+        #: rather than "does not name a coordinate".
+        self.labels: dict[str, frozenset[str]] = {d: frozenset(c) for d, c in (labels or {}).items()}
 
     @classmethod
-    def of(cls, schema: MathSchema, known_variables: Iterable[str] = ()) -> Namespace:
+    def of(cls, schema: Model, known_variables: Iterable[str] = ()) -> Namespace:
         """Build the namespace of *schema*.
 
         ``known_variables`` widens the variable set only — used by
@@ -94,7 +112,13 @@ class Namespace:
             set(schema.variables) | set(known_variables),
             schema.parameters,
             schema.dimensions,
-            {d: dd.coords for d, dd in schema.dimensions.items()},
+            {d: dd.targeted for d, dd in schema.dimensions.items()},
+            {
+                **{p: pd.dtype for p, pd in schema.parameters.items()},
+                **{d: dd.dtype for d, dd in schema.dimensions.items()},
+                **{c: spec.dtype for dd in schema.dimensions.values() for c, spec in dd.labels.items()},
+            },
+            {d: dd.labels for d, dd in schema.dimensions.items()},
         )
 
     def kind(self, name: str) -> str | None:
@@ -122,7 +146,7 @@ class Namespace:
 # ---------------------------------------------------------------------------
 
 
-def expression_of(text: str, schema: MathSchema, ns: Namespace, context: str) -> ExpressionNode:
+def expression_of(text: str, schema: Model, ns: Namespace, context: str) -> ExpressionNode:
     """Parse, expand and resolve *text* — the only way a backend gets an AST.
 
     Raises :class:`LanguageError` listing every problem. ``validation.py`` calls the
@@ -182,11 +206,19 @@ def resolve_expression(
 
 
 def _resolve_arith(node: ArithmeticNode, ns: Namespace, context: str, errors: list[str]) -> ArithmeticNode:
+    """The recursive worker under :func:`resolve_expression`.
+
+    Idempotent — already-typed nodes pass through unchanged, because
+    piecewise re-resolves expanded links. The ``KeywordNode`` branch is
+    unreachable from a file: the grammar admits a quoted value only in a
+    kwarg position, and the kwarg branches consume it there. It exists for a
+    hand-built AST, and because the union must be exhausted.
+    """
     if isinstance(node, NumberNode):
         return node
 
     if isinstance(node, (VariableNode, ParameterNode, DimensionNode, CoordinateNode, EdgeNode)):
-        return node  # idempotent: piecewise re-resolves expanded links
+        return node
 
     if isinstance(node, NameNode):
         match ns.kind(node.name):
@@ -232,15 +264,22 @@ def _resolve_arith(node: ArithmeticNode, ns: Namespace, context: str, errors: li
                 kwargs[key] = _resolve_edge(value, context, node.name, errors)
             elif key in builtin.dimension_kwargs:
                 kwargs[key] = _resolve_dim_ref(value, ns, context, node.name, key, errors)
-            elif key in builtin.coordinate_kwargs:
-                # scoped to the sibling over= dim, so that kwarg has to be read
-                # here rather than resolved on its own
+            elif key in builtin.coordinate_kwargs or key in builtin.optional_coordinate_kwargs:
+                sibling = builtin.dimension_kwargs[0] if builtin.dimension_kwargs else 'over'
                 kwargs[key] = _resolve_coordinate_ref(
-                    value, node.kwargs.get('over'), ns, context, node.name, key, errors
+                    value, node.kwargs.get(sibling), ns, context, node.name, key, errors
                 )
             else:
                 kwargs[key] = _resolve_arith(value, ns, context, errors)
         return FunctionCallNode(node.name, args, kwargs)
+
+    if isinstance(node, KeywordNode):
+        errors.append(
+            f'{context}: {node.value!r} is a quoted keyword, which is only legal as a '
+            f"helper kwarg value such as shift(..., edge='wrap'). In an expression, quote "
+            f'nothing — names resolve and numbers are written bare.'
+        )
+        return node
 
     assert_never(node)
 
@@ -265,12 +304,26 @@ def _resolve_edge(
     A bare name here is never a model name — the one keyword is closed, so an
     unrecognised name is a typo rather than a lookup. That is why this does not
     take a namespace: nothing in it could make ``edge=usual`` mean anything.
+    Even so, the keyword must be written quoted: a bare ``edge=wrap`` would
+    make ``over=wrap`` and ``edge='wrap'`` the same token meaning two things
+    in one call, and quoting is what the language uses to say "literal, not a
+    name" (SPEC §6.1).
     """
     if isinstance(value, EdgeNode):
         return value
+    if isinstance(value, KeywordNode):
+        if value.value == EDGE_WRAP:
+            return EdgeNode(EDGE_WRAP)
+        errors.append(f'{context}: {edge_error(helper, repr(value.value))}')
+        return value
     if isinstance(value, NameNode):
         if value.name == EDGE_WRAP:
-            return EdgeNode(EDGE_WRAP)
+            errors.append(
+                f'{context}: {helper}(edge={EDGE_WRAP}) is a bare name where a keyword belongs. '
+                f"Write edge='{EDGE_WRAP}' — quoted, because a bare word in a kwarg value is a "
+                f'name to resolve and this one is a literal.'
+            )
+            return value
         errors.append(f'{context}: {edge_error(helper, value.name)}')
         return value
     return value
@@ -305,7 +358,13 @@ def _resolve_coordinate_ref(
     key: str,
     errors: list[str],
 ) -> ArithmeticNode:
-    """Resolve a helper kwarg naming a coordinate on the sibling ``over=`` dim."""
+    """Resolve a helper kwarg naming a coordinate on the sibling dimension kwarg.
+
+    A coordinate is scoped to that sibling — ``over=`` where the helper
+    consumes the dim, ``onto=`` where it produces it — so the caller reads
+    the sibling kwarg and passes it in rather than this resolving the
+    coordinate on its own.
+    """
     if isinstance(value, CoordinateNode):
         return value
     if not isinstance(value, (NameNode, DimensionNode)):
@@ -318,6 +377,18 @@ def _resolve_coordinate_ref(
         )
         return value
     declared = ns.coordinates.get(over.name, {})
+    if value.name in ns.labels.get(over.name, ()):
+        errors.append(
+            f'{context}: {helper}(over={over.name}, {key}={value.name}): '
+            f"'{value.name}' is a label on '{over.name}', not a groupable coordinate — "
+            f'it targets no dimension for the terms to land on. To group into it, '
+            f'declare the axis and target it:\n'
+            f'  dimensions:\n'
+            f'    {value.name}: {{...}}\n'
+            f'    {over.name}:\n'
+            f'      coords: {{{value.name}: {value.name}}}'
+        )
+        return value
     if value.name not in declared:
         listing = (
             f'  Coordinates on {over.name}: {sorted(declared)}'
@@ -358,6 +429,77 @@ def resolve_where(
     return None if len(errors) > before else resolved
 
 
+#: An ISO literal carrying a time-of-day, which decides date vs datetime.
+_HAS_TIME = re.compile(r'[T ]\d')
+
+
+def _typed_literal(
+    node: UnresolvedComparisonNode,
+    dtype: str | None,
+    context: str,
+    errors: list[str],
+) -> float | str | datetime.date | None:
+    """The comparison's literal, checked against the declared dtype.
+
+    A where comparison is the one place a literal meets a declared type, and
+    getting it wrong is **silent**: polars compares a datetime column against an
+    integer as an offset from the epoch, so ``snapshot > 0`` quietly means
+    *"after 1970-01-01"* and drops every earlier coordinate. Row absence is the
+    structural zero, so the model then solves a smaller problem without a word
+    (#460). This is the guard ``_check_dimension_values`` already applies to a
+    dimension's declared ``values:``, one construct over.
+
+    Returns ``None`` when it has recorded an error, so the caller leaves the
+    node unresolved rather than lowering something it could not type.
+
+    ``dtype`` is ``None`` for a namespace built by hand, which accepts any
+    literal. A parameter's declared dtype is one of ``float``/``int``/
+    ``bool``/``str`` and never ``datetime`` (``_DTYPE_TYPES``), so only a
+    dimension comparison can receive a ``datetime.date`` from here.
+    """
+    if dtype is None:
+        return node.value
+    value = node.value
+    text = isinstance(value, str)
+
+    if dtype == 'datetime':
+        if not text:
+            errors.append(
+                f"{context}: '{node.name}' is a datetime dimension, so comparing it to "
+                f'{value!r} compares against the epoch — {node.name} > 0 means "after '
+                f'1970-01-01", not what it looks like. Quote an ISO date instead: '
+                f"{node.name} {node.op} '2030-01-01'."
+            )
+            return None
+        try:
+            return (
+                datetime.datetime.fromisoformat(str(value))
+                if _HAS_TIME.search(str(value))
+                else datetime.date.fromisoformat(str(value))
+            )
+        except ValueError:
+            errors.append(
+                f"{context}: '{node.name}' is a datetime dimension and {value!r} is not an "
+                f"ISO date. Write '2030-01-01' or '2030-01-01T06:00'."
+            )
+            return None
+
+    if dtype == 'str' and not text:
+        errors.append(
+            f"{context}: '{node.name}' has dtype 'str', so comparing it to the number "
+            f'{value!r} matches no label. Quote it if it is one: {node.name} {node.op} '
+            f"'{value:g}'."
+        )
+        return None
+    if dtype in ('int', 'float', 'bool') and text:
+        errors.append(
+            f"{context}: '{node.name}' has dtype '{dtype}', so comparing it to the string "
+            f'{value!r} matches nothing. Drop the quotes if it is a number.'
+        )
+        return None
+    return value
+
+
 def _declared_rhs_error(context: str, node: UnresolvedComparisonNode, value: str, kind: str) -> str:
     """Why the right-hand side of a where-comparison may not name a declaration.
 
@@ -391,7 +533,7 @@ def _resolve_where(
         return node
 
     if isinstance(node, (ParameterComparisonNode, DimensionComparisonNode, ParameterDefinedNode, VariableDefinedNode)):
-        return node  # already resolved
+        return node
 
     if isinstance(node, UnresolvedNameNode):
         match ns.kind(node.name):
@@ -419,14 +561,20 @@ def _resolve_where(
 
     if isinstance(node, UnresolvedComparisonNode):
         value = node.value
-        # The grammar has no string quoting, so a bare-name RHS is ambiguous;
-        # resolving it like any other name keeps the meaning declaration-independent.
-        if isinstance(value, str) and (rhs_kind := ns.kind(value)) is not None:
+        if not node.quoted and isinstance(value, str) and (rhs_kind := ns.kind(value)) is not None:
             errors.append(_declared_rhs_error(context, node, value, rhs_kind))
             return node
 
-        match ns.kind(node.name):
+        kind = ns.kind(node.name)
+        if kind in ('parameter', 'dimension'):
+            typed = _typed_literal(node, ns.dtypes.get(node.name), context, errors)
+            if typed is None:
+                return node
+            value = typed
+
+        match kind:
             case 'parameter':
+                assert not isinstance(value, datetime.date)
                 return ParameterComparisonNode(node.name, node.op, value)
             case 'dimension':
                 return DimensionComparisonNode(node.name, node.op, value)

@@ -117,7 +117,7 @@ def test_a_where_lands_on_the_quantifier_not_in_the_equation(fmt: Format):
 
 @EVERY_FORMAT
 def test_translation_distinguishes_a_wrapping_edge_from_a_dropping_one(fmt: Format):
-    """``edge=wrap`` wraps and a bare shift does not — one symbol each, since a
+    """``edge='wrap'`` wraps and a bare shift does not — one symbol each, since a
     reader who cannot tell them apart cannot tell the two models apart either."""
 
     def storage(edge: str) -> dict[str, object]:
@@ -134,7 +134,7 @@ def test_translation_distinguishes_a_wrapping_edge_from_a_dropping_one(fmt: Form
         }
 
     cyclic = fmt.operators['cyclic_minus']
-    assert cyclic in typeset(storage(', edge=wrap'), fmt, legend=False)
+    assert cyclic in typeset(storage(", edge='wrap'"), fmt, legend=False)
     assert cyclic not in typeset(storage(''), fmt, legend=False)
 
 
@@ -144,7 +144,7 @@ def test_the_legend_explains_wraparound_only_when_it_is_used(fmt: Format):
         'dimensions': {'snapshot': {'dtype': 'int'}},
         'variables': {'soc': {'foreach': ['snapshot'], 'bounds': {'lower': 0}}},
         'constraints': {
-            'b': {'foreach': ['snapshot'], 'expression': 'soc == shift(soc, over=snapshot, by=1, edge=wrap)'}
+            'b': {'foreach': ['snapshot'], 'expression': "soc == shift(soc, over=snapshot, by=1, edge='wrap')"}
         },
     }
     assert 'cyclic translation' in typeset(rolled, fmt)
@@ -270,7 +270,7 @@ def test_latex_binary_and_integer_variables_state_their_domain():
     assert r'\in \mathbb{Z}' in tex
 
 
-def test_latex_group_sum_renders_the_coordinate_map_as_a_set_condition():
+def test_latex_sum_renders_the_coordinate_map_as_a_set_condition():
     tex = to_latex('examples/transport.yaml', legend=False)
     assert r'\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g}' in tex
     assert r'\sum_{l \in \mathcal{L} \,:\, \mathrm{to}(l) = b} f_{t,l}' in tex
@@ -318,7 +318,7 @@ def test_typst_uses_its_own_grouping_and_set_notation():
     assert 'italic("load")_(t)' in typ
 
 
-def test_typst_group_sum_renders_the_coordinate_map():
+def test_typst_sum_renders_the_coordinate_map():
     typ = to_typst('examples/transport.yaml', legend=False)
     assert 'sum_(g in cal(G) colon upright("bus")(g) = b) p_(t,g)' in typ
 
@@ -384,12 +384,20 @@ GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'models'
 #: Pages whose hand-written summary states the **model's** math. The notation a
 #: gallery reader expects is the spec and `typeset/` is what is under test — so
 #: every symbol the summary uses, the generator has to be able to reach.
-REPRODUCIBLE = ('dispatch', 'transport')
+REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 
 #: Pages whose summary deliberately says something *else*, each with its reason.
 #: Declared rather than assumed: `test_every_summary_declares_itself` fails on a
 #: page in neither list, so a new summary cannot quietly opt out of the check.
 DIVERGENT = {
+    'multi_period': (
+        "renders the objective as one sum over the union of both terms' dims. The "
+        'capex term carries (period, generator) and the operating term carries '
+        '(snapshot, generator), and the engine sums each over its own dims — so the '
+        'rendered sum over t as well would multiply capex by the snapshots per '
+        'period. Reproducing it would need the generator to split an additive '
+        'objective into one sum per term.'
+    ),
     'storage': (
         'writes soc_{s-1}, ordinary index arithmetic. The model rolls, and a roll '
         'wraps — which the generator writes as the cyclic ⊖. Matching would mean '
@@ -441,7 +449,7 @@ def _summary(stem: str) -> str:
         )
         page = page[:begin] + page[end:]
     # `$$` blocks only. The prose and the YAML fence around them are full of
-    # identifiers like `p_max` and `group_sum`, which read as subscripts.
+    # identifiers like `p_max` and `sum`, which read as subscripts.
     return '\n'.join(page.split('$$')[1::2])
 
 

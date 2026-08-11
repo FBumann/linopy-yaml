@@ -14,16 +14,19 @@ import numpy as np
 import pytest
 
 from lpspec.errors import DataError, DimensionError, LanguageError
+from lpspec.language.model import Model
 from lpspec.language.resolution import Namespace
-from lpspec.language.schema import MathSchema
 from lpspec.lowering import _lower_expr, _lower_where, lower_program
 from lpspec.relational.plan import (
+    At,
     DimensionComparison,
+    Divide,
     Parameter,
     ParameterComparison,
     ParameterDefined,
     Sum,
     Variable,
+    divisor_parameters,
 )
 from lpspec.sources import tidy_sources
 from tests.conftest import resolved, schema_of
@@ -33,7 +36,7 @@ DISPATCH_YAML = Path('examples/dispatch.yaml')
 
 
 @pytest.fixture
-def dispatch_schema() -> MathSchema:
+def dispatch_schema() -> Model:
     return schema_of(DISPATCH_YAML)
 
 
@@ -152,7 +155,7 @@ def _tidy_cap(names):
     index = pd.MultiIndex.from_tuples(list(CAPS), names=names)
     # tidy_sources normalises to a frame, so read the columns back by name —
     # which is the point: a transposition would show up as swapped values
-    frame = tidy_sources(MathSchema(**NETWORK), {'cap': pd.Series(list(CAPS.values()), index=index)})['cap'].collect()
+    frame = tidy_sources(Model(**NETWORK), {'cap': pd.Series(list(CAPS.values()), index=index)})['cap'].collect()
     table = frame.to_dict(as_series=False)
     return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
 
@@ -174,3 +177,22 @@ def test_an_unnamed_index_still_binds_positionally():
 def test_an_index_name_outside_the_declared_dims_is_an_error():
     with pytest.raises(DataError, match='do not match its declared dims'):
         _tidy_cap(['banana', 'to_bus'])
+
+
+def test_a_divisor_under_a_pullback_is_still_named():
+    """`children` has to descend through every node, or a refusal loses its name.
+
+    `divisor_parameters` is what turns "a coefficient came out null" into a
+    message naming the parameter the caller has to fix, and it finds those names
+    by walking `children`. `At` was missing from that walk, so a quotient inside
+    `at(...)` reported an uncovered divisor with an empty list where the name
+    belongs — the refusal still fired, and stopped saying what to do about it.
+
+    Asked of the walk directly rather than through a build: the walk is static,
+    and a test that needed data to reach it would be testing the assembly.
+    """
+    quotient = Divide(Variable('x'), Parameter('rate'))
+    pulled = At(quotient, over='flow', coordinate='component', into='component')
+
+    assert divisor_parameters(pulled) == frozenset({'rate'})
+    assert divisor_parameters(Sum(pulled, ('flow',))) == frozenset({'rate'})
