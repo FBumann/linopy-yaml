@@ -7,7 +7,7 @@ a :class:`~lpspec.relational.plan.Program`. It lives on the language side —
 the engine subpackage stays free of YAML knowledge, and this module never
 imports the eager builder.
 
-Covered: foreach, where, arithmetic (+ - * /), sum, sum, shift,
+Covered: foreach, where, arithmetic (+ - * /), sum, at, shift,
 comparison, and binary/integer variables (variable_type). Constructs with no
 lowering raise :class:`~lpspec.errors.LanguageError` naming
 the construct and its rewrite — never a pointer to another backend: the two
@@ -305,10 +305,10 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
     """The number an ``edge=`` names, or ``None`` for the absence default.
 
     One kwarg, three policies: ``edge='wrap'`` is cyclic and vacates nothing —
-    the caller sends it straight to the plan and never here, so the pair that
-    used to contradict each other, a cyclic call also asking for a fill, is
-    unrepresentable rather than refused. A number is the value the vacated
-    slots contribute, and an absent ``edge=`` leaves them absent.
+    the caller sends it straight to the plan and never here, which makes a
+    cyclic call that also asks for a fill unrepresentable rather than refused.
+    A number is the value the vacated slots contribute, and an absent ``edge=``
+    leaves them absent.
 
     **The right fill is positional**, which is linopy v1's own reason for
     refusing to pick one (``convention.rst`` §7): 0 is the identity of a sum and
@@ -349,8 +349,8 @@ def _shift_over_data_message(context: str) -> str:
     but `edge=0` alone leaves a row at the vacated coordinate whose bound is
     that zero, which is the silent pinning this refusal exists to prevent. The
     row is omitted only by masking it, and the mask is only reachable once the
-    expression is well-formed. Listing the two as alternatives sent a reader to
-    whichever they read first, and both are wrong on their own.
+    expression is well-formed. Either one alone is wrong, so the message says
+    so rather than listing them as alternatives.
     """
     return (
         f'{context}: shift() over a variable-free expression leaves vacated positions with no '
@@ -489,13 +489,6 @@ def _produced_axes(e: plan.Expression) -> set[str]:
         out.add(e.into)
     if isinstance(e, plan.At):
         out.add(e.over)
-    children: tuple[plan.Expression, ...] = ()
-    if isinstance(e, (plan.Negate, plan.Sum, plan.GroupSum, plan.At, plan.Translate)):
-        children = (e.operand,)
-    elif isinstance(e, (plan.Add, plan.Multiply)):
-        children = (e.left, e.right)
-    elif isinstance(e, plan.Divide):
-        children = (e.numerator, e.divisor)
-    for child in children:
+    for child in plan.children(e):
         out |= _produced_axes(child)
     return out

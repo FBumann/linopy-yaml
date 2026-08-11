@@ -109,8 +109,8 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
 def check_coordinates_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -> None:
     """One label, one coordinate value — two rows disagreeing is a data bug.
 
-    It names *every* offending coordinate: the per-coordinate loop this replaced
-    raised on the first and left the rest to be found one build at a time.
+    It names *every* offending coordinate in one pass, rather than raising on
+    the first and leaving the rest to be found one build at a time.
     """
     if not names:
         return

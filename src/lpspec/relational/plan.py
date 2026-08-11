@@ -121,18 +121,10 @@ class Divide(Expression):
 
 @dataclass(frozen=True)
 class Sum(Expression):
-    """Sum ``operand`` over the named dims, removing them from the result.
-
-    A bare string for ``over`` is tolerated and wrapped into a one-tuple, so
-    ``Sum(operand, "generator")`` means the single dim rather than its letters.
-    """
+    """Sum ``operand`` over the named dims, removing them from the result."""
 
     operand: Expression
     over: tuple[str, ...]
-
-    def __post_init__(self) -> None:
-        if isinstance(self.over, str):
-            object.__setattr__(self, 'over', (self.over,))
 
 
 @dataclass(frozen=True)
@@ -202,9 +194,9 @@ class Translate(Expression):
 def children(expression: Expression) -> tuple[Expression, ...]:
     """The sub-expressions of *expression* — the structural half of any walk.
 
-    Both halves of :func:`divisor_parameters` recurse over this tree and differ
-    only in what they do at the leaves. Enumerating the children once is how a
-    node added later reaches both of them rather than one.
+    Every walk over a plan expression recurses through here and differs only in
+    what it does at the leaves. Enumerating the children once is how a node
+    added later reaches all of them rather than one.
     """
     if isinstance(expression, Negate):
         return (expression.operand,)
@@ -431,20 +423,11 @@ def divisor_parameters(*expressions: Expression) -> frozenset[str]:
     keeps the coverage check off parameters that can never need it, and off the
     coordinates a ``where`` already removed.
     """
-
     found: set[str] = set()
 
-    def names(e: Expression) -> None:
-        """Every parameter under *e*, wherever it sits."""
-        if isinstance(e, Parameter):
-            found.add(e.name)
-        for child in children(e):
-            names(child)
-
     def walk(e: Expression) -> None:
-        """Every divisor under *e*, whose parameters are the answer."""
         if isinstance(e, Divide):
-            names(e.divisor)
+            found.update(parameters_of(e.divisor))
         for child in children(e):
             walk(child)
 

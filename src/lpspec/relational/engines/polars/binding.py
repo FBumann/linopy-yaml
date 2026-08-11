@@ -115,13 +115,19 @@ class _Binder:
 
         if p.name not in self.sources:
             raise DataError(f"no source bound for parameter '{p.name}'")
-        frame = self._source_frame(p.name, self.sources[p.name])
+        frame = self._read(
+            self.sources[p.name],
+            f"source for parameter '{p.name}' must be a parquet path or a table polars can "
+            f'read — polars, pyarrow, pandas (got {type(self.sources[p.name]).__name__})',
+        )
         wanted = [*p.dims, 'value']
-        missing = set(wanted) - set(frame.collect_schema().names())
+        available = frame.collect_schema().names()
+        missing = set(wanted) - set(available)
         if missing:
             raise DataError(
                 f"source for parameter '{p.name}' is missing columns {sorted(missing)} "
-                f"(need dims {list(p.dims)} plus 'value')"
+                f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
+                f'the declared dims, or drop the index names to bind positionally.'
             )
         frame = frame.select(wanted).collect(engine='streaming').lazy()
         data_validation.check_one_row_per_coordinate(p, frame, self.dimensions)
@@ -130,16 +136,20 @@ class _Binder:
             self.boolean.add(p.name)
         self.parameters[p.name] = frame
 
-    def _source_frame(self, name: str, source: Any) -> pl.LazyFrame:
+    def _read(self, source: Any, unreadable: str) -> pl.LazyFrame:
+        """A caller's source as a lazy frame, or *unreadable* as a data error.
+
+        The one place a path is told from a table: a path is scanned, so the
+        engine reads it directly, and anything else has to be table-shaped.
+        The message is the caller's because what the source was *for* — a
+        parameter, a dimension's index — is what makes it actionable.
+        """
         if isinstance(source, (str, Path)):
             return pl.scan_parquet(source)
         frame = as_frame(source)
-        if frame is not None:
-            return frame
-        raise DataError(
-            f"source for '{name}' must be a parquet path or a table polars can "
-            f'read — polars, pyarrow, pandas (got {type(source).__name__})'
-        )
+        if frame is None:
+            raise DataError(unreadable)
+        return frame
 
     # -- dimensions --------------------------------------------------------
 
@@ -206,15 +216,11 @@ class _Binder:
         check and the grouping below both read that one collect instead.
         """
 
-        if isinstance(source, (str, Path)):
-            frame = pl.scan_parquet(source)
-        else:
-            frame = as_frame(source)
-            if frame is None:
-                raise DataError(
-                    f"explicit index for dimension '{d}' must be a table polars can read "
-                    f"with a '{d}' column, or a parquet path"
-                )
+        frame = self._read(
+            source,
+            f"explicit index for dimension '{d}' must be a table polars can read "
+            f"with a '{d}' column, or a parquet path",
+        )
         available = frame.collect_schema().names()
         if d not in available:
             raise DataError(

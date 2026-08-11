@@ -221,6 +221,20 @@ class ModelTables:
             yield lo, hi, self.matrix_block(lo, hi)
 
 
+def solver_vector(values: Any) -> pl.Series:
+    """One quantity a solver produced, in its own index — every sink's read-back.
+
+    Carried as a series rather than a ``(label, value)`` frame because the label
+    would be the position: the read-back takes a declaration's share by slicing,
+    so an index column beside it is an ``arange`` nothing reads — 8 bytes a
+    column, for as long as the result is held. The same argument took ``col``
+    off ``cols`` (#433); this is its other half.
+    """
+    import numpy as np
+
+    return pl.Series('value', np.asarray(values, dtype=np.float64))
+
+
 def _scattered(count: int, at: Any, values: Any, absent: Any) -> Any:
     """*values* written at the label each one belongs to, *absent* elsewhere."""
     import numpy as np

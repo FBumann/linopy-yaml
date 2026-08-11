@@ -178,10 +178,9 @@ class PolarsExecutor:
         and usually repeats nothing (a cell repeats only when one variable
         reaches a row twice), so the sort and the aggregate run only when a
         probe says they would change something. At 10M entries they cost 5 ms
-        where the unconditional hash aggregate costs 325 ms. The answer is
-        read off the data rather than reasoned from the declarations — the
-        static machinery that made this call is what #520 removed, and
-        nothing here has to know *why* a cell repeats.
+        where the unconditional hash aggregate costs 325 ms. The answer is read
+        off the data rather than reasoned from the declarations, so nothing
+        here has to know *why* a cell repeats (#520).
 
         **That 5 ms is why the share is rechunked first.** A streaming collect
         returns its morsels as chunks — 104 of them for `dispatch/l`'s share —
@@ -257,10 +256,9 @@ class PolarsExecutor:
         Duplicates from ``Sum`` and ``GroupSum`` — which project rather than
         aggregate — and from ``x + 2 * x`` collapse in the terminal
         ``SUM(coeff) GROUP BY row, col`` of :meth:`_matrix_share`, which runs
-        only when a linear probe over the stacked share finds a repeated
-        cell. Whether a *particular* constraint could repeat one used to be
-        reasoned statically from how each fragment was reshaped; the answer
-        is read off the data instead, which is what #520 removed.
+        only when a linear probe over the stacked share finds a repeated cell.
+        Whether a *particular* constraint could repeat one is read off the data
+        rather than reasoned from how its fragments were reshaped (#520).
 
         The share leaves ordered by ``(row, col)``, which every sink reads it
         as: a row range at a time, entries ascending within the row.
@@ -351,9 +349,8 @@ class PolarsExecutor:
         A row with no variables is not a constraint — it asserts something about
         constants, which the solver cannot act on. Three different provenances
         reach that shape (an absent variable, an empty reduction, a missing
-        coefficient) and the language used to answer them differently, so the
-        same row meant different things depending on how it emptied. This is the
-        rule at the level the property lives at.
+        coefficient) and all three drop the row, so the rule is stated at the
+        level the property lives at rather than once per provenance.
 
         Labels are dense, and the dual read-back reads a block by position, so a
         dropped row cannot leave a gap: the survivors are renumbered from
@@ -390,16 +387,15 @@ class PolarsExecutor:
         The aggregate runs only when a column actually repeats, and the probe
         is the ``n_unique`` hash count — the *only* sound probe here, because
         the stack arrives unordered and adjacency then proves nothing. Buying
-        order to probe linearly was tried and is a dead end, twice over: the
-        mul join's ``maintain_order`` held the label order on some shapes and
-        lost it on others that differ only in data (`dispatch/l` kept it,
-        `nodal` and `profiled` did not — all three the same lone masked
+        order to probe linearly instead is a dead end, twice over: the mul
+        join's ``maintain_order`` holds the label order on some shapes and
+        loses it on others that differ only in data (`dispatch/l` keeps it,
+        `nodal` and `profiled` do not — all three the same lone masked
         ``p * cost``), so no static gate can say when the tax will pay; and
-        where it was paid for nothing, the objective phase tripled
-        (`profiled/l` 40 → 147 ms) while the best case had shrunk to a wash
-        (69 + 6 ordered against 32 + 42 plain). ``obj`` carries no order
-        contract anyway — the writer sorts it and the solver hand-off
-        scatters it.
+        paid for nothing it triples the objective phase (`profiled/l` 40 →
+        147 ms) against a best case that is a wash (69 + 6 ordered against
+        32 + 42 plain). ``obj`` carries no order contract anyway — the writer
+        sorts it and the solver hand-off scatters it.
         """
 
         comp = self._q.expression(o.expression, 'objective')
@@ -709,7 +705,7 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str
 
     *Having* no dims is not *having nothing to restrict*: a masked scalar
     variable restricts every row of every constraint that names it, all or
-    nothing. Reading the empty dims as "skip" is what let one through silently.
+    nothing, so empty dims may not be read as "skip".
 
     Each restriction is keyed by ``presence_dims`` where the fragment states
     them — narrower than ``dims`` for an acyclic shift, whose vacated edge

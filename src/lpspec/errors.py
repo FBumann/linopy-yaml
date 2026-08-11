@@ -18,9 +18,8 @@ so a caller who catches the built-in still catches these.
 ``model.py``'s field validators raise plain ``ValueError``, because pydantic
 collects those into its own ``ValidationError`` and a custom class does not
 survive the trip. :func:`schema_error` turns one back into a
-:class:`SchemaError` at the API boundary, so a caller sees one tree rather than
-two — the class was always named for exactly that case ("unknown key, bad
-dtype") and simply was not wired to it.
+:class:`SchemaError` at the API boundary, so a caller sees one tree rather
+than two.
 
 Deliberately dependency-free: the relational engine imports this module and
 nothing else from the package (docs/ARCHITECTURE.md, hard rule 2).
@@ -192,10 +191,9 @@ def duplicate_coordinate_message(name: str, shown: str, dims: list[str]) -> str:
     """More than one value for one coordinate — one wording, both lanes.
 
     A parameter is a function of its dims, so two rows for one coordinate has
-    no answer the language could pick. Both lanes refuse; the eager one used to
-    let the duplicate reach xarray, which raised a bare `ValueError` from its
-    index machinery — the opaque exception with no pointer back to a
-    declaration that §9 exists to prevent (#351).
+    no answer the language could pick. Both lanes refuse before the duplicate
+    reaches xarray, whose own `ValueError` names neither the parameter nor the
+    repair — the opaque exception §9 exists to prevent (#351).
     """
     return (
         f"parameter '{name}' has more than one row for a coordinate: {shown}. "
