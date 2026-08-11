@@ -72,6 +72,14 @@ def frame(
     verifies that linearly and sorts only when the engine emitted another
     order. The unconditional sort this replaces was 0.26 s of a 0.73 s build
     at ``dispatch/l``, against ~0.01 s for the verify.
+
+    **Nothing renumbers unless a row was dropped, either.** Only a mask or a
+    restriction leaves gaps in the positions; with neither, every coordinate
+    survives, ``start + position`` *is* the label, and the row-index pass —
+    plus the position column it renumbers, materialised only to be dropped —
+    never exists. That pass was most of what an unmasked declaration paid
+    here over an arithmetic label, per declaration, mask or none (`fleet`
+    carries 19 of them per coordinate and no ``where`` at all).
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))
@@ -83,6 +91,16 @@ def frame(
     surviving = compiler.frame(dims, where)
     for on, presence in restrictions:
         surviving = restrict_by_presence(surviving, presence, on)
+
+    if where is None and not restrictions:
+        materialised = in_position_order(
+            surviving.select(
+                *(dims or (UNIT,)),
+                (pl.lit(start, dtype=pl.Int64) + _row_major(compiler, dims)).alias(label),
+            ).collect(engine='streaming'),
+            label,
+        ).select(*dims, pl.col(label).set_sorted())
+        return materialised, start + materialised.height
 
     position = '#position'
     materialised = in_position_order(
@@ -183,9 +201,10 @@ def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
     Horner over the declared ordinals — one multiply and one add per dim
     whatever the arity. With no dims the position is the literal zero: the
     empty product's one row. Dense over the *full* product, not the
-    survivors, which is why the caller renumbers with a row index rather
-    than reading this as the label: a mask leaves gaps, and a label may not
-    have any (a declaration's share of the solver vector is a slice).
+    survivors — so where a mask or restriction dropped rows the caller
+    renumbers with a row index, because a label may not have gaps (a
+    declaration's share of the solver vector is a slice), and where nothing
+    dropped any this *is* the label, offset by ``start``.
     """
     position: pl.Expr = pl.lit(0, dtype=pl.Int64)
     for d in dims:
