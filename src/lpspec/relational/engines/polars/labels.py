@@ -74,12 +74,10 @@ def frame(
     at ``dispatch/l``, against ~0.01 s for the verify.
 
     **Nothing renumbers unless a row was dropped, either.** Only a mask or a
-    restriction leaves gaps in the positions; with neither, every coordinate
-    survives, ``start + position`` *is* the label, and the row-index pass —
-    plus the position column it renumbers, materialised only to be dropped —
-    never exists. That pass was most of what an unmasked declaration paid
-    here over an arithmetic label, per declaration, mask or none (`fleet`
-    carries 19 of them per coordinate and no ``where`` at all).
+    restriction leaves gaps in the positions; with neither, ``start +
+    position`` *is* the label and the row-index pass never runs — ~3 ms per
+    unmasked declaration back on `fleet`, which carries 19 and no ``where``
+    at all.
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))
@@ -92,26 +90,18 @@ def frame(
     for on, presence in restrictions:
         surviving = restrict_by_presence(surviving, presence, on)
 
-    if where is None and not restrictions:
-        materialised = in_position_order(
-            surviving.select(
-                *(dims or (UNIT,)),
-                (pl.lit(start, dtype=pl.Int64) + _row_major(compiler, dims)).alias(label),
-            ).collect(engine='streaming'),
-            label,
-        ).select(*dims, pl.col(label).set_sorted())
-        return materialised, start + materialised.height
-
-    position = '#position'
+    dropped = where is not None or bool(restrictions)
+    numbering = _row_major(compiler, dims)
+    if not dropped:
+        numbering = pl.lit(start, dtype=pl.Int64) + numbering
+    position = '#position' if dropped else label
     materialised = in_position_order(
-        surviving.select(*(dims or (UNIT,)), _row_major(compiler, dims).alias(position)).collect(engine='streaming'),
+        surviving.select(*(dims or (UNIT,)), numbering.alias(position)).collect(engine='streaming'),
         position,
     )
-    materialised = (
-        materialised.with_row_index(label, offset=start)
-        .select(*dims, pl.col(label).cast(pl.Int64))
-        .with_columns(pl.col(label).set_sorted())
-    )
+    if dropped:
+        materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
+    materialised = materialised.select(*dims, pl.col(label).set_sorted())
     return materialised, start + materialised.height
 
 

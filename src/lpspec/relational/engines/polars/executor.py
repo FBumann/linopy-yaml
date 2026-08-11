@@ -412,12 +412,10 @@ class PolarsExecutor:
             (col < col.shift(1)).any().alias('#unordered'),
             (col == col.shift(1)).any().alias('#tied'),
         ).row(0)
-        if not unordered:
-            if not tied:
-                return stacked.with_columns(col.set_sorted())
-        elif stacked.get_column('col').n_unique() == stacked.height:
-            return stacked
-        return stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
+        repeated = tied if not unordered else stacked.get_column('col').n_unique() != stacked.height
+        if repeated:
+            return stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
+        return stacked if unordered else stacked.with_columns(col.set_sorted())
 
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the executor only supplies the frames

@@ -191,12 +191,11 @@ class PolarsCompiler:
             return out.filter(_falsy_if_null(condition))
         touched = predicate_dims(where, self.name_dims)
         on = tuple(d for d in dims if d in touched)
-        if not on or not touched <= set(dims) or len(on) == len(dims):
-            return carrier.filter(_falsy_if_null(condition))
-        keys = self._coordinate_product(on)
-        keyed, keyed_condition = self._predicate(keys, where, on)
-        surviving = keyed.filter(_falsy_if_null(keyed_condition)).select(*on)
-        return out.join(surviving, on=list(on), how='semi')
+        if on and len(on) < len(dims) and touched <= set(dims):
+            keyed, keyed_condition = self._predicate(self._coordinate_product(on), where, on)
+            surviving = keyed.filter(_falsy_if_null(keyed_condition)).select(*on)
+            return out.join(surviving, on=list(on), how='semi')
+        return carrier.filter(_falsy_if_null(condition))
 
     def _coordinate_product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dim tables: labels and ordinals, nothing else.
@@ -242,13 +241,8 @@ class PolarsCompiler:
 
         *how* is ``left`` for a bound, where a missing value is a fact the
         caller has to report rather than a row to drop. A mask that cannot be
-        satisfied without the value asks for ``inner`` — the rows a left join
-        keeps there are rows the filter then drops, so all the left join adds
-        is the width of the product they are dropped from
-        (:func:`_certain_parameters`). That width only exists on the direct
-        mask path: a full-width mask on `sector/m` recovered 3.5% of the
-        pipeline from this alone, where behind a semi-join's key product the
-        two strategies had nothing left to differ on.
+        satisfied without the value asks for ``inner`` — why that is safe, and
+        what it buys, is :meth:`_predicate`'s story.
 
         *maintain_order* is asked for only where the result is ordered by
         construction and something downstream reads it that way — the bounds,
@@ -499,6 +493,30 @@ class PolarsCompiler:
         decides speed, never correctness.
         """
 
+        def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
+            """``a * b``, with the variable-carrying side normalised to the left."""
+            if a.terms and b.terms:
+                raise LanguageError(f'nonlinear product in {context}: both factors contain variables')
+            if b.terms:
+                a, b = b, a
+            terms = tuple(_join_mul(t, c, is_term=True, keep_order=keep_order) for t in a.terms for c in b.consts)
+            consts = tuple(_join_mul(x, c, is_term=False, keep_order=keep_order) for x in a.consts for c in b.consts)
+            return CompiledExpression(terms, consts)
+
+        def quotient(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
+            """``a / b``, where *b* must be a single variable-free factor."""
+            if b.terms:
+                raise LanguageError(f'nonlinear quotient in {context}: the divisor contains variables')
+            if len(b.consts) != 1:
+                raise LanguageError(
+                    f'in {context}: a divisor must be a single Constant/Parameter factor, '
+                    f'not a sum — rewrite as multiplication by a precomputed parameter'
+                )
+            inv = b.consts[0]
+            terms = tuple(_join_mul(t, inv, is_term=True, divide=True, keep_order=keep_order) for t in a.terms)
+            consts = tuple(_join_mul(x, inv, is_term=False, divide=True, keep_order=keep_order) for x in a.consts)
+            return CompiledExpression(terms, consts)
+
         def ev(e: plan.Expression) -> CompiledExpression:
             if isinstance(e, plan.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
@@ -513,9 +531,9 @@ class PolarsCompiler:
                 a, b = ev(e.left), ev(e.right)
                 return CompiledExpression(a.terms + b.terms, a.consts + b.consts)
             if isinstance(e, plan.Multiply):
-                return self._product(ev(e.left), ev(e.right), context, keep_order=keep_order)
+                return product(ev(e.left), ev(e.right))
             if isinstance(e, plan.Divide):
-                return self._quotient(ev(e.numerator), ev(e.divisor), context, keep_order=keep_order)
+                return quotient(ev(e.numerator), ev(e.divisor))
             if isinstance(e, plan.Sum):
                 inner = _propagate_absence(ev(e.operand))
                 return _map_fragments(inner, lambda p: self._sum_fragment(p, e.over, context))
@@ -576,34 +594,6 @@ class PolarsCompiler:
         if dims:
             return frame.select(*dims)
         return frame.select(pl.col('var_label').alias(PRESENT))
-
-    def _product(
-        self, a: CompiledExpression, b: CompiledExpression, context: str, *, keep_order: bool
-    ) -> CompiledExpression:
-        """``a * b``, with the variable-carrying side normalised to the left."""
-        if a.terms and b.terms:
-            raise LanguageError(f'nonlinear product in {context}: both factors contain variables')
-        if b.terms:
-            a, b = b, a
-        terms = tuple(_join_mul(t, c, is_term=True, keep_order=keep_order) for t in a.terms for c in b.consts)
-        consts = tuple(_join_mul(x, c, is_term=False, keep_order=keep_order) for x in a.consts for c in b.consts)
-        return CompiledExpression(terms, consts)
-
-    def _quotient(
-        self, a: CompiledExpression, b: CompiledExpression, context: str, *, keep_order: bool
-    ) -> CompiledExpression:
-        """``a / b``, where *b* must be a single variable-free factor."""
-        if b.terms:
-            raise LanguageError(f'nonlinear quotient in {context}: the divisor contains variables')
-        if len(b.consts) != 1:
-            raise LanguageError(
-                f'in {context}: a divisor must be a single Constant/Parameter factor, '
-                f'not a sum — rewrite as multiplication by a precomputed parameter'
-            )
-        inv = b.consts[0]
-        terms = tuple(_join_mul(t, inv, is_term=True, divide=True, keep_order=keep_order) for t in a.terms)
-        consts = tuple(_join_mul(x, inv, is_term=False, divide=True, keep_order=keep_order) for x in a.consts)
-        return CompiledExpression(terms, consts)
 
     # ------------------------------------------------------------------
     # shape operators — one dim rewritten per fragment
