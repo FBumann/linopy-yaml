@@ -100,9 +100,12 @@ on:
   # instrument declines a trigger somebody else fires.
   workflow_dispatch:
 
+# `main` may not cancel: CodSpeed keeps one number per commit and reads a pull
+# request against its own merge base, so a dropped run is a hole the next PR
+# falls into. The cost is that a burst of N merges takes N metered runs.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   memory:
