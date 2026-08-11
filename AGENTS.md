@@ -117,34 +117,40 @@ through `git blame` in six months. Neither wants a log of your session.
 - **One issue, one PR.** Separable work is a stacked PR, not extra commits.
   Split rather than bundle.
 
-## Branch, worktree, and the other agents
+## Branch and worktree
 
-`main` moves several times a day, often while you work, and the git status in
-your prompt is a **snapshot from before you started** — once it read one branch
-while `HEAD` was a different, unmerged one, and a doc PR landed on top of
-somebody else's work.
+**Several agents work this repo at once, and that is fine — because each takes
+its own worktree.** A worktree is a full checkout with its own branch and its
+own working tree, so parallel sessions cannot see each other's edits, and the
+only place their work meets is a PR against `main`.
 
 ```bash
-git fetch origin && git branch --show-current
+git fetch origin
 git worktree add ../wt/<topic> -b <type>/<topic> origin/main
 ```
 
-- Branch from `origin/main`, not from the tree you are sitting in. One topic,
-  one worktree.
-- Verifying a claim about shipped behaviour? Verify it against `origin/main` —
-  the local tree may carry unmerged code that makes it true only here.
-- **Several sessions share this checkout.** Commit early rather than holding a
-  large working-tree diff; if files change under you, stop and say so instead of
-  untangling whose edit is whose; never push a branch you did not create, and
-  never while another agent is mid-run.
-- Before rebasing or reviving anything, `gh pr view` it — it may already be
-  merged, closed or superseded.
+- **One topic, one worktree, one branch, one PR.** Branch from `origin/main`,
+  not from whatever tree you were dropped into.
+- **The primary checkout is shared, so do not homestead in it.** Never switch
+  its branch, and never hold a large uncommitted diff there — a branch switch by
+  another session takes your changes with it. Uncertain? Make a worktree.
+- **Put the worktree outside the repo**, or run `pyrefly` on explicit files:
+  `.claude/worktrees/` is gitignored, and pyrefly silently skips gitignored
+  directories with **exit 0**, which reads as a pass. `ruff format --check` has
+  the mirror problem: run it on `.`, never on the changed `.py` files, because
+  it formats python inside markdown too.
+- **Remove the worktree when the PR merges.** `git worktree remove`, and prune
+  the branch.
+- **Benchmarks are the one thing that does not parallelise.** Another agent's
+  test run is a busy machine; take the measurement when the box is yours.
 
-**Two gates pass locally and fail in CI**, both from a worktree: `pyrefly check`
-silently skips gitignored directories and **exits 0** (use
-`uv run pyrefly check $(git ls-files 'src/**/*.py')`), and `ruff format --check`
-must run on `.`, never on the changed `.py` files — it formats python inside
-markdown, so a docs edit fails a gate every `.py` file passes.
+`main` moves several times a day, so the git status in your prompt is a
+**snapshot from before you started** — once it named one branch while `HEAD` was
+a different, unmerged one, and a doc PR landed on top of somebody else's work.
+Verifying a claim about shipped behaviour? Verify it against `origin/main`; the
+tree you are in may carry unmerged code that makes the claim true only there.
+And before rebasing or reviving anything, `gh pr view` it — it may already be
+merged, closed or superseded.
 
 ## Finishing
 
