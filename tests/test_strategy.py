@@ -271,12 +271,11 @@ def test_a_rolling_horizon_carries_state_across_the_seam():
 
 
 def test_overlapping_windows_advance_by_step_and_look_ahead_by_length():
-    """The carry index is the last *kept* row, not the last row of the window."""
     runs = lps.solve_over(
         WINDOW,
         horizon_sources(),
         lps.EachWindow('snapshot', length=6, step=3, into='t'),
-        carry={'soc_initial': ('soc', 2)},
+        carry={'soc_initial': ('soc', 2)},  # the last *kept* row, not the last row
     )
     assert runs.keys == [0, 3, 6, 9]
     assert runs.primal('soc').filter(pl.col('snapshot_start') == 9).height == 3, (
@@ -455,22 +454,19 @@ def test_a_myopic_pathway_carries_a_whole_vector_with_no_index():
 
 
 def test_a_carry_that_cannot_line_up_says_so_before_anything_solves():
-    """Every one of these is answerable from the two declarations alone.
-
-    Five ways a carry cannot line up, in order: collapsing two dimensions at
-    once where an index names a coordinate of one; dropping a dimension without
-    naming a coordinate of it; an index where the two sides already line up; a
-    parameter over more than the variable is; and a name neither side declares.
-    """
+    """Every one of these is answerable from the two declarations alone."""
     window = lps.EachWindow('snapshot', length=4, step=4, into='t')
 
+    # collapsing two dimensions at once: an index names a coordinate of one
     with pytest.raises(lps.LpspecError, match=r'would collapse .*at once') as raised:
         lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('p', 3)})
     assert "['t', 'generator']" in str(raised.value)
 
+    # dropping a dimension without naming a coordinate of it
     with pytest.raises(lps.LpspecError, match=r"drops 't' and so needs an index"):
         lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('soc', None)})
 
+    # an index where the two sides already line up
     with pytest.raises(lps.LpspecError, match='has nothing to index'):
         lps.solve_over(
             MYOPIC,
@@ -479,9 +475,11 @@ def test_a_carry_that_cannot_line_up_says_so_before_anything_solves():
             carry={'existing': ('total', 0)},
         )
 
+    # a parameter over more than the variable is
     with pytest.raises(lps.LpspecError, match='cannot line up'):
         lps.solve_over(WINDOW, horizon_sources(), window, carry={'p_max': ('soc', 3)})
 
+    # and a name neither side declares
     with pytest.raises(lps.LpspecError, match='does not declare'):
         lps.solve_over(WINDOW, horizon_sources(), window, carry={'soc_initial': ('nope', 3)})
 
@@ -552,16 +550,13 @@ class Inline:
     is what lets a dask ``Client`` or any other pool plug in **without this
     package shipping a transport**. If the driver ever reaches for something
     only a stdlib pool has, this is what stops compiling.
-
-    A pool reports a failure through the future rather than raising, which is
-    why ``submit`` catches everything.
     """
 
     def submit(self, fn, /, *args, **kwargs):
         future: Future = Future()
         try:
             future.set_result(fn(*args, **kwargs))
-        except BaseException as exc:
+        except BaseException as exc:  # a pool reports through the future, never raises
             future.set_exception(exc)
         return future
 
