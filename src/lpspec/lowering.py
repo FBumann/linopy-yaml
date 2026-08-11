@@ -134,7 +134,8 @@ def lower_program(schema: Model) -> plan.Program:
     )
 
     dimensions = tuple(
-        plan.DimensionDeclaration(dname, tuple(ddef.coords.items())) for dname, ddef in schema.dimensions.items()
+        plan.DimensionDeclaration(dname, tuple(ddef.targeted.items()), tuple(ddef.labels))
+        for dname, ddef in schema.dimensions.items()
     )
     return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions)
 
@@ -423,3 +424,78 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
         )
 
     assert_never(node)
+
+
+# ---------------------------------------------------------------------------
+# check-time advice
+# ---------------------------------------------------------------------------
+
+
+def advice(program: plan.Program) -> list[str]:
+    """Modeling advice ``check`` surfaces as warnings — never errors.
+
+    One rule today: **everything under ``dimensions:`` should be an axis** —
+    something is indexed by it, or an aggregation lands terms on it. A
+    declared dimension with neither is not part of the model's dimensionality;
+    it is either a label space wearing a dimension's clothes (say it inline on
+    the dimension that carries it, and the file reads as the model is) or dead
+    weight. Advice rather than an error because ``extend()`` legitimately
+    splits one model across files, and a base file's label space may become a
+    real axis in an extension this check never sees.
+    """
+    axes: set[str] = set()
+    for declaration in (*program.parameters, *program.variables, *program.constraints):
+        axes.update(declaration.dims)
+    expressions = [program.objective.expression]
+    expressions.extend(side for c in program.constraints for side in (c.lhs, c.rhs))
+    for e in expressions:
+        axes |= _produced_axes(e)
+
+    targeted = {target: (d.name, cname) for d in program.dimensions for cname, target in d.coordinates}
+    notes: list[str] = []
+    for d in program.dimensions:
+        if d.name in axes:
+            continue
+        if d.name in targeted:
+            owner, cname = targeted[d.name]
+            notes.append(
+                f"dimension '{d.name}' is never an axis: nothing is indexed by it and nothing "
+                f"aggregates into it — it only serves as the target of coordinate '{cname}' on "
+                f"'{owner}'. That is a label space, not a dimension of this model; declare it "
+                f'inline instead:\n'
+                f'  dimensions:\n'
+                f'    {owner}:\n'
+                f'      coords:\n'
+                f'        {cname}: {{dtype: str}}'
+            )
+        else:
+            notes.append(
+                f"dimension '{d.name}' is never used: nothing is indexed by it, nothing "
+                f'aggregates into it, and no coordinate targets it. Remove it — or keep it '
+                f'knowingly, if an extension file supplies the use.'
+            )
+    return notes
+
+
+def _produced_axes(e: plan.Expression) -> set[str]:
+    """The axes an expression *creates*, beyond what its declarations index.
+
+    ``group_by=`` lands terms on its target and ``at()`` spreads onto its fine
+    dimension, so both are axes even when no declaration is indexed by them —
+    an objective may group into a dimension and then implicitly sum it away.
+    """
+    out: set[str] = set()
+    if isinstance(e, plan.GroupSum):
+        out.add(e.into)
+    if isinstance(e, plan.At):
+        out.add(e.over)
+    children: tuple[plan.Expression, ...] = ()
+    if isinstance(e, (plan.Negate, plan.Sum, plan.GroupSum, plan.At, plan.Translate)):
+        children = (e.operand,)
+    elif isinstance(e, (plan.Add, plan.Multiply)):
+        children = (e.left, e.right)
+    elif isinstance(e, plan.Divide):
+        children = (e.numerator, e.divisor)
+    for child in children:
+        out |= _produced_axes(child)
+    return out

@@ -43,6 +43,7 @@ executor when one build should feed more than one sink:
 ```python
 ex = lps.build('model.yaml', sources)
 ex.write('model.lp')
+ex.omissions()  # rows a constraint declared but did not build, and why it matters
 result = ex.solve()
 ```
 

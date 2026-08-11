@@ -28,11 +28,13 @@ Example::
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from lpspec.errors import LpspecWarning
 from lpspec.language.validation import load_model
-from lpspec.lowering import lower_program
+from lpspec.lowering import advice, lower_program
 from lpspec.relational.engines.polars.executor import PolarsExecutor
 from lpspec.relational.sinks import solver, writer
 from lpspec.sources import tidy_sources
@@ -56,9 +58,16 @@ def check(model: str | Path | dict[str, Any] | Model) -> Model:
     verb for model repositories. Raises :class:`LanguageError` when the model
     uses a construct outside the streaming language, ``ValueError`` for
     schema/expression problems. Returns the validated schema.
+
+    Advice that stops short of an error — a declared dimension nothing uses as
+    an axis, say — is issued as :class:`~lpspec.errors.LpspecWarning`, here
+    and only here: ``check`` is the explicit gate, so the advice never costs a
+    build or a solve.
     """
     schema = load_model(model)
-    lower_program(schema)
+    program = lower_program(schema)
+    for note in advice(program):
+        warnings.warn(note, LpspecWarning, stacklevel=2)
     return schema
 
 

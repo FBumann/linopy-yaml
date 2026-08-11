@@ -86,6 +86,10 @@ def build_dim_coords(
     would otherwise be dropped by xarray's inner-join alignment, silently
     losing the term it carries. A null value passes the check: it means "this
     label belongs to no group" — row absence, not a typo.
+
+    Only a *targeted* coordinate is checked. An inline label coordinate
+    declares its own label space, so there is no dimension for its values to
+    be contained in and nothing the check could ask.
     """
     coords = coords or {}
     out: dict[str, dict[str, xr.DataArray]] = {}
@@ -114,7 +118,8 @@ def build_dim_coords(
         first = source.drop_duplicates(subset=[dim_name]).set_index(dim_name)
         counts = source.groupby(dim_name, sort=False)[sorted(dim_def.coords)].nunique()
         out[dim_name] = {}
-        for cname, target in dim_def.coords.items():
+        targeted = dim_def.targeted
+        for cname in dim_def.coords:
             if (counts[cname] > 1).any():
                 offending = sorted(counts.index[counts[cname] > 1].astype(str))[:5]
                 msg = (
@@ -124,17 +129,19 @@ def build_dim_coords(
                 )
                 raise DataError(msg)
             series = first[cname].reindex(labels)
-            known = set(master_coords[target])
-            unknown = sorted({str(v) for v in series if not pd.isna(v) and v not in known})[:5]
-            if unknown:
-                msg = (
-                    f"Dimension '{dim_name}' coordinate '{cname}' has value(s) that are "
-                    f"not '{target}' coordinates: {', '.join(unknown)}. Every value must "
-                    f"be a declared '{target}' label — otherwise "
-                    f'sum(over={dim_name}, group_by={cname}) drops those terms and the '
-                    f'model builds and solves without them.'
-                )
-                raise DataError(msg)
+            if cname in targeted:
+                target = targeted[cname]
+                known = set(master_coords[target])
+                unknown = sorted({str(v) for v in series if not pd.isna(v) and v not in known})[:5]
+                if unknown:
+                    msg = (
+                        f"Dimension '{dim_name}' coordinate '{cname}' has value(s) that are "
+                        f"not '{target}' coordinates: {', '.join(unknown)}. Every value must "
+                        f"be a declared '{target}' label — otherwise "
+                        f'sum(over={dim_name}, group_by={cname}) drops those terms and the '
+                        f'model builds and solves without them.'
+                    )
+                    raise DataError(msg)
             out[dim_name][cname] = xr.DataArray(
                 series.to_numpy(),
                 dims=[dim_name],

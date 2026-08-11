@@ -147,8 +147,7 @@ class _Binder:
         """Every dimension carrying its own index, before any parameter binds."""
         for d in sorted(self._declared_dims()):
             if d in self.sources:
-                coordinates = sorted(dict(self.program.dimension(d).coordinates))
-                self._register(d, self._explicit_frame(d, self.sources[d], coordinates))
+                self._register(d, self._explicit_frame(d, self.sources[d], self.program.dimension(d).carried))
 
     def remaining_dimensions(self) -> None:
         """Build every dimension's frame, then check its coordinates.
@@ -164,15 +163,15 @@ class _Binder:
         for d in sorted(dims):
             if d in self.dimensions:
                 continue
-            coordinates = dict(self.program.dimension(d).coordinates)
+            carried = self.program.dimension(d).carried
             if d in self.sources:
-                table = self._explicit_frame(d, self.sources[d], sorted(coordinates))
+                table = self._explicit_frame(d, self.sources[d], carried)
             else:
-                if coordinates:
+                if carried:
                     raise DataError(
-                        f"dimension '{d}' declares coordinates {sorted(coordinates)} but has "
+                        f"dimension '{d}' declares coordinates {carried} but has "
                         f"no index source. Pass one under key '{d}' (a parquet path or frame "
-                        f'carrying columns {[d, *sorted(coordinates)]}) — a coordinate cannot '
+                        f'carrying columns {[d, *carried]}) — a coordinate cannot '
                         f'be inferred from the parameters that happen to use the dimension.'
                     )
                 params = [p for p in self.program.parameters if d in p.dims]

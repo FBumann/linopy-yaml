@@ -96,30 +96,65 @@ be of the declared `dtype` — `values: [2024-01-01]` under the default
 `dtype: str` is a load error, because YAML resolved it to a date and a date
 does not join `'2024-01-01'` in the data.
 
-`coords` declares non-index coordinates the dimension's labels carry — a
-generator's bus, a line's endpoints, a snapshot's month — mapping each
-coordinate name to **the dimension its values are labels of**. Written as a
-list when the two names coincide, or as a mapping when they do not:
+**A dimension and a coordinate are different things, and the file keeps them
+apart.** A **dimension** is an axis of the model: something is indexed by it
+(`dims`, `foreach`) or an aggregation lands terms on it (`group_by=`, `at()`).
+A **coordinate** is a label a dimension's members carry — a generator's bus, a
+snapshot's period — structure, never data: it is not legal in a value position,
+and a *value* riding a dimension is what a parameter is. The block invariant
+follows: **everything under `dimensions:` is an axis.** If `b` is single-valued
+per `a`, `b` is a coordinate of `a`, not a dimension — a `foreach` product over
+functionally dependent dims cut back by a mask is the shape `coords` exists to
+replace. `check` warns about a declared dimension that is never an axis.
 
-```yaml
-dimensions:
-  bus: {dtype: str}
-  generator:
-    coords: [bus]  # same as {bus: bus}
-  line:
-    coords: {from: bus, to: bus}  # two coordinates onto one dimension
-```
+`coords` declares the labels, and the shape of each entry's value says which of
+two kinds it is:
 
-The target must be a declared dimension, must not be the dimension carrying the
-coordinate, and a coordinate must not be named after a *different* dimension. A
-coordinate is single-valued per label, and its non-null values are checked
-against the target once data is bound (§8) — the check that makes `sum(group_by=)`
-safe. A **partial** coordinate is legal: null says the label belongs to no group
-(a generator on no bus, a line with one open end) and `sum(group_by=)` places its
-terms nowhere, while an unknown *non-null* value is a typo and an error. A
-dimension declaring `coords` needs an index source carrying those columns; they
-are never inferred from the parameters that use the dimension, since inferring
-would let a mistyped label extend the label space instead of being rejected.
+- **A string names a target dimension — the groupable kind.** The coordinate's
+  values are labels of that dimension, which is what `sum(group_by=)` and
+  `at()` land terms on. Written as a list when the two names coincide, or as a
+  mapping when they do not:
+
+  ```yaml
+  dimensions:
+    bus: {dtype: str}
+    generator:
+      coords: [bus]  # same as {bus: bus}
+    line:
+      coords: {from: bus, to: bus}  # two coordinates onto one dimension
+  ```
+
+  The target must be a declared dimension, must not be the dimension carrying
+  the coordinate, and a coordinate must not be named after a *different*
+  dimension. Non-null values are checked against the target once data is bound
+  (§8) — the check that makes `sum(group_by=)` safe. A **partial** coordinate
+  is legal: null says the label belongs to no group (a generator on no bus, a
+  line with one open end) and `sum(group_by=)` places its terms nowhere, while
+  an unknown *non-null* value is a typo and an error.
+
+- **A mapping declares an inline label space — the selection-only kind.** It
+  owns its values, targets nothing, and puts no entry under `dimensions:`,
+  because a label space nothing aggregates into is not part of the model's
+  dimensionality:
+
+  ```yaml
+  dimensions:
+    snapshot:
+      dtype: int
+      coords:
+        period: {dtype: int}  # a label on snapshot — nothing else
+  ```
+
+  An inline coordinate's name joins the flat namespace (law 3). Grouping into
+  one is refused with the rewrite: declare the axis and target it
+  (`period: {...}` under `dimensions:`, `coords: {period: period}` on
+  `snapshot`) — a one-word promotion, made the day the model genuinely gains
+  the axis.
+
+Either kind is single-valued per label, and a dimension declaring `coords`
+needs an index source carrying those columns; they are never inferred from the
+parameters that use the dimension, since inferring would let a mistyped label
+extend the label space instead of being rejected.
 
 **`parameters`** — declared shape only; data binds by name at run time (§8).
 `dims` required (`[]` is a scalar); `dtype` ∈ {`float`, `int`, `bool`, `str`},
@@ -367,6 +402,19 @@ Three answers, and the language does not pick between them: **supply the rows**
 if the value is what was meant, **mask them out** if the row should not exist,
 or **drop the declaration** if the model has no such quantity — which is what a
 framework emitting a dict does (#217).
+
+### A row with no variable terms is not built
+
+Whatever emptied it. A masked variable takes the row with it (law 7), a
+reduction over an absent set contributes `0`, and a missing parameter row is a
+zero coefficient (law 8) — three ways to reach one shape, *a row asserting
+something about constants only*, and the shape decides, not the provenance.
+Such a row constrains nothing a solver can act on.
+
+It is **reported**, never silent: `omissions()` on the executor gives
+`(constraint, rows_not_built)`, empty for a model whose every declared row was
+built. A declared constraint that goes unenforced is a thing the caller has to
+be able to see.
 
 ### How absence travels
 
