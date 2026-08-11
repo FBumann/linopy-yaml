@@ -22,6 +22,43 @@ who keep re-learning it.
 **Reference pages carry rules, design notes carry arguments.** A change that
 makes one longer is usually a change that belongs in the other.
 
+## The standing brief
+
+This is the instruction that has had to be repeated most often, so it is
+standing: it applies to **every** ask of the shape *clean this up*, *simplify*,
+*review for DRY*, *make it readable* — without being restated, and to ordinary
+feature work as far as it reaches.
+
+**Cut lines. Reduce prose and duplication. Leave the codebase easier to
+navigate than you found it.** Apply YAGNI: delete the abstraction with one
+caller, the option nobody sets, the branch nothing reaches.
+
+- **Breaking changes are free.** The project is `0.0.1aN` and holds no
+  compatibility promise. Asked to change something, *change it* — rename, move,
+  delete. No alias, no deprecation cycle, no `legacy_` path beside the new one,
+  no back-compat nobody requested. Spend that effort on the error message
+  instead: a retired spelling should fail at load naming its rewrite.
+- **A test asserting the old behaviour is not a blocker.** If removing or
+  rewriting it makes the codebase simpler, do that, and say in the PR what
+  coverage moved where.
+- **No inline comments.** Complex logic becomes a helper whose docstring carries
+  the constraint. Measured numbers and issue refs move into that docstring —
+  deleting a comment must never delete a fact. What stays inline: pragmas
+  (`# pyrefly: ignore[…]` with its reason, `# fmt: skip`), `#:` attribute docs,
+  section dividers.
+- **Docstrings are informative but concise.** One that restates the signature,
+  or narrates the change that introduced it, is noise.
+- **Nothing transitive lives in the tree.** "Previously this used to…", "as of
+  the polars rewrite…", "renamed from…" belong in docs, the PR description, or
+  the commit message. Rationale for a *change* goes in the PR description —
+  that is what it is for, and where the user reads it.
+- **Timid diffs get sent back.** The expected output of a cleanup pass is fewer
+  lines and fewer concepts, not a defensive rename. If the cut turns out smaller
+  than it looked, say why in one line rather than padding it.
+
+The *surface* is unfrozen, not the behaviour. What exists is tested and
+differentially verified; a break is a deliberate rewrite, not licence for churn.
+
 ## Start from the base you claim to start from
 
 `main` moves several times a day, often while you are working. The git status in
@@ -102,35 +139,6 @@ Performance is a product claim here, so measurement discipline is not optional:
   tables and charts from the results file; a hand-typed figure outlives the run.
 - **Do not accept a number from the user either.** "My benchmarks are
   preliminary — check for yourself" is standing instruction.
-
-## Change it, do not wrap it
-
-The project is `0.0.1aN` and holds no compatibility promise. This is the habit
-most often imported from other repos, and it is wrong here in both directions:
-
-- Asked to change something, **change it** — rename, move, delete. No alias, no
-  deprecation cycle, no `legacy_` path beside the new one.
-- **A test asserting the old behaviour may be rewritten or deleted.** Do not let
-  one block a simplification; say in the PR what coverage moved where.
-- **Timid diffs get sent back.** Asked to simplify a subsystem, the expected
-  output is fewer lines and fewer concepts, not a defensive rename. If the
-  cleanup turns out smaller than it looked, say why in one line rather than
-  padding it.
-
-## The repo holds facts, not narration
-
-- **No explanatory inline comments.** Complex logic becomes a helper whose
-  docstring carries the constraint. Measured numbers and issue refs move into
-  that docstring — deleting a comment must never delete a fact. What stays
-  inline: pragmas (`# pyrefly: ignore[…]` with its reason, `# fmt: skip`), `#:`
-  attribute docs, section dividers.
-- **Docstrings are informative and short.** A docstring that restates the
-  signature, or narrates the change that introduced it, is noise.
-- **Nothing transitive.** "Previously this used to…", "as of the polars
-  rewrite…", "renamed from…" belong in the PR description or git, never in the
-  tree.
-- **Rationale for a change goes in the PR description.** That is what it is for,
-  and it is where the user reads it.
 
 ## Docs move with the change, or they contradict it
 
