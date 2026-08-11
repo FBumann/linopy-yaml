@@ -445,10 +445,7 @@ class PolarsCompiler:
             strides.insert(0, stride)
             stride *= card
         position = sum(
-            (
-                self._ordinal_of(d) * step
-                for d, step in zip(v.dims, strides, strict=True)
-            ),
+            (self._ordinal_of(d) * step for d, step in zip(v.dims, strides, strict=True)),
             start=pl.lit(0, dtype=pl.Int64),
         )
         pairs = table.select(position.alias('__at__'), pl.col('value')).collect(engine='streaming')
