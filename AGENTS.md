@@ -1,24 +1,23 @@
 # AGENTS.md
 
-Contribution rules and conventions for lpspec, for humans and agents alike.
-What the project is: [docs/](docs/README.md). Which command to run:
-[CONTRIBUTING.md](CONTRIBUTING.md).
+What an agent needs on top of [CONTRIBUTING.md](CONTRIBUTING.md) — pull setup,
+the test loop, what each CI gate means, adding a port and refreshing the
+benchmarks from there. What the project *is*: [docs/](docs/README.md).
 
 ## AI-assisted contributions
 
-Code is checked; a discussion is trusted. Three rules,
-[linopy's](https://github.com/PyPSA/linopy/blob/master/AGENTS.md):
+Code is checked; a discussion is trusted. Mark which is which —
+[linopy's rules](https://github.com/PyPSA/linopy/blob/master/AGENTS.md):
 
-1. **Mark generated content** at the top of the section it starts — a footer
-   does not count. Verbose evidence goes in `<details>`. Applies to PR bodies,
-   issues, and comments posted from a session. Never mix hand-written and
-   generated prose silently.
-2. **The human writes their own intent.** Quoting the ask verbatim is honest;
-   paraphrasing it into a first-person "I want this because…" is not. Missing
-   intent stays missing and is named.
+1. **Mark generated content** at the top of the section it starts, never in a
+   footer. Verbose evidence goes in `<details>`. Applies to PR bodies, issues
+   and comments posted from a session.
+2. **The intent line is the human's**, unless they ask you to write the whole
+   thing — then write it. Usually they add a few sentences at the top; quote the
+   ask verbatim rather than paraphrasing it into first-person motivation, and if
+   the slot is empty, leave it empty and say so.
 3. **Do not hold the conversation.** Post marked information — a log, a
-   benchmark, a diff. Do not reply, concede, agree or decide as someone else;
-   draft it for the human.
+   benchmark, a diff. Do not reply, concede, agree or decide as someone else.
 
 ```markdown
 Why this matters to me — the human's own line.
@@ -59,10 +58,6 @@ In the tree nothing is marked: `Co-Authored-By: Claude …` is the record.
 
   Kept inline: pragmas (`# pyrefly: ignore[…]` with its reason, `# fmt: skip`),
   `#:` attribute docs, section banners.
-- The engine imports **no linopy** — copy names and shapes, test the copy.
-  Validate at **load time**. **Fix the type, never widen it** (pyrefly strict).
-  Dependencies: polars, numpy, pyparsing, pydantic, pyyaml, highspy. The **git
-  tag is the version**.
 
 ## Docstrings
 
@@ -77,12 +72,9 @@ In the tree nothing is marked: `Co-Authored-By: Claude …` is the record.
 
 ## Commit messages and PR titles
 
-Squash merge, so the PR title is the commit subject and the changelog entry:
-`type(scope): subject`, types `feat fix perf refactor docs` (shown) and
-`chore test ci build style revert` (hidden). No `!`, no `BREAKING CHANGE:`.
-
 The subject names **the problem solved**. One line, scannable, no mechanism, no
-"why", no trailing clause.
+"why", no trailing clause. Conventional-commit form and the two forbidden
+markers: [CONTRIBUTING.md](CONTRIBUTING.md#branches-commits-prs).
 
 ```
 yes  fix(api): a closed result says it was closed
@@ -122,11 +114,12 @@ git worktree add ../wt/<topic> -b <type>/<topic> origin/main
 - Never switch the branch of the shared primary checkout, or park a large diff
   there.
 - Keep the worktree out of gitignored paths: `pyrefly` skips them and **exits
-  0**. Run `ruff format --check` on `.`, never on the changed `.py` files.
+  0**, which reads as a pass. From one:
+  `pyrefly check $(git ls-files 'src/**/*.py')`. Run `ruff format --check` on
+  `.`, never on the changed `.py` files — it formats python inside markdown too.
 - `git worktree remove` when the PR merges.
 - Verify claims about shipped behaviour against `origin/main`. `gh pr view`
   before rebasing or reviving anything.
-- Benchmarks do not parallelise.
 
 ## Finishing
 
@@ -135,10 +128,13 @@ merge, force-push, or delete a branch you did not create.
 
 ## Measurements
 
-- Idle machine.
+Method and commands: [CONTRIBUTING.md](CONTRIBUTING.md#refreshing-the-benchmarks).
+On top of it:
+
+- Idle machine — benchmarks do not share the box with another agent's test run,
+  and do not parallelise.
 - A/B against the same base; re-run when the ranking could flip. Noise is the
   default explanation for a small delta.
-- Never retype a number — `bench.report` and `bench.plot` regenerate them.
 - Check the user's numbers too.
 
 ## Docs
@@ -149,22 +145,19 @@ merge, force-push, or delete a branch you did not create.
 - Reference pages carry rules, design notes carry arguments.
 - After a decision in conversation, sweep for what now contradicts it — stale
   rationale included.
-- Inside `docs/` link relatively; outside it, the full GitHub URL.
 
 ## Issues
 
-- File against **behaviour and a file**, never a symbol and a line range, and
-  **label them**.
-- A body invalidated by a rewrite: close and re-file. Checklists and scope
-  decisions stay open with a status comment.
-- Findings, issue bodies and your own earlier analysis are **claims to check**:
-  re-read the code, fix what is still valid, name what you skipped.
+Filing conventions and labels: [CONTRIBUTING.md](CONTRIBUTING.md#filing-issues).
+On top of them: findings, issue bodies and your own earlier analysis are
+**claims to check** — re-read the code, fix what is still valid, name what you
+skipped. A body invalidated by a rewrite is closed and re-filed, not annotated.
 
 ## Working with the user
 
 - **"Discuss", "should we", "is it worth" are questions.** Answer, then stop.
 - **Do not widen scope.** Name the adjacent thing in a sentence instead.
 - **Recommend, do not survey.**
-- **A language feature is triaged first: macro, primitive, or escape.** The
-  ceiling is degree 1 ∩ relational ∩ local; read the deliberate non-primitives
-  in [ceiling.md](docs/design/ceiling.md) first.
+- **A language feature is triaged first: macro, primitive, or escape** — the
+  ceiling is degree 1 ∩ relational ∩ local, and the deliberate non-primitives in
+  [ceiling.md](docs/design/ceiling.md) come first.
