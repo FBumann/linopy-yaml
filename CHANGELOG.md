@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.88](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.87...v0.0.1-alpha.88) (2026-08-11)
+
+
+### Performance
+
+* **engine:** the bound attach reads the ordinal off the Enum, not a dictionary ([#568](https://github.com/fluxopt/lpspec/issues/568)) ([6847419](https://github.com/fluxopt/lpspec/commit/68474193fb1b920ecfe6278178888f6018975644))
+
 ## [0.0.1-alpha.87](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.86...v0.0.1-alpha.87) (2026-08-11)
 
 
