@@ -378,13 +378,20 @@ class PolarsExecutor:
         ``dense[at] = values``, which keeps the *last* write — so the aggregate
         here is what makes the objective the one the file wrote.
 
-        The aggregate runs only when a column actually repeats. ``obj``
-        carries no order contract — the writer sorts it and the solver
-        hand-off scatters it — so the probe is one ``n_unique`` against the
-        height, not a sort.
+        The aggregate runs only when a column actually repeats, and the probe
+        matches how the stack arrives. A lone term leaves the label-ordered
+        variable frame through order-keeping joins (:func:`_join_mul`), so one
+        linear pass answers sortedness and adjacent repeats together — 44 ms
+        of ``n_unique`` down to ~6 ms at 10M terms on `dispatch/l`. Only a
+        stack that really is unordered — several terms concatenated, or a
+        join that shuffled — pays the hash count, where adjacency proves
+        nothing. ``obj`` carries no order contract (the writer sorts it and
+        the solver hand-off scatters it), so nothing re-establishes order
+        here; but when the probe has just witnessed it, that is stated with
+        ``set_sorted`` and the writer's sort becomes a no-op.
         """
 
-        comp = self._q.expression(o.expression, 'objective')
+        comp = self._q.expression(o.expression, 'objective', keep_order=True)
         for p in comp.consts:
             if p.dims:
                 raise LanguageError(
@@ -400,7 +407,15 @@ class PolarsExecutor:
         ]
         stacked = pl.concat(pieces).collect(engine='streaming')
         self._refuse_undefined_divisors(stacked, 'objective', o.expression)
-        if stacked.get_column('col').n_unique() == stacked.height:
+        col = pl.col('col')
+        unordered, tied = stacked.select(
+            (col < col.shift(1)).any().alias('#unordered'),
+            (col == col.shift(1)).any().alias('#tied'),
+        ).row(0)
+        if not unordered:
+            if not tied:
+                return stacked.with_columns(col.set_sorted())
+        elif stacked.get_column('col').n_unique() == stacked.height:
             return stacked
         return stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
 

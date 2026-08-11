@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable, Mapping, Sequence
 
+    from polars._typing import MaintainOrderJoin
+
     from lpspec.relational.engines.polars.binding import BoundSources
 
 
@@ -453,8 +455,19 @@ class PolarsCompiler:
     # expressions → fragments
     # ------------------------------------------------------------------
 
-    def expression(self, expr: plan.Expression, context: str) -> CompiledExpression:
-        """Compile an affine expression into term and const fragments."""
+    def expression(self, expr: plan.Expression, context: str, *, keep_order: bool = False) -> CompiledExpression:
+        """Compile an affine expression into term and const fragments.
+
+        *keep_order* asks every join in the walk to preserve its left side's
+        row order, and belongs to the one caller that reads the fragments raw:
+        the objective, whose repeated-column probe is one linear pass over an
+        ordered stack and a hash count over an unordered one (42 ms against
+        6 ms at 10M terms on `dispatch/l`). A constraint leaves it off — its
+        placement join re-derives order from the labelled row frame, so
+        keeping it here would tax `sector`'s and `storage`'s in-constraint
+        products for nothing. Order is verified where it is read, so the flag
+        decides speed, never correctness.
+        """
 
         def ev(e: plan.Expression) -> CompiledExpression:
             if isinstance(e, plan.Constant):
@@ -470,9 +483,9 @@ class PolarsCompiler:
                 a, b = ev(e.left), ev(e.right)
                 return CompiledExpression(a.terms + b.terms, a.consts + b.consts)
             if isinstance(e, plan.Multiply):
-                return self._product(ev(e.left), ev(e.right), context)
+                return self._product(ev(e.left), ev(e.right), context, keep_order=keep_order)
             if isinstance(e, plan.Divide):
-                return self._quotient(ev(e.numerator), ev(e.divisor), context)
+                return self._quotient(ev(e.numerator), ev(e.divisor), context, keep_order=keep_order)
             if isinstance(e, plan.Sum):
                 inner = _propagate_absence(ev(e.operand))
                 return _map_fragments(inner, lambda p: self._sum_fragment(p, e.over, context))
@@ -534,17 +547,21 @@ class PolarsCompiler:
             return frame.select(*dims)
         return frame.select(pl.col('var_label').alias(PRESENT))
 
-    def _product(self, a: CompiledExpression, b: CompiledExpression, context: str) -> CompiledExpression:
+    def _product(
+        self, a: CompiledExpression, b: CompiledExpression, context: str, *, keep_order: bool
+    ) -> CompiledExpression:
         """``a * b``, with the variable-carrying side normalised to the left."""
         if a.terms and b.terms:
             raise LanguageError(f'nonlinear product in {context}: both factors contain variables')
         if b.terms:
             a, b = b, a
-        terms = tuple(_join_mul(t, c, is_term=True) for t in a.terms for c in b.consts)
-        consts = tuple(_join_mul(x, c, is_term=False) for x in a.consts for c in b.consts)
+        terms = tuple(_join_mul(t, c, is_term=True, keep_order=keep_order) for t in a.terms for c in b.consts)
+        consts = tuple(_join_mul(x, c, is_term=False, keep_order=keep_order) for x in a.consts for c in b.consts)
         return CompiledExpression(terms, consts)
 
-    def _quotient(self, a: CompiledExpression, b: CompiledExpression, context: str) -> CompiledExpression:
+    def _quotient(
+        self, a: CompiledExpression, b: CompiledExpression, context: str, *, keep_order: bool
+    ) -> CompiledExpression:
         """``a / b``, where *b* must be a single variable-free factor."""
         if b.terms:
             raise LanguageError(f'nonlinear quotient in {context}: the divisor contains variables')
@@ -554,8 +571,8 @@ class PolarsCompiler:
                 f'not a sum — rewrite as multiplication by a precomputed parameter'
             )
         inv = b.consts[0]
-        terms = tuple(_join_mul(t, inv, is_term=True, divide=True) for t in a.terms)
-        consts = tuple(_join_mul(x, inv, is_term=False, divide=True) for x in a.consts)
+        terms = tuple(_join_mul(t, inv, is_term=True, divide=True, keep_order=keep_order) for t in a.terms)
+        consts = tuple(_join_mul(x, inv, is_term=False, divide=True, keep_order=keep_order) for x in a.consts)
         return CompiledExpression(terms, consts)
 
     # ------------------------------------------------------------------
@@ -991,7 +1008,9 @@ def _negate(p: TermFragment) -> TermFragment:
     return replace(p, frame=p.frame.with_columns(-pl.col(p.value_column)))
 
 
-def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = False) -> TermFragment:
+def _join_mul(
+    a: TermFragment, c: TermFragment, is_term: bool, divide: bool = False, *, keep_order: bool = False
+) -> TermFragment:
     """``a * c`` (or ``a / c``) where *c* is a const fragment.
 
     Joins on shared dims, broadcasts the rest. The right-hand value is renamed
@@ -1010,12 +1029,23 @@ def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = Fa
     zeroes a term, it does not unmake the variable underneath it. The output
     dims may be wider than ``a.dims``, which is why the presence key travels
     with the fragment rather than being re-derived from dims here (#345).
+
+    *keep_order* keeps *a*'s row order through the join, at a measured price —
+    the ordered collect cost +20 ms at 10M rows on `dispatch/l` — so it is
+    asked for only by the walk whose consumer reads the fragments raw
+    (:meth:`PolarsCompiler.expression`). Order is still verified where it is
+    read, so a join that shuffled anyway degrades a probe, never the model.
     """
     shared = [d for d in a.dims if d in c.dims]
     out_dims = a.dims + tuple(d for d in c.dims if d not in a.dims)
     right = c.frame.rename({'cval': _RHS})
     how = 'left' if divide else 'inner'
-    joined = a.frame.join(right, on=shared, how=how) if shared else a.frame.join(right, how='cross')
+    maintain: MaintainOrderJoin | None = 'left' if keep_order else None
+    joined = (
+        a.frame.join(right, on=shared, how=how, maintain_order=maintain)
+        if shared
+        else a.frame.join(right, how='cross', maintain_order=maintain)
+    )
 
     value, rhs = pl.col(a.value_column), pl.col(_RHS)
     combined = value / rhs if divide else value * rhs
