@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.89](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.88...v0.0.1-alpha.89) (2026-08-11)
+
+
+### Bug Fixes
+
+* **plan:** a divisor under a pullback is still named ([#571](https://github.com/fluxopt/lpspec/issues/571)) ([2591995](https://github.com/fluxopt/lpspec/commit/2591995bb5bf6f66eefdfd1fd24e0f856d70a8b4))
+
 ## [0.0.1-alpha.88](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.87...v0.0.1-alpha.88) (2026-08-11)
 
 
