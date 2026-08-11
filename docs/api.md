@@ -224,11 +224,11 @@ four-way pool wants four times the memory of one slice. That is a machine
 decision, and the reason `None` is the default rather than a pool sized for
 you.
 
-Sources cross a process boundary as parquet, never as pickled frames: measured
-over 1M rows that is 8.3x smaller and 3x faster. A path the workers can reach
+Sources cross a process boundary as parquet, never as pickled frames — smaller
+and faster on every shape it was measured against. A path the workers can reach
 stays a path; one they cannot travels as its own bytes untouched, because
-decoding and re-encoding a parquet file produces identical output for 79x the
-CPU. Either way a source no slice rewrote is encoded once for the whole sweep
+decoding and re-encoding a parquet file produces identical output at a large
+multiple of the CPU. Either way a source no slice rewrote is encoded once for the whole sweep
 rather than once per slice. **Pass paths or frames, whichever you already
 have** — there is nothing to tune. (`df.lazy()` is not an optimisation: an eager
 frame is embedded in the plan, so it pickles *larger* than the frame. Only

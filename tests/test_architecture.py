@@ -158,7 +158,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
             continue
         tree = ast.parse(path.read_text())
         bad = set()
-        for node in _runtime_nodes(tree):  # anywhere it can run, at any nesting
+        for node in _runtime_nodes(tree):
             if isinstance(node, ast.Import):
                 bad |= {a.name for a in node.names if a.name.split('.')[0] in FORBIDDEN_RUNTIME}
             elif isinstance(node, ast.ImportFrom) and node.module and node.module.split('.')[0] in FORBIDDEN_RUNTIME:
@@ -192,7 +192,7 @@ def test_engine_is_isolated():
             continue
         tree = ast.parse(path.read_text())
         bad = []
-        for node in _runtime_nodes(tree):  # include lazy imports — the rule is total for anything that runs
+        for node in _runtime_nodes(tree):
             if isinstance(node, ast.Import):
                 bad += [
                     a.name

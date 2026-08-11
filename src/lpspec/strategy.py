@@ -44,9 +44,9 @@ if TYPE_CHECKING:
 
     from lpspec.language.model import Model
 
-#: Parquet rather than pickle, and not a knob: measured over 1M rows, zstd is
-#: 8.3x smaller *and* 3x faster than pickling the frame, and still smaller and
-#: faster on incompressible float64.
+#: Parquet rather than pickle, and not a knob: zstd measured smaller *and*
+#: faster than pickling the frame, on compressible and incompressible data
+#: alike (#459).
 _COMPRESSION = 'zstd'
 
 #: One cut: the slice key, its sources, and the coords the axis re-indexed.
@@ -620,9 +620,9 @@ def _crosses_a_process(executor: Any) -> bool:
     """Whether a slice's sources have to be encoded to reach *executor*.
 
     A thread pool runs in this process, so encoding would be a parquet round
-    trip for a boundary that is not there — 31% of a thread-pool sweep,
-    measured. Every other executor is assumed to cross, none of them being
-    answerable.
+    trip for a boundary that is not there, and it measured as a large share of
+    such a sweep (#459). Every other executor is assumed to cross, none of them
+    being answerable.
     """
     return not isinstance(executor, ThreadPoolExecutor)
 
@@ -634,8 +634,9 @@ def _encode(
 
     A path the workers can reach stays a path. A path they cannot travels as
     **its own bytes, untouched** — decoding and re-encoding a parquet file
-    produces byte-identical output for 79x the CPU. Anything held in memory is
-    written to parquet, which beats pickling the frame on size and time.
+    produces byte-identical output for a large multiple of the CPU (#459).
+    Anything held in memory is written to parquet, which beats pickling the
+    frame on size and time.
 
     *memo* keeps a source no slice rewrote — the static tables, which is most
     of them — from being encoded once per slice. ``bytes`` is what
