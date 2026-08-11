@@ -23,15 +23,13 @@ from __future__ import annotations
 import polars as pl
 
 from lpspec.strategy import EachCoordinate, solve_over
+from spike.data import GENERATORS, SNAPSHOTS
 
 SCENARIOS = ['dry', 'windy']
-SNAPSHOTS = [0, 1, 2, 3]
-GENERATORS = ['wind', 'gas']
 WIND = {'dry': [0.10, 0.15, 0.05, 0.20], 'windy': [0.90, 1.00, 0.60, 0.80]}
 
 SOURCES = {
     'cost': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 25.0]}),
-    'voll': pl.DataFrame({'value': [3000.0]}),
     'load': pl.DataFrame(
         {
             'scenario': [s for s in SCENARIOS for _ in SNAPSHOTS],
@@ -67,7 +65,7 @@ def cuts_for(capacity: pl.DataFrame) -> pl.DataFrame:
     Adopting the driver for multi-cut costs no YAML at all.
     """
     runs = solve_over(
-        'spike/sub.yaml',
+        'examples/benders/sub.yaml',
         {**SOURCES, 'cap_hat': capacity},
         EachCoordinate('scenario'),
     )
@@ -83,7 +81,7 @@ def cuts_for(capacity: pl.DataFrame) -> pl.DataFrame:
 
 
 if __name__ == '__main__':
-    capacity = pl.DataFrame({'generator': GENERATORS, 'value': [30.0, 40.0]})
+    capacity = pl.DataFrame({'generator': GENERATORS, 'value': [30.0, 100.0]})
     slopes = cuts_for(capacity)
     print('one fold, one cut per scenario:\n')
     print(slopes)

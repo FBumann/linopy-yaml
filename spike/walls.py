@@ -20,10 +20,10 @@ import polars as pl
 
 import lpspec as lps
 from lpspec.strategy import Runs, solve_over
-from spike.benders import GENERATORS, SOURCES
+from spike.data import DISPATCH, FEASIBLE, GENERATORS, SOURCES
 
-SUB_SOURCES = {k: v for k, v in SOURCES.items() if k != 'invest'}
-CAP_ZERO = pl.DataFrame({'generator': GENERATORS, 'value': [0.0] * len(GENERATORS)})
+SUB = 'examples/benders/sub.yaml'
+MASTER = 'examples/benders/master.yaml'
 
 
 def wall_1_the_axis_is_materialised_before_any_slice_runs() -> str:
@@ -35,13 +35,13 @@ def wall_1_the_axis_is_materialised_before_any_slice_runs() -> str:
     answers: list[float] = []
 
     def cuts():
-        yield ('first', {**SUB_SOURCES, 'cap_hat': CAP_ZERO}, {})
+        yield ('first', {**DISPATCH, 'cap_hat': FEASIBLE}, {})
         if not answers:
             raise RuntimeError('asked for cut 2 before cut 1 had been solved')
-        yield ('second', {**SUB_SOURCES, 'cap_hat': CAP_ZERO}, {})
+        yield ('second', {**DISPATCH, 'cap_hat': FEASIBLE}, {})
 
     try:
-        solve_over('spike/sub.yaml', SUB_SOURCES, cuts(), key_name='k')
+        solve_over(SUB, DISPATCH, cuts(), key_name='k')
     except Exception as exc:
         return f'{type(exc).__name__}: {exc}'
     return 'no error — the axis was consumed lazily after all'
@@ -57,8 +57,8 @@ def wall_2_duals_now_cross_the_seam() -> str:
     What is still missing is not the values. It is the *carry* — getting them
     back in as the next plan's parameter, which is wall 3.
     """
-    full = {**SUB_SOURCES, 'cap_hat': CAP_ZERO}
-    runs = solve_over('spike/sub.yaml', full, [('one', full, {})], key_name='k')
+    full = {**DISPATCH, 'cap_hat': FEASIBLE}
+    runs = solve_over(SUB, full, [('one', full, {})], key_name='k')
     prices = runs.dual('capacity')
     return (
         f'Runs.dual exists: {hasattr(Runs, "dual")}; '
@@ -76,7 +76,7 @@ def wall_3_carry_replaces_a_parameter_and_cannot_grow_one() -> str:
     """
     try:
         solve_over(
-            'spike/master.yaml',
+            MASTER,
             {'invest': SOURCES['invest']},
             [('one', {}, {})],
             carry={'cut_const': ('cap', None)},
@@ -100,9 +100,9 @@ def wall_4_sequential_outer_and_parallel_inner_is_refused() -> str:
     with concurrent.futures.ProcessPoolExecutor(2, mp_context=ctx) as pool:
         try:
             solve_over(
-                'spike/sub.yaml',
-                SUB_SOURCES,
-                [('a', {'cap_hat': CAP_ZERO}, {}), ('b', {'cap_hat': CAP_ZERO}, {})],
+                SUB,
+                DISPATCH,
+                [('a', {'cap_hat': FEASIBLE}, {}), ('b', {'cap_hat': FEASIBLE}, {})],
                 carry={'cap_hat': ('p', None)},
                 keep=('p',),
                 executor=pool,
@@ -133,12 +133,20 @@ def cost_of_rebuilding() -> str:
     n = len(GENERATORS)
     cut_const = pl.DataFrame({'cut': [0], 'value': [0.0]})
     cut_slope = pl.DataFrame({'cut': [0] * n, 'generator': GENERATORS, 'value': [0.0] * n})
-    sources = {'invest': SOURCES['invest'], 'cut_const': cut_const, 'cut_slope': cut_slope}
+    empty_f = pl.DataFrame(schema={'fcut': pl.Int64, 'value': pl.Float64})
+    empty_fs = pl.DataFrame(schema={'fcut': pl.Int64, 'generator': pl.String, 'value': pl.Float64})
+    sources = {
+        'invest': SOURCES['invest'],
+        'cut_const': cut_const,
+        'cut_slope': cut_slope,
+        'fcut_const': empty_f,
+        'fcut_slope': empty_fs,
+    }
 
     best = float('inf')
     for _ in range(5):
         start = time.perf_counter()
-        with lps.solve('spike/master.yaml', sources, coords={'cut': [0]}):
+        with lps.solve(MASTER, sources, coords={'cut': [0], 'fcut': []}):
             pass
         best = min(best, time.perf_counter() - start)
     return f'one master solve at this toy size: {best * 1000:.1f} ms, all of it rebuild — nothing is reused between iterations'
