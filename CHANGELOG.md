@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.96](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.95...v0.0.1-alpha.96) (2026-08-11)
+
+
+### Refactoring
+
+* cut the prose, keep the facts ([#592](https://github.com/fluxopt/lpspec/issues/592)) ([dcc279b](https://github.com/fluxopt/lpspec/commit/dcc279b6c0cc4d8a7b84e9f5f610cbd12fa6d88c))
+
+
+### Documentation
+
+* **design:** decomposition, as evidence rather than as a feature ([#597](https://github.com/fluxopt/lpspec/issues/597)) ([c736da9](https://github.com/fluxopt/lpspec/commit/c736da9f046766b80915499b7bec24ab7ee8cf76))
+
 ## [0.0.1-alpha.95](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.94...v0.0.1-alpha.95) (2026-08-11)
 
 
