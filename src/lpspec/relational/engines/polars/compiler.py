@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Callable, Mapping, Sequence
 
-    from polars._typing import MaintainOrderJoin
+    from polars._typing import JoinStrategy, MaintainOrderJoin
 
     from lpspec.relational.engines.polars.binding import BoundSources
 
@@ -176,8 +176,12 @@ class PolarsCompiler:
         a plain filter: it is pointwise over columns the product already
         carries, and a filter keeps order too. The direct path also keeps a
         predicate reading no frame dim at all (scalar parameters have no key
-        to join on) and, defensively, one reading dims outside the frame,
-        whose errors name the full frame rather than the touched subset.
+        to join on), one reading dims outside the frame (defensively, so its
+        errors name the full frame rather than the touched subset) — and a
+        mask that reads **every** frame dim, where the truth set is as wide
+        as the product itself: the semi-join would build the product twice to
+        save no width. `sector`'s balance mask is exactly that shape, and the
+        semi-join there was 6.6% of the whole `m` pipeline.
         """
         out = self._coordinate_product(dims)
         if where is None:
@@ -187,7 +191,7 @@ class PolarsCompiler:
             return out.filter(_falsy_if_null(condition))
         touched = predicate_dims(where, self.name_dims)
         on = tuple(d for d in dims if d in touched)
-        if not on or not touched <= set(dims):
+        if not on or not touched <= set(dims) or len(on) == len(dims):
             return carrier.filter(_falsy_if_null(condition))
         keys = self._coordinate_product(on)
         keyed, keyed_condition = self._predicate(keys, where, on)
@@ -226,22 +230,32 @@ class PolarsCompiler:
         frame_dims: tuple[str, ...],
         alias: str,
         subject: str,
+        how: JoinStrategy = 'left',
+        maintain_order: MaintainOrderJoin | None = None,
     ) -> pl.LazyFrame:
-        """Left-join *param* onto *frame*, its value column renamed to *alias*.
+        """Join *param* onto *frame*, its value column renamed to *alias*.
 
         A parameter carrying a dim the frame lacks would be reduced over it,
         widening a mask or picking an arbitrary bound, so that is refused.
         *subject* is the caller's word for it, since naming the declaration is
         most of the value.
 
-        Always a left join: a missing value is a fact the caller has to be told
-        about — a null bound is refused by name, and a null in a mask reads as
-        false (:func:`_falsy_if_null`) — never a row to drop silently here.
+        *how* is ``left`` for a bound, where a missing value is a fact the
+        caller has to report rather than a row to drop. A mask that cannot be
+        satisfied without the value asks for ``inner`` — the rows a left join
+        keeps there are rows the filter then drops, so all the left join adds
+        is the width of the product they are dropped from
+        (:func:`_certain_parameters`). That width only exists on the direct
+        mask path: a full-width mask on `sector/m` recovered 3.5% of the
+        pipeline from this alone, where behind a semi-join's key product the
+        two strategies had nothing left to differ on.
 
-        The join always keeps the frame's order: every caller reads the result
-        as ordered by construction, and asking the join for it (+12 ms on a
-        10M-row join) is far cheaper than restoring it afterwards (~110 ms to
-        sort the same frame).
+        *maintain_order* is asked for only where the result is ordered by
+        construction and something downstream reads it that way — the bounds,
+        which become ``cols``. It is not free (+12 ms on a 10M-row join) and
+        far cheaper than restoring the order afterwards (~110 ms to sort the
+        same frame), so it is passed deliberately rather than defaulted on;
+        every other consumer's order is verified where it is read.
         """
         declaration = self.program.parameter(param)
         extra = set(declaration.dims) - set(frame_dims)
@@ -249,8 +263,8 @@ class PolarsCompiler:
             raise LanguageError(f'{subject} has dims {sorted(extra)} outside the foreach dims {list(frame_dims)}')
         table = self.parameters[param].rename({'value': alias})
         if not declaration.dims:
-            return frame.join(table, how='cross', maintain_order='left')
-        return frame.join(table, on=list(declaration.dims), how='left', maintain_order='left')
+            return frame.join(table, how='cross', maintain_order=maintain_order)
+        return frame.join(table, on=list(declaration.dims), how=how, maintain_order=maintain_order)
 
     # ------------------------------------------------------------------
     # predicates (where masks — row absence)
@@ -264,17 +278,28 @@ class PolarsCompiler:
         Walking joins the parameters, so the condition is built first and the
         frame read after — one expression would return the pre-walk frame.
 
-        Every name is left-joined and every atom over a missing value reads as
-        false, so a coordinate the mask cannot evaluate is dropped by the
-        filter rather than by the join. That is the same answer either way, and
-        one join strategy is one thing to reason about.
+        **A name the mask is certain of is joined rather than left-joined**,
+        and a variable it is certain of is semi-joined and never read
+        (:func:`_certain_parameters`). Either way an atom over a missing value
+        reads as false, so the coordinate is dropped — the join strategies
+        differ only in *where*: the rows a left join keeps here are rows the
+        filter then drops, so all it adds is the width of the product they are
+        dropped from. That width is real only on the direct mask path;
+        `sector/m`'s full-width balance mask recovered 3.5% of the pipeline
+        from the inner join, where behind a semi-join's key product the two
+        strategies measured the same.
 
         ``VariableDefined`` is the one atom answered by a join rather than a
         column test — existence lives in the variable's own frame — keyed by
         the variable's dims, which the dim rule has already checked are inside
         this frame.
+
+        No join here maintains order: a mask's consumers verify order where
+        they read it (:func:`labels.in_position_order`), so a join that
+        shuffles costs a sort downstream at worst, never a wrong label.
         """
 
+        certain = _certain_parameters(pred)
         joined: set[str] = set()
         carrier = frame
 
@@ -282,13 +307,8 @@ class PolarsCompiler:
             nonlocal carrier
             alias = f'__where {param}__'
             if alias not in joined:
-                carrier = self.parameter_join(
-                    carrier,
-                    param,
-                    dims,
-                    alias,
-                    f"where-parameter '{param}'",
-                )
+                how: JoinStrategy = 'inner' if param in certain else 'left'
+                carrier = self.parameter_join(carrier, param, dims, alias, f"where-parameter '{param}'", how)
                 joined.add(alias)
             return alias
 
@@ -311,11 +331,16 @@ class PolarsCompiler:
                 nonlocal carrier
                 on = list(self.program.variable(p.variable).dims)
                 flag = f'__where defined {p.variable}__'
+                if p.variable in certain:
+                    if flag not in joined:
+                        carrier = carrier.join(self.variables[p.variable].select(*on), on=on, how='semi')
+                        joined.add(flag)
+                    return pl.lit(value=True)
                 if flag not in joined:
                     marked = (
                         self.variables[p.variable].select(*on).unique().with_columns(pl.lit(value=True).alias(flag))
                     )
-                    carrier = carrier.join(marked, on=on, how='left', maintain_order='left')
+                    carrier = carrier.join(marked, on=on, how='left')
                     joined.add(flag)
                 return _falsy_if_null(pl.col(flag))
             if isinstance(p, plan.BooleanConstant):
@@ -357,7 +382,12 @@ class PolarsCompiler:
                         attached
                         if attached is not None
                         else self.parameter_join(
-                            carrier, e.name, v.dims, alias, f"bound parameter '{e.name}' of variable '{v.name}'"
+                            carrier,
+                            e.name,
+                            v.dims,
+                            alias,
+                            f"bound parameter '{e.name}' of variable '{v.name}'",
+                            maintain_order='left',
                         )
                     )
                     joined.add(alias)
@@ -886,6 +916,24 @@ def predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...
         f'{type(where).__name__} is a predicate the mask planner does not know how to read; '
         'add it to predicate_dims before using it in a where'
     )
+
+
+def _certain_parameters(pred: plan.Predicate) -> frozenset[str]:
+    """Names whose absence alone makes the whole mask false.
+
+    A row those names have no value for is one the filter would drop anyway,
+    so the join may drop it first. Only ``And`` descends: under ``Or`` or
+    ``Not`` an absent value can still leave the mask true, and dropping the
+    row there is a wrong model, not a slow one — which is why the fallthrough
+    answers nothing rather than raising on a node it does not know.
+    """
+    if isinstance(pred, plan.And):
+        return _certain_parameters(pred.left) | _certain_parameters(pred.right)
+    if isinstance(pred, (plan.ParameterComparison, plan.ParameterDefined)):
+        return frozenset({pred.parameter})
+    if isinstance(pred, plan.VariableDefined):
+        return frozenset({pred.variable})
+    return frozenset()
 
 
 def _falsy_if_null(condition: pl.Expr) -> pl.Expr:
