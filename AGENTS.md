@@ -5,19 +5,6 @@ here. **What** the project is lives in [docs/](docs/README.md); **which command
 to run** lives in [CONTRIBUTING.md](CONTRIBUTING.md). Every rule below is here
 because its absence cost a wrong number, a lost diff, or a round trip.
 
-## Where the rules live
-
-| question | file |
-|---|---|
-| what may a YAML file say | [docs/SPEC.md](docs/SPEC.md) — §0 is the ten laws, every section elaborates one |
-| how does it fit together | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — hard rules, module map |
-| may this enter the language | [docs/design/ceiling.md](docs/design/ceiling.md) — the admissibility test |
-| where is it going | [docs/ROADMAP.md](docs/ROADMAP.md) — motivation and end state, no work items |
-| how do I run and ship it | [CONTRIBUTING.md](CONTRIBUTING.md) — setup, gates, ports, benchmarks |
-
-Reference pages carry rules, design notes carry arguments. A change that makes
-one longer usually belongs in the other.
-
 ## Code
 
 **Cut lines. Remove duplication. Apply YAGNI.** Delete the abstraction with one
@@ -191,6 +178,8 @@ existed, and readers concluded the no-fallback claim was aspirational.
   — §0 if it changes a law, the section if it changes a detail. Changing
   structure updates [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), diagrams
   included.
+- **Reference pages carry rules, design notes carry arguments.** A change that
+  makes one longer usually belongs in the other.
 - **When a decision is made in conversation, sweep for what now contradicts it.**
   Half-updated docs are the failure mode.
 - Stale *rationale* is corrected even when the thing it justified is done: a
