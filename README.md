@@ -174,6 +174,14 @@ pip install "lpspec[gurobi]"  # adds the gurobi sink: solver_name='gurobi'
 Not a solver wrapper, not a domain package, not a data-loading layer — bring
 polars, pandas or xarray objects, Arrow tables, or parquet paths. MIT licensed.
 
+## Prior art
+
+The surface — YAML math, a block per component, `foreach:`, a `where:` string —
+comes from [Calliope](https://github.com/calliope-project/calliope);
+[linopy](https://github.com/PyPSA/linopy) supplies the shared vocabulary, the
+oracle and every benchmark denominator. What was taken from each, and how to
+cite them: [prior art and credit](docs/design/prior-art.md).
+
 ## Status
 
 Alpha, pre-1.0.

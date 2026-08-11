@@ -76,6 +76,7 @@ nav:
       - The ceiling: design/ceiling.md
       - Decomposition: design/decomposition.md
       - Relationship to linopy: design/linopy.md
+      - Prior art and credit: design/prior-art.md
       - Roadmap: ROADMAP.md
   - Changelog: changelog.md
 
