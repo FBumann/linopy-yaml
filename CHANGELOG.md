@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.92](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.91...v0.0.1-alpha.92) (2026-08-11)
+
+
+### Bug Fixes
+
+* **data:** an empty index keeps the dimension's declared dtype ([#585](https://github.com/fluxopt/lpspec/issues/585)) ([b5bd409](https://github.com/fluxopt/lpspec/commit/b5bd4091671aa7614386d9545ff7084b0c1842fa))
+
 ## [0.0.1-alpha.91](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.90...v0.0.1-alpha.91) (2026-08-11)
 
 
