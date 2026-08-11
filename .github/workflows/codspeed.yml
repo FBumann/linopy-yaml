@@ -103,6 +103,13 @@ on:
     # `bench/` is the workload. This file is the instrument. None of the three
     # may be added here however documentation-shaped a particular diff to them is.
     #
+    # **Config is listed by path, never by extension.** `**.md` is safe because
+    # no markdown in this tree reaches a build; `**.yaml` would not be, because
+    # `bench/models/*.yaml` *are* the benchmarked models and `examples/**` and
+    # `tests/golden/model.yaml` are models too. An extension glob cannot tell a
+    # tool's configuration from a program's input, so the config entries below
+    # are named one by one and a new one earns its line by being read.
+    #
     # `paths-ignore` skips only when *every* changed file matches, and merges here
     # are squashes, so a pull request touching docs and `src/` together is still
     # measured. The failure mode to watch is the reverse: a path added to this
@@ -117,9 +124,14 @@ on:
     paths-ignore:
       - '**.md'
       - docs/**
-      - .release-please-manifest.json
       - LICENSE
       - .gitignore
+      - mkdocs.yml
+      - .readthedocs.yaml
+      - .pre-commit-config.yaml
+      - .github/dependabot.yml
+      - .release-please-config.json
+      - .release-please-manifest.json
   # required for a report to have somewhere to land. `labeled` is on the list
   # because the default triple stops at `reopened`, and without it applying
   # `trigger:bench` to an open pull request would re-trigger nothing — the
