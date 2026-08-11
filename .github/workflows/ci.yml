@@ -43,19 +43,32 @@ jobs:
       # this asks whether *every* changed path is inert and a directory nobody
       # listed runs everything. Not `paths-ignore:` — `ci` is required, and a
       # workflow that never starts never reports the status the PR waits for.
+      #
+      # Only an answer sets the output. A diff that did not read, or read as
+      # empty, is not evidence of inertness — the default is to run everything,
+      # because the alternative is skipping a gate on a failed API call.
+      #
+      # An entry earns its place by being unreachable from all three steps:
+      # prose and the licence are read by nothing, `mkdocs.yml` only by the
+      # strict build above, and the release manifest by release-please — the
+      # version the build stamps comes from the git tag, not from that file.
       - name: Is every changed file inert?
         id: scope
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          live=$(gh pr diff ${{ github.event.number }} --name-only \
-            | grep -Ev '(^|/)[^/]+\.md$|^LICENSE$' || true)
-          if [ -z "$live" ]; then
+          if ! changed=$(gh pr diff ${{ github.event.number }} --name-only); then
+            echo 'The diff did not read; running everything.'
+            exit 0
+          fi
+          live=$(printf '%s\n' "$changed" | grep -Ev \
+            '(^|/)[^/]+\.md$|^LICENSE$|^mkdocs\.yml$|^\.release-please-manifest\.json$' || true)
+          if [ -n "$changed" ] && [ -z "$live" ]; then
             echo 'inert=true' >> "$GITHUB_OUTPUT"
             echo 'Prose only — the TeX render and the bare install are skipped.'
           else
-            printf 'Live files, so everything runs:\n%s\n' "$live"
+            printf 'Running everything. Live files:\n%s\n' "$live"
           fi
 
       # Current dependencies, dev group: lint, format, types, suite.
