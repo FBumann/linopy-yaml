@@ -35,8 +35,8 @@ spelling should fail at load naming its rewrite.
 that makes the codebase simpler, and say in the PR what coverage moved where.
 
 **No explanatory inline comments.** Complex logic becomes a helper whose
-docstring carries the constraint; a fact the code cannot show moves to the
-nearest docstring, so deleting a comment never deletes a fact.
+docstring carries the constraint; a rule the code cannot show moves to the
+nearest docstring, and everything else moves to the PR.
 
 ```python
 # no
@@ -68,14 +68,17 @@ Informative, concise, and about the reader's problem — not the author's.
 | **argument for a settled decision** | two paragraphs defending a choice the first sentence stated |
 | **narration of how the answer was found** | the trials and measurement runs that led here, rather than the number they produced |
 
-What earns its lines: the rule, the invariant, a measured number, an issue ref,
-and the non-obvious reason something is safe. `relational/chunking.py`'s module
-docstring is the model — one rule, then the trap that makes the rule necessary,
-then the scope it does *not* claim.
+What earns its lines: the rule, the invariant, the non-obvious reason something
+is safe, and a `#nnn` when the argument is longer than the docstring should be.
+`relational/chunking.py`'s module docstring is the model — one rule, then the
+trap that makes the rule necessary, then the scope it does *not* claim.
 
-Docstrings are also where a *correction* lives: when a claim is disproved, the
-post-mortem number goes in the docstring so the bet is not re-placed
-([#581](https://github.com/fluxopt/lpspec/pull/581)).
+**Measured numbers do not live in the tree.** They belong in the PR description
+that produced them, where the method, the base commit and the ladder are next to
+them; a number copied into a docstring loses all three and ages silently. Say
+the conclusion and point at the PR — *"ordered joins were measured slower on
+masked models (#581)"* — and the numbers stay one click away, for as long as
+they are worth having.
 
 ## Commit messages and PR titles
 
@@ -86,20 +89,29 @@ release-please parses it into the changelog. One conventional-commit line:
 footer** — the check refuses both while the version is pinned to the alpha
 stream.
 
-The subject is a **claim in the indicative present**, not a label for an
-activity:
+The subject names **the problem solved**, in the indicative present, and stops.
+It is read in `git log --oneline` and in the changelog by people who will never
+open the diff, so: scannable, one line, no mechanism, no "why", no trailing
+clause.
 
 ```
+yes  fix(api): a closed result says it was closed
+yes  feat(language): a coordinate may declare its own label space
 yes  fix(data): an empty index keeps the dimension's declared dtype
-yes  perf(engine): the objective keeps the hash count — bought order was a shape-dependent bet
-yes  refactor(engine): ask the data, not the declarations
+yes  perf(engine): bounds stop dominating build on wide models
+
+no   perf(engine): the bound attach reads the ordinal off the Enum, not a dictionary
+     ^ how it was done — belongs in the description
+no   perf(engine): the objective keeps the hash count — bought order was a shape-dependent bet
+     ^ mechanism plus the argument for it; two descriptions in a title
 no   fix(data): fix dtype bug
-no   refactor(engine): improvements to the compiler
+     ^ names an activity, not an outcome
 ```
 
-Rationale, numbers and alternatives go in the body — never in the tree. Nothing
-transitive lives in the code: "previously this used to…", "renamed from…", "as
-of the polars rewrite…" belong in the commit, the PR, or docs.
+For a `perf` change, the outcome is what got cheaper and for whom — not which
+call changed. **Mechanism, rationale, numbers and alternatives go in the body.**
+Nothing transitive lives in the code: "previously this used to…", "renamed
+from…", "as of the polars rewrite…" belong in the commit, the PR, or docs.
 
 ## PR descriptions
 
@@ -108,9 +120,10 @@ through `git blame` in six months. Neither wants a log of your session.
 
 - **Lead with the claim**, then the evidence. [#592](https://github.com/fluxopt/lpspec/pull/592)
   and [#581](https://github.com/fluxopt/lpspec/pull/581) are the pattern.
-- **Numbers carry their provenance**: the base commit they were taken against,
-  what is counted (build vs solve, LP file vs direct sink), and how they were
-  taken. A rebase invalidates them — re-run or remove, never leave standing.
+- **This is where numbers live**, and the only place. Each carries the base
+  commit it was taken against, what is counted (build vs solve, LP file vs
+  direct sink), and how it was taken. A rebase invalidates them — re-run or
+  remove, never leave standing.
 - **Say what was verified**: gates run, test counts, and what you could *not*
   check.
 - **Name what you deliberately did not do**, and why.
