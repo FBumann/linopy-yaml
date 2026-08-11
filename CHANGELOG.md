@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.97](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.96...v0.0.1-alpha.97) (2026-08-11)
+
+
+### Documentation
+
+* the surface is Calliope's, the vocabulary is linopy's — say so ([#598](https://github.com/fluxopt/lpspec/issues/598)) ([a1042fc](https://github.com/fluxopt/lpspec/commit/a1042fccc070c5cc730445eb7da180d5a66705e6))
+
 ## [0.0.1-alpha.96](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.95...v0.0.1-alpha.96) (2026-08-11)
 
 
