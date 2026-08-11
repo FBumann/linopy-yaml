@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.102](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.101...v0.0.1-alpha.102) (2026-08-11)
+
+
+### Features
+
+* **strategy:** one model solved over scenarios, windows and pathways ([#459](https://github.com/fluxopt/lpspec/issues/459)) ([5d4c4ce](https://github.com/fluxopt/lpspec/commit/5d4c4cea287512a70c2cc23e910309abe07e3bea))
+
 ## [0.0.1-alpha.101](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.100...v0.0.1-alpha.101) (2026-08-11)
 
 
