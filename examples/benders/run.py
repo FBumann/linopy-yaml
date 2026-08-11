@@ -17,6 +17,11 @@ The master's cuts are **data**. It declares ``cut`` and ``fcut`` with members
 from data (SPEC §8) and never changes; an iteration appends rows to their
 parameter tables. No YAML is written at runtime, so the model a reviewer reads
 is the model that runs — which is the point of writing models in YAML at all.
+
+Because no file changes, each is parsed and validated **once**, above the loop.
+``lps.solve`` takes a ``Model`` wherever it takes a path, and a path re-parses a
+model that cannot have moved — three times an iteration here. Any driver over a
+fixed model does this, whether it decomposes, rolls a horizon or sweeps data.
 """
 
 from __future__ import annotations
@@ -30,6 +35,10 @@ import lpspec as lps
 HERE = Path(__file__).parent
 SNAPSHOTS = [0, 1, 2, 3]
 GENERATORS = ['wind', 'gas']
+
+SUB = lps.load_model(HERE / 'sub.yaml')
+FEASIBILITY = lps.load_model(HERE / 'feasibility.yaml')
+MASTER = lps.load_model(HERE / 'master.yaml')
 
 SOURCES = {
     'invest': pl.DataFrame({'generator': GENERATORS, 'value': [90.0, 30.0]}),
@@ -95,7 +104,7 @@ def main() -> None:
     upper = float('inf')
 
     for step in range(25):
-        with lps.solve(HERE / 'sub.yaml', {**DISPATCH, 'cap_hat': capacity}) as sub:
+        with lps.solve(SUB, {**DISPATCH, 'cap_hat': capacity}) as sub:
             dispatchable = sub.has_primal
             if dispatchable:
                 slope, here = slope_at(sub, capacity)
@@ -108,12 +117,12 @@ def main() -> None:
             # values would be a vector of zeros indistinguishable from an
             # answer. So the violation is minimised instead, and *its* duals
             # say which way capacity has to move.
-            with lps.solve(HERE / 'feasibility.yaml', {**DISPATCH, 'cap_hat': capacity}) as short:
+            with lps.solve(FEASIBILITY, {**DISPATCH, 'cap_hat': capacity}) as short:
                 slope, here = slope_at(short, capacity)
                 appended(tables, 'fcut', here - short.objective, slope)
 
         coordinates = {'cut': tables['cut_const']['cut'].to_list(), 'fcut': tables['fcut_const']['fcut'].to_list()}
-        with lps.solve(HERE / 'master.yaml', {'invest': SOURCES['invest'], **tables}, coords=coordinates) as master:
+        with lps.solve(MASTER, {'invest': SOURCES['invest'], **tables}, coords=coordinates) as master:
             lower = master.objective
             capacity = master.primal('cap').select('generator', 'value')
 

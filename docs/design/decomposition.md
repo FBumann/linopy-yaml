@@ -205,8 +205,10 @@ objective on the subproblem.
 ## The loop
 
 ```python
+sub_model, feasibility_model, master_model = (lps.load_model(path) for path in paths)
+
 for step in range(25):
-    with lps.solve(here / 'sub.yaml', {**dispatch, 'cap_hat': capacity}) as sub:
+    with lps.solve(sub_model, {**dispatch, 'cap_hat': capacity}) as sub:
         dispatchable = sub.has_primal
         if dispatchable:
             slope, here_value = slope_at(sub, capacity)
@@ -214,11 +216,11 @@ for step in range(25):
             appended(tables, 'cut', sub.objective - here_value, slope)
 
     if not dispatchable:
-        with lps.solve(here / 'feasibility.yaml', {**dispatch, 'cap_hat': capacity}) as short:
+        with lps.solve(feasibility_model, {**dispatch, 'cap_hat': capacity}) as short:
             slope, here_value = slope_at(short, capacity)
             appended(tables, 'fcut', here_value - short.objective, slope)
 
-    with lps.solve(here / 'master.yaml', master_sources, coords=coordinates) as master:
+    with lps.solve(master_model, master_sources, coords=coordinates) as master:
         lower = master.objective
         capacity = master.primal('cap').select('generator', 'value')
 
@@ -229,6 +231,12 @@ for step in range(25):
 Twenty lines, three `lps.solve` calls, and a growing pair of tables. **A reader
 could write this**, which is the observation that matters most for
 [#596](https://github.com/fluxopt/lpspec/issues/596).
+
+The models are loaded above the loop because none of them changes — a cut is a
+row in a parameter table, not an edit to a file. `lps.solve` accepts a `Model`
+anywhere it accepts a path, so parse and validation are paid once for the run
+instead of three times an iteration. That is not decomposition-specific: it is
+what any driver over a fixed model does, and `solve_over` already does it.
 
 ## Running it
 
