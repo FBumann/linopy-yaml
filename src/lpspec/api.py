@@ -1,17 +1,12 @@
 """The runner: bind data to a YAML model and execute it. Not a modeling API.
 
-Math is defined in YAML only — there is no Python API for constructing
-models, and the logical plan is internal (a stable plan-construction API may
-come later). This module's job is exactly three verbs: ``build`` (YAML +
-sources → live executor), ``solve``, and ``write``.
+Math is defined in YAML only — there is no Python API for constructing models,
+and the logical plan is internal. Four verbs: ``check``, ``build`` (YAML +
+sources → live executor), ``solve`` and ``write``.
 
-This is the product path (docs/ARCHITECTURE.md). The language is validated at load
-time, lowered to the plan — anything outside the streaming subset raises
-:class:`~lpspec.errors.LanguageError` naming the construct — and executed
-relationally.
-
-linopy exists only in the optional compatibility/oracle layer
-(``import lpspec.linopy``) and in the differential test suite.
+This is the product path (docs/ARCHITECTURE.md): validated at load time,
+lowered to the plan, executed relationally. linopy exists only in the optional
+compatibility/oracle layer (``import lpspec.linopy``).
 
 Example::
 
@@ -109,24 +104,20 @@ def solve(
 ) -> Result:
     """Build and solve in one call.
 
-    ``solver_name`` is which solver sink to hand the built model to —
-    ``highs``, which ships with the package, or ``gurobi``, which needs the
-    ``[gurobi]`` extra. linopy's spelling, and a decision the *caller* makes:
-    the same file solves the same model either way, so nothing in the YAML
-    names a solver.
-
-    ``solver_options`` is forwarded verbatim to it — the same shape linopy
-    takes, e.g. ``{'time_limit': 60, 'mip_rel_gap': 0.01}``, in whichever
-    solver's vocabulary was chosen. Build options stay separate, because they
-    govern *construction* and never reach the solver.
+    ``solver_name`` picks the sink — ``highs``, which ships with the package,
+    or ``gurobi``, needing the ``[gurobi]`` extra. linopy's spelling, and the
+    *caller's* decision: the same file solves the same model either way, so
+    nothing in the YAML names a solver. ``solver_options`` is forwarded
+    verbatim in that solver's vocabulary; build options stay separate, never
+    reaching the solver.
 
     The executor stays attached to the returned :class:`Result`, whose label
-    frames back ``result.primal(...)``. Nothing has to be released, though
-    ``result.close()`` drops a large model early if you want the memory back.
+    frames back ``result.primal(...)``; nothing has to be released, though
+    ``result.close()`` drops a large model early.
 
-    The solver sink is resolved before the build, for the reason ``write``
-    checks the suffix first: a caller who named a sink nothing can serve
-    should not pay for a model.
+    The sink is resolved before the build, as ``write`` checks the suffix
+    first: a caller who named a sink nothing can serve should not pay for a
+    model.
     """
     solver(solver_name)
     ex = build(model, sources, **build_kwargs)
@@ -145,12 +136,9 @@ def write(
 ) -> Path:
     """Build and stream the model to a file; format from the suffix.
 
-    ``.lp`` is supported today and ``.mps`` is planned, both answered by the
-    writer family rather than by a branch here — this verb owns *when* to
-    build, not what can be written.
-
-    The suffix is checked **before** the build, because a caller who named a
-    format nothing can write should not pay for a model first.
+    Which formats exist is the writer family's answer, not a branch here — this
+    verb owns *when* to build. The suffix is checked **before** the build, so a
+    caller who named a format nothing can write does not pay for a model first.
     """
     out = Path(out)
     writer(out.suffix.lower())

@@ -40,13 +40,11 @@ class Result:
     readers stay valid as long as the object does; :meth:`close` releases a
     large one early but nothing breaks without it.
 
-    **Its values are its own.** The result holds the solver's vectors rather
-    than reading them back off the executor, so a later solve on the same
-    executor cannot rewrite what an earlier result reports. Only the label
-    frames — which the coordinates are joined against, and which a re-solve
-    does not touch — are shared. Holding them costs nothing until the caller
-    retains several results, which is the point: a sweep, a rolling horizon
-    and Benders all keep one per iteration.
+    **Its values are its own** — held here rather than read back off the
+    executor, so a later solve cannot rewrite what an earlier result reports.
+    Only the label frames are shared, and a re-solve does not touch them. That
+    matters once a caller retains several results, which a sweep, a rolling
+    horizon and Benders all do.
     """
 
     _status: SolveStatus
@@ -105,10 +103,10 @@ class Result:
     def primal(self, name: str) -> pl.DataFrame:
         """The tidy solution of *name* — ``(dims…, value)``.
 
-        Rows come back in **label order**: row-major over the variable's
-        coordinate product, the same order the LP sink writes and the one
-        ``var_label`` already encodes. So two reads agree, two runs of one
-        model agree, and a solution file can be diffed.
+        Rows come back in **label order** — row-major over the variable's
+        coordinate product, what ``var_label`` already encodes and what the LP
+        sink writes — so two reads agree, two runs agree, and a solution file
+        can be diffed.
         """
         self._require_solution(f"the primal of '{name}'")
         return self._executor._primal(name, self._primal_values)
@@ -116,14 +114,12 @@ class Result:
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name*: ``(dims…, value)``.
 
-        :meth:`primal`'s join against the row frame rather than a column one,
-        in that method's order.
-
-        The two empty cases are different failures and both raise rather than
-        return zeros: no values at all is
-        :class:`~lpspec.errors.NoSolutionError`, while primals without duals —
-        any integer variable makes them undefined — raises
-        :class:`~lpspec.errors.LpspecError`. Duals exist only on this sink.
+        :meth:`primal` against the row frame rather than a column one, in that
+        method's order. The two empty cases are different failures and both
+        raise rather than return zeros: no values at all is
+        :class:`~lpspec.errors.NoSolutionError`, primals without duals — any
+        integer variable makes them undefined — a
+        :class:`~lpspec.errors.LpspecError`.
         """
         self._require_solution(f"the dual of '{name}'")
         if self._dual_values is None:

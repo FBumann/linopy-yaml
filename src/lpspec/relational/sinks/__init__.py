@@ -1,13 +1,11 @@
 """Sinks: how a built model leaves the engine. See README.md.
 
-**Two families, and that is the whole mental model.** A *solver* takes the
-tables and runs them (``solvers/``, chosen by name); a *writer* takes the
-tables and renders them to a file (``writers/``, chosen by suffix). The
-families are directories rather than a convention, so
+**Two families.** A *solver* takes the tables and runs them (``solvers/``,
+chosen by name); a *writer* renders them to a file (``writers/``, chosen by
+suffix). They are directories rather than a convention, so
 ``tests/test_architecture.py`` reads membership off the path.
 
-``tables.py`` is what both read, and neither family imports the other. This
-module is the seam a caller uses: the contract, and the two lookups.
+``tables.py`` is what both read, and neither family imports the other.
 """
 
 from lpspec.relational.sinks.solvers import SOLVERS, solver

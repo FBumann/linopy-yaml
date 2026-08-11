@@ -1,25 +1,21 @@
 """Dense solver indices for a masked coordinate product.
 
 **Labels are the one place order is load-bearing.** ``var_label`` *is* the
-solver's column index and ``row`` its row index, so a label is not a detail of
-how the executor happens to number things — it is the model's identity, and two
-builds of one model must agree on it integer for integer (docs/ARCHITECTURE.md,
-"The relational lane").
+solver's column index and ``row`` its row index, so a label is the model's
+identity: two builds of one model must agree on it integer for integer
+(docs/ARCHITECTURE.md, "The relational lane").
 
 Variables and constraint rows are the same operation over different frames, so
-:func:`frame` is written once; twice is how the two would come to disagree
-about which coordinate gets which index. One rule: sort the surviving
-coordinates into declaration order and number them from *start*. A mask, a
-restriction, or neither all produce the same shape, so a mask that removes
-nothing is indistinguishable from no mask — down to the schema.
+:func:`frame` is written once — one rule, sort the survivors into declaration
+order and number them from *start*. A mask, a restriction or neither produce
+the same shape down to the schema.
 
-The one split kept is *how much product is materialised*, not what a label is.
-A mask that cannot see the leading dims removes the same coordinates under
-every one of their values, so the survivors are a rectangle and only the
-masked suffix needs to exist as rows (:func:`_factored`). Measured on
-`sector/m`: labelling one time-invariantly-masked variable through the full
-product transiently peaked +177 MB and 17 ms where the rectangle costs the
-suffix — a few hundred rows — plus the output.
+The one split kept is *how much product is materialised*. A mask that cannot
+see the leading dims removes the same coordinates under every one of their
+values, so the survivors are a rectangle and only the masked suffix needs rows
+(:func:`_factored`): on `sector/m`, labelling one time-invariantly-masked
+variable through the full product peaked +177 MB and 17 ms where the rectangle
+costs a few hundred rows plus the output.
 """
 
 from __future__ import annotations
@@ -47,36 +43,29 @@ def frame(
 ) -> tuple[pl.DataFrame, int]:
     """The masked coord product of *dims* with a dense *label* from *start*.
 
-    Returns ``(dims…, label)`` in that column order, in label order, together
-    with the next free label. A label follows declaration order — row-major
-    over the dims' declared ordinals — which is what lets it *be* the solver's
-    own index with no remapping.
+    Returns ``(dims…, label)`` in that column order, in label order, with the
+    next free label. A label follows declaration order — row-major over the
+    dims' declared ordinals — which is what lets it *be* the solver's own index
+    with no remapping.
 
     *restrictions* are variable-presence frames a constraint row must be
-    contained in: absence propagates into a comparison and drops the row (v1
-    ``convention.rst`` §6, §12). They are semi-joins, so they can only remove
-    rows. Which rows is not known until data is read, which is why a
-    restriction takes the counted path below whatever the mask looks like.
+    contained in (v1 ``convention.rst`` §6, §12). They are semi-joins, so they
+    only remove rows, and nothing deduplicates them — a key occurring twice
+    still occurs. Which rows they remove is unknown until data is read, so a
+    restriction takes the counted path whatever the mask looks like.
 
-    Being semi-joins is also why nothing deduplicates them: a semi-join asks
-    whether a key occurs, and a key occurring twice still occurs.
+    No dims means the carrier is :data:`UNIT`, selected because selecting
+    nothing would drop the one row of the empty coordinate product.
 
-    No dims means the carrier is `UNIT`, which is selected in that case because
-    selecting nothing would drop the one row of the empty coordinate product.
+    **Nothing sorts unless the data says it must.** The product is *produced*
+    in declaration order, a filter keeps it and a semi-join usually does, so
+    :func:`in_position_order` verifies linearly and sorts only when the engine
+    emitted another order: ~0.01 s against 0.26 s of a 0.73 s build at
+    `dispatch/l` for the unconditional sort.
 
-    **Nothing here sorts unless the data says it must.** Declaration order is
-    row-major over the ordinals, which is one arithmetic expression
-    (:func:`_row_major`) — and the product is *produced* in that order, a
-    filter keeps it, and a semi-join usually does, so the sort that would
-    re-establish it usually permutes nothing. :func:`in_position_order`
-    verifies that linearly and sorts only when the engine emitted another
-    order: ~0.01 s against 0.26 s of a 0.73 s build at `dispatch/l` for the
-    unconditional sort.
-
-    **Nothing renumbers unless a row was dropped, either.** Only a mask or a
-    restriction leaves gaps in the positions; with neither, ``start +
-    position`` *is* the label and the row-index pass never runs — ~3 ms per
-    unmasked declaration on `fleet`, which carries 19 and no ``where`` at all.
+    **Nothing renumbers unless a row was dropped**, either. With neither mask
+    nor restriction, ``start + position`` *is* the label and the row-index pass
+    never runs — ~3 ms per unmasked declaration on `fleet`, which carries 19.
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))
@@ -116,30 +105,25 @@ def _factored(
 
     The survivors are a rectangle — the full product of the leading dims
     against one surviving suffix set — so only the suffix is materialised and
-    ranked (a sort of the set, not of the product: on `dispatch` the
-    generators rather than 10M ``(snapshot, generator)`` pairs). The label is
-    then arithmetic: row-major over the leading dims, times the width of the
-    surviving set, plus a survivor's rank within it — the same number the
-    counted path would have counted, because each leading coordinate sees the
-    same survivors in the same order.
+    ranked: on `dispatch`, the generators rather than 10M
+    ``(snapshot, generator)`` pairs. The label is then arithmetic, row-major
+    over the leading dims times the surviving set's width plus a survivor's
+    rank, which is the number the counted path would have counted since each
+    leading coordinate sees the same survivors in the same order.
 
-    The prefix has to be *leading* rather than merely absent from the mask: a
-    label follows declaration order, and only a prefix leaves the surviving
-    set contiguous within it.
+    The prefix must be *leading* rather than merely unread by the mask: only a
+    prefix leaves the surviving set contiguous within declaration order.
+    ``None`` when nothing survives, the counted path already answering the
+    empty case with the right columns and dtypes.
 
-    ``None`` when nothing survives: the rectangle degenerates and the counted
-    path already answers the empty case with the right columns and dtypes.
-
-    **The survivors go on the left of the cross join**, which is the side the
-    streaming engine cycles fastest: survivors turning over within each head
-    coordinate is label order, so :func:`in_position_order` below verifies and
-    permutes nothing. The other way round sorts the whole variable frame on
-    every build — a million rows on `dispatch/m`, 45% slower.
-
-    Which side cycles is an implementation detail of a dependency and is
-    asserted nowhere: the verify is what makes it safe to exploit, and what
-    would turn a change in polars back into a sort rather than into wrong
-    labels. Rearranging the join means re-measuring, not reasoning.
+    **The survivors go on the left of the cross join**, the side the streaming
+    engine cycles fastest, so survivors turning over within each head
+    coordinate is label order and :func:`in_position_order` permutes nothing.
+    The other way round sorts the whole variable frame on every build — a
+    million rows on `dispatch/m`, 45% slower. Which side cycles is an
+    implementation detail of a dependency asserted nowhere: the verify is what
+    makes it safe to exploit, and would turn a change in polars back into a
+    sort rather than into wrong labels. Rearranging means re-measuring.
     """
     head, kept = dims[:free], dims[free:]
     rank = '#rank'
@@ -186,12 +170,11 @@ def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
     """A coordinate's row-major position in the declared product.
 
     Horner over the declared ordinals — one multiply and one add per dim
-    whatever the arity. With no dims the position is the literal zero: the
-    empty product's one row. Dense over the *full* product, not the
-    survivors — so where a mask or restriction dropped rows the caller
-    renumbers with a row index, because a label may not have gaps (a
-    declaration's share of the solver vector is a slice), and where nothing
-    dropped any this *is* the label, offset by ``start``.
+    whatever the arity; with no dims, the literal zero of the empty product's
+    one row. Dense over the *full* product rather than the survivors, so a
+    caller that dropped rows renumbers with a row index (a label may not have
+    gaps, a declaration's share of the solver vector being a slice) and one
+    that dropped none has the label already, offset by ``start``.
     """
     position: pl.Expr = pl.lit(0, dtype=pl.Int64)
     for d in dims:
@@ -202,13 +185,9 @@ def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
 def in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame:
     """The frame ordered by *position*, verified rather than re-established.
 
-    One linear ``is_sorted`` against a single column, and the sort — also
-    single-key, where sorting the ordinal columns was one key per dim — only
-    when the engine emitted another order. The witness column stays; a caller
-    that has no further use for it projects it away, and one of the three
-    (:meth:`PolarsExecutor._build_variable`'s ``cols`` share) has to.
-
-    All three orderings in the lane go through here, which is the point: a
+    One linear ``is_sorted`` against a single column, and a single-key sort
+    only when the engine emitted another order. The witness column stays for a
+    caller to project away. All three orderings in the lane go through here: a
     second copy of "check before you sort" is a second thing to get backwards.
     """
     if materialised.get_column(position).is_sorted():

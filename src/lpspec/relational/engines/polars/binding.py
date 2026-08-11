@@ -5,14 +5,11 @@ the Arrow PyCapsule protocol — and *what the query is written against*. Bindin
 is the only phase that touches a caller's data; everything downstream reads
 :class:`BoundSources` and nothing else.
 
-**It is frozen, and that is the point.** The four things here are written once,
-during the three passes below, and are then read exactly twice: to construct
-the compiler and the labeller. Holding them as a value rather than as four
-dicts on the executor is what says so — and it separates them from the one
-registry that is deliberately *live*, the variable frames, which appear as
-declarations are built and which a constraint compiled afterwards has to see.
-Three adjacent ``dict[str, pl.LazyFrame]`` attributes could not say which of
-them was which.
+**It is frozen, and that is the point.** Written once by the passes below,
+then read to construct the compiler and the labeller. Holding it as a value
+rather than as four dicts on the executor is what separates it from the one
+registry that is deliberately *live* — the variable frames, which appear as
+declarations build and which a constraint compiled afterwards has to see.
 """
 
 from __future__ import annotations
@@ -57,19 +54,27 @@ class BoundSources:
     cardinality: Mapping[str, int]
     boolean_parameters: frozenset[str]
 
+    def is_enum_encoded(self, dim: str) -> bool:
+        """Whether :meth:`_Binder.encode_dimensions` gave *dim* an ``Enum``.
+
+        Asked by both consumers of the encoding — the compiler reads the
+        physical code as an ordinal for free, and the executor casts back to
+        ``String`` on the way out — and answered here, where the encoding is
+        decided, so the two cannot come to disagree about which dims have one.
+        """
+        return self.dimensions[dim].collect_schema()['val'] == pl.Enum
+
 
 def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
     """Adapt *sources* to the frames *program* is written against.
 
     Four passes, and the order is load-bearing. Dimensions with an index of
-    their own come first, so a parameter's labels can be checked against them
-    in the pass that binds it rather than in a second one over the same rows.
-    The parameters follow. The remaining dimensions are *derived* from those
-    parameters, so they cannot be built until they exist — and a derived
-    dimension has no strangers to find, its labels being the union of what
-    arrived. Encoding comes last for the same reason: a dimension's ``Enum``
-    is built from its labels, and a derived dimension has none until the
-    parameters have all bound.
+    their own come first, so a parameter's labels are checked in the pass that
+    binds it rather than a second one over the same rows. The remaining
+    dimensions are *derived* from those parameters and cannot be built until
+    they exist — and have no strangers to find, their labels being the union of
+    what arrived. Encoding comes last: a dimension's ``Enum`` is built from its
+    labels, which a derived dimension has only once the parameters have bound.
     """
     binder = _Binder(program, sources)
     binder.sourced_dimensions()
@@ -101,16 +106,12 @@ class _Binder:
     def parameter(self, p: plan.ParameterDeclaration) -> None:
         """Bind one parameter's source and register it as a tidy frame.
 
-        The one collect in this file that runs on the streaming engine, because
-        it is the one whose result is model-sized, so it is the one the engine
-        choice moves. ``collect()`` defaults to the in-memory engine — unlike
-        ``sink_csv``, whose default resolves to streaming — and switching every
-        collect costs 29% on a small join-heavy model to save the same 0.15 GB
-        this one saves alone.
+        The one collect in this file on the streaming engine, its result being
+        the one that is model-sized: switching every collect costs 29% on a
+        small join-heavy model to save the same 0.15 GB this one saves alone.
 
-        Validation runs before the string cast, not after: a dictionary-encoded
-        column compares on its codes, and widening it to strings first doubles
-        the check.
+        Validation runs before the string cast — a dictionary-encoded column
+        compares on its codes, and widening to strings first doubles the check.
         """
 
         if p.name not in self.sources:
@@ -207,13 +208,13 @@ class _Binder:
     def _explicit_frame(self, d: str, source: Any, names: list[str]) -> pl.LazyFrame:
         """A dimension's ``(val, ord, coordinates…)`` from a caller's index.
 
-        Ordinals follow the source's own order, so a translation moves by
-        position exactly as the eager lane does even for string labels. A
-        label's position is the row it first appears at.
+        Ordinals follow the source's own order — a label's position is the row
+        it first appears at — so a translation moves by position exactly as the
+        eager lane does, even for string labels.
 
-        The source is collected once, because the frame is a scan: every pass
-        over a lazy view of it re-reads the source (#273). The single-valued
-        check and the grouping below both read that one collect instead.
+        Collected once, the frame being a scan: every pass over a lazy view
+        re-reads the source (#273), and both the single-valued check and the
+        grouping below read that one collect.
         """
 
         frame = self._read(
@@ -250,15 +251,15 @@ class _Binder:
     def encode_dimensions(self) -> None:
         """Every string dimension becomes an ``Enum`` over its labels, in ordinal order.
 
-        One dictionary per dimension, applied to every frame carrying it, so
-        downstream joins meet ``Enum`` against ``Enum`` with equal categories
-        by construction. A dim column costs a code instead of a string for the
-        model's lifetime — retained label frames -23%, emit 0.90-0.95x, the
-        encode itself ~16 ms per 10M rows (PR #541).
+        One dictionary per dimension applied to every frame carrying it, so
+        downstream joins meet ``Enum`` against ``Enum`` with equal categories by
+        construction. A dim column then costs a code instead of a string for the
+        model's lifetime: retained label frames -23%, emit 0.90-0.95x, the
+        encode itself ~16 ms per 10M rows (#541).
 
-        Running after every check is what makes the strict cast safe: each
-        label was already probed against its dimension, so a failure here is
-        an engine bug, not a data error.
+        Running after every check is what makes the strict cast safe — each
+        label was already probed against its dimension, so a failure here is an
+        engine bug rather than a data error.
         """
         materialised = {d: table.collect() for d, table in self.dimensions.items()}
         enums = {d: pl.Enum(f['val']) for d, f in materialised.items() if f.schema['val'] == pl.String}
