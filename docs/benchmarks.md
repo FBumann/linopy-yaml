@@ -70,8 +70,10 @@ under 0.4 are a different quantity wearing the same name, and are not mixed in.
 that produced it predates the current default, and a table says what the run
 that produced it did. On duckdb the numbers are worse, and
 [bench/duckdb-spike.md](https://github.com/fluxopt/lpspec/blob/main/bench/duckdb-spike.md)
-says by how much. Re-taking this page with `--arms lpspec linopy` on an idle
-machine puts the default engine back in the column.
+says by how much: `duckdb ÷ polars` at the `l` rung is 1.6–3.1x on build,
+1.19–2.84x on wall and 0.90–1.84x on peak. Re-taking this page with
+`--arms lpspec linopy` on an idle machine puts the default engine back in the
+column.
 
 *This lane replaced an out-of-tree duckdb engine, and the three-way comparison
 that decided it — speed against a settable memory ceiling — is in

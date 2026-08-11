@@ -149,32 +149,38 @@ to say "build this within N gigabytes or fail".
 **Choosing an engine is not the answer**, and that is worth knowing before this
 track is picked up. The figure this section used to quote — 2.1–4.2x less
 memory on the write path — was measured on the engine the in-tree duckdb one
-was ported from, and the port has never reproduced it: at `e42b9a0` its peak
-lands between 0.91x and 1.59x of the polars engine's, lighter on two rungs of
-twelve and heavier on eight
+was ported from, and the port has never reproduced it: peak lands between 0.90x
+and 1.84x of the polars engine's, lighter on two rungs of fourteen and heavier
+on eleven
 ([bench/duckdb-spike.md](https://github.com/fluxopt/lpspec/blob/main/bench/duckdb-spike.md)).
-It was briefly ahead on *speed* at the top of the ladder; five optimisations on
-the polars engine have since taken that back too. duckdb is the default
-regardless — being behind on the ladder is what makes it the engine worth
-having under CI's instruments unasked — but the default is not what closes this
-gap and was never meant to be.
+It was briefly ahead on *speed* at the top of the ladder; the polars perf series
+has since taken that back too. duckdb is the default regardless — being behind
+on the ladder is what makes it the engine worth having under CI's instruments
+unasked — but the default is not what closes this gap and was never meant to be.
 
 **But it locates the ceiling, which is worth more than a ratio.** duckdb *does*
 have the knob this section asks for — `SET memory_limit`, and it spills past it.
 Setting it shows the knob is aimed at the wrong half: `dispatch/xl`, 40M
-columns, engine capped at **500 MB**, builds unchanged and peaks at **2.98 GB,
-of which 2.61 GB is the four frames themselves**. Its own working set was
-already under the cap. Peak is the *output*, not the computation, and no
-engine-side limit reaches it — so a declared bound is a `ModelTables` question,
-and the same one whichever engine fills it.
+columns, engine capped at **500 MB**, builds unchanged and peaks at **4.49 GB —
+the same figure, to the last measured digit, as the uncapped build**. Its own
+working set was already under the cap, so there is nothing for the knob to bind
+on, and no engine-side limit reaches peak.
+
+**What a bound would have to be declared over has moved, though.** The frames
+are **1.65 GB of that 4.49** — CSR halved the matrix on both engines — so peak
+is no longer mostly the output the way this section used to say it was. The
+build transient is now the larger term, on polars (4.02 GB against the same
+1.65) as much as on duckdb. A ceiling declared over `ModelTables` would miss
+most of what a build costs.
 
 What remains is a declared bound, and the honest version is partition-wise
 execution, which the locality closure already guarantees is safe. Measured on
 polars it takes 23–36% off peak and then floors, because the matrix stops being
 the binding term while the label frames, `cols`, `rows`, `obj` and the
-parameters stay resident. Worth most for the write path either way: the solver
-is the larger term by roughly an order of magnitude at 10⁷ variables
-([benchmarks](benchmarks.md)).
+parameters stay resident. That floor and the transient above are the same
+finding from two directions, and between them they are what this track has to
+answer. Worth most for the write path either way: the solver is the larger term
+by roughly an order of magnitude at 10⁷ variables ([benchmarks](benchmarks.md)).
 
 ## What we will not build
 

@@ -26,36 +26,52 @@ in the tree (`relational/engines/duck/`), so re-running is:
 ```bash
 uv sync --group bench
 uv run pytest bench --arms lpspec polars --benchmark-memory \
-    --sizes xs s m l xl --sinks lp highs --builds 0 \
-    --benchmark-json=/tmp/engines.json
+    --sizes xs s m l --sinks lp highs \
+    --benchmark-json=bench/results/engines.json
+uv run python -m bench.report bench/results/engines.json --arms lpspec polars
 ```
 
 `lpspec` is the *default* engine, so that pair is duckdb against polars. Every
 ratio in this file is written `duckdb ÷ polars` — by engine name rather than by
 arm, so it stays readable whichever one the default names.
 
-**The committed results file is the *old* engine**, kept as the measurement the
-argument was built on rather than re-baselined. §7's ratios are provenance, not
-the current cost.
+**Two results files, and they are not the same measurement.**
+`bench/results/engines.json` is the in-tree engine and is what the table below
+reports. `bench/results/duckdb-spike.jsonl` is the *old*, out-of-tree engine,
+kept as the measurement §7's argument was built on rather than re-baselined —
+provenance, not the current cost.
 
-## Where it stands, measured at `e42b9a0`
+## Where it stands, measured at `9257b54`
 
-All six cases, both sinks, `l` rung, three repeats on a clean tree; the noise
-floor per row is in `bench/results/engines.jsonl` beside the numbers.
+All seven cases, both sinks, `l` rung, five rounds on a clean tree, taken by
+the pytest harness in one process per rung so the two arms are adjacent rather
+than a run apart. Provenance: `bench/results/engines.json`. `build` is the
+steady-state rebuild (`test_rebuild`) and so has no sink column.
 
-| `duckdb ÷ polars`, `l` | build | peak | wall |
-|---|---:|---:|---:|
-| `sector` lp | 3.39× | 1.28× | 2.19× |
-| `nodal` lp | 2.61× | 1.08× | 1.40× |
-| `fleet` lp | 2.14× | **0.91×** | 1.42× |
-| `dispatch` lp | 2.21× | 1.05× | 1.07× |
-| `transport` lp | 1.62× | 1.46× | 1.27× |
-| `profiled` lp | 1.32× | 1.59× | 1.21× |
+| `duckdb ÷ polars`, `l` rung | build | peak lp | wall lp | peak highs | wall highs |
+|---|---:|---:|---:|---:|---:|
+| `sector` | 3.05× | 1.32× | **2.36×** | 1.14× | **2.84×** |
+| `fleet` | 2.75× | 1.04× | 1.56× | 1.11× | 2.18× |
+| `transport` | 2.00× | **1.70×** | 1.46× | 1.37× | 1.78× |
+| `profiled` | 1.96× | **1.84×** | 1.44× | 1.09× | 1.79× |
+| `storage` | 1.93× | 1.47× | 1.37× | 1.21× | 1.63× |
+| `dispatch` | 1.84× | 1.00× | 1.19× | **0.94×** | 1.52× |
+| `nodal` | 1.59× | 1.08× | 1.28× | **0.90×** | 1.43× |
 
-**Slower on all twelve rungs, and heavier on eight of them.** It is lighter only
-on `fleet` and on `nodal` through the solver. The objectives are bit-identical
-either way — the parity gate passes at 0.0 relative on all six cases, which is
-the claim this engine was built to make and the one thing that has not moved.
+**Slower on all fourteen rungs, and heavier on eleven of them.** It is lighter
+only on `dispatch` and `nodal` through the solver, and level with polars on
+`dispatch` through the LP file. The objectives are bit-identical either way —
+the parity gate is enforced at measurement time and every one of the 169
+measurements above built the same model, which is the claim this engine was
+made to make and the one thing that has never moved.
+
+**The spread narrowed and the middle got worse.** Against the previous run
+(`e42b9a0`, six cases) build went 1.3–3.4× → 1.6–3.1× and wall 1.07–2.19× →
+1.19–2.84×. Peak is the interesting column: it was 0.91–1.59× and is now
+0.90–1.84×, because the CSR matrix (#550) halved the largest frame on *both*
+engines and so stopped hiding a difference that was never in the matrix. What
+is left is `transport` and `profiled` writing an LP file at 1.7–1.8×, which is
+where this engine's real memory gap now lives.
 
 **Two things widened this, and one of them is not the engine's fault.** Five
 optimisations landed on the polars engine while this one sat on a branch
@@ -69,10 +85,32 @@ it is worth more than any single row above.
 
 **The memory ceiling is not an engine question**, which this engine is the
 reason we know. duckdb has the knob — `SET memory_limit`, spilling past it — and
-it does not bind: `dispatch/xl`, 40M columns, capped at 500 MB, builds unchanged
-and peaks at 2.98 GB, of which **2.61 GB is the four frames**. Its own working
-set was already under the cap. Peak is the output, so a declared bound is a
-`ModelTables` question and the same one on either engine.
+it does not bind. `dispatch/xl`, 40M columns, built in a fresh process with the
+data written by another one:
+
+| | peak RSS | of which the four frames |
+|---|---:|---:|
+| duckdb, `memory_limit='500MB'` | 4.49 GB | 1.65 GB |
+| duckdb, default limit | 4.49 GB | 1.65 GB |
+| polars | 4.02 GB | 1.65 GB |
+
+**Capped and uncapped are the same number to the last measured digit**, which
+is the claim: the engine's own working set was already under the cap, so the
+knob has nothing to bind on.
+
+**But the second column has inverted since this was last taken, and that
+matters more than the first.** The figure this section used to quote was 2.98 GB
+peak with 2.61 GB of it the frames — peak *was* the output, and the conclusion
+drawn was that a declared bound is therefore a `ModelTables` question. It is not
+that any more. CSR (#550) halved the matrix on both engines, so the frames are
+1.65 GB where they were 2.61, and peak did not follow them down: **the frames
+are 37% of peak, and the build transient is the larger term** — on polars too,
+which is why this is not a duckdb finding. A bound declared over `ModelTables`
+would now miss most of what a build actually costs.
+
+(The 2.98 GB is not directly comparable — different commit, different polars,
+and it is not re-measured here. What is measured on this tree is the table
+above, and the composition is what the argument turns on.)
 
 **Still untested rather than refuted:** every rung here fits in RAM, so the
 argument this engine was built on — a model that does not — has not been
