@@ -44,7 +44,11 @@ STEPS = (
 
 
 def _instrument(timings: dict[Any, list[float]], phase: dict[str, str]) -> None:
-    """Tag each collection with the build step that issued it."""
+    """Tag each collection with the build step that issued it.
+
+    A query is identified by its flattened plan — the same role the SQL text
+    plays in a statement-level profiler.
+    """
     import importlib
 
     import polars as pl
@@ -57,8 +61,6 @@ def _instrument(timings: dict[Any, list[float]], phase: dict[str, str]) -> None:
             return original_collect(self, *args, **kwargs)
         finally:
             elapsed = time.perf_counter() - started
-            # the plan, flattened, is what identifies a query here — the same
-            # role the SQL text plays in a statement-level profiler
             key = (phase['now'], ' '.join(self.explain(optimized=False).split())[:88])
             entry = timings.setdefault(key, [0.0, 0])
             entry[0] += elapsed

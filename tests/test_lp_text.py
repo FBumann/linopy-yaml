@@ -83,7 +83,7 @@ def test_signed_coefficient_round_trips(value: float) -> None:
     (text,) = _rendered(_signed_text, [value])
     assert text[0] in '+-', f'coefficient {text!r} carries no explicit sign'
     assert text[:2] != '+-', f'coefficient {text!r} carries two signs'
-    assert float(text) == value  # -0.0 == 0.0, which is the whole point
+    assert float(text) == value, '-0.0 == 0.0, which is the whole point'
 
 
 def test_negative_zero_coefficient_is_written_once() -> None:

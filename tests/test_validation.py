@@ -227,15 +227,16 @@ class TestDimensionKwargs:
 
     @staticmethod
     def _schema(expression: str, foreach: list[str] | None = None) -> Model:
-        # `or` would turn an explicit [] into ['snapshot']; a scalar constraint
-        # is a legitimate thing to ask for
-        foreach = ['snapshot'] if foreach is None else foreach
+        """A model over (snapshot, generator), with `zone` a coordinate of `bus`.
+
+        `zone` deliberately targets a dim `p` does *not* carry: grouping into
+        one it already has needs that dim twice, which is its own error.
+        """
+        foreach = ['snapshot'] if foreach is None else foreach  # an explicit [] is a scalar constraint
         return load_model(
             {
                 'dimensions': {
                     'snapshot': {'dtype': 'int'},
-                    # `zone` targets a dim `p` does NOT carry: grouping into one
-                    # it already has needs that dim twice, which is its own error
                     'bus': {'values': ['n']},
                     'generator': {'values': ['wind'], 'coords': {'zone': 'bus'}},
                 },

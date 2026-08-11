@@ -68,6 +68,8 @@ def test_extend_is_stateless(yaml_file):
     """A second YAML cannot lean on the first: every file declares what it uses.
 
     This is hard rule 5 — no Python-side state may change what a file means.
+    ``q`` is a model variable, so the second file may reference it; ``cap`` is
+    not redeclared there and must therefore be unknown.
     """
     m = linopy.Model()
     first = yaml_file(
@@ -87,8 +89,6 @@ def test_extend_is_stateless(yaml_file):
     )
     lpspec_linopy.extend(m, first, data={'cap': pd.Series({'wind': 1.0, 'solar': 2.0})})
 
-    # 'q' is a model variable, so the second file may reference it. 'cap' is
-    # not redeclared here — and must therefore be unknown.
     second = yaml_file(
         """
         dimensions:
@@ -122,17 +122,17 @@ def test_infer_coords_unions_across_variables(model_with):
     [
         pytest.param('[wind, solar]', ['wind', 'solar'], True, id='values-match'),
         pytest.param('[a, b]', ['wind', 'solar'], False, id='values-differ'),
-        # inference unions across variables, so `values:` must match what was
-        # inferred — not merely what some other declaration said
         pytest.param('[wind, gas]', ['wind', 'solar'], False, id='values-differ-from-inferred'),
     ],
 )
 def test_redeclared_dim_values_must_match_the_existing_model(yaml_file, model_with, declared, existing, accepted):
+    """Inference unions across variables, so `values:` must match what was
+    inferred — not merely what some other declaration said."""
     m = model_with(p=('generator', existing))
     ext = yaml_file(f'dimensions:\n  generator: {{values: {declared}}}\n')
 
     if accepted:
-        lpspec_linopy.extend(m, ext)  # must not raise
+        lpspec_linopy.extend(m, ext)
     else:
         with pytest.raises(ValueError, match='differ from the existing model'):
             lpspec_linopy.extend(m, ext)
@@ -159,10 +159,10 @@ def test_extend_falls_back_to_inferred_coords(yaml_file, model_with):
 
 
 def test_the_coords_kwarg_wins_over_inference(yaml_file, model_with):
+    """The override, not inference, defines the dim where both could speak."""
     m = model_with(p=('generator', ['wind', 'solar']))
     ext = yaml_file('dimensions:\n  generator: {}\nparameters:\n  cap: {dims: [generator]}\n')
 
-    # must not raise: the override, not inference, defines the dim here
     lpspec_linopy.extend(
         m,
         ext,
@@ -405,13 +405,11 @@ def _has_note(exc: BaseException, substring: str) -> bool:
             id='objective-with-comparison',
         ),
         pytest.param(
-            # valid syntax and dims, but no variable on the LHS: past what
-            # validation can see, so the note has to come from the build phase
             "constraints:\n  c:\n    foreach: []\n    expression: '1 <= 2'\n",
             TypeError,
             None,
             "while building constraint 'c'",
-            id='build-phase-failure',
+            id='valid-syntax-and-dims-but-no-variable-so-only-the-build-sees-it',
         ),
     ],
 )
@@ -550,7 +548,7 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
         model.read_text().replace('{foreach: [f], bounds:', '{foreach: [f], where: live, bounds:'),
         'masked.yaml',
     )
-    built = lpspec_linopy.build(masked, data=data)  # must not raise
+    built = lpspec_linopy.build(masked, data=data)
     assert 'x' in built.variables
 
 

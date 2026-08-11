@@ -51,8 +51,8 @@ _MATRIX = ('row', 'col', 'coeff')
 #: The dtype of each of those columns. ``vtype`` is an ``Enum`` over the
 #: variable types the plan declares, rather than a string: it holds one word
 #: per column and the same handful of words for the whole model, so as a string
-#: it stores that word once per row — 0.098 GB of the ``cols`` frame's 0.333 at
-#: 9.8M columns, against 0.010 as an Enum. The Enum also makes the vocabulary
+#: it stores that word once per row, where an Enum stores a code: on a wide
+#: model that is most of the ``cols`` frame. The Enum also makes the vocabulary
 #: explicit, so a fourth variable type added to
 #: :data:`~lpspec.relational.plan.VariableType` and not reaching here fails
 #: where the column is built rather than in whichever sink first compares
@@ -162,17 +162,16 @@ class PolarsExecutor:
         count, whether the stack arrives in order, whether any cell repeats. It
         usually is in order and usually repeats nothing (a cell repeats only
         when one variable reaches a row twice), so the sort and the aggregate
-        run only when a probe says they would change something: 5 ms at 10M
-        entries against 325 ms for the unconditional hash aggregate. Read off
-        the data, so nothing here knows *why* a cell repeats (#520).
+        run only when a probe says they would change something, which is far
+        cheaper than the unconditional hash aggregate it replaced. Read off the
+        data, so nothing here knows *why* a cell repeats (#520).
 
-        **That 5 ms is why the share is rechunked first.** A streaming collect
-        returns morsels as chunks — 104 of them for `dispatch/l`'s share — and
-        ``shift(1)`` pays at every boundary where ``is_sorted`` does not: 28 ms
-        to probe as it arrives against 12 ms for rechunk and probe together
-        (#576). Not an extra copy, since the assembly needs a contiguous matrix
-        anyway (#550). The objective's stack is left fragmented — measured, and
-        it costs peak for no wall.
+        **Cheap probes are why the share is rechunked first.** A streaming
+        collect returns morsels as chunks, and ``shift(1)`` pays at every
+        boundary where ``is_sorted`` does not, so rechunking and probing
+        together beats probing as it arrives (#576). Not an extra copy, since
+        the assembly needs a contiguous matrix anyway (#550). The objective's
+        stack is left fragmented — measured, and it costs peak for no wall.
         """
         stacked = pl.concat(pieces).collect(engine='streaming').rechunk()
         self._refuse_undefined_divisors(stacked, name, *expressions)
@@ -364,12 +363,11 @@ class PolarsExecutor:
         — the only sound probe here, the stack arriving unordered so adjacency
         proves nothing. Buying order to probe linearly is a dead end twice
         over: the mul join's ``maintain_order`` holds the label order on some
-        shapes and loses it on others differing only in data (`dispatch/l`
-        keeps it, `nodal` and `profiled` do not, all three the same lone masked
+        shapes and loses it on others differing only in data (`dispatch` keeps
+        it, `nodal` and `profiled` do not, all three the same lone masked
         ``p * cost``), so no static gate can say when the tax will pay; and
-        paid for nothing it triples the objective phase (`profiled/l` 40 →
-        147 ms) against a best case that is a wash (69 + 6 against 32 + 42).
-        ``obj`` carries no order contract anyway.
+        paid for nothing it multiplies the objective phase against a best case
+        that is a wash. ``obj`` carries no order contract anyway.
         """
 
         comp = self._q.expression(o.expression, 'objective')
@@ -511,9 +509,8 @@ class PolarsExecutor:
 
         The cast sits inside this projection rather than after it, so the
         string column is produced once instead of widened from an Enum that
-        also exists: +7.2 ms and +5.0 MB over 1M rows on `dispatch/m`.
-        Declaration order is the *row* order and survives, never having been
-        the dtype's to carry.
+        also exists. Declaration order is the *row* order and survives, never
+        having been the dtype's to carry.
         """
         start, height = self._blocks[name]
         labelled = coordinates.select(*dims).with_columns(values.slice(start, height))
@@ -632,8 +629,8 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
     """Each row's first entry in the row-ordered *ordered* — CSR's own index.
 
     Run-length, scatter, cumulative sum — robust to the model's shape where the
-    alternatives are not: ``bincount`` pays per entry (26 ms to rle's 7 at 10M
-    entries over 100k rows) and ``searchsorted`` per row times log entries.
+    alternatives are not: ``bincount`` pays per entry and ``searchsorted`` per
+    row times log entries.
     Computed here so ``row`` can then be dropped, since every consumer either
     slices by these starts or asks
     :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to spell
@@ -641,8 +638,7 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
 
     The kept matrix is then **rechunked, once**: a sink slices it per row
     block, and against a chunked frame every block's ``to_numpy`` is a
-    gather-copy where against one contiguous buffer it is a view (-6.9% on
-    `profiled-m`, ~150 blocks over 16 chunks).
+    gather-copy where against one contiguous buffer it is a view.
     """
     import numpy as np
 

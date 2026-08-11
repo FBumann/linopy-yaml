@@ -42,28 +42,20 @@ def _write(tmp_path, **patch):
 
 
 @pytest.mark.parametrize(
-    ('where', 'match', 'was'),
+    ('where', 'match'),
     [
-        ('typo_name > 0', "'typo_name' not found", 'eager built 0 live variables; relational raised'),
-        ('p_max > cost', 'compares two parameters', "eager compared parameters; relational compared to 'cost'"),
-        (
-            'generator == snapshot',
-            'compares against dimension',
-            "both read the RHS as the string 'snapshot' and built the block empty",
-        ),
-        ('nonexistent', "'nonexistent' not found", 'eager masked everything out; relational raised'),
-        (
-            'snapshot',
-            'bare dimension name is true at every coordinate',
-            'eager raised only when the dim was outside foreach; relational always built',
-        ),
+        pytest.param('typo_name > 0', "'typo_name' not found", id='a-name-nothing-declares'),
+        pytest.param('p_max > cost', 'compares two parameters', id='two-parameters-compared'),
+        pytest.param('generator == snapshot', 'compares against dimension', id='a-dimension-on-the-right'),
+        pytest.param('nonexistent', "'nonexistent' not found", id='a-bare-name-nothing-declares'),
+        pytest.param('snapshot', 'bare dimension name is true at every coordinate', id='a-bare-dimension-name'),
     ],
 )
-def test_both_lanes_refuse_the_same_where(tmp_path, data, coords, where, match, was):
+def test_both_lanes_refuse_the_same_where(tmp_path, data, coords, where, match):
     path = _write(tmp_path, **{'variables.p.where': where})
 
     with pytest.raises(ValueError, match=match):
-        lpspec_linopy.build(path, data=data, coords=coords)  # was: {was}
+        lpspec_linopy.build(path, data=data, coords=coords)
 
     with pytest.raises(ValueError, match=match):
         lps.check(path)
@@ -96,6 +88,12 @@ COVERED_ELSEWHERE = {
 
 @pytest.mark.parametrize('where', ACCEPTED)
 def test_both_lanes_build_the_same_model(tmp_path, data, coords, where):
+    """Both lanes agree on *which* model they built, feasible or not.
+
+    A mask that excludes snapshot 0 leaves the balance row unsatisfiable; that
+    is not the claim here, and neither lane is asked to make every mask
+    feasible.
+    """
     path = _write(tmp_path, **{'variables.p.where': where})
 
     m = lpspec_linopy.build(path, data=data, coords=coords)
@@ -106,9 +104,6 @@ def test_both_lanes_build_the_same_model(tmp_path, data, coords, where):
         relational_rows = ex._variables['p'].select(pl.len()).collect().item()
         relational_status = ex.solve().termination_condition
 
-    # a mask that excludes snapshot 0 leaves the balance row unsatisfiable —
-    # the point is that both lanes agree on *which* model they built, not that
-    # every mask yields a feasible one
     assert eager_rows == relational_rows, f'{where}: {eager_rows} vs {relational_rows} variables'
     assert eager_status == relational_status, f'{where}: {eager_status} vs {relational_status}'
 
@@ -251,8 +246,7 @@ def test_the_empty_coordinate_builds_on_both_lanes(tmp_path):
 
     with lps.solve(path, data) as result:
         relational = result.objective
-        # Each claim is *one* — not zero, and not one per `f`.
-        assert result.dual('budget_row').height == 1
+        assert result.dual('budget_row').height == 1, 'each claim is one — not zero, and not one per f'
         assert result.primal('slack').to_dicts() == [{'value': 10.0}]
         assert result.primal('x').sort('f')['value'].to_list() == [0.0, 30.0, 100.0]
 
@@ -294,8 +288,7 @@ def test_a_masked_scalar_variable_takes_its_row_with_it(tmp_path, threshold, row
 
     with lps.solve(path, data) as result:
         relational = result.objective
-        # The row is gone, not slackened: a dropped constraint has no dual.
-        assert result.dual('budget_row').height == rows
+        assert result.dual('budget_row').height == rows, 'the row is gone, not slackened: a dropped row has no dual'
 
     assert eager == relational == objective
 
@@ -346,8 +339,7 @@ def test_a_datetime_boundary_is_sayable_on_both_lanes(tmp_path):
 
     with lps.solve(path, frames) as result:
         relational = result.objective
-        # only the third day survives the boundary, and it keeps its dtype
-        assert result.primal('p')['snapshot'].dtype in (pl.Date, pl.Datetime('us'))
-        assert result.primal('p').height == 2
+        assert result.primal('p')['snapshot'].dtype in (pl.Date, pl.Datetime('us')), 'the coordinate keeps its dtype'
+        assert result.primal('p').height == 2, 'only the third day survives the boundary'
 
     assert eager == relational == 30.0

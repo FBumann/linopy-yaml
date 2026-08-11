@@ -40,12 +40,10 @@ if TYPE_CHECKING:
 #:
 #: Deliberately small. Both columns and rows are numpy slices, so more chunks
 #: cost almost nothing and only residency scales with the budget — where an
-#: engine whose every chunk re-ran an ordered query would want the opposite.
-#: Measured at
-#: `l`: 2e6 against 1e5 is 0.50s against 0.59s on `dispatch` and 0.71 against
-#: 0.75 on `transport`, for 0.6 GB and 0.2 GB more peak. A tenth of a second
-#: on a hand-off that precedes a minute of simplex is not worth half a
-#: gigabyte of the invariant.
+#: engine whose every chunk re-ran an ordered query would want the opposite. A
+#: wider budget buys a fraction of a second on a hand-off that precedes a
+#: minute of simplex, and pays for it in the invariant this budget exists to
+#: hold.
 HANDOFF_BUDGET = 100_000
 
 #: HiGHS model status -> termination condition. Copied from linopy's own

@@ -2,8 +2,6 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = ["linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
-# # linopy is pinned because it builds the model here; xarray is its data
-# # model. pandas is a floor — it only shapes the input tables.
 # ///
 """Reference for ``stigler_diet``: the same LP, hand-written in linopy.
 
@@ -24,6 +22,10 @@ same five foods.
 Nothing here imports lpspec. The model is a covering LP with no network in it
 at all, which is why it is in the corpus: every other verified port is a flow
 of something through something.
+
+Pinned above to the versions that produced the number in ``references.json``.
+linopy is pinned because it builds the model here and xarray is its data model;
+pandas is a floor, shaping the input tables and nothing else.
 """
 
 from __future__ import annotations
@@ -42,13 +44,15 @@ PUBLISHED_ANNUAL = 39.69
 
 
 def build(data: dict) -> linopy.Model:
-    """The port's tables as a linopy model, column for column."""
+    """The port's tables as a linopy model, column for column.
+
+    ``supply`` is the sparse table filled back out: a missing (food, nutrient)
+    pair means that food supplies none of that nutrient.
+    """
     foods = pd.Index(data['food']['food'], name='food')
     nutrients = pd.Index(data['nutrient']['nutrient'], name='nutrient')
 
     minimum = pd.Series(data['daily_minimum']['value'], index=nutrients)
-    # the sparse table filled back out: a missing (food, nutrient) pair means
-    # that food supplies none of that nutrient
     per_dollar = (
         pd.DataFrame(data['nutrient_per_dollar'])
         .pivot(index='food', columns='nutrient', values='value')

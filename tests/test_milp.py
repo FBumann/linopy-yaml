@@ -74,19 +74,19 @@ def commitment_inputs():
 
 
 def test_commitment_milp_agrees_and_stays_integral(commitment_inputs):
+    """Both lanes agree, the binaries are integral, and the LP file says so."""
     data, coords = commitment_inputs
 
     with differential(COMMITMENT_YAML, data, coords, lp=True) as run:
-        # commitment must actually bind somewhere (u not all-1 at the optimum)
-        assert float(run.model.solution['u'].sum()) < run.model.solution['u'].size
+        assert float(run.model.solution['u'].sum()) < run.model.solution['u'].size, (
+            'u is not all-1 at the optimum, so commitment actually binds'
+        )
 
-        # binary variables actually take integral 0/1 values
         u = run.result.to_pandas('u')['value'].to_numpy()
-        assert np.allclose(u, np.round(u), atol=1e-6)
-        assert set(np.round(u)) <= {0.0, 1.0}
+        assert np.allclose(u, np.round(u), atol=1e-6), 'a binary variable takes an integral value'
+        assert set(np.round(u)) <= {0.0, 1.0}, 'and that value is 0 or 1'
 
-        # the LP file carries integrality, not just bounds
-        assert 'binary' in run.lp.read_text()
+        assert 'binary' in run.lp.read_text(), 'the LP file carries integrality, not just bounds'
 
 
 @pytest.mark.parametrize('batch_rows', [7, 13, 100_000], ids=['tiny-chunks', 'odd-chunks', 'one-chunk'])

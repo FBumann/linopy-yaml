@@ -136,7 +136,12 @@ DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_transport.json'
 
 
 def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
-    """The port's tables as a PyPSA network, column for column."""
+    """The port's tables as a PyPSA network, column for column.
+
+    ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
+    a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
+    it ships ``neg_rating`` as data instead. That is the ledger row.
+    """
     n = pypsa.Network()
     n.set_snapshots(data['snapshot']['snapshot'])
     n.add('Bus', data['bus']['bus'])
@@ -148,9 +153,6 @@ def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         p_nom=data['p_nom']['value'],
         marginal_cost=data['marginal_cost']['value'],
     )
-    # `p_min_pu = -1` makes a link bidirectional. The port cannot say that in a
-    # bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
-    # it ships `neg_rating` as data instead. That is the ledger row.
     n.add(
         'Link',
         data['link']['link'],

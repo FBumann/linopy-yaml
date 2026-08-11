@@ -2,9 +2,6 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = ["linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
-# # linopy is pinned because it *is* the reference here: this script calls its
-# # own `add_piecewise_formulation`, so the formulation is theirs. xarray is its
-# # data model. pandas is a floor — it only shapes the input tables.
 # ///
 """Reference for ``transport_pwl``: the same model through linopy's own
 piecewise formulation. See docs/models/index.md.
@@ -29,6 +26,11 @@ relaxation is **not** valid: it would let the solver ride the chord underneath
 the true curve and buy transport cheaper than the model allows. The
 formulation therefore needs segment binaries, which is what makes this port a
 MILP.
+
+Pinned above to the versions that produced the number in ``references.json``.
+linopy is pinned because it *is* the reference here — this script calls its own
+``add_piecewise_formulation``, so the formulation is theirs — and xarray is its
+data model; pandas is a floor, shaping the input tables and nothing else.
 """
 
 from __future__ import annotations
@@ -43,7 +45,11 @@ DATA = Path(__file__).resolve().parent.parent / 'data' / 'transport_pwl.json'
 
 
 def build(data: dict) -> linopy.Model:
-    """The port's tables as a linopy model, column for column."""
+    """The port's tables as a linopy model, column for column.
+
+    ``scaled`` is what the objective is actually charged on — ``sqrt(shipment)``
+    read off the discretised curve rather than computed.
+    """
     plants = pd.Index(data['plant']['plant'], name='plant')
     markets = pd.Index(data['market']['market'], name='market')
 
@@ -58,8 +64,6 @@ def build(data: dict) -> linopy.Model:
 
     m = linopy.Model()
     shipment = m.add_variables(lower=0, coords=[plants, markets], name='shipment')
-    # what the objective is actually charged on: sqrt(shipment), read off the
-    # discretised curve rather than computed
     scaled = m.add_variables(lower=0, coords=[plants, markets], name='scaled')
 
     m.add_piecewise_formulation(

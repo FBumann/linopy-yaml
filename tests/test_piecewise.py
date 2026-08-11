@@ -108,11 +108,13 @@ def curve(p, bp_x, bp_y) -> float:
 
 @pytest.fixture
 def nonconvex_inputs():
+    """A concave curve — economies of scale — and a load that reaches into it.
+
+    The convex hull's lower envelope is the chord, which undercuts a concave
+    curve, so the adjacency binaries are load-bearing on this fixture.
+    """
     rng = np.random.default_rng(13)
     n_s = 12
-    # concave curve (economies of scale): slopes 0.75 then ~0.417 — the
-    # convex hull's lower envelope (the chord) would undercut it, so the
-    # adjacency binaries are load-bearing
     bp_x = pd.Series([0.0, 40.0, 100.0], index=pd.RangeIndex(3, name='bp'))
     bp_y = pd.Series([0.0, 30.0, 55.0], index=pd.RangeIndex(3, name='bp'))
     load = pd.Series(rng.uniform(5, 95, n_s).round(2), index=pd.RangeIndex(n_s, name='snapshot'))
@@ -127,11 +129,12 @@ def nonconvex_inputs():
 
 
 def test_the_solution_sits_on_the_curve_not_on_its_hull(nonconvex_inputs):
+    """The λ formulation reaches the curve itself, not the chord under it."""
     data, coords = nonconvex_inputs
     expected = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
 
     with differential(NONCONVEX_YAML, data, coords) as run:
-        assert run.oracle == pytest.approx(expected, rel=1e-6)  # ON the curve, not the hull
+        assert run.oracle == pytest.approx(expected, rel=1e-6), 'ON the curve, not on the hull'
 
         cost = run.result.to_pandas('op_cost').set_index('snapshot')['value']
         for s, load_v in data['load'].items():
@@ -139,13 +142,16 @@ def test_the_solution_sits_on_the_curve_not_on_its_hull(nonconvex_inputs):
 
 
 def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs, tmp_path):
-    # same concave curve with convex: true — the LP relaxation's lower
-    # envelope is the chord, so the objective must drop BELOW the curve
+    """`convex: true` drops the binaries, and says so in the answer.
+
+    The same concave curve relaxes to its hull, whose lower envelope is the
+    chord, so the objective must land below the curve.
+    """
     data, coords = nonconvex_inputs
     yaml_text = NONCONVEX_YAML.replace('over: bp', 'over: bp\n    convex: true')
 
-    program = lower_program(schema_of(yaml_text))  # inside the streaming language
-    assert all(v.variable_type == 'continuous' for v in program.variables)
+    program = lower_program(schema_of(yaml_text))
+    assert all(v.variable_type == 'continuous' for v in program.variables), 'convex: true is a pure LP'
 
     path = tmp_path / 'hull.yaml'
     path.write_text(yaml_text)
@@ -153,9 +159,9 @@ def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs, tm
     m.solve(solver_name='highs', output_flag=False)
 
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
-    chord = sum(0.55 * v for v in data['load'])  # (100, 55) chord from origin
+    chord = sum(0.55 * v for v in data['load'])  # the (100, 55) chord from the origin
     assert float(m.objective.value) == pytest.approx(chord, rel=1e-6)
-    assert float(m.objective.value) < on_curve
+    assert float(m.objective.value) < on_curve, 'the hull undercuts a concave curve'
 
 
 CHP_YAML = """
@@ -264,6 +270,11 @@ objectives:
 
 
 def test_active_gates_the_curve_off(nonconvex_inputs):
+    """`active:` decides whether the curve applies at a coordinate at all.
+
+    Gated on, the cost sits on the curve at the pinned load; gated off, it is
+    pinned to zero.
+    """
     data, coords = nonconvex_inputs
     on_flag = pd.Series([1.0, 0.0] * 6, index=pd.RangeIndex(12, name='snapshot'))
     data = {**data, 'on_flag': on_flag}
@@ -271,14 +282,18 @@ def test_active_gates_the_curve_off(nonconvex_inputs):
     with differential(GATED_YAML, data, coords) as run:
         cost = run.result.to_pandas('op_cost').set_index('snapshot')['value']
         for s in on_flag.index:
-            # on: cost sits ON the curve at the pinned load; off: pinned to zero
             expected = curve(data['load'][s], data['bp_x'], data['bp_y']) if on_flag[s] else 0.0
             assert cost[s] == pytest.approx(expected, abs=1e-6)
 
 
 def test_breakpoints_may_vary_along_another_dim():
     """examples/piecewise.yaml: convex per-generator curves (breakpoints vary
-    along the generator dim — the thing flat breakpoint lists can't do)."""
+    along the generator dim — the thing flat breakpoint lists can't do).
+
+    Each generator gets an increasing marginal cost of a different shape, and
+    each one's cost has to sit on its own curve: the hull is exact here,
+    because the curves are convex and the objective minimises.
+    """
     import xarray as xr
 
     example = Path('examples/piecewise.yaml')
@@ -287,7 +302,6 @@ def test_breakpoints_may_vary_along_another_dim():
     gens = pd.Index(['cheap', 'mid'], name='generator')
     bps = pd.RangeIndex(3, name='bp')
     p_max = pd.Series({'cheap': 100.0, 'mid': 120.0})
-    # convex per-generator curves: increasing marginal cost, different shapes
     bp_x = xr.DataArray([[0.0, 40.0, 100.0], [0.0, 60.0, 120.0]], coords={'generator': gens, 'bp': bps})
     bp_y = xr.DataArray([[0.0, 200.0, 800.0], [0.0, 900.0, 2700.0]], coords={'generator': gens, 'bp': bps})
     load = pd.Series(
@@ -297,10 +311,9 @@ def test_breakpoints_may_vary_along_another_dim():
     data = {'p_max': p_max, 'load': load, 'bp_x': bp_x, 'bp_y': bp_y}
     coords = {'snapshot': load.index, 'generator': gens, 'bp': bps}
 
-    lower_program(schema_of(example))  # inside the streaming language (convex: pure LP)
+    lower_program(schema_of(example))
 
     with differential(example, data, coords) as run:
-        # each generator's cost sits on its own curve (hull is exact: convex + min)
         p = run.result.to_pandas('p').set_index(['snapshot', 'generator'])['value']
         cost = run.result.to_pandas('op_cost').set_index(['snapshot', 'generator'])['value']
         for (s, g), pv in p.items():
@@ -484,15 +497,19 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
 @pytest.mark.parametrize(
     ('breakpoints', 'match'),
     [
-        # convex then concave — the hull would silently cut corners
-        (
+        pytest.param(
             {
                 'bp_x': pd.Series([0.0, 30.0, 60.0, 100.0], index=pd.RangeIndex(4, name='bp')),
                 'bp_y': pd.Series([0.0, 10.0, 40.0, 50.0], index=pd.RangeIndex(4, name='bp')),
             },
             'mixed-curvature',
+            id='convex-then-concave-the-hull-would-cut-corners',
         ),
-        ({'bp_x': pd.Series([0.0, 50.0, 40.0], index=pd.RangeIndex(3, name='bp'))}, 'strictly increasing'),
+        pytest.param(
+            {'bp_x': pd.Series([0.0, 50.0, 40.0], index=pd.RangeIndex(3, name='bp'))},
+            'strictly increasing',
+            id='breakpoints-that-go-backwards',
+        ),
     ],
 )
 def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, breakpoints, match):
@@ -559,6 +576,13 @@ objectives:
 
 @pytest.fixture
 def epigraph_inputs():
+    """A convex piecewise cost written as tangents, with no `piecewise:` block.
+
+    Segment *k* of a convex curve is the tangent ``cost >= slope_k * p +
+    intercept_k``, so marginal cost increases per segment. The breakpoints sit
+    at 40% and 75% of each generator's ``p_max``, and the intercepts are what
+    make the tangents touch there.
+    """
     import xarray as xr
 
     rng = np.random.default_rng(9)
@@ -567,10 +591,7 @@ def epigraph_inputs():
     segments = ['s0', 's1', 's2']
     p_max = pd.Series({'cheap': 100.0, 'mid': 120.0})
 
-    # convex piecewise cost: increasing marginal cost per segment.
-    # tangent k of a convex curve: cost >= slope_k * p + intercept_k
     slopes = pd.DataFrame({'cheap': [5.0, 15.0, 40.0], 'mid': [20.0, 35.0, 60.0]}, index=segments)
-    # breakpoints at 40% and 75% of p_max; intercepts make tangents touch
     intercepts = {}
     for g in gens:
         b1, b2 = 0.4 * p_max[g], 0.75 * p_max[g]
@@ -597,14 +618,17 @@ def epigraph_inputs():
 
 
 def test_the_epigraph_pattern_needs_no_formulation_machinery(epigraph_inputs):
+    """A convex piecewise cost is ordinary affine YAML, and stays a pure LP.
+
+    Under minimisation the epigraph is tight, so ``gen_cost`` equals the true
+    piecewise cost at the optimal dispatch.
+    """
     data, coords = epigraph_inputs
 
     program = lower_program(schema_of(EPIGRAPH_YAML))
-    assert all(v.variable_type == 'continuous' for v in program.variables)  # pure LP
+    assert all(v.variable_type == 'continuous' for v in program.variables), 'the epigraph pattern is a pure LP'
 
     with differential(EPIGRAPH_YAML, data, coords, lp=True) as run:
-        # gen_cost equals the true piecewise cost at the optimal dispatch
-        # (epigraph is tight under minimisation)
         p = run.result.to_pandas('p').set_index(['snapshot', 'generator'])['value']
         gc = run.result.to_pandas('gen_cost').set_index(['snapshot', 'generator'])['value']
         slopes = data['seg_slope'].to_series().unstack('segment')

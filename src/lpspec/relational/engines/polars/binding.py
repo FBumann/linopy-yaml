@@ -107,8 +107,8 @@ class _Binder:
         """Bind one parameter's source and register it as a tidy frame.
 
         The one collect in this file on the streaming engine, its result being
-        the one that is model-sized: switching every collect costs 29% on a
-        small join-heavy model to save the same 0.15 GB this one saves alone.
+        the one that is model-sized: switching every collect costs wall time on
+        a small join-heavy model to save the peak this one saves alone.
 
         Validation runs before the string cast — a dictionary-encoded column
         compares on its codes, and widening to strings first doubles the check.
@@ -254,8 +254,8 @@ class _Binder:
         One dictionary per dimension applied to every frame carrying it, so
         downstream joins meet ``Enum`` against ``Enum`` with equal categories by
         construction. A dim column then costs a code instead of a string for the
-        model's lifetime: retained label frames -23%, emit 0.90-0.95x, the
-        encode itself ~16 ms per 10M rows (#541).
+        model's lifetime, which shrinks the retained label frames and the emit
+        alike for an encode that is cheap per row (#541).
 
         Running after every check is what makes the strict cast safe — each
         label was already probed against its dimension, so a failure here is an

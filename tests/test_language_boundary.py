@@ -41,13 +41,13 @@ def test_every_shipped_example_is_inside_the_language(path):
     'patch',
     [
         pytest.param({'variables.p.binary': True, 'variables.p.bounds': {}}, id='binary-variable'),
-        # ROADMAP 5b: both lanes accept `where: "snapshot > 2"`
-        pytest.param({'variables.p.where': 'snapshot > 2'}, id='where-on-a-dimension'),
+        pytest.param({'variables.p.where': 'snapshot > 2'}, id='where-on-a-dimension-roadmap-5b'),
         pytest.param(_objective('sum(p * cost, over=generator)'), id='affine-product'),
     ],
 )
 def test_inside_the_language(patch):
-    lower_program(schema_of(DISPATCH, **patch))  # must not raise
+    """Each of these lowers, so both lanes accept it."""
+    lower_program(schema_of(DISPATCH, **patch))
 
 
 @pytest.mark.parametrize(
@@ -58,16 +58,18 @@ def test_inside_the_language(patch):
             r"operator '\*\*'",
             id='power-operator',
         ),
-        # `check()` must catch degree 2 — it is the first clause of the ceiling.
-        # The affine guard used to live only in the executor, so it needed data
-        # bound: `lps.check()` accepted this and the model only blew up at build
-        # time, which made check() useless as the CI verb for exactly the rule
-        # it should enforce first.
         pytest.param(_objective('sum(p * p, over=generator)'), 'degree 2', id='degree-two'),
         pytest.param(_objective('sum(cost / p, over=generator)'), 'divisor contains variables', id='variable-divisor'),
     ],
 )
 def test_outside_the_language_is_a_load_error(patch, match):
+    """Each of these is refused at load, with no data bound.
+
+    ``degree-two`` is the first clause of the ceiling and the reason this runs
+    here rather than in the executor: the affine guard used to need data bound,
+    so ``lps.check()`` accepted the model and it only blew up at build time —
+    useless as a CI verb for exactly the rule it should enforce first.
+    """
     with pytest.raises(LanguageError, match=match):
         lower_program(schema_of(DISPATCH, **patch))
 
@@ -80,6 +82,6 @@ def test_an_unknown_helper_names_its_context_and_teaches_the_rewrite():
         lower_program(schema_of(DISPATCH, **patch))
 
     reason = str(exc.value)
-    assert 'power_balance' in reason  # reason carries context
-    assert 'escape' in reason  # ...and the rewrite, not a pointer to another lane
+    assert 'power_balance' in reason, 'the reason carries its context'
+    assert 'escape' in reason, 'and the rewrite, rather than a pointer to another lane'
     assert 'eager' not in reason.lower()

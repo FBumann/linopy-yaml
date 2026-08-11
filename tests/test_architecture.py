@@ -321,6 +321,9 @@ def test_typesets_import_closure_needs_no_third_party_engine():
     importing a submodule runs ``lpspec/__init__.py``, which eagerly exposes
     ``build``/``solve`` and so loads the runner whatever this subpackage does.
     That is a property of the top-level namespace, not of ``typeset/``.
+
+    The walk follows module-level ``from lpspec.x import y`` edges, resolved
+    back to modules.
     """
     heavy = {'polars', 'highspy', 'numpy', 'pandas'} | FORBIDDEN_RUNTIME
     by_module = {
@@ -336,7 +339,6 @@ def test_typesets_import_closure_needs_no_third_party_engine():
         for imported in _module_level_imports(by_module[mod]):
             if imported in heavy:
                 reached.setdefault(imported, []).append(mod)
-        # module-level `from lpspec.x import y` edges, resolved to modules
         for node in ast.walk(ast.parse(by_module[mod].read_text())):
             if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith('lpspec'):
                 stack.append(node.module)
@@ -530,6 +532,10 @@ def test_both_lanes_implement_exactly_the_closed_helper_set():
 
     Read statically: ``linopy/builder.py`` imports xarray at module level (it
     is linopy lane), and this check must still run on a bare install.
+
+    The eager lane keeps a table; the relational lane spells its cases out in
+    ``lowering.py``, so every declared name has to appear there as a lowering
+    branch.
     """
     from lpspec.language.helpers import BUILTIN_NAMES
 
@@ -544,8 +550,6 @@ def test_both_lanes_implement_exactly_the_closed_helper_set():
         f'eager lane implements {sorted(eager)}, language declares {sorted(BUILTIN_NAMES)}'
     )
 
-    # the relational lane spells its cases out in lowering.py rather than in a
-    # table; every declared name must appear there as a lowering branch
     lowering_src = (PKG / 'lowering.py').read_text()
     missing = [name for name in BUILTIN_NAMES if f"'{name}'" not in lowering_src]
     assert not missing, f'built-in helpers with no lowering case: {missing}'

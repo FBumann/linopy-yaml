@@ -48,6 +48,10 @@ from tests.oracle import linopy, pd, transport_eager_objective, xr
 
 @pytest.fixture
 def dispatch_data():
+    """The spec's dispatch instance, with one generator retired to `p_max = 0`.
+
+    That row is what the model's `where` masks out.
+    """
     rng = np.random.default_rng(7)
     n_s, n_g = 40, 6
     gens = pd.DataFrame(
@@ -57,7 +61,7 @@ def dispatch_data():
             'cost': rng.uniform(5, 100, n_g).round(3),
         }
     )
-    gens.loc[1, 'p_max'] = 0.0  # masked out by where
+    gens.loc[1, 'p_max'] = 0.0
     load = pd.DataFrame(
         {
             'snapshot': np.arange(n_s),
@@ -122,6 +126,7 @@ def dispatch_eager_objective(gens: pd.DataFrame, load: pd.DataFrame) -> float:
 
 
 def test_dispatch_roundtrip(dispatch_data, tmp_path):
+    """Solver and LP file agree with the eager oracle, down to the dispatch."""
     gens, load = dispatch_data
     oracle = dispatch_eager_objective(gens, load)
 
@@ -136,15 +141,13 @@ def test_dispatch_roundtrip(dispatch_data, tmp_path):
         ex.write(lp)
         assert solve_lp_file(lp) == pytest.approx(oracle, rel=RTOL)
 
-        # masked variable rows are absent, and primal joins back to coords
         primal = result.to_pandas('p')
         n_active = int((gens['p_max'] > 0).sum())
-        assert len(primal) == n_active * len(load)
-        assert set(primal.columns) == {'snapshot', 'generator', 'value'}
-        # per-snapshot dispatch matches load
+        assert len(primal) == n_active * len(load), 'a masked variable row is absent, not zero'
+        assert set(primal.columns) == {'snapshot', 'generator', 'value'}, 'primal joins back to the coords'
         balance = primal.groupby('snapshot')['value'].sum()
         expected = load.set_index('snapshot')['value']
-        assert np.allclose(balance.sort_index(), expected.sort_index())
+        assert np.allclose(balance.sort_index(), expected.sort_index()), 'dispatch meets load in every snapshot'
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +200,11 @@ def transport_program() -> Program:
 
 
 def transport_sources(gens, lines, load) -> dict:
+    """The transport instance as tidy sources.
+
+    A dim carrying declared coordinates needs an index source that has them,
+    which is why `generator` and `line` ship their mapping columns.
+    """
     return {
         'p_max': gens[['generator', 'p_max']].rename(columns={'p_max': 'value'}),
         'cost': gens[['generator', 'cost']].rename(columns={'cost': 'value'}),
@@ -204,13 +212,13 @@ def transport_sources(gens, lines, load) -> dict:
         'load': load,
         'snapshot': load[['snapshot']],
         'bus': load[['bus']],
-        # dims carrying declared coordinates need an index source that has them
         'generator': gens[['generator', 'bus']],
         'line': lines[['line', 'from_bus', 'to_bus']].rename(columns={'from_bus': 'from', 'to_bus': 'to'}),
     }
 
 
 def test_transport_roundtrip(transport_data, tmp_path):
+    """Solver and LP file agree with the eager oracle."""
     gens, lines, load = transport_data
     oracle = transport_eager_objective(gens, lines, load)
     assert np.isfinite(oracle), 'oracle model must be feasible'
@@ -226,7 +234,6 @@ def test_transport_roundtrip(transport_data, tmp_path):
         ex.write(lp)
         assert solve_lp_file(lp) == pytest.approx(oracle, rel=RTOL)
 
-        # flows respect line capacity bounds
         primal_f = result.to_pandas('f')
         caps = lines.set_index('line')['cap']
         limits = primal_f['line'].map(caps)
@@ -290,7 +297,7 @@ def test_a_dimensionless_parameter_of_one_row_still_builds():
     """The control: the shape the check exists to let through."""
     data = {'s': pl.DataFrame({'value': [10.0]})}
     with lps.solve(SCALAR_MODEL, data) as result:
-        assert result.objective == pytest.approx(20.0)  # x == 1 at both coordinates of i, times s
+        assert result.objective == pytest.approx(20.0), 'x == 1 at both coordinates of i, times s'
 
 
 def test_a_dimension_named_n_is_still_a_legal_dimension():
@@ -311,13 +318,14 @@ def test_a_dimension_named_n_is_still_a_legal_dimension():
     with lps.solve(model, {'cost': pl.DataFrame({'n': [1, 2], 'value': [1.0, 2.0]})}) as result:
         assert result.objective == pytest.approx(15.0)
 
-    # and the check the column belongs to still catches its own case
+    # the check the column belongs to still catches its own case
     doubled = {'cost': pl.DataFrame({'n': [1, 1, 2], 'value': [1.0, 9.0, 2.0]})}
     with pytest.raises(DataError, match="parameter 'cost'"):
         lps.build(model, doubled)
 
 
 def test_out_of_foreach_dims_rejected(dispatch_data):
+    """A term carrying a dim the constraint does not `foreach` is refused."""
     gens, load = dispatch_data
     prog = dispatch_program()
     bad = Program(
@@ -327,7 +335,7 @@ def test_out_of_foreach_dims_rejected(dispatch_data):
             ConstraintDeclaration(
                 'power_balance',
                 ('snapshot',),
-                lhs=Variable('p'),  # generator dim not summed
+                lhs=Variable('p'),  # generator dim deliberately not summed
                 sense='==',
                 rhs=Parameter('load'),
             ),
@@ -377,17 +385,17 @@ def test_a_variable_appearing_twice_in_a_row_is_summed_not_duplicated():
     model = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
         'parameters': {'rhs': {'dims': ['i']}},
-        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},
+        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},  # no upper: +inf
         'constraints': {'c': {'foreach': ['i'], 'expression': 'x + 2 * x >= rhs'}},
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
     }
     sources = {'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
     with lps.build(model, sources) as ex:
         matrix = ex._tables().matrix
-        assert matrix.height == 2  # one entry per row, not one per fragment
+        assert matrix.height == 2, 'one entry per row, not one per fragment'
         assert sorted(matrix['coeff'].to_list()) == [3.0, 3.0]
         result = ex.solve()
-    assert result.objective == pytest.approx(5.0)  # 6/3 + 9/3
+    assert result.objective == pytest.approx(5.0), '6/3 + 9/3'
 
 
 def test_a_masked_variable_is_labelled_in_declaration_order():
@@ -595,6 +603,7 @@ def test_a_mask_a_missing_value_can_satisfy_keeps_the_rows_with_no_value():
 
     Every mask in the suite was a conjunction before this, so nothing else here
     distinguishes the two joins.
+
     """
     model = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1, 2, 3]}},
@@ -617,7 +626,7 @@ def test_a_mask_a_missing_value_can_satisfy_keeps_the_rows_with_no_value():
             for name in ('absent', 'either', 'both', 'mixed')
         }
     assert surviving == {
-        'absent': [2, 3],  # a is missing there, which is the whole condition
+        'absent': [2, 3],  # `a` is missing there, which is the whole condition
         'either': [0, 2],  # i=2 has no `a` at all and qualifies on `b`
         'both': [0],
         'mixed': [0, 1],  # `a` is certain, `b` is not
@@ -781,6 +790,7 @@ def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows():
     all name one column, and `obj` must hold their sum: the LP file would
     quietly re-sum |generator| rows, while `cols` joined to `obj` in the HiGHS
     sink would hand the solver more columns than the model has.
+
     """
     model = {
         'dimensions': {'snapshot': {'dtype': 'int', 'values': [0, 1]}, 'generator': {'values': ['g0', 'g1', 'g2']}},
@@ -795,8 +805,9 @@ def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows():
         ),
         'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 5.0]}),
     }
-    # one row per column, each carrying the summed price — not three rows of one
-    assert _objective_of(lower_program(Model(**model)), sources) == ({0: 6.0, 1: 6.0}, 2)
+    assert _objective_of(lower_program(Model(**model)), sources) == ({0: 6.0, 1: 6.0}, 2), (
+        'one row per column, each carrying the summed price — not three rows of one'
+    )
 
 
 def test_infinite_bounds_survive_the_handoff(dispatch_data):
@@ -972,6 +983,7 @@ def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
 
     Wide rows are the case that separates the two, so this builds them: 50
     generators summed into each of 4 snapshots is 50 entries per row.
+
     """
     n_g, n_s = 50, 4
     gens = pd.DataFrame(
@@ -994,10 +1006,9 @@ def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
         budget = 100
         assert widest(tables._spans(budget)) <= budget
 
-        # the same budget spent as if a row cost one element puts every entry
-        # in one chunk — 2x the budget here, and unbounded in general, because
-        # nothing caps how wide a row gets
-        assert widest(chunking.ranges(tables.row_count, budget, 1.0)) == n_g * n_s
+        assert widest(chunking.ranges(tables.row_count, budget, 1.0)) == n_g * n_s, (
+            'the same budget spent as if a row cost one element puts every entry in one chunk'
+        )
 
 
 @pytest.mark.parametrize(
@@ -1042,11 +1053,13 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
     simply is not there.
 
     Only the *constant* side lost this reading, and the test below says why.
+
     """
     data = {'w': pd.Series({1: 1.0, 2: 1.0}), 'c': pd.Series({0: 0.0, 1: 4.0, 2: 5.0})}
     with differential(SPARSE_COEFFICIENT_MODEL, data, lp=True) as run:
-        # t=0 carries `<= 0` with no term: a row that exists and constrains nothing
-        assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL)
+        assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
+            't=0 carries `<= 0` with no term: a row that exists and constrains nothing'
+        )
 
 
 def test_a_sparse_constant_side_is_refused_on_both_lanes():
@@ -1070,13 +1083,15 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
     The check is keyed to the rows a declaration builds, not to the coordinate
     product — the same property that keeps #312's divisor check from becoming a
     wall. Without it the remedy the error names would not work.
+
     """
     masked = {**SPARSE_COEFFICIENT_MODEL}
     masked['constraints'] = {'cap': {**SPARSE_COEFFICIENT_MODEL['constraints']['cap'], 'where': 'c'}}
     data = {'w': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}), 'c': pd.Series({1: 4.0, 2: 5.0})}
     with differential(masked, data) as run:
-        # t=0 has no row at all, so x runs to its bound there
-        assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL)
+        assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
+            't=0 has no row at all, so x runs to its bound there'
+        )
 
 
 ABSENT_VARIABLE_MODEL = {
@@ -1116,6 +1131,7 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
         assert x['b'] == pytest.approx(100.0, rel=RTOL), 'unsized: the row is gone, so only the bound holds'
 
 
+#: One rule per block, so the two regimes are two named constraints.
 DEFINED_MODEL = {
     'dimensions': {'f': {'values': ['a', 'b']}},
     'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
@@ -1124,7 +1140,6 @@ DEFINED_MODEL = {
         'size': {'foreach': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
     },
     'constraints': {
-        # one rule per block, so the two regimes are two named constraints
         'envelope_sized': {'foreach': ['f'], 'where': 'size', 'expression': 'x - relmax * size <= 0'},
         'envelope_unsized': {'foreach': ['f'], 'where': 'NOT size', 'expression': 'x <= 0'},
     },
@@ -1207,11 +1222,16 @@ def _reindexed_parameter_model(op: str) -> dict:
 @pytest.mark.parametrize(
     ('op', 'expected'),
     [
-        # roll is cyclic: nothing is vacated, so t=0 reads the last value
-        ("shift(dt, over=t, by=1, edge='wrap')", {0: 7.0, 1: 5.0, 2: 6.0}),
-        # shift with the escape hatch: the vacated position contributes zero,
-        # and a zero in right-hand-side position is a pin
-        ('shift(dt, over=t, by=1, edge=0)', {0: 0.0, 1: 5.0, 2: 6.0}),
+        pytest.param(
+            "shift(dt, over=t, by=1, edge='wrap')",
+            {0: 7.0, 1: 5.0, 2: 6.0},
+            id='cyclic-vacates-nothing-so-t0-reads-the-last-value',
+        ),
+        pytest.param(
+            'shift(dt, over=t, by=1, edge=0)',
+            {0: 0.0, 1: 5.0, 2: 6.0},
+            id='the-vacated-position-contributes-zero-which-pins',
+        ),
     ],
 )
 def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expected):
@@ -1308,14 +1328,13 @@ def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
 
     Held here as well as in the parity suite because that suite needs the
     ``[linopy]`` extra, and this has to be true on the bare install too.
+
     """
     data = {'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
 
     with lps.solve(SCALAR_MASKED_MODEL, data) as sol:
-        # The row is gone, not slackened — a dropped constraint has no dual.
-        assert sol.dual('cap').height == 0
-        # Unbudgeted, both generators run flat out: 100 x 1 + 100 x 2.
-        assert sol.objective == pytest.approx(300.0)
+        assert sol.dual('cap').height == 0, 'the row is gone, not slackened — a dropped row has no dual'
+        assert sol.objective == pytest.approx(300.0), 'unbudgeted, both generators run flat out'
 
 
 #: A masked variable broadcast onto a wider frame, then reduced back. `p` is
@@ -1352,6 +1371,7 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
     Unmasked the same model was fine, which is what made it look like a problem
     with the coordinate dim rather than with the mask. The whole benchmark
     `sector` case sat on this.
+
     """
     import pandas as pd
     import xarray as xr
@@ -1465,11 +1485,12 @@ def test_dense_columns_does_not_edit_the_model_it_projects():
     scatter's fresh arrays. Replacing an infinity in place through one would
     rewrite the built model to suit whichever solver asked last, and the second
     ask would read bounds the first had already edited.
+
     """
     model = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
         'parameters': {'rhs': {'dims': ['i']}},
-        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},  # no upper: +inf
+        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},
         'constraints': {'c': {'foreach': ['i'], 'expression': 'x >= rhs'}},
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
     }
@@ -1596,13 +1617,15 @@ def test_a_bound_dense_over_the_product_is_attached_by_position_not_joined():
 
     Checked against the oracle, because a misaligned bound is a different model
     rather than an error.
+
     """
     data = {'avail': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'cost': pd.Series({'a': 1.0, 'b': 1.0, 'c': 1.0})}
 
     assert _aligned_for(FLAT_MODEL, data) == {'avail': True}
     with differential(FLAT_MODEL, data, lp=True) as run:
-        # every p at its own upper bound; the cap of 100 never binds
-        assert run.result.objective == pytest.approx(1 + 2 + 3, rel=RTOL)
+        assert run.result.objective == pytest.approx(1 + 2 + 3, rel=RTOL), (
+            'every p at its own upper bound; the cap of 100 never binds'
+        )
 
 
 def test_the_positional_attach_sorts_rather_than_trusting_the_source_order():

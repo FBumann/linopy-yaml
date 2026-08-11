@@ -13,9 +13,9 @@ the same shape down to the schema.
 The one split kept is *how much product is materialised*. A mask that cannot
 see the leading dims removes the same coordinates under every one of their
 values, so the survivors are a rectangle and only the masked suffix needs rows
-(:func:`_factored`): on `sector/m`, labelling one time-invariantly-masked
-variable through the full product peaked +177 MB and 17 ms where the rectangle
-costs a few hundred rows plus the output.
+(:func:`_factored`): labelling one time-invariantly-masked variable through the
+full product costs a peak the rectangle avoids entirely, where the rectangle is
+a few hundred rows plus the output.
 """
 
 from __future__ import annotations
@@ -60,12 +60,11 @@ def frame(
     **Nothing sorts unless the data says it must.** The product is *produced*
     in declaration order, a filter keeps it and a semi-join usually does, so
     :func:`in_position_order` verifies linearly and sorts only when the engine
-    emitted another order: ~0.01 s against 0.26 s of a 0.73 s build at
-    `dispatch/l` for the unconditional sort.
+    emitted another order. The unconditional sort was a large share of a build.
 
     **Nothing renumbers unless a row was dropped**, either. With neither mask
     nor restriction, ``start + position`` *is* the label and the row-index pass
-    never runs — ~3 ms per unmasked declaration on `fleet`, which carries 19.
+    never runs — which is per declaration, on a model that may carry dozens.
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))
@@ -119,9 +118,9 @@ def _factored(
     **The survivors go on the left of the cross join**, the side the streaming
     engine cycles fastest, so survivors turning over within each head
     coordinate is label order and :func:`in_position_order` permutes nothing.
-    The other way round sorts the whole variable frame on every build — a
-    million rows on `dispatch/m`, 45% slower. Which side cycles is an
-    implementation detail of a dependency asserted nowhere: the verify is what
+    The other way round sorts the whole variable frame on every build, which is
+    the dominant cost on a wide model. Which side cycles is an implementation
+    detail of a dependency asserted nowhere: the verify is what
     makes it safe to exploit, and would turn a change in polars back into a
     sort rather than into wrong labels. Rearranging means re-measuring.
     """

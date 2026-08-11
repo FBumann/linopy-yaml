@@ -20,7 +20,23 @@ Cases are chosen so each stresses a *different* SQL shape (docs/ARCHITECTURE.md,
                stream against itself on ``snapshot.ord - 1``. Held at
                ``dispatch``'s width on ``dispatch``'s snapshot counts, so the two
                ladders differ in exactly one thing: whether a row reaches the
-               previous one.
+               previous one. ``soc_balance`` carries a row per store against
+               ``power_balance``'s one, so the self-join dominates the case
+               rather than garnishing it.
+``sector``     ``nodal``'s sparse portfolio crossed with dense carriers: ``p`` is
+               sparse in (node, tech) while ``shed`` and the balance are dense in
+               (node, carrier), and the objective spans both.
+``fleet``      the same variable total spread over many declarations rather than
+               one large one — the only axis it varies.
+``profiled``   ``nodal``'s ladder with no mask, held at the same cardinalities so
+               the two differ in exactly one thing: whether the parameters span
+               the variable product or a subset of it. Its availability table has
+               a row per variable, which is where "I/O is noise" gets tested.
+
+A rung label counts variables per snapshot across *all* of a case's
+declarations, so the ladders read against each other.  ``nominal_variables`` is
+the full coordinate product; what survives a mask is measured rather than
+assumed (``live`` in the report).
 
 Data is generated once per (case, shape) into a cache directory and both arms
 read the same parquet files, so no arm pays a generation cost and neither can
@@ -120,14 +136,17 @@ def _dump(frames: dict[str, pd.DataFrame], dest: Path) -> dict[str, str]:
 
 
 def _dispatch_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``dispatch`` ladder.
+
+    Load is drawn against the fleet total so it is always feasible and never so
+    slack that every generator prices in at zero.
+    """
     rng = _seed(shape)
     n_snap, n_gen = shape.sizes['snapshot'], shape.sizes['generator']
     gens = [f'g{i:05d}' for i in range(n_gen)]
 
     p_max = rng.uniform(50.0, 150.0, n_gen)
     cost = rng.uniform(10.0, 100.0, n_gen)
-    # 60% +- 20% of the fleet: always feasible, never so slack that every
-    # generator prices in at zero.
     load = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
 
     return _dump(
@@ -195,6 +214,12 @@ def _portfolios(rng: np.random.Generator, n_node: int, n_tech: int, density: flo
 
 
 def _nodal_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``nodal`` ladder.
+
+    Every node meets its own demand from its own portfolio: the model has no
+    transmission, so feasibility must not depend on the draw. Only installed
+    pairs are written — the tidy table *is* the sparsity this case measures.
+    """
     rng = _seed(shape)
     n_snap, n_node = shape.sizes['snapshot'], shape.sizes['node']
     techs = list(TECHNOLOGIES[: shape.sizes['tech']])
@@ -204,14 +229,11 @@ def _nodal_data(shape: Shape, dest: Path) -> dict[str, str]:
     capacity = installed * rng.uniform(200.0, 800.0, (n_node, len(techs)))
     cost = rng.uniform(10.0, 100.0, len(techs))
 
-    # every node meets its own demand from its own portfolio: this model has no
-    # transmission, so feasibility must not depend on the draw
     at_node = capacity.sum(axis=1)
     demand = at_node[None, :] * 0.5 * (0.8 + 0.4 * rng.random((n_snap, n_node)))
 
     return _dump(
         {
-            # only installed pairs are stored — the tidy table *is* the sparsity
             'installed': pd.DataFrame(
                 {
                     'node': np.repeat(nodes, len(techs))[installed.reshape(-1)],
@@ -236,15 +258,19 @@ def _nodal_data(shape: Shape, dest: Path) -> dict[str, str]:
 
 
 def _nodal_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The same parquet files, as the linopy lane wants them.
+
+    The eager lane cannot hold an absent pair, so ``installed`` is reindexed
+    over the full node x tech product: that is what turns structural sparsity
+    into NaN padding, and doing it here rather than pretending otherwise is the
+    point of the case.
+    """
     import xarray as xr
 
     nodes = pd.read_parquet(paths['node'])['node']
     techs = pd.read_parquet(paths['tech'])['tech']
     cost = pd.read_parquet(paths['cost']).set_index('tech')['value']
     demand = pd.read_parquet(paths['demand'])
-    # the eager lane cannot hold an absent pair: reindexing over the full
-    # node x tech product is what turns structural sparsity into NaN padding,
-    # and doing it here rather than pretending otherwise is the point of the case
     installed = (
         pd.read_parquet(paths['installed'])
         .set_index(['node', 'tech'])['value']
@@ -275,6 +301,13 @@ CARRIERS = ('electricity', 'heat', 'hydrogen', 'gas', 'transport')
 
 
 def _sector_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``sector`` ladder.
+
+    ``reachable`` is what a node can actually deliver into a carrier. Demand
+    exists only where that is nonzero, which is what keeps the model feasible
+    on any draw and what makes the demand table sparse in (node, carrier) while
+    staying dense in time.
+    """
     rng = _seed(shape)
     n_snap, n_node = shape.sizes['snapshot'], shape.sizes['node']
     techs = list(TECHNOLOGIES[: shape.sizes['tech']])
@@ -286,9 +319,6 @@ def _sector_data(shape: Shape, dest: Path) -> dict[str, str]:
     serves = rng.integers(0, len(carriers), len(techs))
     efficiency = rng.uniform(0.3, 0.95, len(techs))
 
-    # what a node can actually deliver into a carrier. Demand exists only where
-    # that is nonzero, which is what keeps the model feasible on any draw and
-    # what makes the demand table sparse in (node, carrier) while dense in time
     reachable = np.zeros((n_node, len(carriers)))
     for t, c in enumerate(serves):
         reachable[:, c] += capacity[:, t] * efficiency[t]
@@ -325,15 +355,18 @@ def _sector_data(shape: Shape, dest: Path) -> dict[str, str]:
 
 
 def _sector_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The same parquet files, as the linopy lane wants them.
+
+    Both sparse tables are reindexed over their full product: the eager lane
+    has nowhere else to put an absent pair, and doing it in the open is what
+    makes the arms comparable.
+    """
     import xarray as xr
 
     nodes = pd.read_parquet(paths['node'])['node']
     techs = pd.read_parquet(paths['tech'])['tech']
     carriers = pd.read_parquet(paths['carrier'])['carrier']
     demand = pd.read_parquet(paths['demand'])
-    # both sparse tables are reindexed over their full product here: the eager
-    # lane has nowhere else to put an absent pair, and doing it in the open is
-    # what makes the arms comparable
     installed = (
         pd.read_parquet(paths['installed'])
         .set_index(['node', 'tech'])['value']
@@ -368,22 +401,26 @@ def _sector_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]
 
 
 def _transport_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``transport`` ladder.
+
+    Generation is dealt round-robin so every bus has some, and the network is a
+    ring plus chords, which makes ``from != to`` true by construction. Load is
+    sized against what a bus can raise from its own generators alone, so the
+    model is feasible whatever the line capacities do.
+    """
     rng = _seed(shape)
     n_snap = shape.sizes['snapshot']
     n_gen, n_bus, n_line = shape.sizes['generator'], shape.sizes['bus'], shape.sizes['line']
 
     buses = [f'b{i:04d}' for i in range(n_bus)]
     gens = [f'g{i:05d}' for i in range(n_gen)]
-    gen_bus = [buses[i % n_bus] for i in range(n_gen)]  # every bus gets generation
+    gen_bus = [buses[i % n_bus] for i in range(n_gen)]
     p_max = rng.uniform(50.0, 150.0, n_gen)
 
-    # a ring, then chords: from != to by construction
     lines = [f'l{i:05d}' for i in range(n_line)]
     frm = [buses[i % n_bus] for i in range(n_line)]
     to = [buses[(i % n_bus + 1 + i // n_bus) % n_bus] for i in range(n_line)]
 
-    # each bus is servable from its own generators alone, so the model is
-    # feasible whatever the line capacities do
     own = pd.Series(p_max, index=gen_bus).groupby(level=0).sum().reindex(buses).to_numpy()
     load = own[None, :] * 0.5 * (0.8 + 0.4 * rng.random((n_snap, n_bus)))
     snaps = np.repeat(np.arange(n_snap), n_bus)
@@ -440,13 +477,16 @@ FLEET_VARIABLES = (
 
 
 def _fleet_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``fleet`` ladder.
+
+    Demand sits where the balance can be met three ways and all three are
+    priced, so the optimum is a choice rather than "take the free one".
+    """
     rng = _seed(shape)
     n_snap, n_unit = shape.sizes['snapshot'], shape.sizes['unit']
     units = [f'u{i:05d}' for i in range(n_unit)]
 
     p_max = rng.uniform(50.0, 150.0, n_unit)
-    # the balance can be met three ways and all three are priced, so the
-    # optimum is a choice rather than "take the free one"
     demand = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
 
     return _dump(
@@ -478,6 +518,21 @@ def _fleet_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]
 
 
 def _profiled_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``profiled`` ladder.
+
+    The point of the case is an availability factor per (snapshot, node, tech),
+    so ``availability`` has one row per variable rather than per coordinate of
+    some smaller product. It is never zero: this case carries no mask, and a
+    zero upper bound would be sparsity by the back door. Demand is half of what
+    is available in *that* snapshot, so a draw is feasible without depending on
+    a profile that happens to be high somewhere.
+
+    Its label columns are categorical, unlike the other generators': the upper
+    rungs run to millions of rows, where two object columns of repeated labels
+    would cost more to build than the model does. The parquet is
+    dictionary-encoded either way, so nothing about what the arms *read*
+    changes.
+    """
     rng = _seed(shape)
     n_snap, n_node = shape.sizes['snapshot'], shape.sizes['node']
     techs = list(TECHNOLOGIES[: shape.sizes['tech']])
@@ -485,13 +540,7 @@ def _profiled_data(shape: Shape, dest: Path) -> dict[str, str]:
     nodes = [f'n{i:04d}' for i in range(n_node)]
 
     capacity = rng.uniform(200.0, 800.0, (n_node, n_tech))
-    # the point of the case: an availability factor per (snapshot, node, tech),
-    # so `availability` has one row per variable rather than per coordinate of
-    # some smaller product. Never zero — this case carries no mask, and a zero
-    # upper bound would be sparsity by the back door.
     availability = capacity[None, :, :] * (0.2 + 0.8 * rng.random((n_snap, n_node, n_tech)))
-    # half of what is available in *that* snapshot: feasible on every draw
-    # without depending on a profile that happens to be high somewhere
     demand = availability.sum(axis=2) * 0.5
 
     return _dump(
@@ -499,11 +548,6 @@ def _profiled_data(shape: Shape, dest: Path) -> dict[str, str]:
             'availability': pd.DataFrame(
                 {
                     'snapshot': np.repeat(np.arange(n_snap), n_node * n_tech),
-                    # categorical, unlike the other generators: at the `l` rung
-                    # this frame is 12M rows, and two object columns of repeated
-                    # labels would cost more to build than the model does. The
-                    # parquet is dictionary-encoded either way, so nothing about
-                    # what the arms *read* changes.
                     'node': pd.Categorical.from_codes(
                         np.tile(np.repeat(np.arange(n_node), n_tech), n_snap), categories=pd.Index(nodes)
                     ),
@@ -530,6 +574,17 @@ def _profiled_data(shape: Shape, dest: Path) -> dict[str, str]:
 
 
 def _profiled_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The same parquet files, as the linopy lane wants them.
+
+    This is the eager lane at its best, and the case exists to let it be: the
+    file already carries the layout xarray wants, so ``availability`` reads and
+    reshapes rather than aligning. Routing it through ``from_series`` like the
+    sparse cases would time a sort the *harness* imposed rather than one the
+    shape requires, and would make the comparison dishonest in our favour.
+    Order is load-bearing — ``_profiled_data`` writes C-order (snapshot, node,
+    tech) — so a permuted file would change the objective and the parity gate
+    would kill the run before anything is timed.
+    """
     import xarray as xr
 
     nodes = pd.read_parquet(paths['node'])['node']
@@ -537,14 +592,6 @@ def _profiled_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, An
     snapshots = pd.read_parquet(paths['snapshot'])['snapshot']
     demand = pd.read_parquet(paths['demand'])
 
-    # This is the eager lane at its best, and the case exists to let it be:
-    # the file already carries the layout xarray wants, so it reads and
-    # reshapes rather than aligning. Routing it through `from_series` like the
-    # sparse cases would time a sort the *harness* imposed, not one the shape
-    # requires, and would make the comparison dishonest in our favour. Order is
-    # load-bearing — the generator writes C-order (snapshot, node, tech) — so a
-    # permuted file would change the objective and the parity gate would kill
-    # the run before anything is timed.
     values = pd.read_parquet(paths['availability'])['value'].to_numpy()
     availability = xr.DataArray(
         values.reshape(len(snapshots), len(nodes), len(techs)),
@@ -570,6 +617,16 @@ def _profiled_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, An
 
 
 def _storage_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``storage`` ladder.
+
+    Load is ``dispatch``'s, for ``dispatch``'s reason: the generators alone
+    serve every snapshot, so ``charge == discharge == soc == 0`` satisfies both
+    constraints whatever the storage parameters say, and feasibility never
+    depends on the half of the model this case exists to measure. The optimum
+    uses storage anyway — generator costs spread over an order of magnitude, so
+    arbitrage beats the round-trip loss, where a case whose optimum is
+    ``soc == 0`` would build the same rows and prove nothing.
+    """
     rng = _seed(shape)
     n_snap = shape.sizes['snapshot']
     n_gen, n_store = shape.sizes['generator'], shape.sizes['store']
@@ -577,14 +634,7 @@ def _storage_data(shape: Shape, dest: Path) -> dict[str, str]:
     gens = [f'g{i:05d}' for i in range(n_gen)]
     stores = [f's{i:05d}' for i in range(n_store)]
     p_max = rng.uniform(50.0, 150.0, n_gen)
-    # dispatch's load, for dispatch's reason: the generators alone serve every
-    # snapshot, so `charge == discharge == soc == 0` satisfies both constraints
-    # whatever the storage parameters say. Feasibility does not depend on the
-    # half of the model this case exists to measure.
     load = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
-    # ...and the optimum uses storage anyway: generator costs spread over an
-    # order of magnitude, so arbitrage beats the round-trip loss. A case whose
-    # optimum is `soc == 0` would build the same rows and prove nothing.
     p_store = rng.uniform(10.0, 40.0, n_store)
 
     return _dump(
@@ -632,12 +682,18 @@ def _ladder(
     per_snapshot: int,
     density: float = 1.0,
 ) -> tuple[Shape, ...]:
-    #: `xs`..`l` is the published ladder — the range the tables compare across
-    #: cases. `xl` and `2xl` are 4x and 12x the `l` rung and answer a different
-    #: question: whether an engine that keeps the model resident holds together
-    #: where one that spills would. Every case grows by the same two factors, so
-    #: the top rungs stay comparable with each other rather than each case
-    #: choosing its own idea of "large".
+    """A case's rungs, one per entry of *snapshots*.
+
+    ``xs``..``l`` is the published ladder — the range the tables compare across
+    cases. ``xl`` and ``2xl`` answer a different question: whether an engine
+    that keeps the model resident holds together where one that spills would.
+    ``2xl`` is the capability rung, where ``docs/benchmarks.md`` claims a model
+    whose dense build cannot fit on the machine still streams out under the
+    budget; a rung nothing else survives is the only way to keep testing that
+    claim rather than restating it. Every case grows by the same two factors,
+    so the top rungs stay comparable with each other rather than each case
+    choosing its own idea of "large".
+    """
     labels = ('xs', 's', 'm', 'l', 'xl', '2xl')
     return tuple(
         Shape(labels[i], {**sizes, 'snapshot': n}, n * per_snapshot, density)
@@ -664,15 +720,6 @@ CASES: dict[str, Case] = {
     'dispatch': Case(
         name='dispatch',
         model=MODELS / 'dispatch.yaml',
-        # 100 generators: 1e4 / 1e5 / 1e6 / 1e7 / 4e7 variables.
-        # `xl` is not just one more rung: below it every arm fits in RAM, so
-        # the ladder measures throughput and says nothing about the invariant
-        # the architecture exists for. It is the first rung where a budgeted
-        # engine and an unbudgeted one visibly part company.
-        # `2xl` (1.2e8) is the capability rung: docs/benchmarks.md claims a
-        # model whose dense build cannot fit on the machine still streams out
-        # under the budget, and a rung nothing else survives is the only way to
-        # keep testing that claim rather than restating it.
         ladder=_ladder({'generator': 100}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100),
         write=_dispatch_data,
         eager_inputs=_dispatch_eager,
@@ -680,11 +727,6 @@ CASES: dict[str, Case] = {
     'fleet': Case(
         name='fleet',
         model=MODELS / 'fleet.yaml',
-        # 12 variables and 7 constraints over (snapshot, unit), so the rung
-        # labels count the *total* across declarations and stay comparable
-        # with the rest of the ladder. `per_snapshot` is 12 declarations x 50
-        # units; what this case varies is how many declarations that total is
-        # spread over, and nothing else.
         ladder=_ladder({'unit': 50}, (20, 200, 2_000, 20_000, 80_000, 240_000), per_snapshot=600),
         write=_fleet_data,
         eager_inputs=_fleet_eager,
@@ -692,10 +734,6 @@ CASES: dict[str, Case] = {
     'nodal': Case(
         name='nodal',
         model=MODELS / 'nodal.yaml',
-        # 50 nodes x 12 technologies = 600 coordinates per snapshot, of which 3
-        # per node are installed. `nominal_variables` is the *full* product;
-        # what survives is measured, never assumed (see `live` in the report).
-        # The density sweep is 12 / 6 / 3 / 1 technologies per node.
         ladder=(
             *_ladder(
                 {'node': 50, 'tech': 12}, (20, 200, 2_000, 20_000, 80_000, 240_000), per_snapshot=600, density=0.25
@@ -708,9 +746,6 @@ CASES: dict[str, Case] = {
     'sector': Case(
         name='sector',
         model=MODELS / 'sector.yaml',
-        # 50 nodes x 12 technologies at 8% installed, crossed with 5 dense
-        # carriers. `p` is sparse in (node, tech); `shed` and the balance are
-        # dense in (node, carrier); the objective spans both.
         ladder=_ladder(
             {'node': 50, 'tech': 12, 'carrier': 5},
             (20, 200, 2_000, 20_000, 80_000, 240_000),
@@ -723,12 +758,6 @@ CASES: dict[str, Case] = {
     'profiled': Case(
         name='profiled',
         model=MODELS / 'profiled.yaml',
-        # `nodal`'s ladder with no mask: 50 nodes x 12 technologies, all
-        # installed. Held at those cardinalities on purpose — the two cases then
-        # differ in exactly one thing, whether the parameters span the variable
-        # product or a subset of it, so the rungs can be read against each other.
-        # At `l` that is a 12M-row availability table against a 12M coordinate
-        # product, which is where the "I/O is noise" claim gets tested.
         ladder=_ladder({'node': 50, 'tech': 12}, (20, 200, 2_000, 20_000, 80_000, 240_000), per_snapshot=600),
         write=_profiled_data,
         eager_inputs=_profiled_eager,
@@ -736,7 +765,6 @@ CASES: dict[str, Case] = {
     'transport': Case(
         name='transport',
         model=MODELS / 'transport.yaml',
-        # 100 generators + 40 lines per snapshot
         ladder=_ladder(
             {'generator': 100, 'bus': 20, 'line': 40}, (70, 700, 7_000, 70_000, 280_000, 840_000), per_snapshot=140
         ),
@@ -746,12 +774,6 @@ CASES: dict[str, Case] = {
     'storage': Case(
         name='storage',
         model=MODELS / 'storage.yaml',
-        # 40 generators + 20 stores x 3 declarations = 100 variables per
-        # snapshot, on dispatch's snapshot counts: deliberately dispatch's
-        # ladder, so the rungs read against each other and the difference
-        # between them is the recurrence and nothing else.
-        # `soc_balance` is 20 rows per snapshot against `power_balance`'s one,
-        # so the self-join is what dominates the case rather than garnishing it.
         ladder=_ladder(
             {'generator': 40, 'store': 20}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100
         ),

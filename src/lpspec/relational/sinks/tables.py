@@ -82,8 +82,8 @@ class ModelTables:
         ``budget=None`` is one span, and a real answer: whether splitting pays
         is a property of the API being fed, not the model. HiGHS takes a chunk
         at a time and its budget bounds the temporary; Gurobi's ``addMConstr``
-        charges ~42 ns per *model column* per call whatever the block holds —
-        0.23 s in one call against 0.89 s in forty on the same matrix (#434).
+        charges per *model column* per call whatever the block holds, so
+        splitting a matrix into many blocks costs it dearly (#434).
 
         Private, so no caller can pair spans and entries that disagree.
         """
@@ -126,8 +126,7 @@ class ModelTables:
 
         **Nothing textual crosses into numpy**: a polars ``String`` converts by
         boxing every value as a Python object, so the test against
-        ``'continuous'`` is made in polars and only its answer crosses — 0.04 s
-        against 0.95 s at 10M columns.
+        ``'continuous'`` is made in polars and only its answer crosses.
         """
         import numpy as np
 

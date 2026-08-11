@@ -107,8 +107,7 @@ def test_runtime_is_linopy_free(dispatch_yaml):
             coords={{"snapshot": range(3)}},
         )
         assert result.is_ok
-        # the whole round trip stayed in Arrow: no dataframe on either side
-        assert isinstance(result.primal("p"), pl.DataFrame)
+        assert isinstance(result.primal("p"), pl.DataFrame), "no dataframe on either side"
         assert result.primal("p").height == 9
         result.close()
         for lib in {absent!r}:
@@ -131,19 +130,22 @@ def test_check_and_load_model_need_no_data(dispatch_yaml):
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
-        ('sum(p ** 2, over=generator)', r"operator '\*\*'"),
-        # the CI verb enforces degree 1 with no data bound (docs/design/ceiling.md)
-        ('sum(p * p, over=generator)', 'degree 2'),
+        pytest.param('sum(p ** 2, over=generator)', r"operator '\*\*'", id='an-operator-outside-the-language'),
+        pytest.param('sum(p * p, over=generator)', 'degree 2', id='degree-2-caught-with-no-data-bound'),
     ],
 )
 def test_check_reports_language_errors_before_any_data_is_bound(
     dispatch_yaml, dispatch_frame_inputs, expression, match
 ):
+    """The CI verb enforces the ceiling with no data bound (docs/design/ceiling.md).
+
+    ``build`` is asserted to say the same thing rather than defer it to the
+    solver.
+    """
     raw = schema_of(dispatch_yaml, **{'objectives.total_cost.expression': expression}).model_dump()
 
     with pytest.raises(lps.LanguageError, match=match):
         lps.check(raw)
-    # ...and build says the same thing rather than deferring it to the solver
     sources, coords = dispatch_frame_inputs
     with pytest.raises(lps.LanguageError, match=match):
         lps.build(raw, sources, coords=coords)
@@ -221,7 +223,7 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
     generators = list(sources['p_max']['generator'])
     with lps.solve(dispatch_yaml, sources, coords=coords) as result:
         first = result.primal('p')
-        assert first.equals(result.primal('p'))  # a second read agrees, to the row
+        assert first.equals(result.primal('p')), 'a second read agrees, to the row'
 
         by_declaration = first.with_columns(
             pl.col('generator').replace_strict(generators, range(len(generators))).alias('ord')
@@ -229,7 +231,7 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
         assert by_declaration.equals(by_declaration.sort('snapshot', 'ord'))
 
         written = [result.to_parquet(tmp_path / f'solution{i}')['p'].read_bytes() for i in range(3)]
-        assert len(set(written)) == 1  # the same solution writes the same bytes
+        assert len(set(written)) == 1, 'the same solution writes the same bytes'
 
 
 def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_frame_inputs):
@@ -244,7 +246,7 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
     result = lps.solve(dispatch_yaml, sources, coords=coords)
     height = result.primal('p').height
     assert height > 0
-    assert result.primal('p').height == height  # still there, no close in sight
+    assert result.primal('p').height == height, 'still readable, with no close in sight'
 
     result.close()
     with pytest.raises(lps.LpspecError, match='this result was closed'):
@@ -268,14 +270,12 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
         before = first.primal('p').sort(key)
         assert first.is_ok
 
-        # force a different optimum: flip the costs, so the same feasible set
-        # is served by the other generators
         assert ex._obj is not None
         ex._obj = ex._obj.with_columns(-pl.col('coeff'))
         second = ex.solve()
 
-        assert not second.primal('p').sort(key).equals(before)  # the second solve really moved
-        assert first.primal('p').sort(key).equals(before)  # and the first still reports its own
+        assert not second.primal('p').sort(key).equals(before), 'the second solve really moved'
+        assert first.primal('p').sort(key).equals(before), 'and the first still reports its own'
         assert first.objective != pytest.approx(second.objective)
 
 
@@ -324,12 +324,13 @@ def test_solution_to_dataarray(dispatch_yaml, dispatch_frame_inputs):
         arr = result.to_dataarray('p')
         tidy = result.to_pandas('p')
 
-    assert arr.name == 'p'  # not 'value', the tidy column it came from
+    assert arr.name == 'p', "named for the variable, not 'value' — the tidy column it came from"
     assert sorted(arr.dims) == ['generator', 'snapshot']
     assert arr.sizes['generator'] == 3
-    # the labelled form is the tidy form, indexed
     wind_0 = tidy.query("generator == 'wind' and snapshot == 0")['value'].iloc[0]
-    assert float(arr.sel(generator='wind', snapshot=0)) == pytest.approx(wind_0)
+    assert float(arr.sel(generator='wind', snapshot=0)) == pytest.approx(wind_0), (
+        'the labelled form is the tidy form, indexed'
+    )
 
 
 def test_solution_to_dataset(dispatch_yaml, dispatch_frame_inputs):
@@ -380,7 +381,7 @@ def test_to_dataset_defaults_to_every_variable():
 
     assert set(ds.data_vars) == {'p', 'shed'}
     assert sorted(ds['p'].dims) == ['generator', 'snapshot']
-    assert list(ds['shed'].dims) == ['snapshot']  # keeps its own dims
+    assert list(ds['shed'].dims) == ['snapshot'], 'each variable keeps its own dims'
     assert set(subset.data_vars) == {'shed'}
 
 
