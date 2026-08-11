@@ -1,0 +1,54 @@
+# One investment period: what to build, and how it runs on a few typical days.
+#
+# The model never mentions the period. `EachCoordinate('year', ordered=True)`
+# filters every source to one year and drops the column, so this file is the
+# math for *a* year and the driver decides which.
+#
+# `existing` is what the previous period carried across, and `total` is the
+# derived variable that adds this period's build to it. That addition lives
+# here rather than in the driver because `carry` is a copy and never
+# arithmetic: accumulation is math, and math belongs in the file a reviewer
+# reads and the oracle checks.
+version: 0
+
+dimensions:
+  day: {dtype: str} # typical days, each standing for many real ones
+  hour: {dtype: int}
+  generator: {dtype: str}
+
+parameters:
+  weight: {dims: [day]} # how many real days this typical day represents
+  load: {dims: [day, hour]}
+  avail: {dims: [day, hour, generator]} # capacity factor
+  invest: {dims: [generator]} # annualised build cost per MW
+  cost: {dims: [generator]} # variable cost per MWh
+  existing: {dims: [generator]} # carried in from the previous period
+
+variables:
+  build:
+    foreach: [generator]
+    bounds: {lower: 0}
+  total: # existing + build, and what the next period inherits
+    foreach: [generator]
+    bounds: {lower: 0}
+  p:
+    foreach: [day, hour, generator]
+    bounds: {lower: 0}
+
+constraints:
+  accumulate:
+    foreach: [generator]
+    expression: total == existing + build
+
+  capacity:
+    foreach: [day, hour, generator]
+    expression: p <= total * avail
+
+  balance:
+    foreach: [day, hour]
+    expression: sum(p, over=generator) == load
+
+objectives:
+  cost:
+    sense: minimize
+    expression: sum(invest * build, over=generator) + sum(weight * cost * p, over=generator)

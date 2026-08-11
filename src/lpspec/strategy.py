@@ -6,7 +6,9 @@ never a language feature and never an engine feature — it is a driver above
 :mod:`lpspec.api`, built from the public verbs, and no lane learns a new word.
 
 Every strategy is the same fold: **partition → build → solve → carry →
-stitch**. Only how slices are cut and whether they couple differs.
+stitch**. Only how slices are cut and whether they couple differs. (The
+*stage* stitches; a reader asks for its result by the index it wants, which is
+:meth:`Runs.primal`'s ``original_index``.)
 
     scenario / sweep    ``EachCoordinate('scenario')``              independent
     myopic pathway      ``EachCoordinate('period', ordered=True)``  + ``carry``
@@ -53,6 +55,27 @@ _COMPRESSION = 'zstd'
 Cut = tuple[Any, dict[str, Any], dict[str, Any]]
 
 
+@dataclass(frozen=True)
+class _OriginalIndex:
+    """The way back from a windowed sweep's slices to the dimension it sliced.
+
+    ``owned`` is ``(key, local, dim)`` for the coordinates each window is
+    *responsible* for — its first ``step``, the rest being lookahead the next
+    window recomputes. An inner join against it is the whole operation: it
+    restores the original coordinate, and because a coordinate may appear only
+    once under its own index, the lookahead rows have nowhere to go.
+
+    **One-way, and that is why it holds only the owned coordinates.** It is the
+    return path, not a record of the slicing: the lookahead rows are not in it,
+    so a sliced frame cannot be rebuilt from it. Slicing is
+    :meth:`EachWindow._slices`' business and stays there.
+    """
+
+    local: str
+    dim: str
+    owned: pl.DataFrame
+
+
 # ---------------------------------------------------------------------------
 # axes — how slices are cut
 # ---------------------------------------------------------------------------
@@ -73,14 +96,19 @@ class EachCoordinate:
     dim: str
     ordered: bool = False
 
-    def _slices(self, sources: Mapping[str, Any]) -> list[Cut]:
-        """One cut per coordinate, keyed by it. Sources without *dim* pass through."""
+    def _slices(self, sources: Mapping[str, Any], key_name: str) -> tuple[list[Cut], _OriginalIndex | None]:
+        """One cut per coordinate, keyed by it. Sources without *dim* pass through.
+
+        No :class:`_OriginalIndex`: nothing was re-indexed, so a slice's frames
+        already carry the coordinates they were solved over.
+        """
+        del key_name
         carrying, coordinates = _coordinates(sources, self.dim, 'slice')
         out: list[Cut] = []
         for key in coordinates:
             cut = {name: _lazy(sources[name]).filter(pl.col(self.dim) == key).drop(self.dim) for name in carrying}
             out.append((key, {**sources, **cut}, {}))
-        return out
+        return out, None
 
 
 @dataclass(frozen=True)
@@ -124,7 +152,7 @@ class EachWindow:
         if self.into == self.dim:
             raise ValueError(f'into={self.into!r} must differ from dim — the local index replaces the global one')
 
-    def _slices(self, sources: Mapping[str, Any]) -> list[Cut]:
+    def _slices(self, sources: Mapping[str, Any], key_name: str) -> tuple[list[Cut], _OriginalIndex]:
         """One cut per window, keyed by its **first coordinate**.
 
         Keyed by the coordinate rather than the window's position, which is
@@ -133,9 +161,16 @@ class EachWindow:
 
         The filter leads because it is what a scan can push down; the
         re-indexing that follows is over a frame already cut to one window.
+
+        **A window owns its first ``step`` coordinates**, and the
+        :class:`_OriginalIndex` records which — the rest is lookahead the next window
+        recomputes. The final window can hold no more than ``step``, its start
+        being the last multiple of ``step`` below the end, so the same rule
+        keeps all of it and nothing is dropped off the tail.
         """
         carrying, coordinates = _coordinates(sources, self.dim, 'window')
         out: list[Cut] = []
+        owned: list[dict[str, Any]] = []
         for start in range(0, len(coordinates), self.step):
             window = coordinates[start : start + self.length]
             local = {coordinate: position for position, coordinate in enumerate(window)}
@@ -149,7 +184,11 @@ class EachWindow:
                 for name in carrying
             }
             out.append((window[0], {**sources, **cut}, {self.into: range(len(window))}))
-        return out
+            owned.extend(
+                {key_name: window[0], self.into: position, self.dim: coordinate}
+                for position, coordinate in enumerate(window[: self.step])
+            )
+        return out, _OriginalIndex(self.into, self.dim, pl.DataFrame(owned))
 
 
 #: What ``axis=`` accepts. A plain list of ``(key, sources, coords)`` is also
@@ -169,6 +208,16 @@ class Runs:
     :class:`~lpspec.relational.result.Result`'s readers one dimension wider —
     same names, same shapes, the slice key prepended.
 
+    **Keyed is the default; the original index is asked for.** Reading a
+    windowed sweep over the dimension it re-indexed is the nicer answer, but a
+    *lossy* one — a coordinate may appear only once under its own index, so the
+    lookahead rows every overlapping window solved have nowhere to go. A reader
+    that discarded them by default would be throwing away computed answers
+    silently, and it would key differently from :attr:`objective`, which is one
+    row per slice always, so the two would stop joining.
+    ``original_index=True`` is one word at the call site and says which was
+    meant.
+
     **Nothing is aggregated, and that is the decision.** Scenarios are a
     distribution rather than a sum, summing window objectives double-counts
     whatever the overlap discards, and a window's shadow price is that
@@ -185,6 +234,7 @@ class Runs:
     _primals: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
     _duals: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
     _no_duals: str | None = field(repr=False, default=None)
+    _original: _OriginalIndex | None = field(repr=False, default=None)
 
     @property
     def objective(self) -> pl.DataFrame:
@@ -207,29 +257,72 @@ class Runs:
             raise LpspecError(absent or _nothing_to_read(kind, name, held, self.meta))
         return pl.concat(held[name])
 
-    def primal(self, name: str) -> pl.DataFrame:
+    def primal(self, name: str, *, original_index: bool = False) -> pl.DataFrame:
         """One variable's values across every slice, the slice key prepended.
 
         A slice that reached no solution contributes no rows, so this frame can
         be shorter than the sweep — :attr:`objective` is the record of which
         slices those were, and it is one row per slice always.
-        """
-        return self._read(self._primals, 'variable', name)
 
-    def dual(self, name: str) -> pl.DataFrame:
+        ``original_index=True`` asks for the same values over the dimension the
+        axis sliced instead — see :meth:`_reindexed`.
+        """
+        return self._reindexed(self._read(self._primals, 'variable', name), original_index=original_index)
+
+    def dual(self, name: str, *, original_index: bool = False) -> pl.DataFrame:
         """One constraint's shadow prices across every slice, the key prepended.
 
-        :meth:`primal`'s shape and caveats, plus one of its own: a slice whose
-        model had an integer variable has no duals to contribute, so a mixed
-        sweep can be shorter here than there.
+        :meth:`primal`'s shape, caveats and ``original_index``, plus one of its
+        own: a slice whose model had an integer variable has no duals to
+        contribute, so a mixed sweep can be shorter here than there.
 
-        **Nothing is combined.** Averaging window prices, taking the last, and
-        reading one slice alone are all defensible, and this cannot know which
-        was meant.
+        **Nothing is combined** either way. Averaging window prices and taking
+        the last are both defensible and neither is done; over the original
+        index each coordinate carries the price of *the window that owns it*,
+        which is one window's answer rather than a blend of several.
         """
-        return self._read(self._duals, 'constraint', name, self._no_duals)
+        return self._reindexed(
+            self._read(self._duals, 'constraint', name, self._no_duals), original_index=original_index
+        )
 
-    def to_pandas(self, name: str) -> pd.DataFrame:
+    def _reindexed(self, frame: pl.DataFrame, *, original_index: bool) -> pl.DataFrame:
+        """*frame* over the dimension the axis sliced, rather than over its slices.
+
+        **One operation, not two.** Restoring the original coordinate is the
+        whole of it; dropping the overlap falls out, because a coordinate may
+        appear only once under its own index and the lookahead rows have
+        nowhere to go. That is why a single window with no overlap at all still
+        needs this — the re-index fires regardless of how many pieces there
+        are, which is what the word *stitch* got wrong.
+
+        Each window contributes the ``step`` coordinates it owns, the final one
+        included, which can hold no more and so keeps all of it.
+
+        **Every axis answers it**, so code handed one need not ask which it
+        got. :class:`EachCoordinate` and a hand-built axis re-indexed nothing —
+        their key column already *is* a coordinate of the answer — so the frame
+        comes back unchanged, which is a satisfied request rather than an
+        ignored one.
+
+        A flag on the readers rather than a reader of its own, because what has
+        to be undone depends on the *axis* and not on which quantity was read:
+        duals get it for free, and a name that is both a variable and a
+        constraint (which the language permits) never has to be dispatched.
+
+        It takes a *frame* rather than a name, so making it public would be a
+        rename plus a precondition — the frame has to carry the key column and
+        the local index — for a caller with a quantity the sweep does not hold.
+        Nothing here forecloses that; it is private because the readers are
+        where a sweep's frames come from.
+        """
+        if not original_index or self._original is None:
+            return frame
+        keys = [self.key_name, self._original.local]
+        restored = frame.join(self._original.owned, on=keys, how='inner').drop(keys)
+        rest = [column for column in restored.columns if column not in (self._original.dim, 'value')]
+        return restored.select(self._original.dim, *rest, 'value').sort(self._original.dim, *rest)
+
+    def to_pandas(self, name: str, *, original_index: bool = False) -> pd.DataFrame:
         """:meth:`primal` as a tidy :class:`pandas.DataFrame`.
 
         **The name is resolved before pandas is imported.** A sweep that never
@@ -237,17 +330,22 @@ class Runs:
         a question about the environment when the caller asked one about their
         model.
         """
-        return tidy_to_pandas(self.primal(name))
+        return tidy_to_pandas(self.primal(name, original_index=original_index))
 
-    def to_dataarray(self, name: str) -> xr.DataArray:
+    def to_dataarray(self, name: str, *, original_index: bool = False) -> xr.DataArray:
         """:meth:`primal` as a :class:`xarray.DataArray`, the slice key a dimension.
 
-        ``(scenario, snapshot, generator)`` is what a sweep is *for* — ``.sel``
-        a scenario, take a quantile across them, plot the spread. A slice that
-        reached no solution has no rows and comes back NaN, the same answer a
-        masked coordinate gets from ``Result``.
+        The extra dimension is named by the axis, not by this class — a
+        scenario sweep gives ``(scenario, …)`` and a window ``(<dim>_start, …)``
+        — which is what a sweep is *for*: ``.sel`` one slice, take a quantile
+        across them, plot the spread. A slice that reached no solution has no
+        rows and comes back NaN, the same answer a masked coordinate gets from
+        ``Result``.
+
+        ``original_index=True`` gives the array over the dimension the axis
+        sliced instead, so a rolling horizon comes back indexed by time.
         """
-        return tidy_to_dataarray(self.to_pandas(name), name)
+        return tidy_to_dataarray(self.to_pandas(name, original_index=original_index), name)
 
     def to_dataset(self, *names: str) -> xr.Dataset:
         """Kept variables as one :class:`xarray.Dataset`; all of them by default.
@@ -255,6 +353,11 @@ class Runs:
         Costs more than ``Result``'s does — each variable arrives dense over
         its own dims *and* over every slice. Name the few you need, or use
         :meth:`to_parquet`.
+
+        No ``original_index``: this and :meth:`to_parquet` export what the
+        sweep *holds*, and the original index is lossy — the lookahead rows
+        every overlapping window computed cannot survive it. A bulk export is
+        the wrong place to lose them.
         """
         wanted = names or tuple(sorted(self._primals))
         if not wanted:
@@ -266,7 +369,7 @@ class Runs:
 
         Returns name → path, in :meth:`primal`'s order, so the same sweep
         writes the same bytes. This is a *copy out* of frames already held and
-        bounds nothing; spilling per slice, which would, is #477.
+        bounds nothing — what a sweep holds is #610.
         """
         if not self._primals:
             raise LpspecError(_nothing_to_read('variable', 'anything', self._primals, self.meta))
@@ -365,7 +468,10 @@ def solve_over(
     plan: dict[str, tuple[str, str | None, int | None]] = _carry_plan(schema, carry) if carry else {}
     key_name = _key_column(axis, key_name, schema)
 
-    cuts = axis._slices(sources) if isinstance(axis, (EachCoordinate, EachWindow)) else list(axis)
+    if isinstance(axis, (EachCoordinate, EachWindow)):
+        cuts, original = axis._slices(sources, key_name)
+    else:
+        cuts, original = list(axis), None
     if not cuts:
         raise DataError('the axis produced no slices')
 
@@ -430,6 +536,7 @@ def solve_over(
         _primals={name: frames for name, frames in primals.items() if frames},
         _duals={name: frames for name, frames in shadow.items() if frames},
         _no_duals=no_duals,
+        _original=original,
     )
 
 

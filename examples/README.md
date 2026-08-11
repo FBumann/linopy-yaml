@@ -16,6 +16,9 @@ reference implementation. This directory is the source; that is the guided tour.
 | `transport.yaml` | a network: coordinates on a dimension *are* the topology (`sum(group_by=)`) |
 | `piecewise.yaml` | per-generator convex cost curves (`piecewise:`) |
 | `walkthrough.yaml` | the model `walkthrough.py` prints every pipeline stage for |
+| `rolling/` | a storage schedule solved a window at a time, and what the lookahead buys (`solve_over`, `EachWindow`) |
+| `myopic/` | an investment pathway over periods of typical days, each inheriting the last one's fleet (`solve_over`, `carry`) |
+| `benders/` | the problem split in two and reassembled, checked against the monolith it decomposes |
 | `ports/` | eleven models somebody else already solved, checked against an optimum that did not come from us |
 
 `walkthrough.py` runs one model through YAML → schema → AST → plan → frames →
