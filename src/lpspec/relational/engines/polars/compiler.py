@@ -479,18 +479,18 @@ class PolarsCompiler:
     # expressions → fragments
     # ------------------------------------------------------------------
 
-    def expression(self, expr: plan.Expression, context: str, *, keep_order: bool = False) -> CompiledExpression:
+    def expression(self, expr: plan.Expression, context: str) -> CompiledExpression:
         """Compile an affine expression into term and const fragments.
 
-        *keep_order* asks every join in the walk to preserve its left side's
-        row order, and belongs to the one caller that reads the fragments raw:
-        the objective, whose repeated-column probe is one linear pass over an
-        ordered stack and a hash count over an unordered one (42 ms against
-        6 ms at 10M terms on `dispatch/l`). A constraint leaves it off — its
-        placement join re-derives order from the labelled row frame, so
-        keeping it here would tax `sector`'s and `storage`'s in-constraint
-        products for nothing. Order is verified where it is read, so the flag
-        decides speed, never correctness.
+        No join in the walk maintains order, on evidence rather than by
+        omission: a ``keep_order`` flag for the objective's raw read was
+        built, measured, and taken out again — the mul join's
+        ``maintain_order`` held the label order on some shapes and lost it on
+        others differing only in data, so the tax landed unpredictably and
+        `profiled/l`'s objective phase tripled paying it for nothing. Every
+        consumer re-derives or verifies order where it reads
+        (:meth:`PolarsExecutor._build_objective`'s docstring keeps the
+        numbers).
         """
 
         def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
@@ -499,8 +499,8 @@ class PolarsCompiler:
                 raise LanguageError(f'nonlinear product in {context}: both factors contain variables')
             if b.terms:
                 a, b = b, a
-            terms = tuple(_join_mul(t, c, is_term=True, keep_order=keep_order) for t in a.terms for c in b.consts)
-            consts = tuple(_join_mul(x, c, is_term=False, keep_order=keep_order) for x in a.consts for c in b.consts)
+            terms = tuple(_join_mul(t, c, is_term=True) for t in a.terms for c in b.consts)
+            consts = tuple(_join_mul(x, c, is_term=False) for x in a.consts for c in b.consts)
             return CompiledExpression(terms, consts)
 
         def quotient(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
@@ -513,8 +513,8 @@ class PolarsCompiler:
                     f'not a sum — rewrite as multiplication by a precomputed parameter'
                 )
             inv = b.consts[0]
-            terms = tuple(_join_mul(t, inv, is_term=True, divide=True, keep_order=keep_order) for t in a.terms)
-            consts = tuple(_join_mul(x, inv, is_term=False, divide=True, keep_order=keep_order) for x in a.consts)
+            terms = tuple(_join_mul(t, inv, is_term=True, divide=True) for t in a.terms)
+            consts = tuple(_join_mul(x, inv, is_term=False, divide=True) for x in a.consts)
             return CompiledExpression(terms, consts)
 
         def ev(e: plan.Expression) -> CompiledExpression:
@@ -1046,9 +1046,7 @@ def _negate(p: TermFragment) -> TermFragment:
     return replace(p, frame=p.frame.with_columns(-pl.col(p.value_column)))
 
 
-def _join_mul(
-    a: TermFragment, c: TermFragment, is_term: bool, divide: bool = False, *, keep_order: bool = False
-) -> TermFragment:
+def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = False) -> TermFragment:
     """``a * c`` (or ``a / c``) where *c* is a const fragment.
 
     Joins on shared dims, broadcasts the rest. The right-hand value is renamed
@@ -1067,23 +1065,12 @@ def _join_mul(
     zeroes a term, it does not unmake the variable underneath it. The output
     dims may be wider than ``a.dims``, which is why the presence key travels
     with the fragment rather than being re-derived from dims here (#345).
-
-    *keep_order* keeps *a*'s row order through the join, at a measured price —
-    the ordered collect cost +20 ms at 10M rows on `dispatch/l` — so it is
-    asked for only by the walk whose consumer reads the fragments raw
-    (:meth:`PolarsCompiler.expression`). Order is still verified where it is
-    read, so a join that shuffled anyway degrades a probe, never the model.
     """
     shared = [d for d in a.dims if d in c.dims]
     out_dims = a.dims + tuple(d for d in c.dims if d not in a.dims)
     right = c.frame.rename({'cval': _RHS})
     how = 'left' if divide else 'inner'
-    maintain: MaintainOrderJoin | None = 'left' if keep_order else None
-    joined = (
-        a.frame.join(right, on=shared, how=how, maintain_order=maintain)
-        if shared
-        else a.frame.join(right, how='cross', maintain_order=maintain)
-    )
+    joined = a.frame.join(right, on=shared, how=how) if shared else a.frame.join(right, how='cross')
 
     value, rhs = pl.col(a.value_column), pl.col(_RHS)
     combined = value / rhs if divide else value * rhs
