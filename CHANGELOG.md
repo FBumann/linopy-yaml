@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.99](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.98...v0.0.1-alpha.99) (2026-08-11)
+
+
+### Documentation
+
+* AGENTS.md carries how we work, CLAUDE.md just imports it ([#599](https://github.com/fluxopt/lpspec/issues/599)) ([e815252](https://github.com/fluxopt/lpspec/commit/e815252c5ce40e72104ca79300d57321d51d08f1))
+
 ## [0.0.1-alpha.98](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.97...v0.0.1-alpha.98) (2026-08-11)
 
 
