@@ -57,7 +57,28 @@ In the tree nothing is marked: `Co-Authored-By: Claude …` is the record.
   ```
 
   Kept inline: pragmas (`# pyrefly: ignore[…]` with its reason, `# fmt: skip`),
-  `#:` attribute docs, section banners.
+  `#:` attribute docs, section banners, and the two below.
+- **Put the claim in the message that prints** — the assertion message in a
+  test, the error or warning text in the code. A comment saying it is read by
+  whoever already found the line; a message is read by whoever hit it.
+
+  ```python
+  # no
+  assert runs.keys == ['high', 'low', 'mid']  # sorted, not data order
+
+  # yes
+  assert runs.keys == ['high', 'low', 'mid'], 'keys come back sorted, not in data order'
+  ```
+
+- **A sequence of cases is parametrized, and the `id` is the label.** Five
+  `pytest.raises` blocks in one test hide four failures behind the first and
+  keep their labels in the source; five `pytest.param(..., id='…')` print the
+  case that failed and select with `-k`.
+- **Two comments are not explanation, and stay where the eye lands**: a **case
+  label** where parametrizing would distort the test, and a **one-line
+  justification of a line that reads as a mistake** — a bare
+  `except BaseException`, a magic literal, a deliberate no-op. Moving either
+  into a docstring puts it where the reader is not.
 
 ## Docstrings
 
