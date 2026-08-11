@@ -80,7 +80,7 @@ rolling horizons and myopic pathways are all the same fold.
 
 ```python
 runs = lps.solve_over(
-    'model.yaml', sources, lps.EachCoordinate('scenario'), keep=('p',), executor=ProcessPoolExecutor(4)
+    'model.yaml', sources, lps.EachCoordinate('scenario'), executor=ProcessPoolExecutor(4)
 )
 runs.objective  # (scenario, status, termination_condition, objective)
 runs.primal('p')  # (scenario, snapshot, generator, value)
@@ -90,7 +90,6 @@ runs = lps.solve_over(
     sources,
     lps.EachWindow('snapshot', length=48, step=24, into='t'),
     carry={'soc_initial': ('soc', 23)},
-    keep=('p', 'soc'),
 )
 runs.primal('soc')  # (snapshot_start, t, value) — the window, and the index inside it
 ```
@@ -105,19 +104,20 @@ that is [a decision](#solving-one-model-many-times), not an omission.
 | Rule | |
 |---|---|
 | **a partition is a filter on the sources** | not a narrower `coords` — the containment check refuses parameter rows outside the declared coordinates, by design. The axis rewrites the sources and supplies the matching `coords` together |
-| **`keep` is mandatory in practice** | a fold releases each slice's model as it goes, so peak stays at one slice. What is not extracted inside the loop cannot be read afterwards |
+| **everything a slice produced is kept** | every variable's primals and every constraint's duals, read back through `runs.primal(name)` and `runs.dual(name)`. It is still a fold — each slice's *model* is released as the loop goes, so build peak stays at one slice however many there are, and what accumulates is the answer. Narrowing that is a later addition and an easy one; it is absent because it would need *two* keywords, a constraint being allowed to carry a variable's name |
+| **duals are keyed, never combined** | `runs.dual(name)` is `runs.primal(name)`'s shape. Averaging window prices, taking the last, and reading one slice alone are all defensible, so the reduction is the caller's. A slice whose model had an integer variable contributes none, and `runs.objective` says which |
 | **no aggregate objective** | `objective` is a frame keyed by slice. Scenarios are a distribution, not a sum; summing window objectives double-counts whatever the overlap discards |
 | **duals are not exposed** | a window's shadow price is that window's. Concatenating them into a price curve is wrong in a way nothing complains about |
 | `carry` is a copy, never arithmetic | `{parameter: (variable, index)}`. Accumulation — `existing += built` — is a derived variable in the YAML, where the math is reviewable |
 | **the two declarations say what is copied** | whichever dimension the *variable* has and the *parameter* does not is the one the carry collapses, and `index` names a coordinate of it. Everything else rides along. So `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t` and hands both stores forward, and `total` over `(generator)` into `existing` over `(generator)` drops nothing and needs no index — pass `None` |
 | the carry index is explicit | with `EachWindow(…, 48, 24, …)` the state to carry is at coordinate 23 of `into`, not 47. An implicit "last" is correct until overlap is introduced and silently wrong after |
-| **a carry is checked before anything is read** | the dims come from the YAML, so a carry that cannot line up — collapsing two dimensions at once, a parameter over more than the variable is, an index where the sides already match — raises before the axis has scanned a single source, never mind solved a slice. `check` cannot answer this for you: `carry` and `keep` are arguments to the call, not part of the model |
+| **a carry is checked before anything is read** | the dims come from the YAML, so a carry that cannot line up — collapsing two dimensions at once, a parameter over more than the variable is, an index where the sides already match — raises before the axis has scanned a single source, never mind solved a slice. `check` cannot answer this for you: `carry` is an argument to the call, not part of the model |
 | **a hand-built axis names its own key** | the class axes derive the key column — `EachCoordinate('scenario')` keys on `scenario`, a window on `<dim>_start` — but a plain list of cuts cannot say what its keys are coordinates *of*, so it must pass `key_name='draw'`. `'slice'` would be this library naming somebody else's axis, which is the same reason `into` has no default. `key_name` overrides the derived name anywhere, and is refused only when it collides with a dimension a kept variable already carries |
 | the model is parsed once | `solve_over` validates it up front and hands every slice the schema, so a model outside the streaming language fails before the data is touched and no worker re-reads the YAML |
 | **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`, so the key column is `snapshot_start` and holds where each window began. Naming it `snapshot` would put window starts under the name of the coordinate they are not, and join cleanly against real data |
 | a slice that did not solve | contributes no `primal` rows, so that frame can be shorter than the sweep. `objective` is one row per slice always, and is the record of which slices those were |
 | **the lookahead is `t >= step`** | overlapping windows return every row they solved, including the tail the next window recomputes. Keeping only what each window owns is one clause and no special case — `runs.primal('soc').filter(pl.col('t') < step)` — because the final window can never hold more than `step` rows |
-| the readers hold what the fold accumulated | `to_parquet` copies out frames already in memory; it does not bound the sweep. That is `keep`'s job, and spilling per slice is [#477](https://github.com/FBumann/lpspec/issues/477) |
+| the readers hold what the fold accumulated | `to_parquet` copies out frames already in memory and bounds nothing; spilling per slice, which would, is [#477](https://github.com/FBumann/lpspec/issues/477) |
 | **a window spans coordinates, not values** | `length=48` is forty-eight snapshots however they are numbered, so the dimension only has to be **orderable** — datetimes, strings and gapped integers all work. `into` is a dense `0..n-1` local index, which is what keeps the seam's `where: "t == 0"` matching, and it has no default because the name belongs to the model |
 | non-positional grouping | *"each calendar month"* has unequal groups, so it is a precomputed column plus `EachCoordinate`. What `EachWindow` uniquely offers is **overlap** |
 | `carry` excludes `executor` | a carried value makes slice *i+1* depend on slice *i*, so the slices cannot run concurrently. Refused rather than one silently winning |
@@ -154,7 +154,7 @@ from concurrent.futures import ProcessPoolExecutor
 def main():
     ctx = multiprocessing.get_context('spawn')  # or 'forkserver'
     with ProcessPoolExecutor(4, mp_context=ctx) as pool:
-        runs = lps.solve_over('model.yaml', sources, lps.EachCoordinate('scenario'), keep=('p',), executor=pool)
+        runs = lps.solve_over('model.yaml', sources, lps.EachCoordinate('scenario'), executor=pool)
 
 
 if __name__ == '__main__':  # spawn re-imports your module; without this it recurses
