@@ -84,7 +84,12 @@ def build_dim_coords(
     column per declared coordinate. The containment check mirrors the
     relational lane's: a value that is not a label of the target dimension
     would otherwise be dropped by xarray's inner-join alignment, silently
-    losing the term it carries.
+    losing the term it carries. A null value passes the check: it means "this
+    label belongs to no group" — row absence, not a typo.
+
+    Only a *targeted* coordinate is checked. An inline label coordinate
+    declares its own label space, so there is no dimension for its values to
+    be contained in and nothing the check could ask.
     """
     coords = coords or {}
     out: dict[str, dict[str, xr.DataArray]] = {}
@@ -127,8 +132,6 @@ def build_dim_coords(
             if cname in targeted:
                 target = targeted[cname]
                 known = set(master_coords[target])
-                # a null value means "this label belongs to no group" — row absence,
-                # not a typo; see the relational lane's containment check
                 unknown = sorted({str(v) for v in series if not pd.isna(v) and v not in known})[:5]
                 if unknown:
                     msg = (
@@ -228,7 +231,11 @@ def _coerce_to_dataarray(
     dims: list[str],
     master_coords: dict[str, pd.Index],
 ) -> xr.DataArray:
-    """Coerce a user-provided value into an xr.DataArray."""
+    """Coerce a user-provided value into an ``xr.DataArray``.
+
+    In the DataFrame branch the two-dims check guarantees flat columns, so
+    ``stack()`` yields a ``Series`` — which is what the ``cast`` asserts.
+    """
     if isinstance(raw, (int, float, np.integer, np.floating)):
         return xr.DataArray(float(raw))
 
@@ -238,7 +245,7 @@ def _coerce_to_dataarray(
             raise DataError(msg)
         series = pd.Series(raw)
         series.index.name = dims[0]
-        raw = series  # fall through to Series handling
+        raw = series
 
     if isinstance(raw, pd.Series):
         if len(dims) != 1:
@@ -265,7 +272,6 @@ def _coerce_to_dataarray(
             raw.index.name = dims[0]
         if raw.columns.name is None:
             raw.columns.name = dims[1]
-        # flat columns (checked above: exactly 2 dims), so stack() gives a Series
         stacked = cast('pd.Series', raw.stack())
         stacked.name = name
         return xr.DataArray.from_series(stacked).unstack()
@@ -353,9 +359,9 @@ def check_constant_side_covers(name: str, node: Any, schema: Model, dataset: Any
     reached by the shape each lane has to hand.
     """
     for side in (node.left, node.right):
-        if _variable_names(side, schema):
+        if _names_of(side, schema.variables):
             continue
-        params = _parameter_names(side, schema)
+        params = _names_of(side, schema.parameters)
         if not params:
             continue
         for param in sorted(params):
@@ -387,11 +393,11 @@ def check_divisors_cover(name: str, node: Any, schema: Model, dataset: Any, mask
     out — silently, and identically on both lanes until #312.
     """
     for quotient in _quotients(node):
-        params = _parameter_names(quotient.right, schema)
+        params = _names_of(quotient.right, schema.parameters)
         if not params:
             continue
         needed = mask
-        for variable in _variable_names(quotient.left, schema):
+        for variable in _names_of(quotient.left, schema.variables):
             present = model.variables[variable].labels != -1
             needed = present if needed is None else (needed & present)
         for param in sorted(params):
@@ -409,14 +415,6 @@ def _quotients(node: Any) -> list[Any]:
     for child in _children(node):
         out.extend(_quotients(child))
     return out
-
-
-def _parameter_names(node: Any, schema: Model) -> set[str]:
-    return _names_of(node, schema.parameters)
-
-
-def _variable_names(node: Any, schema: Model) -> set[str]:
-    return _names_of(node, schema.variables)
 
 
 def _names_of(node: Any, declared: Any) -> set[str]:

@@ -121,13 +121,17 @@ class Divide(Expression):
 
 @dataclass(frozen=True)
 class Sum(Expression):
-    """Sum ``operand`` over the named dims, removing them from the result."""
+    """Sum ``operand`` over the named dims, removing them from the result.
+
+    A bare string for ``over`` is tolerated and wrapped into a one-tuple, so
+    ``Sum(operand, "generator")`` means the single dim rather than its letters.
+    """
 
     operand: Expression
     over: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if isinstance(self.over, str):  # tolerate Sum(operand, "generator")
+        if isinstance(self.over, str):
             object.__setattr__(self, 'over', (self.over,))
 
 
@@ -198,10 +202,9 @@ class Translate(Expression):
 def children(expression: Expression) -> tuple[Expression, ...]:
     """The sub-expressions of *expression* — the structural half of any walk.
 
-    Three passes recurse over this tree (degree in ``lowering._has_var``, and
-    both halves of :func:`divisor_parameters`), and they differ only in what
-    they do at the leaves. Enumerating the children once per pass is how a node
-    added later reaches two of them and not the third.
+    Both halves of :func:`divisor_parameters` recurse over this tree and differ
+    only in what they do at the leaves. Enumerating the children once is how a
+    node added later reaches both of them rather than one.
     """
     if isinstance(expression, Negate):
         return (expression.operand,)

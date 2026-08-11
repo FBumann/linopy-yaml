@@ -7,250 +7,167 @@ builds of one model must agree on it integer for integer (docs/ARCHITECTURE.md,
 "The relational lane").
 
 Variables and constraint rows are the same operation over different frames, so
-:meth:`Labeller.frame` is written once; twice is how the two would come to
-disagree about which coordinate gets which index. It reaches an answer three
-ways depending on how much of the coordinate product survives the mask —
-arithmetic, factored, counted — and *those* must agree with each other, which
-is what makes this a module rather than three methods among twenty.
+:func:`frame` is written once; twice is how the two would come to disagree
+about which coordinate gets which index. One rule: sort the surviving
+coordinates into declaration order and number them from *start*. A mask, a
+restriction, or neither all produce the same shape, so a mask that removes
+nothing is indistinguishable from no mask — down to the schema.
 
-Its inputs are stated rather than reached for: a labeller needs the query
-(to build the masked product), the dimension cardinalities (to do the
-arithmetic), and the program (to know which dims a mask reads). Nothing else
-about the build can change a label.
+The one split kept is *how much product is materialised*, not what a label is.
+A mask that cannot see the leading dims removes the same coordinates under
+every one of their values, so the survivors are a rectangle and only the
+masked suffix needs to exist as rows (:func:`_factored`). Measured on
+`sector/m`: labelling one time-invariantly-masked variable through the full
+product transiently peaked +177 MB and 17 ms where the rectangle costs the
+suffix — a few hundred rows — plus the output.
 """
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 import polars as pl
 
-from lpspec.errors import LanguageError
-from lpspec.relational import plan
-from lpspec.relational.engines.polars.compiler import UNIT, _ordinal, restrict_by_presence
+from lpspec.relational.engines.polars.compiler import UNIT, ordinal, predicate_dims, restrict_by_presence
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
+    from lpspec.relational import plan
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
 
-class Labeller:
-    """Assigns dense ``0..n-1`` labels over a declaration's coordinate product."""
+def frame(
+    compiler: PolarsCompiler,
+    dims: tuple[str, ...],
+    where: plan.Predicate | None,
+    label: str,
+    start: int,
+    restrictions: Sequence[tuple[tuple[str, ...], pl.LazyFrame]] = (),
+) -> tuple[pl.DataFrame, int]:
+    """The masked coord product of *dims* with a dense *label* from *start*.
 
-    def __init__(
-        self,
-        compiler: PolarsCompiler,
-        dimension_cardinality: Mapping[str, int],
-        program: plan.Program,
-    ) -> None:
-        self._q = compiler
-        self._card = dimension_cardinality
-        #: The dims each name in a where is read through — parameters by their
-        #: ``dims`` and variables by their ``foreach``. A bare name in a where
-        #: may be either, and the label planner only asks "which dims does this
-        #: mask touch". One flat mapping, because the language has one flat
-        #: namespace and the two cannot collide.
-        self._param_dims: dict[str, tuple[str, ...]] = {p.name: p.dims for p in program.parameters}
-        self._param_dims.update({v.name: v.dims for v in program.variables})
+    Returns ``(dims…, label)`` in that column order, in label order, together
+    with the next free label. A label follows declaration order — row-major
+    over the dims' declared ordinals — which is what lets it *be* the solver's
+    own index with no remapping.
 
-    def frame(
-        self,
-        dims: tuple[str, ...],
-        where: plan.Predicate | None,
-        label: str,
-        start: int,
-        restrictions: Sequence[tuple[tuple[str, ...], pl.LazyFrame]] = (),
-    ) -> tuple[pl.DataFrame, int]:
-        """The masked coord product of *dims* with a dense *label* from *start*.
+    *restrictions* are variable-presence frames a constraint row must be
+    contained in: absence propagates into a comparison and drops the row (v1
+    ``convention.rst`` §6, §12). They are semi-joins, so they can only remove
+    rows. Which rows is not known until data is read, which is why a
+    restriction takes the counted path below whatever the mask looks like.
 
-        A label follows declaration order, which is what lets it *be* the
-        solver's own index with no remapping.
+    Being semi-joins is also why nothing deduplicates them: a semi-join asks
+    whether a key occurs, and a key occurring twice still occurs.
 
-        The mask chooses the path. **Unmasked**, every coordinate exists, so a
-        row's label is its position in the product — arithmetic on the dim
-        ordinals, with no sort and nothing to count. **Masked**, which rows
-        survive is not known until the predicate has run, so the position has
-        to be counted, and that costs a sort — unless the mask *factors*, which
-        is :meth:`_factored`.
+    No dims means the carrier is `UNIT`, which is selected in that case because
+    selecting nothing would drop the one row of the empty coordinate product.
 
-        All three return ``(dims…, label)`` in that column order. A mask that
-        removes nothing has to be indistinguishable from no mask, down to the
-        schema.
+    **Nothing here sorts unless the data says it must.** Declaration order is
+    row-major over the ordinals, which is one arithmetic expression
+    (:func:`_row_major`) — and the product is *produced* in that order, a
+    filter keeps it, and a semi-join usually does, so the sort that would
+    re-establish it usually permutes nothing. :func:`in_position_order`
+    verifies that linearly and sorts only when the engine emitted another
+    order. The unconditional sort this replaces was 0.26 s of a 0.73 s build
+    at ``dispatch/l``, against ~0.01 s for the verify.
 
-        *restrictions* are variable-presence frames a constraint row must be
-        contained in: absence propagates into a comparison and drops the row
-        (v1 ``convention.rst`` §6, §12). They are semi-joins, so they can only
-        remove rows — but which rows is not known until data is read, and that
-        is what costs the two fast paths, so the caller passes them only when a
-        variable in the equation is actually masked.
-
-        Being semi-joins is also why nothing deduplicates them: a semi-join
-        asks whether a key occurs, and a key occurring twice still occurs, so
-        the distinct would change no row and cost a hash pass over every
-        coordinate the variable has.
-        """
-        if not restrictions:
-            if where is None:
-                frame = self._q.frame(dims, None)
-                rows = math.prod(self._card[d] for d in dims)
-                labelled = frame.select(*dims, self.row_major(dims, start).alias(label))
-                return _in_label_order(labelled.collect(engine='streaming'), label), start + rows
-
-            free = _free_prefix(dims, _predicate_dims(where, self._param_dims))
-            if free:
-                return self._factored(dims, free, where, label, start)
-
-        restricted = self._q.frame(dims, where)
-        for on, presence in restrictions:
-            restricted = restrict_by_presence(restricted, presence, on)
-
-        materialised = (
-            restricted.sort([_ordinal(d) for d in dims])
-            # No dims means the carrier is `UNIT`: selecting nothing would drop
-            # the one row this path exists to count.
-            .select(*(dims or (UNIT,)))
-            .with_row_index(label, offset=start)
-            .select(*dims, pl.col(label).cast(pl.Int64))
-            .collect(engine='streaming')
-        )
-        return materialised, start + materialised.height
-
-    def _factored(
-        self,
-        dims: tuple[str, ...],
-        free: int,
-        where: plan.Predicate,
-        label: str,
-        start: int,
-    ) -> tuple[pl.DataFrame, int]:
-        """Labels for a mask that reads none of the first *free* dims.
-
-        A mask that cannot see the leading dims removes the same coordinates
-        under every one of their values, so the survivors are a rectangle: the
-        full product of the leading dims against one surviving set. Ranking
-        that set costs a sort of the *set*, not of the product — on `dispatch`
-        it is a sort of the generators rather than of 10M
-        ``(snapshot, generator)`` pairs.
-
-        The label is then arithmetic again, through the same
-        :meth:`row_major` the unmasked path uses: row-major over the leading
-        dims, times the width of the surviving set, plus a survivor's rank
-        within it. That is the same number the sort would have counted, because
-        for each leading coordinate the same survivors appear in the same order.
-
-        The prefix has to be *leading* rather than merely absent from the mask:
-        a label follows declaration order, and only a prefix leaves the
-        surviving set contiguous within it.
-        """
-
-        head, kept = dims[:free], dims[free:]
-        survivors = (
-            self._q.frame(kept, where)
-            .sort([_ordinal(d) for d in kept])
-            .select(*kept)
-            .with_row_index('__rank')
-            .collect(engine='streaming')
-        )
-        width = survivors.height
-        if width == 0:
-            # nothing survived anywhere, so there is no rectangle to describe.
-            # The counted path returns the right columns and dtypes for free.
-            empty = (
-                self._q.frame(dims, where)
-                .select(*dims)
-                .with_row_index(label, offset=start)
-                .select(*dims, pl.col(label).cast(pl.Int64))
-                .collect(engine='streaming')
-            )
-            return empty, start
-
-        labelled = (
-            survivors.lazy()
-            .join(self._q.frame(head, None).select(*head, self.row_major(head, 0).alias('__position')), how='cross')
-            .select(
-                *dims,
-                (pl.lit(start, dtype=pl.Int64) + pl.col('__position') * width + pl.col('__rank')).alias(label),
-            )
-            .collect(engine='streaming')
-        )
-        return _in_label_order(labelled, label), start + labelled.height
-
-    def row_major(self, dims: tuple[str, ...], start: int) -> pl.Expr:
-        """Row-major position in *dims*' coordinate product, offset by *start*.
-
-        The trailing dim has stride 1 and every other is the product of the
-        cardinalities to its right, so the position is a dot product against the
-        ordinals the frame already carries — no ordering imposed, because the
-        answer does not depend on the order rows arrive in.
-
-        Both arithmetic paths of :meth:`frame` reach a label through this,
-        written once for the reason the label itself is: two copies would come
-        to disagree about which coordinate gets which solver index.
-        """
-
-        stride, position = 1, pl.lit(start, dtype=pl.Int64)
-        for d in reversed(dims):
-            position = position + pl.col(_ordinal(d)) * stride
-            stride *= self._card[d]
-        return position
-
-
-def _in_label_order(frame: pl.DataFrame, label: str) -> pl.DataFrame:
-    """*frame* in label order — checked, not assumed.
-
-    **The order is free but it is not ours.** Both arithmetic paths get it from
-    the emission order of a cross join, and polars' streaming engine walks one
-    right-major, which is why the product is folded in reverse
-    (`compiler._coordinate_product`). That is an implementation detail of a
-    dependency, and a label is arithmetic on ordinals rather than a position —
-    so a change there would not corrupt a *label*. It would silently stop the
-    frame being sorted, and **two readers take that order on trust**: `cols` is
-    handed to a solver positionally, and `executor._read_back` reads a solution
-    back against these coordinates without sorting them again.
-
-    So the claim is verified. `is_sorted` is a linear scan over a column the
-    frame already holds; the sort behind it is the correctness floor and is
-    expected never to run.
+    **Nothing renumbers unless a row was dropped, either.** Only a mask or a
+    restriction leaves gaps in the positions; with neither, ``start +
+    position`` *is* the label and the row-index pass never runs — ~3 ms per
+    unmasked declaration back on `fleet`, which carries 19 and no ``where``
+    at all.
     """
-    if frame.height and not frame[label].is_sorted():
-        return frame.sort(label)
-    return frame
+    if where is not None and not restrictions:
+        free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))
+        if free:
+            factored = _factored(compiler, dims, free, where, label, start)
+            if factored is not None:
+                return factored, start + factored.height
 
+    surviving = compiler.frame(dims, where)
+    for on, presence in restrictions:
+        surviving = restrict_by_presence(surviving, presence, on)
 
-def _predicate_dims(where: plan.Predicate, param_dims: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
-    """Which dims *where* reads.
-
-    A parameter is read through its own dims, a dimension comparison through
-    the dim it names, and a constant reads nothing. Anything unrecognised
-    raises: there is no such case today, and a new predicate that forgot to
-    answer here would silently mislabel a model.
-    """
-    if isinstance(where, plan.BooleanConstant):
-        return frozenset()
-    if isinstance(where, plan.DimensionComparison):
-        return frozenset({where.dimension})
-    if isinstance(where, (plan.ParameterComparison, plan.ParameterDefined)):
-        dims = frozenset(param_dims.get(where.parameter, ()))
-        # a parameter compared against another parameter reads both
-        value = getattr(where, 'value', None)
-        if isinstance(value, str) and value in param_dims:
-            dims |= frozenset(param_dims[value])
-        return dims
-    if isinstance(where, plan.VariableDefined):
-        # Read through the variable's own foreach, exactly as a parameter is
-        # read through its dims. `_free_prefix` then keeps its arithmetic path
-        # for the leading dims this mask cannot see, as for any other predicate.
-        return frozenset(param_dims.get(where.variable, ()))
-    if isinstance(where, (plan.And, plan.Or)):
-        return _predicate_dims(where.left, param_dims) | _predicate_dims(where.right, param_dims)
-    if isinstance(where, plan.Not):
-        return _predicate_dims(where.operand, param_dims)
-    raise LanguageError(
-        f'{type(where).__name__} is a predicate the label planner does not know how to read; '
-        'add it to _predicate_dims before using it in a where'
+    dropped = where is not None or bool(restrictions)
+    numbering = _row_major(compiler, dims)
+    if not dropped:
+        numbering = pl.lit(start, dtype=pl.Int64) + numbering
+    position = '#position' if dropped else label
+    materialised = in_position_order(
+        surviving.select(*(dims or (UNIT,)), numbering.alias(position)).collect(engine='streaming'),
+        position,
     )
+    if dropped:
+        materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
+    materialised = materialised.select(*dims, pl.col(label).set_sorted())
+    return materialised, start + materialised.height
+
+
+def _factored(
+    compiler: PolarsCompiler,
+    dims: tuple[str, ...],
+    free: int,
+    where: plan.Predicate,
+    label: str,
+    start: int,
+) -> pl.DataFrame | None:
+    """Labels for a mask that reads none of the first *free* dims.
+
+    The survivors are a rectangle — the full product of the leading dims
+    against one surviving suffix set — so only the suffix is materialised and
+    ranked (a sort of the set, not of the product: on `dispatch` the
+    generators rather than 10M ``(snapshot, generator)`` pairs). The label is
+    then arithmetic: row-major over the leading dims, times the width of the
+    surviving set, plus a survivor's rank within it — the same number the
+    counted path would have counted, because each leading coordinate sees the
+    same survivors in the same order.
+
+    The prefix has to be *leading* rather than merely absent from the mask: a
+    label follows declaration order, and only a prefix leaves the surviving
+    set contiguous within it.
+
+    ``None`` when nothing survives: the rectangle degenerates and the counted
+    path already answers the empty case with the right columns and dtypes.
+
+    **The survivors go on the left of the cross join**, which is the side the
+    streaming engine cycles fastest: survivors turning over within each head
+    coordinate is label order, so :func:`in_position_order` below verifies and
+    permutes nothing. With the operands the other way round it sorted the whole
+    variable frame on every build — a million rows on `dispatch/m`, and the
+    reason that case read 45% slower than main.
+
+    Which side cycles is an implementation detail of a dependency and is
+    asserted nowhere: the verify is what makes it safe to exploit, and what
+    would turn a change in polars back into a sort rather than into wrong
+    labels. If this is ever rearranged, re-measure rather than reason — the
+    comment this replaces argued the opposite and was wrong.
+    """
+    head, kept = dims[:free], dims[free:]
+    rank = '#rank'
+    survivors = (
+        compiler.frame(kept, where)
+        .sort([ordinal(d) for d in kept])
+        .select(*kept)
+        .with_row_index(rank)
+        .collect(engine='streaming')
+    )
+    width = survivors.height
+    if width == 0:
+        return None
+
+    position = '#position'
+    labelled = (
+        survivors.lazy()
+        .join(compiler.frame(head, None).select(*head, _row_major(compiler, head).alias(position)), how='cross')
+        .select(
+            *dims,
+            (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(label),
+        )
+        .collect(engine='streaming')
+    )
+    return in_position_order(labelled, label).with_columns(pl.col(label).set_sorted())
 
 
 def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
@@ -258,11 +175,45 @@ def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
 
     Leading, not merely absent: a label follows declaration order, so only a
     prefix leaves the surviving set contiguous under each of its coordinates.
-    Returns 0 when the mask reads the first dim, which is the case that has to
-    count its survivors the slow way.
+    Returns 0 when the mask reads the first dim — the case that has to count
+    its survivors the slow way — and 0 again when *no* dim is read, where the
+    split would gain nothing over the one-path arithmetic.
     """
     free = 0
     while free < len(dims) and dims[free] not in touched:
         free += 1
-    # every remaining dim is masked-or-not; the split only helps if something is left
     return free if free < len(dims) else 0
+
+
+def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
+    """A coordinate's row-major position in the declared product.
+
+    Horner over the declared ordinals — one multiply and one add per dim
+    whatever the arity. With no dims the position is the literal zero: the
+    empty product's one row. Dense over the *full* product, not the
+    survivors — so where a mask or restriction dropped rows the caller
+    renumbers with a row index, because a label may not have gaps (a
+    declaration's share of the solver vector is a slice), and where nothing
+    dropped any this *is* the label, offset by ``start``.
+    """
+    position: pl.Expr = pl.lit(0, dtype=pl.Int64)
+    for d in dims:
+        position = position * compiler.dimension_cardinality[d] + pl.col(ordinal(d))
+    return position.cast(pl.Int64)
+
+
+def in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame:
+    """The frame ordered by *position*, verified rather than re-established.
+
+    One linear ``is_sorted`` against a single column, and the sort — also
+    single-key, where sorting the ordinal columns was one key per dim — only
+    when the engine emitted another order. The witness column stays; a caller
+    that has no further use for it projects it away, and one of the three
+    (:meth:`PolarsExecutor._build_variable`'s ``cols`` share) has to.
+
+    All three orderings in the lane go through here, which is the point: a
+    second copy of "check before you sort" is a second thing to get backwards.
+    """
+    if materialised.get_column(position).is_sorted():
+        return materialised
+    return materialised.sort(position)

@@ -99,7 +99,19 @@ class _Binder:
     # -- parameters --------------------------------------------------------
 
     def parameter(self, p: plan.ParameterDeclaration) -> None:
-        """Bind one parameter's source and register it as a tidy frame."""
+        """Bind one parameter's source and register it as a tidy frame.
+
+        The one collect in this file that runs on the streaming engine, because
+        it is the one whose result is model-sized, so it is the one the engine
+        choice moves. ``collect()`` defaults to the in-memory engine — unlike
+        ``sink_csv``, whose default resolves to streaming — and switching every
+        collect costs 29% on a small join-heavy model to save the same 0.15 GB
+        this one saves alone.
+
+        Validation runs before the string cast, not after: a dictionary-encoded
+        column compares on its codes, and widening it to strings first doubles
+        the check.
+        """
 
         if p.name not in self.sources:
             raise DataError(f"no source bound for parameter '{p.name}'")
@@ -111,15 +123,7 @@ class _Binder:
                 f"source for parameter '{p.name}' is missing columns {sorted(missing)} "
                 f"(need dims {list(p.dims)} plus 'value')"
             )
-        # streaming here and nowhere else in this file: this is the one
-        # collect whose result is model-sized, so it is the one the engine
-        # choice moves. `collect()` defaults to the in-memory engine — unlike
-        # `sink_csv`, whose default resolves to streaming — and switching every
-        # collect costs 29% on a small join-heavy model to save the same 0.15 GB
-        # this one saves alone.
         frame = frame.select(wanted).collect(engine='streaming').lazy()
-        # before the cast, not after: a dictionary-encoded column compares on
-        # its codes, and widening it to strings first doubles the check
         data_validation.check_one_row_per_coordinate(p, frame, self.dimensions)
         frame = _plain_strings(frame, p.dims)
         if frame.collect_schema()['value'] == pl.Boolean:
@@ -149,14 +153,15 @@ class _Binder:
         """Build every dimension's frame, then check its coordinates.
 
         A dimension with no explicit index has no declared order, so its labels
-        are sorted. Containment runs once every frame exists: it stops a
+        are sorted. Dimensions already registered by :meth:`sourced_dimensions`
+        are skipped. Containment runs once every frame exists: it stops a
         mistyped coordinate from vanishing in the join that places its terms,
         leaving a model that builds and solves without them.
         """
 
         dims = self._declared_dims()
         for d in sorted(dims):
-            if d in self.dimensions:  # built by `sourced_dimensions`
+            if d in self.dimensions:
                 continue
             carried = self.program.dimension(d).carried
             if d in self.sources:
@@ -195,6 +200,10 @@ class _Binder:
         Ordinals follow the source's own order, so a translation moves by
         position exactly as the eager lane does even for string labels. A
         label's position is the row it first appears at.
+
+        The source is collected once, because the frame is a scan: every pass
+        over a lazy view of it re-reads the source (#273). The single-valued
+        check and the grouping below both read that one collect instead.
         """
 
         if isinstance(source, (str, Path)):
@@ -217,26 +226,15 @@ class _Binder:
             raise DataError(
                 f"index for dimension '{d}' is missing declared coordinate column(s) {missing} (has {available})"
             )
-        # One pass, and one collect. The single-valued check needs an
-        # `n_unique` per coordinate grouped by `d`, which is the aggregate this
-        # is already running — so the counts ride in it rather than costing a
-        # `group_by` each, over a frame that is a scan and would be re-read
-        # every time (#273).
-        grouped = (
-            frame.select(d, *names)
-            .with_row_index(_ROW_POSITION)
-            .group_by(d)
-            .agg(
-                pl.col(_ROW_POSITION).min(),
-                *(pl.col(c).first() for c in names),
-                *data_validation.nunique_exprs(names),
-            )
+        labelled = frame.select(d, *names).with_row_index(_ROW_POSITION).collect().lazy()
+        data_validation.check_coordinates_single_valued(d, names, labelled)
+        return (
+            labelled.group_by(d)
+            .agg(pl.col(_ROW_POSITION).min(), *(pl.col(c).first() for c in names))
             .sort(_ROW_POSITION)
             .with_row_index('ord')
-            .collect()
+            .select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64), *names)
         )
-        data_validation.check_coordinates_single_valued(d, names, grouped)
-        return grouped.lazy().select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64), *names)
 
     def _register(self, d: str, table: pl.LazyFrame) -> None:
         materialised = table.collect()

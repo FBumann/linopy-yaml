@@ -79,17 +79,29 @@ class ModelTables:
     objective_sense: str
     objective_constant: float
 
-    def _row_chunks_by_nonzeros(self, budget: int) -> Iterator[tuple[int, int]]:
-        """Row ranges holding roughly ``budget`` *nonzeros* each.
+    def _spans(self, budget: int | None) -> Iterator[tuple[int, int]]:
+        """The row ranges a block reader walks — one rule, for both of them.
 
         A reader that walks ``matrix`` a range at a time pays in nonzeros, not
-        in rows — a range of 100k rows is 900k entries in one model and 10M in
-        another, and only the second is a problem. So the width here is the
-        average row, and there is deliberately no row-counted twin to reach
-        for by mistake. Private: a consumer takes whole blocks from
-        :meth:`row_blocks` or :meth:`labeled_blocks`, so no caller can pair
-        spans and entries that disagree.
+        in rows: a range of 100k rows is 900k entries in one model and 10M in
+        another, and only the second is a problem. So the width is the average
+        row, and there is deliberately no row-counted twin to reach for by
+        mistake.
+
+        **``budget=None`` is one span, and that is a real answer rather than a
+        degenerate one.** Whether splitting pays is a property of the API being
+        fed, not of the model: HiGHS takes a chunk at a time and its budget
+        bounds the temporary, while Gurobi's ``addMConstr`` charges about 42 ns
+        per *model column* per call whatever the block holds — 0.23 s in one
+        call against 0.89 s in forty on the same matrix (#434). So the caller
+        says, and both answers come out of the same code.
+
+        Private: a consumer takes whole blocks from :meth:`row_blocks` or
+        :meth:`labeled_blocks`, so no caller can pair spans and entries that
+        disagree.
         """
+        if budget is None:
+            return iter([(0, self.row_count)])
         return chunking.ranges(self.row_count, budget, self.matrix.height / max(1, self.row_count))
 
     def _span(self, lo: int, hi: int) -> pl.DataFrame:
@@ -124,6 +136,11 @@ class ModelTables:
         in no objective term has no row, and is left free rather than holding
         whatever the allocator returned.
 
+        The bound vectors are rewritten with ``copy=True`` rather than in
+        place because they are views of the frame: rewriting an infinity
+        through one would edit the built model to suit whichever solver asked
+        last.
+
         **Nothing textual crosses into numpy.** A polars ``String`` converts by
         boxing every value as a Python object, so the test against
         ``'continuous'`` is made in polars and only its answer crosses: 0.04 s
@@ -132,10 +149,6 @@ class ModelTables:
         import numpy as np
 
         count = self.column_count
-        # `cols` is already the solver's index, so its three vectors need no
-        # scatter. `copy=True` rather than in place because they are views of
-        # the frame now: rewriting an infinity through one would edit the built
-        # model to suit whichever solver asked last.
         lb = np.nan_to_num(self.cols['lb'].to_numpy(), copy=True, neginf=-infinity, posinf=infinity)
         ub = np.nan_to_num(self.cols['ub'].to_numpy(), copy=True, neginf=-infinity, posinf=infinity)
         integral = self.cols.select(pl.col('vtype') != 'continuous').to_series().to_numpy()
@@ -171,15 +184,7 @@ class ModelTables:
         return sense, rhs
 
     def row_blocks(self, budget: int | None) -> Iterator[RowBlock]:
-        """Each chunk of rows with the matrix entries it owns.
-
-        **``budget=None`` is one block, and that is a real answer rather than a
-        degenerate one.** Whether splitting pays is a property of the API being
-        fed, not of the model: HiGHS takes a chunk at a time and its budget
-        bounds the temporary, while Gurobi's ``addMConstr`` charges about 42 ns
-        per *model column* per call whatever the block holds — 0.23 s in one
-        call against 0.89 s in forty on the same matrix (#434). So the caller
-        says, and both answers come out of the same code.
+        """Each chunk of rows with the matrix entries it owns — a solver's reader.
 
         A chunk is a ``slice``: ``row_starts`` already says where every row's
         entries sit, so nothing is sorted and nothing is searched.
@@ -188,8 +193,7 @@ class ModelTables:
         solvers' matrix APIs ask for. A row with no entries takes the next
         row's offset, and so occupies no span.
         """
-        spans = [(0, self.row_count)] if budget is None else self._row_chunks_by_nonzeros(budget)
-        for lo, hi in spans:
+        for lo, hi in self._spans(budget):
             yield lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo]
 
     def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
@@ -208,13 +212,12 @@ class ModelTables:
     def labeled_blocks(self, budget: int | None) -> Iterator[tuple[int, int, pl.DataFrame]]:
         """Each chunk of rows with its entries labeled — the LP writer's reader.
 
-        :meth:`matrix_block`'s budget-iterator form, chunked by the same rule
-        every reader spends (:mod:`~lpspec.relational.chunking`, in nonzeros).
-        One method per consumer shape — solvers take :meth:`row_blocks`, the
-        writer this — so no caller pairs spans and entries that disagree.
+        :meth:`matrix_block`'s budget-iterator form, over :meth:`_spans` like
+        its solver-side twin. One method per consumer shape — solvers take
+        :meth:`row_blocks`, the writer this — so no caller pairs spans and
+        entries that disagree.
         """
-        spans = [(0, self.row_count)] if budget is None else self._row_chunks_by_nonzeros(budget)
-        for lo, hi in spans:
+        for lo, hi in self._spans(budget):
             yield lo, hi, self.matrix_block(lo, hi)
 
 

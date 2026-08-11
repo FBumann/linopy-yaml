@@ -22,6 +22,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from lpspec.relational.sinks.writers import lp_file
 from lpspec.relational.sinks.writers.lp_file import _number, _signed
 from tests.conftest import DISPATCH_MODEL, override
 
@@ -154,6 +155,33 @@ def test_one_model_writes_the_same_bytes_every_time(tmp_path: Path) -> None:
             written.append(hashlib.sha256(lp.read_bytes()).hexdigest())
 
     assert len(set(written)) == 1, 'the same model wrote different bytes'
+
+
+def test_chunking_the_constraint_section_leaves_the_bytes_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The seams are invisible — chunking bounds the writer's peak, not its output.
+
+    The suite's models fit inside one `EMIT_BUDGET`, so without forcing the
+    budget down no test ever crosses a seam: a writer that dropped, doubled or
+    reordered a boundary row would pass everything else here. A budget of a few
+    nonzeros puts a seam every handful of rows.
+    """
+    generators = [f'g{i}' for i in range(5)]
+    snapshots = 40
+    schema = override(DISPATCH_MODEL, **{'dimensions.generator.values': generators})
+    data = {
+        'p_max': pl.DataFrame({'generator': generators, 'value': [100.0 + i for i in range(len(generators))]}),
+        'cost': pl.DataFrame({'generator': generators, 'value': [1.0 + i / 8 for i in range(len(generators))]}),
+        'load': pl.DataFrame({'snapshot': list(range(snapshots)), 'value': [50.0 + t % 7 for t in range(snapshots)]}),
+    }
+
+    with lps.build(schema, data) as ex:
+        ex.write(tmp_path / 'one.lp')
+        monkeypatch.setattr(lp_file, 'EMIT_BUDGET', 3)
+        ex.write(tmp_path / 'many.lp')
+
+    assert (tmp_path / 'one.lp').read_bytes() == (tmp_path / 'many.lp').read_bytes()
 
 
 def test_section_keywords_survive_sections_far_larger_than_a_buffer(tmp_path: Path) -> None:
