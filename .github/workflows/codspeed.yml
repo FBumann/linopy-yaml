@@ -169,7 +169,7 @@ jobs:
     # read. This is the one metered thing in the tree, which is why it is fenced
     # to merges and to a label somebody types.
     runs-on: codspeed-macro
-    timeout-minutes: 20
+    timeout-minutes: 30
     continue-on-error: true
     permissions:
       contents: read
@@ -184,12 +184,15 @@ jobs:
           enable-cache: true
       - run: uv sync --no-default-groups --group codspeed
 
-      # `m`, where the memory job takes `s`. That job is capped by CodSpeed's
+      # `m l`, where the memory job takes `s`. That job is capped by CodSpeed's
       # ~2M-allocation guidance; this one is not capped by anything except the
       # meter, and `s` is short enough that per-run overhead is a large share of
-      # what gets recorded. `l` is the next question, once there is a series to
-      # say whether `m` resolves what we want to see.
+      # what gets recorded. `l` earned its slot when #520 showed the two rungs
+      # answering differently: fixed per-declaration overhead read as -5..-10%
+      # at `m` and amortized to ±4% at `l`, where peak — the product claim —
+      # moved the other way. A rung the meter pays for exists to catch exactly
+      # that divergence.
       - uses: CodSpeedHQ/action@v5
         with:
           mode: walltime
-          run: uv run --no-sync pytest bench --arms lpspec --sizes m --skip-gate --codspeed
+          run: uv run --no-sync pytest bench --arms lpspec --sizes m l --skip-gate --codspeed
