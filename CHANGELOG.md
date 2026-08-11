@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.91](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.90...v0.0.1-alpha.91) (2026-08-11)
+
+
+### Performance
+
+* **engine:** the objective keeps the hash count — bought order was a shape-dependent bet ([#581](https://github.com/fluxopt/lpspec/issues/581)) ([d30598f](https://github.com/fluxopt/lpspec/commit/d30598feb563ecbcd58ea73311901bac123b4246))
+
 ## [0.0.1-alpha.90](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.89...v0.0.1-alpha.90) (2026-08-11)
 
 
