@@ -6,7 +6,7 @@ never a language feature and never an engine feature — it is a driver above
 :mod:`lpspec.api`, built from the public verbs, and no lane learns a new word.
 
 Every strategy is the same fold: **partition → build → solve → carry →
-stitch**. What differs is only how slices are cut and whether they couple.
+stitch**. Only how slices are cut and whether they couple differs.
 
     scenario / sweep    ``EachCoordinate('scenario')``              independent
     myopic pathway      ``EachCoordinate('period', ordered=True)``  + ``carry``
@@ -14,7 +14,7 @@ stitch**. What differs is only how slices are cut and whether they couple.
 
 **A partition is a filter on the sources, not a narrower ``coords``.** Passing
 ``coords`` alone leaves the parameter rows outside the window in place, and the
-containment check refuses them by design. So an axis rewrites the sources and
+containment check refuses them by design, so an axis rewrites the sources and
 supplies the matching ``coords`` together.
 
 The caller-facing rules are [docs/api.md](../../docs/api.md#solving-one-model-many-times).
@@ -34,6 +34,7 @@ from lpspec.api import check
 from lpspec.api import solve as _solve
 from lpspec.errors import DataError, LpspecError
 from lpspec.relational.frames import as_frame
+from lpspec.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -73,13 +74,12 @@ class EachCoordinate:
     ordered: bool = False
 
     def _slices(self, sources: Mapping[str, Any]) -> list[Cut]:
+        """One cut per coordinate, keyed by it. Sources without *dim* pass through."""
         carrying, coordinates = _coordinates(sources, self.dim, 'slice')
         out: list[Cut] = []
         for key in coordinates:
-            sliced = dict(sources)
-            for name in carrying:
-                sliced[name] = _lazy(sources[name]).filter(pl.col(self.dim) == key).drop(self.dim)
-            out.append((key, sliced, {}))
+            cut = {name: _lazy(sources[name]).filter(pl.col(self.dim) == key).drop(self.dim) for name in carrying}
+            out.append((key, {**sources, **cut}, {}))
         return out
 
 
@@ -87,24 +87,21 @@ class EachCoordinate:
 class EachWindow:
     """One slice per window of consecutive coordinates of *dim*.
 
-    Unlike :class:`EachCoordinate` the dimension is re-indexed rather than
-    dropped, because a window holds many coordinates and the model has to be
-    able to name their order. ``length`` is what the solver sees, ``step`` is
-    what you keep, and ``length > step`` is overlap.
+    The dimension is re-indexed rather than dropped, a window holding many
+    coordinates whose order the model has to be able to name. ``length`` is
+    what the solver sees, ``step`` is what you keep, and ``length > step`` is
+    overlap — the one thing this class uniquely offers. Non-positional grouping
+    (every calendar month) is a precomputed column plus
+    :class:`EachCoordinate`.
 
-    ``length`` and ``step`` count **coordinates, not coordinate values**, so
-    the only thing *dim* has to be is orderable — datetimes, strings and gapped
-    integers all work.
+    Both count **coordinates, not coordinate values**, so *dim* need only be
+    orderable — datetimes, strings and gapped integers all work.
 
     **``into`` is structural, and has no default.** The seam row of a windowed
     model is ``where: "t == 0"``, which needs a literal, and "the first
-    coordinate of *this* window" is not one in global numbering. Re-indexing is
-    the mechanism, the local index is dense ``0..n-1`` by construction, and the
-    name belongs to whoever wrote the model.
-
-    For grouping that is not positional — every calendar month, say — precompute
-    the group column and use :class:`EachCoordinate`. What this class uniquely
-    offers is **overlap**.
+    coordinate of *this* window" is not one in global numbering. The local
+    index is dense ``0..n-1`` by construction, and its name belongs to whoever
+    wrote the model.
     """
 
     dim: str
@@ -128,24 +125,30 @@ class EachWindow:
             raise ValueError(f'into={self.into!r} must differ from dim — the local index replaces the global one')
 
     def _slices(self, sources: Mapping[str, Any]) -> list[Cut]:
+        """One cut per window, keyed by its **first coordinate**.
+
+        Keyed by the coordinate rather than the window's position, which is
+        what names a window in the caller's own terms. Sources without *dim*
+        pass through untouched.
+
+        The filter leads because it is what a scan can push down; the
+        re-indexing that follows is over a frame already cut to one window.
+        """
         carrying, coordinates = _coordinates(sources, self.dim, 'window')
         out: list[Cut] = []
         for start in range(0, len(coordinates), self.step):
             window = coordinates[start : start + self.length]
             local = {coordinate: position for position, coordinate in enumerate(window)}
-            sliced = dict(sources)
-            for name in carrying:
-                sliced[name] = (
+            cut = {
+                name: (
                     _lazy(sources[name])
-                    # the filter is what a scan can push down; the mapping that
-                    # follows is over a frame already cut to one window
                     .filter(pl.col(self.dim).is_in(window))
                     .with_columns(pl.col(self.dim).replace_strict(local, return_dtype=pl.Int64).alias(self.into))
                     .drop(self.dim)
                 )
-            # keyed by the window's first coordinate, not its position: that is
-            # what names the window in the caller's own terms
-            out.append((window[0], sliced, {self.into: range(len(window))}))
+                for name in carrying
+            }
+            out.append((window[0], {**sources, **cut}, {self.into: range(len(window))}))
         return out
 
 
@@ -163,22 +166,15 @@ Axis = EachCoordinate | EachWindow
 class Runs:
     """What a fold returned: frames keyed by slice, never a scalar.
 
-    **There is no aggregate objective**, and that is deliberate. Scenarios are
-    a distribution rather than a sum, and summing window objectives
-    double-counts whatever the overlap discards. :attr:`objective` is a frame;
-    the caller reduces it having said what they mean.
+    :class:`~lpspec.relational.result.Result`'s readers one dimension wider —
+    same names, same shapes, the slice key prepended.
 
-    **Duals are not aggregated**, which is different from not being available:
-    :meth:`dual` hands a constraint's shadow prices back slice by slice, keyed
-    like everything else. What is refused is doing the reduction *for* the
-    caller — a window's shadow price is that window's, and concatenating them
-    into a price curve is wrong in a way nothing complains about. Keyed rows
-    say whose each price is; a sum would not.
-
-    Everything else here is :class:`~lpspec.relational.result.Result`'s reader
-    one dimension wider — same names, same shapes, the slice key prepended. A
-    sweep is where a labelled array earns its keep, and building one out of a
-    slice-keyed frame by hand is the part worth not writing twice.
+    **Nothing is aggregated, and that is the decision.** Scenarios are a
+    distribution rather than a sum, summing window objectives double-counts
+    whatever the overlap discards, and a window's shadow price is that
+    window's — concatenating them into a price curve is wrong in a way nothing
+    complains about. Keyed rows say whose each number is; a reduction would
+    have to know what the caller meant.
     """
 
     key_name: str
@@ -199,6 +195,18 @@ class Runs:
     def keys(self) -> list[Any]:
         return self.meta[self.key_name].to_list()
 
+    def _read(
+        self, held: Mapping[str, list[pl.DataFrame]], kind: str, name: str, absent: str | None = None
+    ) -> pl.DataFrame:
+        """*name*'s frames from *held*, concatenated — or why there are none.
+
+        *absent* is a reason the fold already knows, which beats one derived
+        from what the sweep happens to hold.
+        """
+        if name not in held:
+            raise LpspecError(absent or _nothing_to_read(kind, name, held, self.meta))
+        return pl.concat(held[name])
+
     def primal(self, name: str) -> pl.DataFrame:
         """One variable's values across every slice, the slice key prepended.
 
@@ -206,70 +214,52 @@ class Runs:
         be shorter than the sweep — :attr:`objective` is the record of which
         slices those were, and it is one row per slice always.
         """
-        if name not in self._primals:
-            raise LpspecError(_nothing_to_read('variable', name, self._primals, self.meta))
-        return pl.concat(self._primals[name])
+        return self._read(self._primals, 'variable', name)
 
     def dual(self, name: str) -> pl.DataFrame:
         """One constraint's shadow prices across every slice, the key prepended.
 
-        :meth:`primal`'s shape and its caveats, plus one of its own: a slice
-        whose model had an integer variable has no duals to contribute, so a
-        mixed sweep can be shorter here than it is there. :attr:`objective`
-        carries what each slice did.
+        :meth:`primal`'s shape and caveats, plus one of its own: a slice whose
+        model had an integer variable has no duals to contribute, so a mixed
+        sweep can be shorter here than there.
 
         **Nothing is combined.** Averaging window prices, taking the last, and
         reading one slice alone are all defensible, and this cannot know which
         was meant.
         """
-        if name not in self._duals:
-            raise LpspecError(self._no_duals or _nothing_to_read('constraint', name, self._duals, self.meta))
-        return pl.concat(self._duals[name])
+        return self._read(self._duals, 'constraint', name, self._no_duals)
 
     def to_pandas(self, name: str) -> pd.DataFrame:
         """:meth:`primal` as a tidy :class:`pandas.DataFrame`.
 
-        Needs pandas, which ships with the ``[linopy]`` extra. Column by column
-        for the same reason ``Result.to_pandas`` does it: polars' own
-        ``to_pandas`` reaches for pyarrow.
-
-        **The name is resolved before the import.** A sweep that never held
-        *name* should say so on any install, and importing first answers a
-        question about the environment where the caller asked one about their
+        **The name is resolved before pandas is imported.** A sweep that never
+        held *name* should say so on any install, where importing first answers
+        a question about the environment when the caller asked one about their
         model.
         """
-        frame = self.primal(name)
-        import pandas as pd
-
-        return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
+        return tidy_to_pandas(self.primal(name))
 
     def to_dataarray(self, name: str) -> xr.DataArray:
         """:meth:`primal` as a :class:`xarray.DataArray`, the slice key a dimension.
 
         ``(scenario, snapshot, generator)`` is what a sweep is *for* — ``.sel``
         a scenario, take a quantile across them, plot the spread. A slice that
-        reached no solution has no rows and so comes back NaN, which is the
-        same answer a masked coordinate gets from ``Result``.
+        reached no solution has no rows and comes back NaN, the same answer a
+        masked coordinate gets from ``Result``.
         """
-        frame = self.to_pandas(name)
-        dims = [column for column in frame.columns if column != 'value']
-        return frame.set_index(dims).to_xarray()['value'].rename(name)
+        return tidy_to_dataarray(self.to_pandas(name), name)
 
     def to_dataset(self, *names: str) -> xr.Dataset:
         """Kept variables as one :class:`xarray.Dataset`; all of them by default.
 
-        Costs what it says, and more than ``Result``'s does — each variable
-        arrives dense over its own dims *and* over every slice. Name the few you
-        need, or use :meth:`to_parquet`.
+        Costs more than ``Result``'s does — each variable arrives dense over
+        its own dims *and* over every slice. Name the few you need, or use
+        :meth:`to_parquet`.
         """
         wanted = names or tuple(sorted(self._primals))
         if not wanted:
             raise LpspecError(_nothing_to_read('variable', 'anything', self._primals, self.meta))
-        first, *rest = wanted
-        dataset = self.to_dataarray(first).to_dataset(name=first)
-        for name in rest:
-            dataset[name] = self.to_dataarray(name)
-        return dataset
+        return tidy_to_dataset(wanted, self.to_dataarray)
 
     def to_parquet(self, directory: str | Path = '.') -> dict[str, Path]:
         """One parquet file per variable the sweep holds, ``(key, dims…, value)``.
@@ -296,19 +286,17 @@ class Runs:
 def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], meta: pl.DataFrame) -> str:
     """Why *name* has no frame.
 
-    A sweep keeps everything every slice produced, so there is only one way to
-    arrive here with a name the model declares: no slice produced it. A name
-    the model does not declare arrives here too, and the two are told apart by
-    what the sweep did hold.
+    A sweep keeps everything every slice produced, so a declared name arrives
+    here only when no slice produced it; an undeclared name arrives here too,
+    and the two are told apart by what the sweep did hold.
     """
+    conditions = ', '.join(sorted(set(meta['termination_condition'].to_list())))
     if held:
         listed = ', '.join(repr(k) for k in sorted(held))
-        conditions = ', '.join(sorted(set(meta['termination_condition'].to_list())))
         return (
             f'no {kind} {name!r} in this sweep — it holds {listed}. '
             f'If the model declares it, no slice produced one: all {meta.height} terminated {conditions}.'
         )
-    conditions = ', '.join(sorted(set(meta['termination_condition'].to_list())))
     return (
         f'this sweep holds no {kind} frames at all — every one of its {meta.height} slices '
         f'terminated {conditions}. The fold ran; the models did not solve. '
@@ -331,55 +319,26 @@ def solve_over(
 ) -> Runs:
     """Solve *model* once per slice of *axis* and fold the answers together.
 
-    ``carry`` maps a **parameter** to ``(variable, index)`` — that variable's
-    values in slice *i* become the parameter's in slice *i+1*. **The two
-    declarations say what is copied**: whichever dimension the variable has and
-    the parameter does not is the one the carry collapses, and ``index`` names a
-    coordinate of it. Every other dimension rides along, so a myopic pathway
-    hands a whole capacity vector forward (``('capacity', None)``, nothing
-    dropped) while a rolling horizon hands one row of a time series
-    (``('soc', 23)``, dropping ``t``). The index is explicit because with
-    ``EachWindow(48, 24)`` the state to carry sits at 23, not 47.
+    The caller-facing rules — what a carry copies, how a key column is named,
+    which executor to choose — are the table in
+    [docs/api.md](../../docs/api.md#solving-one-model-many-times), so that they
+    are stated once. What this docstring adds is the order the work happens in.
 
-    It is a **copy and never arithmetic**: accumulation (``existing += built``)
-    is a derived variable in the YAML, where the oracle can see it.
+    **Everything answerable from the declarations is answered before a source
+    is read.** A mistyped carry, a key column that collides, an axis a carry
+    cannot run on: each costs a parse rather than a scan of every parquet file.
+    The schema then rides down to the slices already parsed, so no slice — and
+    no worker — reads the same YAML again.
 
-    **Everything a slice produced is kept** — every variable's primals, every
-    constraint's duals — and read back through :meth:`Runs.primal` and
-    :meth:`Runs.dual`. It is still a fold: each slice's *model* is released as
-    the loop goes, so build peak stays at one slice however many there are.
-    What accumulates is the answer, which is what the caller asked for.
-
-    Narrowing that is a later addition and an easy one — a keyword naming what
-    to hold on to. It is absent because it would have to be *two* keywords, a
-    constraint being allowed to carry a variable's name, and neither has been
-    wanted yet.
-
-    ``key_name`` names the column holding the slice key — the same word in
-    :attr:`Runs.objective` and in every frame :meth:`Runs.primal` returns, so
-    the two still join. The class axes derive it (``EachCoordinate('scenario')``
-    keys on ``scenario``; a window keys on ``<dim>_start``, since ``dim`` itself
-    was dropped), but **a hand-built list of cuts has to be told**, for the
-    reason :attr:`EachWindow.into` has no default.
-
-    ``executor`` is any :class:`concurrent.futures.Executor`; ``None`` is
-    sequential. A ``carry`` makes slices sequential by definition, so the two
-    are refused together rather than one silently winning.
-
-    ``workers_share_fs`` says whether the executor's workers can read the caller's
-    paths, and it only affects path sources — a frame crosses as parquet either
-    way. Left unset it is **inferred from the pool**: a stdlib
-    :class:`~concurrent.futures.ProcessPoolExecutor` runs on this machine and
-    reads this machine's files, so its paths stay paths; anything else is a
-    transport this package did not ship and is assumed remote, so its paths
-    travel as bytes. Say it outright when the inference is wrong — a cluster
-    that mounts the same filesystem is ``workers_share_fs=True``.
+    **It is a fold.** Each slice's model is released as the loop goes, so build
+    peak stays at one slice however many there are; what accumulates is the
+    answer, which is what the caller asked for.
 
     **A process pool must not use the ``fork`` start method.** polars' thread
-    pool does not survive a fork, and a forked worker hangs rather than failing.
-    This cannot be enforced here — a remote executor has no start method to
-    inspect — so pass the context, and give the entry point the ``__main__``
-    guard that ``spawn`` requires.
+    pool does not survive a fork, and a forked worker hangs rather than
+    failing. This cannot be enforced here — a remote executor has no start
+    method to inspect — so pass the context, and give the entry point the
+    ``__main__`` guard that ``spawn`` requires:
 
     .. code-block:: python
 
@@ -397,11 +356,6 @@ def solve_over(
             f'carry needs an ordered axis: {axis!r} has no defined "next" slice for a value to move into. '
             f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
         )
-    # Everything above and below this line is answerable from the declarations
-    # and the keywords, so it is answered before a single source is read — a
-    # mistyped carry should not cost a scan of every parquet file first. The
-    # schema then rides down to the slices already parsed, rather than each of
-    # them (and each worker) reading the same YAML again.
     schema = check(model)
     plan: dict[str, tuple[str, str | None, int | None]] = _carry_plan(schema, carry) if carry else {}
     key_name = _key_column(axis, key_name, schema)
@@ -410,14 +364,9 @@ def solve_over(
     if not cuts:
         raise DataError('the axis produced no slices')
 
-    # the caller's own coords are merged under the axis's, which owns the dim it
-    # re-indexed; popped once rather than per slice, so the loop stays pure
     caller_coords = dict(build_kwargs.pop('coords', None) or {})
     call = {'solver_name': solver_name, 'solver_options': dict(solver_options or {}) or None, **build_kwargs}
-    # the two stdlib pools are the ones whose deployment is knowable: both run
-    # here, so both read the paths here. An executor this package did not ship
-    # is a transport it cannot ask, so it is assumed remote until told otherwise
-    shared = workers_share_fs if workers_share_fs is not None else isinstance(executor, ProcessPoolExecutor)
+    shared = _shares_filesystem(executor, workers_share_fs)
     memo: dict[str, tuple[Any, Any]] = {}
     rows: list[dict[str, Any]] = []
     primals: dict[str, list[pl.DataFrame]] = {name: [] for name in schema.variables}
@@ -425,6 +374,12 @@ def solve_over(
     no_duals: str | None = None
 
     def arguments(sliced: dict[str, Any], coords: dict[str, Any], crosses: bool) -> tuple[Any, ...]:
+        """One slice's ``_run_slice`` arguments, as plain data.
+
+        The caller's own ``coords`` sit *under* the axis's, which owns the dim
+        it re-indexed. They are popped once rather than per slice, so the loop
+        stays a pure function of the cut.
+        """
         return (
             schema,
             _encode(sliced, memo, workers_share_fs=shared) if crosses else dict(sliced),
@@ -436,6 +391,12 @@ def solve_over(
     def absorb(
         key: Any, meta: dict[str, Any], frames: dict[str, pl.DataFrame], priced: dict[str, pl.DataFrame]
     ) -> None:
+        """Fold one slice's answer in, its key prepended to every frame.
+
+        Called in **slice order, never completion order** — the concurrent
+        branch below walks the futures in the order it submitted them, so a
+        sweep cannot reorder itself under a pool.
+        """
         rows.append({key_name: key, **meta})
         for into, produced in ((primals, frames), (shadow, priced)):
             for name, frame in produced.items():
@@ -450,17 +411,12 @@ def solve_over(
             if plan:
                 state = _carried(plan, frames, key)
     else:
-        # A thread pool runs in this process, so encoding would be a parquet
-        # round trip for a boundary that is not there — 31% of a thread-pool
-        # sweep, measured. Every other executor is assumed to cross, because
-        # none of them can be asked.
-        crosses = not isinstance(executor, ThreadPoolExecutor)
+        crosses = _crosses_a_process(executor)
         futures = [executor.submit(_run_slice, *arguments(sliced, coords, crosses)) for _key, sliced, coords in cuts]
-        # in slice order, never completion order — a sweep must not reorder itself
         for (key, _sliced, _coords), future in zip(cuts, futures, strict=True):
             meta, returned, priced, reason = future.result()
             no_duals = no_duals or reason
-            absorb(key, meta, _decode(returned) if crosses else returned, _decode(priced) if crosses else priced)
+            absorb(key, meta, _decode(returned), _decode(priced))
 
     return Runs(
         key_name=key_name,
@@ -502,11 +458,10 @@ def _prices(result: Any, model: Any) -> tuple[dict[str, Any], str | None]:
     """Every constraint's duals, or the one reason there are none.
 
     An integer variable leaves duals undefined, and one such slice must not
-    fail a whole sweep — so the frames are simply absent, as they are for a
-    slice that did not solve. But *absent* is where a sweep used to lose what a
-    single solve says plainly, and `Result.dual` already writes that sentence
-    (it names the integer variable). It is caught and carried rather than
-    rewritten: a sweep of one model has one answer, so the first is the answer.
+    fail a whole sweep, so the frames are simply absent as they are for a slice
+    that did not solve. ``Result.dual`` already writes the sentence saying why
+    and names the variable, so it is caught and carried rather than rewritten —
+    a sweep of one model has one answer, so the first is the answer.
     """
     if not result.has_primal:
         return {}, None
@@ -526,16 +481,15 @@ def _key_column(
 ) -> str:
     """What to call the column holding the slice key.
 
-    The two class axes know: a coordinate sweep keys on the dimension it cut,
-    and a window keys on where it *started* — never on ``dim`` itself, which the
-    slice dropped and re-indexed to ``into``. A column called ``snapshot``
-    holding window starts joins against real snapshot-indexed data and keeps a
-    fraction of it, silently.
+    The class axes know: a coordinate sweep keys on the dimension it cut, a
+    window on where it *started* — never on ``dim`` itself, which the slice
+    dropped and re-indexed. A column called ``snapshot`` holding window starts
+    would join against real snapshot-indexed data and keep a fraction of it,
+    silently.
 
-    A hand-built list knows neither, so it has to be told, for the same reason
-    :attr:`EachWindow.into` has no default: naming somebody else's axis is
-    guessing at their decision, and ``'slice'`` would be the library's word for
-    the caller's draw, ladder or pathway.
+    A hand-built list knows neither and has to be told, for the reason
+    :attr:`EachWindow.into` has no default: ``'slice'`` would be this library's
+    word for the caller's draw, ladder or pathway.
     """
     if key_name is None:
         if isinstance(axis, EachWindow):
@@ -565,15 +519,12 @@ def _carry_plan(
 ) -> dict[str, tuple[str, str | None, int | None]]:
     """Resolve each carry against the schema: what is dropped, and what rides.
 
-    The declaration says which dimensions the two sides have, so it says what a
-    carry *is*: the variable's dims minus the parameter's is the one dimension
-    the carry collapses, and ``index`` names a coordinate of it. Everything else
-    passes through, which is what lets a myopic pathway hand a whole capacity
-    vector forward rather than one number at a time.
+    The variable's dims minus the parameter's is the one dimension the carry
+    collapses, and ``index`` names a coordinate of it; everything else passes
+    through, which is what lets a myopic pathway hand a whole capacity vector
+    forward rather than one number at a time.
 
-    **Nothing here reads data**, which is why it runs before the axis cuts one.
-    Every question is answered by the YAML and the keywords, so a carry that
-    cannot work costs a parse rather than a scan of every source.
+    **Nothing here reads data**, which is why it runs before the axis cuts any.
     """
     plan: dict[str, tuple[str, str | None, int | None]] = {}
     for parameter, (variable, index) in carry.items():
@@ -646,24 +597,43 @@ def _carried(
 # ---------------------------------------------------------------------------
 
 
+def _shares_filesystem(executor: Any, declared: bool | None) -> bool:
+    """Whether *executor*'s workers can read this process's paths.
+
+    The two stdlib pools are the ones whose deployment is knowable: both run
+    here, so both read the paths here. An executor this package did not ship is
+    a transport it cannot ask, so it is assumed remote until *declared* says
+    otherwise.
+    """
+    if declared is not None:
+        return declared
+    return isinstance(executor, ProcessPoolExecutor)
+
+
+def _crosses_a_process(executor: Any) -> bool:
+    """Whether a slice's sources have to be encoded to reach *executor*.
+
+    A thread pool runs in this process, so encoding would be a parquet round
+    trip for a boundary that is not there — 31% of a thread-pool sweep,
+    measured. Every other executor is assumed to cross, none of them being
+    answerable.
+    """
+    return not isinstance(executor, ThreadPoolExecutor)
+
+
 def _encode(
     sources: Mapping[str, Any], memo: dict[str, tuple[Any, Any]], *, workers_share_fs: bool = False
 ) -> dict[str, Any]:
     """Sources in the shape a worker can be handed.
 
-    A path the workers can reach stays a path and costs nothing. A path they
-    cannot reach travels as **its own bytes, untouched** — decoding and
-    re-encoding a parquet file produces byte-identical output for 79x the CPU,
-    so the caller must never be pushed into doing it by hand. Anything held in
-    memory is written to parquet, which beats pickling the frame on both size
-    and time.
+    A path the workers can reach stays a path. A path they cannot travels as
+    **its own bytes, untouched** — decoding and re-encoding a parquet file
+    produces byte-identical output for 79x the CPU. Anything held in memory is
+    written to parquet, which beats pickling the frame on size and time.
 
-    *memo* keeps a source that no slice rewrote — the static tables, which is
-    most of them — from being encoded once per slice. ``bytes`` is what
-    :func:`_decode` reads back, and it cannot be confused with a path.
-
-    Not called on the sequential or thread path at all: nothing crosses a
-    boundary there, so encoding would be a round trip paid for nothing.
+    *memo* keeps a source no slice rewrote — the static tables, which is most
+    of them — from being encoded once per slice. ``bytes`` is what
+    :func:`_decode` reads back, and cannot be confused with a path.
     """
     out: dict[str, Any] = {}
     for name, obj in sources.items():
@@ -686,6 +656,12 @@ def _encode(
 
 
 def _decode(encoded: Mapping[str, Any]) -> dict[str, Any]:
+    """The inverse of :func:`_encode`, and a pass-through for what never crossed.
+
+    Called on every returned frame rather than only the encoded ones: a frame
+    that stayed in this process is not ``bytes`` and comes back untouched, so
+    the caller needs no branch and the two paths cannot answer differently.
+    """
     return {name: pl.read_parquet(io.BytesIO(v)) if isinstance(v, bytes) else v for name, v in encoded.items()}
 
 
@@ -713,6 +689,9 @@ def _coordinates(sources: Mapping[str, Any], dim: str, verb: str) -> tuple[list[
     *carrying* is derived rather than declared: a source that carries the slice
     key and is *not* filtered produces a duplicate-coordinate error at bind
     time, so the derivation cannot silently miss one.
+
+    The coordinates are sorted as **values of the column**, so a window is a
+    span of those and never of the numbers in them.
     """
     carrying = [name for name, obj in sources.items() if dim in _lazy(obj).collect_schema().names()]
     if not carrying:
@@ -720,7 +699,6 @@ def _coordinates(sources: Mapping[str, Any], dim: str, verb: str) -> tuple[list[
             f"no source carries a '{dim}' column, so there is nothing to {verb} over. "
             f'EachCoordinate names a column the data has; a span of consecutive coordinates is EachWindow.'
         )
-    # a window is a span of *these*, never of the numbers in them
     return carrying, sorted(
         {c for name in carrying for c in _lazy(sources[name]).select(pl.col(dim).unique()).collect()[dim]}
     )

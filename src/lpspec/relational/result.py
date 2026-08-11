@@ -21,12 +21,48 @@ from typing import TYPE_CHECKING, Literal
 from lpspec.errors import LpspecError, NoSolutionError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
     import pandas as pd
     import polars as pl
     import xarray as xr
 
     from lpspec.relational.engines.polars.executor import PolarsExecutor
     from lpspec.relational.status import SolveStatus
+
+
+def tidy_to_pandas(frame: pl.DataFrame) -> pd.DataFrame:
+    """A tidy polars frame as pandas, column by column.
+
+    The three bridges below are shared by :class:`Result` and
+    :class:`~lpspec.strategy.Runs`, which differ only in where the tidy frame
+    comes from — a sweep's is the same frame one slice wider. Built column by
+    column because polars' own ``to_pandas`` reaches for pyarrow; pandas itself
+    ships with the ``[linopy]`` extra.
+    """
+    import pandas as pd
+
+    return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
+
+
+def tidy_to_dataarray(frame: pd.DataFrame, name: str) -> xr.DataArray:
+    """The same, labelled by its non-``value`` columns.
+
+    A scalar declaration has none and comes back 0-dimensional.
+    """
+    dims = [column for column in frame.columns if column != 'value']
+    if not dims:
+        return frame['value'].to_xarray().rename(name)
+    return frame.set_index(dims).to_xarray()['value'].rename(name)
+
+
+def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) -> xr.Dataset:
+    """*names* as one dataset, each array built by *one*."""
+    first, *rest = names
+    dataset = one(first).to_dataset(name=first)
+    for name in rest:
+        dataset[name] = one(name)
+    return dataset
 
 
 @dataclass
@@ -128,29 +164,17 @@ class Result:
         return self._executor._dual(name, self._dual_values)
 
     def to_pandas(self, name: str) -> pd.DataFrame:
-        """:meth:`primal` as a tidy :class:`pandas.DataFrame`.
-
-        Needs pandas, which ships with the ``[linopy]`` extra. Built column by
-        column, since polars' own ``to_pandas`` reaches for pyarrow.
-        """
-        import pandas as pd
-
+        """:meth:`primal` as a tidy :class:`pandas.DataFrame`."""
         self._require_solution(f"the primal of '{name}'")
-        frame = self._executor._primal(name, self._primal_values)
-        return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
+        return tidy_to_pandas(self._executor._primal(name, self._primal_values))
 
     def to_dataarray(self, name: str) -> xr.DataArray:
         """``primal(name)`` as a labelled :class:`xarray.DataArray`.
 
         The bridge to array post-processing — ``.sel``, resampling, duration
-        curves. Needs the ``[linopy]`` extra; a masked coordinate has no row
-        and comes back NaN.
+        curves. A masked coordinate has no row and comes back NaN.
         """
-        frame = self.to_pandas(name)
-        dims = [c for c in frame.columns if c != 'value']
-        if not dims:
-            return frame['value'].to_xarray().rename(name)
-        return frame.set_index(dims).to_xarray()['value'].rename(name)
+        return tidy_to_dataarray(self.to_pandas(name), name)
 
     def to_dataset(self, *names: str) -> xr.Dataset:
         """Variables as one :class:`xarray.Dataset`; all of them by default.
@@ -161,11 +185,7 @@ class Result:
         """
         assert self._executor._program is not None
         wanted = names or tuple(v.name for v in self._executor._program.variables)
-        first, *rest = wanted
-        dataset = self.to_dataarray(first).to_dataset(name=first)
-        for name in rest:
-            dataset[name] = self.to_dataarray(name)
-        return dataset
+        return tidy_to_dataset(wanted, self.to_dataarray)
 
     def to_parquet(self, directory: str | Path) -> dict[str, Path]:
         """One parquet file per variable, ``(dims…, value)``. Returns name → path.
