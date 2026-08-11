@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.103](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.102...v0.0.1-alpha.103) (2026-08-11)
+
+
+### Performance
+
+* **examples:** the benders loop parses each model once ([#613](https://github.com/fluxopt/lpspec/issues/613)) ([5f03dbd](https://github.com/fluxopt/lpspec/commit/5f03dbd07154c13798dfbe3b1ef008467886af86))
+
 ## [0.0.1-alpha.102](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.101...v0.0.1-alpha.102) (2026-08-11)
 
 
