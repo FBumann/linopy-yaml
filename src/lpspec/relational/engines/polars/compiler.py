@@ -445,22 +445,30 @@ class PolarsCompiler:
             strides.insert(0, stride)
             stride *= card
         position = sum(
-            (
-                pl.col(d).replace_strict(self._ordinals(d), return_dtype=pl.Int64) * step
-                for d, step in zip(v.dims, strides, strict=True)
-            ),
+            (self._ordinal_of(d) * step for d, step in zip(v.dims, strides, strict=True)),
             start=pl.lit(0, dtype=pl.Int64),
         )
         pairs = table.select(position.alias('__at__'), pl.col('value')).collect(engine='streaming')
         return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs['value'], expected)))
 
-    def _ordinals(self, dim: str) -> dict[Any, int]:
-        """Each coordinate of *dim* to its position in that dimension's index.
+    def _ordinal_of(self, dim: str) -> pl.Expr:
+        """A parameter's *dim* column as that dimension's ordinal.
 
         The index is what every label is numbered against, so this is the same
         order :class:`~lpspec.relational.engines.polars.labels.Labeller` walks.
+
+        **Free for a string dimension**, which is most of them: binding encodes
+        those as an ``Enum`` over the labels *in ordinal order*
+        (``_Binder.encode_dimensions``), so the physical code already is the
+        ordinal and no lookup happens at all. Every other dtype pays a
+        dictionary built from the dimension table — the small side, one entry
+        per label rather than per row.
         """
-        return {value: position for position, value in enumerate(self.dimensions[dim].collect()['val'])}
+        column = pl.col(dim)
+        if self.dimensions[dim].collect_schema()['val'] == pl.Enum:
+            return column.to_physical().cast(pl.Int64)
+        labels = self.dimensions[dim].select('val').collect()['val']
+        return column.replace_strict({value: at for at, value in enumerate(labels)}, return_dtype=pl.Int64)
 
     # ------------------------------------------------------------------
     # expressions → fragments
