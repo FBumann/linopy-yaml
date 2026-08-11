@@ -88,7 +88,7 @@ def tidy_sources(
             sources[dname] = src
             continue
         table = as_frame(src, (dname,))
-        sources[dname] = table if table is not None else labels_frame(dname, src)
+        sources[dname] = table if table is not None else labels_frame(dname, src, ddef.dtype)
 
     validate_piecewise_data(schema, sources)
 
