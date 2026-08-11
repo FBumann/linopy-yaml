@@ -266,7 +266,8 @@ Only the notation is a choice, and **How** shows the one that was made here.
     decided never to build.
 
     [:octicons-arrow-right-24: Architecture](ARCHITECTURE.md) ·
-    [Roadmap](ROADMAP.md)
+    [Roadmap](ROADMAP.md) ·
+    [Prior art](design/prior-art.md)
 
 </div>
 

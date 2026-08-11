@@ -640,7 +640,8 @@ language: nothing there changes what a file means.
 | arbitrary array ops (`merge`, `reindex`, `apply_ufunc`) | data prep, or a declared `escape:` island — the closed AST is what makes streaming possible |
 | filling a missing value (`.fillna`) | data prep, or a `where` if you meant the coordinate not to exist. In the language only where the data cannot reach — `shift(..., edge=)`, §6 |
 
-Calliope's math language is a corpus we score coverage against, not a
+[Calliope](design/prior-art.md)'s math language — which this surface is derived
+from — is a corpus we score coverage against, not a
 specification we match; file portability is not a goal, and neither is
 operation parity with xarray/pandas. A model built partly in Python has no
 readable `.yaml` representation and will not get one: the *math* side is

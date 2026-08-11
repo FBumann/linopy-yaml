@@ -163,7 +163,7 @@ sharper statement about the language than either alone.
 ## Ledger — what a port could not say
 
 Feeds [ROADMAP](../ROADMAP.md), with the verdict
-[CLAUDE.md](https://github.com/fluxopt/lpspec/blob/main/CLAUDE.md) asks for:
+[AGENTS.md](https://github.com/fluxopt/lpspec/blob/main/AGENTS.md) asks for:
 macro, primitive, or escape.
 
 | Port | What could not be said | Worked around by | Verdict |

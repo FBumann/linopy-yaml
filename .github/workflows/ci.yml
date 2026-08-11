@@ -11,6 +11,10 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -33,6 +37,39 @@ jobs:
           # early-development section of RELEASING.md.
           python-version: "3.11"
           enable-cache: true
+
+      # A denylist, unlike the `paths:` filter bench.yml refuses: an allowlist
+      # drifts and a job that stopped running looks like one that passed, so
+      # this asks whether *every* changed path is inert and a directory nobody
+      # listed runs everything. Not `paths-ignore:` — `ci` is required, and a
+      # workflow that never starts never reports the status the PR waits for.
+      #
+      # Only an answer sets the output. A diff that did not read, or read as
+      # empty, is not evidence of inertness — the default is to run everything,
+      # because the alternative is skipping a gate on a failed API call.
+      #
+      # An entry earns its place by being unreachable from all three steps:
+      # prose and the licence are read by nothing, `mkdocs.yml` only by the
+      # strict build above, and the release manifest by release-please — the
+      # version the build stamps comes from the git tag, not from that file.
+      - name: Is every changed file inert?
+        id: scope
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! changed=$(gh pr diff ${{ github.event.number }} --name-only); then
+            echo 'The diff did not read; running everything.'
+            exit 0
+          fi
+          live=$(printf '%s\n' "$changed" | grep -Ev \
+            '(^|/)[^/]+\.md$|^LICENSE$|^mkdocs\.yml$|^\.release-please-manifest\.json$' || true)
+          if [ -n "$changed" ] && [ -z "$live" ]; then
+            echo 'inert=true' >> "$GITHUB_OUTPUT"
+            echo 'Prose only — the TeX render and the bare install are skipped.'
+          else
+            printf 'Running everything. Live files:\n%s\n' "$live"
+          fi
 
       # Current dependencies, dev group: lint, format, types, suite.
       - run: uv sync --group dev
@@ -73,12 +110,14 @@ jobs:
       # If the preamble ever grows a \usepackage, this list grows with it, and
       # that is the point: it keeps the preamble installable from a small TeX.
       - name: Install a minimal TeX
+        if: steps.scope.outputs.inert != 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             texlive-latex-base texlive-fonts-recommended
       - name: Every model renders to LaTeX that compiles
         # (the Typst half of this claim is `test_typst_output_compiles`)
+        if: steps.scope.outputs.inert != 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/tex"
           for model in examples/*.yaml examples/ports/*.yaml; do
@@ -120,6 +159,7 @@ jobs:
       # floor when the code relies on that version's behaviour, not to chase
       # a newer interpreter — see the early-development note in RELEASING.md.
       - name: bare install, at the dependency floors
+        if: steps.scope.outputs.inert != 'true'
         run: |
           rm -rf .venv
           uv venv

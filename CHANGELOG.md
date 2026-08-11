@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.0.1-alpha.100](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.99...v0.0.1-alpha.100) (2026-08-11)
+
+
+### Documentation
+
+* **agents:** a reader can tell the maintainer's voice from an agent's ([#605](https://github.com/fluxopt/lpspec/issues/605)) ([b987971](https://github.com/fluxopt/lpspec/commit/b98797149cc4e5e61931de7ba2ffae0ede7bbb65))
+
+## [0.0.1-alpha.99](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.98...v0.0.1-alpha.99) (2026-08-11)
+
+
+### Documentation
+
+* AGENTS.md carries how we work, CLAUDE.md just imports it ([#599](https://github.com/fluxopt/lpspec/issues/599)) ([e815252](https://github.com/fluxopt/lpspec/commit/e815252c5ce40e72104ca79300d57321d51d08f1))
+
+## [0.0.1-alpha.98](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.97...v0.0.1-alpha.98) (2026-08-11)
+
+
+### Documentation
+
+* the copyright line names whoever wrote it, and that was never PyPSA ([#601](https://github.com/fluxopt/lpspec/issues/601)) ([06fb7d5](https://github.com/fluxopt/lpspec/commit/06fb7d5ddcbf2753e780afe1d0f8434f33334485))
+
+## [0.0.1-alpha.97](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.96...v0.0.1-alpha.97) (2026-08-11)
+
+
+### Documentation
+
+* the surface is Calliope's, the vocabulary is linopy's — say so ([#598](https://github.com/fluxopt/lpspec/issues/598)) ([a1042fc](https://github.com/fluxopt/lpspec/commit/a1042fccc070c5cc730445eb7da180d5a66705e6))
+
+## [0.0.1-alpha.96](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.95...v0.0.1-alpha.96) (2026-08-11)
+
+
+### Refactoring
+
+* cut the prose, keep the facts ([#592](https://github.com/fluxopt/lpspec/issues/592)) ([dcc279b](https://github.com/fluxopt/lpspec/commit/dcc279b6c0cc4d8a7b84e9f5f610cbd12fa6d88c))
+
+
+### Documentation
+
+* **design:** decomposition, as evidence rather than as a feature ([#597](https://github.com/fluxopt/lpspec/issues/597)) ([c736da9](https://github.com/fluxopt/lpspec/commit/c736da9f046766b80915499b7bec24ab7ee8cf76))
+
 ## [0.0.1-alpha.95](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.94...v0.0.1-alpha.95) (2026-08-11)
 
 

@@ -110,3 +110,7 @@ and diff — and the third is
 
 Where linopy is genuinely ahead, and why none of it is a ceiling question, is the
 honest snapshot in [ROADMAP](../ROADMAP.md#honest-snapshot).
+
+What is *owed* to linopy rather than merely true of it — and the same for
+Calliope, whose math language this surface is derived from — is
+[prior art and credit](prior-art.md).
