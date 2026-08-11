@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.93](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.92...v0.0.1-alpha.93) (2026-08-11)
+
+
+### Bug Fixes
+
+* **api:** a closed result says it was closed ([#587](https://github.com/fluxopt/lpspec/issues/587)) ([45cc1d0](https://github.com/fluxopt/lpspec/commit/45cc1d0f68364d8a7ca591cc2d2c3b37ae884837))
+
 ## [0.0.1-alpha.92](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.91...v0.0.1-alpha.92) (2026-08-11)
 
 
