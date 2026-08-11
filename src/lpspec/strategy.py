@@ -288,7 +288,7 @@ class Runs:
         return self.meta.height
 
 
-def _nothing_to_read(kind: str, name: str, held: dict[str, pl.DataFrame], meta: pl.DataFrame) -> str:
+def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], meta: pl.DataFrame) -> str:
     """Why *name* has no frame.
 
     A sweep keeps everything every slice produced, so there is only one way to
