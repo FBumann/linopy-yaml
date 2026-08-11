@@ -168,9 +168,12 @@ class Runs:
     double-counts whatever the overlap discards. :attr:`objective` is a frame;
     the caller reduces it having said what they mean.
 
-    **Duals are not exposed.** A window's shadow price is that window's, and
-    concatenating them into a price curve is wrong in a way nothing complains
-    about.
+    **Duals are not aggregated**, which is different from not being available:
+    :meth:`dual` hands a constraint's shadow prices back slice by slice, keyed
+    like everything else. What is refused is doing the reduction *for* the
+    caller — a window's shadow price is that window's, and concatenating them
+    into a price curve is wrong in a way nothing complains about. Keyed rows
+    say whose each price is; a sum would not.
 
     Everything else here is :class:`~lpspec.relational.result.Result`'s reader
     one dimension wider — same names, same shapes, the slice key prepended. A
@@ -180,8 +183,12 @@ class Runs:
 
     key_name: str
     meta: pl.DataFrame
-    kept: tuple[str, ...] = ()
-    _primals: dict[str, pl.DataFrame] = field(repr=False, default_factory=dict)
+    #: Per slice, not concatenated. Joining them is the reader's work so a
+    #: sweep pays it for the names actually read, and so the concatenated copy
+    #: never exists beside the pieces it was built from.
+    _primals: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
+    _duals: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
+    _no_duals: str | None = field(repr=False, default=None)
 
     @property
     def objective(self) -> pl.DataFrame:
@@ -200,8 +207,24 @@ class Runs:
         slices those were, and it is one row per slice always.
         """
         if name not in self._primals:
-            raise LpspecError(_no_primal(name, self.kept, self.meta))
-        return self._primals[name]
+            raise LpspecError(_nothing_to_read('variable', name, self._primals, self.meta))
+        return pl.concat(self._primals[name])
+
+    def dual(self, name: str) -> pl.DataFrame:
+        """One constraint's shadow prices across every slice, the key prepended.
+
+        :meth:`primal`'s shape and its caveats, plus one of its own: a slice
+        whose model had an integer variable has no duals to contribute, so a
+        mixed sweep can be shorter here than it is there. :attr:`objective`
+        carries what each slice did.
+
+        **Nothing is combined.** Averaging window prices, taking the last, and
+        reading one slice alone are all defensible, and this cannot know which
+        was meant.
+        """
+        if name not in self._duals:
+            raise LpspecError(self._no_duals or _nothing_to_read('constraint', name, self._duals, self.meta))
+        return pl.concat(self._duals[name])
 
     def to_pandas(self, name: str) -> pd.DataFrame:
         """:meth:`primal` as a tidy :class:`pandas.DataFrame`.
@@ -236,7 +259,7 @@ class Runs:
         """
         wanted = names or tuple(sorted(self._primals))
         if not wanted:
-            raise LpspecError(_no_primal('anything', self.kept, self.meta))
+            raise LpspecError(_nothing_to_read('variable', 'anything', self._primals, self.meta))
         first, *rest = wanted
         dataset = self.to_dataarray(first).to_dataset(name=first)
         for name in rest:
@@ -244,22 +267,20 @@ class Runs:
         return dataset
 
     def to_parquet(self, directory: str | Path = '.') -> dict[str, Path]:
-        """One parquet file per kept variable, ``(key, dims…, value)``.
+        """One parquet file per variable the sweep holds, ``(key, dims…, value)``.
 
         Returns name → path, in :meth:`primal`'s order, so the same sweep
-        writes the same bytes. This is a *copy out* of frames already held — it
-        does not bound what the fold accumulated, which is what ``keep`` is for
-        and what spilling per slice would be (#477). A sweep that kept nothing
-        raises rather than leaving an empty directory behind.
+        writes the same bytes. This is a *copy out* of frames already held and
+        bounds nothing; spilling per slice, which would, is #477.
         """
         if not self._primals:
-            raise LpspecError(_no_primal('anything', self.kept, self.meta))
+            raise LpspecError(_nothing_to_read('variable', 'anything', self._primals, self.meta))
         directory = Path(directory)
         directory.mkdir(parents=True, exist_ok=True)
         written: dict[str, Path] = {}
         for name in sorted(self._primals):
             path = directory / f'{name}.parquet'
-            self._primals[name].write_parquet(path)
+            self.primal(name).write_parquet(path)
             written[name] = path
         return written
 
@@ -267,24 +288,25 @@ class Runs:
         return self.meta.height
 
 
-def _no_primal(name: str, kept: tuple[str, ...], meta: pl.DataFrame) -> str:
-    """Why *name* has no frame — two different failures that read alike.
+def _nothing_to_read(kind: str, name: str, held: dict[str, pl.DataFrame], meta: pl.DataFrame) -> str:
+    """Why *name* has no frame.
 
-    A variable nobody asked to keep and a variable every slice failed to solve
-    both arrive here as a missing key, and pointing the second one at ``keep``
-    sends the caller to fix what is not broken.
+    A sweep keeps everything every slice produced, so there is only one way to
+    arrive here with a name the model declares: no slice produced it. A name
+    the model does not declare arrives here too, and the two are told apart by
+    what the sweep did hold.
     """
-    if name not in kept:
-        listed = ', '.join(repr(k) for k in sorted(kept)) or 'nothing'
+    if held:
+        listed = ', '.join(repr(k) for k in sorted(held))
+        conditions = ', '.join(sorted(set(meta['termination_condition'].to_list())))
         return (
-            f'variable {name!r} was not kept — this run kept {listed}. '
-            f"Name it in keep=(...) : a fold releases each slice's model as it goes, so what "
-            f'is not extracted inside the loop cannot be read afterwards.'
+            f'no {kind} {name!r} in this sweep — it holds {listed}. '
+            f'If the model declares it, no slice produced one: all {meta.height} terminated {conditions}.'
         )
     conditions = ', '.join(sorted(set(meta['termination_condition'].to_list())))
     return (
-        f'variable {name!r} was kept, but no slice reached a solution to keep it from — '
-        f'all {meta.height} terminated {conditions}. The fold ran; the models did not solve. '
+        f'this sweep holds no {kind} frames at all — every one of its {meta.height} slices '
+        f'terminated {conditions}. The fold ran; the models did not solve. '
         f'runs.objective carries the status of each slice.'
     )
 
@@ -295,7 +317,6 @@ def solve_over(
     axis: Axis | Sequence[Cut],
     *,
     carry: Mapping[str, tuple[str, int | None]] | None = None,
-    keep: Sequence[str] = (),
     key_name: str | None = None,
     executor: Any = None,
     workers_share_fs: bool | None = None,
@@ -318,9 +339,16 @@ def solve_over(
     It is a **copy and never arithmetic**: accumulation (``existing += built``)
     is a derived variable in the YAML, where the oracle can see it.
 
-    ``keep`` names the variables whose primals survive. This is a fold rather
-    than a list comprehension: each slice's model is released as the loop goes,
-    so peak stays at one slice instead of N.
+    **Everything a slice produced is kept** — every variable's primals, every
+    constraint's duals — and read back through :meth:`Runs.primal` and
+    :meth:`Runs.dual`. It is still a fold: each slice's *model* is released as
+    the loop goes, so build peak stays at one slice however many there are.
+    What accumulates is the answer, which is what the caller asked for.
+
+    Narrowing that is a later addition and an easy one — a keyword naming what
+    to hold on to. It is absent because it would have to be *two* keywords, a
+    constraint being allowed to carry a variable's name, and neither has been
+    wanted yet.
 
     ``key_name`` names the column holding the slice key — the same word in
     :attr:`Runs.objective` and in every frame :meth:`Runs.primal` returns, so
@@ -352,9 +380,8 @@ def solve_over(
 
         ctx = multiprocessing.get_context('spawn')
         with ProcessPoolExecutor(4, mp_context=ctx) as pool:
-            runs = lps.solve_over(model, sources, axis, keep=('p',), executor=pool)
+            runs = lps.solve_over(model, sources, axis, executor=pool)
     """
-    keep = tuple(keep)
     if carry and executor is not None:
         raise LpspecError(
             'carry and executor are mutually exclusive: a carried value makes slice i+1 depend on '
@@ -371,8 +398,8 @@ def solve_over(
     # schema then rides down to the slices already parsed, rather than each of
     # them (and each worker) reading the same YAML again.
     schema = check(model)
-    plan: dict[str, tuple[str, str | None, int | None]] = _carry_plan(schema, carry, keep) if carry else {}
-    key_name = _key_column(axis, key_name, schema, keep)
+    plan: dict[str, tuple[str, str | None, int | None]] = _carry_plan(schema, carry) if carry else {}
+    key_name = _key_column(axis, key_name, schema)
 
     cuts = axis._slices(sources) if isinstance(axis, (EachCoordinate, EachWindow)) else list(axis)
     if not cuts:
@@ -388,28 +415,33 @@ def solve_over(
     shared = workers_share_fs if workers_share_fs is not None else isinstance(executor, ProcessPoolExecutor)
     memo: dict[str, tuple[Any, Any]] = {}
     rows: list[dict[str, Any]] = []
-    primals: dict[str, list[pl.DataFrame]] = {name: [] for name in keep}
+    primals: dict[str, list[pl.DataFrame]] = {name: [] for name in schema.variables}
+    shadow: dict[str, list[pl.DataFrame]] = {name: [] for name in schema.constraints}
+    no_duals: str | None = None
 
     def arguments(sliced: dict[str, Any], coords: dict[str, Any], crosses: bool) -> tuple[Any, ...]:
         return (
             schema,
             _encode(sliced, memo, workers_share_fs=shared) if crosses else dict(sliced),
             {**caller_coords, **coords} or None,
-            keep,
             crosses,
             call,
         )
 
-    def absorb(key: Any, meta: dict[str, Any], frames: dict[str, pl.DataFrame]) -> None:
+    def absorb(
+        key: Any, meta: dict[str, Any], frames: dict[str, pl.DataFrame], priced: dict[str, pl.DataFrame]
+    ) -> None:
         rows.append({key_name: key, **meta})
-        for name, frame in frames.items():
-            primals[name].append(frame.select(pl.lit(key).alias(key_name), pl.all()))
+        for into, produced in ((primals, frames), (shadow, priced)):
+            for name, frame in produced.items():
+                into[name].append(frame.select(pl.lit(key).alias(key_name), pl.all()))
 
     if executor is None:
         state: dict[str, Any] = {}
         for key, sliced, coords in cuts:
-            meta, frames = _run_slice(*arguments({**sliced, **state}, coords, False))
-            absorb(key, meta, frames)
+            meta, frames, priced, reason = _run_slice(*arguments({**sliced, **state}, coords, False))
+            no_duals = no_duals or reason
+            absorb(key, meta, frames, priced)
             if plan:
                 state = _carried(plan, frames, key)
     else:
@@ -421,14 +453,16 @@ def solve_over(
         futures = [executor.submit(_run_slice, *arguments(sliced, coords, crosses)) for _key, sliced, coords in cuts]
         # in slice order, never completion order — a sweep must not reorder itself
         for (key, _sliced, _coords), future in zip(cuts, futures, strict=True):
-            meta, returned = future.result()
-            absorb(key, meta, _decode(returned) if crosses else returned)
+            meta, returned, priced, reason = future.result()
+            no_duals = no_duals or reason
+            absorb(key, meta, _decode(returned) if crosses else returned, _decode(priced) if crosses else priced)
 
     return Runs(
         key_name=key_name,
         meta=pl.DataFrame(rows),
-        kept=keep,
-        _primals={name: pl.concat(frames) for name, frames in primals.items() if frames},
+        _primals={name: frames for name, frames in primals.items() if frames},
+        _duals={name: frames for name, frames in shadow.items() if frames},
+        _no_duals=no_duals,
     )
 
 
@@ -436,10 +470,9 @@ def _run_slice(
     model: Any,
     encoded: dict[str, Any],
     coords: dict[str, Any] | None,
-    keep: tuple[str, ...],
     encode_out: bool,
     call: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str | None]:
     """One slice, start to finish, over plain data.
 
     Module-level and closure-free on purpose: a remote executor has to pickle
@@ -453,15 +486,38 @@ def _run_slice(
             'termination_condition': result.termination_condition,
             'objective': result.objective if result.has_primal else float('nan'),
         }
-        frames = {name: result.primal(name) for name in keep} if result.has_primal else {}
-        return meta, _encode(frames, {}) if encode_out else frames
+        frames = {name: result.primal(name) for name in model.variables} if result.has_primal else {}
+        priced, no_duals = _prices(result, model)
+        if not encode_out:
+            return meta, frames, priced, no_duals
+        return meta, _encode(frames, {}), _encode(priced, {}), no_duals
+
+
+def _prices(result: Any, model: Any) -> tuple[dict[str, Any], str | None]:
+    """Every constraint's duals, or the one reason there are none.
+
+    An integer variable leaves duals undefined, and one such slice must not
+    fail a whole sweep — so the frames are simply absent, as they are for a
+    slice that did not solve. But *absent* is where a sweep used to lose what a
+    single solve says plainly, and `Result.dual` already writes that sentence
+    (it names the integer variable). It is caught and carried rather than
+    rewritten: a sweep of one model has one answer, so the first is the answer.
+    """
+    if not result.has_primal:
+        return {}, None
+    priced: dict[str, Any] = {}
+    for name in model.constraints:
+        try:
+            priced[name] = result.dual(name)
+        except LpspecError as exc:
+            return {}, str(exc)
+    return priced, None
 
 
 def _key_column(
     axis: Axis | Sequence[Cut],
     key_name: str | None,
     schema: MathSchema,
-    keep: tuple[str, ...],
 ) -> str:
     """What to call the column holding the slice key.
 
@@ -487,7 +543,9 @@ def _key_column(
                 "coordinates of, and 'slice' would be this library naming your axis for you. Pass "
                 "key_name='draw', key_name='period', or whatever the keys actually are."
             )
-    clashing = sorted(name for name in keep if key_name in getattr(schema.variables.get(name), 'foreach', ()))
+    clashing = sorted(
+        name for name in schema.variables if key_name in getattr(schema.variables.get(name), 'foreach', ())
+    )
     if clashing:
         raise LpspecError(
             f'key_name={key_name!r} is already a dimension of {clashing}, so the slice key would collide '
@@ -499,7 +557,6 @@ def _key_column(
 def _carry_plan(
     schema: MathSchema,
     carry: Mapping[str, tuple[str, int | None]],
-    keep: tuple[str, ...],
 ) -> dict[str, tuple[str, str | None, int | None]]:
     """Resolve each carry against the schema: what is dropped, and what rides.
 
@@ -519,11 +576,6 @@ def _carry_plan(
             raise LpspecError(f'carry writes parameter {parameter!r}, which the model does not declare')
         if variable not in schema.variables:
             raise LpspecError(f'carry reads variable {variable!r}, which the model does not declare')
-        if variable not in keep:
-            raise LpspecError(
-                f'carry reads variable {variable!r}, which this run did not keep. '
-                f'Add it to keep=(...) — the carry is read from the same frames.'
-            )
         over = list(schema.parameters[parameter].dims)
         source = list(schema.variables[variable].foreach)
         if missing := [d for d in over if d not in source]:
