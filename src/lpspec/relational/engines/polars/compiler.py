@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -48,6 +48,10 @@ _ORD_OUT = '__ord out__'
 #: unit needs a column to exist in, and every path drops it by selecting the
 #: dims and the label instead.
 UNIT = '__unit__'
+
+#: Where a dense parameter's value belongs in the label order, while it is
+#: being scattered there. Spaces, so it cannot collide with a declared name.
+_AT = '__at__'
 
 #: The same trick for a *scalar* declaration's presence frame. It is distinct
 #: from :data:`UNIT` rather than reusing it because the two meet: the empty
@@ -364,16 +368,8 @@ class PolarsCompiler:
             if isinstance(e, plan.Parameter):
                 alias = f'__bound {e.name}__'
                 if alias not in joined:
-                    carrier = self.parameter_join(
-                        carrier,
-                        e.name,
-                        v.dims,
-                        alias,
-                        f"bound parameter '{e.name}' of variable '{v.name}'",
-                        # the label frame arrives in label order and `cols` is
-                        # read positionally, so this join may not shuffle it
-                        maintain_order='left',
-                    )
+                    attached = self._attached_bound(carrier, e.name, v, alias)
+                    carrier = attached if attached is not None else self._joined_bound(carrier, e.name, v, alias)
                     joined.add(alias)
                 return pl.col(alias).cast(pl.Float64)
             if isinstance(e, plan.Negate):
@@ -389,6 +385,91 @@ class PolarsCompiler:
 
         lower, upper = walk(v.lower), walk(v.upper)
         return carrier.with_columns(lower.alias('lb'), upper.alias('ub'))
+
+    def _joined_bound(self, frame: pl.LazyFrame, param: str, v: plan.VariableDeclaration, alias: str) -> pl.LazyFrame:
+        """*frame* with *param* joined on the dims it declares — the general way.
+
+        ``maintain_order`` because the label frame arrives in label order and
+        ``cols`` is read positionally, so this join may not shuffle it.
+        """
+        return self.parameter_join(
+            frame,
+            param,
+            v.dims,
+            alias,
+            f"bound parameter '{param}' of variable '{v.name}'",
+            maintain_order='left',
+        )
+
+    def _attached_bound(
+        self, frame: pl.LazyFrame, param: str, v: plan.VariableDeclaration, alias: str
+    ) -> pl.LazyFrame | None:
+        """*frame* with *param* attached **by position**, or ``None`` to join.
+
+        A profile per node, per technology, per hour is dense over the whole
+        variable product — the ordinary shape in energy modelling, and the one
+        the eager lane handles for free: in an array, position *is* the
+        coordinate, so there is nothing to align. Joining a full-size frame
+        against a full-size coordinate product is the largest single query in
+        a `profiled/l` build, and the whole of why that rung is the one this
+        engine loses to linopy on.
+
+        Position can mean the coordinate here too. The label frame is in label
+        order by construction — not *lexicographic* dim order, which is why
+        sorting the parameter by its dim columns does not match it, but
+        row-major over the product in each dimension's own index order. Each
+        row's row-major position is therefore computable from its own
+        coordinates, and the values scatter into that order without a join.
+
+        **A wrong bound is a wrong model with no error**, so this is refused
+        unless every one of these holds, each a fact already computed:
+
+        * the parameter's dims are exactly the variable's, in the same order —
+          fewer dims broadcast, more is already refused, and a different order
+          is a different row-major walk
+        * the variable declares no ``where`` — a mask makes the label frame a
+          subset of the product and position stops lining up
+        * the parameter is dense over that product, its height equal to the
+          product of the cardinalities binding cached
+
+        Duplicate coordinates would break density without changing the height,
+        and are refused before this by ``check_one_row_per_coordinate``.
+        """
+        declaration = self.program.parameter(param)
+        if v.where is not None or not v.dims or tuple(declaration.dims) != tuple(v.dims):
+            return None
+
+        cardinalities = [self.dimension_cardinality[d] for d in v.dims]
+        expected = math.prod(cardinalities)
+        table = self.parameters[param]
+        if table.select(pl.len()).collect().item() != expected:
+            return None
+
+        stride, strides = 1, list[int]()
+        for card in reversed(cardinalities):
+            strides.insert(0, stride)
+            stride *= card
+        position = sum(
+            (self._ordinal_of(d) * step for d, step in zip(v.dims, strides, strict=True)),
+            start=pl.lit(0, dtype=pl.Int64),
+        )
+        placed = table.select(position.alias(_AT), pl.col('value')).collect(engine='streaming')
+        return frame.with_columns(pl.Series(alias, _scattered(placed[_AT], placed['value'], expected)))
+
+    def _ordinal_of(self, dim: str) -> pl.Expr:
+        """A parameter's *dim* column as that dimension's ordinal.
+
+        Free for a string dimension: binding encodes those as an ``Enum`` over
+        the labels **in ordinal order** (``_Binder.encode_dimensions``), so the
+        physical code already *is* the ordinal and no lookup happens at all.
+        Every other dtype pays a dictionary built from the dimension table,
+        which is the small side — one entry per label, not per row.
+        """
+        column = pl.col(dim)
+        if self.dimensions[dim].collect_schema()['val'] == pl.Enum:
+            return column.to_physical().cast(pl.Int64)
+        labels = self.dimensions[dim].select('val').collect()['val']
+        return column.replace_strict({value: at for at, value in enumerate(labels)}, return_dtype=pl.Int64)
 
     # ------------------------------------------------------------------
     # expressions → fragments
@@ -826,6 +907,20 @@ class PolarsCompiler:
         if not p.dims:
             return p.frame.select(pl.col('cval').sum())
         return p.frame.group_by(p.dims).agg(pl.col('cval').sum())
+
+
+def _scattered(at: pl.Series, values: pl.Series, count: int) -> Any:
+    """*values* written at the row-major position each one belongs to.
+
+    Every position is written exactly once — the caller's gate established that
+    the parameter is dense over the product and single-valued per coordinate —
+    so no slot is left holding whatever the allocator returned.
+    """
+    import numpy as np
+
+    dense = np.empty(count, dtype=np.float64)
+    dense[at.to_numpy()] = values.to_numpy()
+    return dense
 
 
 def _ordinal(dim: str) -> str:
