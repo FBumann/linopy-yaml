@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.101](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.100...v0.0.1-alpha.101) (2026-08-11)
+
+
+### Documentation
+
+* **agents:** a claim belongs in the message that prints ([#608](https://github.com/fluxopt/lpspec/issues/608)) ([d0b1e86](https://github.com/fluxopt/lpspec/commit/d0b1e86397935c70ac9773e538e5f2577909ddd4))
+
 ## [0.0.1-alpha.100](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.99...v0.0.1-alpha.100) (2026-08-11)
 
 
