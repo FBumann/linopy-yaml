@@ -175,7 +175,17 @@ jobs:
       # individually and its guidance is to stay under ~2M of them, which polars
       # may or may not respect at `m`. Widen it on evidence from this job rather
       # than on a guess made before it ever ran.
+      #
+      # **One thread, because peak is max simultaneous liveness and that is a
+      # race.** Unpinned, this measures the runner: at 1/4/8 threads `transport/s`
+      # peaks at 176/194/216 MB with run-to-run spread 1.5/3.2/3.6%. Not the peak
+      # a caller sees — `bench.yml` and `docs/benchmarks.md` own that one; this
+      # job needs a comparable series instead, and pays realism for it. Steps the
+      # series where it lands. Memory only: walltime measures multi-threaded
+      # native code and its macro runner is already stable.
       - uses: CodSpeedHQ/action@v5
+        env:
+          POLARS_MAX_THREADS: 1
         with:
           mode: memory
           run: uv run --no-sync pytest bench --arms lpspec --sizes s --skip-gate --codspeed
