@@ -903,20 +903,24 @@ def test_a_solver_hands_back_a_vector_and_not_an_index(solver_name):
 
 @pytest.mark.parametrize('solver_name', sorted(SOLVERS))
 @pytest.mark.parametrize('batch_rows', [1, 2, 7, 100_000], ids=['one', 'two', 'odd', 'whole'])
-def test_a_row_with_no_terms_keeps_its_seat_at_any_chunking(solver_name, batch_rows):
-    """Rows reach a solver by position, so an empty one still occupies one.
+def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_rows):
+    """A row that lost every term is not a constraint, and the build says so.
 
-    `where: "t > 0"` leaves `balance` at `t = 0` with nothing to sum, and this
-    lane keeps the row: `0 == 5` is infeasible and says so. Both solvers now
-    take the row bounds from a dense vector and slice it per chunk, which is
-    the same hand-off only if every label in the range has a seat — a row that
-    fell out of the frame would take a comparison nothing can fail, leave the
-    constraint unenforced, and the model would come back solved against a
-    model that cannot be.
+    `where: "t > 0"` leaves `balance` at `t = 0` with nothing to sum. Three
+    provenances reach that shape — an absent variable, an empty reduction, a
+    missing coefficient — and the language used to answer them differently, so
+    the same empty row meant different things depending on how it emptied. The
+    rule is now at the level the property lives at: no variable terms, no row.
 
-    Ragged batches because the range loop is where a seat would be lost, and a
-    round number is the one split that hides an off-by-one. Both solvers,
-    because the seating is now theirs jointly rather than either one's.
+    **The omission is reported, and that is what makes dropping defensible.**
+    An unenforced constraint the caller cannot see is the failure this used to
+    guard against by keeping the row; `omissions()` answers it without asking
+    the solver to carry a comparison nothing can fail.
+
+    Ragged batches because the range loop is where a *surviving* seat would be
+    lost — labels are compacted when a row goes, so the dense vector and the
+    chunk ranges have to agree about the narrower block. Both solvers, because
+    the seating is theirs jointly.
     """
     model = {
         'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}, 'g': {'values': ['a', 'b']}},
@@ -928,9 +932,24 @@ def test_a_row_with_no_terms_keeps_its_seat_at_any_chunking(solver_name, batch_r
     with lps.build(model, {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}) as ex:
         tables = ex._tables()
         occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
-        assert occupied == [1, 2], 'row 0 is the orphan under test'
+        assert occupied == [0, 1], 'the block closes up around the gap'
+        assert ex.omissions().to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
         solution = ex.solve(batch_rows=batch_rows, solver_name=solver_name)
-        assert solution.termination_condition == 'infeasible'
+        assert solution.termination_condition == 'optimal'
+        assert solution.objective == pytest.approx(4.0 + 6.0, rel=RTOL), 'the two built rows still bind'
+
+
+def test_omissions_is_empty_when_every_declared_row_is_built():
+    """The common case says nothing, so the report is a signal rather than noise."""
+    model = {
+        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
+        'parameters': {'load': {'dims': ['t']}},
+        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
+    }
+    with lps.build(model, {'load': pl.DataFrame({'t': [0, 1], 'value': [1.0, 2.0]})}) as ex:
+        assert ex.omissions().is_empty()
 
 
 def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():

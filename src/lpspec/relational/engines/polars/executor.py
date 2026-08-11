@@ -83,6 +83,9 @@ class PolarsExecutor:
         self._bound: BoundSources | None = None
         self._variables: dict[str, pl.LazyFrame] = {}
         self._constraints: dict[str, pl.LazyFrame] = {}
+        #: ``name -> rows not built``, because every term they had vanished.
+        #: Empty for a model whose every declared row reached the solver.
+        self._omitted: dict[str, int] = {}
         #: ``name -> (first label, how many)``.
         #: :func:`~lpspec.relational.engines.polars.labels.frame` hands a
         #: declaration a *contiguous, dense* run of labels, so a declaration's
@@ -301,7 +304,11 @@ class PolarsExecutor:
         ).collect(engine='streaming')
 
         if not terms:
-            return rows, None
+            self._omitted[c.name] = rows.height
+            self._blocks[c.name] = (start, 0)
+            self._n_rows = start
+            self._constraints[c.name] = self._constraints[c.name].clear()
+            return rows.clear(), None
 
         pieces = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(terms) == 1 else None
@@ -318,7 +325,44 @@ class PolarsExecutor:
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
-        return rows, self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
+        matrix = self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
+        rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, start)
+        return rows, matrix
+
+    def _drop_termless_rows(
+        self, name: str, rows: pl.DataFrame, matrix: pl.DataFrame, start: int
+    ) -> tuple[pl.DataFrame, pl.DataFrame, int]:
+        """Rows that kept no variable term are not built, and the block closes up.
+
+        A row with no variables is not a constraint — it asserts something about
+        constants, which the solver cannot act on. Three different provenances
+        reach that shape (an absent variable, an empty reduction, a missing
+        coefficient) and the language used to answer them differently, so the
+        same row meant different things depending on how it emptied. This is the
+        rule at the level the property lives at.
+
+        Labels are dense, and the dual read-back reads a block by position, so a
+        dropped row cannot leave a gap: the survivors are renumbered from
+        *start* and the row counter rewinds to match.
+
+        Costs one `n_unique` on a frame already in memory when nothing is
+        dropped, which is every correct model.
+        """
+        kept = matrix.get_column('row').unique()
+        if kept.len() == rows.height:
+            return rows, matrix, start + rows.height
+
+        surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
+        renumber = surviving.select('row').with_row_index('__new__', offset=start)
+        self._omitted[name] = rows.height - surviving.height
+        self._blocks[name] = (start, surviving.height)
+        remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
+        rows = surviving.with_columns(pl.col('row').replace_strict(remap))
+        matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
+        self._constraints[name] = (
+            self._constraints[name].filter(pl.col('row').is_in(kept)).with_columns(pl.col('row').replace_strict(remap))
+        )
+        return rows, matrix, start + surviving.height
 
     def _build_objective(self, o: plan.ObjectiveDeclaration) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
@@ -372,6 +416,25 @@ class PolarsExecutor:
             row_count=self._n_rows,
             objective_sense=self._obj_sense,
             objective_constant=self._obj_const,
+        )
+
+    def omissions(self) -> pl.DataFrame:
+        """``(constraint, rows_not_built)`` — every row that lost all its terms.
+
+        A row with no variable terms is not built (SPEC §6), and a build that
+        said nothing about it would leave a declared constraint unenforced with
+        no way to notice. This is that record: empty for a model whose every
+        declared row reached the solver, one line per constraint otherwise.
+
+        Counts rather than coordinates, deliberately. The label of a row that
+        was not built does not exist, so naming *which* coordinates went would
+        mean holding the pre-drop frame — memory proportional to the omission,
+        on the path this package measures hardest. A count is enough to be
+        noticed, which is the whole job.
+        """
+        return pl.DataFrame(
+            {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
+            schema={'constraint': pl.String, 'rows_not_built': pl.UInt32},
         )
 
     def write(self, path: str | Path) -> None:
