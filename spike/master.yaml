@@ -1,0 +1,40 @@
+# The master: capacity, and a placeholder for what operating it will cost.
+#
+# **The cut family is declared once and never regenerated.** `cut` takes its
+# members from data (SPEC 8), so an iteration appends a row to `cut_const` and
+# `cut_slope` and nothing about this file changes. No YAML is written at
+# runtime; the file stays the artifact and stays reviewable.
+dimensions:
+  generator:
+    values: [wind, gas]
+  cut:
+    dtype: int
+
+parameters:
+  invest:
+    dims: [generator]
+  cut_const:
+    dims: [cut]
+  cut_slope:
+    dims: [cut, generator]
+
+variables:
+  cap:
+    foreach: [generator]
+    bounds:
+      lower: 0
+      upper: 100
+  theta:
+    foreach: []
+    bounds:
+      lower: 0
+
+constraints:
+  optimality_cut:
+    foreach: [cut]
+    expression: theta >= cut_const + sum(cut_slope * cap, over=generator)
+
+objectives:
+  investment_plus_operating:
+    sense: minimize
+    expression: cap * invest + theta
