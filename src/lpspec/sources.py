@@ -7,8 +7,8 @@ PyCapsule protocol) and produces the tidy frames the engine reads by name.
 
 It lives here rather than in ``lowering.py`` because it is not lowering.
 Lowering turns an AST into a plan and touches no data at all; this touches
-only data and knows nothing about expressions. They were in one file because
-``api.build`` calls them on consecutive lines, which is not a reason.
+only data and knows nothing about expressions. That ``api.build`` calls them
+on consecutive lines is not a reason to put them in one file.
 
 The shapes themselves are recognised in :mod:`lpspec.relational.frames`,
 so no dataframe library beyond the engine's own is a dependency of either lane.

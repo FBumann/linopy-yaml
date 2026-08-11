@@ -10,11 +10,10 @@ That is why it lives here and not in ``lowering.py``. Degree is a property of
 the *language*, not of any plan — the ceiling doc says so in as many words —
 so both lanes have to give the same verdict *and the same sentence*, the way
 they already do for dim sets (:mod:`lpspec.language.dimensions`) and the
-closed helper set (:mod:`lpspec.language.helpers`). Stated once here, both
-lanes **ask**; neither answers. When the rule lived in ``lowering.py`` the
-eager lane had to keep a hand-copy of the ``**`` message and let linopy raise
-its own error for ``x * y``, so one language rule had two spellings and one
-lane's version was untested.
+closed helper set (:mod:`lpspec.language.helpers`). Stated once here, every
+consumer **asks**; none answers. A copy of the rule in a lane is a second
+spelling of one language rule, and the copy is the one no differential test
+covers.
 
 The decision is deliberately narrow: :func:`check_binary` decides a *binary
 operator node*, which is the only place degree can be lost. Everything else

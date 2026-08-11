@@ -95,12 +95,27 @@ class TermFragment:
     @property
     def value_column(self) -> str:
         """``coeff`` for a term, ``cval`` for a constant part."""
-        return 'coeff' if self.is_term else 'cval'
+        return value_column(is_term=self.is_term)
 
     @property
     def carried(self) -> list[str]:
         """The non-dim columns a projection has to keep."""
-        return ['var_label', self.value_column] if self.is_term else [self.value_column]
+        return carried_columns(is_term=self.is_term)
+
+
+def value_column(*, is_term: bool) -> str:
+    """The value column a fragment of this kind carries.
+
+    A free function as well as a :class:`TermFragment` property because
+    :func:`_join_mul` names the columns of the fragment it is *building*, whose
+    kind need not be either operand's.
+    """
+    return 'coeff' if is_term else 'cval'
+
+
+def carried_columns(*, is_term: bool) -> list[str]:
+    """The non-dim columns a projection of this fragment kind has to keep."""
+    return ['var_label', value_column(is_term=is_term)] if is_term else [value_column(is_term=is_term)]
 
 
 @dataclass(frozen=True)
@@ -483,13 +498,11 @@ class PolarsCompiler:
         """Compile an affine expression into term and const fragments.
 
         No join in the walk maintains order, on evidence rather than by
-        omission: a ``keep_order`` flag for the objective's raw read was
-        built, measured, and taken out again — the mul join's
-        ``maintain_order`` held the label order on some shapes and lost it on
-        others differing only in data, so the tax landed unpredictably and
-        `profiled/l`'s objective phase tripled paying it for nothing. Every
-        consumer re-derives or verifies order where it reads
-        (:meth:`PolarsExecutor._build_objective`'s docstring keeps the
+        omission: the mul join's ``maintain_order`` holds the label order on
+        some shapes and loses it on others differing only in data, so the tax
+        lands unpredictably and `profiled/l`'s objective phase triples paying
+        it for nothing. Every consumer re-derives or verifies order where it
+        reads (:meth:`PolarsExecutor._build_objective`'s docstring keeps the
         numbers).
         """
 
@@ -755,9 +768,9 @@ class PolarsCompiler:
             The third outcome is an operand that had **no** presence at all:
             nothing was absent before and the acyclic edge now is. Without
             this the vacated slot would merely fail to join and the row would
-            survive with its term quietly gone — a different constraint, which
-            is the shape #239 removed from masks and #289 from shift. It is
-            keyed by the one dimension it speaks about, which is why
+            survive with its term quietly gone — a different constraint, and
+            the same shape masks and shift refuse (#239, #289). It is keyed by
+            the one dimension it speaks about, which is why
             :attr:`TermFragment.presence_dims` exists: keying it by the
             fragment's dims would materialise the whole coordinate product to
             name an edge, and doing so measured 1.15-1.21x of build over two
@@ -844,8 +857,7 @@ class PolarsCompiler:
         makes them present-with-no-term, which is a zero contribution and a
         surviving row. Without it they stay out of the set, so absence
         propagates and the row drops — linopy v1's reading of ``.shift()``,
-        which the eager lane now gets from linopy itself rather than from a
-        ``fillna`` we apply on top of it.
+        which the eager lane takes from linopy itself.
 
         Only the ``shift`` edge qualifies. A coordinate the variable's own mask
         removed is genuinely absent, and remapping already dropped it above —
@@ -1042,7 +1054,6 @@ def _map_fragments(
 
 
 def _negate(p: TermFragment) -> TermFragment:
-
     return replace(p, frame=p.frame.with_columns(-pl.col(p.value_column)))
 
 
@@ -1074,9 +1085,8 @@ def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = Fa
 
     value, rhs = pl.col(a.value_column), pl.col(_RHS)
     combined = value / rhs if divide else value * rhs
-    out = 'coeff' if is_term else 'cval'
-    carried = ['var_label', out] if is_term else [out]
-    frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried)
+    out = value_column(is_term=is_term)
+    frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(is_term=is_term))
     return replace(a, dims=out_dims, frame=frame, is_term=is_term)
 
 

@@ -8,17 +8,16 @@ both reaching it through
 unit is: a row costs its average nonzeros, a column costs one.
 
 The width is the part that gets forgotten, and forgetting it does not look
-like a bug. The HiGHS solver chunked the constraint matrix by rows with no
-width at all, which reads as bounded and is not: a row is nine entries in one
-model and a hundred in another, so what the pass held tracked the model's
-shape rather than the budget — the one thing a *batched* pass exists to stop
-doing. (The engine's own peak tracks the model, deliberately: there is no
-configured ceiling any more, and declaring one is the memory axis in
-docs/ROADMAP.md. This is the narrower promise
-that a pass over a model holds a bounded slice of it, not the whole.)
-Requiring a width at every call site is the point of this module. A pass
-whose unit really does cost one element says so, in one character, where a
-reviewer can see it.
+like a bug: chunking a constraint matrix by rows with no width reads as
+bounded and is not, since a row is nine entries in one model and a hundred in
+another, so what the pass holds tracks the model's shape rather than the
+budget — the one thing a *batched* pass exists to stop doing. (The engine's
+own peak tracks the model, deliberately: there is no configured ceiling, and
+declaring one is the memory axis in docs/ROADMAP.md. This is the narrower
+promise that a pass over a model holds a bounded slice of it, not the whole.)
+Requiring a width at every call site is the point of this module. A pass whose
+unit really does cost one element says so, in one character, where a reviewer
+can see it.
 """
 
 from __future__ import annotations

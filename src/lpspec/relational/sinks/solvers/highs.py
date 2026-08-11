@@ -20,14 +20,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import polars as pl
-
 from lpspec.errors import LpspecError
-from lpspec.relational.sinks.tables import SENSE_CODES
+from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    import polars as pl
 
     from lpspec.relational.sinks.tables import ModelTables
 
@@ -40,11 +40,10 @@ if TYPE_CHECKING:
 #: unit costs: a column is one element, a constraint row is as many as it has
 #: nonzeros.
 #:
-#: Deliberately small, and the opposite of what the same budget settled at on
-#: the duckdb engine. There a wider chunk was worth a third of the hand-off,
-#: because every chunk re-ran an ordered query; here both columns and rows are
-#: numpy slices, so more chunks cost almost nothing and only residency scales
-#: with the budget. Measured at
+#: Deliberately small. Both columns and rows are numpy slices, so more chunks
+#: cost almost nothing and only residency scales with the budget — where an
+#: engine whose every chunk re-ran an ordered query would want the opposite.
+#: Measured at
 #: `l`: 2e6 against 1e5 is 0.50s against 0.59s on `dispatch` and 0.71 against
 #: 0.75 on `transport`, for 0.6 GB and 0.2 GB more peak. A tenth of a second
 #: on a hand-off that precedes a minute of simplex is not worth half a
@@ -166,8 +165,8 @@ def solve_highs(
 
     objective = h.getInfo().objective_function_value + model.objective_constant
     solution = h.getSolution()
-    primal = _vector(solution.col_value)
-    dual = _vector(solution.row_dual) if solution.dual_valid else None
+    primal = solver_vector(solution.col_value)
+    dual = solver_vector(solution.row_dual) if solution.dual_valid else None
     return status, objective, primal, dual
 
 
@@ -202,17 +201,3 @@ def _status_of(h: Any, highspy: Any) -> SolveStatus:
         solver_wording=h.modelStatusToString(model_status),
         has_primal=h.getInfo().primal_solution_status == int(highspy.SolutionStatus.kSolutionStatusFeasible),
     )
-
-
-def _vector(values: Any) -> pl.Series:
-    """One quantity the solver produced, in its own index.
-
-    Carried as a series rather than a ``(label, value)`` frame because the
-    label would be the position: the read-back takes a declaration's share by
-    slicing, so an index column beside it is an ``arange`` nothing reads —
-    8 bytes a column, for as long as the result is held. The same argument
-    took ``col`` off ``cols`` (#433); this is its other half.
-    """
-    import numpy as np
-
-    return pl.Series('value', np.asarray(values, dtype=np.float64))

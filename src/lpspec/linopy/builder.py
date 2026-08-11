@@ -49,7 +49,7 @@ from lpspec.language.where_parser import (
     WhereNode,
 )
 from lpspec.linopy import semantics
-from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover
+from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover, gaps_under
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
@@ -164,14 +164,9 @@ def _check_bounds_are_defined(name: str, vdef: Any, dataset: xr.Dataset, mask: A
     check is: a coordinate the variable does not occupy needs no bound, and
     supplying data only where the variable exists is the ordinary idiom.
     """
-    missing = 0
-    for bound in (vdef.bounds.lower, vdef.bounds.upper):
-        if not isinstance(bound, str):
-            continue
-        gaps = dataset[bound].isnull()
-        if mask is not None:
-            gaps = gaps & mask
-        missing += int(gaps.sum())
+    missing = sum(
+        gaps_under(dataset[bound], mask) for bound in (vdef.bounds.lower, vdef.bounds.upper) if isinstance(bound, str)
+    )
     if missing:
         raise DataError(null_bounds_message(name, missing))
 
@@ -330,9 +325,7 @@ def _eval_ast(
 
     Binary nodes go through ``degree.check_binary`` first: ``**``, a quadratic
     product and a variable divisor are all refused by ``language/degree.py``,
-    the same verdict the relational lane asks for — this lane used to keep a
-    hand-copy of the ``**`` message and leave ``x * y`` to fail as whatever
-    linopy raised.
+    the same verdict the relational lane asks for and in the same sentence.
 
     Unknown helper names were rejected by ``validation.py`` at load time; the
     guard on ``_HELPERS`` covers hand-built calls that skipped it.
@@ -534,8 +527,7 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
     positions contribute, and omitting it leaves them **absent** — which
     propagates and drops the row, what linopy's own v1 convention means by
     ``.shift()``. Nothing is done to the result in that default case on
-    purpose: the whole point of #289 was to stop holding linopy off its own
-    answer.
+    purpose: linopy already gives that answer (#289).
 
     A DataArray shift always fills — absence is not representable in data, so
     lowering refuses a bare shift over a variable-free operand and that branch

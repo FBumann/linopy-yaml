@@ -22,14 +22,14 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
-import polars as pl
-
 from lpspec.errors import LpspecError
-from lpspec.relational.sinks.tables import SENSE_CODES
+from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    import polars as pl
 
     from lpspec.relational.sinks.tables import ModelTables
 
@@ -119,7 +119,7 @@ def solve_gurobi(
         status = _status_of(m)
         if not status.is_readable:
             return status, float('nan'), None, None
-        return status, m.ObjVal, _vector(x.X), _duals(model.row_count, blocks)
+        return status, m.ObjVal, solver_vector(x.X), _duals(model.row_count, blocks)
     finally:
         m.dispose()
         environment.dispose()
@@ -260,12 +260,4 @@ def _duals(row_count: int, blocks: list[Any]) -> pl.Series | None:
             f'positional, so a short vector would drop rows silently. This is an '
             f'engine bug rather than a problem with the model — please report it.'
         )
-    return _vector(values)
-
-
-def _vector(values: Any) -> pl.Series:
-    """One quantity the solver produced, in its own index — see
-    :func:`~lpspec.relational.sinks.solvers.highs._vector`."""
-    import numpy as np
-
-    return pl.Series('value', np.asarray(values, dtype=np.float64))
+    return solver_vector(values)

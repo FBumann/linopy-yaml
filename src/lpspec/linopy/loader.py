@@ -343,6 +343,20 @@ def _validate_coords(
             raise DataError(msg)
 
 
+def gaps_under(array: Any, mask: Any) -> int:
+    """How many slots of *array* are null where *mask* still admits the row.
+
+    The eager lane's one way of asking "is this parameter defined where it is
+    needed" — a bound, a divisor and a constant side all ask it, and a second
+    spelling is a second chance to forget the mask and refuse a model whose
+    ``where`` had already answered. ``None`` means nothing narrows the question.
+    """
+    missing = array.isnull()
+    if mask is not None:
+        missing = missing & mask
+    return int(missing.sum())
+
+
 def check_constant_side_covers(name: str, node: Any, schema: Model, dataset: Any, mask: Any) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
@@ -365,10 +379,7 @@ def check_constant_side_covers(name: str, node: Any, schema: Model, dataset: Any
         if not params:
             continue
         for param in sorted(params):
-            gaps = dataset[param].isnull()
-            if mask is not None:
-                gaps = gaps & mask
-            missing = int(gaps.sum())
+            missing = gaps_under(dataset[param], mask)
             if missing:
                 raise DataError(uncovered_constant_message(param, missing, name))
 
@@ -401,10 +412,7 @@ def check_divisors_cover(name: str, node: Any, schema: Model, dataset: Any, mask
             present = model.variables[variable].labels != -1
             needed = present if needed is None else (needed & present)
         for param in sorted(params):
-            gaps = dataset[param].isnull()
-            if needed is not None:
-                gaps = gaps & needed
-            missing = int(gaps.sum())
+            missing = gaps_under(dataset[param], needed)
             if missing:
                 raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
 

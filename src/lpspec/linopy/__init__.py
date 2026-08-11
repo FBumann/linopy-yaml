@@ -36,11 +36,10 @@ linopy's default is ``legacy``, which fills every absent slot with 0: a masked
 variable contributes zero instead of taking its row with it, and a shift's
 vacated position does the same, where the relational lane drops the row in
 both cases (SPEC §6, §7). Left alone, the two lanes therefore answer the same
-YAML differently — measured at 25.0 against 125.0 on a masked-variable model,
-which is a wrong answer rather than a wrong error. ``tests/oracle.py`` had
-always set this, which is exactly why nothing caught it: the suite proved the
-lanes agree under a configuration the package never shipped. Writing global
-state on import is a real cost — a process importing this module has its own
+YAML differently — 25.0 against 125.0 on a masked-variable model, a wrong
+answer rather than a wrong error. It is set on *import* rather than in
+``tests/oracle.py`` so that the suite proves the lanes agree under the
+configuration the package ships. Writing global state on import is a real cost — a process importing this module has its own
 linopy arithmetic changed too — but scoping it per call is something linopy's
 own context manager cannot do (``__exit__`` calls ``reset()``, restoring *all*
 options to their defaults rather than to their prior values, so it would

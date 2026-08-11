@@ -70,14 +70,13 @@ def frame(
     filter keeps it, and a semi-join usually does, so the sort that would
     re-establish it usually permutes nothing. :func:`in_position_order`
     verifies that linearly and sorts only when the engine emitted another
-    order. The unconditional sort this replaces was 0.26 s of a 0.73 s build
-    at ``dispatch/l``, against ~0.01 s for the verify.
+    order: ~0.01 s against 0.26 s of a 0.73 s build at `dispatch/l` for the
+    unconditional sort.
 
     **Nothing renumbers unless a row was dropped, either.** Only a mask or a
     restriction leaves gaps in the positions; with neither, ``start +
     position`` *is* the label and the row-index pass never runs — ~3 ms per
-    unmasked declaration back on `fleet`, which carries 19 and no ``where``
-    at all.
+    unmasked declaration on `fleet`, which carries 19 and no ``where`` at all.
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))
@@ -134,15 +133,13 @@ def _factored(
     **The survivors go on the left of the cross join**, which is the side the
     streaming engine cycles fastest: survivors turning over within each head
     coordinate is label order, so :func:`in_position_order` below verifies and
-    permutes nothing. With the operands the other way round it sorted the whole
-    variable frame on every build — a million rows on `dispatch/m`, and the
-    reason that case read 45% slower than main.
+    permutes nothing. The other way round sorts the whole variable frame on
+    every build — a million rows on `dispatch/m`, 45% slower.
 
     Which side cycles is an implementation detail of a dependency and is
     asserted nowhere: the verify is what makes it safe to exploit, and what
     would turn a change in polars back into a sort rather than into wrong
-    labels. If this is ever rearranged, re-measure rather than reason — the
-    comment this replaces argued the opposite and was wrong.
+    labels. Rearranging the join means re-measuring, not reasoning.
     """
     head, kept = dims[:free], dims[free:]
     rank = '#rank'
