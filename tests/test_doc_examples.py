@@ -73,6 +73,7 @@ TRACKED = [
     'docs/ARCHITECTURE.md',
     'docs/design/ceiling.md',
     'docs/ROADMAP.md',
+    'docs/design/decomposition.md',
 ]
 
 # Names an example may dot into, and the object that decides what is valid.
