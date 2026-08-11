@@ -813,8 +813,11 @@ def test_duals_come_back_keyed_by_slice_and_are_never_combined():
 def test_a_slice_without_duals_does_not_fail_the_sweep():
     """An integer variable leaves duals undefined, and that is one slice's news.
 
-    `Result.dual` raises for such a model — correct there, fatal here. A mixed
-    sweep must still return, with `objective` carrying what each slice did.
+    `Result.dual` raises for such a model — correct there, fatal here. The
+    sweep must still return, and when the caller does ask for a price it must
+    say what a single solve says: which variable is not continuous, and what to
+    do about it. A sweep of one model has one answer, so the first is carried
+    rather than rewritten.
     """
     integral = {
         **DISPATCH,
@@ -824,5 +827,6 @@ def test_a_slice_without_duals_does_not_fail_the_sweep():
 
     assert len(runs) == 3, 'every slice is still a row of the record'
     assert runs.primal('p').height > 0, 'primals are unaffected'
-    with pytest.raises(lps.LpspecError, match='holds no constraint frames at all'):
+    with pytest.raises(lps.LpspecError, match='duals are undefined for a mixed-integer model') as raised:
         runs.dual('balance')
+    assert "'p' is not continuous" in str(raised.value), 'the sweep names the variable, as one solve does'

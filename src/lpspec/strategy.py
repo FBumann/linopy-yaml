@@ -183,8 +183,12 @@ class Runs:
 
     key_name: str
     meta: pl.DataFrame
-    _primals: dict[str, pl.DataFrame] = field(repr=False, default_factory=dict)
-    _duals: dict[str, pl.DataFrame] = field(repr=False, default_factory=dict)
+    #: Per slice, not concatenated. Joining them is the reader's work so a
+    #: sweep pays it for the names actually read, and so the concatenated copy
+    #: never exists beside the pieces it was built from.
+    _primals: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
+    _duals: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
+    _no_duals: str | None = field(repr=False, default=None)
 
     @property
     def objective(self) -> pl.DataFrame:
@@ -204,7 +208,7 @@ class Runs:
         """
         if name not in self._primals:
             raise LpspecError(_nothing_to_read('variable', name, self._primals, self.meta))
-        return self._primals[name]
+        return pl.concat(self._primals[name])
 
     def dual(self, name: str) -> pl.DataFrame:
         """One constraint's shadow prices across every slice, the key prepended.
@@ -219,8 +223,8 @@ class Runs:
         was meant.
         """
         if name not in self._duals:
-            raise LpspecError(_nothing_to_read('constraint', name, self._duals, self.meta))
-        return self._duals[name]
+            raise LpspecError(self._no_duals or _nothing_to_read('constraint', name, self._duals, self.meta))
+        return pl.concat(self._duals[name])
 
     def to_pandas(self, name: str) -> pd.DataFrame:
         """:meth:`primal` as a tidy :class:`pandas.DataFrame`.
@@ -276,7 +280,7 @@ class Runs:
         written: dict[str, Path] = {}
         for name in sorted(self._primals):
             path = directory / f'{name}.parquet'
-            self._primals[name].write_parquet(path)
+            self.primal(name).write_parquet(path)
             written[name] = path
         return written
 
@@ -413,6 +417,7 @@ def solve_over(
     rows: list[dict[str, Any]] = []
     primals: dict[str, list[pl.DataFrame]] = {name: [] for name in schema.variables}
     shadow: dict[str, list[pl.DataFrame]] = {name: [] for name in schema.constraints}
+    no_duals: str | None = None
 
     def arguments(sliced: dict[str, Any], coords: dict[str, Any], crosses: bool) -> tuple[Any, ...]:
         return (
@@ -434,7 +439,8 @@ def solve_over(
     if executor is None:
         state: dict[str, Any] = {}
         for key, sliced, coords in cuts:
-            meta, frames, priced = _run_slice(*arguments({**sliced, **state}, coords, False))
+            meta, frames, priced, reason = _run_slice(*arguments({**sliced, **state}, coords, False))
+            no_duals = no_duals or reason
             absorb(key, meta, frames, priced)
             if plan:
                 state = _carried(plan, frames, key)
@@ -447,14 +453,16 @@ def solve_over(
         futures = [executor.submit(_run_slice, *arguments(sliced, coords, crosses)) for _key, sliced, coords in cuts]
         # in slice order, never completion order — a sweep must not reorder itself
         for (key, _sliced, _coords), future in zip(cuts, futures, strict=True):
-            meta, returned, priced = future.result()
+            meta, returned, priced, reason = future.result()
+            no_duals = no_duals or reason
             absorb(key, meta, _decode(returned) if crosses else returned, _decode(priced) if crosses else priced)
 
     return Runs(
         key_name=key_name,
         meta=pl.DataFrame(rows),
-        _primals={name: pl.concat(frames) for name, frames in primals.items() if frames},
-        _duals={name: pl.concat(frames) for name, frames in shadow.items() if frames},
+        _primals={name: frames for name, frames in primals.items() if frames},
+        _duals={name: frames for name, frames in shadow.items() if frames},
+        _no_duals=no_duals,
     )
 
 
@@ -464,7 +472,7 @@ def _run_slice(
     coords: dict[str, Any] | None,
     encode_out: bool,
     call: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str | None]:
     """One slice, start to finish, over plain data.
 
     Module-level and closure-free on purpose: a remote executor has to pickle
@@ -479,17 +487,31 @@ def _run_slice(
             'objective': result.objective if result.has_primal else float('nan'),
         }
         frames = {name: result.primal(name) for name in model.variables} if result.has_primal else {}
-        # An integer variable leaves duals undefined, and one such slice must
-        # not fail a whole sweep: the frames are simply absent, exactly as they
-        # are for a slice that did not solve. `Runs.objective` says which.
-        priced = (
-            {name: result.dual(name) for name in model.constraints}
-            if result.has_primal and result._dual_values is not None
-            else {}
-        )
+        priced, no_duals = _prices(result, model)
         if not encode_out:
-            return meta, frames, priced
-        return meta, _encode(frames, {}), _encode(priced, {})
+            return meta, frames, priced, no_duals
+        return meta, _encode(frames, {}), _encode(priced, {}), no_duals
+
+
+def _prices(result: Any, model: Any) -> tuple[dict[str, Any], str | None]:
+    """Every constraint's duals, or the one reason there are none.
+
+    An integer variable leaves duals undefined, and one such slice must not
+    fail a whole sweep — so the frames are simply absent, as they are for a
+    slice that did not solve. But *absent* is where a sweep used to lose what a
+    single solve says plainly, and `Result.dual` already writes that sentence
+    (it names the integer variable). It is caught and carried rather than
+    rewritten: a sweep of one model has one answer, so the first is the answer.
+    """
+    if not result.has_primal:
+        return {}, None
+    priced: dict[str, Any] = {}
+    for name in model.constraints:
+        try:
+            priced[name] = result.dual(name)
+        except LpspecError as exc:
+            return {}, str(exc)
+    return priced, None
 
 
 def _key_column(

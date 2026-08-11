@@ -79,9 +79,7 @@ process may loop over plans** ([the ceiling](design/ceiling.md)). Scenarios,
 rolling horizons and myopic pathways are all the same fold.
 
 ```python
-runs = lps.solve_over(
-    'model.yaml', sources, lps.EachCoordinate('scenario'), executor=ProcessPoolExecutor(4)
-)
+runs = lps.solve_over('model.yaml', sources, lps.EachCoordinate('scenario'), executor=ProcessPoolExecutor(4))
 runs.objective  # (scenario, status, termination_condition, objective)
 runs.primal('p')  # (scenario, snapshot, generator, value)
 
