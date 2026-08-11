@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.98](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.97...v0.0.1-alpha.98) (2026-08-11)
+
+
+### Documentation
+
+* the copyright line names whoever wrote it, and that was never PyPSA ([#601](https://github.com/fluxopt/lpspec/issues/601)) ([06fb7d5](https://github.com/fluxopt/lpspec/commit/06fb7d5ddcbf2753e780afe1d0f8434f33334485))
+
 ## [0.0.1-alpha.97](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.96...v0.0.1-alpha.97) (2026-08-11)
 
 
