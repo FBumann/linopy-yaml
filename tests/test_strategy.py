@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import datetime
 import multiprocessing
+import sys
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
+from unittest import mock
 
 import polars as pl
 import pytest
@@ -830,3 +832,19 @@ def test_a_slice_without_duals_does_not_fail_the_sweep():
     with pytest.raises(lps.LpspecError, match='duals are undefined for a mixed-integer model') as raised:
         runs.dual('balance')
     assert "'p' is not continuous" in str(raised.value), 'the sweep names the variable, as one solve does'
+
+
+def test_a_bad_name_is_reported_without_the_optional_dependency():
+    """`to_pandas` answers about the model before it asks about the environment.
+
+    The bare-install job carries no pandas, and importing it first turned "this
+    sweep never held 'q'" into "no module named pandas" — a true statement about
+    something the caller did not ask about. Resolving the name first is what
+    makes the reader's message the same on every install.
+    """
+    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+    with mock.patch.dict(sys.modules, {'pandas': None}):
+        with pytest.raises(lps.LpspecError, match="no variable 'q' in this sweep"):
+            runs.to_pandas('q')
+        with pytest.raises(ImportError):
+            runs.to_pandas('p')  # a name it does hold still needs the dependency

@@ -232,10 +232,15 @@ class Runs:
         Needs pandas, which ships with the ``[linopy]`` extra. Column by column
         for the same reason ``Result.to_pandas`` does it: polars' own
         ``to_pandas`` reaches for pyarrow.
+
+        **The name is resolved before the import.** A sweep that never held
+        *name* should say so on any install, and importing first answers a
+        question about the environment where the caller asked one about their
+        model.
         """
+        frame = self.primal(name)
         import pandas as pd
 
-        frame = self.primal(name)
         return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
 
     def to_dataarray(self, name: str) -> xr.DataArray:
