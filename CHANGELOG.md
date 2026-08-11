@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.87](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.86...v0.0.1-alpha.87) (2026-08-11)
+
+
+### Performance
+
+* **engine:** a bound dense over the variable product is attached, not joined ([#511](https://github.com/fluxopt/lpspec/issues/511)) ([8efd207](https://github.com/fluxopt/lpspec/commit/8efd207c991fb956fcd516636ffe233ed6b29437))
+
 ## [0.0.1-alpha.86](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.85...v0.0.1-alpha.86) (2026-08-11)
 
 

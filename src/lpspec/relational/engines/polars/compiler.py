@@ -21,11 +21,11 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import LanguageError
+from lpspec.errors import LanguageError, LpspecError
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
@@ -350,12 +350,13 @@ class PolarsCompiler:
             if isinstance(e, plan.Parameter):
                 alias = f'__bound {e.name}__'
                 if alias not in joined:
-                    carrier = self.parameter_join(
-                        carrier,
-                        e.name,
-                        v.dims,
-                        alias,
-                        f"bound parameter '{e.name}' of variable '{v.name}'",
+                    attached = self._aligned_bound(carrier, e.name, v, alias)
+                    carrier = (
+                        attached
+                        if attached is not None
+                        else self.parameter_join(
+                            carrier, e.name, v.dims, alias, f"bound parameter '{e.name}' of variable '{v.name}'"
+                        )
                     )
                     joined.add(alias)
                 return pl.col(alias).cast(pl.Float64)
@@ -372,6 +373,81 @@ class PolarsCompiler:
 
         lower, upper = walk(v.lower), walk(v.upper)
         return carrier.with_columns(lower.alias('lb'), upper.alias('ub'))
+
+    def _aligned_bound(
+        self, frame: pl.LazyFrame, param: str, v: plan.VariableDeclaration, alias: str
+    ) -> pl.LazyFrame | None:
+        """*frame* with *param* attached **by position**, or ``None`` to join.
+
+        A profile per node, per technology, per hour is dense over the whole
+        variable product — the ordinary shape in energy modelling, and the one
+        the eager lane handles for free: in an array, position *is* the
+        coordinate, so there is nothing to align. Here the same parameter is a
+        full-size frame joined against a full-size coordinate product, which on
+        `profiled/l` is 0.58 s of a 1.27 s build and the whole of why that rung
+        is the one we lose to linopy.
+
+        Position can mean the coordinate here too. The label frame is in label
+        order by construction — not *lexicographic* dim order, which is why
+        sorting the parameter by its dim columns does not match it, but
+        row-major over the product in each dimension's own index order. Sorting
+        the parameter by those ordinals reproduces it exactly, and then the
+        value column is attached rather than joined.
+
+        **Wrong bounds are a wrong model with no error**, so this is refused
+        unless every one of these holds, and each is a fact already computed:
+
+        * the parameter's dims are exactly the variable's, in the same order —
+          fewer dims broadcast, more is already refused, and a different order
+          is a different row-major walk
+        * the variable declares no ``where`` — a mask makes the label frame a
+          subset of the product and position stops lining up
+        * the parameter is dense over that product, its height equal to the
+          product of the cardinalities binding cached
+
+        Duplicate coordinates would break density without changing the height,
+        and are refused before this by ``check_one_row_per_coordinate``.
+        """
+        declaration = self.program.parameter(param)
+        if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
+            return None
+
+        cards = [self.dimension_cardinality[d] for d in v.dims]
+        expected = math.prod(cards)
+        table = self.parameters[param]
+        if table.select(pl.len()).collect().item() != expected:
+            return None
+
+        stride = 1
+        strides: list[int] = []
+        for card in reversed(cards):
+            strides.insert(0, stride)
+            stride *= card
+        position = sum(
+            (self._ordinal_of(d) * step for d, step in zip(v.dims, strides, strict=True)),
+            start=pl.lit(0, dtype=pl.Int64),
+        )
+        pairs = table.select(position.alias('__at__'), pl.col('value')).collect(engine='streaming')
+        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs['value'], expected)))
+
+    def _ordinal_of(self, dim: str) -> pl.Expr:
+        """A parameter's *dim* column as that dimension's ordinal.
+
+        The index is what every label is numbered against, so this is the same
+        order :class:`~lpspec.relational.engines.polars.labels.Labeller` walks.
+
+        **Free for a string dimension**, which is most of them: binding encodes
+        those as an ``Enum`` over the labels *in ordinal order*
+        (``_Binder.encode_dimensions``), so the physical code already is the
+        ordinal and no lookup happens at all. Every other dtype pays a
+        dictionary built from the dimension table — the small side, one entry
+        per label rather than per row.
+        """
+        column = pl.col(dim)
+        if self.dimensions[dim].collect_schema()['val'] == pl.Enum:
+            return column.to_physical().cast(pl.Int64)
+        labels = self.dimensions[dim].select('val').collect()['val']
+        return column.replace_strict({value: at for at, value in enumerate(labels)}, return_dtype=pl.Int64)
 
     # ------------------------------------------------------------------
     # expressions → fragments
@@ -947,3 +1023,19 @@ def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = Fa
     carried = ['var_label', out] if is_term else [out]
     frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried)
     return replace(a, dims=out_dims, frame=frame, is_term=is_term)
+
+
+def _scattered(at: pl.Series, values: pl.Series, size: int) -> Any:
+    """*values* moved to the positions *at* names, one pass, order checked."""
+    import numpy as np
+
+    indices = at.to_numpy()
+    written = np.zeros(size, dtype=bool)
+    written[indices] = True
+    if not written.all():
+        msg = 'a parameter passed the density gate but does not cover the coordinate product'
+        raise LpspecError(msg)
+
+    out = np.empty(size, dtype=np.float64)
+    out[indices] = values.to_numpy()
+    return out
