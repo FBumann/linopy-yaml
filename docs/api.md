@@ -2,11 +2,11 @@
 
 How you *run* a model. The model itself is the YAML file —
 [SPEC](SPEC.md) is what it may contain and what it means; this page is the
-sixteen names that load, check, build, solve and read one back. The surface is
+nineteen names that load, check, build, solve and read one back. The surface is
 pinned by a test and the reasoning behind its size is
 [ARCHITECTURE](ARCHITECTURE.md#the-python-surface).
 
-Five verbs — `check`, `load_model`, `build`, `solve`, `write` — and the
+Six verbs — `check`, `load_model`, `build`, `solve`, `solve_over`, `write` — and the
 exception tree rooted at `LpspecError`: `LanguageError` (with `SchemaError`,
 `DimensionError`, `PiecewiseExpansionError`) for the model, `DataError` for what
 was bound to it.
@@ -130,6 +130,144 @@ Reading a result:
 | duals exist only where a solver ran | either solver sink hands them back through the same join; a model written to LP and solved elsewhere never passes back through here. Reduced costs and slacks ride that join too and are not exposed yet |
 | `to_dataset` costs what it says | each variable arrives dense over its own dims — name a subset, or use `to_parquet` |
 | `write` | the **suffix** picks the writer — `.lp` today, `.mps` a `NotImplementedError` naming it as planned, anything else a `ValueError` listing both sets. Checked before the build, so a format nothing can write costs no model |
+
+## Solving one model many times
+
+`solve_over` runs the same model once per slice and folds the answers. It is a
+driver over `solve`, not a second engine: **a plan cannot contain a loop; a
+process may loop over plans** ([the ceiling](design/ceiling.md)). Scenarios,
+rolling horizons and myopic pathways are all the same fold.
+
+```python
+runs = lps.solve_over('model.yaml', sources, lps.EachCoordinate('scenario'), executor=ProcessPoolExecutor(4))
+runs.objective  # (scenario, status, termination_condition, objective)
+runs.primal('p')  # (scenario, snapshot, generator, value)
+
+runs = lps.solve_over(
+    'window.yaml',
+    sources,
+    lps.EachWindow('snapshot', length=48, step=24, into='t'),
+    carry={'soc_initial': ('soc', 23)},
+)
+runs.primal('soc')  # (snapshot_start, t, value) — the window, and the index inside it
+```
+
+**`Runs` reads like `Result`, one dimension wider** — `primal`, `dual`,
+`to_pandas`, `to_dataarray`, `to_dataset`, `to_parquet`, under the same names
+and with the slice key prepended. That extra dimension is **named by you, not
+by the library**: `EachCoordinate('scenario')` keys on `scenario` and
+`EachCoordinate('draw')` on `draw`, a window on `<dim>_start`, and `key_name=`
+overrides either. So `runs.to_dataarray('p')` on a scenario sweep is
+`(scenario, snapshot, generator)`, which is what a sweep is *for*: `.sel` one
+scenario, take a spread across them, plot the band.
+
+**`stitch=` is how you ask for the answer over real coordinates**, and it is a
+keyword on the readers rather than a reader of its own:
+
+```python
+runs.primal('soc')  # (snapshot_start, t, value) — keyed by slice
+runs.primal('soc', stitch=True)  # (snapshot, value)          — the answer
+runs.dual('balance', stitch=True)  # the same, for a price
+```
+
+A flag rather than a method because what has to be undone is a property of the
+*axis*, not of the quantity — so duals get it for free, and a name that is both
+a variable and a constraint (which the language permits) is never dispatched
+on. `to_pandas` and `to_dataarray` take it too.
+
+**Every axis answers it.** For `EachWindow` it is the answer a rolling horizon
+is *for*: the overlap dropped and the global coordinate restored, each window
+contributing the `step` coordinates it owns — the final one included, which can
+hold no more and so keeps all of it. `snapshot_start + t` would not do, because
+a window spans coordinates rather than values and there is nothing to add for a
+datetime or a string axis. For `EachCoordinate` and a hand-built axis nothing
+was re-indexed, the key column already *is* a coordinate, and the frame comes
+back unchanged.
+
+**Keyed is the default**, because stitching is lossy: it keeps only what each
+window owns and drops the lookahead rows the sweep solved. A default that
+discarded computed answers would also key differently from `objective`, which
+is one row per slice always, and the two would stop joining. For the same
+reason `to_dataset` and `to_parquet` have no `stitch` — a bulk export of what
+the sweep holds is the wrong place to lose rows.
+
+Per slice is a partition of a frame you already have, so there is no reader for
+it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
+
+| Rule | |
+|---|---|
+| **a partition is a filter on the sources** | not a narrower `coords` — the containment check refuses parameter rows outside the declared coordinates, by design. The axis rewrites the sources and supplies the matching `coords` together |
+| **everything a slice produced is kept** | every variable's primals and every constraint's duals, read back through `runs.primal(name)` and `runs.dual(name)`. It is still a fold — each slice's *model* is released as the loop goes, so build peak stays at one slice however many there are, and what accumulates is the answer. Narrowing that is a later addition and an easy one; it is absent because it would need *two* keywords, a constraint being allowed to carry a variable's name |
+| **duals are keyed, never combined** | `runs.dual(name)` is `runs.primal(name)`'s shape. Averaging window prices, taking the last, and reading one slice alone are all defensible, so the reduction is the caller's. A slice whose model had an integer variable contributes none, and `runs.objective` says which |
+| **no aggregate objective** | `objective` is a frame keyed by slice. Scenarios are a distribution, not a sum; summing window objectives double-counts whatever the overlap discards |
+| **duals are not exposed** | a window's shadow price is that window's. Concatenating them into a price curve is wrong in a way nothing complains about |
+| `carry` is a copy, never arithmetic | `{parameter: (variable, index)}`. Accumulation — `existing += built` — is a derived variable in the YAML, where the math is reviewable |
+| **the two declarations say what is copied** | whichever dimension the *variable* has and the *parameter* does not is the one the carry collapses, and `index` names a coordinate of it. Everything else rides along. So `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t` and hands both stores forward, and `total` over `(generator)` into `existing` over `(generator)` drops nothing and needs no index — pass `None` |
+| the carry index is explicit | with `EachWindow(…, 48, 24, …)` the state to carry is at coordinate 23 of `into`, not 47. An implicit "last" is correct until overlap is introduced and silently wrong after |
+| **a carry is checked before anything is read** | the dims come from the YAML, so a carry that cannot line up — collapsing two dimensions at once, a parameter over more than the variable is, an index where the sides already match — raises before the axis has scanned a single source, never mind solved a slice. `check` cannot answer this for you: `carry` is an argument to the call, not part of the model |
+| **a hand-built axis names its own key** | the class axes derive the key column — `EachCoordinate('scenario')` keys on `scenario`, a window on `<dim>_start` — but a plain list of cuts cannot say what its keys are coordinates *of*, so it must pass `key_name='draw'`. `'slice'` would be this library naming somebody else's axis, which is the same reason `into` has no default. `key_name` overrides the derived name anywhere, and is refused only when it collides with a dimension a kept variable already carries |
+| the model is parsed once | `solve_over` validates it up front and hands every slice the schema, so a model outside the streaming language fails before the data is touched and no worker re-reads the YAML |
+| **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`, so the key column is `snapshot_start` and holds where each window began. Naming it `snapshot` would put window starts under the name of the coordinate they are not, and join cleanly against real data |
+| a slice that did not solve | contributes no `primal` rows, so that frame can be shorter than the sweep. `objective` is one row per slice always, and is the record of which slices those were |
+| **the lookahead is `t >= step`** | overlapping windows return every row they solved, including the tail the next window recomputes. Keeping only what each window owns is one clause and no special case — `runs.primal('soc').filter(pl.col('t') < step)` — because the final window can never hold more than `step` rows |
+| **a sweep's memory grows with its answer** | each slice's *model* is released as the fold goes, so build peak stays at one slice — but the extracted frames accumulate, and nothing bounds them. `to_parquet` copies out frames already in memory: a bridge, not a bound. Whether to bound it, and how, is [#610](https://github.com/fluxopt/lpspec/issues/610) |
+| **a window spans coordinates, not values** | `length=48` is forty-eight snapshots however they are numbered, so the dimension only has to be **orderable** — datetimes, strings and gapped integers all work. `into` is a dense `0..n-1` local index, which is what keeps the seam's `where: "t == 0"` matching, and it has no default because the name belongs to the model |
+| non-positional grouping | *"each calendar month"* has unequal groups, so it is a precomputed column plus `EachCoordinate`. What `EachWindow` uniquely offers is **overlap** |
+| `carry` excludes `executor` | a carried value makes slice *i+1* depend on slice *i*, so the slices cannot run concurrently. Refused rather than one silently winning |
+| `workers_share_fs` | whether the executor's workers can read your paths. Inferred from the pool — a stdlib `ProcessPoolExecutor` runs here and reads what is here, anything else is assumed remote — and only path sources are affected |
+
+### Choosing an executor
+
+`executor` is any [`concurrent.futures.Executor`](https://docs.python.org/3/library/concurrent.futures.html#executor-objects) —
+a `submit` returning a `Future`, and nothing else. That is deliberate: **this
+package ships no remote transport and no vendor integration**, so the executor
+is the only extension point there is, and it has to be one anybody can
+implement. `tests/test_strategy.py` runs the whole sweep through a nine-line
+class to keep that honest.
+
+| | use it when | notes |
+|---|---|---|
+| `None` *(default)* | always, until measurement says otherwise | sequential. Nothing is serialised, because nothing crosses a boundary |
+| `ThreadPoolExecutor` | rarely | works, and sources are **not** encoded — but polars is already multithreaded, so slices contend with its pool, and threads share an address space so peak is additive rather than per-worker |
+| `ProcessPoolExecutor` | genuine local parallelism | **must not use `fork`** — see below. Sources cross as parquet |
+| anything remote | a cluster you already run | dask's `Client`, ray's wrappers, loky. Assumed not to share your filesystem, so paths travel as bytes; pass `workers_share_fs=True` if the workers really do mount it |
+
+**A forked worker hangs.** polars' thread pool does not survive `fork`, and the
+failure is a **hang** rather than an error — indistinguishable from a slow
+solve, which makes it the worst shape a failure can take. Measured: `fork` never
+returns where `spawn` and `forkserver` both do. It cannot be enforced from
+inside `solve_over`, because a remote executor has no start method to inspect,
+so pass the context yourself:
+
+```python
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+
+
+def main():
+    ctx = multiprocessing.get_context('spawn')  # or 'forkserver'
+    with ProcessPoolExecutor(4, mp_context=ctx) as pool:
+        runs = lps.solve_over('model.yaml', sources, lps.EachCoordinate('scenario'), executor=pool)
+
+
+if __name__ == '__main__':  # spawn re-imports your module; without this it recurses
+    main()
+```
+
+**Parallel is N × peak.** Each worker holds its own slice's model, so a
+four-way pool wants four times the memory of one slice. That is a machine
+decision, and the reason `None` is the default rather than a pool sized for
+you.
+
+Sources cross a process boundary as parquet, never as pickled frames — smaller
+and faster on every shape it was measured against. A path the workers can reach
+stays a path; one they cannot travels as its own bytes untouched, because
+decoding and re-encoding a parquet file produces identical output at a large
+multiple of the CPU. Either way a source no slice rewrote is encoded once for the whole sweep
+rather than once per slice. **Pass paths or frames, whichever you already
+have** — there is nothing to tune. (`df.lazy()` is not an optimisation: an eager
+frame is embedded in the plan, so it pickles *larger* than the frame. Only
+`scan_parquet` is a reference.)
 
 **The linopy shim** (`lpspec.linopy.build` / `.extend`, `[linopy]` extra) puts
 the same YAML math on a `linopy.Model` that already exists in memory. It is
