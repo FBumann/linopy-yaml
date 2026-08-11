@@ -54,6 +54,7 @@ class Result:
     _executor: PolarsExecutor
     _primal_values: pl.Series | None = None
     _dual_values: pl.Series | None = None
+    _closed: bool = False
 
     @property
     def status(self) -> str:
@@ -85,6 +86,12 @@ class Result:
         return self._objective
 
     def _require_solution(self, what: str) -> None:
+        if self._closed:
+            raise LpspecError(
+                f'cannot read {what}: this result was closed, and closing releases the model the '
+                f'readers join against. Frames already read stay valid — they are their own data — so '
+                f'read what you need before close(), or drop the `with` and close when you are done.'
+            )
         if self._status.is_readable:
             return
         raise NoSolutionError(
@@ -180,6 +187,7 @@ class Result:
         still frees everything one solve allocated; a sibling result keeps its.
         """
         self._primal_values = self._dual_values = None
+        self._closed = True
         self._executor.close()
 
     def __enter__(self) -> Result:
