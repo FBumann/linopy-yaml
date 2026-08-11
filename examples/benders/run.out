@@ -1,0 +1,11 @@
+the whole problem, in one plan: 9600.00
+
+  step 0  feasibility  lower  2025.00   upper none yet
+  step 1  feasibility  lower  2625.00   upper none yet
+  step 2  feasibility  lower  2850.00   upper none yet
+  step 3  optimality   lower  9600.00   upper 9600.00
+
+decomposed: 9600.00 in 4 steps
+monolithic: 9600.00
+difference: 0.0e+00
+cuts: 1 optimality, 3 feasibility
