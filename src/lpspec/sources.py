@@ -50,6 +50,11 @@ def tidy_sources(
     Normalising here rather than at the executor is what lets the piecewise
     curvature guard see every in-memory shape alike (:mod:`relational.frames`
     is where the shapes are recognised).
+
+    Whether a source carries the columns its declaration needs is *not* asked
+    here. Binding asks it of every source, path or frame, so a copy of the
+    question on this side would answer only for the in-memory half — a second
+    wording for one defect, and the narrower one.
     """
     sources: dict[str, object] = {}
     for pname, pdef in schema.parameters.items():
@@ -65,13 +70,6 @@ def tidy_sources(
                 f"parameter '{pname}': cannot adapt {type(obj).__name__} to a tidy "
                 f'table — pass any table polars can read with columns '
                 f'{[*pdef.dims, "value"]} (polars, pyarrow, pandas), or a parquet path'
-            )
-        available = table.collect_schema().names()
-        if any(d not in available for d in pdef.dims):
-            raise DataError(
-                f"parameter '{pname}': source columns {available} "
-                f'do not match its declared dims {list(pdef.dims)}. Rename them to the '
-                f'declared dims, or drop the index names to bind positionally.'
             )
         sources[pname] = table
 

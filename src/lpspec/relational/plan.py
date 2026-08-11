@@ -121,18 +121,10 @@ class Divide(Expression):
 
 @dataclass(frozen=True)
 class Sum(Expression):
-    """Sum ``operand`` over the named dims, removing them from the result.
-
-    A bare string for ``over`` is tolerated and wrapped into a one-tuple, so
-    ``Sum(operand, "generator")`` means the single dim rather than its letters.
-    """
+    """Sum ``operand`` over the named dims, removing them from the result."""
 
     operand: Expression
     over: tuple[str, ...]
-
-    def __post_init__(self) -> None:
-        if isinstance(self.over, str):
-            object.__setattr__(self, 'over', (self.over,))
 
 
 @dataclass(frozen=True)

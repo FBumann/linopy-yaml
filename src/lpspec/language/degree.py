@@ -26,11 +26,10 @@ declaration to name in the error.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, assert_never
+from typing import assert_never
 
 from lpspec.errors import LanguageError
 from lpspec.language.expression_parser import (
-    ArithmeticNode,
     BinaryOperatorNode,
     ComparisonNode,
     CoordinateNode,
@@ -44,10 +43,8 @@ from lpspec.language.expression_parser import (
     ParameterNode,
     UnaryOperatorNode,
     VariableNode,
+    children,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
 
 #: The operators the language has. Anything else is refused by name, with the
 #: rewrite — ``**`` parses (the grammar is not the ceiling) and dies here.
@@ -77,17 +74,9 @@ def carries_variable(node: ExpressionNode) -> bool:
             f'through resolution.expression_of() first (docs/ARCHITECTURE.md hard rule 1).'
         )
         raise AssertionError(msg)
-    if isinstance(node, UnaryOperatorNode):
-        return carries_variable(node.operand)
-    if isinstance(node, (BinaryOperatorNode, ComparisonNode)):
-        return carries_variable(node.left) or carries_variable(node.right)
-    if isinstance(node, FunctionCallNode):
-        return _any_carries([*node.args, *node.kwargs.values()])
+    if isinstance(node, (UnaryOperatorNode, BinaryOperatorNode, ComparisonNode, FunctionCallNode)):
+        return any(carries_variable(c) for c in children(node))
     assert_never(node)
-
-
-def _any_carries(nodes: Iterable[ArithmeticNode]) -> bool:
-    return any(carries_variable(n) for n in nodes)
 
 
 def check_binary(node: BinaryOperatorNode, context: str | None = None) -> None:
@@ -119,7 +108,7 @@ def check_binary(node: BinaryOperatorNode, context: str | None = None) -> None:
         )
 
 
-def check_expression(node: ArithmeticNode, context: str | None = None) -> None:
+def check_expression(node: ExpressionNode, context: str | None = None) -> None:
     """Apply :func:`check_binary` everywhere in *node*.
 
     Lowering asks per node as it descends, because it is already walking. A
@@ -135,10 +124,5 @@ def check_expression(node: ArithmeticNode, context: str | None = None) -> None:
     """
     if isinstance(node, BinaryOperatorNode):
         check_binary(node, context)
-        check_expression(node.left, context)
-        check_expression(node.right, context)
-    elif isinstance(node, UnaryOperatorNode):
-        check_expression(node.operand, context)
-    elif isinstance(node, FunctionCallNode):
-        for arg in (*node.args, *node.kwargs.values()):
-            check_expression(arg, context)
+    for child in children(node):
+        check_expression(child, context)
