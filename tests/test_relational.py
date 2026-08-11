@@ -477,9 +477,16 @@ def test_a_dictionary_encoded_source_column_binds_like_a_plain_one():
     assert from_encoded == pytest.approx(from_plain), 'the encoding changed the model'
 
 
-def test_a_string_dimension_is_enum_encoded_end_to_end():
-    """A string dim is an ``Enum`` over its labels in declaration order, build
-    to read-back — and `to_pandas` hands over an ordered `pandas.Categorical`."""
+def test_a_string_dimension_is_enum_encoded_up_to_the_read_back():
+    """A string dim is an ``Enum`` over its labels in declaration order for the
+    whole build — and plain ``String`` the moment it is handed back.
+
+    The encoding buys the joins and the label frames and every gram of that is
+    internal. What a caller gets is something they join against their own data,
+    which an ``Enum`` refuses. Declaration order survives the cast because it
+    was never the dtype carrying it: it is the row order, and `to_pandas` puts
+    the ordered categories back for the bridge out.
+    """
     model = {
         'dimensions': {'node': {'dtype': 'str', 'values': ['c', 'a', 'b']}},
         'parameters': {'cap': {'dims': ['node']}},
@@ -494,9 +501,9 @@ def test_a_string_dimension_is_enum_encoded_end_to_end():
         assert ex._variables['x'].collect_schema()['node'] == declared
         primal = ex.solve().primal('x')
 
-    assert primal.schema['node'] == declared
+    assert primal.schema['node'] == pl.String, 'what leaves is what a caller can join against'
     assert primal['node'].to_list() == ['c', 'a', 'b'], 'read-back follows label order, not source order'
-    assert primal.to_pandas()['node'].dtype == pd.CategoricalDtype(['c', 'a', 'b'], ordered=True)
+    assert primal.join(cap, on='node').height == 3, "the caller's own frame is String, and it joins"
 
 
 def test_a_where_orders_string_labels_bytewise_not_by_declaration():
@@ -1665,3 +1672,26 @@ def test_an_empty_index_of_a_string_dimension_is_a_string_column():
     empty = pl.DataFrame(schema={'cut': pl.String, 'value': pl.Float64})
     with lps.build(model, {'c': empty}, coords={'cut': []}) as ex:
         assert ex._tables().column_count == 0
+
+
+def test_two_solutions_over_different_members_concatenate():
+    """An `Enum` column will not concatenate against different categories.
+
+    A sweep holds one frame per slice and joins them on read, so slices that
+    bound different members of a dimension used to meet `SchemaError: Enum
+    mismatch` — for two answers to the same question.
+    """
+    model = {
+        'dimensions': {'node': {'dtype': 'str'}},
+        'parameters': {'cap': {'dims': ['node']}},
+        'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {'k': {'foreach': ['node'], 'expression': 'x >= cap'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
+    }
+    frames = []
+    for members in (['a', 'b'], ['a', 'c']):
+        cap = pl.DataFrame({'node': members, 'value': [1.0, 2.0]})
+        with lps.build(model, {'cap': cap}) as ex:
+            frames.append(ex.solve().primal('x'))
+
+    assert pl.concat(frames).height == 4
