@@ -439,33 +439,33 @@ def _family(name: str) -> set[str]:
 def test_each_sink_family_is_its_directory_and_its_registry():
     """One shape per family, checked off the path.
 
-    A solver is four things that must agree: a module under ``solvers/`` named
-    for the solver, a ``solve_<name>``, a ``build_<name>`` seam for `bench/`,
-    and the ``SOLVERS`` key. Writers are keyed by suffix instead, but the rule
-    is the same. Agreement is what makes adding one mechanical — nothing above
-    the module to teach, nothing to remember but the name.
+    A solver is five things that must agree: a module under ``solvers/`` named
+    for the solver, a ``Solver`` subclass defined *in that module*, a
+    ``solve_<name>``, a ``build_<name>`` seam for `bench/`, and the ``SOLVERS``
+    key holding the class. Writers are keyed by suffix instead, but the rule is
+    the same. Agreement is what makes adding one mechanical — nothing above the
+    module to teach, nothing to remember but the name.
 
-    ``SESSIONS`` is the one optional part, a solver that cannot stay loaded
-    between solves being merely slower to re-solve. Optional membership, not
-    optional placement: a session lives in its own solver's module, so the
-    fence that keeps ``gurobipy`` off a HiGHS caller's import path holds.
+    The class rather than the function, because a solver holds a model between
+    solves and ``solve_<name>`` is that lifecycle walked once. Defined in its
+    own module, so the fence that keeps ``gurobipy`` off a HiGHS caller's
+    import path holds.
     """
     import importlib
 
-    from lpspec.relational.sinks import PLANNED_WRITERS, SESSIONS, SOLVERS, WRITERS
+    from lpspec.relational.sinks import PLANNED_WRITERS, SOLVERS, WRITERS, Solver
 
-    solvers = _family('solvers')
+    solvers = _family('solvers') - {'base'}
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
     for name in sorted(solvers):
         module = importlib.import_module(f'lpspec.relational.sinks.solvers.{name}')
-        assert SOLVERS[name] is getattr(module, f'solve_{name}'), f'SOLVERS[{name!r}] is not {name}.solve_{name}'
-        assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
-
-    assert set(SESSIONS) <= solvers, f'SESSIONS names what is not a solver: {sorted(set(SESSIONS) - solvers)}'
-    for name, loaded in sorted(SESSIONS.items()):
-        assert loaded.__module__.rsplit('.', 1)[-1] == name, (
-            f"{name}'s session is defined in {loaded.__module__} — a session belongs to its own solver's module"
+        held = SOLVERS[name]
+        assert issubclass(held, Solver), f'SOLVERS[{name!r}] is not a Solver'
+        assert held.__module__.rsplit('.', 1)[-1] == name, (
+            f"{name}'s solver is defined in {held.__module__} — it belongs to its own module"
         )
+        assert hasattr(module, f'solve_{name}'), f'{name} has no solve_{name}: the one-shot spelling'
+        assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
     assert {w.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers')
     assert all(s.startswith('.') for s in (*WRITERS, *PLANNED_WRITERS)), 'writers are keyed by file suffix'
@@ -476,9 +476,16 @@ def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
     ``gurobipy`` stays the ``gurobi`` module's alone only because no other
-    sink imports it, directly or by importing the module that does. Each leaf
-    reads ``tables.py`` and nothing else in the family.
+    sink imports it, directly or by importing the module that does. A leaf
+    reads ``tables.py``, its family's ``base``, and its own dependency —
+    nothing else in the family.
+
+    ``base`` is allowed for the reason the rest is not: it imports no solver,
+    so it cannot carry one across, and it is what stops the alternative — one
+    leaf importing the other to share a rule — from being the tempting option.
+    A ``base`` that reached for a leaf would fail the same check.
     """
+    shareable = ('.tables', '.base')
     offenders = {}
     for family in ('solvers', 'writers'):
         for path in sorted((SINKS / family).glob('*.py')):
@@ -488,13 +495,13 @@ def test_no_sink_reaches_a_sibling():
                 if isinstance(node, ast.ImportFrom)
                 and node.module
                 and node.module.startswith('lpspec.relational.sinks.')
-                and not node.module.endswith('.tables')
+                and not node.module.endswith(shareable)
             }
             if reached and path.stem != '__init__':
                 offenders[f'{family}/{path.name}'] = sorted(reached)
     assert not offenders, (
-        f'sink modules reaching a sibling: {offenders} — a sink reads tables.py and its own '
-        f'dependency; anything shared belongs on ModelTables, where both families can see it'
+        f'sink modules reaching a sibling: {offenders} — a sink reads tables.py, its family base '
+        f'and its own dependency; anything else shared belongs on one of those two'
     )
 
 

@@ -37,7 +37,7 @@ from lpspec.relational.plan import (
     VariableDeclaration,
 )
 from lpspec.relational.sinks import SOLVERS
-from lpspec.relational.sinks.solvers.highs import HighsSession
+from lpspec.relational.sinks.solvers.highs import Highs, solve_highs
 from tests.conftest import by_coord, override, solve_lp_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, transport_eager_objective, xr
@@ -878,21 +878,19 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
     a broken vector reports a plausible number and fails only if someone asks
     for a coordinate.
 
-    The double is a *session* because that is the hand-off `highs` takes — the
-    guard is one call after both branches, so crooking the branch that runs
-    covers it.
+    The double subclasses the sink rather than replacing it: what is crooked
+    is the read-back, and everything that reaches it — the load, the push, the
+    guard — is the real one.
     """
     from lpspec.relational.engines.polars import executor as executor_module
 
-    honest = executor_module.sinks.solver('highs')
-
-    class Crooked(HighsSession):
+    class Crooked(Highs):
         def run(self, tables):
-            status, objective, primal, dual = honest(tables, None, None)
+            status, objective, primal, dual = solve_highs(tables)
             stretched = pl.Series('value', list(primal) + [0.0] * length)
             return status, objective, stretched.head(length), dual
 
-    monkeypatch.setattr(executor_module.sinks, 'session', lambda _name: Crooked)
+    monkeypatch.setattr(executor_module.sinks, 'solver', lambda _name: Crooked)
     with (
         lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as ex,
         pytest.raises(LpspecError, match=f'returned {length} primal values for a model with 3'),

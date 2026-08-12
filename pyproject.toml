@@ -271,6 +271,11 @@ preset = "strict"
 # handoff `explicit-any` is unpromoted for. Kept on rather than switched off so
 # a lambda outside those grammars still has to say what it takes.
 [tool.pyrefly.errors]
+# Off, and not per-line: `typing.override` is 3.12 and this project's floor is
+# 3.11, so satisfying it means a `typing_extensions` dependency bought for a
+# decorator. The sink family's overrides are held to their base by
+# `@abstractmethod` and `tests/test_architecture.py` instead.
+missing-override-decorator = false
 implicit-import = true
 missing-import = true
 non-exhaustive-match = true

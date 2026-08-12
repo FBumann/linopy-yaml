@@ -13,8 +13,8 @@ here, the rule
 ``highspy`` is imported inside the function, being optional: importing this
 module stays free for callers that only write LP files.
 
-:class:`HighsSession` is the same hand-off held open — what a driver that
-re-solves one model with new numbers uses, and where the warm basis lives.
+:class:`Highs` is the same hand-off held open — what a driver that re-solves
+one model with new numbers uses, and where the warm basis lives.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import LpspecError
+from lpspec.relational.sinks.solvers.base import Solver
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from lpspec.relational.sinks.solvers.base import Answer
     from lpspec.relational.sinks.tables import ModelTables
 
 
@@ -139,8 +141,8 @@ def build_highs(
     return h
 
 
-class HighsSession:
-    """A loaded HiGHS model that outlives the solve it was loaded for.
+class Highs(Solver):
+    """HiGHS, holding one model — :class:`Solver`'s member for the default sink.
 
     What makes an iterative driver cheap. The second solve of a rebound model
     changes bounds, costs and right-hand sides on the model HiGHS already
@@ -152,42 +154,13 @@ class HighsSession:
     the trade is argued once, in ``../README.md``. Pushing the whole vectors
     costs a pass over the columns and the rows, against the matrix pass that
     loading would cost.
-
-    :meth:`takes` is the guard, and it is asked of every reuse: a model whose
-    :meth:`~lpspec.relational.sinks.tables.ModelTables.structure` moved is a
-    different model wearing the same labels.
-
-    A live handle is memory outside this process's frames, so whoever holds
-    one :meth:`close`\\ s it.
     """
 
-    def __init__(
-        self,
-        model: ModelTables,
-        batch_rows: int | None = None,
-        solver_options: Mapping[str, Any] | None = None,
-    ) -> None:
-        self._handle = build_highs(model, batch_rows, solver_options)
-        self._options = dict(solver_options or {})
-        #: The structure of the model the handle holds, recorded when
-        #: something rebuilt the tables under it. ``None`` while nothing has,
-        #: which is every solve of a model nobody rebound — and the reason a
-        #: one-shot ``solve`` pays for no digest.
-        self._structure: bytes | None = None
+    #: The loaded model. Declared rather than inferred, ``close`` dropping it.
+    _handle: Any
 
-    def remember(self, model: ModelTables) -> None:
-        """Record what is loaded, before the frames it was loaded from go."""
-        self._structure = model.structure()
-
-    def takes(self, model: ModelTables, solver_options: Mapping[str, Any] | None) -> bool:
-        """Whether *model* is the loaded one differing in nothing but numbers.
-
-        Options count: they are set on the handle when it is loaded, so a
-        solve asking for others has to be given a handle that was told them.
-        """
-        if dict(solver_options or {}) != self._options:
-            return False
-        return self._structure is None or self._structure == model.structure()
+    def _load(self, model: ModelTables, batch_rows: int | None) -> None:
+        self._handle = build_highs(model, batch_rows, self._options)
 
     def push(self, model: ModelTables) -> None:
         """*model*'s bounds, costs and right-hand sides onto the loaded model.
@@ -211,12 +184,7 @@ class HighsSession:
         rub = np.where(sense == SENSE_CODES['>='], inf, rhs)
         _loaded(self._handle, self._handle.changeRowsBounds(model.row_count, rows, rlb, rub), 'new right-hand sides')
 
-    def run(self, model: ModelTables) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
-        """Solve what is loaded and read it back — :func:`solve_highs`'s half.
-
-        *model* is asked only for its objective constant, which has no column
-        and so was never loaded.
-        """
+    def run(self, model: ModelTables) -> Answer:
         import highspy
 
         self._handle.run()
@@ -254,10 +222,10 @@ def solve_highs(
     basis. HiGHS hands back full-length vectors of zeros either way, and
     returning them would only make them reachable.
 
-    A caller that will solve the same model again holds a :class:`HighsSession`
-    instead; this is that with the handle dropped, and the family's contract.
+    A caller that will solve the same model again holds a :class:`Highs`
+    instead; this is that with the handle dropped.
     """
-    session = HighsSession(model, batch_rows, solver_options)
+    session = Highs(model, batch_rows, solver_options)
     try:
         return session.run(model)
     finally:

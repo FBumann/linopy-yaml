@@ -83,9 +83,8 @@ class PolarsExecutor:
         #: it reads through is no longer the one it was an answer to.
         self._generation = 0
         #: The loaded solver, kept between solves — the only thing a rebuild
-        #: does *not* throw away, and ``None`` for a solver that cannot stay
-        #: loaded or a model nobody has solved.
-        self._session: Any = None
+        #: does *not* throw away. ``None`` until a model has been solved once.
+        self._session: sinks.Solver | None = None
         self._session_of: str | None = None
         #: ``(solve number, why)`` for every solve that loaded the model from
         #: scratch instead of pushing values onto a loaded one.
@@ -510,11 +509,7 @@ class PolarsExecutor:
         """
         tables = self._tables()
         self.solves += 1
-        live = self._loaded_solver(tables, batch_rows, solver_options, solver_name)
-        if live is None:
-            status, objective, primal, dual = sinks.solver(solver_name)(tables, batch_rows, solver_options)
-        else:
-            status, objective, primal, dual = live.run(tables)
+        status, objective, primal, dual = self._held(tables, batch_rows, solver_options, solver_name).run(tables)
         _spanning(solver_name, 'primal', primal, self._n_cols)
         _spanning(solver_name, 'dual', dual, self._n_rows)
         return Result(
@@ -526,38 +521,38 @@ class PolarsExecutor:
             _dual_values=dual,
         )
 
-    def _loaded_solver(
+    def _held(
         self,
         tables: sinks.ModelTables,
         batch_rows: int | None,
         solver_options: Mapping[str, Any] | None,
         solver_name: str,
-    ) -> Any:
-        """The solver to run *tables* on, kept from the last solve if it fits.
+    ) -> sinks.Solver:
+        """The solver to run *tables* on — the one held, if it still fits.
 
-        Returns ``None`` when nothing can be kept, which the caller reads as
-        "hand the tables to the one-shot sink" — the same answer, without a
-        handle to release. A session that no longer fits is closed here rather
-        than left to the collector: it holds memory outside this process.
+        A solver that no longer fits is closed here rather than left to the
+        collector: it holds memory, and for one of them a licence, that no
+        frame in this process accounts for. The named sink is resolved before
+        any of that, so a caller who named nothing does not first cost a
+        release.
         """
-        session = self._session
-        if session is not None and self._session_of == solver_name and session.takes(tables, solver_options):
-            session.push(tables)
-            return session
+        loadable = sinks.solver(solver_name)
+        held = self._session
+        if held is not None and self._session_of == solver_name and held.takes(tables, solver_options):
+            held.push(tables)
+            return held
 
-        why = (
-            'nothing was loaded yet'
-            if session is None
-            else f'the last solve ran {self._session_of!r}'
-            if self._session_of != solver_name
-            else 'a rebuild moved the structure, or the solver options changed'
+        self._reloads.append(
+            (
+                self.solves,
+                'nothing was loaded yet'
+                if held is None
+                else f'the last solve ran {self._session_of!r}'
+                if self._session_of != solver_name
+                else 'a rebuild moved the structure, or the solver options changed',
+            )
         )
         self._close_session()
-        loadable = sinks.session(solver_name)
-        if loadable is None:
-            self._reloads.append((self.solves, f'{solver_name} cannot stay loaded between solves'))
-            return None
-        self._reloads.append((self.solves, why))
         self._session = loadable(tables, batch_rows, solver_options)
         self._session_of = solver_name
         return self._session
