@@ -10,7 +10,7 @@ they loaded, which is the one thing neither may do.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any, Protocol, get_args
 
 import polars as pl
 
@@ -93,7 +93,54 @@ def stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
     return pl.concat([f.select(columns) for f in kept])
 
 
-def compress_rows(matrix: pl.DataFrame, row_count: int) -> tuple[pl.DataFrame, npt.NDArray[np.int64]]:
+class MatrixBlocks(Protocol):
+    """The constraint matrix, as the only thing a sink is allowed to ask of it.
+
+    A row range at a time, plus the CSR index that says where each range sits.
+    **Never the whole thing**, because it is the one part of a model that has no
+    upper bound a caller can see: `cols`, `rows` and `obj` are one row per
+    declaration coordinate, and this is one per nonzero.
+
+    That is what lets an engine keep it where it built it. The polars engine
+    holds a frame and slices it (:class:`FrameMatrix`); the duckdb engine leaves
+    it in duckdb and answers each block with a query. A sink cannot tell, and
+    must not be able to: it reads blocks either way.
+    """
+
+    @property
+    def starts(self) -> npt.NDArray[np.int64]:
+        """``starts[r] : starts[r + 1]`` is the half-open span row ``r`` owns."""
+
+    @property
+    def nonzeros(self) -> int:
+        """How many entries the matrix has, for the sizing a batcher does."""
+
+    def block(self, lo: int, hi: int) -> pl.DataFrame:
+        """``(col, coeff)`` for rows ``[lo, hi)``, in row-major order."""
+
+
+@dataclass(frozen=True)
+class FrameMatrix:
+    """A matrix that is already a frame: a block is a slice of it.
+
+    What :func:`compress_rows` produces, and what an engine that assembles its
+    model in polars hands over. The slice is free — no copy, no search — which
+    is what the CSR index is for.
+    """
+
+    entries: pl.DataFrame
+    starts: npt.NDArray[np.int64]
+
+    @property
+    def nonzeros(self) -> int:
+        return self.entries.height
+
+    def block(self, lo: int, hi: int) -> pl.DataFrame:
+        first = int(self.starts[lo])
+        return self.entries.slice(first, int(self.starts[hi]) - first)
+
+
+def compress_rows(matrix: pl.DataFrame, row_count: int) -> FrameMatrix:
     """A ``(row, col, coeff)`` matrix as the CSR pair `ModelTables` takes.
 
     Here rather than in an engine because it is the *contract's* layout: both
@@ -135,7 +182,7 @@ def compress_rows(matrix: pl.DataFrame, row_count: int) -> tuple[pl.DataFrame, n
     runs = ordered['row'].rle()
     starts = np.zeros(row_count + 1, dtype=np.int64)
     starts[runs.struct.field('value').to_numpy() + 1] = runs.struct.field('len').to_numpy()
-    return ordered.select('col', 'coeff').rechunk(), np.cumsum(starts, out=starts)
+    return FrameMatrix(ordered.select('col', 'coeff').rechunk(), np.cumsum(starts, out=starts))
 
 
 @dataclass(frozen=True)
@@ -161,8 +208,7 @@ class ModelTables:
     cols: pl.DataFrame
     obj: pl.DataFrame
     rows: pl.DataFrame
-    matrix: pl.DataFrame
-    row_starts: npt.NDArray[np.int64]
+    matrix: MatrixBlocks
     column_count: int
     row_count: int
     objective_sense: str
@@ -185,16 +231,7 @@ class ModelTables:
         """
         if budget is None:
             return iter([(0, self.row_count)])
-        return chunking.ranges(self.row_count, budget, self.matrix.height / max(1, self.row_count))
-
-    def _span(self, lo: int, hi: int) -> pl.DataFrame:
-        """The matrix entries rows ``[lo, hi)`` own — the CSR arithmetic, once.
-
-        Both block readers slice through here, so how a span is located, and
-        the half-open ``hi`` bound, cannot drift between them.
-        """
-        first = int(self.row_starts[lo])
-        return self.matrix.slice(first, int(self.row_starts[hi]) - first)
+        return chunking.ranges(self.row_count, budget, self.matrix.nonzeros / max(1, self.row_count))
 
     def col_chunks(self, budget: int) -> Iterator[tuple[int, int]]:
         """Column ranges of roughly ``budget`` columns each.
@@ -270,7 +307,8 @@ class ModelTables:
             next row's offset, and so occupies no span.
         """
         for lo, hi in self._spans(budget):
-            yield lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo]
+            starts = self.matrix.starts
+            yield lo, hi, self.matrix.block(lo, hi), starts[lo:hi] - starts[lo]
 
     def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
         """Rows ``[lo, hi)`` of the matrix with their ``row`` labels spelled out.
@@ -281,8 +319,8 @@ class ModelTables:
         """
         import numpy as np
 
-        labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
-        return self._span(lo, hi).with_columns(pl.Series('row', labels))
+        labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.matrix.starts[lo : hi + 1]))
+        return self.matrix.block(lo, hi).with_columns(pl.Series('row', labels))
 
     def labeled_blocks(self, budget: int | None) -> Iterator[tuple[int, int, pl.DataFrame]]:
         """Each chunk of rows with its entries labeled — the LP writer's reader.

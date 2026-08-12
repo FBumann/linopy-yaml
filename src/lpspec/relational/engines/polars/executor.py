@@ -65,8 +65,7 @@ class PolarsExecutor(Engine):
         self._cols: pl.DataFrame | None = None
         self._obj: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
-        self._matrix: pl.DataFrame | None = None
-        self._matrix_starts: Any = None
+        self._matrix: sinks.FrameMatrix | None = None
         self._n_cols = 0
         self._n_rows = 0
         self._obj_const = 0.0
@@ -99,7 +98,7 @@ class PolarsExecutor(Engine):
         self._cols = sinks.stack(cols, _COLS)
         self._rows = sinks.stack([r for r, _ in built], _ROWS)
         stacked = sinks.stack([m for _, m in built if m is not None], _MATRIX)
-        self._matrix, self._matrix_starts = sinks.compress_rows(stacked, self._n_rows)
+        self._matrix = sinks.compress_rows(stacked, self._n_rows)
         self._obj = sinks.stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -375,7 +374,6 @@ class PolarsExecutor(Engine):
             obj=self._obj,
             rows=self._rows,
             matrix=self._matrix,
-            row_starts=self._matrix_starts,
             column_count=self._n_cols,
             row_count=self._n_rows,
             objective_sense=self._obj_sense,
@@ -391,7 +389,7 @@ class PolarsExecutor(Engine):
         the registries can: what frees the bound frames is dropping every
         reference to them, and the compiler holds one.
         """
-        self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
+        self._cols = self._obj = self._rows = self._matrix = None
         self._var_frames.clear()
         self._row_frames.clear()
         self._blocks.clear()

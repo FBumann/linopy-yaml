@@ -109,6 +109,44 @@ class _Labels(Mapping[str, 'pl.LazyFrame']):
         self._frames.clear()
 
 
+class _DuckMatrix:
+    """The constraint matrix, left in duckdb and read a row range at a time.
+
+    `sinks.MatrixBlocks` against tables rather than against a frame. Nothing
+    above this can tell the difference — a sink asks for rows ``[lo, hi)`` and
+    gets ``(col, coeff)`` either way — which is the whole reason the matrix can
+    stay where it was built while `cols`, `rows` and `obj` cross.
+
+    **A block reads only the constraints it overlaps.** Each share covers a
+    contiguous run of rows, recorded when it was built, so a chunk in the middle
+    of a large model scans the one or two tables it lands in rather than the
+    model. Within a share the rows are ordered, so the filter is a range over a
+    sorted column and duckdb skips the chunks that cannot match.
+    """
+
+    def __init__(self, con: duckdb.DuckDBPyConnection, spans: tuple[tuple[str, int, int], ...], starts: Any) -> None:
+        self._con = con
+        self._spans = spans
+        self.starts = starts
+
+    @property
+    def nonzeros(self) -> int:
+        return int(self.starts[-1])
+
+    def block(self, lo: int, hi: int) -> pl.DataFrame:
+        """``(col, coeff)`` for rows ``[lo, hi)``, in row-major order."""
+        overlapping = [t for t, first, last in self._spans if first < hi and last > lo]
+        if not overlapping:
+            return sinks.stack([], ('col', 'coeff'))
+        bounded = [
+            self._con.table(t)
+            .filter((col('row') >= ConstantExpression(lo)) & (col('row') < ConstantExpression(hi)))
+            .select(col('col'), col('coeff'))
+            for t in overlapping
+        ]
+        return union_all(bounded[0], bounded[1:]).pl()
+
+
 class DuckExecutor(Engine):
     """The duckdb engine: plan → relations → `sinks.ModelTables`.
 
@@ -129,8 +167,11 @@ class DuckExecutor(Engine):
         #: `row` count in. It stays here until a sink asks for it.
         self._col_tables: list[str] = []
         self._row_shares: list[str] = []
-        self._matrix_tables: list[str] = []
         self._obj_tables: list[str] = []
+        #: `(table, first row, last row + 1)` per constraint that kept a term.
+        #: The range is what lets a block read skip the constraints it does not
+        #: overlap instead of scanning the whole matrix for every chunk.
+        self._matrix_spans: list[tuple[str, int, int]] = []
         #: How many entries each built row owns, taken per constraint while its
         #: matrix was still in duckdb. `_starts` sums them into the CSR index.
         self._row_lengths: list[pl.Series] = []
@@ -548,7 +589,7 @@ class DuckExecutor(Engine):
         if lengths.height != declared:
             rows, matrix = self._drop_termless_rows(c.name, name, rows, matrix, start, declared, lengths)
         self._row_shares.append(rows)
-        self._matrix_tables.append(matrix)
+        self._matrix_spans.append((matrix, start, start + lengths.height))
         self._row_lengths.append(lengths.get_column('n'))
         self._n_rows = start + lengths.height
 
@@ -699,20 +740,19 @@ class DuckExecutor(Engine):
         LP file and then solves pays for the crossing once, and a caller that
         does neither never pays at all.
 
-        ``matrix`` crosses as ``(col, coeff)`` **without** its ``row``. The
-        labels are already spent — the shares arrive in ascending row ranges,
-        each ordered — so the CSR index is a cumulative sum over
-        :attr:`_row_lengths`, counted per constraint where the entries were and
-        one number per *row* rather than per nonzero. On `storage/l` that is
-        16M labels a build no longer copies into polars to drop again.
+        **``matrix`` is not drained at all.** It stays in duckdb and answers one
+        row range at a time (:class:`_DuckMatrix`), which is the only thing a
+        sink asks of it — so the model's one unbounded part never becomes a
+        polars frame, and the ``row`` label per nonzero never crosses either.
+        The other three are one row per declaration coordinate and are what a
+        solver wants densely anyway.
         """
         if self._cached is None:
             self._cached = sinks.ModelTables(
                 cols=self._drain(self._col_tables, _COLS[:2]).with_columns(self._vtypes()),
                 obj=self._drain(self._obj_tables, _OBJ),
                 rows=self._drain(self._row_shares, _ROWS),
-                matrix=self._drain(self._matrix_tables, ('col', 'coeff')),
-                row_starts=self._starts(),
+                matrix=_DuckMatrix(self._con, tuple(self._matrix_spans), self._starts()),
                 column_count=self._n_cols,
                 row_count=self._n_rows,
                 objective_sense=self._obj_sense,
@@ -776,7 +816,7 @@ class DuckExecutor(Engine):
         self._col_tables.clear()
         self._col_runs.clear()
         self._row_shares.clear()
-        self._matrix_tables.clear()
+        self._matrix_spans.clear()
         self._obj_tables.clear()
         self._compiler = None
         self._con.close()
