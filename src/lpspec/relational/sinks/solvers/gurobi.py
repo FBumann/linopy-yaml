@@ -95,33 +95,119 @@ def build_gurobi(
     return m
 
 
+class GurobiSession:
+    """A loaded Gurobi model that outlives the solve it was loaded for.
+
+    :class:`~lpspec.relational.sinks.solvers.highs.HighsSession`'s twin, and
+    the same contract — ``takes`` guards, ``push`` replaces only what a rebind
+    may change, and Gurobi re-optimises from the basis it already has. Three
+    things differ, all of them gurobipy's shape rather than a choice:
+
+    - **A push writes through the read-back handles.** The ``MVar`` and the
+      constraint blocks are what carry the attributes, so this keeps what
+      :func:`_load` returns rather than the model alone — and it is why
+      :func:`build_gurobi` is not reused: its finalizer disposes an
+      environment a session ends explicitly.
+    - **Nothing pushes ``Sense``.** A row's comparison comes from the YAML and
+      no data can move it, so a model whose senses differ is one
+      :meth:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
+      sent back to be loaded again. gurobipy would refuse the array anyway.
+    - **``update`` before ``optimize``**, gurobipy's changes being queued.
+    """
+
+    def __init__(
+        self,
+        model: ModelTables,
+        batch_rows: int | None = None,
+        solver_options: Mapping[str, Any] | None = None,
+    ) -> None:
+        self._m, self._x, self._blocks, self._env = _load(model, batch_rows, solver_options)
+        self._options = dict(solver_options or {})
+        self._structure: bytes | None = None
+
+    def remember(self, model: ModelTables) -> None:
+        """Record what is loaded, before the frames it was loaded from go."""
+        self._structure = model.structure()
+
+    def takes(self, model: ModelTables, solver_options: Mapping[str, Any] | None) -> bool:
+        """Whether *model* is the loaded one differing in nothing but numbers.
+
+        Options count double here: they are the *environment's*, which cannot
+        be re-parameterised once started (:func:`_load`), so a solve asking for
+        others needs a new one.
+        """
+        if dict(solver_options or {}) != self._options:
+            return False
+        return self._structure is None or self._structure == model.structure()
+
+    def push(self, model: ModelTables) -> None:
+        """*model*'s bounds, costs and right-hand sides onto the loaded model.
+
+        Whole vectors, in as many calls as there are blocks — the matrix API
+        writes an attribute across an ``MVar`` or an ``MConstr`` at a time, so
+        there is nothing here to batch that was not batched at the load.
+        """
+        gurobipy = _gurobipy()
+        lb, ub, cost, _ = model.dense_columns(gurobipy.GRB.INFINITY)
+        self._x.LB, self._x.UB, self._x.Obj = lb, ub, cost
+
+        _sense, rhs = model.dense_rows(gurobipy.GRB.INFINITY)
+        at = 0
+        for block in self._blocks:
+            block.RHS = rhs[at : at + block.shape[0]]
+            at += block.shape[0]
+        self._m.ObjCon = model.objective_constant
+        self._m.update()
+
+    def run(self, model: ModelTables) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
+        """Solve what is loaded and read it back.
+
+        The two ``None`` cases mean what they mean in
+        :func:`~lpspec.relational.sinks.solvers.highs.solve_highs`: no primal,
+        no dual. Gurobi refuses the attribute in both cases rather than handing
+        back zeros, which is the one place it makes this easier than HiGHS.
+        """
+        self._m.optimize()
+        status = _status_of(self._m)
+        if not status.is_readable:
+            return status, float('nan'), None, None
+        return status, self._m.ObjVal, solver_vector(self._x.X), _duals(model.row_count, self._blocks)
+
+    def close(self) -> None:
+        """Release the model and the licence its environment holds. Idempotent.
+
+        Both, and in that order: gurobipy has no ``Model.getEnv()``, so an
+        environment left behind holds the licence until the collector reaches
+        it — which is the hazard :func:`build_gurobi`'s finalizer exists for
+        and a session answers by ending explicitly.
+        """
+        if self._m is not None:
+            self._m.dispose()
+            self._env.dispose()
+            self._m = self._x = self._env = None
+            self._blocks = []
+
+
 def solve_gurobi(
     model: ModelTables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
-    """Feed the model to Gurobi and solve it.
-
-    The family's shape, and the two ``None`` cases mean what they mean in
-    :func:`~lpspec.relational.sinks.solvers.highs.solve_highs`: no primal, no
-    dual. Gurobi refuses the attribute in both cases rather than handing back
-    zeros, which is the one place it makes this easier than HiGHS.
+    """Feed the model to Gurobi and solve it, keeping nothing.
 
     Model and environment are disposed before returning, so the licence is
     released when the solve ends rather than whenever the collector gets to
     it. Everything read back is a numpy array taken before the dispose.
     :func:`build_gurobi` cannot do this — its caller owns the model.
+
+    A caller that will solve the same model again holds a
+    :class:`GurobiSession` instead; this is that, with the licence handed back.
     """
-    m, x, blocks, environment = _load(model, batch_rows, solver_options)
+    session = GurobiSession(model, batch_rows, solver_options)
     try:
-        m.optimize()
-        status = _status_of(m)
-        if not status.is_readable:
-            return status, float('nan'), None, None
-        return status, m.ObjVal, solver_vector(x.X), _duals(model.row_count, blocks)
+        return session.run(model)
     finally:
-        m.dispose()
-        environment.dispose()
+        session.close()
 
 
 def _load(

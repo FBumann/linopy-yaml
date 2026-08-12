@@ -19,11 +19,10 @@ takes the tables and renders them to a file. Everything else follows.
 A solver may also offer a **session**: the same hand-off held open, so that a
 model rebuilt with new numbers (`bound.rebind`) has its bounds, costs and
 right-hand sides pushed onto the model the solver already holds, and solves from
-the basis the last one ended on. `SESSIONS` lists who has one; `highs` does,
-`gurobi` does not yet, and absence costs a re-solving driver the warm basis and
-nothing else.
+the basis the last one ended on. `SESSIONS` lists who has one — both sinks do — and absence would cost a
+re-solving driver the warm basis and nothing else.
 
-A session answers six things, and `highs.HighsSession` is the one that does:
+A session answers six things:
 
 | | |
 |---|---|

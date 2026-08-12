@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from lpspec.errors import LpspecError
-from lpspec.relational.sinks.solvers.gurobi import solve_gurobi
+from lpspec.relational.sinks.solvers.gurobi import GurobiSession, solve_gurobi
 from lpspec.relational.sinks.solvers.highs import HighsSession, solve_highs
 
 if TYPE_CHECKING:
@@ -45,14 +45,15 @@ SOLVERS: Mapping[str, Solve] = {
     'gurobi': solve_gurobi,
 }
 
-#: Those of :data:`SOLVERS` that can stay loaded between solves. What a
-#: session answers is ``../README.md``'s table, and ``highs.HighsSession`` is
-#: the member that does. A subset, and the uneven capability Track 3 (#472)
-#: exists to declare: absence costs a driver the warm basis and nothing else,
-#: so it is read where the model is handed over rather than asked about at
-#: the call.
+#: Those of :data:`SOLVERS` that can stay loaded between solves. What a session
+#: answers is ``../README.md``'s table. Both members are in it, and it is still
+#: keyed rather than assumed: a solver whose API cannot take a value without
+#: reloading is a solver like any other, and its absence here would cost a
+#: re-solving driver the warm basis and nothing else — read where the model is
+#: handed over rather than asked about at the call.
 SESSIONS: Mapping[str, type[Any]] = {
     'highs': HighsSession,
+    'gurobi': GurobiSession,
 }
 
 

@@ -18,6 +18,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from lpspec.relational.sinks import SOLVERS
 
 GENERATORS = ['wind', 'solar', 'gas']
 SNAPSHOTS = [0, 1, 2, 3]
@@ -67,19 +68,23 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, change, keep
     reference.close()
 
 
+@pytest.mark.parametrize('solver_name', sorted(SOLVERS))
 @pytest.mark.parametrize(('change', 'keeps_the_solver'), RUNGS)
-def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, change, keeps_the_solver):
+def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, change, keeps_the_solver, solver_name):
     """The fast path is taken exactly when the structure held.
 
     The first solve always loads — there was nothing to keep — so a driver on
     the fast path leaves `diagnostics().reloads` one row long however many times
-    round.
+    round. The rule is the digest's, so it is the same rule for every sink that
+    can stay loaded.
     """
+    if solver_name == 'gurobi':
+        pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
     with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        bound.solve()
+        bound.solve(solver_name=solver_name)
         assert bound.diagnostics().reloads.height == 1, 'the first solve has nothing loaded to keep'
 
-        bound.rebind(change).solve()
+        bound.rebind(change).solve(solver_name=solver_name)
         seen = bound.diagnostics()
         expected = 1 if keeps_the_solver else 2
         assert seen.solves == 2, 'both solves are counted whichever path each took'
