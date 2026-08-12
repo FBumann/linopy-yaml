@@ -175,6 +175,34 @@ def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispa
     assert set(SOLVERS) == {'highs', 'gurobi'}
 
 
+def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
+    dispatch_yaml, dispatch_frame_inputs, monkeypatch
+):
+    """A name in the closed set is not a promise the package is installed.
+
+    `gurobi` is a name lpspec knows on an install that never took the extra, so
+    the two mistakes are different and get different sentences. Both refuse
+    where the sink is resolved, which is before the build: resolving it there is
+    what makes naming a sink nothing can serve cost no model, and that was only
+    half true while a known name always resolved.
+
+    Faked by naming a package nothing has rather than by uninstalling gurobipy,
+    so the check runs wherever the suite does and still goes through the real
+    probe.
+    """
+    from lpspec import api
+    from lpspec.relational.sinks import SOLVERS
+
+    sources, coords = dispatch_frame_inputs
+    monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))
+    monkeypatch.setattr(
+        api.PolarsExecutor, 'build', lambda *_a, **_k: pytest.fail('the model was built before the refusal')
+    )
+
+    with pytest.raises(ModuleNotFoundError, match=r'not installed here.*\[gurobi\] extra'):
+        lps.solve(dispatch_yaml, sources, solver_name='gurobi', coords=coords)
+
+
 def test_a_list_of_models_is_refused(dispatch_yaml):
     """Composition is merging declarations, not passing several models.
 

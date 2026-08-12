@@ -16,8 +16,9 @@ the other — from ever being the tempting option.
 
 from __future__ import annotations
 
+import importlib.util
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lpspec.errors import LpspecError
 
@@ -69,6 +70,35 @@ class Solver(ABC):
         #: holding the frames themselves would keep two models alive across a
         #: rebuild.
         self._structure = model.structure
+
+    #: The packages this member imports lazily, and so the ones an environment
+    #: has to have for it to run at all. Data rather than a probe per member:
+    #: how availability is *decided* is one rule and lives in
+    #: :meth:`is_available`, where a copy of it in each leaf could drift.
+    requires: ClassVar[tuple[str, ...]]
+
+    #: What to tell a caller when :meth:`is_available` says no — which package
+    #: is missing, and whether it ships or needs an extra. The member's own
+    #: fact, so the sentence a caller reads is the one written beside the
+    #: import that needs it, and there is only one of it. Named for when it
+    #: prints rather than for what it advises: it is a message, not a verb.
+    unavailable_message: ClassVar[str]
+
+    @classmethod
+    def is_available(cls) -> bool:
+        """Whether this build can actually run this solver.
+
+        A name in ``SOLVERS`` says the package *knows* the solver, not that the
+        environment has it: ``gurobi`` is a name here on an install that never
+        took the extra. Asked where the sink is resolved, which is before the
+        build, so naming one this environment cannot run costs no model
+        (:func:`~lpspec.relational.sinks.solvers.solver`).
+
+        A probe of the import system rather than an import: answering must not
+        cost the load it is asked in order to avoid, and must not raise.
+        Uncached, being asked once per solve — against a solve.
+        """
+        return all(importlib.util.find_spec(package) is not None for package in cls.requires)
 
     @abstractmethod
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:

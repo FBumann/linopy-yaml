@@ -463,6 +463,13 @@ def test_each_sink_family_is_its_directory_and_its_registry():
         assert held.__module__.rsplit('.', 1)[-1] == name, (
             f"{name}'s solver is defined in {held.__module__} — it belongs to its own module"
         )
+        assert held.requires and all(isinstance(package, str) for package in held.requires), (
+            f'{name} does not name the packages it needs, so is_available() cannot answer for it'
+        )
+        assert isinstance(held.is_available(), bool), (
+            f'{name}.is_available() must answer without importing the solver or raising'
+        )
+        assert held.unavailable_message, f'{name} does not say what to do when is_available() is False'
         assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
     assert {w.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers')

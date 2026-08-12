@@ -123,6 +123,11 @@ class Gurobi(Solver):
     _blocks: list[Any]
     _env: Any
 
+    #: Both halves of the extra, for the reason :attr:`unavailable_message`
+    #: names both: the missing one is as often scipy.
+    requires = ('gurobipy', 'scipy')
+    unavailable_message = 'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "lpspec[gurobi]"'
+
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._m, self._x, self._blocks, self._env = _built(model, batch_rows, self._options)
 
@@ -244,14 +249,13 @@ def _spelled(gurobipy: Any) -> Any:
 
 
 def _gurobipy() -> Any:
-    """The optional dependency, or a message naming the extra. Both halves are
-    named, because the missing one is as often scipy."""
+    """The optional dependency, or :attr:`Gurobi.unavailable_message` — the same sentence
+    the early refusal prints, since it is the same fact arriving later."""
     try:
         import gurobipy
         import scipy.sparse  # noqa: F401 — guarded here so the message covers it
     except ModuleNotFoundError as exc:
-        msg = 'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "lpspec[gurobi]"'
-        raise ModuleNotFoundError(msg) from exc
+        raise ModuleNotFoundError(Gurobi.unavailable_message) from exc
     return gurobipy
 
 
