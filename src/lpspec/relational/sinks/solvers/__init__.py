@@ -7,6 +7,11 @@ the mechanism, because every member uses the same one. Each answers::
 
 plus a ``build_<solver>`` that loads the model and stops, which is the seam
 `bench/` measures. ``tests/test_architecture.py`` checks that off the path.
+
+A solver may also define a **session** — that hand-off held open, so a second
+solve of a rebound model pushes values onto the model it already holds. That
+one is optional, and :data:`SESSIONS` is the list of who has it: a driver that
+re-solves is faster where it exists and correct where it does not.
 """
 
 from __future__ import annotations
@@ -15,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from lpspec.errors import LpspecError
 from lpspec.relational.sinks.solvers.gurobi import solve_gurobi
-from lpspec.relational.sinks.solvers.highs import solve_highs
+from lpspec.relational.sinks.solvers.highs import HighsSession, solve_highs
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -26,12 +31,10 @@ if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
     from lpspec.relational.status import SolveStatus
 
-    Solve = Callable[
-        [ModelTables, int | None, Mapping[str, Any] | None],
-        tuple[SolveStatus, float, pl.Series | None, pl.Series | None],
-    ]
+    Answer = tuple[SolveStatus, float, pl.Series | None, pl.Series | None]
+    Solve = Callable[[ModelTables, int | None, Mapping[str, Any] | None], Answer]
 
-__all__ = ['SOLVERS', 'solver']
+__all__ = ['SESSIONS', 'SOLVERS', 'session', 'solver']
 
 #: Every solver a caller may name, and **closed** — a dict literal, not a
 #: registry something installed can add to. Which solver runs is the caller's
@@ -40,6 +43,15 @@ __all__ = ['SOLVERS', 'solver']
 SOLVERS: Mapping[str, Solve] = {
     'highs': solve_highs,
     'gurobi': solve_gurobi,
+}
+
+#: Those of :data:`SOLVERS` that can stay loaded between solves, and what a
+#: session has to answer is :class:`~...highs.HighsSession` and ../README.md.
+#: A subset, and the uneven capability Track 3 (#472) exists to declare:
+#: absence costs a driver the warm basis and nothing else, so it is read where
+#: the model is handed over rather than asked about at the call.
+SESSIONS: Mapping[str, type[Any]] = {
+    'highs': HighsSession,
 }
 
 
@@ -52,3 +64,12 @@ def solver(name: str) -> Solve:
             f'unknown solver {name!r} — this build solves with {", ".join(sorted(SOLVERS))}. '
             'HiGHS ships with the package and is the default; gurobi needs the [gurobi] extra.'
         ) from None
+
+
+def session(name: str) -> type[Any] | None:
+    """How *name* stays loaded between solves, or ``None`` if it cannot.
+
+    Never an error: which solver was named is :func:`solver`'s question, and a
+    second answer to it here could disagree.
+    """
+    return SESSIONS.get(name)

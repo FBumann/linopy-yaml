@@ -151,15 +151,66 @@ class ModelTables:
         comparison nothing can fail (``>=`` against ``-infinity``) rather than
         the ``== 0`` that would be an equality the model never stated.
         """
-        sided = self.rows.select(
-            'row',
-            pl.col('sense').replace_strict(SENSE_CODES, return_dtype=pl.UInt8).alias('op'),
-            'rhs',
+        at = self.rows['row'].to_numpy()
+        rhs = _scattered(self.row_count, at, self.rows['rhs'].to_numpy(), -infinity)
+        return self._dense_sense(), rhs
+
+    def _dense_sense(self) -> Any:
+        """Each row's comparison over the solver's row index.
+
+        Scattered rather than read off the column, because ``rows`` carries no
+        order contract — two builds of one model can hand back the same rows in
+        a different order, which is invisible to a scatter and would be the
+        whole answer to :meth:`structure`.
+        """
+        return _scattered(
+            self.row_count,
+            self.rows['row'].to_numpy(),
+            _sense_codes(self.rows).to_numpy(),
+            SENSE_CODES['>='],
         )
-        at = sided['row'].to_numpy()
-        sense = _scattered(self.row_count, at, sided['op'].to_numpy(), SENSE_CODES['>='])
-        rhs = _scattered(self.row_count, at, sided['rhs'].to_numpy(), -infinity)
-        return sense, rhs
+
+    def structure(self) -> bytes:
+        """A digest of everything a re-solve may **not** change.
+
+        The question a loaded solver asks of a rebuilt model: may I keep what
+        I hold and take the new numbers by value? Bounds, costs and right-hand
+        sides go in that way; the counts, the matrix, each row's comparison
+        and each column's type do not, so a model whose digest moved has to be
+        loaded again.
+
+        Read off the data rather than derived from the declarations, because
+        whether a rebind moved a label or a coefficient is a property of the
+        data (SPEC §8) and not of the model that declared it. Every vector it
+        reads is one with an order contract — the label-ordered columns, the
+        row-ordered matrix, the *scattered* senses — so that two builds of one
+        model agree.
+
+        **A digest rather than the frames.** Keeping the previous matrix to
+        compare against would hold two models alive across a rebuild, which is
+        the memory the rebuild exists not to spend — and it is why this cannot
+        be linopy's diff (`persistent/diff.py`), whose snapshot pins the
+        buffers it may later need. The cost is one linear pass over the
+        matrix, paid only by a caller who rebinds.
+
+        Each vector is hashed through its own **buffer**, so the matrix is read
+        where it lies rather than copied to bytes to be read once.
+        """
+        import hashlib
+
+        import numpy as np
+
+        digest = hashlib.blake2b(digest_size=16)
+        digest.update(f'{self.column_count} {self.row_count} {self.objective_sense}'.encode())
+        for vector in (
+            self.cols['vtype'].to_physical().to_numpy(),
+            self._dense_sense(),
+            self.matrix['col'].to_numpy(),
+            self.matrix['coeff'].to_numpy(),
+            self.row_starts,
+        ):
+            digest.update(np.ascontiguousarray(vector).data)
+        return digest.digest()
 
     def row_blocks(self, budget: int | None) -> Iterator[RowBlock]:
         """Each chunk of rows with the matrix entries it owns — a solver's reader.
@@ -208,6 +259,16 @@ def solver_vector(values: Any) -> pl.Series:
     import numpy as np
 
     return pl.Series('value', np.asarray(values, dtype=np.float64))
+
+
+def _sense_codes(rows: pl.DataFrame) -> pl.Series:
+    """Each row's comparison as its :data:`SENSE_CODES` byte.
+
+    Shared by the two readers that must agree about what a row compares —
+    the dense vector a solver loads, and the digest that says whether it may
+    keep the one it loaded.
+    """
+    return rows['sense'].replace_strict(SENSE_CODES, return_dtype=pl.UInt8)
 
 
 def _scattered(count: int, at: Any, values: Any, absent: Any) -> Any:

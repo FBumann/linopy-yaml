@@ -444,10 +444,15 @@ def test_each_sink_family_is_its_directory_and_its_registry():
     and the ``SOLVERS`` key. Writers are keyed by suffix instead, but the rule
     is the same. Agreement is what makes adding one mechanical — nothing above
     the module to teach, nothing to remember but the name.
+
+    ``SESSIONS`` is the one optional part, a solver that cannot stay loaded
+    between solves being merely slower to re-solve. Optional membership, not
+    optional placement: a session lives in its own solver's module, so the
+    fence that keeps ``gurobipy`` off a HiGHS caller's import path holds.
     """
     import importlib
 
-    from lpspec.relational.sinks import PLANNED_WRITERS, SOLVERS, WRITERS
+    from lpspec.relational.sinks import PLANNED_WRITERS, SESSIONS, SOLVERS, WRITERS
 
     solvers = _family('solvers')
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
@@ -455,6 +460,12 @@ def test_each_sink_family_is_its_directory_and_its_registry():
         module = importlib.import_module(f'lpspec.relational.sinks.solvers.{name}')
         assert SOLVERS[name] is getattr(module, f'solve_{name}'), f'SOLVERS[{name!r}] is not {name}.solve_{name}'
         assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
+
+    assert set(SESSIONS) <= solvers, f'SESSIONS names what is not a solver: {sorted(set(SESSIONS) - solvers)}'
+    for name, loaded in sorted(SESSIONS.items()):
+        assert loaded.__module__.rsplit('.', 1)[-1] == name, (
+            f"{name}'s session is defined in {loaded.__module__} — a session belongs to its own solver's module"
+        )
 
     assert {w.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers')
     assert all(s.startswith('.') for s in (*WRITERS, *PLANNED_WRITERS)), 'writers are keyed by file suffix'

@@ -11,8 +11,35 @@ takes the tables and renders them to a file. Everything else follows.
 |---|---|---|
 | answers | `(tables, batch_rows, options) -> (status, objective, primal, dual)` | `(tables, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
-| registry | `SOLVERS`, closed | `WRITERS` + `PLANNED_WRITERS`, closed |
+| registry | `SOLVERS`, closed (plus `SESSIONS`, below) | `WRITERS` + `PLANNED_WRITERS`, closed |
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`) | `lp_file.py` (nothing beyond polars) |
+
+## Staying loaded
+
+A solver may also offer a **session**: the same hand-off held open, so that a
+model rebuilt with new numbers (`bound.rebind`) has its bounds, costs and
+right-hand sides pushed onto the model the solver already holds, and solves from
+the basis the last one ended on. `SESSIONS` lists who has one; `highs` does,
+`gurobi` does not yet, and absence costs a re-solving driver the warm basis and
+nothing else.
+
+A session answers six things, and `highs.HighsSession` is the one that does:
+
+| | |
+|---|---|
+| `(tables, batch_rows, options)` | load the model, and hold it |
+| `takes(tables, options)` | is the loaded model this one, differing in nothing but numbers? |
+| `push(tables)` | only if it is — new bounds, costs and right-hand sides |
+| `run(tables)` | solve what is loaded and read it back |
+| `remember(tables)` | asked before the frames a model was loaded from go |
+| `close()` | drop the handle |
+
+The guard is `ModelTables.structure()` — a digest of everything a re-solve may
+not change. **Values are re-pushed, not diffed**: linopy's persistent layer
+(`persistent/diff.py`) computes a delta against a snapshot of the previous
+model, where here the previous model is released before the new one exists, that
+release being what keeps a rebound build at one model's peak. What a diff would
+need is exactly what is not kept.
 
 `tables.py` is what both read. Neither family imports the other and no member
 imports a sibling — `tests/test_architecture.py` reads all of that off the
@@ -37,7 +64,8 @@ of the work — `ModelTables.dense_columns`, which both solvers read.
 ## Adding one
 
 **A solver:** `solvers/<name>.py` named for the solver, defining `solve_<name>`
-and the `build_<name>` seam `bench/` measures, plus one line in `SOLVERS`.
+and the `build_<name>` seam `bench/` measures, plus one line in `SOLVERS`. A
+session is optional and goes in the same module, with its line in `SESSIONS`.
 Import the solver **inside the function** and declare an extra for it — the
 module boundary is the fence, the lazy import is what keeps this package free
 to import for callers who will never use it. Copy linopy's status map for it
