@@ -157,6 +157,9 @@ class Highs(Solver):
     #: The loaded model. Declared rather than inferred, ``close`` dropping it.
     _handle: Any
 
+    requires = ('highspy',)
+    unavailable_message = 'highspy ships with lpspec, so a build without it is broken rather than missing an extra'
+
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._handle = build_highs(model, batch_rows, self._options)
 

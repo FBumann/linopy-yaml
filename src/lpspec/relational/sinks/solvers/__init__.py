@@ -44,14 +44,32 @@ SOLVERS: Mapping[str, type[Solver]] = {
 
 
 def solver(name: str) -> type[Solver]:
-    """The solver called *name*, or an error listing every alternative."""
+    """The solver called *name*, or why this build cannot give you it.
+
+    Two refusals, because they are two mistakes: a name outside the closed set,
+    and a name inside it whose package this environment does not have. Both land
+    where the sink is resolved — before the build — which is what makes naming a
+    sink nothing can serve cost no model. The second was only half true while a
+    known name always resolved.
+
+    What to do about the second is the *member's* sentence
+    (:attr:`~lpspec.relational.sinks.solvers.base.Solver.unavailable_message`), not one
+    written here: whether a solver ships or needs an extra is its own fact, and
+    the one written here would have told a caller whose HiGHS is broken about
+    gurobi's extra.
+    """
     try:
-        return SOLVERS[name]
+        found = SOLVERS[name]
     except KeyError:
         raise LpspecError(
             f'unknown solver {name!r} — this build solves with {", ".join(sorted(SOLVERS))}. '
             'HiGHS ships with the package and is the default; gurobi needs the [gurobi] extra.'
         ) from None
+    if not found.is_available():
+        raise ModuleNotFoundError(
+            f'{name} is a solver this build knows, but its package is not installed here. {found.unavailable_message}'
+        )
+    return found
 
 
 def loaded(
