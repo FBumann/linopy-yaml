@@ -8,11 +8,9 @@ that differs between a `PolarsExecutor` build and a `DuckExecutor` build is
 which engine filled the four frames.
 
 Scope: the affine core — variables with bounds and masks, constraints over
-sum/group_sum/translate, one objective. Enough to build every model in
-`bench/models/` and diff the result against polars, which is what pricing the
-port is for. Not the whole language: piecewise expansion happens above this
-layer anyway, and duals/solution read-back are the polars executor's business
-since they are joins against label frames rather than engine work.
+sum/group_sum/translate, one objective. Piecewise expansion happens above this
+layer, and the solution read-back below it, in `Engine`: both are written
+against the plan and the label frames rather than against either engine.
 """
 
 from __future__ import annotations
@@ -143,9 +141,9 @@ class DuckExecutor(Engine):
         self._blocks: dict[str, tuple[int, int]] = {}
         self._omitted: dict[str, int] = {}
         self._matrix_starts: Any = None
-        #: `(head, kept, ranked table, width)` when the last label frame
-        #: factored — `None` otherwise. Read only by `_repeating_bounds`.
-        self._rectangle: tuple[tuple[str, ...], tuple[str, ...], str, int] | None = None
+        #: `(head, kept, ranked survivors)` when the last label frame
+        #: factored — `None` otherwise. Read only by `_bounds_run`.
+        self._rectangle: tuple[tuple[str, ...], tuple[str, ...], Relation] | None = None
         self._n_cols = 0
         self._n_rows = 0
         self._obj_const = 0.0
@@ -191,10 +189,6 @@ class DuckExecutor(Engine):
         Copying is not free — the frame and the table are both resident for the
         length of one statement — but it buys a build that cannot stall, and
         duckdb's own storage for every scan after the first.
-
-        The frame itself, not `to_arrow()`: duckdb reads polars natively, and
-        the round-trip through a pyarrow table is what used to drag pandas into
-        a runtime that declares it a bridge out and not a dependency.
         """
         source = f'__source {name}__'
         self._con.register(source, frame)
@@ -225,11 +219,11 @@ class DuckExecutor(Engine):
         built = [self._build_constraint(c) for c in program.constraints]
         objective = self._build_objective(program.objective)
 
-        self._cols = _stack(cols, _COLS)
-        self._rows = _stack([r for r, _ in built], _ROWS)
-        stacked = _stack([m for _, m in built if m is not None], _MATRIX)
+        self._cols = sinks.stack(cols, _COLS)
+        self._rows = sinks.stack([r for r, _ in built], _ROWS)
+        stacked = sinks.stack([m for _, m in built if m is not None], _MATRIX)
         self._matrix, self._matrix_starts = sinks.compress_rows(stacked, self._n_rows)
-        self._obj = _stack([objective] if objective is not None else [], _OBJ)
+        self._obj = sinks.stack([objective] if objective is not None else [], _OBJ)
 
     @property
     def _variables(self) -> Mapping[str, pl.LazyFrame]:
@@ -372,9 +366,9 @@ class DuckExecutor(Engine):
             )
         )
         rows = math.prod(self._q.cardinality[d] for d in head) * width
-        #: the rectangle, kept for `_repeating_bounds` — a caller that only
-        #: reads the trailing dims can be answered once and repeated
-        self._rectangle = (head, kept, ranked, width)
+        #: the rectangle, kept for `_bounds_run` — a caller that only reads the
+        #: trailing dims can be answered once and repeated
+        self._rectangle = (head, kept, survivors)
         return self._relation(rel, 'lbl', materialise=False), start + rows
 
     def _height(self, table: str) -> int:
@@ -422,31 +416,62 @@ class DuckExecutor(Engine):
             col('lb').cast('DOUBLE').alias('lb'), col('ub').cast('DOUBLE').alias('ub')
         )
 
+    def _bounds_run(self, v: plan.VariableDeclaration) -> tuple[tuple[str, ...], Relation] | None:
+        """`(head, ranked run)` when *v*'s bounds repeat once per head coordinate.
+
+        Two label frames have that shape, and they differ only in who chose the
+        split. A **factored** one is a rectangle already: the mask fixed which
+        dims lead, and the bounds either read inside the surviving set or they
+        do not. An **unmasked** one is a rectangle under *every* suffix split —
+        nothing was removed, so each leading coordinate carries the whole
+        trailing product — which leaves the split free, and the shortest suffix
+        the bounds read is the one that makes the run smallest.
+
+        `None` where nothing repeats: a counted label frame, or bounds reading
+        the leading dim, which is where the run is the whole column and there
+        is nothing to expand.
+        """
+        reads = {p for e in (v.lower, v.upper) for p in _parameters(e)}
+        read = {d for p in reads for d in self._q.program.parameter(p).dims}
+        if self._rectangle is not None:
+            head, kept, ranked = self._rectangle
+            return (head, ranked) if read <= set(kept) else None
+        if v.where is not None:
+            return None
+        split = min((i for i, d in enumerate(v.dims) if d in read), default=len(v.dims))
+        if split == 0:
+            return None
+        head, kept = v.dims[:split], v.dims[split:]
+        # arithmetic, not a window: an unmasked run is the whole product of
+        # *kept*, so a row's rank in it is its row-major position
+        return head, self._q.frame(kept, None).select(*_coordinates(kept), self._row_major(kept, 0).alias('__rank'))
+
     def _repeating_bounds(self, v: plan.VariableDeclaration) -> Relation | None:
         """Bounds in label order without a sort, when the same run repeats.
 
-        A factored label frame is a rectangle: every leading coordinate carries
-        the *same* surviving set in the same order. So if the bounds read only
-        the trailing dims, the whole column is one short run repeated once per
-        leading coordinate — build the run, and expand it.
+        The whole column is one short run repeated once per head coordinate
+        (:meth:`_bounds_run`) — so build the run, and expand it.
 
         `unnest` of a list is that expansion, and it is not merely cheaper than
         the sort it replaces, it is cheaper than the cross join: 0.12 s against
         0.43 s at 10M columns, where an *unordered* join of the same shape is
         0.11 s. Ordering stops costing anything at all.
 
-        `None` when the shape does not apply — an unfactored frame, or a bound
-        that reads a leading dim and therefore does not repeat. The caller
-        sorts, which is always correct and sometimes all that is available.
-        """
-        if self._rectangle is None:
-            return None
-        head, kept, ranked, _ = self._rectangle
-        reads = {p for e in (v.lower, v.upper) for p in _parameters(e)}
-        if any(not set(self._q.program.parameter(p).dims) <= set(kept) for p in reads):
-            return None
+        `None` where the shape does not apply; the caller sorts, which is
+        always correct and sometimes all that is available.
 
-        run = self._q.bounds(self._con.table(ranked), v)
+        Both this and the label arithmetic above it read the head product in
+        the order duckdb scans it, which is the order it was written in —
+        `preserve_insertion_order`, on by default and never turned off here.
+        `test_engine_parity.py` compares byte-identical LP files, where a
+        column out of place moves every bound after it.
+        """
+        found = self._bounds_run(v)
+        if found is None:
+            return None
+        head, ranked = found
+
+        run = self._q.bounds(ranked, v)
         # An ordered aggregate has no expression form; the two names it orders
         # and collects are the compiler's own, not the model's.
         lists = run.aggregate(f'list(lb ORDER BY {q("__rank")}) AS lbs, list(ub ORDER BY {q("__rank")}) AS ubs')
@@ -508,7 +533,23 @@ class DuckExecutor(Engine):
         return carrier.select(col('row'), ConstantExpression(sense).alias('sense'), total.cast('DOUBLE').alias('rhs'))
 
     def _matrix_side(self, frame: Relation, terms: list[tuple[TermFragment, float]]) -> Relation:
-        """``(row, col, coeff)`` for one constraint, aggregated only when it must be."""
+        """``(row, col, coeff)`` for one constraint, in row order, aggregated only when it must be.
+
+        **Someone has to sort, and past a few million nonzeros duckdb is the
+        cheaper someone.** `compress_rows` needs an ascending ``row``; sorting
+        here means each constraint's share, inside duckdb, before it crosses
+        the boundary, and leaves polars nothing to do. Sorting there means one
+        pass over the whole stacked matrix at the moment the build is holding
+        all of it. At the `l` rung that is worth 0.87x of build on `storage`
+        and 0.89x on `transport` (#399).
+
+        It is not free below that: `nodal/l`, at 3M nonzeros against those two's
+        12.6M and 16M, is 1.14x — polars sorts a small matrix faster than
+        duckdb materialises a pipeline that was streaming. Sorting the small
+        ones on one side and the large ones on the other does not work, because
+        polars re-sorts the *stack* if any share arrives out of order, so this
+        is one decision for the model, taken where it pays most.
+        """
         pieces = []
         for p, sign in terms:
             left, right = frame.set_alias('l'), p.rel.set_alias('r')
@@ -521,15 +562,12 @@ class DuckExecutor(Engine):
                 )
             )
         stacked = union_all(pieces[0], pieces[1:])
-        if not _needs_aggregate([f for f, _ in terms], self._q.may_share_a_column):
-            return stacked
-        # `sum` over `(row, col)` is the terminal aggregate — where duplicates
-        # from Sum and GroupSum, which project rather than aggregate, collapse.
-        # Unordered: every sink sorts the matrix into the order it needs
-        # (`lp_file` by `(row, col)`, `solver_direct` by `row`), so ordering
-        # here is a second sort of the largest frame in the model for nothing.
-        total = FunctionExpression('sum', col('coeff')).alias('coeff')
-        return stacked.aggregate([col('row'), col('col'), total], f'{q("row")}, {q("col")}')
+        if _needs_aggregate([f for f, _ in terms], self._q.may_share_a_column):
+            # `sum` over `(row, col)` is the terminal aggregate — where duplicates
+            # from Sum and GroupSum, which project rather than aggregate, collapse.
+            total = FunctionExpression('sum', col('coeff')).alias('coeff')
+            stacked = stacked.aggregate([col('row'), col('col'), total], f'{q("row")}, {q("col")}')
+        return stacked.order(q('row'))
 
     def _drop_termless_rows(
         self, constraint: str, labels: str, rows: pl.DataFrame, matrix: pl.DataFrame, start: int
@@ -646,13 +684,6 @@ def _parameters(expression: plan.Expression) -> set[str]:
     return found
 
 
-def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
-    kept = [f for f in frames if f.height]
-    if not kept:
-        return pl.DataFrame(schema={name: sinks.DTYPES[name] for name in columns})
-    return pl.concat([f.select(columns) for f in kept])
-
-
 def _needs_aggregate(
     terms: Sequence[TermFragment],
     may_share: Callable[[TermFragment, TermFragment], bool],
@@ -679,13 +710,6 @@ def _needs_aggregate(
     fragment's dims, so `keyed` — one row per ``(dims…, var_label)`` — carries
     straight into ``(row, col)``. The objective keeps only ``var_label``, so it
     asks the stronger question: does the key survive losing *all* dims?
-
-    **This is not how the polars engine answers any more.** #520 replaced the
-    same reasoning there with three linear probes over the built matrix — is it
-    ordered, does any cell repeat — which is exact where this is conservative,
-    and costs a pass rather than a dimension-table query. Whether that is the
-    better trade here is unmeasured: this engine builds its matrix in duckdb
-    and would have to fetch it unaggregated to probe it.
     """
     if any(not t.survives_dropping(set(t.dims) if projected else set()) for t in terms):
         return True
