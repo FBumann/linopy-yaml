@@ -61,7 +61,9 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, change, keep
 
         assert rebound.objective == pytest.approx(reference.objective), 'the rebind reached a different optimum'
         assert rebound.primal('p').equals(reference.primal('p')), 'the rebind laid its values out differently'
-        assert rebound.dual('power_balance').equals(reference.dual('power_balance'))
+        assert rebound.dual('power_balance').equals(reference.dual('power_balance')), (
+            'the rebind laid its duals out differently'
+        )
     reference.close()
 
 
@@ -153,13 +155,6 @@ def test_closing_a_stale_result_leaves_the_rebound_model_alone(dispatch_yaml):
     [
         pytest.param(lambda bound: bound.rebind({'p_maxx': 1}), 'p_maxx', id='sources'),
         pytest.param(lambda bound: bound.rebind({}, coords={'snapshots': [0]}), 'snapshots', id='coords'),
-        pytest.param(
-            lambda bound: bound.rebind(
-                {'snapshot': [0, 1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 6.0]})}
-            ),
-            None,
-            id='a dimension index is a source',
-        ),
     ],
 )
 def test_a_rebind_refuses_a_name_the_model_does_not_declare(dispatch_yaml, call, unknown):
@@ -167,15 +162,20 @@ def test_a_rebind_refuses_a_name_the_model_does_not_declare(dispatch_yaml, call,
     a driver cannot see: it re-solves the numbers already bound and reports the
     answer. `build` needs no such check — it binds every declared name or
     fails."""
+    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound, pytest.raises(lps.DataError, match=unknown):
+        call(bound)
+
+
+def test_a_dimension_index_rebinds_as_a_source(dispatch_yaml):
+    """A dimension index is a source (SPEC §8), so `rebind` takes it where it
+    takes any other — the refusal above is for names the model never declared,
+    not for names that happen not to be parameters."""
     with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        if unknown is None:
-            assert call(bound).solve().primal('p').height > 0, 'a dimension index is a source, and rebinds as one'
-            return
-        with pytest.raises(lps.DataError, match=unknown):
-            call(bound)
+        change = {'snapshot': [0, 1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 6.0]})}
+        assert bound.rebind(change).solve().primal('p').height > 0, 'a dimension index is a source, and rebinds as one'
 
 
-def test_a_rebind_can_grow_a_dimension(tmp_path):
+def test_a_rebind_can_grow_a_dimension():
     """Appending rows is a rebind — the Benders master, in three lines.
 
     A cut family is declared once and its members come from data (SPEC §8), so
