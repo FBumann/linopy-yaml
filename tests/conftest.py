@@ -30,10 +30,9 @@ import yaml as pyyaml
 from lpspec.language.validation import load_model
 
 if TYPE_CHECKING:
-    from lpspec.language.model import Model
-
-if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from lpspec.language.model import Model
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 

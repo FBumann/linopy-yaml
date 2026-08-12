@@ -38,8 +38,8 @@ STEPS = (
     ('lpspec.relational.engines.polars.executor', 'PolarsExecutor', '_build_constraint'),
     ('lpspec.relational.engines.polars.executor', 'PolarsExecutor', '_build_objective'),
     ('lpspec.relational.engines.polars.labels', None, 'frame'),
-    ('lpspec.relational.engines.polars.binding', '_Binder', 'parameter'),
-    ('lpspec.relational.engines.polars.binding', '_Binder', '_register'),
+    ('lpspec.relational.binding', '_Binder', 'parameter'),
+    ('lpspec.relational.binding', '_Binder', '_register'),
 )
 
 

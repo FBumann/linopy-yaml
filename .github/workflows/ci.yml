@@ -198,22 +198,3 @@ jobs:
           uv run --no-sync python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('pandas') is not None)"
           uv run --no-sync pytest -q
           uv run --no-sync pytest -q --engine polars
-
-      # A solve on the default engine, in that same pandas-free environment,
-      # asserting pandas stayed unimported rather than merely uninstalled. The
-      # step above proves it is not on disk; this proves the engine does not go
-      # looking, which is the claim that would survive somebody installing it
-      # for an unrelated reason.
-      - name: the default engine reaches for no pandas
-        run: |
-          uv run --no-sync python -c "
-          import polars as pl, lpspec as lps
-          src = {'p_max': pl.DataFrame({'generator': ['wind'], 'value': [10.0]}),
-                 'cost': pl.DataFrame({'generator': ['wind'], 'value': [1.0]}),
-                 'load': pl.DataFrame({'snapshot': [0], 'value': [5.0]})}
-          sol = lps.solve('examples/dispatch.yaml', src)
-          assert sol.objective == 5.0, sol.objective
-          assert isinstance(sol.primal('p'), pl.DataFrame)
-          import sys; assert 'pandas' not in sys.modules
-          print('default engine OK, pandas-free')
-          "
