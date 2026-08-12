@@ -79,7 +79,7 @@ ROOTS: dict[str, Any] = {
     'lps': lps,
     'lpspec_linopy': linopy_lane,
     'result': Result,
-    'ex': BoundModel,
+    'bound': BoundModel,
     'schema': Model,
 }
 

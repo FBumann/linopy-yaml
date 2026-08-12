@@ -42,10 +42,10 @@ early, not because forgetting them breaks anything. `lps.build` returns a
 than one sink, or be solved more than once:
 
 ```python
-ex = lps.build('model.yaml', sources)
-ex.write('model.lp')
-ex.diagnostics()  # what the build and its solves did that the answer does not show
-result = ex.solve()
+bound = lps.build('model.yaml', sources)
+bound.write('model.lp')
+bound.diagnostics()  # what the build and its solves did that the answer does not show
+result = bound.solve()
 ```
 
 ### Re-solving with new numbers
@@ -54,11 +54,11 @@ result = ex.solve()
 the same math over and over pays for the YAML, the plan and the build once:
 
 ```python
-ex = lps.build('sub.yaml', sources)
+bound = lps.build('sub.yaml', sources)
 for capacity in search:
-    result = ex.rebind({'cap_hat': capacity}).solve()
+    result = bound.rebind({'cap_hat': capacity}).solve()
     price = result.dual('capacity')  # read it out before the next rebind
-    ex.diagnostics()  # did that push values, or load the model again?
+    bound.diagnostics()  # did that push values, or load the model again?
 ```
 
 | | |
