@@ -14,8 +14,8 @@ stitch**. Only how slices are cut and whether they couple differs. (The
 slice onto that model (:func:`_serially`) — every slice being the same math
 over different numbers, which is what ``rebind`` is for. A fold under a process
 pool builds per slice (:func:`_pooled`), a built model being the one thing that
-cannot cross. The two differ in that and nothing else: both yield
-:data:`_Answered`, and the fold that absorbs them is written once.
+cannot cross. The two differ in that and nothing else: both yield an
+:class:`_Answer`, and the fold that absorbs them is written once.
 
     scenario / sweep    ``EachCoordinate('scenario')``              independent
     myopic pathway      ``EachCoordinate('period', ordered=True)``  + ``carry``
@@ -35,7 +35,7 @@ import io
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import closing
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -63,11 +63,28 @@ _COMPRESSION = 'zstd'
 #: One cut: the slice key, its sources, and the coords the axis re-indexed.
 Cut = tuple[Any, dict[str, Any], dict[str, Any]]
 
-#: One slice answered: its key, its meta row, its primal and dual frames, and
-#: the one reason a sweep has no duals. What :func:`_serially` and
-#: :func:`_pooled` both yield, so that the fold reads the same either way and
-#: only *how a slice is solved* differs between them.
-_Answered = tuple[Any, dict[str, Any], dict[str, pl.DataFrame], dict[str, pl.DataFrame], str | None]
+
+@dataclass(frozen=True)
+class _Answer:
+    """One slice, solved and read out — what the fold absorbs.
+
+    What :func:`_serially` and :func:`_pooled` both produce, so the fold reads
+    the same either way and only *how* a slice was solved differs between them.
+
+    **Plain data throughout**, because it is what a worker returns and so has
+    to pickle: frames, strings and numbers, never a result or a model. The
+    frames cross as ``bytes`` on that path, which is why :func:`_encode` and
+    :func:`_decode` rewrite the two frame fields rather than the whole of it.
+    """
+
+    #: ``(status, termination_condition, objective)`` — one row of
+    #: :attr:`Runs.objective`, which is one row per slice whatever it returned.
+    meta: dict[str, Any]
+    primals: dict[str, pl.DataFrame]
+    duals: dict[str, pl.DataFrame]
+    #: Why this slice has none, when it has none. Carried rather than raised:
+    #: one mixed-integer slice must not fail a whole sweep.
+    no_duals: str | None
 
 
 @dataclass(frozen=True)
@@ -504,10 +521,10 @@ def solve_over(
         else _pooled(executor, workers_share_fs, schema, cuts, build_kwargs, solving)
     )
     with closing(answered) as stream:
-        for key, meta, frames, priced, reason in stream:
-            no_duals = no_duals or reason
-            rows.append({key_name: key, **meta})
-            for into, produced in ((primals, frames), (shadow, priced)):
+        for key, answer in stream:
+            no_duals = no_duals or answer.no_duals
+            rows.append({key_name: key, **answer.meta})
+            for into, produced in ((primals, answer.primals), (shadow, answer.duals)):
                 for name, frame in produced.items():
                     into[name].append(frame.select(pl.lit(key).alias(key_name), pl.all()))
 
@@ -527,7 +544,7 @@ def _serially(
     building: Mapping[str, Any],
     solving: Mapping[str, Any],
     plan: Mapping[str, tuple[str, str | None, int | None]],
-) -> Generator[_Answered, None, None]:
+) -> Generator[tuple[Any, _Answer], None, None]:
     """Each slice's answer, off one model rebound in place.
 
     Every slice of a sweep is the same math over different numbers, which is
@@ -553,10 +570,10 @@ def _serially(
                 bound = build(schema, sources, coords=coords or None, **building)
             else:
                 bound.rebind(sources, coords=coords)
-            meta, frames, priced, reason = _answers(bound.solve(**solving), schema)
-            yield key, meta, frames, priced, reason
+            answer = _answers(bound.solve(**solving), schema)
+            yield key, answer
             if plan and position < len(cuts) - 1:
-                state = _carried(plan, frames, key)
+                state = _carried(plan, answer.primals, key)
     finally:
         if bound is not None:
             bound.close()
@@ -569,7 +586,7 @@ def _pooled(
     cuts: Sequence[Cut],
     building: Mapping[str, Any],
     solving: Mapping[str, Any],
-) -> Generator[_Answered, None, None]:
+) -> Generator[tuple[Any, _Answer], None, None]:
     """The same, from slices built independently and possibly elsewhere.
 
     Yielded in **slice order, never completion order**: the futures are walked
@@ -596,11 +613,11 @@ def _pooled(
         for _key, sliced, coords in cuts
     ]
     for (key, _sliced, _coords), future in zip(cuts, futures, strict=True):
-        meta, frames, priced, reason = future.result()
-        yield key, meta, _decode(frames), _decode(priced), reason
+        answer = future.result()
+        yield key, replace(answer, primals=_decode(answer.primals), duals=_decode(answer.duals))
 
 
-def _answers(result: Any, model: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str | None]:
+def _answers(result: Any, model: Any) -> _Answer:
     """One slice's answer, read out of *result*: its meta row, and its frames.
 
     Read here rather than held, so that what a sweep accumulates is frames and
@@ -620,12 +637,12 @@ def _answers(result: Any, model: Any) -> tuple[dict[str, Any], dict[str, Any], d
         'objective': result.objective if result.has_primal else float('nan'),
     }
     if not result.has_primal:
-        return meta, {}, {}, None
-    frames = {name: result.primal(name) for name in model.variables}
+        return _Answer(meta, {}, {}, None)
+    primals = {name: result.primal(name) for name in model.variables}
     try:
-        return meta, frames, {name: result.dual(name) for name in model.constraints}, None
+        return _Answer(meta, primals, {name: result.dual(name) for name in model.constraints}, None)
     except LpspecError as exc:
-        return meta, frames, {}, str(exc)
+        return _Answer(meta, primals, {}, str(exc))
 
 
 def _run_slice(
@@ -634,7 +651,7 @@ def _run_slice(
     coords: dict[str, Any] | None,
     encode_out: bool,
     call: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str | None]:
+) -> _Answer:
     """One slice, start to finish, over plain data — the *pooled* branch.
 
     Module-level and closure-free on purpose: a remote executor has to pickle
@@ -644,10 +661,10 @@ def _run_slice(
     branch rebinds.
     """
     with _solve(model, _decode(encoded), coords=coords, **call) as result:
-        meta, frames, priced, no_duals = _answers(result, model)
+        answer = _answers(result, model)
         if not encode_out:
-            return meta, frames, priced, no_duals
-        return meta, _encode(frames, {}), _encode(priced, {}), no_duals
+            return answer
+        return replace(answer, primals=_encode(answer.primals, {}), duals=_encode(answer.duals, {}))
 
 
 def _key_column(
