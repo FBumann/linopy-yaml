@@ -87,11 +87,15 @@ class PolarsExecutor:
         #: ``name -> rows not built``, because every term they had vanished.
         #: Empty for a model whose every declared row reached the solver.
         self._omitted: dict[str, int] = {}
-        #: ``name -> (first label, how many)``.
+        #: ``name -> (first label, how many)``, one map per label space.
         #: :func:`~lpspec.relational.engines.polars.labels.frame` hands a
         #: declaration a *contiguous, dense* run of labels, so a declaration's
-        #: share of a solver vector is a slice of it.
-        self._blocks: dict[str, tuple[int, int]] = {}
+        #: share of a solver vector is a slice of it. Columns and rows are
+        #: numbered independently and a model may name a variable and a
+        #: constraint alike, so one map keyed by name would hand the primal
+        #: reader a row block.
+        self._variable_blocks: dict[str, tuple[int, int]] = {}
+        self._constraint_blocks: dict[str, tuple[int, int]] = {}
         self._cols: pl.DataFrame | None = None
         self._obj: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
@@ -212,7 +216,7 @@ class PolarsExecutor:
         start = self._n_cols
         labelled, self._n_cols = labels.frame(self._q, v.dims, v.where, 'var_label', start)
         self._variables[v.name] = labelled.lazy()
-        self._blocks[v.name] = (start, labelled.height)
+        self._variable_blocks[v.name] = (start, labelled.height)
 
         bounded = labels.in_position_order(
             self._q.bounds(labelled.lazy(), v)
@@ -261,7 +265,7 @@ class PolarsExecutor:
         labelled, self._n_rows = labels.frame(self._q, c.dims, c.where, 'row', start, restrictions)
         frame = labelled.lazy()
         self._constraints[c.name] = frame
-        self._blocks[c.name] = (start, labelled.height)
+        self._constraint_blocks[c.name] = (start, labelled.height)
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
         uncovered: pl.Expr | None = None
@@ -292,7 +296,7 @@ class PolarsExecutor:
 
         if not terms:
             self._omitted[c.name] = rows.height
-            self._blocks[c.name] = (start, 0)
+            self._constraint_blocks[c.name] = (start, 0)
             self._n_rows = start
             self._constraints[c.name] = self._constraints[c.name].clear()
             return rows.clear(), None
@@ -339,7 +343,7 @@ class PolarsExecutor:
         surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
         renumber = surviving.select('row').with_row_index('__new__', offset=start)
         self._omitted[name] = rows.height - surviving.height
-        self._blocks[name] = (start, surviving.height)
+        self._constraint_blocks[name] = (start, surviving.height)
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
         rows = surviving.with_columns(pl.col('row').replace_strict(remap))
         matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
@@ -473,11 +477,12 @@ class PolarsExecutor:
         """
         assert self._program is not None
         assert values is not None, 'no solve has stored a primal'
-        return self._read_back(name, self._variables[name], self._program.variable(name).dims, values)
+        block = self._variable_blocks[name]
+        return self._read_back(block, self._variables[name], self._program.variable(name).dims, values)
 
     def _read_back(
         self,
-        name: str,
+        block: tuple[int, int],
         coordinates: pl.LazyFrame,
         dims: tuple[str, ...],
         values: pl.Series,
@@ -488,11 +493,12 @@ class PolarsExecutor:
         :func:`labels.frame` numbers a sorted frame and hands back a
         label-ascending one.
 
-        The declaration owns a contiguous, dense run of labels
-        (:attr:`_blocks`) and the solver's vector is positional in the same
-        index, so coordinates and values line up by construction. The slice is
-        attached as a column rather than concatenated as a frame, so a
-        mismatched length raises instead of padding with nulls.
+        The declaration owns a contiguous, dense run of labels — *block*, out
+        of the map for the label space *coordinates* is numbered in — and the
+        solver's vector is positional in the same index, so coordinates and
+        values line up by construction. The slice is attached as a column
+        rather than concatenated as a frame, so a mismatched length raises
+        instead of padding with nulls.
 
         **Dim columns leave in ``String``**, where the build holds them as
         ``pl.Enum`` (#541). That encoding is internal and every gram of its win
@@ -508,7 +514,7 @@ class PolarsExecutor:
         order is the *row* order and survives, never having been the dtype's to
         carry.
         """
-        start, height = self._blocks[name]
+        start, height = block
         labelled = coordinates.select(*dims).with_columns(values.slice(start, height))
         return labelled.with_columns(pl.col(d).cast(pl.String) for d in self._string_dims(dims))
 
@@ -528,7 +534,8 @@ class PolarsExecutor:
         """
         assert self._program is not None
         dims = self._program.constraint(name).dims
-        return self._read_back(name, self._constraints[name], dims, values).collect(engine='streaming')
+        block = self._constraint_blocks[name]
+        return self._read_back(block, self._constraints[name], dims, values).collect(engine='streaming')
 
     def _no_duals_reason(self, termination_condition: str) -> str:
         """Why a solve that *did* leave values still has no duals.
@@ -573,7 +580,8 @@ class PolarsExecutor:
         self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
         self._variables.clear()
         self._constraints.clear()
-        self._blocks.clear()
+        self._variable_blocks.clear()
+        self._constraint_blocks.clear()
         self._bound = None
         self._compiler = None
 

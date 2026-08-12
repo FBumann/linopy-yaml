@@ -659,18 +659,48 @@ def test_every_declaration_owns_a_contiguous_run_of_labels():
     }
     with lps.build(model, {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as ex:
         tables = ex._tables()
-        for names, total, frames, label in (
-            (['x', 'y', 'z'], tables.column_count, ex._variables, 'var_label'),
-            (['c1', 'c2'], tables.row_count, ex._constraints, 'row'),
+        for names, total, frames, blocks, label in (
+            (['x', 'y', 'z'], tables.column_count, ex._variables, ex._variable_blocks, 'var_label'),
+            (['c1', 'c2'], tables.row_count, ex._constraints, ex._constraint_blocks, 'row'),
         ):
             at = 0
             for name in names:
-                start, height = ex._blocks[name]
+                start, height = blocks[name]
                 assert start == at, f'{name} does not start where the previous declaration ended'
                 labels = frames[name].select(label).collect().to_series()
                 assert sorted(labels) == list(range(start, start + height)), f'{name} is not a dense run'
                 at += height
             assert at == total, 'the runs do not tile the index'
+
+
+def test_a_variable_and_a_constraint_may_share_a_name():
+    """Columns and rows are numbered independently, so the maps are separate.
+
+    `pypsa_unit_commitment` names both `start_up`, and linopy — the oracle the
+    whole corpus is checked against — keeps variables and constraints in
+    separate namespaces, so the model is legal and the read-back has to tell
+    the two apart. `pad` exists to push the variable's block off the
+    constraint's: sharing a start, the wrong block returns plausible numbers
+    from the wrong declaration rather than a length error.
+    """
+    model = {
+        'dimensions': {'i': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'parameters': {'cap': {'dims': ['i']}},
+        'variables': {
+            'pad': {'foreach': ['i'], 'bounds': {'lower': 0, 'upper': 0}},
+            'x': {'foreach': ['i'], 'bounds': {'lower': 0}},
+        },
+        'constraints': {'x': {'foreach': ['i'], 'expression': 'x >= cap'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
+    }
+    with lps.solve(model, {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as result:
+        assert result.primal('x')['value'].to_list() == pytest.approx([1.0, 2.0, 3.0]), (
+            "variable 'x' read back over the constraint of the same name"
+        )
+        assert result.primal('pad')['value'].to_list() == pytest.approx([0.0, 0.0, 0.0])
+        assert result.dual('x')['value'].to_list() == pytest.approx([1.0, 1.0, 1.0]), (
+            "constraint 'x' read back over the variable of the same name"
+        )
 
 
 def test_the_matrix_collapses_a_repeated_cell_and_leaves_the_rest_alone():
