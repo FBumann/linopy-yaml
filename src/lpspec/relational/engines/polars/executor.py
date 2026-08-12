@@ -239,6 +239,12 @@ class PolarsExecutor:
         fragment is aggregated to its own coordinates and left-joined, so a
         coordinate it has no row for contributes zero.
 
+        **The coverage check rides on the rows pass rather than taking its own.**
+        Both read the same joined carrier, so asking separately collects every
+        constant's join twice. The flag is a boolean column dropped once counted,
+        and the refusal still precedes any use of the rows — ``accumulated``
+        fills nulls with zero, so a gap cannot reach ``rhs`` before it is caught.
+
         Duplicates from ``Sum`` and ``GroupSum`` — which project rather than
         aggregate — and from ``x + 2 * x`` collapse in :meth:`_matrix_share`'s
         terminal ``SUM(coeff) GROUP BY row, col``, read off the data rather
@@ -283,17 +289,20 @@ class PolarsExecutor:
             gap = pl.col(column).is_null()
             uncovered = gap if uncovered is None else uncovered | gap
 
-        if uncovered is not None:
-            gaps = int(carrier.select(uncovered.sum()).collect(engine='streaming').item())
-            if gaps:
-                names = ', '.join(sorted(plan.parameters_of(c.lhs, c.rhs)))
-                raise DataError(uncovered_constant_message(names, gaps, f"constraint '{c.name}'"))
-
+        gap_column = '__uncovered__'
         rows = carrier.select(
             'row',
             pl.lit(c.sense, dtype=SENSE).alias('sense'),
             accumulated.cast(pl.Float64).alias('rhs'),
+            *([uncovered.alias(gap_column)] if uncovered is not None else []),
         ).collect(engine='streaming')
+
+        if uncovered is not None:
+            gaps = int(rows.get_column(gap_column).sum())
+            if gaps:
+                names = ', '.join(sorted(plan.parameters_of(c.lhs, c.rhs)))
+                raise DataError(uncovered_constant_message(names, gaps, f"constraint '{c.name}'"))
+            rows = rows.drop(gap_column)
 
         if not terms:
             self._omitted[c.name] = rows.height
