@@ -211,11 +211,12 @@ class DuckExecutor(Engine):
         #: How many entries each built row owns, taken per constraint while its
         #: matrix was still in duckdb. `_starts` sums them into the CSR index.
         self._row_lengths: list[pl.Series] = []
-        #: `(variable type, how many columns)` per variable, in declaration
-        #: order — the runs `_vtypes` spells out. Kept here rather than read off
-        #: `_blocks`, which is keyed by declaration name and so cannot tell a
-        #: variable from a constraint that shares its name.
-        self._col_runs: list[tuple[str, int]] = []
+        #: `(name, variable type, how many columns)` per variable, in
+        #: declaration order — the runs `_vtypes` spells out and
+        #: `_refuse_null_bounds` attributes a missing bound to. Kept here rather
+        #: than read off `_blocks`, which is keyed by declaration name and so
+        #: cannot tell a variable from a constraint that shares its name.
+        self._col_runs: list[tuple[str, str, int]] = []
         #: The four frames, once something has drained them.
         self._cached: sinks.ModelTables | None = None
         self._var_tables: dict[str, str] = {}
@@ -495,13 +496,15 @@ class DuckExecutor(Engine):
         bounds = repeating if repeating is not None else self._sorted_bounds(v, name)
         # `vtype` is not stored: every column of one declaration carries the
         # same word, so it is a run per variable rather than a value per row,
-        # and `_vtypes` spells it out from the blocks at the sink seam.
-        table = self._relation(bounds, 'cols', materialise=True)
-        self._col_tables.append(table)
-        self._col_runs.append((v.variable_type, self._n_cols - start))
-        bad = self._count(self._con.table(table).filter(SQLExpression('lb IS NULL OR ub IS NULL')))
-        if bad:
-            raise DataError(null_bounds_message(v.name, bad))
+        # and `_vtypes` spells it out from the runs at the sink seam.
+        #
+        # **Written down only where the sort is.** `_relation`'s rule is that a
+        # table pays for an expensive derivation, and these two paths are the
+        # two sides of it: a sorted bound is a pass over the whole column and is
+        # worth keeping, a repeated one is a short run and an `unnest` and is
+        # cheaper to answer again at the drain than to store (#399).
+        self._col_tables.append(self._relation(bounds, 'cols', materialise=repeating is None))
+        self._col_runs.append((v.name, v.variable_type, self._n_cols - start))
 
     def _sorted_bounds(self, v: plan.VariableDeclaration, labels: str) -> Relation:
         """``(lb, ub)`` in label order, by sorting — always available.
@@ -615,7 +618,7 @@ class DuckExecutor(Engine):
             self._row_tables[c.name] = self._relation(frame.filter(ConstantExpression(False)), 'lbl', materialise=False)
             return
 
-        rows = self._relation(self._constant_side(frame, consts, c.sense), 'rows', materialise=True)
+        rows = self._relation(self._constant_side(frame, consts, c.sense), 'rows', materialise=False)
         matrix = self._relation(self._matrix_side(frame, terms), 'mat', materialise=True)
         # `(row, entries)` for the rows that kept a term, ascending. Small — one
         # row per constraint row, not per nonzero — and it answers both
@@ -757,7 +760,7 @@ class DuckExecutor(Engine):
         if _needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
             total = FunctionExpression('sum', col('coeff')).alias('coeff')
             stacked = stacked.aggregate([col('col'), total], q('col'))
-        self._obj_tables.append(self._relation(stacked, 'obj', materialise=True))
+        self._obj_tables.append(self._relation(stacked, 'obj', materialise=False))
 
     # -- the sink seam --------------------------------------------------
 
@@ -778,7 +781,7 @@ class DuckExecutor(Engine):
         """
         if self._cached is None:
             self._cached = sinks.ModelTables(
-                cols=self._drain(self._col_tables, _BOUNDS).with_columns(self._vtypes()),
+                cols=self._bounds(),
                 obj=self._drain(self._obj_tables, _OBJ),
                 rows=self._drain(self._row_shares, _ROWS),
                 matrix=_DuckMatrix(self._con, tuple(self._matrix_spans), self._starts()),
@@ -793,6 +796,37 @@ class DuckExecutor(Engine):
         """*tables* stacked and fetched, in the order they were built."""
         return _fetch(_stacked(self._con, tables, columns), columns)
 
+    def _bounds(self) -> pl.DataFrame:
+        """``cols``: every variable's bounds, in label order, with its type.
+
+        The null check happens here rather than per declaration because the
+        bounds a repeated run produces are not written down (`_build_variable`)
+        — asking a view whether it holds a null would re-derive it. One pass
+        over the drained column costs less and says the same thing.
+        """
+        cols = self._drain(self._col_tables, _BOUNDS).with_columns(self._vtypes())
+        self._refuse_null_bounds(cols)
+        return cols
+
+    def _refuse_null_bounds(self, cols: pl.DataFrame) -> None:
+        """A bound with no value where the model needed one, named for its variable.
+
+        Raises:
+            DataError: A bound parameter had no row for some coordinate the
+                variable exists at. Attributed by walking the runs, so the
+                message names the declaration rather than a row number — which
+                costs a slice per variable, and only on the failing path.
+        """
+        missing = cols.select(pl.col('lb').is_null() | pl.col('ub').is_null()).to_series()
+        if not missing.any():
+            return
+        at = 0
+        for name, _, height in self._col_runs:
+            bad = int(missing.slice(at, height).sum())
+            if bad:
+                raise DataError(null_bounds_message(name, bad))
+            at += height
+
     def _vtypes(self) -> pl.Series:
         """``cols``' variable-type column, one run per declaration.
 
@@ -801,7 +835,7 @@ class DuckExecutor(Engine):
         the frame's stated dtype is an `Enum` and :attr:`_col_runs` already says
         how long each run is.
         """
-        runs = [pl.repeat(t, n, dtype=sinks.VTYPE, eager=True) for t, n in self._col_runs]
+        runs = [pl.repeat(t, n, dtype=sinks.VTYPE, eager=True) for _, t, n in self._col_runs]
         return pl.concat(runs).alias('vtype') if runs else pl.Series('vtype', [], dtype=sinks.VTYPE)
 
     def _starts(self) -> Any:
