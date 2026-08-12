@@ -72,26 +72,20 @@ def expand_piecewise(
     leaving the first lambda unconstrained by segment selection — a wrong MILP
     with no error, which is why #289 kept the escape hatch.
 
+    ``known_variables`` widens the variable set the same way it does for any
+    other expression: a link may name a variable the model being extended
+    already has, and the frame is the union of the links' dims, so resolution
+    has to see those names to compute it.
+
     Building the expanded ``Model`` validates it, so the result is memoised
     on *schema* keyed by the namespace it was expanded against — a validated
     schema already carries the expansion its own validation built
     (:class:`Model` expands as a check on the way in), and asking again
     returns it rather than validating a second copy.
 
-    Args:
-        schema: The model as the file declares it, ``piecewise:`` intact.
-        known_variables: Widens the variable set the same way it does for any
-            other expression: a link may name a variable the model being
-            extended already has, and the frame is the union of the links'
-            dims, so resolution has to see those names to compute it.
-
-    Returns:
-        The schema with plain variables and constraints in place of every
-        block, or *schema* itself where there was nothing to expand.
-
     Raises:
-        PiecewiseExpansionError: If a block names something that does not
-            exist, or emits a name the file already declares.
+        PiecewiseExpansionError: A block naming something that does not exist,
+            or emitting a name the file already declares.
     """
     if not schema.piecewise:
         return schema

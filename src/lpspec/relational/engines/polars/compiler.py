@@ -841,11 +841,10 @@ def predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...
     nothing.
 
     Raises:
-        LanguageError: On a predicate this function does not know. There is no
-            such case today, and a new one that forgot to answer here would
-            silently mis-restrict or mislabel a model — both
-            :meth:`PolarsCompiler.frame`'s semi-join and the label planner's
-            factored prefix read this answer.
+        LanguageError: A predicate this function does not know. One that
+            forgot to answer here would silently mis-restrict or mislabel a
+            model — :meth:`PolarsCompiler.frame`'s semi-join and the label
+            planner's factored prefix both read this.
     """
     if isinstance(where, plan.BooleanConstant):
         return frozenset()

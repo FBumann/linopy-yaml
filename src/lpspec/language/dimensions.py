@@ -83,16 +83,12 @@ def dims_of(
 ) -> frozenset[str]:
     """The dim set of a resolved expression, checking every rule on the way.
 
-    Args:
-        node: The resolved expression, either side of a comparison included.
-        schema: What the file declares.
-        context: The declaration to name in a message.
-        external: Dims of variables that live on a model rather than in
-            *schema* — ``linopy.extend()``'s case, mirroring how
-            ``known_variables`` widens the namespace.
+    ``external`` gives the dims of variables that live on a model rather than
+    in this schema — ``linopy.extend()``'s case, mirroring how
+    ``known_variables`` widens the namespace.
 
     Raises:
-        DimensionError: If a rule in this module's table is broken.
+        DimensionError: On the first rule broken.
     """
     if isinstance(node, ComparisonNode):
         return _dims(node.left, schema, context, external) | _dims(node.right, schema, context, external)
@@ -228,12 +224,9 @@ def check_schema(
 ) -> None:
     """Check every declaration's dim rules.
 
-    Args:
-        schema: What the file declares.
-        external: Variables already on a model, mapped to their dims, so
-            ``linopy.extend()`` can reference them (hard rule 5 keeps
-            parameters schema-local, but variables legitimately come from the
-            model argument).
+    ``external`` maps variables already on a model to their dims, so
+    ``linopy.extend()`` can reference them (hard rule 5 keeps parameters
+    schema-local, but variables legitimately come from the model argument).
 
     Raises:
         DimensionError: On the first declaration that breaks one.

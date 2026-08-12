@@ -94,10 +94,13 @@ def build(
         coords: Dimension coordinate values. Overrides ``values:`` declared
             in the YAML.
 
+    Returns:
+        A model carrying every declaration the file makes.
+
     Raises:
-        LanguageError: If the file says something the language does not
-            accept — its structure, its declarations or its expressions.
-        DataError: If the file is fine and what *data* supplied for it is not.
+        LanguageError: A file the language does not accept — its structure,
+            its declarations or its expressions.
+        DataError: A file that is fine, and data that does not fit it.
     """
     path = Path(path)
     with note(f"while loading YAML '{path}'"):
@@ -124,20 +127,10 @@ def extend(
 ) -> None:
     """Add variables, constraints, and/or objectives from YAML to *model*.
 
-    Mutates *model* in place. Expressions may reference variables already on
-    the model — those come from the model itself, not from prior calls. The
-    YAML must declare every parameter it uses, and this call must supply that
-    parameter's data.
-
-    The existing variables' dims are linopy ``Hashable``s where the language's
-    are names, so they are stringified before validation.
-
-    Coords precedence (highest first):
-
-    1. ``coords=`` kwarg to this call
-    2. coords inferred from the model's existing variables
-    3. ``values:`` declared in this YAML
-    4. error if none of the above resolve a referenced dim
+    Expressions may reference variables *model* already carries; every
+    parameter they use is declared in this file and supplied in this call. A
+    referenced dimension takes its labels from ``coords``, then from the
+    model's existing variables, then from this file's ``values:``.
 
     Args:
         model: Extended in place.
@@ -146,9 +139,10 @@ def extend(
         coords: Dimension coordinate values.
 
     Raises:
-        LanguageError: If this YAML declares ``values:`` for a dim the model
-            already carries and they differ — a silent override would hide
-            real bugs.
+        LanguageError: A file the language does not accept, or ``values:``
+            for a dim the model already carries with other labels.
+        DataError: A dimension nothing resolves, or parameter data that does
+            not fit the file.
     """
     path = Path(path)
     with note(f"while extending with YAML '{path}'"):

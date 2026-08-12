@@ -102,12 +102,10 @@ class Namespace:
     def of(cls, schema: Model, known_variables: Iterable[str] = ()) -> Namespace:
         """Build the namespace of *schema*.
 
-        Args:
-            schema: The model whose declarations are the namespace.
-            known_variables: Widens the variable set only — used by
-                ``linopy.extend()``, where expressions may reference variables
-                already on the model. Parameters get no such widening: a YAML
-                file declares every parameter it uses (hard rule 5).
+        ``known_variables`` widens the variable set only — used by
+        ``linopy.extend()``, where expressions may reference variables already
+        on the model. Parameters get no such widening: a YAML file declares
+        every parameter it uses (hard rule 5).
         """
         return cls(
             set(schema.variables) | set(known_variables),
@@ -197,15 +195,10 @@ def resolve_expression(
     Arity is a language rule, and this is the pass every consumer goes through,
     so neither backend has to state a signature a second time.
 
-    Args:
-        node: The parsed, expanded expression.
-        ns: The declared names to resolve against.
-        context: The declaration to name in a message.
-        errors: Appended to, rather than raised from, so a caller collecting
-            problems across a whole schema reports them together.
-
     Returns:
-        The typed tree, or ``None`` if anything failed to resolve.
+        The typed tree, or ``None`` once anything failed — appending to
+        *errors* rather than raising, so a caller collecting problems across a
+        whole schema reports them together.
     """
     before = len(errors)
     if isinstance(node, ComparisonNode):

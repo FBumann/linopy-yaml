@@ -308,9 +308,6 @@ def parse_expression(text: str) -> ExpressionNode:
     Returns:
         One of ``NumberNode``, ``NameNode``, ``UnaryOperatorNode``,
         ``BinaryOperatorNode``, ``ComparisonNode`` or ``FunctionCallNode``.
-
-    Raises:
-        SchemaError: If the text does not parse — the message quotes it.
     """
     try:
         result = _GRAMMAR.parse_string(text, parse_all=True)

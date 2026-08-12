@@ -69,19 +69,11 @@ def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) ->
 class Result:
     """What a solve returned — the outcome, and access to any values.
 
-    Named for linopy's envelope rather than its ``Solution``: it is returned
-    when the solve produced *nothing*, so "solution" would be a lie in exactly
-    the case a caller most needs to notice.
-
-    **No lifetime to manage.** The model is frames this process owns, so the
-    readers stay valid as long as the object does; :meth:`close` releases a
-    large one early but nothing breaks without it.
-
-    **Its values are its own** — held here rather than read back off the
-    executor, so a later solve cannot rewrite what an earlier result reports.
-    Only the label frames are shared, and a re-solve does not touch them. That
-    matters once a caller retains several results, which a sweep, a rolling
-    horizon and Benders all do.
+    Returned whatever the solve concluded: test :attr:`has_primal` before
+    reading values, or catch :class:`~lpspec.errors.NoSolutionError`. The
+    values are this result's own, so a later solve on the same model does not
+    rewrite them, and there is no lifetime to manage — :meth:`close` releases
+    a large model early, and nothing breaks without it.
     """
 
     _status: SolveStatus
@@ -138,30 +130,28 @@ class Result:
         )
 
     def primal(self, name: str) -> pl.DataFrame:
-        """The tidy solution of *name* — ``(dims…, value)``.
+        """The tidy solution of variable *name* — ``(dims…, value)``.
 
-        Rows come back in **label order** — row-major over the variable's
-        coordinate product, what ``var_label`` already encodes and what the LP
-        sink writes — so two reads agree, two runs agree, and a solution file
-        can be diffed.
+        Rows come back in label order, row-major over the variable's coordinate
+        product, so two reads and two runs agree.
 
         Raises:
-            NoSolutionError: If the solve left no values to read.
+            NoSolutionError: The solve left no values to read.
+            KeyError: No variable is called *name*.
         """
         self._require_solution(f"the primal of '{name}'")
         return self._executor._primal(name, self._primal_values)
 
     def dual(self, name: str) -> pl.DataFrame:
-        """Shadow prices of constraint *name*: ``(dims…, value)``.
+        """Shadow prices of constraint *name* — ``(dims…, value)``.
 
-        :meth:`primal` against the row frame rather than a column one, in that
-        method's order. The two empty cases are different failures and both
-        raise rather than return zeros.
+        :meth:`primal`'s shape and order, over constraint rows.
 
         Raises:
-            NoSolutionError: If the solve left no values at all.
-            LpspecError: If it left primals but no duals — any integer
-                variable makes them undefined.
+            NoSolutionError: The solve left no values at all.
+            LpspecError: It left primals but no duals — an integer variable
+                makes them undefined.
+            KeyError: No constraint is called *name*.
         """
         self._require_solution(f"the dual of '{name}'")
         if self._dual_values is None:
@@ -174,30 +164,27 @@ class Result:
         return tidy_to_pandas(self._executor._primal(name, self._primal_values))
 
     def to_dataarray(self, name: str) -> xr.DataArray:
-        """``primal(name)`` as a labelled :class:`xarray.DataArray`.
+        """:meth:`primal` as a labelled :class:`xarray.DataArray`.
 
-        The bridge to array post-processing — ``.sel``, resampling, duration
-        curves. A masked coordinate has no row and comes back NaN.
+        Dense over the variable's dims: a masked coordinate comes back NaN.
         """
         return tidy_to_dataarray(self.to_pandas(name), name)
 
     def to_dataset(self, *names: str) -> xr.Dataset:
-        """Variables as one :class:`xarray.Dataset`; all of them by default.
+        """The named variables as one :class:`xarray.Dataset`; all by default.
 
-        Costs what it says: each variable arrives dense over its own dims,
-        whatever the mask removed, and all of them at once. On a large model,
-        name the few you need or use :meth:`to_parquet`.
+        Each arrives dense over its own dims, all at once — on a large model
+        name the few you need, or use :meth:`to_parquet`.
         """
         assert self._executor._program is not None
         wanted = names or tuple(v.name for v in self._executor._program.variables)
         return tidy_to_dataset(wanted, self.to_dataarray)
 
     def to_parquet(self, directory: str | Path) -> dict[str, Path]:
-        """One parquet file per variable, ``(dims…, value)``.
+        """Write one parquet file per variable into *directory*.
 
-        Sunk straight to disk, never copied into a second representation, in
-        :meth:`primal`'s order — so the same model and data write the same
-        bytes.
+        Streamed to disk in :meth:`primal`'s order, so the same model and data
+        write the same bytes.
 
         Returns:
             Each variable's name, mapped to the file it was written to.
@@ -206,10 +193,9 @@ class Result:
         return self._executor._solution_to_parquet(Path(directory), self._primal_values)
 
     def close(self) -> None:
-        """Release the built model early. Optional — see the class docstring.
+        """Release the built model and this result's values. Optional.
 
-        Drops this result's own values as well as the shared model, so closing
-        still frees everything one solve allocated; a sibling result keeps its.
+        Frames already read stay valid; the readers stop working.
         """
         self._primal_values = self._dual_values = None
         self._closed = True

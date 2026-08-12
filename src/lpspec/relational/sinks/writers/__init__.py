@@ -36,8 +36,8 @@ def writer(suffix: str) -> Write:
     """The writer for *suffix*.
 
     Raises:
-        NotImplementedError: If the format is one that is coming.
-        ValueError: If nothing writes it — the message lists what can be.
+        NotImplementedError: A format that is coming.
+        ValueError: One nothing writes; the message lists what can be.
     """
     if suffix in WRITERS:
         return WRITERS[suffix]

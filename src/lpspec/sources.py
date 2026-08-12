@@ -51,10 +51,8 @@ def tidy_sources(
     wording for one defect, and the narrower one.
 
     Raises:
-        DataError: If a declared parameter has no data, or what it was given
-            cannot be adapted to a tidy table.
-        PiecewiseExpansionError: If a ``convex: true`` block's breakpoints
-            are not what the hull relaxation needs.
+        DataError: A declared parameter with no data, or one bound to
+            something no tidy table can be made of.
     """
     sources: dict[str, object] = {}
     for pname, pdef in schema.parameters.items():
@@ -98,24 +96,19 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
 
     The hull relaxation is silently wrong for mixed curvature and ill-defined
     when the x-breakpoints are not strictly monotone; both are checkable once
-    the breakpoint values are in hand, which the schema never has. Called by
-    both lanes, which is why it sits beside ``tidy_sources``.
+    the breakpoint values are in hand, which the schema never has. *values*
+    maps parameter names to whatever its lane holds — :func:`tidy_sources`'
+    frames and paths, or the linopy lane's ``xr.Dataset`` — and blocks whose
+    parameters are missing or bound to a path are skipped. Called by both
+    lanes, which is why it sits beside ``tidy_sources``.
 
     Only the curvature check needs xarray, for the broadcast over dims, so the
     import waits until a ``convex: true`` block is found. Such a block carries
     exactly two links, which the pair unpack relies on.
 
-    Args:
-        schema: The model as the file declares it, ``piecewise:`` intact.
-        values: Parameter names mapped to whatever the lane holds —
-            :func:`tidy_sources`' frames and paths, or the linopy lane's
-            ``xr.Dataset``. Blocks whose parameters are missing or bound to a
-            path are skipped.
-
     Raises:
-        PiecewiseExpansionError: If the breakpoints are not strictly
-            increasing, or the curve is not the one curvature the hull is
-            exact for.
+        PiecewiseExpansionError: Breakpoints that are not strictly increasing,
+            or a curve of the curvature the hull is not exact for.
     """
     import numpy as np
 

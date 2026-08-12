@@ -79,6 +79,9 @@ def build_gurobi(
 
     :func:`~lpspec.relational.sinks.solvers.highs.build_highs`'s seam, drawn
     for its reason: the search is the same work whoever filled the model.
+    ``batch_rows`` is a *nonzero* budget that splits the matrix across calls;
+    it defaults to one call — see
+    :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks` for why.
 
     **The caller owns the model, so the environment follows it.** gurobipy has
     no ``Model.getEnv()``, so a caller handed only the model could never
@@ -86,15 +89,6 @@ def build_gurobi(
     model is collected, which under refcounting is when the caller drops it.
     One thing to own rather than two, which is why this returns a model rather
     than a pair.
-
-    Args:
-        model: The built model, as every sink reads it.
-        batch_rows: A *nonzero* budget splitting the matrix across calls,
-            defaulting to one call — see
-            :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks`
-            for why.
-        solver_options: Set on the environment before it starts, so a licence
-            parameter reaches this sink at all.
     """
     m, _x, _blocks, environment = _load(model, batch_rows, solver_options)
     weakref.finalize(m, environment.dispose)
@@ -114,12 +108,9 @@ def solve_gurobi(
     :func:`build_gurobi` cannot do this — its caller owns the model.
 
     Returns:
-        ``(status, objective, primal, dual)``, the family's shape. The two
-        ``None`` cases mean what they mean in
-        :func:`~lpspec.relational.sinks.solvers.highs.solve_highs`: no primal,
-        no dual. Gurobi refuses the attribute in both cases rather than
-        handing back zeros, which is the one place it makes this easier than
-        HiGHS.
+        ``(status, objective, primal, dual)``, the family's shape — the two
+        ``None`` cases as in
+        :func:`~lpspec.relational.sinks.solvers.highs.solve_highs`.
     """
     m, x, blocks, environment = _load(model, batch_rows, solver_options)
     try:

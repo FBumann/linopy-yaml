@@ -86,11 +86,9 @@ class EachCoordinate:
     """One slice per coordinate of *dim* — a column the sources carry.
 
     Scenarios, draws, investment periods. Sources carrying *dim* are filtered
-    to one coordinate and the column dropped, so **the model never mentions
-    it**; every other source passes through untouched.
-
-    ``ordered`` says the coordinates have a meaningful sequence, which is what
-    a ``carry`` needs — scenarios have no "next", investment periods do.
+    to one coordinate and the column dropped, so the model never mentions it;
+    every other source passes through untouched. ``ordered=True`` says the
+    coordinates are a sequence, which a ``carry`` needs.
     """
 
     dim: str
@@ -115,21 +113,11 @@ class EachCoordinate:
 class EachWindow:
     """One slice per window of consecutive coordinates of *dim*.
 
-    The dimension is re-indexed rather than dropped, a window holding many
-    coordinates whose order the model has to be able to name. ``length`` is
-    what the solver sees, ``step`` is what you keep, and ``length > step`` is
-    overlap — the one thing this class uniquely offers. Non-positional grouping
-    (every calendar month) is a precomputed column plus
-    :class:`EachCoordinate`.
-
-    Both count **coordinates, not coordinate values**, so *dim* need only be
-    orderable — datetimes, strings and gapped integers all work.
-
-    **``into`` is structural, and has no default.** The seam row of a windowed
-    model is ``where: "t == 0"``, which needs a literal, and "the first
-    coordinate of *this* window" is not one in global numbering. The local
-    index is dense ``0..n-1`` by construction, and its name belongs to whoever
-    wrote the model.
+    ``length`` is what the solver sees, ``step`` is what the window keeps, and
+    ``length > step`` is overlap. Both count coordinates rather than coordinate
+    values, so *dim* need only be orderable — datetimes, strings and gapped
+    integers all work. The dimension is re-indexed rather than dropped, into a
+    dense ``0..n-1`` column the model addresses by the name ``into`` gives it.
     """
 
     dim: str
@@ -206,24 +194,11 @@ class Runs:
     """What a fold returned: frames keyed by slice, never a scalar.
 
     :class:`~lpspec.relational.result.Result`'s readers one dimension wider —
-    same names, same shapes, the slice key prepended.
-
-    **Keyed is the default; the original index is asked for.** Reading a
-    windowed sweep over the dimension it re-indexed is the nicer answer, but a
-    *lossy* one — a coordinate may appear only once under its own index, so the
-    lookahead rows every overlapping window solved have nowhere to go. A reader
-    that discarded them by default would be throwing away computed answers
-    silently, and it would key differently from :attr:`objective`, which is one
-    row per slice always, so the two would stop joining.
-    ``original_index=True`` is one word at the call site and says which was
-    meant.
-
-    **Nothing is aggregated, and that is the decision.** Scenarios are a
-    distribution rather than a sum, summing window objectives double-counts
-    whatever the overlap discards, and a window's shadow price is that
-    window's — concatenating them into a price curve is wrong in a way nothing
-    complains about. Keyed rows say whose each number is; a reduction would
-    have to know what the caller meant.
+    same names, same shapes, the slice key prepended. Nothing is combined
+    across slices: each row says which slice computed it. A windowed sweep
+    reads over that key unless a reader asks ``original_index=True``, which
+    gives the dimension the axis sliced and drops the lookahead rows every
+    overlapping window recomputed.
     """
 
     key_name: str
@@ -260,33 +235,30 @@ class Runs:
     def primal(self, name: str, *, original_index: bool = False) -> pl.DataFrame:
         """One variable's values across every slice, the slice key prepended.
 
-        A slice that reached no solution contributes no rows, so this frame can
-        be shorter than the sweep — :attr:`objective` is the record of which
-        slices those were, and it is one row per slice always.
+        A slice that reached no solution contributes no rows, so this can be
+        shorter than the sweep; :attr:`objective` is one row per slice always.
 
-        ``original_index=True`` asks for the same values over the dimension the
-        axis sliced instead — see :meth:`_reindexed`.
+        Args:
+            name: A variable the sweep's model declares.
+            original_index: Read over the dimension the axis sliced instead of
+                over the slice key.
 
         Raises:
-            LpspecError: If no slice of the sweep produced *name*.
+            LpspecError: No slice of the sweep produced *name*.
         """
         return self._reindexed(self._read(self._primals, 'variable', name), original_index=original_index)
 
     def dual(self, name: str, *, original_index: bool = False) -> pl.DataFrame:
         """One constraint's shadow prices across every slice, the key prepended.
 
-        :meth:`primal`'s shape, caveats and ``original_index``, plus one of its
-        own: a slice whose model had an integer variable has no duals to
-        contribute, so a mixed sweep can be shorter here than there.
-
-        **Nothing is combined** either way. Averaging window prices and taking
-        the last are both defensible and neither is done; over the original
-        index each coordinate carries the price of *the window that owns it*,
-        which is one window's answer rather than a blend of several.
+        :meth:`primal`'s shape and arguments. A slice whose model had an
+        integer variable contributes no duals, so a mixed sweep can be shorter
+        here than there; over the original index each coordinate carries the
+        price of the window that owns it, never a blend of several.
 
         Raises:
-            LpspecError: If no slice produced duals for *name* — the message
-                says which of the two it was.
+            LpspecError: No slice produced duals for *name* — the message says
+                which of the two it was.
         """
         return self._reindexed(
             self._read(self._duals, 'constraint', name, self._no_duals), original_index=original_index
@@ -367,7 +339,7 @@ class Runs:
         the wrong place to lose them.
 
         Raises:
-            LpspecError: If the sweep holds no variable values at all.
+            LpspecError: The sweep holds no variable values at all.
         """
         wanted = names or tuple(sorted(self._primals))
         if not wanted:
@@ -385,7 +357,7 @@ class Runs:
             Each variable's name, mapped to the file it was written to.
 
         Raises:
-            LpspecError: If the sweep holds no variable values at all.
+            LpspecError: The sweep holds no variable values at all.
         """
         if not self._primals:
             raise LpspecError(_nothing_to_read('variable', 'anything', self._primals, self.meta))
@@ -438,37 +410,35 @@ def solve_over(
 ) -> Runs:
     """Solve *model* once per slice of *axis* and fold the answers together.
 
-    The caller-facing rules — what a carry copies, how a key column is named,
-    which executor to choose — are the table in
-    [docs/api.md](../../docs/api.md#solving-one-model-many-times), so that they
-    are stated once. What this docstring adds is the order the work happens in.
-
-    **Everything answerable from the declarations is answered before a source
-    is read.** A mistyped carry, a key column that collides, an axis a carry
-    cannot run on: each costs a parse rather than a scan of every parquet file.
-    The schema then rides down to the slices already parsed, so no slice — and
-    no worker — reads the same YAML again.
-
-    **It is a fold.** Each slice's model is released as the loop goes, so build
+    One slice is built, solved and released before the next begins, so build
     peak stays at one slice however many there are; what accumulates is the
-    answer, which is what the caller asked for.
+    answers. A carry hands each slice's result to the next, and the last slice
+    carries nothing. What a carry copies and how a key column is named are the
+    table in
+    [docs/api.md](../../docs/api.md#solving-one-model-many-times).
 
-    **The last slice carries nothing**, there being no next slice to read it.
-    A short tail window can hold fewer coordinates than the carry index names,
-    and computing a value nothing will use would fail an otherwise complete
-    sweep at the final slice.
+    Every declaration is checked before a source is read: a mistyped carry, a
+    key column that collides, an axis a carry cannot run on all cost a parse
+    rather than a scan of every parquet file.
 
     **A process pool must not use the ``fork`` start method.** polars' thread
     pool does not survive a fork, and a forked worker hangs rather than
-    failing. This cannot be enforced here — a remote executor has no start
-    method to inspect — so pass the context, and give the entry point the
-    ``__main__`` guard that ``spawn`` requires:
+    failing. Pass a ``spawn`` context, and give the entry point the ``__main__``
+    guard it requires:
 
     .. code-block:: python
 
         ctx = multiprocessing.get_context('spawn')
         with ProcessPoolExecutor(4, mp_context=ctx) as pool:
             runs = lps.solve_over(model, sources, axis, executor=pool)
+
+    Returns:
+        Every slice's answers, keyed by slice.
+
+    Raises:
+        LpspecError: A carry together with an executor — a carried value makes
+            each slice depend on the one before, so they cannot run
+            concurrently — or a carry on an unordered axis.
     """
     if carry and executor is not None:
         raise LpspecError(

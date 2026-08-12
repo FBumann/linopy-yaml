@@ -352,12 +352,7 @@ _Declaration = TypeVar('_Declaration', ParameterDeclaration, VariableDeclaration
 
 
 def _declared(items: tuple[_Declaration, ...], name: str, kind: str) -> _Declaration:
-    """The declaration called *name*.
-
-    Raises:
-        KeyError: If nothing is called *name* — the message names the near
-            miss.
-    """
+    """The declaration called *name*, or a ``KeyError`` naming the near miss."""
     for item in items:
         if item.name == name:
             return item

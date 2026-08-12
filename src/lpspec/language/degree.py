@@ -82,13 +82,12 @@ def carries_variable(node: ExpressionNode) -> bool:
 def check_binary(node: BinaryOperatorNode, context: str | None = None) -> None:
     """Check that *node* stays inside degree 1.
 
-    Callers want the *raise*, not the answer — this is the same shape as
+    Callers want the *raise*, not the answer — the same shape as
     ``dimensions.dims_of`` being asked for its verdict.
 
     Raises:
-        LanguageError: If the node would leave degree 1 — both factors of a
-            product carrying variables, a divisor carrying one, or an operator
-            the language does not have.
+        LanguageError: Both factors of a product carrying variables, a divisor
+            carrying one, or an operator the language does not have.
     """
     where = f'{context}: ' if context else ''
     if node.op not in ARITHMETIC_OPERATORS:
@@ -124,10 +123,6 @@ def check_expression(node: ExpressionNode, context: str | None = None) -> None:
     Degree only, deliberately. What a plan node can represent is a different
     question and a consuming lane's to ask; a formulation runs in lanes that
     build no plan at all.
-
-    Raises:
-        LanguageError: As :func:`check_binary` raises it, for the first node
-            that leaves degree 1.
     """
     if isinstance(node, BinaryOperatorNode):
         check_binary(node, context)

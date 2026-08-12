@@ -72,23 +72,23 @@ def typeset(
     legend: bool = True,
     numbered: bool = True,
 ) -> str:
-    """Render *model* in *fmt*.
-
-    The model is validated on the way in, so a file that does not compile does
-    not print. A symbol table naming nothing in the model is an error too, the
-    alternative being a symbol that silently never applies.
-
-    The walk runs before the legend is assembled: ``saw_wraparound`` is
-    something it *discovers*, and the legend has to explain what was emitted.
+    """Render *model*'s math in *fmt*.
 
     Args:
         model: Anything :func:`lpspec.load_model` accepts.
-        fmt: The format to spell the math in — one of :data:`FORMATS`.
-        symbols: A :class:`SymbolTable` as a path, a mapping or the object,
-            saying how names print. Everything it does not name is derived.
+        fmt: What spells the math — one of :data:`FORMATS`.
+        symbols: How names print, as a :class:`SymbolTable`, a path or a
+            mapping. Names it does not carry are derived.
         standalone: Emit a compilable document rather than a fragment.
         legend: Prepend the sets/parameters/variables table.
         numbered: Number the equations.
+
+    Returns:
+        The rendered text.
+
+    Raises:
+        LanguageError: A model that does not compile; it does not print.
+        SchemaError: A symbol table entry naming nothing in the model.
     """
     schema = expand_piecewise(load_model(model))
     table = symbols if isinstance(symbols, SymbolTable) else SymbolTable.load(symbols or {})

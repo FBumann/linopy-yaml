@@ -410,14 +410,9 @@ class PolarsExecutor:
     def omissions(self) -> pl.DataFrame:
         """``(constraint, rows_not_built)`` — every row that lost all its terms.
 
-        A row with no variable terms is not built (SPEC §6), so without this
-        record a declared constraint could go unenforced with no way to notice.
-        Empty for a model whose every declared row reached the solver.
-
-        Counts rather than coordinates: the label of an unbuilt row does not
-        exist, so naming which went would mean holding the pre-drop frame —
-        memory proportional to the omission, on the path this package measures
-        hardest.
+        A row with no variable terms is not built (SPEC §6). Counts, not
+        coordinates; empty for a model whose every declared row reached the
+        solver.
         """
         return pl.DataFrame(
             {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
@@ -425,11 +420,11 @@ class PolarsExecutor:
         )
 
     def write(self, path: str | Path) -> None:
-        """Sink the built model to a file; the **suffix** picks the writer.
+        """Stream the built model to *path*, in the format its suffix names.
 
-        The caller names an output rather than a writer, unlike :meth:`solve`:
-        a file's format is a property of the file, where which solver runs is a
-        property of nothing but the call.
+        Raises:
+            ValueError: A suffix nothing writes.
+            NotImplementedError: A format that is planned and not here yet.
         """
         path = Path(path)
         sinks.writer(path.suffix.lower())(self._tables(), path)
@@ -440,20 +435,19 @@ class PolarsExecutor:
         solver_options: Mapping[str, Any] | None = None,
         solver_name: str = 'highs',
     ) -> Result:
-        """Sink the built model straight into a solver and solve it.
-
-        Which solver runs is a *caller's* choice at the call, spelled linopy's
-        way: no YAML file can express it, a model meaning the same thing
-        whoever solves it.
+        """Hand the built model to a solver and solve it.
 
         Args:
             batch_rows: The hand-off budget in elements, defaulting to the
                 sink's own
                 (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
-            solver_options: Forwarded verbatim in the solver's own vocabulary
-                (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
+            solver_options: Forwarded to the solver verbatim, in its own
+                vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
             solver_name: ``highs``, which ships with the package, or
-                ``gurobi``, needing the ``[gurobi]`` extra.
+                ``gurobi``, which needs the ``[gurobi]`` extra.
+
+        Returns:
+            The solution, holding this executor.
         """
         status, objective, primal, dual = sinks.solver(solver_name)(self._tables(), batch_rows, solver_options)
         _spanning(solver_name, 'primal', primal, self._n_cols)

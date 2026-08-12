@@ -77,8 +77,8 @@ def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
     labels, which a derived dimension has only once the parameters have bound.
 
     Raises:
-        DataError: If a source is missing, unreadable, or does not carry what
-            its declaration needs.
+        DataError: A source missing, unreadable, or not carrying what its
+            declaration needs.
     """
     binder = _Binder(program, sources)
     binder.sourced_dimensions()
@@ -142,19 +142,12 @@ class _Binder:
         self.parameters[p.name] = frame
 
     def _read(self, source: Any, unreadable: str) -> pl.LazyFrame:
-        """A caller's source as a lazy frame.
+        """A caller's source as a lazy frame, or *unreadable* as a data error.
 
         The one place a path is told from a table: a path is scanned, so the
         engine reads it directly, and anything else has to be table-shaped.
-
-        Args:
-            source: A path to scan, or a table to adapt.
-            unreadable: The message if it is neither — the caller's, because
-                what the source was *for* (a parameter, a dimension's index)
-                is what makes it actionable.
-
-        Raises:
-            DataError: If *source* is not table-shaped.
+        The message is the caller's because what the source was *for* — a
+        parameter, a dimension's index — is what makes it actionable.
         """
         if isinstance(source, (str, Path)):
             return pl.scan_parquet(source)

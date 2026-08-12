@@ -111,6 +111,10 @@ class ModelTables:
     def dense_columns(self, infinity: float) -> DenseColumns:
         """``(lb, ub, cost, integral)`` as numpy vectors over the solver's index.
 
+        *infinity* is the solver's own spelling of an absent bound — the one
+        thing the two disagree on — so it is asked for and the vectors come
+        back ready to hand over unedited.
+
         ``cols`` already arrives one row per column in ``col`` order, so its
         three vectors are the frame's own. Only ``cost`` is scattered, ``obj``
         being genuinely sparse: a variable in no objective term is left free
@@ -124,11 +128,6 @@ class ModelTables:
         boxing every value as a Python object, so the test against
         ``'continuous'`` is made in polars and only its answer crosses — an
         order of magnitude apart at the top of the ladder (#418).
-
-        Args:
-            infinity: The solver's own spelling of an absent bound — the one
-                thing the two disagree on — so the vectors come back ready to
-                hand over unedited.
         """
         import numpy as np
 
@@ -151,9 +150,6 @@ class ModelTables:
         side, both this pair spelled differently. A row with no entry gets a
         comparison nothing can fail (``>=`` against ``-infinity``) rather than
         the ``== 0`` that would be an equality the model never stated.
-
-        Args:
-            infinity: As :meth:`dense_columns` takes it.
         """
         sided = self.rows.select(
             'row',

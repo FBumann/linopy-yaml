@@ -75,8 +75,8 @@ def lower_program(schema: Model) -> plan.Program:
     ``binary=True``.
 
     Raises:
-        LanguageError: If the model uses a construct outside the streaming
-            language — the message names the construct and its rewrite.
+        LanguageError: A construct outside the streaming language, named with
+            its rewrite.
     """
     schema = expand_piecewise(schema)
     ns = Namespace.of(schema)

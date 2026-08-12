@@ -85,12 +85,9 @@ def build_highs(
     filled it. `bench/` ends here, as linopy's ``Model.to_highspy()`` does on
     that side.
 
-    Args:
-        model: The built model, as every sink reads it.
-        batch_rows: The budget in *elements*, spent through
-            :mod:`~lpspec.relational.chunking`. The parameter stays so tests
-            can force ragged chunks.
-        solver_options: Set on the solver before anything is loaded.
+    ``batch_rows`` is the budget in *elements*, spent through
+    :mod:`~lpspec.relational.chunking`; the parameter stays so tests can force
+    ragged chunks.
     """
     import highspy
     import numpy as np
@@ -145,13 +142,11 @@ def solve_highs(
     Returns:
         ``(status, objective, primal, dual)``, the last two the solver's own
         vectors — positional in its index, which *is* our label, so there is
-        nothing to key them by and nothing to join.
-
-        Either vector can be ``None``, for different reasons: no primal means
-        the solve left nothing worth reading, while no dual is narrower, a
-        mixed-integer model having none at all and neither does a run stopped
-        short of a simplex basis. HiGHS hands back full-length vectors of
-        zeros either way, and returning them would only make them reachable.
+        nothing to key them by and nothing to join. Either is ``None`` where
+        the solve left it: no values worth reading, or no duals at all, which
+        a mixed-integer model and a run stopped short of a simplex basis both
+        give. HiGHS hands back zeros either way, and returning them would only
+        make them reachable.
     """
     import highspy
 

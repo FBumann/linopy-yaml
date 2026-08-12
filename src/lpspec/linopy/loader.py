@@ -36,13 +36,10 @@ def build_master_coords(
 ) -> dict[str, pd.Index]:
     """Assemble master coordinate indices for every declared dimension.
 
-    Args:
-        schema: What the file declares.
-        coords: The caller's labels, which take precedence over the
-            ``values:`` the YAML declares.
+    ``coords`` takes precedence over the ``values:`` the YAML declares.
 
     Raises:
-        DataError: If a dimension's labels come from neither.
+        DataError: A dimension whose labels come from neither.
     """
     coords = coords or {}
     master: dict[str, pd.Index] = {}
@@ -172,8 +169,8 @@ def load_parameters(
         One DataArray per parameter, aligned to the master coordinates.
 
     Raises:
-        DataError: If a parameter is missing, or its dims or labels are not
-            the ones declared.
+        DataError: A parameter missing, or dims or labels other than the ones
+            declared.
     """
     data = data or {}
     arrays: dict[str, xr.DataArray] = {}
@@ -360,11 +357,7 @@ def gaps_under(array: Any, mask: Any) -> int:
     The eager lane's one way of asking "is this parameter defined where it is
     needed" — a bound, a divisor and a constant side all ask it, and a second
     spelling is a second chance to forget the mask and refuse a model whose
-    ``where`` had already answered.
-
-    Args:
-        array: The parameter, reindexed to the master coordinates.
-        mask: The rows the declaration builds; ``None`` narrows nothing.
+    ``where`` had already answered. ``None`` means nothing narrows the question.
     """
     missing = array.isnull()
     if mask is not None:

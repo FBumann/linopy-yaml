@@ -24,12 +24,9 @@ __all__ = ['as_frame', 'labels_frame']
 def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
     """Normalise one in-memory source to a tidy lazy frame.
 
-    A bool stays boolean rather than widening to float: the executor reads a
-    mask's truthiness from the column type (#47).
-
-    Args:
-        obj: Whatever the caller bound — a table, an index, a scalar.
-        dims: The columns an index becomes.
+    *dims* names the columns an index becomes. A bool stays boolean rather than
+    widening to float: the executor reads a mask's truthiness from the column
+    type (#47).
 
     Returns:
         The tidy frame, or ``None`` for "not table-shaped" — the caller knows
