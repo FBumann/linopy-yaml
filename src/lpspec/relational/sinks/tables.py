@@ -167,9 +167,11 @@ class ModelTables:
         A chunk is a ``slice``: ``row_starts`` already says where every row's
         entries sit, so nothing is sorted and nothing is searched.
 
-        ``starts`` is each row's offset within the block, which is what both
-        solvers' matrix APIs ask for. A row with no entries takes the next
-        row's offset, and so occupies no span.
+        Yields:
+            ``(lo, hi, entries, starts)`` for rows ``[lo, hi)``, where
+            ``starts`` is each row's offset within the block — what both
+            solvers' matrix APIs ask for. A row with no entries takes the
+            next row's offset, and so occupies no span.
         """
         for lo, hi in self._spans(budget):
             yield lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo]
@@ -189,9 +191,12 @@ class ModelTables:
     def labeled_blocks(self, budget: int | None) -> Iterator[tuple[int, int, pl.DataFrame]]:
         """Each chunk of rows with its entries labeled — the LP writer's reader.
 
-        :meth:`matrix_block`'s budget-iterator form. One method per consumer
-        shape — solvers take :meth:`row_blocks`, the writer this — so no caller
-        pairs spans and entries that disagree.
+        One method per consumer shape — solvers take :meth:`row_blocks`, the
+        writer this — so no caller pairs spans and entries that disagree.
+
+        Yields:
+            ``(lo, hi, entries)`` for rows ``[lo, hi)``, the entries labelled
+            as :meth:`matrix_block` labels them.
         """
         for lo, hi in self._spans(budget):
             yield lo, hi, self.matrix_block(lo, hi)

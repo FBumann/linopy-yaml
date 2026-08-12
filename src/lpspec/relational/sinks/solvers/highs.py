@@ -139,15 +139,14 @@ def solve_highs(
 ) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
     """Feed the model to HiGHS and solve it.
 
-    Returns ``(status, objective, primal, dual)`` as the solver's own vectors,
-    positional in the solver's index — which *is* our label — so there is
-    nothing to key them by and nothing to join.
-
-    Either can be ``None``, for different reasons: no primal means the solve
-    left nothing worth reading, while no dual is narrower, a mixed-integer
-    model having none at all and neither does a run stopped short of a simplex
-    basis. HiGHS hands back full-length vectors of zeros either way, and
-    returning them would only make them reachable.
+    Returns:
+        ``(status, objective, primal, dual)``, the last two the solver's own
+        vectors — positional in its index, which *is* our label, so there is
+        nothing to key them by and nothing to join. Either is ``None`` where
+        the solve left it: no values worth reading, or no duals at all, which
+        a mixed-integer model and a run stopped short of a simplex basis both
+        give. HiGHS hands back zeros either way, and returning them would only
+        make them reachable.
     """
     import highspy
 
@@ -166,11 +165,14 @@ def solve_highs(
 
 
 def _loaded(h: Any, status: Any, what: str) -> None:
-    """Raise unless the solver accepted the batch.
+    """Check that the solver accepted the batch.
 
     HiGHS reports a rejected batch by return value and carries on with an empty
     model, so an unchecked call turns a malformed hand-off into a confident
     answer to a different problem — an unconstrained one, if it was the rows.
+
+    Raises:
+        LpspecError: If the batch was refused.
     """
     import highspy
 

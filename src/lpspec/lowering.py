@@ -73,6 +73,10 @@ def lower_program(schema: Model) -> plan.Program:
 
     A ``binary:`` variable lowers with fixed 0/1 bounds, matching linopy's
     ``binary=True``.
+
+    Raises:
+        LanguageError: A construct outside the streaming language, named with
+            its rewrite.
     """
     schema = expand_piecewise(schema)
     ns = Namespace.of(schema)

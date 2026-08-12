@@ -370,8 +370,11 @@ class Program:
     dimensions: tuple[DimensionDeclaration, ...] = ()
 
     def dimension(self, name: str) -> DimensionDeclaration:
-        """The dimension called *name*. Undeclared is not an error here: a
-        dimension with no coordinates has nothing to declare."""
+        """The dimension called *name*.
+
+        Undeclared is not an error here: a dimension with no coordinates has
+        nothing to declare.
+        """
         for d in self.dimensions:
             if d.name == name:
                 return d

@@ -36,10 +36,10 @@ def build_master_coords(
 ) -> dict[str, pd.Index]:
     """Assemble master coordinate indices for every declared dimension.
 
-    Sources in order of precedence:
-    1. ``coords`` kwarg (highest priority).
-    2. ``values`` declared in the YAML.
-    3. If neither → raise immediately.
+    ``coords`` takes precedence over the ``values:`` the YAML declares.
+
+    Raises:
+        DataError: A dimension whose labels come from neither.
     """
     coords = coords or {}
     master: dict[str, pd.Index] = {}
@@ -161,10 +161,16 @@ def load_parameters(
 ) -> xr.Dataset:
     """Load, coerce, and validate all declared parameters.
 
-    Returns an ``xr.Dataset`` with one DataArray per parameter, aligned to
-    the master coordinates. Dim and coordinate checking happens here rather
-    than per input shape: every branch of ``_coerce_to_dataarray`` produces a
-    DataArray, and every one of them owes the same two guarantees.
+    Dim and coordinate checking happens here rather than per input shape:
+    every branch of ``_coerce_to_dataarray`` produces a DataArray, and every
+    one of them owes the same two guarantees.
+
+    Returns:
+        One DataArray per parameter, aligned to the master coordinates.
+
+    Raises:
+        DataError: A parameter missing, or dims or labels other than the ones
+            declared.
     """
     data = data or {}
     arrays: dict[str, xr.DataArray] = {}

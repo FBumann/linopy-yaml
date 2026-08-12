@@ -133,7 +133,8 @@ class _Carrier:
     def once(self, alias: str, attach: Callable[[pl.LazyFrame, str], pl.LazyFrame]) -> str:
         """Join *attach* onto the frame under *alias*, unless it already is.
 
-        Returns *alias*, so a caller reads the column it just made sure of.
+        Returns:
+            *alias*, so a caller reads the column it just made sure of.
         """
         if alias not in self._attached:
             self.frame = attach(self.frame, alias)
@@ -185,16 +186,21 @@ class PolarsCompiler:
 
     @property
     def name_dims(self) -> dict[str, tuple[str, ...]]:
-        """The dims each name in a where is read through — parameters by their
-        ``dims`` and variables by their ``foreach``. One flat mapping, because
-        the language has one flat namespace and the two cannot collide."""
+        """The dims each name in a where is read through.
+
+        Parameters by their ``dims`` and variables by their ``foreach``. One
+        flat mapping, because the language has one flat namespace and the two
+        cannot collide.
+        """
         named: dict[str, tuple[str, ...]] = {p.name: p.dims for p in self.program.parameters}
         named.update({v.name: v.dims for v in self.program.variables})
         return named
 
     def frame(self, dims: tuple[str, ...], where: plan.Predicate | None) -> pl.LazyFrame:
-        """The masked coordinate product over *dims*: labels, plus the
-        ordinals a caller sorts by so labels follow declaration order.
+        """The masked coordinate product over *dims*.
+
+        Labels, plus the ordinals a caller sorts by so labels follow
+        declaration order.
 
         **A mask that has to join restricts by semi-join, not by value join.**
         The predicate reads only its own dims, so it is evaluated over *their*
@@ -312,7 +318,6 @@ class PolarsCompiler:
         (:func:`labels.in_position_order`), so a shuffle costs a sort
         downstream at worst, never a wrong label.
         """
-
         certain = _certain_parameters(pred)
         carrier = _Carrier(frame)
 
@@ -374,7 +379,6 @@ class PolarsCompiler:
         Joins and arithmetic are one object, so a bound cannot be evaluated
         against a frame missing what it reads.
         """
-
         carrier = _Carrier(frame)
 
         def attach_bound(f: pl.LazyFrame, alias: str, name: str) -> pl.LazyFrame:
@@ -544,9 +548,11 @@ class PolarsCompiler:
         return ev(expr)
 
     def _parameter_fragment(self, name: str) -> TermFragment:
-        """A parameter as a constant part, keyed by its declared dims —
-        which the executor enforces by refusing a duplicated coordinate."""
+        """A parameter as a constant part, keyed by its declared dims.
 
+        One row per coordinate, which the executor enforces by refusing a
+        duplicated one.
+        """
         dims = self.program.parameter(name).dims
         frame = self.parameters[name].select(*dims, pl.col('value').cast(pl.Float64).alias('cval'))
         return TermFragment(dims, frame, False)
@@ -563,7 +569,6 @@ class PolarsCompiler:
         drops) while the presence frame is not — an implied key silently
         becomes a claim about columns it never had.
         """
-
         dims = self.program.variable(name).dims
         frame = self.variables[name].select(*dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff'))
         masked = self.program.variable(name).where is not None
@@ -590,14 +595,13 @@ class PolarsCompiler:
     # ------------------------------------------------------------------
 
     def _sum_fragment(self, p: TermFragment, over: tuple[str, ...], context: str) -> TermFragment:
-        """Drop the summed dims. **Not an aggregate.**
+        """Drop the summed dims — **not an aggregate**.
 
         The rows that carried them stay and collapse in the terminal
         ``sum(coeff)`` at assembly. Constructed rather than ``replace``d so
         ``presence`` is *dropped*: §13 reads a reduction as skipping absent
         slots, so summing over a partly-masked dim reports nothing.
         """
-
         missing = [d for d in over if d not in p.dims]
         if missing and not p.is_term:
             raise LanguageError(
@@ -621,7 +625,6 @@ class PolarsCompiler:
         so §13 applies and this constructs rather than ``replace``s — see
         :meth:`_sum_fragment`.
         """
-
         if g.over not in p.dims:
             raise LanguageError(f"in {context}: GroupSum over '{g.over}' but the expression has dims {list(p.dims)}")
         return self._remap_fragment(p, g, consumed=g.over, produced=g.into)
@@ -638,7 +641,6 @@ class PolarsCompiler:
         coordinate of its component — so a later reduction can bring two copies
         into one row, where the terminal aggregate adds them.
         """
-
         if a.into not in p.dims:
             raise LanguageError(f"in {context}: At through '{a.into}' but the expression has dims {list(p.dims)}")
         return self._remap_fragment(p, a, consumed=a.into, produced=a.over)
@@ -663,8 +665,9 @@ class PolarsCompiler:
         return TermFragment((*keep, produced), frame, p.is_term)
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
-        """A pointwise remap of the dim through its ord: a row at *o*
-        contributes at ``(o + by) % card``.
+        """A pointwise remap of the dim through its ord.
+
+        A row at *o* contributes at ``(o + by) % card``.
 
         Both joins are on a dim-table key, so the row count is unchanged and an
         out-of-range ordinal does not join. No window function; bounded-halo
@@ -678,7 +681,6 @@ class PolarsCompiler:
         entry would be a matrix nonzero standing for a term that is not there.
         Lowering refuses every other numeric edge over a variable.
         """
-
         if s.dimension not in p.dims:
             raise LanguageError(
                 f"in {context}: translation along '{s.dimension}' but the expression has dims {list(p.dims)}"
@@ -821,7 +823,6 @@ class PolarsCompiler:
     @staticmethod
     def constant_scalar(p: TermFragment) -> pl.LazyFrame:
         """The const fragment summed per coordinate: ``(dims…, cval)``."""
-
         if not p.dims:
             return p.frame.select(pl.col('cval').sum())
         return p.frame.group_by(p.dims).agg(pl.col('cval').sum())
@@ -837,10 +838,13 @@ def predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...
 
     A parameter is read through its own dims, a variable through its foreach,
     a dimension comparison through the dim it names, and a constant reads
-    nothing. Anything unrecognised raises: there is no such case today, and a
-    new predicate that forgot to answer here would silently mis-restrict or
-    mislabel a model — both :meth:`PolarsCompiler.frame`'s semi-join and the
-    label planner's factored prefix read this answer.
+    nothing.
+
+    Raises:
+        LanguageError: A predicate this function does not know. One that
+            forgot to answer here would silently mis-restrict or mislabel a
+            model — :meth:`PolarsCompiler.frame`'s semi-join and the label
+            planner's factored prefix both read this.
     """
     if isinstance(where, plan.BooleanConstant):
         return frozenset()
@@ -883,8 +887,11 @@ def _certain_parameters(pred: plan.Predicate) -> frozenset[str]:
 
 
 def _falsy_if_null(condition: pl.Expr) -> pl.Expr:
-    """*condition* with null read as false: a missing parameter row must
-    exclude the coordinate rather than propagate. Masks are row absence."""
+    """*condition* with null read as false.
+
+    A missing parameter row must exclude the coordinate rather than
+    propagate. Masks are row absence.
+    """
     return condition.fill_null(value=False)
 
 
@@ -901,7 +908,6 @@ def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.
 
 def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
     """One where-comparison. A string, a float and a date are all literals here."""
-
     literal = pl.lit(value)
     match op:
         case '==':

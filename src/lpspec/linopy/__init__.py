@@ -88,22 +88,19 @@ def build(
 ) -> linopy.Model:
     """Build a ``linopy.Model`` from a YAML math definition.
 
-    Parameters
-    ----------
-    path : str or Path
-        Path to the YAML file.
-    data : mapping or None
-        Parameter data. Keys are parameter names declared in the YAML.
-    coords : mapping or None
-        Dimension coordinate values. Overrides ``values:`` declared in YAML.
+    Args:
+        path: Path to the YAML file.
+        data: Parameter data, keyed by the names the YAML declares.
+        coords: Dimension coordinate values. Overrides ``values:`` declared
+            in the YAML.
 
-    Raises
-    ------
-    LanguageError
-        The file says something the language does not accept — its structure,
-        its declarations or its expressions.
-    DataError
-        The file is fine; what *data* supplied for it is not.
+    Returns:
+        A model carrying every declaration the file makes.
+
+    Raises:
+        LanguageError: A file the language does not accept — its structure,
+            its declarations or its expressions.
+        DataError: A file that is fine, and data that does not fit it.
     """
     path = Path(path)
     with note(f"while loading YAML '{path}'"):
@@ -130,22 +127,22 @@ def extend(
 ) -> None:
     """Add variables, constraints, and/or objectives from YAML to *model*.
 
-    Mutates *model* in place. Expressions may reference variables already on
-    the model — those come from the model itself, not from prior calls. The
-    YAML must declare every parameter it uses, and this call must supply that
-    parameter's data.
+    Expressions may reference variables *model* already carries; every
+    parameter they use is declared in this file and supplied in this call. A
+    referenced dimension takes its labels from ``coords``, then from the
+    model's existing variables, then from this file's ``values:``.
 
-    A dim the model already has may carry ``values:`` in this YAML only if
-    they match — a silent override would hide real bugs, so a mismatch raises.
-    The existing variables' dims are linopy ``Hashable``s where the language's
-    are names, so they are stringified before validation.
+    Args:
+        model: Extended in place.
+        path: Path to the YAML file.
+        data: Parameter data, keyed by the names the YAML declares.
+        coords: Dimension coordinate values.
 
-    Coords precedence (highest first):
-
-    1. ``coords=`` kwarg to this call
-    2. coords inferred from the model's existing variables
-    3. ``values:`` declared in this YAML
-    4. error if none of the above resolve a referenced dim
+    Raises:
+        LanguageError: A file the language does not accept, or ``values:``
+            for a dim the model already carries with other labels.
+        DataError: A dimension nothing resolves, or parameter data that does
+            not fit the file.
     """
     path = Path(path)
     with note(f"while extending with YAML '{path}'"):

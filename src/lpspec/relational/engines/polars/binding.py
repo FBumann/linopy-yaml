@@ -75,6 +75,10 @@ def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
     they exist — and have no strangers to find, their labels being the union of
     what arrived. Encoding comes last: a dimension's ``Enum`` is built from its
     labels, which a derived dimension has only once the parameters have bound.
+
+    Raises:
+        DataError: A source missing, unreadable, or not carrying what its
+            declaration needs.
     """
     binder = _Binder(program, sources)
     binder.sourced_dimensions()
@@ -114,7 +118,6 @@ class _Binder:
         Validation runs before the string cast — a dictionary-encoded column
         compares on its codes, and widening to strings first doubles the check.
         """
-
         if p.name not in self.sources:
             raise DataError(f"no source bound for parameter '{p.name}'")
         frame = self._read(
@@ -170,7 +173,6 @@ class _Binder:
         mistyped coordinate from vanishing in the join that places its terms,
         leaving a model that builds and solves without them.
         """
-
         dims = self._declared_dims()
         for d in sorted(dims):
             if d in self.dimensions:
@@ -217,7 +219,6 @@ class _Binder:
         re-reads the source (#273), and both the single-valued check and the
         grouping below read that one collect.
         """
-
         frame = self._read(
             source,
             f"explicit index for dimension '{d}' must be a table polars can read "

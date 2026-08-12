@@ -43,10 +43,9 @@ def frame(
 ) -> tuple[pl.DataFrame, int]:
     """The masked coord product of *dims* with a dense *label* from *start*.
 
-    Returns ``(dims…, label)`` in that column order, in label order, with the
-    next free label. A label follows declaration order — row-major over the
-    dims' declared ordinals — which is what lets it *be* the solver's own index
-    with no remapping.
+    A label follows declaration order — row-major over the dims' declared
+    ordinals — which is what lets it *be* the solver's own index with no
+    remapping.
 
     *restrictions* are variable-presence frames a constraint row must be
     contained in (v1 ``convention.rst`` §6, §12). They are semi-joins, so they
@@ -67,6 +66,10 @@ def frame(
     nor restriction, ``start + position`` *is* the label and the row-index pass
     never runs — milliseconds per declaration, on a model that may carry dozens
     (#520).
+
+    Returns:
+        ``(dims…, label)`` in that column order and in label order, and the
+        next free label.
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))

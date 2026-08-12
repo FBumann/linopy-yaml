@@ -185,6 +185,38 @@ name is the *caller*, not the implementer.
 - **Cut**: restatement, argument for a settled decision, narration of how the
   answer was found, and any tour of the internals a caller cannot see.
 
+**The form is Google's**, per the
+[style guide](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings)
+— `ruff`'s `D` rules check it, `pydocstyle.convention = "google"`. A summary
+line, a blank line, then the body; `Args:`, `Returns:`, `Yields:`, `Raises:`,
+`Attributes:`, `Example:`, in that order, `name: description` under each and no
+types (the annotation carries them).
+
+```python
+def solve(sources: Mapping[str, Any], solver_name: str = 'highs') -> Result:
+    """Build and solve in one call.
+
+    Args:
+        sources: Parameter names to parquet paths or in-memory tables.
+        solver_name: Which sink serves the solve — ``highs`` or ``gurobi``.
+
+    Raises:
+        LanguageError: If the model uses a construct outside the streaming
+            language.
+    """
+```
+
+The brevity rule above still decides **what earns a section**, and the choice is
+all or nothing: an `Args:` block names *every* parameter (`D417` checks that),
+so a function whose signature already says it takes the one-line docstring and
+no block at all — the guide's own escape, and what most of this tree's private
+helpers want. Half a signature restated is the outcome neither rule accepts.
+
+**The gate is `src/`**, where a docstring is a contract with a caller. Under
+`tests/`, `bench/`, `tools/` and `examples/` it argues for one assertion or
+narrates a script, and a summary line it has to fit in is the worse sentence —
+so the rules are off there and the paragraphs above are not.
+
 ## Commit messages and PR titles
 
 The subject names **the problem solved**. One line, scannable, no mechanism, no

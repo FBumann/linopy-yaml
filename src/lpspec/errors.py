@@ -194,11 +194,11 @@ def unknown_labels_message(name: str, dim: str, strangers: list[object], known: 
 
 
 def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
-    """``unknown <kind> '<name>'``, plus the near miss or the declared set.
+    r"""``unknown <kind> '<name>'``, plus the near miss or the declared set.
 
     Single-line on purpose: these are raised as ``KeyError``, whose ``str`` is
     the *repr* of its argument, so a newline reaches the reader as a literal
-    ``\\n``. Untruncated, because a caller reading a solution back by name has
+    ``\n``. Untruncated, because a caller reading a solution back by name has
     no other way to discover what the model built.
 
     A prefix hit lists the whole family rather than a near miss — ``piecewise:``

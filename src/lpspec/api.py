@@ -47,17 +47,21 @@ __all__ = ['build', 'check', 'load_model', 'solve', 'write']
 
 
 def check(model: str | Path | dict[str, Any] | Model) -> Model:
-    """Compile-check a model without data: parse, expand, validate, lower.
+    """Parse, expand, validate and lower a model; bind no data.
 
-    Lowering needs no sources, so this works on a bare YAML file — the CI
-    verb for model repositories. Raises :class:`LanguageError` when the model
-    uses a construct outside the streaming language, ``ValueError`` for
-    schema/expression problems. Returns the validated schema.
+    Args:
+        model: A YAML path, a mapping, or a loaded :class:`Model`.
 
-    Advice that stops short of an error — a declared dimension nothing uses as
-    an axis, say — is issued as :class:`~lpspec.errors.LpspecWarning`, here
-    and only here: ``check`` is the explicit gate, so the advice never costs a
-    build or a solve.
+    Returns:
+        The validated schema.
+
+    Raises:
+        LanguageError: A construct outside the streaming language.
+        ValueError: A schema or expression that does not parse.
+
+    Warns:
+        LpspecWarning: Advice short of an error — a declared dimension nothing
+            uses as an axis, say. Issued here and nowhere else.
     """
     schema = load_model(model)
     program = lower_program(schema)
@@ -72,17 +76,22 @@ def build(
     *,
     coords: dict[str, Any] | None = None,
 ) -> PolarsExecutor:
-    """Build *model* on the relational engine and return the executor.
+    """Bind data to *model* and build it on the relational engine.
 
-    ``sources`` maps parameter names to parquet paths or in-memory tables (and
-    optionally dimension names to index tables). One build can feed more than
-    one sink: call ``ex.solve()`` and ``ex.write(path)`` on the same object.
+    Args:
+        model: A YAML path, a mapping, or a loaded :class:`Model`.
+        sources: Parameter names to parquet paths or in-memory tables, and
+            optionally dimension names to index tables.
+        coords: Dimension labels neither *sources* nor the YAML carries.
 
-    Raises
-    ------
-    LanguageError
-        If the model uses a construct outside the streaming language —
-        the message names the construct and its context.
+    Returns:
+        The executor holding the built model. It feeds any number of sinks —
+        ``ex.solve()`` and ``ex.write(path)`` on the same object — and
+        ``ex.close()`` releases it.
+
+    Raises:
+        LanguageError: A construct outside the streaming language.
+        DataError: A source that is missing, unreadable, or the wrong shape.
     """
     schema = load_model(model)
     program = lower_program(schema)
@@ -102,22 +111,23 @@ def solve(
     solver_name: str = 'highs',
     **build_kwargs: Any,
 ) -> Result:
-    """Build and solve in one call.
+    """Build *model* and solve it in one call.
 
-    ``solver_name`` picks the sink — ``highs``, which ships with the package,
-    or ``gurobi``, needing the ``[gurobi]`` extra. linopy's spelling, and the
-    *caller's* decision: the same file solves the same model either way, so
-    nothing in the YAML names a solver. ``solver_options`` is forwarded
-    verbatim in that solver's vocabulary; build options stay separate, never
-    reaching the solver.
+    Args:
+        model: A YAML path, a mapping, or a loaded :class:`Model`.
+        sources: As :func:`build` takes them.
+        solver_options: Forwarded to the solver verbatim, in its own
+            vocabulary (``{'time_limit': 60}``).
+        solver_name: ``highs``, which ships with the package, or ``gurobi``,
+            which needs the ``[gurobi]`` extra.
+        **build_kwargs: Passed to :func:`build`.
 
-    The executor stays attached to the returned :class:`Result`, whose label
-    frames back ``result.primal(...)``; nothing has to be released, though
-    ``result.close()`` drops a large model early.
+    Returns:
+        The solution, the built model still attached to it. ``result.close()``
+        releases that model.
 
-    The sink is resolved before the build, as ``write`` checks the suffix
-    first: a caller who named a sink nothing can serve should not pay for a
-    model.
+    Raises:
+        LpspecError: A solver name nothing serves — checked before the build.
     """
     solver(solver_name)
     ex = build(model, sources, **build_kwargs)
@@ -134,11 +144,20 @@ def write(
     out: str | Path,
     **build_kwargs: Any,
 ) -> Path:
-    """Build and stream the model to a file; format from the suffix.
+    """Build *model* and stream it to a file, in the format *out*'s suffix names.
 
-    Which formats exist is the writer family's answer, not a branch here — this
-    verb owns *when* to build. The suffix is checked **before** the build, so a
-    caller who named a format nothing can write does not pay for a model first.
+    Args:
+        model: A YAML path, a mapping, or a loaded :class:`Model`.
+        sources: As :func:`build` takes them.
+        out: Where to write; ``.lp`` is what ships.
+        **build_kwargs: Passed to :func:`build`.
+
+    Returns:
+        The path written.
+
+    Raises:
+        ValueError: A suffix nothing writes — checked before the build.
+        NotImplementedError: A format that is planned and not here yet.
     """
     out = Path(out)
     writer(out.suffix.lower())

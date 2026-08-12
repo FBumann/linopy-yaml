@@ -203,25 +203,34 @@ select = [
     "T10",   # flake8-debugger
     "PLC",   # pylint conventions
     "PLE",   # pylint errors
+    "D",     # pydocstyle
 ]
 ignore = [
     "E501",     # line too long (handled by formatter)
     "RET504",   # unnecessary assignment before return
     "PLC0415",  # import not at top level (lazy imports are load-bearing here)
+    "D1",       # missing docstring — AGENTS.md decides where one earns its place
 ]
 extend-fixable = ["B", "SIM", "RUF", "C4", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
-"examples/**/*.py" = ["T20"]  # the walkthrough's whole output is its point
-"bench/**/*.py" = ["T20"]  # a harness reports by printing; stdout is its interface
-"tools/**/*.py" = ["T20"]  # same: a generator says what it wrote
-"tests/golden/__main__.py" = ["T20"]  # likewise a generator, and only reachable as a command
+# `D` is off outside the package: the Google convention is for what a *caller*
+# reads, and elsewhere a docstring argues for one assertion or narrates a
+# script, where a summary line it has to fit in is the worse sentence.
+"examples/**/*.py" = ["T20", "D"]  # the walkthrough's whole output is its point
+"bench/**/*.py" = ["T20", "D"]  # a harness reports by printing; stdout is its interface
+"tools/**/*.py" = ["T20", "D"]  # same: a generator says what it wrote
+"tests/**/*.py" = ["D"]
+"tests/golden/__main__.py" = ["T20", "D"]  # likewise a generator, and only reachable as a command
 "src/lpspec/language/where_parser.py" = ["N806"]  # grammar tokens (NOT/AND/OR) are named after keywords
 
 [tool.ruff.format]
 quote-style = "single"
 indent-style = "space"
 docstring-code-format = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = false

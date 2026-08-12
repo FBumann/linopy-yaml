@@ -49,6 +49,10 @@ def tidy_sources(
     here. Binding asks it of every source, path or frame, so a copy of the
     question on this side would answer only for the in-memory half — a second
     wording for one defect, and the narrower one.
+
+    Raises:
+        DataError: A declared parameter with no data, or one bound to
+            something no tidy table can be made of.
     """
     sources: dict[str, object] = {}
     for pname, pdef in schema.parameters.items():
@@ -101,6 +105,10 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     Only the curvature check needs xarray, for the broadcast over dims, so the
     import waits until a ``convex: true`` block is found. Such a block carries
     exactly two links, which the pair unpack relies on.
+
+    Raises:
+        PiecewiseExpansionError: Breakpoints that are not strictly increasing,
+            or a curve of the curvature the hull is not exact for.
     """
     import numpy as np
 
@@ -147,14 +155,16 @@ def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) ->
     """One source as a DataArray indexed by its declared dims.
 
     Two shapes reach here — the linopy lane's ``xr.Dataset`` entries and the
-    relational lane's tidy frames. Raises ``KeyError`` when there is nothing to
-    lay out in process (a parquet path, or no ``value`` column), which the
-    caller reads as "skip".
+    relational lane's tidy frames.
 
     The frame crosses to pandas column by column through numpy: a whole-frame
     conversion would reach for pyarrow, and this check already costs the caller
     xarray without adding a third library. Issue #27 would make it numpy-only
     and retire this function.
+
+    Raises:
+        KeyError: If there is nothing to lay out in process (a parquet path,
+            or no ``value`` column), which the caller reads as "skip".
     """
     import xarray as xr
 
