@@ -401,11 +401,10 @@ optimizer having skipped the work.
 
 Comparable to #189 in the other direction and somewhat larger.
 
-**The line count was the wrong worry.** `bench/engine_diff.py` puts the two
-implementations of each operator side by side, against the duckdb engine in
-`relational/engines/duck/`, which builds the whole suite to frames identical to
-polars' — same `row`, same `col`, exactly. Over the
-operators both implement, the SQL is **1.05×** the polars line count. The
+**The line count was the wrong worry.** Counted operator by operator against
+the engine that landed in `relational/engines/duck/` — which builds the whole
+suite to frames identical to polars', same `row`, same `col`, exactly — the SQL
+is **1.05×** the polars line count over the operators both implement. The
 volume is not the tax.
 
 Where the tax actually falls:
