@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.105](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.104...v0.0.1-alpha.105) (2026-08-12)
+
+
+### Documentation
+
+* **agents:** a number leaves only with a pointer, and vagueness is not a conclusion ([#618](https://github.com/fluxopt/lpspec/issues/618)) ([5489607](https://github.com/fluxopt/lpspec/commit/54896072d7b57c5d172eef77ac2135496f34e8b9))
+
 ## [0.0.1-alpha.104](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.103...v0.0.1-alpha.104) (2026-08-12)
 
 
