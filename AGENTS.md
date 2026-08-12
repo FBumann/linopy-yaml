@@ -107,14 +107,17 @@ rewrite…" belong in git. Neither belongs in the code.
 conversation, sweep for what now contradicts it, stale rationale included: a
 stale sentence outranks correct code in every reader's head.
 
-## Invariants the code holds
+## The maintainer decides
 
-- The engine imports **no linopy** — copy names and shapes, test the copy.
-- **Validate at load time**, with an error naming the construct and its rewrite.
-- Dependencies stay at polars, numpy, pyparsing, pydantic, pyyaml, highspy.
-- The **git tag is the version**.
-- **The user merges.** Never merge, force-push, or delete a branch you did not
-  create.
+**The user merges** — the default, and a strong one: an agent does not decide
+that work is finished. Told directly to merge, merge. Never force-push or delete
+a branch you did not create.
+
+The architectural invariants — the engine importing no linopy, load-time
+validation, the dependency set, the git tag as the version — are enforced by
+`tests/test_architecture.py`, the bare-install job and
+[ARCHITECTURE](docs/ARCHITECTURE.md). They come up rarely and only deliberately,
+so they are not repeated here.
 
 # Part 2 — Good defaults
 
