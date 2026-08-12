@@ -23,6 +23,15 @@ The fixture keeps one masked variable (``y``, absent at ``f=b``) and one total
 one (``x``), because every interesting law is conditional on whether absence is
 in play. Laws are therefore checked twice where it matters: once over ``x``
 alone, where they hold, and once over ``y``, where some of them stop.
+
+The wide cases at the end vary one thing at a time against that fixture: the
+*reduction* (a plain sum rather than a grouped one), the *number* of masks,
+where the mask sits relative to the dim being reduced, and where the absence
+comes from. The narrow cases reduce over ``f`` with one mask on ``f``, which is
+the smallest arrangement that shows a rule — and small enough that it could be
+passing for the wrong reason. The grouped form is the one that had to be here:
+#314 routed it through the same propagation as a plain sum and nothing covered
+it, so its behaviour was a claim rather than a result.
 """
 
 from __future__ import annotations
@@ -91,6 +100,12 @@ def _objective_of(
 # laws — these must hold
 # ---------------------------------------------------------------------------
 
+#: Rewrites that must build the same model. ``reduction-is-linear`` holds only
+#: while nothing is absent, which is why it is stated over ``x`` and not ``y``.
+#: ``commutative-add-under-absence`` is the one law that *is* allowed absence:
+#: both spellings carry the same absence, so it survives — which is what makes
+#: the non-laws below meaningful rather than "anything with a mask behaves
+#: oddly".
 LAWS = [
     pytest.param(
         'sum(x + w * x, over=f) <= 120',
@@ -118,7 +133,6 @@ LAWS = [
         id='distributive-over-a-divisor',
     ),
     pytest.param(
-        # linearity of the reduction, which holds while nothing is absent
         'sum(x + w * x, over=f) <= 120',
         'sum(x, over=f) + sum(w * x, over=f) <= 120',
         id='reduction-is-linear-when-every-operand-is-total',
@@ -129,9 +143,6 @@ LAWS = [
         id='cyclic-shift-is-invertible',
     ),
     pytest.param(
-        # absence is *allowed* here: both spellings carry the same absence, so
-        # the law survives it. This is what makes the non-laws below meaningful
-        # rather than "anything with a mask behaves oddly".
         'sum(y + w * y, over=f) <= 120',
         'sum(w * y + y, over=f) <= 120',
         id='commutative-add-under-absence',
@@ -164,15 +175,13 @@ def test_a_reduction_does_not_distribute_over_addition_when_an_operand_is_absent
     ``y`` as a zero.
 
     The relational lane used to distribute, so it answered the second question
-    for both spellings and disagreed with linopy by 40% with no error.
+    for both spellings and disagreed with linopy, silently.
     """
     together = _objective_of('sum(x + y, over=f) <= 120')
     apart = _objective_of('sum(x, over=f) + sum(y, over=f) <= 120')
 
-    # `together` binds only at f=a, so x[b] is free to its own bound
-    assert together == pytest.approx(400.0, rel=RTOL)
-    # `apart` keeps x[b] in the row, so the cap actually binds the total
-    assert apart == pytest.approx(240.0, rel=RTOL)
+    assert together == pytest.approx(400.0, rel=RTOL), 'together binds only at f=a, so x[b] is free to its bound'
+    assert apart == pytest.approx(240.0, rel=RTOL), 'apart keeps x[b] in the row, so the cap binds the total'
     assert together != pytest.approx(apart, rel=RTOL), 'the two questions must stay distinguishable'
 
 
@@ -193,11 +202,12 @@ def test_a_term_whose_variable_is_absent_is_not_a_term_worth_zero():
         also={'c_unsized': {'foreach': ['f', 't'], 'where': 'NOT y', 'expression': 'x >= 60'}},
     )
 
-    # f=a: y covers 50 of the 60, so x is pushed to 10. f=b: no row at all,
-    # so x is free to fall to 0 — the absence removed the requirement.
-    assert propagated == pytest.approx(-(10.0 + 10.0), rel=RTOL)
-    # asking for zero-fill explicitly puts the requirement back at f=b
-    assert zero_filled == pytest.approx(-(10.0 + 10.0 + 60.0 + 60.0), rel=RTOL)
+    assert propagated == pytest.approx(-(10.0 + 10.0), rel=RTOL), (
+        'f=a: y covers 50 of the 60, so x is pushed to 10. f=b: no row at all, so x falls to 0'
+    )
+    assert zero_filled == pytest.approx(-(10.0 + 10.0 + 60.0 + 60.0), rel=RTOL), (
+        'asking for zero-fill explicitly puts the requirement back at f=b'
+    )
 
 
 def test_shift_and_a_filled_shift_are_different_operators():
@@ -216,21 +226,11 @@ def test_shift_and_a_filled_shift_are_different_operators():
 
 # ---------------------------------------------------------------------------
 # the same rules under wider shapes
-#
-# The cases above all reduce over `f` with one mask on `f`, which is the
-# smallest arrangement that shows the rule — and small enough that it could be
-# passing for the wrong reason. These vary one thing at a time: the *reduction*
-# (a plain sum rather than a grouped one), the *number* of masks, where the
-# mask *sits*
-# relative to the dim being reduced, and where the absence *comes from*.
-#
-# The grouped form is the one that had to be here. #314 routed it through the
-# same propagation as a plain sum and nothing covered it, so its behaviour was a claim
-# rather than a result.
 # ---------------------------------------------------------------------------
 
+#: ``y`` is absent at ``d``; ``v`` at ``b`` *and* ``d``, so the two masks do
+#: not nest.
 WIDE_DATA = {
-    # `y` absent at d; `v` absent at b *and* d, so the two masks do not nest
     'gate': pd.Series([True, True, True], index=pd.Index(['a', 'b', 'c'], name='f')),
     'gate2': pd.Series([True, True], index=pd.Index(['a', 'c'], name='f')),
     'w': pd.Series([2.0, 3.0, 4.0, 5.0], index=pd.Index(['a', 'b', 'c', 'd'], name='f')),
@@ -246,9 +246,12 @@ PLAIN_COORDS = {'f': pd.Index(['a', 'b', 'c', 'd'], name='f'), 't': pd.Index([0,
 
 
 def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
-    # `g` and the coordinate that reaches it exist only for the grouped cases:
-    # a dimension no declaration uses has no coordinate set to check against,
-    # and the executor refuses it rather than carrying a dangling target.
+    """The wide fixture solved through both lanes, for one expression.
+
+    ``g`` and the coordinate that reaches it exist only for the grouped cases:
+    a dimension no declaration uses has no coordinate set to check against, and
+    the executor refuses it rather than carrying a dangling target.
+    """
     grouped = 'g' in foreach
     dims = (
         {'g': {}, 'f': {'coords': {'grp': 'g'}}, 't': {'dtype': 'int'}} if grouped else {'f': {}, 't': {'dtype': 'int'}}
@@ -342,8 +345,9 @@ def test_a_mask_on_a_dim_the_reduction_does_not_touch_still_propagates():
     coords = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
     with differential(model, data, coords, lp=True) as run:
-        # t=0 the row binds; t=1 the summand is absent everywhere, so both x are free
-        assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL)
+        assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL), (
+            't=0 the row binds; t=1 the summand is absent everywhere, so both x are free'
+        )
 
 
 def test_shift_created_absence_reaches_a_reduction_like_any_other():
@@ -379,10 +383,9 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
     coords = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
     with differential(model, {}, coords, lp=True) as run:
-        # t=0: the shifted operand vacates, so the summand is absent and the row
-        # sums nothing — both x[.,0] stay at 100. t=1: the row binds, and `v` is
-        # free to fall to 0, leaving 120 for x[.,1].
-        assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL)
+        assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL), (
+            't=0: the shifted operand vacates, so both x[.,0] stay at 100; t=1: the row binds'
+        )
 
 
 def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
@@ -412,10 +415,11 @@ def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
     with pytest.raises(DataError, match='used as a divisor'), differential(model, sparse) as run:
         _ = run.result.objective
 
-    # covered, the same model builds and the row binds on both lanes
     dense = {'d': pd.Series([2.0, 5.0], index=pd.Index(['a', 'b'], name='f'))}
     with differential(model, dense, lp=True) as run:
-        assert float(run.result.objective) == pytest.approx(70.0, rel=RTOL)
+        assert float(run.result.objective) == pytest.approx(70.0, rel=RTOL), (
+            'covered, the same model builds and the row binds on both lanes'
+        )
 
 
 def test_a_sparse_divisor_in_the_objective_is_refused_too():
@@ -460,8 +464,9 @@ def test_a_divisor_may_be_sparse_where_the_row_is_masked_out():
         'active': pd.Series([True], index=pd.Index(['a'], name='f')),
     }
     with differential(model, data, lp=True) as run:
-        # f=a: the row binds at x <= 20. f=b: masked out, so x runs to its bound
-        assert float(run.result.objective) == pytest.approx(120.0, rel=RTOL)
+        assert float(run.result.objective) == pytest.approx(120.0, rel=RTOL), (
+            'f=a: the row binds at x <= 20. f=b: masked out, so x runs to its bound'
+        )
 
 
 @pytest.mark.parametrize(

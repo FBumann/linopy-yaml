@@ -117,8 +117,6 @@ def test_invalid_sense():
 @pytest.mark.parametrize(
     ('raw', 'match'),
     [
-        # strictness lives on the shared `_StrictBlock` base, so no model can
-        # opt out of it by omission — one row per model to prove it
         pytest.param(
             {'dimenzions': {'x': {'values': [1], 'dtype': 'int'}}},
             "unknown key 'dimenzions' in the top level",
@@ -169,20 +167,34 @@ def test_invalid_sense():
     ],
 )
 def test_an_unknown_key_is_rejected(raw, match):
+    """Strictness lives on the shared `_StrictBlock` base, so no model can opt
+    out of it by omission — one case per model to prove it."""
     with pytest.raises(SchemaError, match=match):
         Model.model_validate(raw)
 
 
-def test_a_near_miss_is_named_and_anything_else_lists_the_valid_keys():
+@pytest.mark.parametrize(
+    ('block', 'match'),
+    [
+        pytest.param(
+            {'foreach': ['x'], 'boundz': {'lower': 0}},
+            r"unknown key 'boundz'.*Did you mean 'bounds'",
+            id='a-near-miss-is-named',
+        ),
+        pytest.param(
+            {'foreach': ['x'], 'zzzz': 1},
+            'Valid keys: binary, bounds, foreach, integer, where',
+            id='anything-else-lists-the-valid-keys',
+        ),
+    ],
+)
+def test_a_near_miss_is_named_and_anything_else_lists_the_valid_keys(block, match):
     """A misspelled key used to be dropped, leaving the variable unbounded —
     so the message has to be good enough to act on without reading the source."""
     base = {'dimensions': {'x': {'values': [1], 'dtype': 'int'}}}
 
-    with pytest.raises(SchemaError, match=r"unknown key 'boundz'.*Did you mean 'bounds'"):
-        Model.model_validate({**base, 'variables': {'v': {'foreach': ['x'], 'boundz': {'lower': 0}}}})
-
-    with pytest.raises(SchemaError, match='Valid keys: binary, bounds, foreach, integer, where'):
-        Model.model_validate({**base, 'variables': {'v': {'foreach': ['x'], 'zzzz': 1}}})
+    with pytest.raises(SchemaError, match=match):
+        Model.model_validate({**base, 'variables': {'v': block}})
 
 
 # ---------------------------------------------------------------------------
@@ -223,14 +235,13 @@ def test_coords_mapping_allows_two_coordinates_onto_one_dimension():
             id='target-self',
         ),
         pytest.param(
-            # `coords: {bus: zone}` would read as a bus coordinate and be a zone one
             {
                 'bus': {'values': ['n']},
                 'zone': {'values': ['z']},
                 'generator': {'values': ['w'], 'coords': {'bus': 'zone'}},
             },
             'shadows the dimension of the same name',
-            id='shadows-a-dimension',
+            id='shadows-a-dimension-so-a-bus-coordinate-would-read-as-a-zone-one',
         ),
     ],
 )

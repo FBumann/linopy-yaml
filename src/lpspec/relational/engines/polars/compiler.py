@@ -209,8 +209,8 @@ class PolarsCompiler:
         outside the frame (so errors name the full frame), and one reading
         **every** frame dim — where the truth set is as wide as the product and
         the semi-join would build it twice to save no width. `sector`'s balance
-        mask is that shape, and the semi-join there was 6.6% of the whole `m`
-        pipeline.
+        mask is that shape, and the semi-join there was a measurable share of
+        the whole pipeline (#520).
         """
         out = self._coordinate_product(dims)
         if where is None:
@@ -270,10 +270,10 @@ class PolarsCompiler:
         story.
 
         *maintain_order* is asked for only by the bounds, which become ``cols``
-        and are read in order. It costs +12 ms on a 10M-row join against
-        ~110 ms to sort the same frame afterwards, so it is passed deliberately
-        rather than defaulted on; every other consumer verifies order where it
-        reads.
+        and are read in order. Asking the join for that order costs an order of
+        magnitude less than sorting the same frame afterwards (#433), so it is
+        passed deliberately rather than defaulted on; every other consumer
+        verifies order where it reads.
         """
         declaration = self.program.parameter(param)
         extra = set(declaration.dims) - set(frame_dims)
@@ -301,8 +301,8 @@ class PolarsCompiler:
         (:func:`_certain_parameters`). An atom over a missing value reads as
         false either way, so the strategies differ only in *where* the row is
         dropped, and the inner join saves the width of the product it is
-        dropped from: 3.5% of `sector/m`'s pipeline on the direct path, and
-        nothing measurable behind a semi-join's key product.
+        dropped from — a few percent of a pipeline on the direct path, and
+        nothing measurable behind a semi-join's key product (#520).
 
         ``VariableDefined`` is the one atom answered by a join rather than a
         column test — existence lives in the variable's own frame — keyed by
@@ -412,8 +412,8 @@ class PolarsCompiler:
         A bound dense over the whole variable product — a profile per node per
         technology per hour, the ordinary shape in energy modelling — costs a
         full-size join against a full-size coordinate product here, where the
-        eager lane gets it free from array position: 0.58 s of `profiled/l`'s
-        1.27 s build.
+        eager lane gets it free from array position — on `profiled` that join
+        was most of the build (#511).
 
         Position means the coordinate here too. The label frame is row-major
         over the product in each dimension's own index order (*not*
@@ -728,8 +728,8 @@ class PolarsCompiler:
             quietly gone (#239, #289). It is keyed by the one dimension it
             speaks about, which is what :attr:`TermFragment.presence_dims` is
             for — keying it by the fragment's dims would materialise the whole
-            coordinate product to name an edge, measured at 1.15-1.21x of build
-            on an 8760x200 ramp, a shape no case in `bench/` covers.
+            coordinate product to name an edge, which costs a fifth again of
+            build on a wide ramp (#520), a shape no case in `bench/` covers.
             """
             if p.presence is None:
                 if s.wrap or s.fill is not None:
@@ -951,8 +951,8 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     the rows and leaves the coordinates, a translation remaps both, a fill adds
     to both — so the rows are inside the coordinates by construction and the
     join could only return them all. Under a mask over a single term, the
-    ordinary case, that made the pass a semi-join of a frame against itself:
-    0.31 s over 10M rows on `dispatch/l`.
+    ordinary case, that made the pass a semi-join of a frame against itself,
+    which is measurable on any model large enough to care (#413).
 
     The presence frame is not deduplicated first: a semi-join asks whether a
     key occurs, and occurring twice is still occurring, so the distinct changes

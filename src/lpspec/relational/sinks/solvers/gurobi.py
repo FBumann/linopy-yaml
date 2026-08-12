@@ -141,9 +141,9 @@ def _load(
     else is affected: an environment's parameters are the defaults of every
     model built on it. ``OutputFlag`` leads so a caller can put the log back.
 
-    ``vtype`` is passed only when some column is integral — an LP pays 17% of
-    the column hand-off for an array of one repeated letter (0.46 s against
-    0.38 s at 10^6 columns), and linopy skips it the same way. ``batch_rows``
+    ``vtype`` is passed only when some column is integral — an LP otherwise
+    pays a double-digit percentage of the column hand-off for an array of one
+    repeated letter (#434), and linopy skips it the same way. ``batch_rows``
     goes straight through un-defaulted: one call unless a caller asks
     otherwise (#434).
     """

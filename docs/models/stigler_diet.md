@@ -172,13 +172,15 @@ PUBLISHED_ANNUAL = 39.69
 
 
 def build(data: dict) -> linopy.Model:
-    """The port's tables as a linopy model, column for column."""
+    """The port's tables as a linopy model, column for column.
+
+    ``supply`` is the sparse table filled back out: a missing (food, nutrient)
+    pair means that food supplies none of that nutrient.
+    """
     foods = pd.Index(data['food']['food'], name='food')
     nutrients = pd.Index(data['nutrient']['nutrient'], name='nutrient')
 
     minimum = pd.Series(data['daily_minimum']['value'], index=nutrients)
-    # the sparse table filled back out: a missing (food, nutrient) pair means
-    # that food supplies none of that nutrient
     per_dollar = (
         pd.DataFrame(data['nutrient_per_dollar'])
         .pivot(index='food', columns='nutrient', values='value')

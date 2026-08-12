@@ -41,17 +41,18 @@ def split_sources(case: Case, paths: dict[str, str]) -> tuple[dict[str, str], di
     re-parses the YAML only because the runner, not lpspec, decides which
     parquet file is which. The linopy arm has no counterpart — its own
     ``read_parquet`` and reshape are inside its build, where they belong.
+
+    A path the model declares nothing for is an error rather than a silent
+    drop, which would leave the case measuring a build that never saw it. The
+    way it happens is a stale parquet in the case's cache directory: the
+    generator's output is globbed on a cache hit, so a file an older generator
+    wrote outlives the declaration it was written for.
     """
     import yaml as pyyaml
 
     schema = pyyaml.safe_load(case.model.read_text())
     params = set(schema.get('parameters', {}))
     dims = set(schema.get('dimensions', {}))
-    # A path the model declares nothing for would otherwise be dropped in
-    # silence, and the case measured building a model that never saw it. The
-    # way this happens is a stale parquet in the case's cache directory: the
-    # generator's output is globbed on a cache hit, so a file an older
-    # generator wrote outlives the declaration it was written for.
     undeclared = sorted(set(paths) - params - dims)
     if undeclared:
         raise ValueError(
@@ -95,6 +96,10 @@ def lpspec_build_and_emit(
     exists to measure and publish a number about HiGHS under our name.
     ``Model.to_highspy()`` is the same seam on linopy's side, which is the only
     reason the two arms are comparable.
+
+    The counts are read after the action, so they are the harness's work and
+    not the engine's. ``matrix`` is this engine's frame and an older checkout
+    exposes its own shape, so the nonzero count stays optional.
     """
     _engine(engine)
     import lpspec as lps
@@ -114,9 +119,6 @@ def lpspec_build_and_emit(
 
             _handle = build_highs(ex._tables())
 
-        # Read after the action, so the counts are the harness's work and not
-        # the engine's. `matrix` is this engine's frame and an older checkout
-        # exposes its own shape, so the nonzero count stays optional.
         tables = ex._tables()
         matrix = getattr(tables, 'matrix', None)
         return {
@@ -186,6 +188,11 @@ def objective(arm: str, case_name: str, paths: dict[str, str], engine: str | Non
     Not a measurement — the one thing the harness does that is allowed to be
     slow, because a performance number describing two different models is worse
     than none.
+
+    The two lanes carry two axes: ``status`` is the coarse rollup (``'ok'``)
+    and the solver's verdict is ``termination_condition`` (``'optimal'``).
+    Checking the wrong one aborts every run with a parity failure that is
+    really a vocabulary mismatch.
     """
     case = CASES[case_name]
     if arm == 'linopy':
@@ -203,10 +210,6 @@ def objective(arm: str, case_name: str, paths: dict[str, str], engine: str | Non
 
     sources, coords_ = split_sources(case, paths)
     with lps.solve(case.model, sources, coords=coords_) as sol:
-        # two axes, not one: `status` is the coarse rollup ('ok') and the
-        # solver's verdict is `termination_condition` ('optimal'). Testing the
-        # wrong one aborted every run with a parity failure that was really a
-        # vocabulary mismatch.
         if sol.termination_condition != 'optimal':
             raise RuntimeError(f'lpspec solve terminated {sol.termination_condition!r}, not optimal')
         return float(sol.objective)

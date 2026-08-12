@@ -183,6 +183,27 @@ def pages() -> list[tuple[str, Path, Path]]:
     return found
 
 
+def _home_has_block(home: str, ap: argparse.ArgumentParser) -> bool:
+    """Whether ``docs/index.md`` carries the tabbed block; error on half a pair.
+
+    Neither marker is a skip, as it is for a gallery page — the block is a
+    deliberate edit and ``tests/test_docs_site.py`` is what asserts the home
+    page still has one. Anything between the two is malformed rather than
+    absent: half a pair reaches ``str.index`` and raises ``substring not
+    found``, and a duplicated pair silently rewrites the first span and leaves
+    the second stale. Both are worth a sentence rather than a traceback.
+    """
+    found = (home.count(HOME_BEGIN), home.count(HOME_END))
+    if found == (1, 1):
+        return True
+    if found != (0, 0):
+        ap.error(
+            f'{HOME.relative_to(ROOT)}: found {found[0]}x {HOME_BEGIN} and {found[1]}x {HOME_END}; '
+            f'expected exactly one of each, or neither. Restore both markers around the tabs.'
+        )
+    return False
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--check', action='store_true', help='fail if any committed block has drifted')
@@ -190,21 +211,9 @@ def main(argv: list[str] | None = None) -> int:
 
     work = [(name, page_path, rendered(page_path.read_text(), name, path)) for name, path, page_path in pages()]
 
-    # Neither marker is a skip, as it is for a gallery page — the block is a
-    # deliberate edit, and `tests/test_docs_site.py` is what asserts the home
-    # page still has one. Anything between the two is malformed rather than
-    # absent: half a pair reaches `str.index` and raises `substring not found`,
-    # and a duplicated pair silently rewrites the first span and leaves the
-    # second stale. Both are worth a sentence rather than a traceback.
     home = HOME.read_text()
-    found = (home.count(HOME_BEGIN), home.count(HOME_END))
-    if found == (1, 1):
+    if _home_has_block(home, ap):
         work.append(('index', HOME, rendered_home(home)))
-    elif found != (0, 0):
-        ap.error(
-            f'{HOME.relative_to(ROOT)}: found {found[0]}x {HOME_BEGIN} and {found[1]}x {HOME_END}; '
-            f'expected exactly one of each, or neither. Restore both markers around the tabs.'
-        )
 
     stale = []
     for name, page_path, updated in work:

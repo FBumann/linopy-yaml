@@ -16,7 +16,6 @@ import pytest
 
 from lpspec.relational import plan
 from tests.differential import differential
-from tests.oracle import pd
 
 COMMITMENT_YAML = """
 dimensions:
@@ -52,41 +51,20 @@ objectives:
 """
 
 
-@pytest.fixture
-def commitment_inputs():
-    rng = np.random.default_rng(5)
-    n_s = 24
-    p_max = pd.Series({'coal': 120.0, 'gas': 80.0, 'peaker': 60.0})
-    data = {
-        'p_max': p_max,
-        'cost': pd.Series({'coal': 10.0, 'gas': 30.0, 'peaker': 90.0}),
-        'fix_cost': pd.Series({'coal': 400.0, 'gas': 150.0, 'peaker': 20.0}),
-        'load': pd.Series(
-            (rng.uniform(0.3, 0.9, n_s) * p_max.sum()).round(1),
-            index=pd.RangeIndex(n_s, name='snapshot'),
-        ),
-    }
-    coords = {
-        'snapshot': pd.RangeIndex(n_s, name='snapshot'),
-        'generator': pd.Index(p_max.index, name='generator'),
-    }
-    return data, coords
-
-
 def test_commitment_milp_agrees_and_stays_integral(commitment_inputs):
+    """Both lanes agree, the binaries are integral, and the LP file says so."""
     data, coords = commitment_inputs
 
     with differential(COMMITMENT_YAML, data, coords, lp=True) as run:
-        # commitment must actually bind somewhere (u not all-1 at the optimum)
-        assert float(run.model.solution['u'].sum()) < run.model.solution['u'].size
+        assert float(run.model.solution['u'].sum()) < run.model.solution['u'].size, (
+            'u is not all-1 at the optimum, so commitment actually binds'
+        )
 
-        # binary variables actually take integral 0/1 values
         u = run.result.to_pandas('u')['value'].to_numpy()
-        assert np.allclose(u, np.round(u), atol=1e-6)
-        assert set(np.round(u)) <= {0.0, 1.0}
+        assert np.allclose(u, np.round(u), atol=1e-6), 'a binary variable takes an integral value'
+        assert set(np.round(u)) <= {0.0, 1.0}, 'and that value is 0 or 1'
 
-        # the LP file carries integrality, not just bounds
-        assert 'binary' in run.lp.read_text()
+        assert 'binary' in run.lp.read_text(), 'the LP file carries integrality, not just bounds'
 
 
 @pytest.mark.parametrize('batch_rows', [7, 13, 100_000], ids=['tiny-chunks', 'odd-chunks', 'one-chunk'])

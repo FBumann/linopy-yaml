@@ -195,7 +195,12 @@ DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_kvl.json'
 
 
 def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
-    """The port's tables as a PyPSA network, column for column."""
+    """The port's tables as a PyPSA network, column for column.
+
+    ``r=0`` keeps a line purely reactive: the linearised power flow is a
+    function of ``x`` alone, and a resistance would only add losses the DC
+    approximation does not model anyway.
+    """
     n = pypsa.Network()
     n.set_snapshots(data['snapshot']['snapshot'])
     n.add('Bus', data['bus']['bus'])
@@ -207,9 +212,6 @@ def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         p_nom=data['p_nom']['value'],
         marginal_cost=data['marginal_cost']['value'],
     )
-    # r=0 keeps the line purely reactive: the linearised power flow is a
-    # function of x alone, and a resistance would only add losses the DC
-    # approximation does not model anyway.
     n.add(
         'Line',
         data['line']['line'],

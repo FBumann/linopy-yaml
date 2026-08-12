@@ -95,6 +95,16 @@ def appended(tables: dict[str, pl.DataFrame], family: str, constant: float, slop
 
 
 def main() -> None:
+    """The decomposition loop, against the same problem solved in one plan.
+
+    An infeasible subproblem has no duals to read — correctly, since its values
+    would be a vector of zeros indistinguishable from an answer — so the
+    violation is minimised instead and *its* duals say which way capacity has
+    to move.
+
+    The gap is only checked once some capacity has proved dispatchable: every
+    feasibility cut leaves the upper bound at infinity.
+    """
     with lps.solve(HERE / 'monolith.yaml', SOURCES) as whole:
         truth = whole.objective
     print(f'the whole problem, in one plan: {truth:.2f}\n')
@@ -113,10 +123,6 @@ def main() -> None:
                 appended(tables, 'cut', sub.objective - here, slope)
 
         if not dispatchable:
-            # An infeasible solve has no duals to read — correctly, since its
-            # values would be a vector of zeros indistinguishable from an
-            # answer. So the violation is minimised instead, and *its* duals
-            # say which way capacity has to move.
             with lps.solve(FEASIBILITY, {**DISPATCH, 'cap_hat': capacity}) as short:
                 slope, here = slope_at(short, capacity)
                 appended(tables, 'fcut', here - short.objective, slope)
@@ -129,8 +135,6 @@ def main() -> None:
         kind = 'optimality' if dispatchable else 'feasibility'
         bound = f'{upper:.2f}' if upper < float('inf') else 'none yet'
         print(f'  step {step}  {kind:11}  lower {lower:8.2f}   upper {bound}')
-        # There is no gap to close until some capacity has proved dispatchable:
-        # every feasibility cut leaves the upper bound at infinity.
         if upper < float('inf') and upper - lower <= 1e-6 * abs(upper):
             break
 

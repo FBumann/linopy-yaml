@@ -69,7 +69,11 @@ FUEL = {2030: 55.0, 2035: 70.0, 2040: 90.0}
 
 
 def sources() -> dict[str, object]:
-    """Every table carrying `year`, which is the column the axis slices on."""
+    """Every table carrying `year`, which is the column the axis slices on.
+
+    ``existing`` is the fleet the pathway starts from: a little gas, and
+    nothing else.
+    """
     return {
         'weight': pl.DataFrame({'day': DAYS, 'value': [WEIGHT[d] for d in DAYS]}),
         'load': pl.DataFrame(
@@ -92,7 +96,6 @@ def sources() -> dict[str, object]:
         'cost': pl.DataFrame(
             [{'year': y, 'generator': g, 'value': 0.0 if g == 'solar' else FUEL[y]} for y in YEARS for g in GENERATORS]
         ),
-        # the pathway starts with a small gas fleet and nothing else
         'existing': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 60.0]}),
     }
 

@@ -307,8 +307,7 @@ def test_stitch_drops_the_overlap_and_restores_the_global_coordinate():
     stitched = runs.primal('soc', original_index=True)
     assert stitched.columns == ['snapshot', 'value'], 'the slice bookkeeping is gone'
     assert stitched['snapshot'].to_list() == list(range(12)), 'and every coordinate is present once'
-    # every window kept exactly the `step` coordinates it owns, out of 21 solved
-    assert runs.primal('soc').height == 21
+    assert runs.primal('soc').height == 21, 'every window kept the `step` coordinates it owns'
 
 
 @pytest.mark.parametrize(('periods', 'length', 'step'), GEOMETRIES)
@@ -406,8 +405,9 @@ def test_keyed_is_the_default_because_stitching_drops_rows():
     )
     assert runs.primal('soc').height == 21, 'keyed keeps every row every window solved'
     assert runs.primal('soc', original_index=True).height == 12, 'only the rows each window owns'
-    # keyed by the same column as `objective`, so the two still join
-    assert runs.objective.join(runs.primal('soc'), on=runs.key_name).height == 21
+    assert runs.objective.join(runs.primal('soc'), on=runs.key_name).height == 21, (
+        'keyed by the same column as `objective`, so the two still join'
+    )
 
 
 #: Six coordinates, three windows of two, whatever the coordinates *are*.

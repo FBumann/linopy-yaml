@@ -143,7 +143,7 @@ def test_an_infeasible_solve_reports_both_axes_in_gurobis_wording() -> None:
         assert solution.status == 'warning'
         assert solution.termination_condition == 'infeasible'
         assert not solution.has_primal
-        assert solution.objective != solution.objective  # nan, not 0.0
+        assert solution.objective != solution.objective, 'nan, not 0.0'
         with pytest.raises(NoSolutionError, match='INFEASIBLE'):
             solution.primal('p')
 

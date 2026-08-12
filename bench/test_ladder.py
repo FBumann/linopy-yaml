@@ -46,6 +46,12 @@ def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -
     service rather than to a JSON file and has none, and an assertion that held
     under one instrument and raised under another is the failure this whole file
     is arranged to prevent.
+
+    ``live_fraction`` is measured rather than declared: `dispatch` masks on a
+    ``p_max`` that is always positive, so its ``where`` removes nothing and the
+    engine pays for it anyway. ``variables`` is the real x of a scaling curve —
+    ``size`` is a rung *label* and sorts alphabetically, where benchmem plots
+    the numeric dimension.
     """
     shape = shape_of(case_name, size)
     assert 0 < counts['columns'] <= shape.nominal_variables
@@ -55,11 +61,7 @@ def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -
     info['columns'] = counts['columns']
     info['rows'] = counts['rows']
     info['nonzeros'] = counts['nonzeros']
-    # measured rather than declared: `dispatch` masks on a p_max that is always
-    # positive, so its `where` removes nothing and the engine pays for it anyway
     info['live_fraction'] = counts['columns'] / shape.nominal_variables
-    # the real x of a scaling curve. `size` is a rung *label* and sorts
-    # alphabetically; benchmem plots the numeric dim.
     info['variables'] = shape.nominal_variables
 
 
@@ -72,6 +74,9 @@ def test_emit(
     Both arms start from the same parquet and stop at the same seam, so each
     pays for its own data ingestion. That is the honest unit, and it is the only
     reason the two are comparable at all.
+
+    ``split_sources`` runs before the clock: it is harness bookkeeping, and the
+    linopy arm has no counterpart to be charged for it.
     """
     if sink == 'gurobi':
         pytest.importorskip('gurobipy')
@@ -83,8 +88,6 @@ def test_emit(
     if arm == 'linopy':
         counts = benchmark(linopy_build_and_emit, case_name, sink, case_paths, io_api)
     else:
-        # split before the clock: harness bookkeeping, and the linopy arm has
-        # no counterpart to be charged for it
         sources, coords = split_sources(CASES[case_name], case_paths)
         counts = benchmark(lpspec_build_and_emit, case_name, sink, sources, coords, ENGINE[arm])
     _record(benchmark, counts, case_name, size)

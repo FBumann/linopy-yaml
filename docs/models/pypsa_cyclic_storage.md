@@ -251,7 +251,11 @@ DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_cyclic_storage.j
 
 
 def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
-    """The port's tables as a PyPSA network, column for column."""
+    """The port's tables as a PyPSA network, column for column.
+
+    ``max_hours`` is the ratio PyPSA stores; the port carries the product it
+    implies (``soc_max``), because a bound there takes a name, not arithmetic.
+    """
     n = pypsa.Network()
     n.set_snapshots(data['snapshot']['snapshot'])
     n.add('Bus', data['bus']['bus'])
@@ -274,8 +278,6 @@ def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         p_min_pu=-1.0,
         efficiency=1.0,
     )
-    # max_hours is the ratio PyPSA stores; the port carries the product it
-    # implies (soc_max) because a bound there takes a name, not arithmetic.
     p_nom = data['storage_p_nom']['value']
     n.add(
         'StorageUnit',

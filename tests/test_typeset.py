@@ -206,9 +206,9 @@ def test_no_format_leaks_another_formats_syntax(name: str, foreign: str):
 @pytest.mark.parametrize(
     ('name', 'expected'),
     [
-        ('p_max', r'p^{\mathrm{max}}'),  # single-letter head: a qualifier
-        ('soc_max', r'\mathit{soc}^{\mathrm{max}}'),  # declared head: a qualifier
-        ('marginal_cost', r'\mathit{marginal\_cost}'),  # neither: one word
+        pytest.param('p_max', r'p^{\mathrm{max}}', id='single-letter-head-so-the-tail-is-a-qualifier'),
+        pytest.param('soc_max', r'\mathit{soc}^{\mathrm{max}}', id='declared-head-so-the-tail-is-a-qualifier'),
+        pytest.param('marginal_cost', r'\mathit{marginal\_cost}', id='neither-so-it-stays-one-word'),
         ('shut_down', r'\mathit{shut\_down}'),
     ],
 )
@@ -332,8 +332,8 @@ def test_markdown_is_latex_math_in_a_markdown_wrapper():
     """The math is byte-identical to the LaTeX lane's; only the wrapper differs.
     That is the claim the module makes, so it is the one asserted."""
     md = to_markdown(DISPATCH, legend=False)
-    assert r'\sum_{g \in \mathcal{G}} p_{t,g}' in md  # same spelling as LaTeX
-    assert '#### Subject to' in md  # different document layer
+    assert r'\sum_{g \in \mathcal{G}} p_{t,g}' in md, 'the math is spelled exactly as LaTeX spells it'
+    assert '#### Subject to' in md, 'the document layer is the whole difference'
     assert r'\begin{align}' not in md
     assert r'\paragraph' not in md
 
@@ -370,7 +370,7 @@ def test_markdown_gives_each_equation_its_own_block():
     md = to_markdown(DISPATCH, legend=False)
     assert md.count('$$') % 2 == 0
     assert 'aligned' not in md
-    assert '&' not in md.replace('&&', '')  # no alignment separators at all
+    assert '&' not in md.replace('&&', ''), 'no alignment separators at all'
 
 
 def test_markdown_renders_the_legend_as_a_table():
@@ -432,24 +432,24 @@ def _summary(stem: str) -> str:
     "What genuinely is refused", because for that page the summary is the
     formulation the language *cannot* use. Keying on the machine-maintained
     markers is the one anchor that holds for both.
+
+    The closing marker is searched for *from* the opening one, so a marker that
+    is missing and one that sits above its partner are the same failure — and
+    the assertion names the file, where ``index`` would raise a bare
+    ``ValueError``. Only ``$$`` blocks are returned: the prose and the YAML
+    fence around them are full of identifiers like ``p_max`` and ``sum``, which
+    read as subscripts.
     """
     path = GALLERY / f'{stem}.md'
     page = path.read_text()
     if gallery_math.BEGIN in page:
         begin = page.index(gallery_math.BEGIN)
-        # `find` from `begin`, so a closing marker that is missing *or* sits
-        # above the opening one is the same failure. Left to `index` it would
-        # be a bare ValueError naming no file; left unchecked in the
-        # out-of-order case it would splice the generated block back in and
-        # quietly check it as hand-written math.
         end = page.find(gallery_math.END, begin)
         assert end != -1, (
             f'{path}: has {gallery_math.BEGIN} with no {gallery_math.END} after it, '
             f'so the generated block cannot be separated from the hand-written math'
         )
         page = page[:begin] + page[end:]
-    # `$$` blocks only. The prose and the YAML fence around them are full of
-    # identifiers like `p_max` and `sum`, which read as subscripts.
     return '\n'.join(page.split('$$')[1::2])
 
 
@@ -632,9 +632,9 @@ def _with_marginal_cost() -> dict[str, object]:
 
 def test_the_table_overrides_and_the_rest_is_still_derived():
     tex = to_latex(_with_marginal_cost(), symbols=SYMBOLS, legend=False)
-    assert r'\pi_{t,u}' in tex  # both overridden
+    assert r'\pi_{t,u}' in tex, 'both the symbol and its subscripts were overridden'
     assert r'c^{\mathrm{marg}}_{u}' in tex
-    assert r'\mathit{load}_{t}' in tex  # untouched: still derived
+    assert r'\mathit{load}_{t}' in tex, 'untouched, so still derived'
     assert r'u \in \mathcal{U}' in tex
 
 
@@ -644,20 +644,34 @@ def test_a_description_reaches_the_legend_without_hiding_the_name():
     assert 'dispatchable units' in tex
 
 
-def test_an_entry_naming_nothing_is_an_error_with_the_near_miss():
+@pytest.mark.parametrize(
+    ('symbols', 'match'),
+    [
+        pytest.param({'names': {'p_maxx': 'x'}}, "Did you mean 'p_max'", id='a-misspelled-name'),
+        pytest.param(
+            {'dimensions': {'generatr': {'index': 'g'}}},
+            "Did you mean 'generator'",
+            id='a-misspelled-dimension',
+        ),
+    ],
+)
+def test_an_entry_naming_nothing_is_an_error_with_the_near_miss(symbols, match):
     """A silent typo means a symbol that never applies and a reader who never
     finds out — so it fails, and says what it probably meant."""
-    with pytest.raises(lps.SchemaError, match="Did you mean 'p_max'"):
-        to_latex(DISPATCH, symbols={'names': {'p_maxx': 'x'}})
-    with pytest.raises(lps.SchemaError, match="Did you mean 'generator'"):
-        to_latex(DISPATCH, symbols={'dimensions': {'generatr': {'index': 'g'}}})
+    with pytest.raises(lps.SchemaError, match=match):
+        to_latex(DISPATCH, symbols=symbols)
 
 
-def test_unknown_sections_and_keys_are_rejected():
-    with pytest.raises(lps.SchemaError, match='unknown section'):
-        to_latex(DISPATCH, symbols={'symbols': {'p': 'x'}})
-    with pytest.raises(lps.SchemaError, match='unknown key'):
-        to_latex(DISPATCH, symbols={'dimensions': {'generator': {'letter': 'g'}}})
+@pytest.mark.parametrize(
+    ('symbols', 'match'),
+    [
+        pytest.param({'symbols': {'p': 'x'}}, 'unknown section', id='an-unknown-section'),
+        pytest.param({'dimensions': {'generator': {'letter': 'g'}}}, 'unknown key', id='an-unknown-key'),
+    ],
+)
+def test_unknown_sections_and_keys_are_rejected(symbols, match):
+    with pytest.raises(lps.SchemaError, match=match):
+        to_latex(DISPATCH, symbols=symbols)
 
 
 def test_the_table_loads_from_a_file_and_the_committed_one_applies():

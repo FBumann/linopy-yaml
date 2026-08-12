@@ -47,8 +47,6 @@ def _inputs(gens, lines, load):
         'neg_cap': -lines.set_index('line')['cap'],
         'load': xr.DataArray.from_series(load.set_index(['snapshot', 'bus'])['value']),
     }
-    # the two dims carrying declared coordinates arrive as frames: the label
-    # column plus one column per coordinate
     coords = {
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),
         'generator': gens[['generator', 'bus']],
@@ -62,9 +60,8 @@ def test_transport_yaml_agrees_with_an_independent_oracle(transport_data):
     gens, lines, load = transport_data
     data, coords = _inputs(gens, lines, load)
 
-    # indicator matrices, no sum involved — an oracle for the oracle
     independent = transport_eager_objective(gens, lines, load)
-    assert np.isfinite(independent)
+    assert np.isfinite(independent), 'indicator matrices, no sum involved — an oracle for the oracle'
 
     with differential(TRANSPORT_YAML, data, coords, lp=True) as run:
         assert run.oracle == pytest.approx(independent, rel=RTOL)
@@ -96,15 +93,25 @@ def test_sum_lowers_to_one_node_per_injection_term():
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
-        # an undeclared dim, or a coordinate the dim does not declare, is caught
-        # in resolution before lowering ever sees the call
-        ('sum(p, over=nope, group_by=bus)', r'over=nope\) does not name a declared dimension'),
-        ('sum(p, over=generator, group_by=nope)', r"group_by=nope\) does not name a coordinate of 'generator'"),
-        # a coordinate declared on a *different* dim is not in scope either
-        ('sum(p, over=generator, group_by=to)', r"group_by=to\) does not name a coordinate of 'generator'"),
+        pytest.param(
+            'sum(p, over=nope, group_by=bus)',
+            r'over=nope\) does not name a declared dimension',
+            id='an-undeclared-dim',
+        ),
+        pytest.param(
+            'sum(p, over=generator, group_by=nope)',
+            r"group_by=nope\) does not name a coordinate of 'generator'",
+            id='a-coordinate-the-dim-does-not-declare',
+        ),
+        pytest.param(
+            'sum(p, over=generator, group_by=to)',
+            r"group_by=to\) does not name a coordinate of 'generator'",
+            id='a-coordinate-declared-on-a-different-dim',
+        ),
     ],
 )
 def test_a_name_sum_cannot_resolve_is_refused(expression, match):
+    """Every one of these is caught in resolution, before lowering sees the call."""
     with pytest.raises(LanguageError, match=match):
         resolved(expression, schema_of(TRANSPORT_YAML))
 
@@ -244,8 +251,9 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
     with lps.solve(path, sources) as result:
         assert result.is_ok
         assert result.objective == pytest.approx(3.0)
-        # the orphan is still a variable; it just carries no group obligation
-        assert result.to_pandas('x').set_index('item')['value']['i2'] == pytest.approx(0.0)
+        assert result.to_pandas('x').set_index('item')['value']['i2'] == pytest.approx(0.0), (
+            'the orphan is still a variable; it just carries no group obligation'
+        )
 
     model = lpspec_linopy.build(path, data=data, coords=coords)
     model.solve(solver_name='highs', output_flag=False)
@@ -297,11 +305,11 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
         tables = ex._tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 4, 'a column appears twice on a row'
-        assert matrix['coeff'].to_list() == [3.0, 5.0, 3.0, 5.0]  # 1.0 + 2.0 merged
+        assert matrix['coeff'].to_list() == [3.0, 5.0, 3.0, 5.0], 'the 1.0 and the 2.0 merged'
 
         result = ex.solve()
     assert result.termination_condition == 'optimal'
-    assert result.objective == pytest.approx(6.0)  # 3x <= 9 at b1, two snapshots
+    assert result.objective == pytest.approx(6.0), '3x <= 9 at b1, over two snapshots'
 
 
 def test_sum_over_a_foreach_dim_needs_no_such_collapse():
@@ -321,8 +329,7 @@ def test_sum_over_a_foreach_dim_needs_no_such_collapse():
     with lps.build(model, sources) as ex:
         tables = ex._tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
-        # one entry per (row, generator-on-that-bus), not one per bus
-        assert matrix.height == 6
+        assert matrix.height == 6, 'one entry per (row, generator-on-that-bus), not one per bus'
         assert ex.solve().termination_condition == 'optimal'
 
 
@@ -341,8 +348,9 @@ BROADCAST_OBJECTIVE = {
     'objectives': {'c': {'sense': 'minimize', 'expression': 'y * w'}},
 }
 
+#: ``w`` is deliberately unequal across snapshots, so last-write-wins is not
+#: the same number as the sum.
 BROADCAST_OBJECTIVE_SOURCES = {
-    # deliberately unequal, so last-write-wins is not the same number as the sum
     'w': pl.DataFrame({'snapshot': [0, 1, 2, 3], 'value': [1.0, 10.0, 100.0, 1000.0]}),
     'floor': pl.DataFrame({'bus': ['b0', 'b1', 'b2'], 'value': [1.0, 2.0, 3.0]}),
     'bus': pl.DataFrame({'bus': ['b0', 'b1', 'b2']}),
@@ -364,7 +372,7 @@ def test_an_objective_term_carrying_dims_is_still_summed_per_column():
     with lps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as ex:
         obj = ex._tables().obj.sort('col')
         assert obj.height == 3, 'one row per column, not one per (bus, snapshot)'
-        assert obj['coeff'].to_list() == [1111.0] * 3  # sum(w), not w[-1]
+        assert obj['coeff'].to_list() == [1111.0] * 3, 'sum(w), not w[-1]'
 
 
 def test_the_broadcast_objective_agrees_with_the_eager_lane():
@@ -389,7 +397,7 @@ def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
     with lps.build(model, BROADCAST_OBJECTIVE_SOURCES) as ex:
         obj = ex._tables().obj.sort('col')
         assert obj.height == 3
-        assert obj['coeff'].to_list() == [1.0, 2.0, 3.0]  # floor itself, un-summed
+        assert obj['coeff'].to_list() == [1.0, 2.0, 3.0], 'floor itself, un-summed'
 
 
 # ---------------------------------------------------------------------------
@@ -451,8 +459,9 @@ def test_a_monthly_budget_binds_and_prices_itself():
             .agg(pl.col('value').sum())
             .sort('month')
         )
-        # 3 snapshots in Jan (capped at 5), 1 in Feb, 2 in Mar — unequal groups
-        assert wind['value'].to_list() == pytest.approx([5.0, 10.0, 20.0])
+        assert wind['value'].to_list() == pytest.approx([5.0, 10.0, 20.0]), (
+            '3 snapshots in Jan (capped at 5), 1 in Feb, 2 in Mar — unequal groups'
+        )
 
         duals = result.dual('monthly_budget').filter(pl.col('generator') == 'wind').sort('month')
         assert duals['value'].to_list() == pytest.approx([-49.0, 0.0, 0.0])

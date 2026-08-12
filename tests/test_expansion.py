@@ -124,7 +124,7 @@ def test_macro_expansion():
 
 
 def test_macro_formals_shadow_model_names():
-    # formal 'load' shadows the model parameter 'load' inside the body
+    """A formal named `load` shadows the model parameter of the same name."""
     schema = make_schema(macros={'double': {'args': ['load'], 'template': 'load + load'}})
     got = parse_and_expand('double(p)', schema)
     want = parse_expression('p + p')
@@ -153,12 +153,17 @@ def test_macro_body_may_use_macros_and_named_expressions():
     assert got == want
 
 
-def test_macro_arity_errors():
+@pytest.mark.parametrize(
+    ('call', 'match'),
+    [
+        pytest.param('ws(p, over=generator)', 'expects 2 positional', id='too-few-positionals'),
+        pytest.param('ws(p, cost)', 'keyword argument', id='a-missing-keyword'),
+    ],
+)
+def test_macro_arity_errors(call, match):
     schema = make_schema(macros={'ws': WEIGHTED_SUM})
-    with pytest.raises(ValueError, match='expects 2 positional'):
-        parse_and_expand('ws(p, over=generator)', schema)
-    with pytest.raises(ValueError, match='keyword argument'):
-        parse_and_expand('ws(p, cost)', schema)
+    with pytest.raises(ValueError, match=match):
+        parse_and_expand(call, schema)
 
 
 def test_macro_cycle_raises():
@@ -171,17 +176,38 @@ def test_macro_cycle_raises():
         )
 
 
-def test_macro_collisions_rejected():
-    with pytest.raises(ValueError, match='collides with the parameter of the same name'):
-        make_schema(macros={'load': {'args': ['a'], 'template': 'a'}})
-    with pytest.raises(ValueError, match='collides with the named expression'):
-        make_schema({'thing': 'p * cost'}, macros={'thing': {'args': ['a'], 'template': 'a'}})
-    # helper names are reserved for every kind of declaration, not just macros,
-    # and the collision is caught building the schema rather than validating it
-    with pytest.raises(ValueError, match="collides with the built-in helper 'sum'"):
-        make_schema(macros={'sum': {'args': ['a'], 'template': 'a'}})
-    with pytest.raises(ValueError, match="collides with the built-in helper 'sum'"):
-        Model(dimensions={'sum': {'values': [1]}})
+@pytest.mark.parametrize(
+    ('build', 'match'),
+    [
+        pytest.param(
+            lambda: make_schema(macros={'load': {'args': ['a'], 'template': 'a'}}),
+            'collides with the parameter of the same name',
+            id='a-parameter',
+        ),
+        pytest.param(
+            lambda: make_schema({'thing': 'p * cost'}, macros={'thing': {'args': ['a'], 'template': 'a'}}),
+            'collides with the named expression',
+            id='a-named-expression',
+        ),
+        pytest.param(
+            lambda: make_schema(macros={'sum': {'args': ['a'], 'template': 'a'}}),
+            "collides with the built-in helper 'sum'",
+            id='a-built-in-helper',
+        ),
+        pytest.param(
+            lambda: Model(dimensions={'sum': {'values': [1]}}),
+            "collides with the built-in helper 'sum'",
+            id='a-built-in-helper-taken-by-a-dimension',
+        ),
+    ],
+)
+def test_macro_collisions_rejected(build, match):
+    """Helper names are reserved for every kind of declaration, not just macros.
+
+    The collision is caught building the schema rather than validating it.
+    """
+    with pytest.raises(ValueError, match=match):
+        build()
 
 
 def test_duplicate_formals_rejected():
@@ -189,14 +215,26 @@ def test_duplicate_formals_rejected():
         make_schema(macros={'m': {'args': ['a'], 'kwargs': ['a'], 'template': 'a'}})
 
 
-def test_macro_templates_validated_even_when_unused():
-    # schema-local macros make load-time validation complete: a typo in a
-    # template the model never calls is still caught
-    with pytest.raises(ValueError, match=r"Macro 'unused'.*'cots' not found"):
-        make_schema(macros={'unused': {'args': ['x'], 'template': 'x * cots'}})
-
-    with pytest.raises(ValueError, match='must not contain a comparison'):
-        make_schema(macros={'bad': {'args': ['a', 'b'], 'template': 'a == b'}})
+@pytest.mark.parametrize(
+    ('macros', 'match'),
+    [
+        pytest.param(
+            {'unused': {'args': ['x'], 'template': 'x * cots'}},
+            r"Macro 'unused'.*'cots' not found",
+            id='a-typo-in-a-template-nothing-calls',
+        ),
+        pytest.param(
+            {'bad': {'args': ['a', 'b'], 'template': 'a == b'}},
+            'must not contain a comparison',
+            id='a-comparison-in-a-template',
+        ),
+    ],
+)
+def test_macro_templates_validated_even_when_unused(macros, match):
+    """Schema-local macros make load-time validation complete: a typo in a
+    template the model never calls is still caught."""
+    with pytest.raises(ValueError, match=match):
+        make_schema(macros=macros)
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +306,6 @@ def test_unknown_helper_rejected_at_load_time_with_the_rewrite():
 
     message = str(exc.value)
     assert 'my_python_helper' in message
-    # the rejection teaches the rewrite instead of pointing at another backend
-    assert 'macros:' in message
-    assert 'escape' in message
-    assert 'eager' not in message.lower()
+    assert 'macros:' in message, 'the rejection teaches the rewrite'
+    assert 'escape' in message, 'the rejection teaches the rewrite'
+    assert 'eager' not in message.lower(), 'and never points at another backend'

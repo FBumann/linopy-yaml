@@ -148,13 +148,6 @@ def resolved(text, schema):
     return expression_of(text, schema, Namespace.of(schema), 't')
 
 
-def resolved_where(text, schema):
-    """Parse + resolve a where string."""
-    from lpspec.language.resolution import Namespace, where_of
-
-    return where_of(text, Namespace.of(schema), 't')
-
-
 # ---------------------------------------------------------------------------
 # data
 # ---------------------------------------------------------------------------
@@ -249,6 +242,13 @@ def commitment_inputs():
 
 @pytest.fixture
 def transport_data():
+    """A four-bus network whose data is feasible by construction.
+
+    Generation is dealt round-robin so every bus has some locally, the topology
+    is a ring plus one chord so every bus is reachable, and loads sit below each
+    bus's local capacity — feasible even with zero flow. The cost spread still
+    makes cross-bus flows optimal, so the network is not decoration.
+    """
     import pandas as pd
 
     rng = np.random.default_rng(11)
@@ -257,14 +257,11 @@ def transport_data():
     gens = pd.DataFrame(
         {
             'generator': [f'g{i}' for i in range(n_g)],
-            # round-robin so every bus has local generation (keeps the data
-            # feasible); the cost spread still makes cross-bus flows optimal
             'bus': [buses[i % n_b] for i in range(n_g)],
             'p_max': rng.uniform(80, 150, n_g).round(3),
             'cost': rng.uniform(5, 100, n_g).round(3),
         }
     )
-    # ring topology plus one chord so every bus is reachable
     pairs = [(buses[i], buses[(i + 1) % n_b]) for i in range(n_b)] + [(buses[0], buses[2])]
     lines = pd.DataFrame(
         {
@@ -274,7 +271,6 @@ def transport_data():
             'cap': rng.uniform(60, 120, n_l).round(3),
         }
     )
-    # loads below each bus's local capacity — feasible even with zero flow
     local_cap = gens.groupby('bus')['p_max'].sum().reindex(buses).to_numpy()
     factors = rng.uniform(0.3, 0.8, (n_s, n_b))
     load = pd.DataFrame(

@@ -65,7 +65,7 @@ def test_parentheses_override_precedence():
 def test_a_call_carries_its_positional_and_keyword_arguments():
     node = parse_expression('sum(p * cost, over=generator)')
     assert len(node.args) == 1
-    assert isinstance(node.args[0], BinaryOperatorNode)  # the argument is an expression, not just a name
+    assert isinstance(node.args[0], BinaryOperatorNode), 'the argument is an expression, not just a name'
     assert 'over' in node.kwargs
 
 
@@ -93,7 +93,6 @@ def test_a_name_may_begin_with_inf(name):
     ('text', 'node_type', 'attrs'),
     [
         ('True', BooleanLiteralNode, {'value': True}),
-        # a bare name is an existence check; what it *names* is resolution's problem
         ('p_max', UnresolvedNameNode, {'name': 'p_max'}),
         ('p_max > 0', UnresolvedComparisonNode, {'op': '>', 'value': 0}),
         ('a AND b', AndNode, {}),
@@ -102,6 +101,8 @@ def test_a_name_may_begin_with_inf(name):
     ],
 )
 def test_a_where_string_parses_to_its_node(text, node_type, attrs):
+    """A bare name parses to an existence check; what it *names* is
+    resolution's problem, not the parser's."""
     node = parse_where(text)
     assert isinstance(node, node_type)
     for attr, expected in attrs.items():
@@ -123,12 +124,13 @@ def test_and_binds_tighter_than_or():
         ("g == 'CCGT 400MW'", 'CCGT 400MW', True),
         ("t > '2030-01-01'", '2030-01-01', True),
         ("g == 'it\\'s'", "it's", True),
-        # a bare word still parses, and still means "resolve me" rather than "label"
         ('g == wind', 'wind', False),
     ],
     ids=['single', 'double', 'hyphen', 'space', 'date', 'escaped quote', 'bare'],
 )
 def test_a_quoted_right_hand_side_is_a_label(text, value, quoted):
+    """Quoting marks a label. A bare word still parses, and still means
+    "resolve me" rather than "label"."""
     """Without quoting, any label carrying a hyphen, space or colon was
     unsayable — `combined-cycle`, `IT-north`, `CCGT 400MW` (#460).
 
