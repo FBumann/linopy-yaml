@@ -4,7 +4,17 @@ What an agent needs on top of [CONTRIBUTING.md](CONTRIBUTING.md) — pull setup,
 the test loop, what each CI gate means, adding a port and refreshing the
 benchmarks from there. What the project *is*: [docs/](docs/README.md).
 
-## AI-assisted contributions
+Two parts, and the difference matters:
+
+- **Part 1 is the project's philosophy.** Not negotiable. A change that breaks
+  one of these is wrong here even when it would be right elsewhere.
+- **Part 2 is good defaults.** Follow them unless the work in front of you is
+  better served otherwise — and when you depart from one, **say so in the PR in
+  a sentence**, so the exception is a decision rather than a slip.
+
+# Part 1 — Philosophy
+
+## Who is speaking
 
 Code is checked; a discussion is trusted. Mark which is which —
 [linopy's rules](https://github.com/PyPSA/linopy/blob/master/AGENTS.md):
@@ -51,14 +61,79 @@ Where that first line was never written, the prompt stands in for it:
 
 In the tree nothing is marked: `Co-Authored-By: Claude …` is the record.
 
+## Simplicity is the design
+
+**The simplest thing that works.** No new layer, protocol, registry, config
+object or plugin seam unless something concrete needs it *now* — a second
+implementation, an extension point a third party builds against, a constraint
+nothing else meets. "It will make the next change easier" is not evidence; the
+next change can add it, and by then it will know what shape it wants.
+
+**YAGNI.** Build what the task needs. An option nobody sets, a branch nothing
+reaches, an abstraction with one caller: delete it, and add it back the day
+something asks for it.
+
+**DRY, about knowledge rather than characters.** One fact — a rule, a default, a
+table, a model — has one home, because a second copy drifts and the drift is
+silent. Two pieces of code that merely *look* alike are not a duplication:
+folding them together to satisfy the letter of the rule buys a parameter, a
+branch and a detour for every future reader, which is the complexity this
+section exists to refuse.
+
+A cleanup pass whose output is a defensive rename rather than fewer lines and
+fewer concepts gets sent back.
+
+## Breaking changes are free
+
+The project is `0.0.1aN` and holds no compatibility promise. Asked to change
+something, change it: rename, move, delete. No alias, no deprecation cycle, no
+`legacy_` path. Spend the effort on the load-time error instead. **A test
+asserting the old behaviour is not a blocker** — say in the PR what coverage
+moved where.
+
+## A claim carries its evidence
+
+- **Measured numbers live in the PR that took them**, beside their method, base
+  commit and ladder. What stays behind is the conclusion **and a `#nnn`, which
+  is not optional** — the ref is the whole reason the number was allowed to
+  leave. `git log -S'<the number>' -- src/` finds the PR when it is not to hand;
+  if nothing does, **keep the number** rather than lose it.
+- **A vague qualifier is not a conclusion.** "measurably slower", "several times
+  slower" and "a large multiple" can be neither checked nor refuted, and are
+  worse than the number they replaced.
+- **Measure on an idle machine**, A/B against the same base, and re-run when the
+  ranking could flip. Noise is the default explanation for a small delta.
+  Benchmarks do not parallelise and do not share the box with another agent's
+  test run. **Check the user's numbers too.**
+
+## The tree holds facts, the PR holds the story
+
+Rationale for a change, its alternatives and its numbers belong in the PR
+description. "Previously this used to…", "renamed from…", "as of the polars
+rewrite…" belong in git. Neither belongs in the code.
+
+**Docs move with the change.** A construct added, renamed or retired updates
+[SPEC](docs/SPEC.md) — §0 if it changes a law; structure updates
+[ARCHITECTURE](docs/ARCHITECTURE.md), diagrams included. After a decision in
+conversation, sweep for what now contradicts it, stale rationale included: a
+stale sentence outranks correct code in every reader's head.
+
+## The maintainer decides
+
+**The user merges** — the default, and a strong one: an agent does not decide
+that work is finished. Told directly to merge, merge. Never force-push or delete
+a branch you did not create.
+
+The architectural invariants — the engine importing no linopy, load-time
+validation, the dependency set, the git tag as the version — are enforced by
+`tests/test_architecture.py`, the bare-install job and
+[ARCHITECTURE](docs/ARCHITECTURE.md). They come up rarely and only deliberately,
+so they are not repeated here.
+
+# Part 2 — Good defaults
+
 ## Code
 
-- **Cut lines, remove duplication, apply YAGNI.** A cleanup pass that renames
-  instead of deleting gets sent back.
-- **Breaking changes are free** (`0.0.1aN`): rename, move, delete. No alias, no
-  deprecation cycle, no `legacy_` path. Spend the effort on the load-time error.
-- **A test asserting old behaviour is not a blocker.** Say in the PR what
-  coverage moved where.
 - **No explanatory inline comments** — complex logic becomes a helper with a
   docstring:
 
@@ -91,28 +166,24 @@ In the tree nothing is marked: `Co-Authored-By: Claude …` is the record.
 - **Two comments are not explanation, and stay where the eye lands**: a **case
   label** where parametrizing would distort the test, and a **one-line
   justification of a line that reads as a mistake** — a bare
-  `except BaseException`, a magic literal, a deliberate no-op. Moving either
-  into a docstring puts it where the reader is not.
+  `except BaseException`, a magic literal, a deliberate no-op.
+- **A number the code acts on stays inline** — a budget, a cap, a chunk size, a
+  tolerance. There the number *is* the decision, not evidence for one.
 
 ## Docstrings
 
-- **Carry**: the rule, the invariant, why something is safe, a `#nnn` when the
-  argument is longer than the docstring should be. `relational/chunking.py` is
-  the model.
+**As short as it can be without losing the reader** — and the reader of a public
+name is the *caller*, not the implementer.
+
+- **Carry, on anything a caller touches**: what it does, what it takes and
+  returns, how it fails, what it guarantees — in the caller's terms. How it
+  works inside belongs in the code, where anyone who needs it is already
+  looking.
+- **A private helper is the exception**, because there the reader *is* a
+  maintainer: write the constraint that made it exist, and the invariant a
+  change could break unknowingly. `relational/chunking.py` is the model.
 - **Cut**: restatement, argument for a settled decision, narration of how the
-  answer was found.
-- **Measured numbers live in the PR that took them**, beside their method, base
-  commit and ladder. What stays in the docstring is the conclusion **and a
-  `#nnn`, which is not optional** — the ref is the whole reason the number was
-  allowed to leave. `git log -S'<the number>' -- src/` finds the PR when it is
-  not to hand; if nothing does, **keep the number** rather than lose it.
-- **A vague qualifier is not a conclusion.** "measurably slower", "several times
-  slower" and "a large multiple" can be neither checked nor refuted, and are
-  worse than the number they replaced. State the direction and the shape of the
-  trade: *"the ordered join costs more than the sort it saves, on wide
-  frames (#576)"*.
-- **A number the code acts on stays inline** — a budget, a cap, a chunk size, a
-  tolerance. There the number *is* the decision, not evidence for one.
+  answer was found, and any tour of the internals a caller cannot see.
 
 ## Commit messages and PR titles
 
@@ -136,13 +207,13 @@ no   fix(data): fix dtype bug
 ## PR descriptions
 
 - **Lead with the claim**, then the evidence.
-- **The only place numbers live**: each with its base commit, what is counted
-  (build vs solve, LP file vs direct sink), and how it was taken. A rebase
-  invalidates them — re-run or drop.
+- Each number with its base commit, what is counted (build vs solve, LP file vs
+  direct sink), and how it was taken. A rebase invalidates them — re-run or drop.
 - **Say what was verified**, and what you could not check.
-- **Name what you deliberately did not do.**
+- **Name what you deliberately did not do**, and any default in Part 2 you
+  departed from.
 - **One issue, one PR.** Separable work is stacked, not bundled.
-- **Mark it**, evidence in `<details>` — see above.
+- **Mark it**, evidence in `<details>`.
 
 ## Branch and worktree
 
@@ -164,31 +235,7 @@ git worktree add ../wt/<topic> -b <type>/<topic> origin/main
 - `git worktree remove` when the PR merges.
 - Verify claims about shipped behaviour against `origin/main`. `gh pr view`
   before rebasing or reviving anything.
-
-## Finishing
-
-Committed, pushed, PR open, CI green, URL reported. **The user merges** — never
-merge, force-push, or delete a branch you did not create.
-
-## Measurements
-
-Method and commands: [CONTRIBUTING.md](CONTRIBUTING.md#refreshing-the-benchmarks).
-On top of it:
-
-- Idle machine — benchmarks do not share the box with another agent's test run,
-  and do not parallelise.
-- A/B against the same base; re-run when the ranking could flip. Noise is the
-  default explanation for a small delta.
-- Check the user's numbers too.
-
-## Docs
-
-- A construct added, renamed or retired updates [SPEC](docs/SPEC.md) — §0 if it
-  changes a law. Structure updates [ARCHITECTURE](docs/ARCHITECTURE.md),
-  diagrams included.
-- Reference pages carry rules, design notes carry arguments.
-- After a decision in conversation, sweep for what now contradicts it — stale
-  rationale included.
+- Finishing is: committed, pushed, PR open, CI green, URL reported.
 
 ## Issues
 
