@@ -79,9 +79,6 @@ def build_gurobi(
 
     :func:`~lpspec.relational.sinks.solvers.highs.build_highs`'s seam, drawn
     for its reason: the search is the same work whoever filled the model.
-    ``batch_rows`` is a *nonzero* budget that splits the matrix across calls;
-    it defaults to one call — see
-    :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks` for why.
 
     **The caller owns the model, so the environment follows it.** gurobipy has
     no ``Model.getEnv()``, so a caller handed only the model could never
@@ -89,6 +86,15 @@ def build_gurobi(
     model is collected, which under refcounting is when the caller drops it.
     One thing to own rather than two, which is why this returns a model rather
     than a pair.
+
+    Args:
+        model: The built model, as every sink reads it.
+        batch_rows: A *nonzero* budget splitting the matrix across calls,
+            defaulting to one call — see
+            :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks`
+            for why.
+        solver_options: Set on the environment before it starts, so a licence
+            parameter reaches this sink at all.
     """
     m, _x, _blocks, environment = _load(model, batch_rows, solver_options)
     weakref.finalize(m, environment.dispose)
@@ -102,15 +108,18 @@ def solve_gurobi(
 ) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
     """Feed the model to Gurobi and solve it.
 
-    The family's shape, and the two ``None`` cases mean what they mean in
-    :func:`~lpspec.relational.sinks.solvers.highs.solve_highs`: no primal, no
-    dual. Gurobi refuses the attribute in both cases rather than handing back
-    zeros, which is the one place it makes this easier than HiGHS.
-
     Model and environment are disposed before returning, so the licence is
     released when the solve ends rather than whenever the collector gets to
     it. Everything read back is a numpy array taken before the dispose.
     :func:`build_gurobi` cannot do this — its caller owns the model.
+
+    Returns:
+        ``(status, objective, primal, dual)``, the family's shape. The two
+        ``None`` cases mean what they mean in
+        :func:`~lpspec.relational.sinks.solvers.highs.solve_highs`: no primal,
+        no dual. Gurobi refuses the attribute in both cases rather than
+        handing back zeros, which is the one place it makes this easier than
+        HiGHS.
     """
     m, x, blocks, environment = _load(model, batch_rows, solver_options)
     try:
@@ -198,8 +207,10 @@ def _spelled(gurobipy: Any) -> Any:
 
 
 def _gurobipy() -> Any:
-    """The optional dependency, or a message naming the extra. Both halves are
-    named, because the missing one is as often scipy."""
+    """The optional dependency, or a message naming the extra.
+
+    Both halves are named, because the missing one is as often scipy.
+    """
     try:
         import gurobipy
         import scipy.sparse  # noqa: F401 — guarded here so the message covers it
@@ -210,9 +221,12 @@ def _gurobipy() -> Any:
 
 
 def _status_of(m: Any) -> SolveStatus:
-    """What the solve concluded, on both axes. ``SolCount`` answers "is there
-    anything here", which the termination condition does not: a run stopped at
-    a limit may or may not hold an incumbent."""
+    """What the solve concluded, on both axes.
+
+    ``SolCount`` answers "is there anything here", which the termination
+    condition does not: a run stopped at a limit may or may not hold an
+    incumbent.
+    """
     code = int(m.Status)
     return SolveStatus(
         termination_condition=_CONDITION_OF_GUROBI_STATUS.get(code, 'unknown'),
@@ -222,9 +236,11 @@ def _status_of(m: Any) -> SolveStatus:
 
 
 def _wording(code: int) -> str:
-    """Gurobi's own name for a status code, read off ``GRB.Status`` rather than
-    tabulated — so one this package has never heard of still arrives
-    searchable."""
+    """Gurobi's own name for a status code.
+
+    Read off ``GRB.Status`` rather than tabulated — so one this package has
+    never heard of still arrives searchable.
+    """
     gurobipy = _gurobipy()
     names = {getattr(gurobipy.GRB.Status, name): name for name in dir(gurobipy.GRB.Status) if not name.startswith('_')}
     return names.get(code, str(code))

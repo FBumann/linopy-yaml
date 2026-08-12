@@ -229,6 +229,9 @@ def parse_where(text: str) -> WhereNode:
 
     With ``parse_all`` and a single top-level alternative, element 0 of the
     parse result is the root node.
+
+    Raises:
+        SchemaError: If the text does not parse — the message quotes it.
     """
     try:
         result = _WHERE_GRAMMAR.parse_string(text, parse_all=True)

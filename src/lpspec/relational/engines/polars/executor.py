@@ -121,7 +121,6 @@ class PolarsExecutor:
         of the build. :func:`_row_starts` reads the CSR index off that order,
         after which ``row`` is dropped: 8 bytes per entry no sink reads.
         """
-
         self._program = program
         self._bound = bind(program, sources)
         self._compiler = PolarsCompiler(program, self._bound, self._variables)
@@ -210,7 +209,6 @@ class PolarsExecutor:
         than materialising them to be dropped. The label then goes too, having
         been the order's witness and nothing else.
         """
-
         start = self._n_cols
         labelled, self._n_cols = labels.frame(self._q, v.dims, v.where, 'var_label', start)
         self._variables[v.name] = labelled.lazy()
@@ -246,7 +244,6 @@ class PolarsExecutor:
         narrows when rows go termless: the run of labels a declaration owns is
         what survived, not what it declared (#561).
         """
-
         lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs")
         rhs = self._q.expression(c.rhs, f"constraint '{c.name}' rhs")
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
@@ -371,7 +368,6 @@ class PolarsExecutor:
         against a best case that is a wash (#581). ``obj`` carries no order
         contract anyway.
         """
-
         comp = self._q.expression(o.expression, 'objective')
         for p in comp.consts:
             if p.dims:
@@ -446,15 +442,18 @@ class PolarsExecutor:
     ) -> Result:
         """Sink the built model straight into a solver and solve it.
 
-        ``solver_name`` picks the sink — ``highs``, which ships with the
-        package, or ``gurobi``, needing the ``[gurobi]`` extra. A *caller's*
-        choice at the call, spelled linopy's way: no YAML file can express it,
-        a model meaning the same thing whoever solves it.
+        Which solver runs is a *caller's* choice at the call, spelled linopy's
+        way: no YAML file can express it, a model meaning the same thing
+        whoever solves it.
 
-        ``solver_options`` is forwarded verbatim in the solver's own vocabulary
-        (``{'time_limit': 60, 'mip_rel_gap': 0.01}``). ``batch_rows`` is the
-        hand-off budget in elements, defaulting to the sink's own
-        (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
+        Args:
+            batch_rows: The hand-off budget in elements, defaulting to the
+                sink's own
+                (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
+            solver_options: Forwarded verbatim in the solver's own vocabulary
+                (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
+            solver_name: ``highs``, which ships with the package, or
+                ``gurobi``, needing the ``[gurobi]`` extra.
         """
         status, objective, primal, dual = sinks.solver(solver_name)(self._tables(), batch_rows, solver_options)
         _spanning(solver_name, 'primal', primal, self._n_cols)

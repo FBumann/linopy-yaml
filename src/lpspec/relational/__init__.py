@@ -1,4 +1,4 @@
-"""Relational LP construction: the logical plan and its executor. **Internal.**
+"""**Internal:** relational LP construction — the logical plan and its executor.
 
 The public interface of the package is YAML (see ``lpspec.api``).
 Constructing Programs in Python is not supported API; a stable plan API may be

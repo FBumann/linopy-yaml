@@ -22,14 +22,18 @@ __all__ = ['as_frame', 'labels_frame']
 
 
 def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
-    """Normalise one in-memory source to a tidy lazy frame, or ``None``.
-
-    ``None`` means "not table-shaped"; the caller knows whether it held a
-    parameter or an index and writes the message. *dims* names the columns an
-    index becomes.
+    """Normalise one in-memory source to a tidy lazy frame.
 
     A bool stays boolean rather than widening to float: the executor reads a
     mask's truthiness from the column type (#47).
+
+    Args:
+        obj: Whatever the caller bound — a table, an index, a scalar.
+        dims: The columns an index becomes.
+
+    Returns:
+        The tidy frame, or ``None`` for "not table-shaped" — the caller knows
+        whether it held a parameter or an index and writes the message.
     """
     import sys
 
@@ -117,7 +121,6 @@ def labels_frame(dname: str, values: object, dtype: str = 'str') -> pl.LazyFrame
     cut set starts empty, and so does any dimension whose members a caller
     appends to between solves.
     """
-
     try:
         labels: list[Any] = list(values)  # pyrefly: ignore[bad-argument-type]  — `values` is whatever a caller passed
         if not labels:

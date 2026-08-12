@@ -266,6 +266,9 @@ class Runs:
 
         ``original_index=True`` asks for the same values over the dimension the
         axis sliced instead — see :meth:`_reindexed`.
+
+        Raises:
+            LpspecError: If no slice of the sweep produced *name*.
         """
         return self._reindexed(self._read(self._primals, 'variable', name), original_index=original_index)
 
@@ -280,6 +283,10 @@ class Runs:
         the last are both defensible and neither is done; over the original
         index each coordinate carries the price of *the window that owns it*,
         which is one window's answer rather than a blend of several.
+
+        Raises:
+            LpspecError: If no slice produced duals for *name* — the message
+                says which of the two it was.
         """
         return self._reindexed(
             self._read(self._duals, 'constraint', name, self._no_duals), original_index=original_index
@@ -358,6 +365,9 @@ class Runs:
         sweep *holds*, and the original index is lossy — the lookahead rows
         every overlapping window computed cannot survive it. A bulk export is
         the wrong place to lose them.
+
+        Raises:
+            LpspecError: If the sweep holds no variable values at all.
         """
         wanted = names or tuple(sorted(self._primals))
         if not wanted:
@@ -367,9 +377,15 @@ class Runs:
     def to_parquet(self, directory: str | Path = '.') -> dict[str, Path]:
         """One parquet file per variable the sweep holds, ``(key, dims…, value)``.
 
-        Returns name → path, in :meth:`primal`'s order, so the same sweep
-        writes the same bytes. This is a *copy out* of frames already held and
-        bounds nothing — what a sweep holds is #610.
+        Written in :meth:`primal`'s order, so the same sweep writes the same
+        bytes. This is a *copy out* of frames already held and bounds nothing —
+        what a sweep holds is #610.
+
+        Returns:
+            Each variable's name, mapped to the file it was written to.
+
+        Raises:
+            LpspecError: If the sweep holds no variable values at all.
         """
         if not self._primals:
             raise LpspecError(_nothing_to_read('variable', 'anything', self._primals, self.meta))

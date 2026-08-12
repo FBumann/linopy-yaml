@@ -98,12 +98,12 @@ class Result:
 
     @property
     def termination_condition(self) -> str:
-        """What the solver said — ``optimal``, ``infeasible``, ``time_limit``…"""
+        """What the solver said — ``optimal``, ``infeasible``, ``time_limit`` and so on."""
         return self._status.termination_condition
 
     @property
     def is_ok(self) -> bool:
-        """linopy's rollup: not an error, an abort or a refusal."""
+        """The linopy rollup: not an error, an abort or a refusal."""
         return self._status.is_ok
 
     @property
@@ -144,6 +144,9 @@ class Result:
         coordinate product, what ``var_label`` already encodes and what the LP
         sink writes — so two reads agree, two runs agree, and a solution file
         can be diffed.
+
+        Raises:
+            NoSolutionError: If the solve left no values to read.
         """
         self._require_solution(f"the primal of '{name}'")
         return self._executor._primal(name, self._primal_values)
@@ -153,10 +156,12 @@ class Result:
 
         :meth:`primal` against the row frame rather than a column one, in that
         method's order. The two empty cases are different failures and both
-        raise rather than return zeros: no values at all is
-        :class:`~lpspec.errors.NoSolutionError`, primals without duals — any
-        integer variable makes them undefined — a
-        :class:`~lpspec.errors.LpspecError`.
+        raise rather than return zeros.
+
+        Raises:
+            NoSolutionError: If the solve left no values at all.
+            LpspecError: If it left primals but no duals — any integer
+                variable makes them undefined.
         """
         self._require_solution(f"the dual of '{name}'")
         if self._dual_values is None:
@@ -188,11 +193,14 @@ class Result:
         return tidy_to_dataset(wanted, self.to_dataarray)
 
     def to_parquet(self, directory: str | Path) -> dict[str, Path]:
-        """One parquet file per variable, ``(dims…, value)``. Returns name → path.
+        """One parquet file per variable, ``(dims…, value)``.
 
         Sunk straight to disk, never copied into a second representation, in
         :meth:`primal`'s order — so the same model and data write the same
         bytes.
+
+        Returns:
+            Each variable's name, mapped to the file it was written to.
         """
         self._require_solution('the solution')
         return self._executor._solution_to_parquet(Path(directory), self._primal_values)

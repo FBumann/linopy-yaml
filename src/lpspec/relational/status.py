@@ -73,7 +73,7 @@ class SolveStatus:
 
     @property
     def is_ok(self) -> bool:
-        """linopy's rollup: the run is not an error, an abort or a refusal.
+        """The linopy rollup: the run is not an error, an abort or a refusal.
 
         Kept exactly as linopy defines it, because it is shared vocabulary.
         It is *not* the question "can I read values" — see

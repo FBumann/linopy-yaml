@@ -52,7 +52,6 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
     streamed pipeline. The constraint section goes out one row range at a time,
     since a chunk's rendered lines are held until it is sunk.
     """
-
     path = Path(path)
     objective = model.obj.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')))
     bounds = (

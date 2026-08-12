@@ -88,22 +88,16 @@ def build(
 ) -> linopy.Model:
     """Build a ``linopy.Model`` from a YAML math definition.
 
-    Parameters
-    ----------
-    path : str or Path
-        Path to the YAML file.
-    data : mapping or None
-        Parameter data. Keys are parameter names declared in the YAML.
-    coords : mapping or None
-        Dimension coordinate values. Overrides ``values:`` declared in YAML.
+    Args:
+        path: Path to the YAML file.
+        data: Parameter data, keyed by the names the YAML declares.
+        coords: Dimension coordinate values. Overrides ``values:`` declared
+            in the YAML.
 
-    Raises
-    ------
-    LanguageError
-        The file says something the language does not accept — its structure,
-        its declarations or its expressions.
-    DataError
-        The file is fine; what *data* supplied for it is not.
+    Raises:
+        LanguageError: If the file says something the language does not
+            accept — its structure, its declarations or its expressions.
+        DataError: If the file is fine and what *data* supplied for it is not.
     """
     path = Path(path)
     with note(f"while loading YAML '{path}'"):
@@ -135,8 +129,6 @@ def extend(
     YAML must declare every parameter it uses, and this call must supply that
     parameter's data.
 
-    A dim the model already has may carry ``values:`` in this YAML only if
-    they match — a silent override would hide real bugs, so a mismatch raises.
     The existing variables' dims are linopy ``Hashable``s where the language's
     are names, so they are stringified before validation.
 
@@ -146,6 +138,17 @@ def extend(
     2. coords inferred from the model's existing variables
     3. ``values:`` declared in this YAML
     4. error if none of the above resolve a referenced dim
+
+    Args:
+        model: Extended in place.
+        path: Path to the YAML file.
+        data: Parameter data, keyed by the names the YAML declares.
+        coords: Dimension coordinate values.
+
+    Raises:
+        LanguageError: If this YAML declares ``values:`` for a dim the model
+            already carries and they differ — a silent override would hide
+            real bugs.
     """
     path = Path(path)
     with note(f"while extending with YAML '{path}'"):

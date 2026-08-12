@@ -43,16 +43,14 @@ def frame(
 ) -> tuple[pl.DataFrame, int]:
     """The masked coord product of *dims* with a dense *label* from *start*.
 
-    Returns ``(dims…, label)`` in that column order, in label order, with the
-    next free label. A label follows declaration order — row-major over the
-    dims' declared ordinals — which is what lets it *be* the solver's own index
-    with no remapping.
+    A label follows declaration order — row-major over the dims' declared
+    ordinals — which is what lets it *be* the solver's own index with no
+    remapping.
 
-    *restrictions* are variable-presence frames a constraint row must be
-    contained in (v1 ``convention.rst`` §6, §12). They are semi-joins, so they
-    only remove rows, and nothing deduplicates them — a key occurring twice
-    still occurs. Which rows they remove is unknown until data is read, so a
-    restriction takes the counted path whatever the mask looks like.
+    Restrictions are semi-joins, so they only remove rows, and nothing
+    deduplicates them — a key occurring twice still occurs. Which rows they
+    remove is unknown until data is read, so a restriction takes the counted
+    path whatever the mask looks like.
 
     No dims means the carrier is :data:`UNIT`, selected because selecting
     nothing would drop the one row of the empty coordinate product.
@@ -67,6 +65,19 @@ def frame(
     nor restriction, ``start + position`` *is* the label and the row-index pass
     never runs — milliseconds per declaration, on a model that may carry dozens
     (#520).
+
+    Args:
+        compiler: The compiler whose frames the product is built from.
+        dims: The declaration's dims, in declaration order.
+        where: Its mask, or ``None``.
+        label: What to call the label column.
+        start: The first label to hand out.
+        restrictions: Variable-presence frames a constraint row must be
+            contained in (v1 ``convention.rst`` §6, §12), keyed by their dims.
+
+    Returns:
+        ``(dims…, label)`` in that column order and in label order, and the
+        next free label.
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))

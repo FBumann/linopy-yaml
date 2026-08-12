@@ -102,10 +102,12 @@ class Namespace:
     def of(cls, schema: Model, known_variables: Iterable[str] = ()) -> Namespace:
         """Build the namespace of *schema*.
 
-        ``known_variables`` widens the variable set only — used by
-        ``linopy.extend()``, where expressions may reference variables already
-        on the model. Parameters get no such widening: a YAML file declares
-        every parameter it uses (hard rule 5).
+        Args:
+            schema: The model whose declarations are the namespace.
+            known_variables: Widens the variable set only — used by
+                ``linopy.extend()``, where expressions may reference variables
+                already on the model. Parameters get no such widening: a YAML
+                file declares every parameter it uses (hard rule 5).
         """
         return cls(
             set(schema.variables) | set(known_variables),
@@ -148,9 +150,12 @@ class Namespace:
 def expression_of(text: str, schema: Model, ns: Namespace, context: str) -> ExpressionNode:
     """Parse, expand and resolve *text* — the only way a backend gets an AST.
 
-    Raises :class:`LanguageError` listing every problem. ``validation.py`` runs
-    the same path at load time, so a backend calling this gets a *typed* tree
-    off a result already known to be clean, without duplicating the pass.
+    ``validation.py`` runs the same path at load time, so a backend calling
+    this gets a *typed* tree off a result already known to be clean, without
+    duplicating the pass.
+
+    Raises:
+        LanguageError: Listing every problem the text has.
     """
     errors: list[str] = []
     resolved = resolve_expression(parse_and_expand(text, schema, context), ns, context, errors)
@@ -161,7 +166,11 @@ def expression_of(text: str, schema: Model, ns: Namespace, context: str) -> Expr
 
 
 def where_of(text: str | None, ns: Namespace, context: str, self_variable: str | None = None) -> WhereNode | None:
-    """Parse and resolve a where string; ``None`` stays ``None``."""
+    """Parse and resolve a where string; ``None`` stays ``None``.
+
+    Raises:
+        LanguageError: Listing every problem the predicate has.
+    """
     if text is None:
         return None
     errors: list[str] = []
@@ -184,12 +193,19 @@ def resolve_expression(
 ) -> ExpressionNode | None:
     """Rewrite every ``NameNode`` under *node* to a typed node.
 
-    Appends to *errors* and returns ``None`` if anything failed to resolve, so
-    a caller collecting problems across a whole schema reports them together.
-
     Helper *call shapes* are checked here too (``helpers.call_shape_error``).
     Arity is a language rule, and this is the pass every consumer goes through,
     so neither backend has to state a signature a second time.
+
+    Args:
+        node: The parsed, expanded expression.
+        ns: The declared names to resolve against.
+        context: The declaration to name in a message.
+        errors: Appended to, rather than raised from, so a caller collecting
+            problems across a whole schema reports them together.
+
+    Returns:
+        The typed tree, or ``None`` if anything failed to resolve.
     """
     before = len(errors)
     if isinstance(node, ComparisonNode):

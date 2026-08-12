@@ -352,7 +352,12 @@ _Declaration = TypeVar('_Declaration', ParameterDeclaration, VariableDeclaration
 
 
 def _declared(items: tuple[_Declaration, ...], name: str, kind: str) -> _Declaration:
-    """The declaration called *name*, or a ``KeyError`` naming the near miss."""
+    """The declaration called *name*.
+
+    Raises:
+        KeyError: If nothing is called *name* — the message names the near
+            miss.
+    """
     for item in items:
         if item.name == name:
             return item
@@ -370,8 +375,11 @@ class Program:
     dimensions: tuple[DimensionDeclaration, ...] = ()
 
     def dimension(self, name: str) -> DimensionDeclaration:
-        """The dimension called *name*. Undeclared is not an error here: a
-        dimension with no coordinates has nothing to declare."""
+        """The dimension called *name*.
+
+        Undeclared is not an error here: a dimension with no coordinates has
+        nothing to declare.
+        """
         for d in self.dimensions:
             if d.name == name:
                 return d

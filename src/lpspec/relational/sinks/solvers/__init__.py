@@ -44,7 +44,12 @@ SOLVERS: Mapping[str, Solve] = {
 
 
 def solver(name: str) -> Solve:
-    """The solver called *name*, or an error listing every alternative."""
+    """The solver called *name*.
+
+    Raises:
+        LpspecError: If no solver has that name — the message lists every
+            alternative this build has.
+    """
     try:
         return SOLVERS[name]
     except KeyError:

@@ -111,10 +111,6 @@ class ModelTables:
     def dense_columns(self, infinity: float) -> DenseColumns:
         """``(lb, ub, cost, integral)`` as numpy vectors over the solver's index.
 
-        *infinity* is the solver's own spelling of an absent bound — the one
-        thing the two disagree on — so it is asked for and the vectors come
-        back ready to hand over unedited.
-
         ``cols`` already arrives one row per column in ``col`` order, so its
         three vectors are the frame's own. Only ``cost`` is scattered, ``obj``
         being genuinely sparse: a variable in no objective term is left free
@@ -128,6 +124,11 @@ class ModelTables:
         boxing every value as a Python object, so the test against
         ``'continuous'`` is made in polars and only its answer crosses — an
         order of magnitude apart at the top of the ladder (#418).
+
+        Args:
+            infinity: The solver's own spelling of an absent bound — the one
+                thing the two disagree on — so the vectors come back ready to
+                hand over unedited.
         """
         import numpy as np
 
@@ -150,6 +151,9 @@ class ModelTables:
         side, both this pair spelled differently. A row with no entry gets a
         comparison nothing can fail (``>=`` against ``-infinity``) rather than
         the ``== 0`` that would be an equality the model never stated.
+
+        Args:
+            infinity: As :meth:`dense_columns` takes it.
         """
         sided = self.rows.select(
             'row',
@@ -167,9 +171,11 @@ class ModelTables:
         A chunk is a ``slice``: ``row_starts`` already says where every row's
         entries sit, so nothing is sorted and nothing is searched.
 
-        ``starts`` is each row's offset within the block, which is what both
-        solvers' matrix APIs ask for. A row with no entries takes the next
-        row's offset, and so occupies no span.
+        Yields:
+            ``(lo, hi, entries, starts)`` for rows ``[lo, hi)``, where
+            ``starts`` is each row's offset within the block — what both
+            solvers' matrix APIs ask for. A row with no entries takes the
+            next row's offset, and so occupies no span.
         """
         for lo, hi in self._spans(budget):
             yield lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo]
@@ -189,9 +195,12 @@ class ModelTables:
     def labeled_blocks(self, budget: int | None) -> Iterator[tuple[int, int, pl.DataFrame]]:
         """Each chunk of rows with its entries labeled — the LP writer's reader.
 
-        :meth:`matrix_block`'s budget-iterator form. One method per consumer
-        shape — solvers take :meth:`row_blocks`, the writer this — so no caller
-        pairs spans and entries that disagree.
+        One method per consumer shape — solvers take :meth:`row_blocks`, the
+        writer this — so no caller pairs spans and entries that disagree.
+
+        Yields:
+            ``(lo, hi, entries)`` for rows ``[lo, hi)``, the entries labelled
+            as :meth:`matrix_block` labels them.
         """
         for lo, hi in self._spans(budget):
             yield lo, hi, self.matrix_block(lo, hi)

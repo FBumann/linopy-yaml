@@ -33,8 +33,12 @@ PLANNED_WRITERS: Mapping[str, str] = {
 
 
 def writer(suffix: str) -> Write:
-    """The writer for *suffix* — or a ``NotImplementedError`` naming a format
-    that is coming, or a ``ValueError`` listing what can be written."""
+    """The writer for *suffix*.
+
+    Raises:
+        NotImplementedError: If the format is one that is coming.
+        ValueError: If nothing writes it — the message lists what can be.
+    """
     if suffix in WRITERS:
         return WRITERS[suffix]
     if suffix in PLANNED_WRITERS:
