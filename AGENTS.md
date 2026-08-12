@@ -69,8 +69,19 @@ implementation, an extension point a third party builds against, a constraint
 nothing else meets. "It will make the next change easier" is not evidence; the
 next change can add it, and by then it will know what shape it wants.
 
-Cut lines, remove duplication, apply YAGNI. A cleanup pass that renames instead
-of deleting gets sent back.
+**YAGNI.** Build what the task needs. An option nobody sets, a branch nothing
+reaches, an abstraction with one caller: delete it, and add it back the day
+something asks for it.
+
+**DRY, about knowledge rather than characters.** One fact — a rule, a default, a
+table, a model — has one home, because a second copy drifts and the drift is
+silent. Two pieces of code that merely *look* alike are not a duplication:
+folding them together to satisfy the letter of the rule buys a parameter, a
+branch and a detour for every future reader, which is the complexity this
+section exists to refuse.
+
+A cleanup pass whose output is a defensive rename rather than fewer lines and
+fewer concepts gets sent back.
 
 ## Breaking changes are free
 
