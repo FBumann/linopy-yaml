@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import statistics
 import sys
 from pathlib import Path
 from typing import Any
@@ -192,6 +193,32 @@ def _live(r: Row) -> str:
     return '—' if frac is None else f'{frac * 100:.0f}%'
 
 
+def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]]) -> str:
+    """How far the first recorded round sits from steady state, per arm.
+
+    Rendered from the results file rather than stated, so a refresh moves it
+    (#619). What the pair measures is one recorded round against the best of
+    the rest: the harness warms up before recording, so **neither end carries
+    the one-time import cost** and this is the loop settling, not a cold start.
+    Measuring that cost needs a fresh interpreter per arm, which no rung takes.
+    """
+    per_arm = []
+    for arm in ARMS:
+        deltas = sorted(
+            (best[(case, size, arm)]['first_build_seconds'] - best[(case, size, arm)]['steady_build_seconds']) * 1000
+            for case, size in seen
+            if (case, size, arm) in best and best[(case, size, arm)].get('first_build_seconds') is not None
+        )
+        if deltas:
+            per_arm.append(f'{statistics.median(deltas):+.1f} ms on {arm}')
+    if not per_arm:
+        return ''
+    return (
+        'The harness warms up before it records, so neither column carries the '
+        'one-time import cost: the median gap between them is ' + ' and '.join(per_arm) + '.'
+    )
+
+
 def marginal(loop_rows: list[Row]) -> str:
     """First model in a process, against every model after it.
 
@@ -213,21 +240,20 @@ def marginal(loop_rows: list[Row]) -> str:
     if not best:
         return ''
 
-    lines = [
-        '### Marginal cost per model',
-        '',
-        'Build only, repeated in one process. **first** is what a caller pays who '
-        'builds one model and solves it; **steady** is what every model after the '
-        'first costs in a rolling horizon. Every lane does lazy first-call work '
-        'that a loop never pays again — ~180 ms of it on the eager lane, ~4 ms here.',
-        '',
-        '| case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | steady vs linopy |',
-        '|---|---|---|---|---|---|---|',
-    ]
     seen = sorted(
         {(c, s) for c, s, _ in best},
         key=lambda k: best[(k[0], k[1], 'lpspec')].get('nominal_variables', 0),
     )
+    lines = [
+        '### Marginal cost per model',
+        '',
+        'Build only, repeated in one process. **first** is the first recorded round '
+        'and **steady** the best of the rounds after it, so the pair is what a '
+        'rolling horizon pays for its second window against its first. ' + _settling(best, seen),
+        '',
+        '| case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | steady vs linopy |',
+        '|---|---|---|---|---|---|---|',
+    ]
     for case, size in seen:
         ours, eager = best.get((case, size, 'lpspec')), best.get((case, size, 'linopy'))
         if not ours or not eager:

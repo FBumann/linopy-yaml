@@ -380,7 +380,7 @@ the wrong one for a rolling horizon, which pays it once.
 
 ### Marginal cost per model
 
-Build only, repeated in one process. **first** is what a caller pays who builds one model and solves it; **steady** is what every model after the first costs in a rolling horizon. Every lane does lazy first-call work that a loop never pays again — ~180 ms of it on the eager lane, ~4 ms here.
+Build only, repeated in one process. **first** is the first recorded round and **steady** the best of the rounds after it, so the pair is what a rolling horizon pays for its second window against its first. The harness warms up before it records, so neither column carries the one-time import cost: the median gap between them is +1.1 ms on lpspec and +2.0 ms on linopy.
 
 | case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | steady vs linopy |
 |---|---|---|---|---|---|
