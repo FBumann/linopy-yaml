@@ -129,8 +129,10 @@ class BoundModel:
         pushed onto a loaded solver, and
         :attr:`~lpspec.relational.result.Diagnostics.loads` says which ran.
 
-        Results taken before the rebind stop reading: it replaces the label
-        frames every reader joins through, so read out what you need first.
+        Results taken before the rebind keep reading: each owns the frames it
+        reads, and a rebind builds new ones rather than touching those. What
+        retaining one costs is its build's label frames staying alive until it
+        is dropped or :meth:`~lpspec.relational.result.Result.close`\\ d.
 
         Args:
             sources: Only what changed; the rest keeps what :func:`build`
@@ -272,8 +274,9 @@ def solve(
         **build_kwargs: Passed to :func:`build`.
 
     Returns:
-        The solution, the built model still attached to it. ``result.close()``
-        releases that model.
+        The solution, self-contained: it owns the frames it reads, so the built
+        model and the solver are released before this returns and there is
+        nothing to manage. ``result.close()`` drops its own hold early.
 
     Raises:
         LpspecError: A solver name nothing serves — checked before the build.
@@ -282,9 +285,8 @@ def solve(
     bound = build(model, sources, **build_kwargs)
     try:
         return bound.solve(solver_name, solver_options=solver_options)
-    except BaseException:
+    finally:
         bound.close()
-        raise
 
 
 def write(

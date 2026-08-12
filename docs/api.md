@@ -57,7 +57,7 @@ the same math over and over pays for the YAML, the plan and the build once:
 bound = lps.build('sub.yaml', sources)
 for capacity in search:
     result = bound.rebind({'cap_hat': capacity}).solve()
-    price = result.dual('capacity')  # read it out before the next rebind
+    price = result.dual('capacity')  # each result reads its own build, rebinds notwithstanding
     bound.diagnostics()  # did that push values, or load the model again?
 ```
 
@@ -68,7 +68,7 @@ for capacity in search:
 | **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
 | **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model HiGHS already holds, and the next solve starts from the basis the last one ended on. A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, and that model is loaded again and solved cold |
 | **which one ran is `bound.diagnostics()`** | `loads` counts the solves that had to load the model from scratch, against `solves` as its denominator. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies". Advisory — nothing about the answer depends on it |
-| **earlier results stop reading** | a rebind replaces the label frames every reader joins through, so a `Result` from before it raises rather than laying its values out over coordinates they were not computed on. Frames already read are their own data and stay valid |
+| **earlier results keep reading** | a `Result` owns its values and a reference to the label frames of the build it answered; a rebind builds new frames without touching those, so an old answer stays an answer over its own coordinates. What retaining one costs is those frames staying alive until it is dropped or `close()`d |
 | **a rebind that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
 
 `solve_over` is the other spelling and the one to reach for first — a sweep,

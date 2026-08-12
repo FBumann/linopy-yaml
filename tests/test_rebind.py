@@ -105,12 +105,7 @@ def test_a_rebind_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml):
 
 
 def test_a_rebind_may_be_repeated_and_each_answer_is_its_own(dispatch_yaml):
-    """The loop `rebind` exists for: bind, solve, read, bind again.
-
-    Each iteration's frame is read out before the next rebind, which is the
-    discipline a driver keeps anyway — and the reason the values are compared
-    here rather than the results.
-    """
+    """The loop `rebind` exists for: bind, solve, read, bind again."""
     with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
         served = []
         for scale in (0.5, 1.0, 1.5):
@@ -121,38 +116,40 @@ def test_a_rebind_may_be_repeated_and_each_answer_is_its_own(dispatch_yaml):
         assert bound.diagnostics().loads == 1, 'a scaled right-hand side moves no label'
 
 
-def test_a_result_from_before_a_rebind_refuses_to_read(dispatch_yaml):
-    """The one lifetime: a rebind replaces the frames the readers join through.
+def test_a_result_from_before_a_rebind_keeps_reading(dispatch_yaml):
+    """A result owns its read-back, so nothing done to the model expires it.
 
-    Values already read are their own data and stay valid, which is what makes
-    "read it out first" a discipline rather than a loss.
+    The label frames are immutable and shared: a rebind builds new ones
+    without touching what earlier results hold, so an old answer stays an
+    answer over its own coordinates — a driver keeps any result it still
+    wants, at the price of keeping that build's label frames alive.
     """
     with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        stale = bound.solve()
-        kept = stale.primal('p')
-        objective = stale.objective
+        before = bound.solve()
+        kept = before.primal('p')
+        prices = before.dual('power_balance')
 
-        bound.rebind({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [3.0, 1.0, 2.0]})})
+        after = bound.rebind({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [3.0, 1.0, 2.0]})}).solve()
 
-        assert kept.height > 0, 'a frame read before the rebind is its own data'
-        assert stale.objective == objective, 'and the outcome needs no model to report'
-        for read in (lambda: stale.primal('p'), lambda: stale.dual('power_balance')):
-            with pytest.raises(lps.LpspecError, match='the model was rebound'):
-                read()
+        assert after.objective != before.objective, 'reordered costs move the optimum, so the two answers differ'
+        assert before.primal('p').equals(kept), 'the old result still reads, and reads its own build'
+        assert before.dual('power_balance').equals(prices), 'its duals too'
 
 
-def test_closing_a_stale_result_leaves_the_rebound_model_alone(dispatch_yaml):
-    """A result the model outgrew releases its own values and nothing else.
-
-    Otherwise leaving the `with` block of an earlier iteration would take down
-    the model the loop is still solving.
+def test_closing_a_result_never_touches_the_model(dispatch_yaml):
+    """`close` releases what the result holds — its values and its hold on the
+    label frames — never the model or the solver, which are the handle's to
+    close. So a result closed on the way out of a `with` block cannot take
+    down the model a loop is still solving, and a sibling result, holding its
+    own read-back, keeps reading.
     """
     with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        stale = bound.solve()
-        bound.rebind({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [1.0, 2.0, 3.0, 4.0]})})
-        stale.close()
+        first = bound.solve()
+        sibling = bound.solve()
+        first.close()
 
-        assert bound.solve().primal('p').height > 0, 'the live model is still there to solve'
+        assert sibling.primal('p').height > 0, 'a sibling holds its own read-back'
+        assert bound.solve().primal('p').height > 0, 'the model is still there to solve'
 
 
 @pytest.mark.parametrize(

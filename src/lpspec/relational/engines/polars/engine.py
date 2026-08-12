@@ -33,7 +33,7 @@ from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler, TermFragment
-from lpspec.relational.result import Diagnostics, Result
+from lpspec.relational.result import Diagnostics, ReadBack, Reader, Result
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -79,9 +79,6 @@ class PolarsEngine:
     """Build a :class:`Program` into polars frames, then sink it."""
 
     def __init__(self) -> None:
-        #: Bumped by every build, so a :class:`Result` can tell that the model
-        #: it reads through is no longer the one it was an answer to.
-        self._generation = 0
         #: The solver holding this model, kept between solves — the only thing
         #: a rebuild does *not* throw away. ``None`` until one has been solved.
         self._solver: sinks.Solver | None = None
@@ -152,7 +149,6 @@ class PolarsEngine:
         the loaded solver holds survives as the digest it recorded at its load.
         """
         self._reset()
-        self._generation += 1
 
         self._program = program
         self._bound = bind(program, sources)
@@ -495,8 +491,7 @@ class PolarsEngine:
         return Result(
             _status=status,
             _objective=objective,
-            _engine=self,
-            _generation=self._generation,
+            _read=self._readback(),
             _primal_values=primal,
             _dual_values=dual,
         )
@@ -519,111 +514,41 @@ class PolarsEngine:
             loads=self._loads,
         )
 
-    def _solution_frame(self, name: str, values: pl.Series | None) -> pl.LazyFrame:
-        """The tidy solution of variable *name*: ``(dims…, value)``.
+    def _readback(self) -> ReadBack:
+        """The layout a :class:`Result` reads through, captured for one solve.
 
-        A slice, never a dense array and never a join. *values* is the solver's
-        column vector, held by the :class:`Result` that asks — labels are the
-        build's and shared, values are one solve's and are not.
-
-        **In label order**: a label *is* row-major position in the coordinate
-        product, so the caller gets the model's own order rather than the order
-        a hash join happened to finish in.
+        References rather than copies: every result of one build points at the
+        same label frames, and :meth:`build` replacing the registries takes
+        nothing from what earlier results still hold. The blocks are what make
+        a declaration's share of a solver vector a slice
+        (:func:`labels.frame` hands each one a contiguous, dense run), and the
+        string dims are recorded here because the binder is gone by the time
+        anyone reads.
         """
         assert self._program is not None
-        assert values is not None, 'no solve has stored a primal'
-        return self._read_back(name, self._variables[name], self._program.variable(name).dims, values)
-
-    def _read_back(
-        self,
-        name: str,
-        coordinates: pl.LazyFrame,
-        dims: tuple[str, ...],
-        values: pl.Series,
-    ) -> pl.LazyFrame:
-        """One declaration's coordinates in label order, beside its values.
-
-        **The order is not re-established here, because it was never lost**:
-        :func:`labels.frame` numbers a sorted frame and hands back a
-        label-ascending one.
-
-        The declaration owns a contiguous, dense run of labels
-        (:attr:`_blocks`) and the solver's vector is positional in the same
-        index, so coordinates and values line up by construction. The slice is
-        attached as a column rather than concatenated as a frame, so a
-        mismatched length raises instead of padding with nulls.
-
-        **Dim columns leave in ``String``**, where the build holds them as
-        ``pl.Enum`` (#541). That encoding is internal and every gram of its win
-        is upstream of here, but a returned frame is something a caller *joins
-        against their own data* — and polars refuses ``Enum`` against
-        ``String`` with a message about dtypes that names nothing about the
-        cause. Two frames of one sweep will not even concatenate when their
-        slices bound different members.
-
-        The cast sits inside this projection rather than after it, so the
-        string column is produced once instead of widened from an Enum that
-        also exists, which is cheaper in both wall and peak (#593). Declaration
-        order is the *row* order and survives, never having been the dtype's to
-        carry.
-        """
-        start, height = self._blocks[name]
-        labelled = coordinates.select(*dims).with_columns(values.slice(start, height))
-        return labelled.with_columns(pl.col(d).cast(pl.String) for d in self._string_dims(dims))
-
-    def _string_dims(self, dims: tuple[str, ...]) -> list[str]:
-        """Those of *dims* the binder encoded as ``Enum`` — its string ones."""
-        assert self._bound is not None, 'build() has not run'
-        return [d for d in dims if self._bound.is_enum_encoded(d)]
-
-    def _primal(self, name: str, values: pl.Series | None) -> pl.DataFrame:
-        return self._solution_frame(name, values).collect(engine='streaming')
-
-    def _dual(self, name: str, values: pl.Series) -> pl.DataFrame:
-        """:meth:`_solution_frame` against row labels instead of column ones.
-
-        Ordered and sliced the same way, for the same reason — a constraint
-        row's label is its position in that constraint's coordinate product.
-        """
-        assert self._program is not None
-        dims = self._program.constraint(name).dims
-        return self._read_back(name, self._constraints[name], dims, values).collect(engine='streaming')
-
-    def _no_duals_reason(self, termination_condition: str) -> str:
-        """Why a solve that *did* leave values still has no duals.
-
-        Integrality is decidable from the program, and naming the variable is
-        actionable where "the solver reported none" is not.
-        """
-        assert self._program is not None
-        discrete = sorted(v.name for v in self._program.variables if v.variable_type != 'continuous')
-        if discrete:
-            names = ', '.join(f"'{n}'" for n in discrete)
-            return (
-                f'duals are undefined for a mixed-integer model: {names} '
-                f'{"is" if len(discrete) == 1 else "are"} not continuous. '
-                f'Drop the integrality to price the LP relaxation instead.'
-            )
-        return (
-            f'the solver returned no dual solution, though the solve terminated '
-            f'{termination_condition!r}. Duals come from a simplex basis, which a '
-            f'run stopped short of one does not have.'
+        return ReadBack(
+            variables={v.name: self._reader(v.name, self._variables[v.name], v.dims) for v in self._program.variables},
+            constraints={
+                c.name: self._reader(c.name, self._constraints[c.name], c.dims) for c in self._program.constraints
+            },
+            discrete=tuple(sorted(v.name for v in self._program.variables if v.variable_type != 'continuous')),
         )
 
-    def _solution_to_parquet(self, directory: Path, values: pl.Series | None) -> dict[str, Path]:
-        assert self._program is not None
-        directory.mkdir(parents=True, exist_ok=True)
-        written: dict[str, Path] = {}
-        for v in self._program.variables:
-            out = directory / f'{v.name}.parquet'
-            self._solution_frame(v.name, values).sink_parquet(out)
-            written[v.name] = out
-        return written
+    def _reader(self, name: str, coordinates: pl.LazyFrame, dims: tuple[str, ...]) -> Reader:
+        assert self._bound is not None, 'build() has not run'
+        start, height = self._blocks[name]
+        return Reader(
+            coordinates=coordinates,
+            dims=dims,
+            start=start,
+            height=height,
+            string_dims=tuple(d for d in dims if self._bound.is_enum_encoded(d)),
+        )
 
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Drop the built model. Optional — see :class:`Result`.
+        """Drop the built model. A :class:`Result` keeps its own read-back.
 
         ``BoundSources`` is frozen, so it cannot be emptied in place the way
         the registries can: what frees the bound frames is dropping every

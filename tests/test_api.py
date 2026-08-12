@@ -265,10 +265,10 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
 def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_frame_inputs):
     """No lifetime to manage: reading is valid until you say otherwise.
 
-    The built model is frames this process owns, so nothing expires on its own
-    and a caller who never closes loses nothing but memory. `close()` is there
-    to hand a large model back early, and it means what it says — after it,
-    there is nothing left to read.
+    A result owns its read-back, so nothing expires it from outside and a
+    caller who never closes loses nothing but memory. `close()` is there to
+    release the label frames it pins early, and it means what it says — after
+    it, there is nothing left to read.
     """
     sources, coords = dispatch_frame_inputs
     result = lps.solve(dispatch_yaml, sources, coords=coords)
@@ -459,12 +459,12 @@ def test_a_wrong_model_raises_one_tree(mistake: str, raw: dict[str, object], tmp
 
 
 def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs):
-    """`close` releases the model the readers join against, and they should say so.
+    """`close` releases the read-back the readers lay values over, and they say so.
 
-    The status gate cannot notice: closing frees the model, not the solve, so
-    `is_readable` stays true and the reader used to fall through to a bare
-    `AssertionError` from the engine. Frames read before the close are their
-    own data and stay valid, which is the half worth stating in the message.
+    The status gate cannot notice: closing releases the coordinates, not the
+    solve, so `is_readable` stays true and the reader used to fall through to
+    a bare `AssertionError`. Frames read before the close are their own data
+    and stay valid, which is the half worth stating in the message.
     """
     sources, coords = dispatch_frame_inputs
     sol = lps.solve(dispatch_yaml, sources, coords=coords)
