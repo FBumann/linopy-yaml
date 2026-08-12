@@ -117,11 +117,6 @@ class DuckExecutor(Engine):
     executor, because none of it is engine work.
     """
 
-    _cols: pl.DataFrame | None
-    _obj: pl.DataFrame | None
-    _rows: pl.DataFrame | None
-    _matrix: pl.DataFrame | None
-    _matrix_starts: Any
     _con: duckdb.DuckDBPyConnection
 
     def __init__(self) -> None:
@@ -129,6 +124,23 @@ class DuckExecutor(Engine):
         self._bound: BoundSources | None = None
         self._compiler: DuckCompiler | None = None
         self._program: plan.Program | None = None
+        #: The model, one table per declaration, in declaration order — which
+        #: is the order `_tables` stacks them in and so the order `col` and
+        #: `row` count in. It stays here until a sink asks for it.
+        self._col_tables: list[str] = []
+        self._row_shares: list[str] = []
+        self._matrix_tables: list[str] = []
+        self._obj_tables: list[str] = []
+        #: How many entries each built row owns, taken per constraint while its
+        #: matrix was still in duckdb. `_starts` sums them into the CSR index.
+        self._row_lengths: list[pl.Series] = []
+        #: `(variable type, how many columns)` per variable, in declaration
+        #: order — the runs `_vtypes` spells out. Kept here rather than read off
+        #: `_blocks`, which is keyed by declaration name and so cannot tell a
+        #: variable from a constraint that shares its name.
+        self._col_runs: list[tuple[str, int]] = []
+        #: The four frames, once something has drained them.
+        self._cached: sinks.ModelTables | None = None
         self._var_tables: dict[str, str] = {}
         self._row_tables: dict[str, str] = {}
         #: the dims each declared name is read through — what `plan.free_prefix`
@@ -140,7 +152,6 @@ class DuckExecutor(Engine):
         #: `Engine._read_back` slices a solver vector by, on both engines
         self._blocks: dict[str, tuple[int, int]] = {}
         self._omitted: dict[str, int] = {}
-        self._matrix_starts: Any = None
         #: `(head, kept, ranked survivors)` when the last label frame
         #: factored — `None` otherwise. Read only by `_bounds_run`.
         self._rectangle: tuple[tuple[str, ...], tuple[str, ...], Relation] | None = None
@@ -199,11 +210,28 @@ class DuckExecutor(Engine):
         return name
 
     def build(self, program: plan.Program, sources: Mapping[str, Any]) -> None:
-        """Bind *sources*, then build every declaration into the model frames.
+        """Bind *sources*, then build every declaration into the model tables.
 
         Binding is `relational/binding.py`, shared with the polars engine: it
         is `scan_parquet` plus dtype and duplicate-coordinate validation, which
         is what a caller's data has to survive whoever builds the model.
+
+        **Nothing crosses into polars here.** Each declaration's share is a
+        duckdb table, and the four frames a sink reads are assembled from them
+        once, in :meth:`_tables`. A build that is never sunk never pays for a
+        frame at all, and a build that is pays for each exactly once — where
+        fetching per declaration paid a Python round trip and a polars
+        concatenate per variable and per constraint.
+
+        **It does not pay for itself yet, and that is the point of the step.**
+        Writing each share into duckdb rather than streaming it straight out
+        costs 1.23-1.26x of build at the `l` rung, and `CREATE TABLE` is 82% of
+        what a build now spends (#399). Peak does not move to meet it — 0.95x
+        to 1.11x — because `ModelTables` still takes whole polars frames, so at
+        the seam the model exists on both sides at once. The copy disappears,
+        rather than moving, when a sink can read its blocks from whichever
+        engine built them; until then this trades wall for a boundary in the
+        right place.
         """
         self._program = program
         self._name_dims = plan.name_dims(program)
@@ -215,15 +243,11 @@ class DuckExecutor(Engine):
             self._con, program, dims, params, bound.cardinality, bound.boolean_parameters, self._var_tables
         )
 
-        cols = [self._build_variable(v) for v in program.variables]
-        built = [self._build_constraint(c) for c in program.constraints]
-        objective = self._build_objective(program.objective)
-
-        self._cols = sinks.stack(cols, _COLS)
-        self._rows = sinks.stack([r for r, _ in built], _ROWS)
-        stacked = sinks.stack([m for _, m in built if m is not None], _MATRIX)
-        self._matrix, self._matrix_starts = sinks.compress_rows(stacked, self._n_rows)
-        self._obj = sinks.stack([objective] if objective is not None else [], _OBJ)
+        for v in program.variables:
+            self._build_variable(v)
+        for c in program.constraints:
+            self._build_constraint(c)
+        self._build_objective(program.objective)
 
     @property
     def _variables(self) -> Mapping[str, pl.LazyFrame]:
@@ -376,8 +400,8 @@ class DuckExecutor(Engine):
 
     # -- declarations ---------------------------------------------------
 
-    def _build_variable(self, v: plan.VariableDeclaration) -> pl.DataFrame:
-        """One variable's labelled relation, and its share of ``cols``."""
+    def _build_variable(self, v: plan.VariableDeclaration) -> None:
+        """One variable's labelled relation, and its share of ``cols``, as tables."""
         start = self._n_cols
         self._rectangle = None
         name, self._n_cols = self._label_frame(v.dims, v.where, 'var_label', start)
@@ -392,14 +416,15 @@ class DuckExecutor(Engine):
         # they do not.
         repeating = self._repeating_bounds(v)
         bounds = repeating if repeating is not None else self._sorted_bounds(v, name)
-        # `vtype` is attached here rather than selected as a literal: one word
-        # per column is one *copy* of that word per row over the wire, and the
-        # frame's stated dtype is an Enum holding four bytes.
-        cols = bounds.pl().with_columns(pl.lit(v.variable_type, dtype=sinks.VTYPE).alias('vtype'))
-        bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
+        # `vtype` is not stored: every column of one declaration carries the
+        # same word, so it is a run per variable rather than a value per row,
+        # and `_vtypes` spells it out from the blocks at the sink seam.
+        table = self._relation(bounds, 'cols', materialise=True)
+        self._col_tables.append(table)
+        self._col_runs.append((v.variable_type, self._n_cols - start))
+        bad = self._count(self._con.table(table).filter(SQLExpression('lb IS NULL OR ub IS NULL')))
         if bad:
             raise DataError(null_bounds_message(v.name, bad))
-        return cols
 
     def _sorted_bounds(self, v: plan.VariableDeclaration, labels: str) -> Relation:
         """``(lb, ub)`` in label order, by sorting — always available.
@@ -484,8 +509,8 @@ class DuckExecutor(Engine):
             )
         )
 
-    def _build_constraint(self, c: plan.ConstraintDeclaration) -> tuple[pl.DataFrame, pl.DataFrame | None]:
-        """One constraint as its ``rows`` and its share of the matrix."""
+    def _build_constraint(self, c: plan.ConstraintDeclaration) -> None:
+        """One constraint's ``rows`` and its share of the matrix, as tables."""
         lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs")
         rhs = self._q.expression(c.rhs, f"constraint '{c.name}' rhs")
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
@@ -505,18 +530,27 @@ class DuckExecutor(Engine):
         self._blocks[c.name] = (start, self._n_rows - start)
         frame = self._con.table(name)
 
-        rows = self._constant_side(frame, consts, c.sense).pl()
-
+        declared = self._n_rows - start
         if not terms:
-            self._omitted[c.name] = rows.height
+            self._omitted[c.name] = declared
             self._blocks[c.name] = (start, 0)
             self._n_rows = start
             self._row_tables[c.name] = self._relation(frame.filter(ConstantExpression(False)), 'lbl', materialise=False)
-            return rows.clear(), None
+            return
 
-        matrix = self._matrix_side(frame, terms).pl()
-        rows, matrix, self._n_rows = self._drop_termless_rows(c.name, name, rows, matrix, start)
-        return rows, matrix
+        rows = self._relation(self._constant_side(frame, consts, c.sense), 'rows', materialise=True)
+        matrix = self._relation(self._matrix_side(frame, terms), 'mat', materialise=True)
+        # `(row, entries)` for the rows that kept a term, ascending. Small — one
+        # row per constraint row, not per nonzero — and it answers both
+        # questions this constraint still has: which rows survived, and how many
+        # entries each owns, which is the CSR index `_tables` needs.
+        lengths = self._con.table(matrix).aggregate(f'{q("row")}, count(*) AS n', q('row')).order(q('row')).pl()
+        if lengths.height != declared:
+            rows, matrix = self._drop_termless_rows(c.name, name, rows, matrix, start, declared, lengths)
+        self._row_shares.append(rows)
+        self._matrix_tables.append(matrix)
+        self._row_lengths.append(lengths.get_column('n'))
+        self._n_rows = start + lengths.height
 
     def _constant_side(self, frame: Relation, consts: list[tuple[TermFragment, float]], sense: str) -> Relation:
         """``(row, sense, rhs)`` — every constant fragment folded onto the frame."""
@@ -570,54 +604,72 @@ class DuckExecutor(Engine):
         return stacked.order(q('row'))
 
     def _drop_termless_rows(
-        self, constraint: str, labels: str, rows: pl.DataFrame, matrix: pl.DataFrame, start: int
-    ) -> tuple[pl.DataFrame, pl.DataFrame, int]:
+        self,
+        constraint: str,
+        labels: str,
+        rows: str,
+        matrix: str,
+        start: int,
+        declared: int,
+        lengths: pl.DataFrame,
+    ) -> tuple[str, str]:
         """Rows that kept no variable term are not built, and the block closes up.
 
-        The polars engine's twin, and the reason it is written twice rather
-        than shared: the frames are polars on both sides, but the *label
-        relation* is a duckdb table here, so the renumbering that follows the
-        drop is a window over that table rather than a `replace_strict` on a
-        frame. The rule itself is the language's (SPEC §6) and must not differ —
-        a row with no variables asserts something about constants, which the
-        solver cannot act on.
+        A row with no variable terms asserts something about constants, which
+        the solver cannot act on, so it is not built (SPEC §6). Labels are dense
+        and the dual read-back reads a block by position, so the drop cannot
+        leave a gap: the survivors are renumbered from *start*, here and in the
+        label relation together.
 
-        Labels are dense, and the dual read-back reads a block by position, so
-        a dropped row cannot leave a gap: the survivors are renumbered from
-        *start* and the row counter rewinds to match.
+        *lengths* already names the survivors in ascending order — one row per
+        surviving constraint row — so the renumbering is a join against it
+        rather than a second pass over the matrix. The three tables it rewrites
+        are the constraint's own; nothing built before this one moves.
+
+        The polars engine's twin, and written twice for the reason the engines
+        are: the frames are polars there and tables here. The *rule* is the
+        language's and may not differ, which `test_engine_parity.py` is what
+        checks.
         """
-        kept = matrix.get_column('row').unique()
-        if kept.len() == rows.height:
-            return rows, matrix, start + rows.height
-
-        surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
-        renumber = surviving.select('row').with_row_index('__new__', offset=start)
-        self._omitted[constraint] = rows.height - surviving.height
-        self._blocks[constraint] = (start, surviving.height)
-        remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
-        dropped = rows.filter(~pl.col('row').is_in(kept)).select('row')
-        rows = surviving.with_columns(pl.col('row').replace_strict(remap))
-        matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
-        self._row_tables[constraint] = self._relation(
-            self._surviving_labels(constraint, labels, dropped, start), 'lbl', materialise=True
+        self._omitted[constraint] = declared - lengths.height
+        self._blocks[constraint] = (start, lengths.height)
+        remap = self._register(
+            f'__remap {constraint}__',
+            lengths.select('row').with_row_index('__new__', offset=start).cast({'__new__': pl.Int64}),
         )
-        return rows, matrix, start + surviving.height
+        renumbered = self._con.table(remap).set_alias('r')
+        rewritten = []
+        for table, columns in ((rows, ('sense', 'rhs')), (matrix, ('col', 'coeff'))):
+            kept = (
+                self._con.table(table)
+                .set_alias('l')
+                .join(renumbered, matching(('row',)))
+                .select(col('__new__', of='r').alias('row'), *(col(x, of='l') for x in columns))
+                .order(q('row'))
+            )
+            rewritten.append(self._relation(kept, 'kept', materialise=True))
+        self._row_tables[constraint] = self._relation(
+            self._surviving_labels(labels, renumbered), 'lbl', materialise=True
+        )
+        return rewritten[0], rewritten[1]
 
-    def _surviving_labels(self, constraint: str, labels: str, dropped: pl.DataFrame, start: int) -> Relation:
-        """The label relation without the *dropped* rows, renumbered from *start*.
+    def _surviving_labels(self, labels: str, renumbered: Relation) -> Relation:
+        """The label relation with only the surviving rows, renumbered.
 
-        Anti-joined against the labels that went rather than restricted to the
-        ones that stayed: a row loses all its terms rarely, so the dropped side
-        is the small frame and the survivors are most of the model.
+        An inner join against the survivors *is* the restriction and the
+        renumbering at once — the map has one row per surviving row and none
+        for a dropped one, so there is nothing left to filter.
         """
         table = self._con.table(labels)
-        absent = self._con.table(self._register(f'__dropped {constraint}__', dropped)).set_alias('r')
-        remaining = table.set_alias('l').join(absent, matching(('row',)), how='anti')
         coordinates = [c for c in table.columns if c != 'row']
-        return remaining.select(*(col(c) for c in coordinates), _ranked(['row'], start).alias('row'))
+        return (
+            table.set_alias('l')
+            .join(renumbered, matching(('row',)))
+            .select(*(col(c, of='l') for c in coordinates), col('__new__', of='r').alias('row'))
+        )
 
-    def _build_objective(self, o: plan.ObjectiveDeclaration) -> pl.DataFrame | None:
-        """The objective as ``(col, coeff)``, or ``None`` if it has no terms."""
+    def _build_objective(self, o: plan.ObjectiveDeclaration) -> None:
+        """The objective's ``(col, coeff)`` as a table, or nothing if it has no terms."""
         comp = self._q.expression(o.expression, 'objective')
         for p in comp.consts:
             if p.dims:
@@ -629,39 +681,103 @@ class DuckExecutor(Engine):
             self._obj_const += (row[0] if row else None) or 0.0
         self._obj_sense = o.sense
         if not comp.terms:
-            return None
+            return
         pieces = [p.rel.select(col('var_label').cast('INTEGER').alias('col'), col('coeff')) for p in comp.terms]
         stacked = union_all(pieces[0], pieces[1:])
         if _needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
             total = FunctionExpression('sum', col('coeff')).alias('coeff')
-            return stacked.aggregate([col('col'), total], q('col')).pl()
-        return stacked.pl()
+            stacked = stacked.aggregate([col('col'), total], q('col'))
+        self._obj_tables.append(self._relation(stacked, 'obj', materialise=True))
 
     # -- the sink seam --------------------------------------------------
 
     def _tables(self) -> sinks.ModelTables:
-        assert self._cols is not None and self._obj is not None
-        assert self._rows is not None and self._matrix is not None
-        return sinks.ModelTables(
-            cols=self._cols,
-            obj=self._obj,
-            rows=self._rows,
-            matrix=self._matrix,
-            row_starts=self._matrix_starts,
-            column_count=self._n_cols,
-            row_count=self._n_rows,
-            objective_sense=self._obj_sense,
-            objective_constant=self._obj_const,
-        )
+        """The built model as the four frames a sink reads — the one fetch.
+
+        Everything above this holds the model in duckdb. Here each frame is
+        drained once, in declaration order, and cached: a caller that writes an
+        LP file and then solves pays for the crossing once, and a caller that
+        does neither never pays at all.
+
+        ``matrix`` crosses as ``(col, coeff)`` **without** its ``row``. The
+        labels are already spent — the shares arrive in ascending row ranges,
+        each ordered — so the CSR index is a cumulative sum over
+        :attr:`_row_lengths`, counted per constraint where the entries were and
+        one number per *row* rather than per nonzero. On `storage/l` that is
+        16M labels a build no longer copies into polars to drop again.
+        """
+        if self._cached is None:
+            self._cached = sinks.ModelTables(
+                cols=self._drain(self._col_tables, _COLS[:2]).with_columns(self._vtypes()),
+                obj=self._drain(self._obj_tables, _OBJ),
+                rows=self._drain(self._row_shares, _ROWS),
+                matrix=self._drain(self._matrix_tables, ('col', 'coeff')),
+                row_starts=self._starts(),
+                column_count=self._n_cols,
+                row_count=self._n_rows,
+                objective_sense=self._obj_sense,
+                objective_constant=self._obj_const,
+            )
+        return self._cached
+
+    def _drain(self, tables: list[str], columns: tuple[str, ...]) -> pl.DataFrame:
+        """*tables* stacked and fetched, in the order they were built.
+
+        Empty is not nothing: a model may declare no objective term and no
+        constraint, and a sink still has to find the columns and dtypes it
+        reads. `sinks.stack` states them for both engines.
+        """
+        if not tables:
+            return sinks.stack([], columns)
+        projected = [self._con.table(t).select(*(col(c) for c in columns)) for t in tables]
+        return union_all(projected[0], projected[1:]).pl()
+
+    def _vtypes(self) -> pl.Series:
+        """``cols``' variable-type column, one run per declaration.
+
+        Not stored beside the bounds: every column of one variable carries the
+        same word, so what duckdb would hold is that word once per row, where
+        the frame's stated dtype is an `Enum` and :attr:`_col_runs` already says
+        how long each run is.
+        """
+        runs = [pl.repeat(t, n, dtype=sinks.VTYPE, eager=True) for t, n in self._col_runs]
+        return pl.concat(runs).alias('vtype') if runs else pl.Series('vtype', [], dtype=sinks.VTYPE)
+
+    def _starts(self) -> Any:
+        """The CSR row index: where each row's entries begin.
+
+        A cumulative sum over the per-row entry counts each constraint took
+        while its matrix was still in duckdb. `compress_rows` is the polars
+        engine's answer to the same question and reads the ``row`` column to
+        get there; this one never brings that column across.
+        """
+        import numpy as np
+
+        starts = np.zeros(self._n_rows + 1, dtype=np.int64)
+        if self._row_lengths:
+            counted = pl.concat(self._row_lengths).to_numpy()
+            starts[1 : len(counted) + 1] = counted
+        return np.cumsum(starts, out=starts)
+
+    def _count(self, rel: Relation) -> int:
+        """How many rows *rel* has, without bringing any of them across."""
+        found = rel.aggregate([SQLExpression('count(*)').alias('n')]).fetchone()
+        return int(found[0]) if found else 0
 
     def close(self) -> None:
         """Drop the built model. Calling twice is not an error."""
-        self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
+        self._cached = None
         self._bound = None
         self._var_labels.clear()
         self._row_labels.clear()
         self._blocks.clear()
         self._omitted.clear()
+        self._row_lengths.clear()
+        self._col_tables.clear()
+        self._col_runs.clear()
+        self._row_shares.clear()
+        self._matrix_tables.clear()
+        self._obj_tables.clear()
         self._compiler = None
         self._con.close()
 
