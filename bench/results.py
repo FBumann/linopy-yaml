@@ -84,6 +84,16 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
     line, already in this shape — and it is still what `bench/results/` holds,
     so the reader takes it verbatim. `.json` is pytest-benchmark's document,
     which the rest of this function unpacks.
+
+    ``versions`` is stamped by ``pytest_benchmark_update_machine_info`` in
+    ``bench/conftest.py``. The commit — dirty flag included — is what says
+    which working tree produced a number, because an editable install reports
+    the version it was synced at rather than the tree that ran.
+
+    ``nominal_variables`` is the x of every scaling table; ``columns`` is what
+    survived the mask and is a different number. ``first_build_seconds`` is
+    round 0 and never competes with the steady rounds: the two answer
+    different questions.
     """
     if path.suffix == '.jsonl':
         for line in path.read_text().splitlines():
@@ -99,11 +109,7 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
         'machine': machine.get('machine'),
         'processor': machine.get('processor') or machine.get('machine'),
         'python': machine.get('python_version'),
-        # stamped by `pytest_benchmark_update_machine_info` in bench/conftest.py
         'versions': machine.get('versions', {}),
-        # an editable install reports the version it was synced at rather than
-        # the tree that ran, so the commit — dirty flag included — is what says
-        # which working tree produced the number
         'commits': {'lpspec': _commit(commit)},
     }
 
@@ -113,8 +119,6 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
             'case': params.get('case_name'),
             'size': params.get('size'),
             'arm': params.get('arm'),
-            # the x of every scaling table. `columns` is what survived the
-            # mask and is a different number.
             'nominal_variables': _nominal(params.get('case_name'), params.get('size')),
         }
         if b['name'].startswith('test_rebuild'):
@@ -123,8 +127,6 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
                 **common,
                 'record': 'loop',
                 'first_build_seconds': series[0] if series else None,
-                # the cold build is round 0 and never competes with the rest —
-                # the two numbers answer different questions
                 'steady_build_seconds': min(series[1:]) if len(series) > 1 else None,
                 'counts': _counts(extra),
             }

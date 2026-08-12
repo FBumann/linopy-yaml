@@ -37,7 +37,7 @@ def storage_inputs():
     cost = pd.Series({'wind': 1.0, 'gas': 40.0})
     t = np.arange(n_s)
     load = pd.Series(
-        (110 + 60 * np.sin(2 * np.pi * t / 24)).round(3),  # peaks at 170 > 150
+        (110 + 60 * np.sin(2 * np.pi * t / 24)).round(3),  # peaks above the fleet's 150
         index=pd.RangeIndex(n_s, name='snapshot'),
     )
     data = {'p_max': p_max, 'cost': cost, 'load': load}
@@ -62,11 +62,13 @@ def _soc_trace(result):
 
 
 def test_a_wrapping_edge_is_cyclic_on_both_lanes(storage_inputs):
+    """`edge='wrap'` closes the recurrence, so `soc[0]` reads the last slot."""
     data, coords = storage_inputs
 
     with differential(STORAGE_YAML, data, coords, lp=True) as run:
-        # the battery must actually cycle for the model to be feasible
-        assert float(run.model.solution['discharge'].max()) > 1e-3
+        assert float(run.model.solution['discharge'].max()) > 1e-3, (
+            'the battery must actually cycle for the model to be feasible'
+        )
 
         soc, charge, discharge = _soc_trace(run.result)
         assert np.allclose(soc, np.roll(soc, 1) + 0.9 * charge - discharge, atol=1e-6)
@@ -96,13 +98,12 @@ def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inp
 
     with differential(acyclic, data, coords) as run:
         soc, charge, discharge = _soc_trace(run.result)
-        # the recurrence holds from the second snapshot on ...
-        assert np.allclose(soc[1:], soc[:-1] + 0.9 * charge[1:] - discharge[1:], atol=1e-6)
-        # ... and t=0 is governed by its own bounds alone. Asserted as the
-        # *absence of a constraint*: the old zero-start would have forced
-        # soc[0] == 0.9*charge[0] - discharge[0], and the solver is free to
-        # violate that now because no such row exists.
-        assert run.model.constraints['soc_balance'].labels.values[0] == -1, 't=0 row should not be built'
+        assert np.allclose(soc[1:], soc[:-1] + 0.9 * charge[1:] - discharge[1:], atol=1e-6), (
+            'the recurrence holds from the second snapshot on'
+        )
+        assert run.model.constraints['soc_balance'].labels.values[0] == -1, (
+            't=0 is governed by its own bounds alone, so no row is built for it'
+        )
 
 
 def test_shift_semantics_are_positional_not_lexicographic():
@@ -111,7 +112,7 @@ def test_shift_semantics_are_positional_not_lexicographic():
     couple the same neighbours."""
     n_s = 48
     labels = pd.Index([f't{i}' for i in range(n_s)], name='snapshot')
-    assert list(labels.sort_values()) != list(labels)  # sorted != positional
+    assert list(labels.sort_values()) != list(labels), 'the fixture is only a fixture if sorted != positional'
 
     p_max = pd.Series({'wind': 80.0, 'gas': 70.0})
     t = np.arange(n_s)
@@ -177,10 +178,11 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
     coords = {'snapshot': pd.RangeIndex(n_s, name='snapshot')}
 
     with differential(RAMP_YAML, data, coords) as run:
-        # the mask must actually bite: the first snapshot is dropped per generator
-        # (masked rows carry label -1 on the eager lane)
         active = int((run.model.constraints['ramp_up'].labels != -1).sum())
-        assert active == (n_s - 1) * 2
+        assert active == (n_s - 1) * 2, (
+            'the mask must bite: the first snapshot is dropped per generator, and a masked row on '
+            'the eager lane carries label -1'
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +194,7 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
     ('expression', 'expected'),
     [
         ("shift(soc, over=snapshot, by=1, edge='wrap')", Translate(Variable('soc'), 'snapshot', 1)),
-        ("shift(soc, over=snapshot, by=-2, edge='wrap')", Translate(Variable('soc'), 'snapshot', -2)),  # look-ahead
+        ("shift(soc, over=snapshot, by=-2, edge='wrap')", Translate(Variable('soc'), 'snapshot', -2)),
         ('shift(soc, over=snapshot, by=1)', Translate(Variable('soc'), 'snapshot', 1, wrap=False)),
     ],
 )
@@ -230,17 +232,25 @@ def test_fill_lowers_to_the_escape_hatch_and_a_bare_shift_does_not():
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
-        # "cyclic, and also fill the vacated slots" no longer has a spelling:
-        # one `edge=` carries all three policies, so the pair that used to
-        # contradict each other cannot be written down to be refused. What is
-        # left to check is that the keyword is closed.
-        ('shift(soc, over=snapshot, by=1, edge=nonsense)', 'is not an edge policy'),
-        # over a *variable* a vacated slot contributes no term, so a nonzero
-        # fill would be a constant standing where a term was
-        ('shift(soc, over=snapshot, by=1, edge=1)', 'only fill=0 is representable there'),
+        pytest.param(
+            'shift(soc, over=snapshot, by=1, edge=nonsense)',
+            'is not an edge policy',
+            id='the-edge-keyword-is-closed',
+        ),
+        pytest.param(
+            'shift(soc, over=snapshot, by=1, edge=1)',
+            'only fill=0 is representable there',
+            id='a-nonzero-fill-over-a-variable-is-a-constant-where-a-term-was',
+        ),
     ],
 )
 def test_fill_is_refused_where_neither_lane_can_honour_it(expression, match):
+    """`edge=` is a closed keyword, and over a variable only `edge=0` is sayable.
+
+    "Cyclic, and also fill the vacated slots" has no spelling any more: one
+    ``edge=`` carries all three policies, so the pair that used to contradict
+    each other cannot be written down to be refused.
+    """
     schema = schema_of(STORAGE_YAML)
     with pytest.raises(LanguageError, match=match):
         _lower_expr(resolved(expression, schema), schema, 't')

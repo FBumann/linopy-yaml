@@ -65,7 +65,21 @@ def walk(node: Any) -> Iterator[Any]:
 
 
 def constructs(model: Path) -> set[str]:
-    """The set of columns *model* exercises."""
+    """The set of columns *model* exercises.
+
+    ``shift`` and ``shift(edge='wrap')`` are two columns rather than one: the
+    two spellings are the acyclic and the cyclic boundary, which is the
+    distinction #330 was about, and ``wrap`` is what the node keeps them apart
+    by.
+
+    A bound counts as *declared* only where it is not the open default.
+    Reading the plan rather than the YAML is what makes ``lower: 0`` and an
+    omitted lower distinguishable.
+
+    ``piecewise:`` is the one construct read off the surface schema: it lowers
+    away into a lambda formulation, so by the time the plan exists there is
+    nothing left to recognise.
+    """
     schema = load_model(model)
     program = lower_program(schema)
     nodes = list(walk(program))
@@ -77,24 +91,14 @@ def constructs(model: Path) -> set[str]:
         elif isinstance(node, plan.GroupSum):
             used.add('sum(group_by)')
         elif isinstance(node, plan.Translate):
-            # Split rather than one `roll / shift` column: the two spellings are
-            # the acyclic and cyclic boundary, and which a model reaches for is
-            # the distinction #330 was about. `wrap` is what the node keeps them
-            # apart by.
             used.add("shift(edge='wrap')" if node.wrap else 'shift')
 
     if any(isinstance(n, plan.Predicate) for n in nodes):
         used.add('where')
     if any(v.variable_type != 'continuous' for v in program.variables):
         used.add('MILP')
-    # A bound is a *declared* one only if it is not the open default. Reading
-    # the plan rather than the YAML means `lower: 0` and an omitted lower are
-    # distinguishable, which is the whole reason for not grepping.
     if any(_bounded(v) for v in program.variables):
         used.add('bounds')
-    # `piecewise:` lowers away into a lambda formulation, so by the time the
-    # plan exists there is nothing left to recognise: the surface declaration
-    # is the only evidence it was ever there.
     if getattr(schema, 'piecewise', None):
         used.add('piecewise')
     return used
@@ -114,6 +118,10 @@ def table(models: list[tuple[str, Path]]) -> str:
 
     A dot rather than an empty cell: an empty one reads as "not checked", and
     the holes in this table are the informative part.
+
+    The ``verified`` badge means *external* verification, not "there is a
+    test": every model here is exercised by the suite, and only the ported
+    ones are checked against a number that did not come from us.
     """
     lines = [
         '| model | verified | ' + ' | '.join(f'`{c}`' if c != 'MILP' else c for c in COLUMNS) + ' |',
@@ -122,9 +130,6 @@ def table(models: list[tuple[str, Path]]) -> str:
     for name, path in models:
         used = constructs(path)
         cells = ['**✓**' if c in used else '·' for c in COLUMNS]
-        # the badge is *external* verification, not "there is a test": every
-        # model here is exercised by the suite, and only these two are checked
-        # against a number that did not come from us
         badge = f'**✔** {REFERENCES[name]["objective"]:g}' if name in REFERENCES else '·'
         lines.append(f'| [{name}]({name}.md) | {badge} | ' + ' | '.join(cells) + ' |')
     return '\n'.join(lines)
@@ -140,6 +145,10 @@ def references_table() -> str:
     ``rtol`` is a column rather than a footnote even though every port shares
     one today — a footnote saying "all matched to 1e-09" becomes quietly false
     the first time one does not, and nothing would catch it.
+
+    Corroboration runs to a paragraph, so it lands under the table as a
+    footnote rather than in a cell. ``footnotes`` is on in ``mkdocs.yml``, and
+    the repo view renders the same text as plain prose that still reads.
     """
     lines = [
         '| port | optimum | `rtol` | duals | reference |',
@@ -155,9 +164,6 @@ def references_table() -> str:
         )
         if corroborated := entry.get('corroborated_by'):
             notes.append(f'[^{name}]: {corroborated}')
-    # Corroboration runs to a paragraph, so it goes under the table rather than
-    # in a cell — `footnotes` is already on in mkdocs.yml and renders in the
-    # repo view as plain text that still reads.
     return '\n'.join(lines) + ('\n\n' + '\n\n'.join(notes) if notes else '')
 
 

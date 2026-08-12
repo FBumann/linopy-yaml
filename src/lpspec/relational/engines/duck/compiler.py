@@ -188,8 +188,11 @@ class DuckCompiler:
     # ------------------------------------------------------------------
 
     def frame(self, dims: tuple[str, ...], where: plan.Predicate | None) -> Relation:
-        """The masked coordinate product over *dims*: labels, plus the ordinals
-        a caller sorts by so labels follow declaration order."""
+        """The masked coordinate product over *dims*.
+
+        Carries the labels and the ordinals a caller sorts by, so labels
+        follow declaration order.
+        """
         out = self._coordinate_product(dims)
         if where is None:
             return out
@@ -438,7 +441,7 @@ class DuckCompiler:
         )
 
     def _sum_fragment(self, p: TermFragment, over: tuple[str, ...], context: str) -> TermFragment:
-        """Drop the summed dims. **Not an aggregate.**"""
+        """Drop the summed dims — **not** an aggregate."""
         missing = [d for d in over if d not in p.dims]
         if missing and not p.is_term:
             raise LanguageError(

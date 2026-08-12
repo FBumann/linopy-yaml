@@ -29,20 +29,18 @@ with F = the union of the links' dims, it emits:
       curve_link1(F):         (fuel * eff) <= sum(curve_lam * fuel_bp, over=bp)
 
 With adjacency, at most two *neighbouring* λ are nonzero, so the linked
-expressions lie on the piecewise curve exactly. Without it (``convex:
-true``), they range over the convex hull of the breakpoints — the correct
-relaxation for convex/concave curves under optimisation pressure.
+expressions lie on the curve exactly. Without it (``convex: true``) they range
+over the convex hull of the breakpoints — the correct relaxation for
+convex/concave curves under optimisation pressure.
 
-A link expression is judged against the *language* before expansion —
-resolved, degree-checked (:mod:`~lpspec.language.degree`), dims from
-:mod:`~lpspec.language.dimensions`. Judging it here keeps ``p * p`` named
-against the link the user wrote rather than against ``curve_link0``, a
+A link expression is judged against the *language* before expansion — resolved,
+degree-checked, dims from :mod:`~lpspec.language.dimensions` — which keeps
+``p * p`` named against the link the user wrote rather than ``curve_link0``, a
 declaration they never saw.
 
-Two verdicts are deliberately elsewhere. What a plan node can represent is the
-consuming lane's business — this module runs in lanes that build no plan
-(docs/ARCHITECTURE.md, "What counts as language"). Curvature is a property of
-the breakpoint *values*, so it needs data and lives in :mod:`lpspec.sources`.
+Two verdicts are deliberately elsewhere: what a plan node can represent is the
+consuming lane's business, and curvature is a property of the breakpoint
+*values*, so it needs data and lives in :mod:`lpspec.sources`.
 """
 
 from __future__ import annotations
@@ -68,13 +66,32 @@ def expand_piecewise(
 ) -> Model:
     """Return *schema* with every ``piecewise:`` block expanded away.
 
+    The adjacency constraint shifts with ``edge=0`` rather than a bare
+    ``shift``: at the first breakpoint the vacated term must contribute zero,
+    giving ``lam <= seg``. Left absent it would propagate and drop that row,
+    leaving the first lambda unconstrained by segment selection — a wrong MILP
+    with no error, which is why #289 kept the escape hatch.
+
     ``known_variables`` widens the variable set the same way it does for any
     other expression: a link may name a variable the model being extended
     already has, and the frame is the union of the links' dims, so resolution
     has to see those names to compute it.
+
+    Building the expanded ``Model`` validates it, so the result is memoised
+    on *schema* keyed by the namespace it was expanded against — a validated
+    schema already carries the expansion its own validation built
+    (:class:`Model` expands as a check on the way in), and asking again
+    returns it rather than validating a second copy.
+
+    Raises:
+        PiecewiseExpansionError: A block naming something that does not exist,
+            or emitting a name the file already declares.
     """
     if not schema.piecewise:
         return schema
+    key = expansion_key(known_variables)
+    if schema._expansion is not None and schema._expansion[0] == key:
+        return schema._expansion[1]
 
     raw = schema.model_dump()
     raw.setdefault('variables', {})
@@ -111,16 +128,18 @@ def expand_piecewise(
             }
             raw['constraints'][f'{name}_adjacency'] = {
                 'foreach': [*frame, pw.over],
-                # fill=0 rather than a bare shift: at the first breakpoint the
-                # vacated term must contribute zero, giving `lam <= seg`. Left
-                # absent it would propagate and drop that row, leaving the first
-                # lambda unconstrained by segment selection — a wrong MILP with
-                # no error, which is why #289 kept the escape hatch.
                 'expression': f'{lam} <= {seg} + shift({seg}, over={pw.over}, by=1, edge=0)',
             }
 
-    raw['piecewise'].clear()  # every block is now expanded away
-    return Model.model_validate(raw, context={'known_variables': known_variables})
+    raw['piecewise'].clear()
+    expanded = Model.model_validate(raw, context={'known_variables': known_variables})
+    schema._expansion = (key, expanded)
+    return expanded
+
+
+def expansion_key(known_variables: Mapping[str, Sequence[str]]) -> dict[str, tuple[str, ...]]:
+    """*known_variables* normalised for equality, however its sequences are typed."""
+    return {name: tuple(dims) for name, dims in known_variables.items()}
 
 
 def _validate_block(
@@ -129,7 +148,13 @@ def _validate_block(
     pw: PiecewiseBlock,
     known_variables: Mapping[str, Sequence[str]] = MappingProxyType({}),
 ) -> tuple[str, ...]:
-    """Check references and infer the frame (union of the links' dims)."""
+    """Check references and infer the frame (union of the links' dims).
+
+    Every name the expansion will emit is checked against what the file
+    already declares — one list per kind rather than one loop per name family,
+    so a new emitted declaration is a name here, not a fourth loop to
+    remember.
+    """
     ctx = f"piecewise '{name}'"
     if pw.over not in schema.dimensions:
         raise PiecewiseExpansionError(f"{ctx}: over references undeclared dimension '{pw.over}'")
@@ -161,9 +186,6 @@ def _validate_block(
             if d not in frame:
                 frame.append(d)
 
-    # Every name the expansion will emit, checked against what the file already
-    # declares. One list per kind rather than one loop per name family: a new
-    # emitted declaration is then a name here, not a fourth loop to remember.
     emitted_constraints = (
         f'{name}_convexity',
         f'{name}_pick',

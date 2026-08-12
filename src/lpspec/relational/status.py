@@ -1,19 +1,15 @@
 """What a solve returned, on two axes.
 
-Copied — deliberately, spelling for spelling — from ``linopy.constants``.
-Anyone arriving from linopy should not have to learn a second vocabulary for
-the same facts, and `tests/test_solve_status.py` asserts the tables still
-match linopy's, so drift is a test failure rather than a discovery.
+Copied spelling for spelling from ``linopy.constants``, so anyone arriving from
+linopy need not learn a second vocabulary for the same facts;
+`tests/test_solve_status.py` asserts the tables still match, making drift a
+test failure rather than a discovery. Nothing here imports linopy — the engine
+may not (hard rule 2) — but the test does.
 
-Nothing here imports linopy: the engine may not (docs/ARCHITECTURE.md, hard rule
-2). The test may, and does — linopy is the oracle for this the same way it is
-for the math.
-
-The two axes are worth keeping separate. ``termination_condition`` is what
-the solver said; ``status`` is what it means for the caller. Note that **ok
-does not mean optimal** — a run stopped at a time limit with an incumbent is
-``ok``, because there are values worth reading. That is precisely the
-question a caller has, so it is the one :attr:`SolveStatus.is_ok` answers.
+The two axes stay separate: ``termination_condition`` is what the solver said,
+``status`` what it means for the caller. **ok does not mean optimal** — a run
+stopped at a time limit with an incumbent is ``ok``, there being values worth
+reading.
 """
 
 from __future__ import annotations
@@ -77,7 +73,7 @@ class SolveStatus:
 
     @property
     def is_ok(self) -> bool:
-        """linopy's rollup: the run is not an error, an abort or a refusal.
+        """The linopy rollup: the run is not an error, an abort or a refusal.
 
         Kept exactly as linopy defines it, because it is shared vocabulary.
         It is *not* the question "can I read values" — see
@@ -89,16 +85,13 @@ class SolveStatus:
     def is_readable(self) -> bool:
         """Whether there are primal values to read.
 
-        `is_ok` alone is not enough, and this is where we deliberately go
-        beyond linopy. Its `safe_get_solution` gates on `is_ok`, so a MIP
-        stopped at a time limit **before finding any incumbent** is `ok` and
-        its zero-filled `col_value` is read as though it were an answer. That
-        is the bug this package just fixed one level down (#115), so
-        inheriting it would be a poor trade for vocabulary parity.
+        Deliberately beyond linopy, whose ``safe_get_solution`` gates on
+        ``is_ok``: a MIP stopped at a time limit **before finding any
+        incumbent** is ``ok``, and its zero-filled ``col_value`` would be read
+        as an answer (#115).
 
-        `optimal` always has a primal. Every other `ok` condition —
-        `time_limit`, `iteration_limit`, `terminated_by_limit`, `suboptimal`,
-        `imprecise` — means "stopped early", and whether an incumbent exists
-        is a separate fact only the solver knows.
+        ``optimal`` always has a primal. Every other ``ok`` condition means
+        "stopped early", and whether an incumbent exists is a separate fact
+        only the solver knows.
         """
         return self.is_ok and self.has_primal

@@ -74,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         return cached[0]
 
     def one() -> float:
+        """One build, timed. Called once untimed to fill the bind cache."""
         ex = PolarsExecutor()
         started = time.perf_counter()
         ex.build(program, sources)
@@ -84,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     full = [one() for _ in range(args.rounds)]
 
     executor_module.bind = bind_once
-    one()  # fills the cache, and is not one of the timed rounds
+    one()
     spent.clear()
     assembly = [one() for _ in range(args.rounds)]
     executor_module.bind = real_bind

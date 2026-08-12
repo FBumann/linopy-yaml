@@ -45,42 +45,31 @@ def _write(tmp_path, **patch):
     return path
 
 
-#: One entry per way degree 1 can be lost. ``was`` records what the eager lane
-#: did before it asked the language — the divergence this module now pins.
+#: One entry per way degree 1 can be lost.
 @pytest.mark.parametrize(
-    ('expression', 'match', 'was'),
+    ('expression', 'match'),
     [
-        (
-            'sum(p * p, over=generator)',
-            'degree 2',
-            "eager multiplied and surfaced linopy's own error",
-        ),
-        (
-            'sum(cost / p, over=generator)',
-            'divisor contains variables',
-            'eager divided by a variable-carrying term and surfaced linopy/xarray',
-        ),
-        (
-            'sum(p ** 2, over=generator)',
-            r"operator '\*\*'",
-            'eager raised its own hand-copy of the sentence, compared against nothing',
-        ),
+        pytest.param('sum(p * p, over=generator)', 'degree 2', id='variable-times-variable'),
+        pytest.param('sum(cost / p, over=generator)', 'divisor contains variables', id='variable-in-a-divisor'),
+        pytest.param('sum(p ** 2, over=generator)', r"operator '\*\*'", id='an-operator-outside-the-language'),
     ],
 )
-def test_both_lanes_refuse_the_same_expression(tmp_path, data, coords, expression, match, was):
+def test_both_lanes_refuse_the_same_expression(tmp_path, data, coords, expression, match):
+    """Not just "both raise": both say the same thing.
+
+    The relational lane prefixes the declaration it was lowering; the eager lane
+    carries that as an ``add_note`` instead, so its message is the bare sentence
+    and the relational one ends with it. One source, so this cannot drift into
+    two dialects the way the hand-copied ``**`` message could.
+    """
     path = _write(tmp_path, **{'objectives.total.expression': expression})
 
     with pytest.raises(LanguageError, match=match) as eager:
-        lpspec_linopy.build(path, data=data, coords=coords)  # was: {was}
+        lpspec_linopy.build(path, data=data, coords=coords)
 
     with pytest.raises(LanguageError, match=match) as relational:
         lps.check(path)
 
-    # Not just "both raise": both say the same thing. The relational lane
-    # prefixes the declaration it was lowering; the eager lane carries that as
-    # an ``add_note`` instead, so its message is the bare sentence and the
-    # relational one ends with it. One source, so this cannot drift into two
-    # dialects the way the hand-copied `**` message could.
     assert str(relational.value).endswith(str(eager.value))
 
 

@@ -1,29 +1,18 @@
-"""GitHub-flavoured Markdown. The format that renders where the docs already live.
+r"""GitHub-flavoured Markdown. The format that renders where the docs already live.
 
-Markdown has no math of its own — GitHub, and every renderer worth using,
-delegates to MathJax, which eats LaTeX. So this is **not** a third spelling: it
-forwards every math method to :class:`LatexFormat` and writes only the document
-layer itself.
+Markdown has no math of its own — GitHub delegates to MathJax, which eats
+LaTeX — so this is **not** a third spelling: it forwards every math method to
+:class:`LatexFormat` and writes only the document layer.
 
-Forwarding rather than subclassing, deliberately. Inheritance would mean a
-method later added to ``LatexFormat`` is silently inherited here — and the two
-differ precisely in the *document* methods, so the silent case is a
-``\\paragraph`` appearing in a Markdown file. Written out, a new seam method is
-simply missing until someone decides which side it belongs on.
+Forwarding rather than subclassing, deliberately. Inheritance would silently
+inherit a method later added to ``LatexFormat``, and the two differ precisely
+in the *document* methods, so the silent case is a ``\paragraph`` in a
+Markdown file. Written out, a new seam method is simply missing until someone
+decides which side it belongs on.
 
-Two departures from the LaTeX format:
-
-- ``aligned`` inside ``$$``, not ``align``. GitHub's MathJax renders the
-  former; the latter is a numbered top-level environment and does not survive
-  a ``$$`` block.
-- No equation numbers. ``aligned`` cannot carry them, so ``numbered`` is
-  accepted and ignored rather than producing something that looks numbered and
-  is not.
-
-Why it exists: `docs/models/` writes its math by hand, and nothing checks it
-against the model beside it. This is what lets a page be generated instead —
-see `test_the_gallery_notation_is_reproducible_from_the_model` in
-`tests/test_typeset.py`.
+It exists because `docs/models/` would otherwise write its math by hand with
+nothing checking it against the model beside it — see
+`test_the_gallery_notation_is_reproducible_from_the_model`.
 """
 
 from __future__ import annotations
@@ -85,9 +74,6 @@ class MarkdownFormat:
     def fraction(self, numerator: str, denominator: str) -> str:
         return _LATEX.fraction(numerator, denominator)
 
-    def power(self, base: str, exponent: str) -> str:
-        return _LATEX.power(base, exponent)
-
     def summation(self, domain: str, body: str) -> str:
         return _LATEX.summation(domain, body)
 
@@ -95,10 +81,10 @@ class MarkdownFormat:
         return _LATEX.apply(function, argument)
 
     def joined(self, parts: list[str], operator: str) -> str:
-        """``a op b op c``, with ``\\enspace`` as the bare separator.
+        r"""``a op b op c``, with ``\enspace`` as the bare separator.
 
-        LaTeX's ``,\\ `` would be safe here too — a backslash before a *space*
-        is not a Markdown escape — but spelling it ``\\enspace`` says why
+        LaTeX's ``,\ `` would be safe here too — a backslash before a *space*
+        is not a Markdown escape — but spelling it ``\enspace`` says why
         without the reader having to know that.
         """
         return f' {operator} '.join(parts) if operator else r',\enspace '.join(parts)
@@ -110,22 +96,16 @@ class MarkdownFormat:
         return f'`{text}`'
 
     def equations(self, lines: list[Line], *, numbered: bool) -> str:
-        """One display block per equation, with the name *outside* the math.
+        r"""One display block per equation, with the name *outside* the math.
 
-        Not the `aligned` environment the LaTeX format uses, for two reasons
-        that only show up in a browser:
+        Not LaTeX's ``aligned``, for two reasons that only show up in a
+        browser: a name is not math (``\text{total\_cost}`` renders its
+        ``\_`` escape literally under MathJax, where a backtick span outside
+        the math does not), and ``aligned`` columns align *across rows*, which
+        a page showing one equation per heading has nothing to line up against.
 
-        * A name is not math. ``\\text{total\\_cost}`` is right in a LaTeX
-          document and wrong here — MathJax renders the ``\\_`` escape
-          literally, backslash and all. Outside the math it is a plain
-          backtick span, and the question does not arise.
-        * `aligned` columns align *across rows*. A page shows one equation at
-          a time under its own heading, so the columns have nothing to line up
-          against and the ``&`` separators become stretches of empty space.
-
-        The LaTeX format keeps its alignment, because a paper prints the
-        constraints as one block where the relations genuinely do line up.
-        That difference is the reason these are two formats and not one.
+        ``numbered`` is accepted and ignored — ``aligned`` cannot carry numbers,
+        and producing something that looks numbered and is not would be worse.
         """
         del numbered
         blocks = []
@@ -137,10 +117,7 @@ class MarkdownFormat:
         return '\n\n'.join(blocks)
 
     def glossary(self, title: str, entries: list[Entry]) -> str:
-        rows = '\n'.join(
-            f'| {self.math(e.symbol)} | {e.name}{e.detail}' + (f' --- {e.description}' if e.description else '') + ' |'
-            for e in entries
-        )
+        rows = '\n'.join(f'| {self.math(e.symbol)} | {e.meaning} |' for e in entries)
         return f'#### {title}\n\n| Symbol | Meaning |\n|---|---|\n{rows}'
 
     def section(self, title: str, body: str) -> str:

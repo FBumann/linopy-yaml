@@ -230,11 +230,14 @@ def nodal_prices(n: pypsa.Network) -> dict[str, list]:
 
 
 def main() -> float:
+    """Solve, and print what ``references.json`` records.
+
+    A ramp limit is the one rung that can make the instance infeasible rather
+    than merely different, and PyPSA reports that by leaving ``n.objective``
+    None — which would otherwise surface as a TypeError three lines down.
+    """
     n = build(json.loads(DATA.read_text()))
     status, condition = n.optimize(solver_name='highs')
-    # A ramp limit is the one rung that can make the instance infeasible rather
-    # than merely different, and PyPSA reports that by leaving n.objective None
-    # — which would otherwise surface as a TypeError three lines down.
     assert status == 'ok', f'{status}: {condition} — the ramp limits are tighter than the load swing'
     print(f'pypsa {pypsa.__version__}')
     print(f'objective {float(n.objective)!r}')

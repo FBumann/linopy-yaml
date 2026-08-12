@@ -17,17 +17,13 @@ So they live here once. An engine supplies four things:
 
 and inherits the rest. That split is the actual claim `engines/` makes, and it
 is why a second engine is a compiler and an assembler rather than a whole lane.
-
-:func:`needs_aggregate` is here for a different reason from the sinks: it is
-not work an engine is spared, it is a rule both must reach the *same* answer
-to. Inverting it builds a wrong model rather than a slow one, so it has one
-home.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 
@@ -36,75 +32,10 @@ from lpspec.relational import sinks
 from lpspec.relational.result import Result
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
-    from pathlib import Path
+    from collections.abc import Mapping
 
     from lpspec.relational import plan
-
-
-class Fragment(Protocol):
-    """The part of a compiled term :func:`needs_aggregate` reads.
-
-    Stated rather than imported: the two compilers' `TermFragment`s hold a
-    lazy frame and a duckdb relation respectively, and this decision reads
-    neither.
-    """
-
-    @property
-    def dims(self) -> tuple[str, ...]:
-        """The coordinates the fragment still carries."""
-
-    def survives_dropping(self, dropped: set[str]) -> bool:
-        """Whether one row per ``(dims…, var_label)`` still holds after *dropped* goes."""
-
-
-#: Each engine passes its *own* fragment type, and `may_share` reads that
-#: engine's dimension tables — so the two travel together or not at all.
-F = TypeVar('F', bound=Fragment)
-
-
-def needs_aggregate(
-    terms: Sequence[F],
-    may_share: Callable[[F, F], bool],
-    *,
-    projected: bool = False,
-) -> bool:
-    """Whether stacking *terms* can put two rows on one solver column.
-
-    Named for the answer, not the condition: an inverted test here is a wrong
-    model rather than a slow one.
-
-    Two things can put a label twice into the stack, asked separately. A
-    fragment that is not keyed already holds one twice on its own. Whether a
-    *pair* can is *may_share* — the engine's own, because it reads a dimension
-    table — which answers no for distinct variables and otherwise asks whether
-    two fragments of one variable send a label to one **row**: for
-    ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``, only
-    where a line's two ends are one bus. That second half is what makes the
-    ordinary multi-term constraint free: reading only a fragment count says the
-    aggregate is reachable for ``reserve_up + reserve_down <= p_max``, which on
-    the `fleet` rungs sorts every nonzero in the model to collapse nothing.
-
-    *projected* is what the two call sites do not share. The matrix keeps a
-    fragment's dims, so keyed — one row per ``(dims…, var_label)`` — carries
-    straight into ``(row, col)``. The objective keeps only ``var_label``, so it
-    asks the stronger question: does the key survive losing *all* dims? It does
-    exactly when ``var_label`` determines every dim the fragment still carries.
-    ``p * cost`` is keyed on dims that are all the variable's own, so a column
-    cannot repeat; ``y * w`` — ``y`` over buses, ``w`` over snapshots — is just
-    as keyed, but ``snapshot`` arrived by broadcast, so one column holds a row
-    per snapshot and their *sum* is the coefficient.
-
-    Worth 2-4x of build time on the polars engine's matrix and little on its
-    objective (#408); on the duckdb engine, 0.90-0.94x of build on the three
-    ladder cases with multi-term constraints and nothing on the other four
-    (#638). The gap is what the skipped operator costs: a sort on one engine, a
-    hash aggregate on the other. The argument is the same at both call sites on
-    both engines, so it is written once.
-    """
-    if any(not t.survives_dropping(set(t.dims) if projected else set()) for t in terms):
-        return True
-    return any(may_share(a, b) for i, a in enumerate(terms) for b in terms[i + 1 :])
+    from lpspec.relational.binding import BoundSources
 
 
 class Engine(ABC):
@@ -129,6 +60,15 @@ class Engine(ABC):
     #: for a model whose every declared row reached the solver. Filled by the
     #: engine, read by :meth:`omissions`.
     _omitted: dict[str, int]
+
+    #: What `bind` returned, for the dtypes :meth:`_read_back` undoes.
+    _bound: BoundSources | None
+
+    #: How many columns and rows the built model has. An engine counts them as
+    #: it labels; :func:`_spanning` reads them to refuse a solver vector that
+    #: describes a different model.
+    _n_cols: int
+    _n_rows: int
 
     @property
     @abstractmethod
@@ -157,16 +97,9 @@ class Engine(ABC):
     def omissions(self) -> pl.DataFrame:
         """``(constraint, rows_not_built)`` — every row that lost all its terms.
 
-        A row with no variable terms is not built (SPEC §6), and a build that
-        said nothing about it would leave a declared constraint unenforced with
-        no way to notice. This is that record: empty for a model whose every
-        declared row reached the solver, one line per constraint otherwise.
-
-        Counts rather than coordinates, deliberately. The label of a row that
-        was not built does not exist, so naming *which* coordinates went would
-        mean holding the pre-drop frame — memory proportional to the omission,
-        on the path this package measures hardest. A count is enough to be
-        noticed, which is the whole job.
+        A row with no variable terms is not built (SPEC §6). Counts, not
+        coordinates; empty for a model whose every declared row reached the
+        solver.
         """
         return pl.DataFrame(
             {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
@@ -174,18 +107,14 @@ class Engine(ABC):
         )
 
     def write(self, path: str | Path) -> None:
-        """Sink the built model to a file; the **suffix** picks the writer.
+        """Stream the built model to *path*, in the format its suffix names.
 
-        ``.lp`` today, ``.mps`` planned — an unknown suffix is an error naming
-        both sets. The caller names an output rather than a writer, which is
-        the one place this differs from :meth:`solve`: a file's format is a
-        property of the file, where which solver runs is not a property of
-        anything but the call.
+        Raises:
+            ValueError: A suffix nothing writes.
+            NotImplementedError: A format that is planned and not here yet.
         """
-        from pathlib import Path as _Path
-
-        out = _Path(path)
-        sinks.writer(out.suffix.lower())(self._tables(), out)
+        path = Path(path)
+        sinks.writer(path.suffix.lower())(self._tables(), path)
 
     def solve(
         self,
@@ -193,24 +122,23 @@ class Engine(ABC):
         solver_options: Mapping[str, Any] | None = None,
         solver_name: str = 'highs',
     ) -> Result:
-        """Sink the built model straight into a solver and solve it.
+        """Hand the built model to a solver and solve it.
 
-        ``solver_name`` picks the sink — ``highs``, which ships with the
-        package, or ``gurobi``, which needs the ``[gurobi]`` extra. Spelled
-        the way linopy spells it, and a *caller's* choice at the call: no YAML
-        file can express it, because a model means the same thing whoever
-        solves it. Neither is it an *engine's* choice — which is why this lives
-        here and not in either executor.
+        Args:
+            batch_rows: The hand-off budget in elements, defaulting to the
+                sink's own
+                (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
+            solver_options: Forwarded to the solver verbatim, in its own
+                vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
+            solver_name: ``highs``, which ships with the package, or
+                ``gurobi``, which needs the ``[gurobi]`` extra.
 
-        ``solver_options`` is forwarded verbatim to that solver, the way
-        linopy's is — ``{'time_limit': 60, 'mip_rel_gap': 0.01}``, and so
-        named in the solver's own vocabulary. ``batch_rows`` is the hand-off
-        budget in elements, and defaults to the sink's own — see
-        :data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`.
+        Returns:
+            The solution, holding this executor.
         """
         status, objective, primal, dual = sinks.solver(solver_name)(self._tables(), batch_rows, solver_options)
-        _spanning(solver_name, 'primal', primal, self._tables().column_count)
-        _spanning(solver_name, 'dual', dual, self._tables().row_count)
+        _spanning(solver_name, 'primal', primal, self._n_cols)
+        _spanning(solver_name, 'dual', dual, self._n_rows)
         return Result(
             _status=status,
             _objective=objective,
@@ -225,53 +153,58 @@ class Engine(ABC):
         """The tidy solution of variable *name*: ``(dims…, value)``.
 
         A slice, never a dense array and never a join. *values* is the solver's
-        column vector, held by the :class:`Result` that asks — the labels are
-        the build's and shared, the values are one solve's and are not.
+        column vector, held by the :class:`Result` that asks — labels are the
+        build's and shared, values are one solve's and are not.
 
-        **Ordered by label**, which is the order the coordinates already have:
-        a label *is* row-major position in the coordinate product, so sorting
-        on it hands the caller back the model's own order rather than the
-        order a hash join happened to finish in. Stated rather than inherited,
-        because the labels are not guaranteed to arrive sorted — a mask decides
-        which rows of the product survive, not how they arrive.
-
-        And once they *are* in label order there is nothing left to look up.
-        The declaration owns a contiguous, dense run of labels (:attr:`_blocks`)
-        and the solver's vector is positional in the same index, so its
-        coordinates and its values line up by construction. Matching them by
-        key instead cost 0.38 s against 0.10 s on `dispatch/l`, for the same
-        10M rows.
+        **In label order**: a label *is* row-major position in the coordinate
+        product, so the caller gets the model's own order rather than the order
+        a hash join happened to finish in.
         """
         assert self._program is not None
         assert values is not None, 'no solve has stored a primal'
-        return self._read_back(name, self._variables[name], 'var_label', self._program.variable(name).dims, values)
+        return self._read_back(name, self._variables[name], self._program.variable(name).dims, values)
 
     def _read_back(
         self,
         name: str,
-        labels: pl.LazyFrame,
-        label: str,
+        coordinates: pl.LazyFrame,
         dims: tuple[str, ...],
         values: pl.Series,
     ) -> pl.LazyFrame:
         """One declaration's coordinates in label order, beside its values.
 
-        **The order is not re-established here, because it was never lost.**
-        Both engines owe this method a label-ascending frame — polars because
-        every labelling path produces one and two of them verify it, duckdb
-        because its registry asks SQL for it on the way out. Sorting again
-        moved a full copy of the coordinates, strings included, at the moment
-        the solver's own model is still resident: the worst point in the
-        process to allocate one.
+        **The order is not re-established here, because it was never lost**:
+        :func:`labels.frame` numbers a sorted frame and hands back a
+        label-ascending one.
 
-        The slice is attached as a column rather than concatenated as a frame
-        so that a length that does not match the coordinates raises instead of
-        padding with nulls — though :func:`_spanning` has already refused a
-        vector that does not span the model, so what is left here is the block
-        bookkeeping alone.
+        The declaration owns a contiguous, dense run of labels
+        (:attr:`_blocks`) and the solver's vector is positional in the same
+        index, so coordinates and values line up by construction. The slice is
+        attached as a column rather than concatenated as a frame, so a
+        mismatched length raises instead of padding with nulls.
+
+        **Dim columns leave in ``String``**, where the build holds them as
+        ``pl.Enum`` (#541). That encoding is internal and every gram of its win
+        is upstream of here, but a returned frame is something a caller *joins
+        against their own data* — and polars refuses ``Enum`` against
+        ``String`` with a message about dtypes that names nothing about the
+        cause. Two frames of one sweep will not even concatenate when their
+        slices bound different members.
+
+        The cast sits inside this projection rather than after it, so the
+        string column is produced once instead of widened from an Enum that
+        also exists, which is cheaper in both wall and peak (#593). Declaration
+        order is the *row* order and survives, never having been the dtype's to
+        carry.
         """
         start, height = self._blocks[name]
-        return labels.select(*dims).with_columns(values.slice(start, height))
+        labelled = coordinates.select(*dims).with_columns(values.slice(start, height))
+        return labelled.with_columns(pl.col(d).cast(pl.String) for d in self._string_dims(dims))
+
+    def _string_dims(self, dims: tuple[str, ...]) -> list[str]:
+        """Those of *dims* the binder encoded as ``Enum`` — its string ones."""
+        assert self._bound is not None, 'build() has not run'
+        return [d for d in dims if self._bound.is_enum_encoded(d)]
 
     def _primal(self, name: str, values: pl.Series | None) -> pl.DataFrame:
         return self._solution_frame(name, values).collect(engine='streaming')
@@ -284,7 +217,7 @@ class Engine(ABC):
         """
         assert self._program is not None
         dims = self._program.constraint(name).dims
-        return self._read_back(name, self._constraints[name], 'row', dims, values).collect(engine='streaming')
+        return self._read_back(name, self._constraints[name], dims, values).collect(engine='streaming')
 
     def _no_duals_reason(self, termination_condition: str) -> str:
         """Why a solve that *did* leave values still has no duals.

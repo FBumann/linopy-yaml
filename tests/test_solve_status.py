@@ -141,7 +141,7 @@ def test_an_infeasible_solve_reports_both_axes_and_a_nan_objective():
         assert solution.status == 'warning'
         assert solution.termination_condition == 'infeasible'
         assert not solution.is_ok
-        assert solution.objective != solution.objective  # nan, not 0.0
+        assert solution.objective != solution.objective, 'nan, not 0.0'
 
 
 def test_reading_results_without_a_solution_raises(tmp_path):
@@ -199,9 +199,9 @@ def test_a_time_limit_with_no_incumbent_is_ok_but_unreadable():
     """
     model, sources = _knapsack()
     with lps.solve(model, sources, solver_options={'time_limit': 0.0}) as result:
-        assert result.is_ok  # linopy's rollup says the run was not an error
-        assert not result.has_primal  # but nothing was found
-        assert result.objective != result.objective  # nan
+        assert result.is_ok, "linopy's rollup says the run was not an error"
+        assert not result.has_primal, 'but nothing was found'
+        assert result.objective != result.objective, 'nan, not 0.0'
         with pytest.raises(NoSolutionError, match='time_limit'):
             result.primal('x')
 

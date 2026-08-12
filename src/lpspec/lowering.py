@@ -1,28 +1,25 @@
 """Lower a parsed YAML schema (typed AST) to the relational logical plan.
 
-This is the lowering seam (docs/ARCHITECTURE.md, "The relational lane"): it
-consumes the same typed AST the
-eager builder evaluates (`expression_parser` / `where_parser` nodes) and emits
-a :class:`~lpspec.relational.plan.Program`. It lives on the language side —
-the engine subpackage stays free of YAML knowledge, and this module never
-imports the eager builder.
+The lowering seam (docs/ARCHITECTURE.md, "The relational lane"): it consumes
+the same typed AST the eager builder evaluates and emits a
+:class:`~lpspec.relational.plan.Program`. It lives on the language side, so the
+engine subpackage stays free of YAML knowledge and this module never imports
+the eager builder.
 
-Covered: foreach, where, arithmetic (+ - * /), sum, sum, shift,
-comparison, and binary/integer variables (variable_type). Constructs with no
-lowering raise :class:`~lpspec.errors.LanguageError` naming
-the construct and its rewrite — never a pointer to another backend: the two
-lanes accept the same language, and a rejection here is a language gap
-(docs/ROADMAP.md), not a routing decision.
+Constructs with no lowering raise :class:`~lpspec.errors.LanguageError` naming
+the construct and its rewrite, never a pointer to another backend: the two
+lanes accept the same language, so a rejection here is a language gap
+(docs/ROADMAP.md) rather than a routing decision.
 
 Semantics mirror the eager builder exactly:
+
 - a reduction over a dim the operand does not carry is an error, not a silent
   identity — ``dimensions.py`` owns that rule and this module asks it;
-- a constraint is **one rule** and carries its own name, so a row is read back
-  by the name the file writes — there is no positional suffix to guess (#298);
-- a file declares one objective, which is likewise one expression;
-- an objective sums each term over the dims that term carries, which is what
-  term fragments do for free and what the eager lane has to distribute for
-  (``builder._objective_expression``).
+- a constraint is **one rule** carrying its own name, so a row is read back by
+  the name the file writes, with no positional suffix to guess (#298);
+- a file declares one objective, likewise one expression;
+- an objective sums each term over the dims that term carries, which term
+  fragments do for free and the eager lane has to distribute for.
 """
 
 from __future__ import annotations
@@ -76,6 +73,10 @@ def lower_program(schema: Model) -> plan.Program:
 
     A ``binary:`` variable lowers with fixed 0/1 bounds, matching linopy's
     ``binary=True``.
+
+    Raises:
+        LanguageError: A construct outside the streaming language, named with
+            its rewrite.
     """
     schema = expand_piecewise(schema)
     ns = Namespace.of(schema)
@@ -148,23 +149,16 @@ def lower_program(schema: Model) -> plan.Program:
 def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expression:
     """Rewrite one resolved core-AST expression as a plan expression.
 
-    Three rules this function relies on, none of them stated here. The call
-    shape comes from ``helpers.call_shape_error``, which resolution has already
-    applied — it is asked again here so an AST that skipped resolution gets the
-    language's wording rather than an ``IndexError``. The dim rules come from
-    ``dimensions.dims_of`` over the *core AST*: whether an operand carries the
-    dim it is being reduced along is a language question, and lowering asks it
-    rather than answering it a second time. Degree is likewise the language's
-    rule, not the plan's — asked here, answered in ``language/degree.py``, and
-    asked identically by the eager lane.
+    Three language rules are *asked* here and answered elsewhere: the call
+    shape (``helpers.call_shape_error``, re-asked so an AST that skipped
+    resolution gets the language's wording rather than an ``IndexError``), the
+    dim rules (``dimensions.dims_of``) and degree (``language/degree.py``).
 
-    What stays here is what is genuinely about the plan: which node a call
-    becomes, and the shapes a node cannot represent — a ``GroupSum`` groups by
-    a declared coordinate, a ``Translate`` distance is an integer literal.
-    ``Sum`` and ``GroupSum`` stay two nodes even though the surface has one
-    verb: reducing a dim away and reducing it into another are different
-    relational shapes, and the executor cases were never the thing the surface
-    was collapsing.
+    What stays is about the plan: which node a call becomes, and the shapes a
+    node cannot represent — a ``GroupSum`` groups by a declared coordinate, a
+    ``Translate`` distance is an integer literal. ``Sum`` and ``GroupSum`` stay
+    two nodes under one surface verb, reducing a dim away and reducing it into
+    another being different relational shapes.
     """
     if isinstance(node, NumberNode):
         return plan.Constant(node.value)
@@ -292,11 +286,9 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
 def _check_dim_rules(node: FunctionCallNode, schema: Model, context: str) -> None:
     """Apply the language's dim rules to a helper call, discarding the dim set.
 
-    Lowering wants the *raise*, not the answer: ``dimensions`` decides whether
-    an operand carries the dim it is being reduced along, and a second copy of
-    that decision here is a second thing to keep in step. It is called after
-    the plan-shape checks so those get to speak first, and only for the dims of
-    one call — the enclosing frame is ``dimensions.check_schema``'s business.
+    Lowering wants the *raise*, not the answer. Called after the plan-shape
+    checks so those speak first, and only for one call's dims — the enclosing
+    frame is ``dimensions.check_schema``'s business.
     """
     dims_of(node, schema, context)
 
@@ -304,24 +296,21 @@ def _check_dim_rules(node: FunctionCallNode, schema: Model, context: str) -> Non
 def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool) -> float | None:
     """The number an ``edge=`` names, or ``None`` for the absence default.
 
-    One kwarg, three policies: ``edge='wrap'`` is cyclic and vacates nothing —
-    the caller sends it straight to the plan and never here, so the pair that
-    used to contradict each other, a cyclic call also asking for a fill, is
-    unrepresentable rather than refused. A number is the value the vacated
-    slots contribute, and an absent ``edge=`` leaves them absent.
+    One kwarg, three policies. ``edge='wrap'`` is cyclic and never reaches here,
+    which makes a cyclic call that also asks for a fill unrepresentable rather
+    than refused; a number is what the vacated slots contribute; an absent
+    ``edge=`` leaves them absent.
 
-    **The right fill is positional**, which is linopy v1's own reason for
-    refusing to pick one (``convention.rst`` §7): 0 is the identity of a sum and
-    1 the identity of a product, so ``x * shift(eff, over=t, by=1, edge=1)``
-    wants a different number from
-    ``lam <= seg + shift(seg, over=bp, by=1, edge=0)``. Over data any number is
-    therefore accepted — it is a data fill, and both lanes do it natively.
+    **The right fill is positional**, linopy v1's own reason for refusing to
+    pick one (``convention.rst`` §7): 0 is the identity of a sum and 1 of a
+    product, so ``x * shift(eff, over=t, by=1, edge=1)`` wants a different
+    number from ``lam <= seg + shift(seg, over=bp, by=1, edge=0)``. Over data
+    any number is accepted, both lanes filling natively.
 
-    Over an operand that carries a **variable** the only representable fill is
-    0, because there the vacated slot contributes no term at all. A nonzero one
-    would be a *constant* standing where a term was, a different fragment kind
-    from the stream the operand produces, and is refused rather than
-    implemented on one lane and not the other.
+    Over an operand carrying a **variable** the only representable fill is 0,
+    the vacated slot contributing no term at all. A nonzero one would be a
+    constant standing where a term was — a different fragment kind — and is
+    refused rather than implemented on one lane and not the other.
     """
     if node is None:
         return None
@@ -344,13 +333,11 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
 def _shift_over_data_message(context: str) -> str:
     """The three ways out, one of which is two things at once.
 
-    A `where` is a *companion* to `edge=`, not an alternative to it. This
-    refusal is decided on the expression alone, so a mask does not lift it —
-    but `edge=0` alone leaves a row at the vacated coordinate whose bound is
-    that zero, which is the silent pinning this refusal exists to prevent. The
-    row is omitted only by masking it, and the mask is only reachable once the
-    expression is well-formed. Listing the two as alternatives sent a reader to
-    whichever they read first, and both are wrong on their own.
+    A ``where`` is a *companion* to ``edge=``, not an alternative: the refusal
+    is decided on the expression alone so a mask does not lift it, and
+    ``edge=0`` alone leaves a row at the vacated coordinate whose bound is that
+    zero — the silent pinning this refusal exists to prevent. Either one alone
+    is wrong, so the message says so rather than listing them as alternatives.
     """
     return (
         f'{context}: shift() over a variable-free expression leaves vacated positions with no '
@@ -435,13 +422,11 @@ def advice(program: plan.Program) -> list[str]:
     """Modeling advice ``check`` surfaces as warnings — never errors.
 
     One rule today: **everything under ``dimensions:`` should be an axis** —
-    something is indexed by it, or an aggregation lands terms on it. A
-    declared dimension with neither is not part of the model's dimensionality;
-    it is either a label space wearing a dimension's clothes (say it inline on
-    the dimension that carries it, and the file reads as the model is) or dead
-    weight. Advice rather than an error because ``extend()`` legitimately
-    splits one model across files, and a base file's label space may become a
-    real axis in an extension this check never sees.
+    indexed by something, or aggregated into. A declared dimension with neither
+    is a label space wearing a dimension's clothes, or dead weight. Advice
+    rather than an error because ``extend()`` legitimately splits one model
+    across files, and a base file's label space may become a real axis in an
+    extension this check never sees.
     """
     axes: set[str] = set()
     for declaration in (*program.parameters, *program.variables, *program.constraints):
@@ -489,13 +474,6 @@ def _produced_axes(e: plan.Expression) -> set[str]:
         out.add(e.into)
     if isinstance(e, plan.At):
         out.add(e.over)
-    children: tuple[plan.Expression, ...] = ()
-    if isinstance(e, (plan.Negate, plan.Sum, plan.GroupSum, plan.At, plan.Translate)):
-        children = (e.operand,)
-    elif isinstance(e, (plan.Add, plan.Multiply)):
-        children = (e.left, e.right)
-    elif isinstance(e, plan.Divide):
-        children = (e.numerator, e.divisor)
-    for child in children:
+    for child in plan.children(e):
         out |= _produced_axes(child)
     return out

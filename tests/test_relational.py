@@ -22,8 +22,6 @@ from lpspec.relational import (
     PolarsExecutor,
     chunking,
 )
-from lpspec.relational.engine import needs_aggregate
-from lpspec.relational.engines.duck.executor import DuckExecutor
 from lpspec.relational.plan import (
     Constant,
     ConstraintDeclaration,
@@ -43,11 +41,6 @@ from tests.conftest import by_coord, override, solve_lp_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, transport_eager_objective, xr
 
-#: Both executors, for the few claims that are about the *model* rather than
-#: about an engine. The aggregate decision is one: it reads fragments neither
-#: engine shares and has to come out the same on each anyway.
-ENGINES = [pytest.param(PolarsExecutor, id='polars'), pytest.param(DuckExecutor, id='duckdb')]
-
 # ---------------------------------------------------------------------------
 # model 1: dispatch (the spec example)
 # ---------------------------------------------------------------------------
@@ -55,6 +48,10 @@ ENGINES = [pytest.param(PolarsExecutor, id='polars'), pytest.param(DuckExecutor,
 
 @pytest.fixture
 def dispatch_data():
+    """The spec's dispatch instance, with one generator retired to `p_max = 0`.
+
+    That row is what the model's `where` masks out.
+    """
     rng = np.random.default_rng(7)
     n_s, n_g = 40, 6
     gens = pd.DataFrame(
@@ -64,7 +61,7 @@ def dispatch_data():
             'cost': rng.uniform(5, 100, n_g).round(3),
         }
     )
-    gens.loc[1, 'p_max'] = 0.0  # masked out by where
+    gens.loc[1, 'p_max'] = 0.0
     load = pd.DataFrame(
         {
             'snapshot': np.arange(n_s),
@@ -129,6 +126,7 @@ def dispatch_eager_objective(gens: pd.DataFrame, load: pd.DataFrame) -> float:
 
 
 def test_dispatch_roundtrip(dispatch_data, tmp_path):
+    """Solver and LP file agree with the eager oracle, down to the dispatch."""
     gens, load = dispatch_data
     oracle = dispatch_eager_objective(gens, load)
 
@@ -143,15 +141,13 @@ def test_dispatch_roundtrip(dispatch_data, tmp_path):
         ex.write(lp)
         assert solve_lp_file(lp) == pytest.approx(oracle, rel=RTOL)
 
-        # masked variable rows are absent, and primal joins back to coords
         primal = result.to_pandas('p')
         n_active = int((gens['p_max'] > 0).sum())
-        assert len(primal) == n_active * len(load)
-        assert set(primal.columns) == {'snapshot', 'generator', 'value'}
-        # per-snapshot dispatch matches load
+        assert len(primal) == n_active * len(load), 'a masked variable row is absent, not zero'
+        assert set(primal.columns) == {'snapshot', 'generator', 'value'}, 'primal joins back to the coords'
         balance = primal.groupby('snapshot')['value'].sum()
         expected = load.set_index('snapshot')['value']
-        assert np.allclose(balance.sort_index(), expected.sort_index())
+        assert np.allclose(balance.sort_index(), expected.sort_index()), 'dispatch meets load in every snapshot'
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +200,11 @@ def transport_program() -> Program:
 
 
 def transport_sources(gens, lines, load) -> dict:
+    """The transport instance as tidy sources.
+
+    A dim carrying declared coordinates needs an index source that has them,
+    which is why `generator` and `line` ship their mapping columns.
+    """
     return {
         'p_max': gens[['generator', 'p_max']].rename(columns={'p_max': 'value'}),
         'cost': gens[['generator', 'cost']].rename(columns={'cost': 'value'}),
@@ -211,13 +212,13 @@ def transport_sources(gens, lines, load) -> dict:
         'load': load,
         'snapshot': load[['snapshot']],
         'bus': load[['bus']],
-        # dims carrying declared coordinates need an index source that has them
         'generator': gens[['generator', 'bus']],
         'line': lines[['line', 'from_bus', 'to_bus']].rename(columns={'from_bus': 'from', 'to_bus': 'to'}),
     }
 
 
 def test_transport_roundtrip(transport_data, tmp_path):
+    """Solver and LP file agree with the eager oracle."""
     gens, lines, load = transport_data
     oracle = transport_eager_objective(gens, lines, load)
     assert np.isfinite(oracle), 'oracle model must be feasible'
@@ -233,7 +234,6 @@ def test_transport_roundtrip(transport_data, tmp_path):
         ex.write(lp)
         assert solve_lp_file(lp) == pytest.approx(oracle, rel=RTOL)
 
-        # flows respect line capacity bounds
         primal_f = result.to_pandas('f')
         caps = lines.set_index('line')['cap']
         limits = primal_f['line'].map(caps)
@@ -297,10 +297,35 @@ def test_a_dimensionless_parameter_of_one_row_still_builds():
     """The control: the shape the check exists to let through."""
     data = {'s': pl.DataFrame({'value': [10.0]})}
     with lps.solve(SCALAR_MODEL, data) as result:
-        assert result.objective == pytest.approx(20.0)  # x == 1 at both coordinates of i, times s
+        assert result.objective == pytest.approx(20.0), 'x == 1 at both coordinates of i, times s'
+
+
+def test_a_dimension_named_n_is_still_a_legal_dimension():
+    """No check may claim a legal dim name for a column of its own.
+
+    The duplicate-row check counts rows beside the dims it grouped by, and its
+    count column once did: `n` collided with a dim of the same name, and every
+    build of such a model — healthy data included — died on an internal polars
+    DuplicateError naming no parameter.
+    """
+    model = {
+        'dimensions': {'n': {'dtype': 'int', 'values': [1, 2]}},
+        'parameters': {'cost': {'dims': ['n']}},
+        'variables': {'x': {'foreach': ['n'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'c': {'foreach': ['n'], 'expression': 'x <= 5'}},
+        'objectives': {'o': {'sense': 'maximize', 'expression': 'x * cost'}},
+    }
+    with lps.solve(model, {'cost': pl.DataFrame({'n': [1, 2], 'value': [1.0, 2.0]})}) as result:
+        assert result.objective == pytest.approx(15.0)
+
+    # the check the column belongs to still catches its own case
+    doubled = {'cost': pl.DataFrame({'n': [1, 1, 2], 'value': [1.0, 9.0, 2.0]})}
+    with pytest.raises(DataError, match="parameter 'cost'"):
+        lps.build(model, doubled)
 
 
 def test_out_of_foreach_dims_rejected(dispatch_data):
+    """A term carrying a dim the constraint does not `foreach` is refused."""
     gens, load = dispatch_data
     prog = dispatch_program()
     bad = Program(
@@ -310,7 +335,7 @@ def test_out_of_foreach_dims_rejected(dispatch_data):
             ConstraintDeclaration(
                 'power_balance',
                 ('snapshot',),
-                lhs=Variable('p'),  # generator dim not summed
+                lhs=Variable('p'),  # generator dim deliberately not summed
                 sense='==',
                 rhs=Parameter('load'),
             ),
@@ -360,36 +385,27 @@ def test_a_variable_appearing_twice_in_a_row_is_summed_not_duplicated():
     model = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
         'parameters': {'rhs': {'dims': ['i']}},
-        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},
+        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},  # no upper: +inf
         'constraints': {'c': {'foreach': ['i'], 'expression': 'x + 2 * x >= rhs'}},
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
     }
     sources = {'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
     with lps.build(model, sources) as ex:
         matrix = ex._tables().matrix
-        assert matrix.height == 2  # one entry per row, not one per fragment
+        assert matrix.height == 2, 'one entry per row, not one per fragment'
         assert sorted(matrix['coeff'].to_list()) == [3.0, 3.0]
         result = ex.solve()
-    assert result.objective == pytest.approx(5.0)  # 6/3 + 9/3
+    assert result.objective == pytest.approx(5.0), '6/3 + 9/3'
 
 
-def test_a_factored_mask_labels_exactly_like_the_counted_path(engine_internals):
-    """The fast path has to be indistinguishable from the one it replaces.
+def test_a_masked_variable_is_labelled_in_declaration_order():
+    """A label is the solver's own column index, so its order is the contract.
 
-    A mask that reads none of the leading dims removes the same coordinates
-    under every one of their values, so the survivors are a rectangle and the
-    label is arithmetic. That is only a speedup if it lands on the *same*
-    numbers the counted path would have assigned — a label is the solver's own
-    column index, so an off-by-one here is a different model, not a slower one.
-
-    Both paths are run over the same model and compared outright. The mask
-    reads `tech` only, so it factors; forcing it through the counted path is a
-    matter of asking for the labels the sort produces.
+    Labels are dense ``0..n-1`` over the coordinates the mask leaves, assigned
+    row-major on the dims' declared ordinals. An off-by-one here is a different
+    model rather than a slower one, so it is asserted against the order spelled
+    out by hand rather than against whatever the engine produced.
     """
-    import polars as pl_
-
-    from lpspec.relational.engines.polars.compiler import _ordinal
-
     model = {
         'dimensions': {
             'snapshot': {'dtype': 'int', 'values': list(range(5))},
@@ -423,21 +439,20 @@ def test_a_factored_mask_labels_exactly_like_the_counted_path(engine_internals):
         'load': pl.DataFrame({'snapshot': list(range(5)), 'value': [1.0] * 5}),
     }
 
-    with lps.build(model, sources) as ex:
-        fast = ex._variables['p'].collect().sort('var_label')
-        dims = ('snapshot', 'node', 'tech')
-        counted = (
-            ex._q.frame(dims, ex._program.variables[0].where)
-            .sort([_ordinal(d) for d in dims])
-            .select(*dims)
-            .with_row_index('var_label', offset=0)
-            .select(*dims, pl_.col('var_label').cast(pl_.Int64))
-            .collect()
-        )
+    zero = {('a', 'gas'), ('c', 'coal'), ('b', 'hydro')}
+    expected = [
+        (s, n, t)
+        for s in range(5)
+        for n in ['a', 'b', 'c']
+        for t in ['wind', 'gas', 'coal', 'hydro']
+        if (n, t) not in zero
+    ]
 
-    assert fast.height == counted.height, 'the two paths disagree about how many coordinates survive'
-    assert fast.equals(counted.sort('var_label')), 'the factored labels are not the counted labels'
-    assert fast['var_label'].to_list() == list(range(fast.height)), 'labels must stay dense from 0'
+    with lps.build(model, sources) as ex:
+        labelled = ex._variables['p'].collect()
+
+    assert labelled['var_label'].to_list() == list(range(len(expected))), 'labels must be dense and ascending'
+    assert list(labelled.select('snapshot', 'node', 'tech').iter_rows()) == expected
 
 
 def test_a_dictionary_encoded_source_column_binds_like_a_plain_one():
@@ -470,9 +485,20 @@ def test_a_dictionary_encoded_source_column_binds_like_a_plain_one():
     assert from_encoded == pytest.approx(from_plain), 'the encoding changed the model'
 
 
-def test_a_string_dimension_is_enum_encoded_end_to_end():
-    """A string dim is an ``Enum`` over its labels in declaration order, build
-    to read-back — and `to_pandas` hands over an ordered `pandas.Categorical`."""
+def test_a_string_dimension_leaves_the_read_back_as_string():
+    """A string dim is plain ``String`` the moment it is handed back.
+
+    What a caller gets is something they join against their own data, which an
+    ``Enum`` refuses. Declaration order survives because it was never the dtype
+    carrying it: it is the row order, and `to_pandas` puts the ordered
+    categories back for the bridge out.
+
+    **Asked of whichever engine is running.** How a dim is encoded *inside* a
+    build is that engine's business — polars holds an `Enum` and casts on the
+    way out, duckdb holds ``VARCHAR`` throughout — but what leaves is a
+    contract, and `test_engine_parity` compares built models rather than
+    returned dtypes, so nothing else here would catch the two disagreeing.
+    """
     model = {
         'dimensions': {'node': {'dtype': 'str', 'values': ['c', 'a', 'b']}},
         'parameters': {'cap': {'dims': ['node']}},
@@ -484,12 +510,27 @@ def test_a_string_dimension_is_enum_encoded_end_to_end():
     declared = pl.Enum(['c', 'a', 'b'])
 
     with lps.build(model, {'cap': cap}) as ex:
-        assert ex._variables['x'].collect_schema()['node'] == declared
         primal = ex.solve().primal('x')
 
-    assert primal.schema['node'] == declared
+    assert primal.schema['node'] == pl.String, 'what leaves is what a caller can join against'
     assert primal['node'].to_list() == ['c', 'a', 'b'], 'read-back follows label order, not source order'
-    assert primal.to_pandas()['node'].dtype == pd.CategoricalDtype(['c', 'a', 'b'], ordered=True)
+    assert primal.join(cap, on='node').height == 3, "the caller's own frame is String, and it joins"
+
+
+def test_a_string_dimension_is_enum_encoded_inside_the_build(engine_internals):
+    """The encoding buys the joins and the label frames, and every gram of that
+    is internal — so it is asserted where it is done, not where it is undone."""
+    model = {
+        'dimensions': {'node': {'dtype': 'str', 'values': ['c', 'a', 'b']}},
+        'parameters': {'cap': {'dims': ['node']}},
+        'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {'k': {'foreach': ['node'], 'expression': 'x >= cap'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
+    }
+    cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
+
+    with lps.build(model, {'cap': cap}) as ex:
+        assert ex._variables['x'].collect_schema()['node'] == pl.Enum(['c', 'a', 'b'])
 
 
 def test_a_where_orders_string_labels_bytewise_not_by_declaration():
@@ -581,6 +622,7 @@ def test_a_mask_a_missing_value_can_satisfy_keeps_the_rows_with_no_value():
 
     Every mask in the suite was a conjunction before this, so nothing else here
     distinguishes the two joins.
+
     """
     model = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1, 2, 3]}},
@@ -603,7 +645,7 @@ def test_a_mask_a_missing_value_can_satisfy_keeps_the_rows_with_no_value():
             for name in ('absent', 'either', 'both', 'mixed')
         }
     assert surviving == {
-        'absent': [2, 3],  # a is missing there, which is the whole condition
+        'absent': [2, 3],  # `a` is missing there, which is the whole condition
         'either': [0, 2],  # i=2 has no `a` at all and qualifies on `b`
         'both': [0],
         'mixed': [0, 1],  # `a` is certain, `b` is not
@@ -615,8 +657,8 @@ def test_every_declaration_owns_a_contiguous_run_of_labels():
 
     A solver vector is positional in the same index the labels are, so a
     declaration's share of it is a slice — but only if its labels are a dense
-    run and the runs tile the whole index. Both are true of every path
-    `Labeller.frame` takes, and neither is visible from the frames: a block
+    run and the runs tile the whole index. Both are how `labels.frame` numbers
+    a declaration, and neither is visible from the frames: a block
     that started one late would report a neighbour's numbers under this
     declaration's coordinates, with nothing out of range and nothing null.
     """
@@ -650,14 +692,13 @@ def test_every_declaration_owns_a_contiguous_run_of_labels():
             assert at == total, 'the runs do not tile the index'
 
 
-def test_the_matrix_aggregate_runs_on_what_repeats_and_not_on_what_might():
-    """Both branches of the collapse, on models that differ only in overlap.
+def test_the_matrix_collapses_a_repeated_cell_and_leaves_the_rest_alone():
+    """Both outcomes of the terminal aggregate, on models differing only in overlap.
 
-    `needs_aggregate` reads the fragments and can only say whether a cell
-    *can* repeat. Two fragments over disjoint variables satisfy it and repeat
-    nothing; two over the same variable repeat every cell. The first must come
-    out untouched and the second must be summed — the point being that the
-    same static answer covers both, so the frame itself has to decide.
+    Two fragments over disjoint variables repeat nothing and must come out
+    untouched; two over the same variable land on one cell and must be summed.
+    A matrix holding the same `(row, col)` twice is not a slower model, it is
+    one the sinks disagree about.
     """
     base = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
@@ -712,8 +753,7 @@ def _network(self_loop: bool) -> tuple[dict, dict]:
     return model, sources
 
 
-@pytest.mark.parametrize('executor', ENGINES)
-def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(executor):
+def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet():
     """`group_by=to` and `group_by=from` reach one cell exactly on a line to itself.
 
     Both fragments carry `f`, so counting variables says the aggregate is
@@ -721,81 +761,26 @@ def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(execut
     labels they share is decided by the *line* table — two rows here, forty at
     the `l` rung, against 12.6M nonzeros — so it is asked there.
 
-    The self-loop is the case that must not be optimised away: `l1` leaves and
-    arrives at `b0`, so `+f - f` lands twice on one cell and has to collapse.
-    A matrix holding the same `(row, col)` twice is not a slower model, it is
-    one the sinks disagree about — an LP reader sums the pair and a solver
-    handed duplicate entries is entitled to do either.
-    """
-    for self_loop, expected in ((False, False), (True, True)):
-        model, sources = _network(self_loop)
-        program = lower_program(Model(**model))
-        with executor() as ex:
-            ex.build(program, sources)
-            terms = ex._q.expression(program.constraints[0].lhs, 'test').terms
-            assert len(terms) == 2 and {t.variable for t in terms} == {'f'}
-            assert needs_aggregate(terms, ex._q.may_share_a_column) is expected, f'self_loop={self_loop}'
-
-            tables = ex._tables()
-            cells = tables.matrix_block(0, tables.row_count).select('row', 'col')
-            assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
-
-
-def test_a_self_loop_collapses_its_two_fragments_on_every_engine():
-    """The property the decision above is only allowed to be *fast* about.
-
-    Both engines now reach the line table for the answer, and neither has to:
-    a build that sorts every nonzero to collapse nothing produces the same
-    rows. What neither may do is hand a sink the same `(row, col)` twice — an
-    LP reader sums the pair and a solver handed duplicate entries is entitled
-    to do either, so the two would disagree about a model both loaded without
-    error.
+    The self-loop is the case the collapse exists for: `l1` leaves and arrives
+    at `b0`, so `+f - f` lands twice on one cell. A matrix holding the same
+    `(row, col)` twice is not a slower model, it is one the sinks disagree
+    about — an LP reader sums the pair and a solver handed duplicate entries is
+    entitled to do either.
     """
     for self_loop in (False, True):
         model, sources = _network(self_loop)
         with lps.build(model, sources) as ex:
+            program = lower_program(Model(**model))
+            terms = ex._q.expression(program.constraints[0].lhs, 'test').terms
+            assert len(terms) == 2
+
             tables = ex._tables()
             cells = tables.matrix_block(0, tables.row_count).select('row', 'col')
             assert cells.height == cells.unique().height, f'a cell reached the sinks twice (self_loop={self_loop})'
 
 
-@pytest.mark.parametrize('executor', ENGINES)
-def test_stacking_distinct_variables_asks_for_no_aggregate(executor):
-    """The static answer itself, which no end-to-end assertion can reach.
-
-    `test_the_matrix_aggregate_runs_on_what_repeats_and_not_on_what_might`
-    pins the *rows*, and both branches produce the same ones — a build that
-    sorts every nonzero to collapse nothing is indistinguishable from one that
-    never sorted. So the question of whether the aggregate was asked for has
-    to be put to `needs_aggregate` directly.
-
-    Reading the count alone answers 'yes' to every multi-term constraint,
-    which is most of them.
-    """
-    dims = {'i': {'dtype': 'int', 'values': [0, 1]}}
-    variables = {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}, 'y': {'foreach': ['i'], 'bounds': {'lower': 0}}}
-    sources = {'rhs': pl.DataFrame({'i': [0, 1], 'value': [4.0, 6.0]})}
-
-    def fragments(expression):
-        program = lower_program(
-            Model(
-                dimensions=dims,
-                parameters={'rhs': {'dims': ['i']}},
-                variables=variables,
-                constraints={'c': {'foreach': ['i'], 'expression': f'{expression} >= rhs'}},
-                objectives={'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
-            )
-        )
-        with executor() as ex:
-            ex.build(program, sources)
-            return ex._q.expression(program.constraints[0].lhs, 'test').terms, ex._q.may_share_a_column
-
-    assert not needs_aggregate(*fragments('x + y'))
-    assert needs_aggregate(*fragments('x + 3 * x'))
-
-
-def test_the_objective_skips_the_aggregate_only_when_a_column_cannot_repeat():
-    """`p * cost` needs no aggregate; `p * cost + p * cost` does."""
+def test_the_objective_sums_the_coefficients_that_land_on_one_column():
+    """`p * cost` is one row per column; `p * cost + p * cost` is two, summed."""
     base = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
         'parameters': {'cost': {'dims': ['i']}, 'lb': {'dims': ['i']}},
@@ -815,18 +800,16 @@ def test_the_objective_skips_the_aggregate_only_when_a_column_cannot_repeat():
     assert _objective_of(twice, sources) == ({0: 4.0, 1: 6.0}, 2)
 
 
-def test_the_objective_keeps_the_aggregate_when_a_reduction_hides_extra_rows():
+def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows():
     """A fragment's dims can match the variable's while its rows do not.
 
     `sum(q * price, over=generator)` with `q` indexed by snapshot alone reduces
     to dims `('snapshot',)` — exactly `q`'s declaration — but `_sum_fragment`
-    *projects*, so the fragment still carries one row per generator. Skipping
-    the aggregate there writes |generator| rows into `obj` for a single column:
-    the LP file would quietly re-sum them, while `cols` joined to `obj` in the
-    HiGHS sink would hand the solver more columns than the model has.
+    *projects*, so the fragment still carries one row per generator. Those rows
+    all name one column, and `obj` must hold their sum: the LP file would
+    quietly re-sum |generator| rows, while `cols` joined to `obj` in the HiGHS
+    sink would hand the solver more columns than the model has.
 
-    This is the case a dims-equality test gets wrong, and the reason a fragment
-    tracks which of its dims its label actually determines.
     """
     model = {
         'dimensions': {'snapshot': {'dtype': 'int', 'values': [0, 1]}, 'generator': {'values': ['g0', 'g1', 'g2']}},
@@ -841,8 +824,9 @@ def test_the_objective_keeps_the_aggregate_when_a_reduction_hides_extra_rows():
         ),
         'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 5.0]}),
     }
-    # one row per column, each carrying the summed price — not three rows of one
-    assert _objective_of(lower_program(Model(**model)), sources) == ({0: 6.0, 1: 6.0}, 2)
+    assert _objective_of(lower_program(Model(**model)), sources) == ({0: 6.0, 1: 6.0}, 2), (
+        'one row per column, each carrying the summed price — not three rows of one'
+    )
 
 
 def test_infinite_bounds_survive_the_handoff(dispatch_data):
@@ -862,12 +846,11 @@ def test_a_solution_is_read_back_in_label_order_without_sorting_for_it():
     Seeding the vector with an ``arange`` makes every value its own label, so a
     read-back in label order comes out ascending — which is the contract
     `sol.primal` states, asserted directly rather than through the sort that
-    used to establish it. The mask puts the variable on the factored path and
-    the constraint on the counted one, so neither is ordered by being a scan.
+    used to establish it.
 
     The plan assertion is the other half: re-imposing the order is not wrong,
-    it moved a full copy of the coordinates — 681 MB reading `dispatch/l` back
-    — at the moment the solver's own model is still resident.
+    it moved a full copy of the coordinates at the moment the solver's own
+    model is still resident.
     """
     model = {
         'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2, 3]}, 'g': {'values': ['a', 'b', 'c']}},
@@ -889,6 +872,18 @@ def test_a_solution_is_read_back_in_label_order_without_sorting_for_it():
         assert ex._dual('meet', dual)['value'].to_list() == list(range(len(dual))), 'dual not in label order'
 
 
+#: Three columns and three rows, the smallest model whose solution vector has a
+#: length worth disagreeing about.
+SOLVER_VECTOR_MODEL = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'parameters': {'load': {'dims': ['t']}},
+    'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
+    'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
+}
+SOLVER_VECTOR_LOAD = {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
+
+
 @pytest.mark.parametrize('length', [2, 5], ids=['short', 'long'])
 def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, length):
     """A wrong length is a different model's answer, not a short one.
@@ -903,13 +898,6 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
     """
     from lpspec.relational.engines.polars import executor as executor_module
 
-    model = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
-        'parameters': {'load': {'dims': ['t']}},
-        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
-        'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
-    }
     honest = executor_module.sinks.solver('highs')
 
     def crooked(tables, batch_rows, options):
@@ -919,7 +907,7 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
 
     monkeypatch.setattr(executor_module.sinks, 'solver', lambda _name: crooked)
     with (
-        lps.build(model, {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as ex,
+        lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as ex,
         pytest.raises(LpspecError, match=f'returned {length} primal values for a model with 3'),
     ):
         ex.solve()
@@ -935,14 +923,7 @@ def test_a_solver_hands_back_a_vector_and_not_an_index(solver_name):
     held. The same argument took ``col`` off ``cols`` in #433; this is the
     other half of it, and neither is visible from the numbers.
     """
-    model = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
-        'parameters': {'load': {'dims': ['t']}},
-        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
-        'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
-    }
-    with lps.build(model, {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as ex:
+    with lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as ex:
         tables = ex._tables()
         solution = ex.solve(solver_name=solver_name)
         assert solution.is_ok
@@ -1019,6 +1000,7 @@ def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
 
     Wide rows are the case that separates the two, so this builds them: 50
     generators summed into each of 4 snapshots is 50 entries per row.
+
     """
     n_g, n_s = 50, 4
     gens = pd.DataFrame(
@@ -1039,12 +1021,11 @@ def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
             return max(int(tables.row_starts[hi] - tables.row_starts[lo]) for lo, hi in ranges)
 
         budget = 100
-        assert widest(tables._row_chunks_by_nonzeros(budget)) <= budget
+        assert widest(tables._spans(budget)) <= budget
 
-        # the same budget spent as if a row cost one element puts every entry
-        # in one chunk — 2x the budget here, and unbounded in general, because
-        # nothing caps how wide a row gets
-        assert widest(chunking.ranges(tables.row_count, budget, 1.0)) == n_g * n_s
+        assert widest(chunking.ranges(tables.row_count, budget, 1.0)) == n_g * n_s, (
+            'the same budget spent as if a row cost one element puts every entry in one chunk'
+        )
 
 
 @pytest.mark.parametrize(
@@ -1089,11 +1070,13 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
     simply is not there.
 
     Only the *constant* side lost this reading, and the test below says why.
+
     """
     data = {'w': pd.Series({1: 1.0, 2: 1.0}), 'c': pd.Series({0: 0.0, 1: 4.0, 2: 5.0})}
     with differential(SPARSE_COEFFICIENT_MODEL, data, lp=True) as run:
-        # t=0 carries `<= 0` with no term: a row that exists and constrains nothing
-        assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL)
+        assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
+            't=0 carries `<= 0` with no term: a row that exists and constrains nothing'
+        )
 
 
 def test_a_sparse_constant_side_is_refused_on_both_lanes():
@@ -1117,13 +1100,15 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
     The check is keyed to the rows a declaration builds, not to the coordinate
     product — the same property that keeps #312's divisor check from becoming a
     wall. Without it the remedy the error names would not work.
+
     """
     masked = {**SPARSE_COEFFICIENT_MODEL}
     masked['constraints'] = {'cap': {**SPARSE_COEFFICIENT_MODEL['constraints']['cap'], 'where': 'c'}}
     data = {'w': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}), 'c': pd.Series({1: 4.0, 2: 5.0})}
     with differential(masked, data) as run:
-        # t=0 has no row at all, so x runs to its bound there
-        assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL)
+        assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
+            't=0 has no row at all, so x runs to its bound there'
+        )
 
 
 ABSENT_VARIABLE_MODEL = {
@@ -1163,6 +1148,7 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
         assert x['b'] == pytest.approx(100.0, rel=RTOL), 'unsized: the row is gone, so only the bound holds'
 
 
+#: One rule per block, so the two regimes are two named constraints.
 DEFINED_MODEL = {
     'dimensions': {'f': {'values': ['a', 'b']}},
     'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
@@ -1171,7 +1157,6 @@ DEFINED_MODEL = {
         'size': {'foreach': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
     },
     'constraints': {
-        # one rule per block, so the two regimes are two named constraints
         'envelope_sized': {'foreach': ['f'], 'where': 'size', 'expression': 'x - relmax * size <= 0'},
         'envelope_unsized': {'foreach': ['f'], 'where': 'NOT size', 'expression': 'x <= 0'},
     },
@@ -1254,11 +1239,16 @@ def _reindexed_parameter_model(op: str) -> dict:
 @pytest.mark.parametrize(
     ('op', 'expected'),
     [
-        # roll is cyclic: nothing is vacated, so t=0 reads the last value
-        ("shift(dt, over=t, by=1, edge='wrap')", {0: 7.0, 1: 5.0, 2: 6.0}),
-        # shift with the escape hatch: the vacated position contributes zero,
-        # and a zero in right-hand-side position is a pin
-        ('shift(dt, over=t, by=1, edge=0)', {0: 0.0, 1: 5.0, 2: 6.0}),
+        pytest.param(
+            "shift(dt, over=t, by=1, edge='wrap')",
+            {0: 7.0, 1: 5.0, 2: 6.0},
+            id='cyclic-vacates-nothing-so-t0-reads-the-last-value',
+        ),
+        pytest.param(
+            'shift(dt, over=t, by=1, edge=0)',
+            {0: 0.0, 1: 5.0, 2: 6.0},
+            id='the-vacated-position-contributes-zero-which-pins',
+        ),
     ],
 )
 def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expected):
@@ -1355,14 +1345,13 @@ def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
 
     Held here as well as in the parity suite because that suite needs the
     ``[linopy]`` extra, and this has to be true on the bare install too.
+
     """
     data = {'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
 
     with lps.solve(SCALAR_MASKED_MODEL, data) as sol:
-        # The row is gone, not slackened — a dropped constraint has no dual.
-        assert sol.dual('cap').height == 0
-        # Unbudgeted, both generators run flat out: 100 x 1 + 100 x 2.
-        assert sol.objective == pytest.approx(300.0)
+        assert sol.dual('cap').height == 0, 'the row is gone, not slackened — a dropped row has no dual'
+        assert sol.objective == pytest.approx(300.0), 'unbudgeted, both generators run flat out'
 
 
 #: A masked variable broadcast onto a wider frame, then reduced back. `p` is
@@ -1399,6 +1388,7 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
     Unmasked the same model was fine, which is what made it look like a problem
     with the coordinate dim rather than with the mask. The whole benchmark
     `sector` case sat on this.
+
     """
     import pandas as pd
     import xarray as xr
@@ -1512,11 +1502,12 @@ def test_dense_columns_does_not_edit_the_model_it_projects():
     scatter's fresh arrays. Replacing an infinity in place through one would
     rewrite the built model to suit whichever solver asked last, and the second
     ask would read bounds the first had already edited.
+
     """
     model = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
         'parameters': {'rhs': {'dims': ['i']}},
-        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},  # no upper: +inf
+        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},
         'constraints': {'c': {'foreach': ['i'], 'expression': 'x >= rhs'}},
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
     }
@@ -1643,13 +1634,15 @@ def test_a_bound_dense_over_the_product_is_attached_by_position_not_joined(engin
 
     Checked against the oracle, because a misaligned bound is a different model
     rather than an error.
+
     """
     data = {'avail': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'cost': pd.Series({'a': 1.0, 'b': 1.0, 'c': 1.0})}
 
     assert _aligned_for(FLAT_MODEL, data) == {'avail': True}
     with differential(FLAT_MODEL, data, lp=True) as run:
-        # every p at its own upper bound; the cap of 100 never binds
-        assert run.result.objective == pytest.approx(1 + 2 + 3, rel=RTOL)
+        assert run.result.objective == pytest.approx(1 + 2 + 3, rel=RTOL), (
+            'every p at its own upper bound; the cap of 100 never binds'
+        )
 
 
 def test_the_positional_attach_sorts_rather_than_trusting_the_source_order(engine_internals):
@@ -1683,3 +1676,62 @@ def test_a_mask_or_a_sparse_bound_keeps_the_join(engine_internals):
 
     holey = {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
     assert _aligned_for(DENSE_BOUND_MODEL, holey) == {'avail': False}
+
+
+def test_an_empty_index_keeps_the_dimension_s_declared_dtype():
+    """polars infers `Null` from no labels, and a `Null` key joins nothing.
+
+    A dimension whose members a caller appends to between solves starts empty —
+    a Benders cut set is the motivating case — and the parameter bound to it
+    carries the right dtype from the first call. Only the declaration knows
+    what the column should be, and it always answers: `dtype` defaults to `str`.
+    """
+    model = {
+        'dimensions': {'cut': {'dtype': 'int'}},
+        'parameters': {'c': {'dims': ['cut']}},
+        'variables': {'x': {'foreach': ['cut'], 'bounds': {'lower': 0}}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'x * c'}},
+    }
+    empty = pl.DataFrame(schema={'cut': pl.Int64, 'value': pl.Float64})
+    with lps.build(model, {'c': empty}, coords={'cut': []}) as ex:
+        assert ex._tables().column_count == 0
+
+    grown = pl.DataFrame({'cut': [0, 1], 'value': [1.0, 2.0]})
+    with lps.build(model, {'c': grown}, coords={'cut': [0, 1]}) as ex:
+        assert ex._tables().column_count == 2
+
+
+def test_an_empty_index_of_a_string_dimension_is_a_string_column():
+    """The default `dtype` carries the same weight as a declared one."""
+    model = {
+        'dimensions': {'cut': {}},
+        'parameters': {'c': {'dims': ['cut']}},
+        'variables': {'x': {'foreach': ['cut'], 'bounds': {'lower': 0}}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'x * c'}},
+    }
+    empty = pl.DataFrame(schema={'cut': pl.String, 'value': pl.Float64})
+    with lps.build(model, {'c': empty}, coords={'cut': []}) as ex:
+        assert ex._tables().column_count == 0
+
+
+def test_two_solutions_over_different_members_concatenate():
+    """An `Enum` column will not concatenate against different categories.
+
+    A sweep holds one frame per slice and joins them on read, so slices that
+    bound different members of a dimension used to meet `SchemaError: Enum
+    mismatch` — for two answers to the same question.
+    """
+    model = {
+        'dimensions': {'node': {'dtype': 'str'}},
+        'parameters': {'cap': {'dims': ['node']}},
+        'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {'k': {'foreach': ['node'], 'expression': 'x >= cap'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
+    }
+    frames = []
+    for members in (['a', 'b'], ['a', 'c']):
+        cap = pl.DataFrame({'node': members, 'value': [1.0, 2.0]})
+        with lps.build(model, {'cap': cap}) as ex:
+            frames.append(ex.solve().primal('x'))
+
+    assert pl.concat(frames).height == 4

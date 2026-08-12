@@ -51,10 +51,11 @@ name: CodSpeed
 # is indistinguishable from that one — so check there first, before reading
 # anything here as broken.
 #
-# That machine is metered, which is the whole of why this is fenced: `main`
-# always, a pull request only when somebody applies `trigger:bench` — the label
-# bench.yml is already driven by. Bare metal should not run fork code unasked
-# either.
+# That machine is metered, which is the whole of why this is fenced: every merge
+# to `main` that changes code, a pull request only when somebody applies
+# `trigger:bench` — the label bench.yml is already driven by. Bare metal should
+# not run fork code unasked either. The one merge that does not qualify is the
+# release commit; see `paths-ignore` under `on:`.
 #
 # What it buys is the signal the tree has nowhere else. bench.yml gates on
 # memory, this job's other half measures memory, and the wall-clock ladder is a
@@ -94,6 +95,48 @@ name: CodSpeed
 on:
   push:
     branches: [main]
+    # **Only what cannot change what the benchmark executes.** A merge that
+    # leaves the built model, the workload and the installed versions identical
+    # would spend a metered macro run reproducing the previous commit's number.
+    # The release commit is the standing case — release-please writes CHANGELOG
+    # and manifest and touches no source, the git tag being the version — and at
+    # the alpha cadence those are a large share of merges.
+    #
+    # That principle is the whole of the list, and it excludes some entries that
+    # look obviously safe. `pyproject.toml` and `uv.lock` decide which polars is
+    # installed, and a floor moving under us is precisely what this series is for.
+    # `bench/` is the workload. This file is the instrument. None of the three
+    # may be added here however documentation-shaped a particular diff to them is.
+    #
+    # **Config is listed by path, never by extension.** `**.md` is safe because
+    # no markdown in this tree reaches a build; `**.yaml` would not be, because
+    # `bench/models/*.yaml` *are* the benchmarked models and `examples/**` and
+    # `tests/golden/model.yaml` are models too. An extension glob cannot tell a
+    # tool's configuration from a program's input, so the config entries below
+    # are named one by one and a new one earns its line by being read.
+    #
+    # `paths-ignore` skips only when *every* changed file matches, and merges here
+    # are squashes, so a pull request touching docs and `src/` together is still
+    # measured. The failure mode to watch is the reverse: a path added to this
+    # list that turns out to reach the build hides a regression in silence.
+    #
+    # A skipped commit has no number, which the concurrency note below calls a
+    # hole the next pull request falls into. It is not one for these paths: the
+    # hole sits at a commit whose executable tree is identical to its parent, so
+    # the fallback compares against the same code it would have. The cost is
+    # cosmetic and worth naming because it reads like a fault — a pull request
+    # merged after one of these is footnoted `unexpected-base`.
+    paths-ignore:
+      - '**.md'
+      - docs/**
+      - LICENSE
+      - .gitignore
+      - mkdocs.yml
+      - .readthedocs.yaml
+      - .pre-commit-config.yaml
+      - .github/dependabot.yml
+      - .release-please-config.json
+      - .release-please-manifest.json
   # required for a report to have somewhere to land. `labeled` is on the list
   # because the default triple stops at `reopened`, and without it applying
   # `trigger:bench` to an open pull request would re-trigger nothing — the
@@ -150,7 +193,17 @@ jobs:
       # individually and its guidance is to stay under ~2M of them, which polars
       # may or may not respect at `m`. Widen it on evidence from this job rather
       # than on a guess made before it ever ran.
+      #
+      # **One thread, because peak is max simultaneous liveness and that is a
+      # race.** Unpinned, this measures the runner: at 1/4/8 threads `transport/s`
+      # peaks at 176/194/216 MB with run-to-run spread 1.5/3.2/3.6%. Not the peak
+      # a caller sees — `bench.yml` and `docs/benchmarks.md` own that one; this
+      # job needs a comparable series instead, and pays realism for it. Steps the
+      # series where it lands. Memory only: walltime measures multi-threaded
+      # native code and its macro runner is already stable.
       - uses: CodSpeedHQ/action@v5
+        env:
+          POLARS_MAX_THREADS: 1
         with:
           mode: memory
           run: uv run --no-sync pytest bench --arms lpspec --sizes s --skip-gate --codspeed

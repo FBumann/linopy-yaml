@@ -17,14 +17,16 @@ from lpspec.errors import (
 from lpspec.language.expression_parser import (
     BinaryOperatorNode,
     ComparisonNode,
-    FunctionCallNode,
     NameNode,
     ParameterNode,
-    UnaryOperatorNode,
     VariableNode,
+    children,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from lpspec.language.expression_parser import ExpressionNode
     from lpspec.language.model import Model
 
 
@@ -34,10 +36,10 @@ def build_master_coords(
 ) -> dict[str, pd.Index]:
     """Assemble master coordinate indices for every declared dimension.
 
-    Sources in order of precedence:
-    1. ``coords`` kwarg (highest priority).
-    2. ``values`` declared in the YAML.
-    3. If neither → raise immediately.
+    ``coords`` takes precedence over the ``values:`` the YAML declares.
+
+    Raises:
+        DataError: A dimension whose labels come from neither.
     """
     coords = coords or {}
     master: dict[str, pd.Index] = {}
@@ -84,7 +86,12 @@ def build_dim_coords(
     column per declared coordinate. The containment check mirrors the
     relational lane's: a value that is not a label of the target dimension
     would otherwise be dropped by xarray's inner-join alignment, silently
-    losing the term it carries.
+    losing the term it carries. A null value passes the check: it means "this
+    label belongs to no group" — row absence, not a typo.
+
+    Only a *targeted* coordinate is checked. An inline label coordinate
+    declares its own label space, so there is no dimension for its values to
+    be contained in and nothing the check could ask.
     """
     coords = coords or {}
     out: dict[str, dict[str, xr.DataArray]] = {}
@@ -127,8 +134,6 @@ def build_dim_coords(
             if cname in targeted:
                 target = targeted[cname]
                 known = set(master_coords[target])
-                # a null value means "this label belongs to no group" — row absence,
-                # not a typo; see the relational lane's containment check
                 unknown = sorted({str(v) for v in series if not pd.isna(v) and v not in known})[:5]
                 if unknown:
                     msg = (
@@ -156,10 +161,16 @@ def load_parameters(
 ) -> xr.Dataset:
     """Load, coerce, and validate all declared parameters.
 
-    Returns an ``xr.Dataset`` with one DataArray per parameter, aligned to
-    the master coordinates. Dim and coordinate checking happens here rather
-    than per input shape: every branch of ``_coerce_to_dataarray`` produces a
-    DataArray, and every one of them owes the same two guarantees.
+    Dim and coordinate checking happens here rather than per input shape:
+    every branch of ``_coerce_to_dataarray`` produces a DataArray, and every
+    one of them owes the same two guarantees.
+
+    Returns:
+        One DataArray per parameter, aligned to the master coordinates.
+
+    Raises:
+        DataError: A parameter missing, or dims or labels other than the ones
+            declared.
     """
     data = data or {}
     arrays: dict[str, xr.DataArray] = {}
@@ -228,7 +239,11 @@ def _coerce_to_dataarray(
     dims: list[str],
     master_coords: dict[str, pd.Index],
 ) -> xr.DataArray:
-    """Coerce a user-provided value into an xr.DataArray."""
+    """Coerce a user-provided value into an ``xr.DataArray``.
+
+    In the DataFrame branch the two-dims check guarantees flat columns, so
+    ``stack()`` yields a ``Series`` — which is what the ``cast`` asserts.
+    """
     if isinstance(raw, (int, float, np.integer, np.floating)):
         return xr.DataArray(float(raw))
 
@@ -238,7 +253,7 @@ def _coerce_to_dataarray(
             raise DataError(msg)
         series = pd.Series(raw)
         series.index.name = dims[0]
-        raw = series  # fall through to Series handling
+        raw = series
 
     if isinstance(raw, pd.Series):
         if len(dims) != 1:
@@ -265,7 +280,6 @@ def _coerce_to_dataarray(
             raw.index.name = dims[0]
         if raw.columns.name is None:
             raw.columns.name = dims[1]
-        # flat columns (checked above: exactly 2 dims), so stack() gives a Series
         stacked = cast('pd.Series', raw.stack())
         stacked.name = name
         return xr.DataArray.from_series(stacked).unstack()
@@ -337,7 +351,21 @@ def _validate_coords(
             raise DataError(msg)
 
 
-def check_constant_side_covers(name: str, node: Any, schema: Model, dataset: Any, mask: Any) -> None:
+def gaps_under(array: Any, mask: Any) -> int:
+    """How many slots of *array* are null where *mask* still admits the row.
+
+    The eager lane's one way of asking "is this parameter defined where it is
+    needed" — a bound, a divisor and a constant side all ask it, and a second
+    spelling is a second chance to forget the mask and refuse a model whose
+    ``where`` had already answered. ``None`` means nothing narrows the question.
+    """
+    missing = array.isnull()
+    if mask is not None:
+        missing = missing & mask
+    return int(missing.sum())
+
+
+def check_constant_side_covers(name: str, node: ComparisonNode, schema: Model, dataset: Any, mask: Any) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
     The divisor argument, one position over. A missing row is read as 0, and on
@@ -353,21 +381,18 @@ def check_constant_side_covers(name: str, node: Any, schema: Model, dataset: Any
     reached by the shape each lane has to hand.
     """
     for side in (node.left, node.right):
-        if _variable_names(side, schema):
+        if _names_of(side, schema.variables):
             continue
-        params = _parameter_names(side, schema)
+        params = _names_of(side, schema.parameters)
         if not params:
             continue
         for param in sorted(params):
-            gaps = dataset[param].isnull()
-            if mask is not None:
-                gaps = gaps & mask
-            missing = int(gaps.sum())
+            missing = gaps_under(dataset[param], mask)
             if missing:
                 raise DataError(uncovered_constant_message(param, missing, name))
 
 
-def check_divisors_cover(name: str, node: Any, schema: Model, dataset: Any, mask: Any, model: Any) -> None:
+def check_divisors_cover(name: str, node: ExpressionNode, schema: Model, dataset: Any, mask: Any, model: Any) -> None:
     """A divisor must have a value wherever this declaration divides by it.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check
@@ -387,53 +412,32 @@ def check_divisors_cover(name: str, node: Any, schema: Model, dataset: Any, mask
     out — silently, and identically on both lanes until #312.
     """
     for quotient in _quotients(node):
-        params = _parameter_names(quotient.right, schema)
+        params = _names_of(quotient.right, schema.parameters)
         if not params:
             continue
         needed = mask
-        for variable in _variable_names(quotient.left, schema):
+        for variable in _names_of(quotient.left, schema.variables):
             present = model.variables[variable].labels != -1
             needed = present if needed is None else (needed & present)
         for param in sorted(params):
-            gaps = dataset[param].isnull()
-            if needed is not None:
-                gaps = gaps & needed
-            missing = int(gaps.sum())
+            missing = gaps_under(dataset[param], needed)
             if missing:
                 raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
 
 
-def _quotients(node: Any) -> list[Any]:
+def _quotients(node: ExpressionNode) -> list[BinaryOperatorNode]:
     """Every division node under *node*."""
     out = [node] if isinstance(node, BinaryOperatorNode) and node.op == '/' else []
-    for child in _children(node):
+    for child in children(node):
         out.extend(_quotients(child))
     return out
 
 
-def _parameter_names(node: Any, schema: Model) -> set[str]:
-    return _names_of(node, schema.parameters)
-
-
-def _variable_names(node: Any, schema: Model) -> set[str]:
-    return _names_of(node, schema.variables)
-
-
-def _names_of(node: Any, declared: Any) -> set[str]:
+def _names_of(node: ExpressionNode, declared: Iterable[str]) -> set[str]:
     """Declared names under *node*, whether the AST is resolved or not."""
     found: set[str] = set()
     if isinstance(node, (NameNode, ParameterNode, VariableNode)) and node.name in declared:
         found.add(node.name)
-    for child in _children(node):
+    for child in children(node):
         found |= _names_of(child, declared)
     return found
-
-
-def _children(node: Any) -> tuple[Any, ...]:
-    if isinstance(node, (ComparisonNode, BinaryOperatorNode)):
-        return (node.left, node.right)
-    if isinstance(node, UnaryOperatorNode):
-        return (node.operand,)
-    if isinstance(node, FunctionCallNode):
-        return (*node.args, *node.kwargs.values())
-    return ()

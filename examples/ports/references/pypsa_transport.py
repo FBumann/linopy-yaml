@@ -2,21 +2,20 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
-# # linopy is pinned because PyPSA builds its model *through* it: the
-# # formulation, and so the number, is theirs jointly. pandas is pinned because
-# # xarray is linopy's data model, so alignment and broadcasting decide which
-# # coefficient lands in which row. pandas is only a floor: it reshapes the
-# # recorded duals and nothing else, and `nodal_prices` spells that reshape
-# # out rather than leaning on `stack()`, whose NA handling changed in 3.0.
-# # Checked: this script emits byte-identical output on pandas 2.3.3 and
-# # 3.0.5, so the floor is a measured claim rather than an assumption.
 # ///
 """Reference for ``pypsa_transport``: PyPSA's own LOPF. See docs/models/index.md.
 
     uv run --script examples/ports/references/pypsa_transport.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project.
+and run out of band — PyPSA is not a dependency of this project. linopy is
+pinned because PyPSA builds its model *through* it, so the formulation, and so
+the number, is theirs jointly; xarray because it is linopy's data model, where
+alignment and broadcasting decide which coefficient lands in which row. pandas
+is only a floor: it reshapes the recorded duals and nothing else, and
+``nodal_prices`` spells that reshape out rather than leaning on ``stack()``,
+whose NA handling changed in 3.0. The floor is checked rather than assumed —
+this script emits byte-identical output on either side of that change.
 
 It reads the same instance the port binds, since a reference optimum means
 nothing against a different one, and builds the network with PyPSA's own
@@ -40,7 +39,12 @@ DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_transport.json'
 
 
 def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
-    """The port's tables as a PyPSA network, column for column."""
+    """The port's tables as a PyPSA network, column for column.
+
+    ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
+    a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
+    it ships ``neg_rating`` as data instead. That is the ledger row.
+    """
     n = pypsa.Network()
     n.set_snapshots(data['snapshot']['snapshot'])
     n.add('Bus', data['bus']['bus'])
@@ -52,9 +56,6 @@ def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         p_nom=data['p_nom']['value'],
         marginal_cost=data['marginal_cost']['value'],
     )
-    # `p_min_pu = -1` makes a link bidirectional. The port cannot say that in a
-    # bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
-    # it ships `neg_rating` as data instead. That is the ledger row.
     n.add(
         'Link',
         data['link']['link'],

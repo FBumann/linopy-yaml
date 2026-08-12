@@ -2,18 +2,17 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
-# # linopy is pinned because PyPSA builds its model *through* it: the
-# # formulation, and so the number, is theirs jointly. pandas is pinned because
-# # xarray is linopy's data model, so alignment and broadcasting decide which
-# # coefficient lands in which row. pandas is only a floor: nothing recorded
-# # here is reshaped with it.
 # ///
 """Reference for ``pypsa_unit_commitment``: PyPSA's own UC. See docs/models/index.md.
 
     uv run --script examples/ports/references/pypsa_unit_commitment.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project.
+and run out of band — PyPSA is not a dependency of this project. linopy is
+pinned because PyPSA builds its model *through* it, so the formulation, and so
+the number, is theirs jointly; xarray because it is linopy's data model, where
+alignment and broadcasting decide which coefficient lands in which row. pandas
+is only a floor: nothing recorded here is reshaped with it.
 
 It reads the same instance the port binds and builds the network with PyPSA's
 own objects. Nothing here imports lpspec.

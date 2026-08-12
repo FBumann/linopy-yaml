@@ -22,14 +22,15 @@ __all__ = ['as_frame', 'labels_frame']
 
 
 def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
-    """Normalise one in-memory source to a tidy lazy frame, or ``None``.
+    """Normalise one in-memory source to a tidy lazy frame.
 
-    ``None`` means "not table-shaped"; the caller knows whether it held a
-    parameter or an index and writes the message. *dims* names the columns an
-    index becomes.
+    *dims* names the columns an index becomes. A bool stays boolean rather than
+    widening to float: the executor reads a mask's truthiness from the column
+    type (#47).
 
-    A bool stays boolean rather than widening to float: the executor reads a
-    mask's truthiness from the column type (#47).
+    Returns:
+        The tidy frame, or ``None`` for "not table-shaped" — the caller knows
+        whether it held a parameter or an index and writes the message.
     """
     import sys
 
@@ -62,9 +63,9 @@ def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
 def _series_to_frame(series: Any, dims: Sequence[str]) -> Any:
     """A pandas Series with its index promoted to columns.
 
-    Levels the caller named are left alone and bind by name: renaming them to
-    *dims* transposes the data when two dims share a label space, and nothing
-    downstream can catch that.
+    Levels the caller named bind by name: renaming them to *dims* transposes
+    the data when two dims share a label space, which nothing downstream can
+    catch.
     """
     if any(n is None for n in series.index.names):
         series = series.rename_axis(dims)
@@ -76,8 +77,7 @@ def _from_pandas(frame: Any) -> pl.LazyFrame:
 
     A whole-frame conversion needs pyarrow for anything Arrow-backed, which
     strings are by default on pandas 3. Object arrays go through a list so
-    numpy's float ``nan`` becomes a null rather than a string; the test is on
-    the numpy dtype, since that is what polars sees.
+    numpy's float ``nan`` becomes a null rather than a string.
     """
     columns: dict[str, Any] = {}
     for name in frame.columns:
@@ -94,11 +94,34 @@ def _is_missing(value: Any) -> bool:
     return value is None or (isinstance(value, float) and value != value)
 
 
-def labels_frame(dname: str, values: object) -> pl.LazyFrame:
-    """A one-column index frame from a plain sequence of labels."""
+#: The declared dimension dtypes (SPEC §2), as the column an index becomes.
+#: Read only when there are no labels to infer from — polars decides the rest,
+#: and a cast over labels that exist could change how §6.1 compares them.
+_DECLARED: dict[str, pl.DataType] = {
+    'int': pl.Int64(),
+    'float': pl.Float64(),
+    'str': pl.String(),
+    'datetime': pl.Datetime('us'),
+}
 
+
+def labels_frame(dname: str, values: object, dtype: str = 'str') -> pl.LazyFrame:
+    """A one-column index frame from a plain sequence of labels.
+
+    **An empty index takes the dimension's declared dtype.** polars infers
+    ``Null`` from no labels, and a ``Null`` key joins against nothing — so a
+    parameter with the right dtype and no rows fails to bind against the
+    dimension it belongs to. The declaration is the only thing that knows, and
+    it always answers: ``dtype`` defaults to ``str``.
+
+    An empty index is not a corner case for a driver that grows one. A Benders
+    cut set starts empty, and so does any dimension whose members a caller
+    appends to between solves.
+    """
     try:
         labels: list[Any] = list(values)  # pyrefly: ignore[bad-argument-type]  — `values` is whatever a caller passed
+        if not labels:
+            return pl.LazyFrame(schema={dname: _DECLARED[dtype]})
         return pl.LazyFrame({dname: labels})
     except (TypeError, pl.exceptions.PolarsError) as exc:
         raise DataError(
