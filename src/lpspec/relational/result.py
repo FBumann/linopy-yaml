@@ -82,14 +82,29 @@ class Result:
     Only the label frames are shared, and a re-solve does not touch them. That
     matters once a caller retains several results, which a sweep, a rolling
     horizon and Benders all do.
+
+    **A rebind is the exception, and it is the one lifetime here.** Rebinding
+    replaces the label frames the readers join through, so a result from before
+    it stops reading rather than laying its values out over coordinates that
+    are no longer the ones they were computed on. Read out what you need first
+    — ``to_pandas``, ``to_parquet``, or ``primal`` itself, all of which return
+    frames that are their own data.
     """
 
     _status: SolveStatus
     _objective: float
     _executor: PolarsExecutor
+    #: The build this answers. The executor's own counter moves past it when
+    #: something rebinds, which is how a stale result knows it is one.
+    _generation: int = 0
     _primal_values: pl.Series | None = None
     _dual_values: pl.Series | None = None
     _closed: bool = False
+
+    @property
+    def _current(self) -> bool:
+        """Whether the model behind this result is still the one it answered."""
+        return self._generation == self._executor._generation
 
     @property
     def status(self) -> str:
@@ -126,6 +141,13 @@ class Result:
                 f'cannot read {what}: this result was closed, and closing releases the model the '
                 f'readers join against. Frames already read stay valid — they are their own data — so '
                 f'read what you need before close(), or drop the `with` and close when you are done.'
+            )
+        if not self._current:
+            raise LpspecError(
+                f'cannot read {what}: the model was rebound after this solve, and a rebind replaces '
+                f'the label frames the readers join through — laying these values out over them would '
+                f'report an answer over coordinates it was not computed on. Read what you need before '
+                f'rebinding; a frame already read is its own data and stays valid.'
             )
         if self._status.is_readable:
             return
@@ -202,10 +224,16 @@ class Result:
 
         Drops this result's own values as well as the shared model, so closing
         still frees everything one solve allocated; a sibling result keeps its.
+
+        A result the model has outgrown releases only its own values: the
+        built model it names is no longer the one it answered, and closing a
+        rebound model on the way out of an old ``with`` block would take the
+        live one down.
         """
         self._primal_values = self._dual_values = None
         self._closed = True
-        self._executor.close()
+        if self._current:
+            self._executor.close()
 
     def __enter__(self) -> Result:
         return self

@@ -51,9 +51,10 @@ import pytest
 import yaml
 
 import lpspec as lps
+from lpspec.api import BoundModel
 from lpspec.language.model import Model
 from lpspec.language.validation import load_model
-from lpspec.relational.engines.polars.executor import PolarsExecutor, Result
+from lpspec.relational.result import Result
 
 try:
     from lpspec import linopy as linopy_lane
@@ -78,7 +79,7 @@ ROOTS: dict[str, Any] = {
     'lps': lps,
     'lpspec_linopy': linopy_lane,
     'result': Result,
-    'ex': PolarsExecutor,
+    'ex': BoundModel,
     'schema': Model,
 }
 

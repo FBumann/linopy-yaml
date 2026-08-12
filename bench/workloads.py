@@ -65,6 +65,17 @@ def split_sources(case: Case, paths: dict[str, str]) -> tuple[dict[str, str], di
     )
 
 
+def _tables(ex: Any) -> Any:
+    """The built model's frames, wherever the checkout under test keeps them.
+
+    ``build`` returns a handle *over* the engine; a checkout from before it
+    returned the engine itself. Written the tolerant way for the same reason
+    the nonzero count below is optional — the ladder is run across checkouts,
+    and a comparison that cannot reach the older one measures nothing.
+    """
+    return getattr(ex, '_engine', ex)._tables()
+
+
 def _engine(engine: str | None) -> None:
     """Select the engine the way a caller does, in this process.
 
@@ -113,13 +124,13 @@ def lpspec_build_and_emit(
         elif sink == 'gurobi':
             from lpspec.relational.sinks.solvers.gurobi import build_gurobi
 
-            _handle = build_gurobi(ex._tables())
+            _handle = build_gurobi(_tables(ex))
         else:
             from lpspec.relational.sinks.solvers.highs import build_highs
 
-            _handle = build_highs(ex._tables())
+            _handle = build_highs(_tables(ex))
 
-        tables = ex._tables()
+        tables = _tables(ex)
         matrix = getattr(tables, 'matrix', None)
         return {
             'columns': tables.column_count,
@@ -178,7 +189,7 @@ def build_only(arm: str, case_name: str, paths: dict[str, str], engine: str | No
 
     sources, coords_ = split_sources(case, paths)
     with lps.build(case.model, sources, coords=coords_) as ex:
-        tables = ex._tables()
+        tables = _tables(ex)
         return {'columns': tables.column_count, 'rows': tables.row_count, 'nonzeros': None}
 
 

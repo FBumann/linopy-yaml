@@ -270,8 +270,8 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
         before = first.primal('p').sort(key)
         assert first.is_ok
 
-        assert ex._obj is not None
-        ex._obj = ex._obj.with_columns(-pl.col('coeff'))
+        assert ex._engine._obj is not None
+        ex._engine._obj = ex._engine._obj.with_columns(-pl.col('coeff'))
         second = ex.solve()
 
         assert not second.primal('p').sort(key).equals(before), 'the second solve really moved'

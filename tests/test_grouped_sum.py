@@ -302,7 +302,7 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
         generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     )
     with lps.build(BROADCAST_GROUP_SUM, sources) as ex:
-        tables = ex._tables()
+        tables = ex._engine._tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 4, 'a column appears twice on a row'
         assert matrix['coeff'].to_list() == [3.0, 5.0, 3.0, 5.0], 'the 1.0 and the 2.0 merged'
@@ -327,7 +327,7 @@ def test_sum_over_a_foreach_dim_needs_no_such_collapse():
         generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     )
     with lps.build(model, sources) as ex:
-        tables = ex._tables()
+        tables = ex._engine._tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 6, 'one entry per (row, generator-on-that-bus), not one per bus'
         assert ex.solve().termination_condition == 'optimal'
@@ -370,7 +370,7 @@ def test_an_objective_term_carrying_dims_is_still_summed_per_column():
     so this reads as a plausible answer to a model nobody wrote.
     """
     with lps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as ex:
-        obj = ex._tables().obj.sort('col')
+        obj = ex._engine._tables().obj.sort('col')
         assert obj.height == 3, 'one row per column, not one per (bus, snapshot)'
         assert obj['coeff'].to_list() == [1111.0] * 3, 'sum(w), not w[-1]'
 
@@ -395,7 +395,7 @@ def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
     """
     model = override(BROADCAST_OBJECTIVE, **{'objectives.c.expression': 'y * floor'})
     with lps.build(model, BROADCAST_OBJECTIVE_SOURCES) as ex:
-        obj = ex._tables().obj.sort('col')
+        obj = ex._engine._tables().obj.sort('col')
         assert obj.height == 3
         assert obj['coeff'].to_list() == [1.0, 2.0, 3.0], 'floor itself, un-summed'
 

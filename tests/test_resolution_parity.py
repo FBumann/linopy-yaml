@@ -101,7 +101,7 @@ def test_both_lanes_build_the_same_model(tmp_path, data, coords, where):
     eager_status = m.solve(solver_name='highs')[1]
 
     with lps.build(path, data, coords=coords) as ex:
-        relational_rows = ex._variables['p'].select(pl.len()).collect().item()
+        relational_rows = ex._engine._variables['p'].select(pl.len()).collect().item()
         relational_status = ex.solve().termination_condition
 
     assert eager_rows == relational_rows, f'{where}: {eager_rows} vs {relational_rows} variables'

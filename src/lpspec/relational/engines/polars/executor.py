@@ -79,6 +79,27 @@ class PolarsExecutor:
     """Build a :class:`Program` into polars frames, then sink it."""
 
     def __init__(self) -> None:
+        #: Bumped by every build, so a :class:`Result` can tell that the model
+        #: it reads through is no longer the one it was an answer to.
+        self._generation = 0
+        #: The loaded solver, kept between solves — the only thing a rebuild
+        #: does *not* throw away, and ``None`` for a solver that cannot stay
+        #: loaded or a model nobody has solved.
+        self._session: Any = None
+        self._session_of: str | None = None
+        #: ``(solve number, why)`` for every solve that loaded the model from
+        #: scratch instead of pushing values onto a loaded one.
+        self._reloads: list[tuple[int, str]] = []
+        self._solves = 0
+        self._reset()
+
+    def _reset(self) -> None:
+        """The state one build owns, emptied.
+
+        What a second :meth:`build` over the same object clears, so that what
+        survives a rebuild is exactly what is *not* the built model: the
+        loaded solver and the counters.
+        """
         self._program: plan.Program | None = None
         self._compiler: PolarsCompiler | None = None
         self._bound: BoundSources | None = None
@@ -120,7 +141,19 @@ class PolarsExecutor:
         linear scan rather than sorting the model's largest frame at the peak
         of the build. :func:`_row_starts` reads the CSR index off that order,
         after which ``row`` is dropped: 8 bytes per entry no sink reads.
+
+        **A second call rebuilds over the same object**, which is what
+        ``rebind`` is. The previous build is released *before* this one starts,
+        so a driver that re-solves in a loop stays at one model's peak — which
+        is also the last moment a loaded solver can be told what it holds, and
+        why :meth:`~lpspec.relational.sinks.solvers.Session.remember` is asked
+        here rather than where the tables are handed over.
         """
+
+        if self._session is not None and self._cols is not None:
+            self._session.remember(self._tables())
+        self._reset()
+        self._generation += 1
 
         self._program = program
         self._bound = bind(program, sources)
@@ -397,8 +430,12 @@ class PolarsExecutor:
     # ------------------------------------------------------------------
 
     def _tables(self) -> sinks.ModelTables:
-        assert self._cols is not None and self._obj is not None
-        assert self._rows is not None and self._matrix is not None
+        if self._cols is None or self._obj is None or self._rows is None or self._matrix is None:
+            raise LpspecError(
+                'there is no built model to hand over: it was closed, or a rebind raised and released '
+                'it rather than leaving half of one behind. Build it again — rebind() with data it can '
+                'bind, or build() from the start.'
+            )
         return sinks.ModelTables(
             cols=self._cols,
             obj=self._obj,
@@ -455,16 +492,89 @@ class PolarsExecutor:
         (``{'time_limit': 60, 'mip_rel_gap': 0.01}``). ``batch_rows`` is the
         hand-off budget in elements, defaulting to the sink's own
         (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
+
+        **The solver stays loaded where it can.** A solve of a model that was
+        rebound to new numbers pushes bounds, costs and right-hand sides onto
+        the model the solver already holds and starts from the basis the last
+        solve ended on; one whose structure moved is loaded again. Which
+        happened is :meth:`reloads`, and it is a diagnostic — the answer is
+        the same either way.
         """
-        status, objective, primal, dual = sinks.solver(solver_name)(self._tables(), batch_rows, solver_options)
+        tables = self._tables()
+        self._solves += 1
+        live = self._loaded_solver(tables, batch_rows, solver_options, solver_name)
+        if live is None:
+            status, objective, primal, dual = sinks.solver(solver_name)(tables, batch_rows, solver_options)
+        else:
+            status, objective, primal, dual = live.run(tables)
         _spanning(solver_name, 'primal', primal, self._n_cols)
         _spanning(solver_name, 'dual', dual, self._n_rows)
         return Result(
             _status=status,
             _objective=objective,
             _executor=self,
+            _generation=self._generation,
             _primal_values=primal,
             _dual_values=dual,
+        )
+
+    def _loaded_solver(
+        self,
+        tables: sinks.ModelTables,
+        batch_rows: int | None,
+        solver_options: Mapping[str, Any] | None,
+        solver_name: str,
+    ) -> Any:
+        """The solver to run *tables* on, kept from the last solve if it fits.
+
+        Returns ``None`` when nothing can be kept, which the caller reads as
+        "hand the tables to the one-shot sink" — the same answer, without a
+        handle to release. A session that no longer fits is closed here rather
+        than left to the collector: it holds memory outside this process.
+        """
+        session = self._session
+        if session is not None and self._session_of == solver_name and session.takes(tables, solver_options):
+            session.push(tables)
+            return session
+
+        why = (
+            'nothing was loaded yet'
+            if session is None
+            else f'the last solve ran {self._session_of!r}'
+            if self._session_of != solver_name
+            else 'a rebuild moved the structure, or the solver options changed'
+        )
+        self._close_session()
+        loadable = sinks.session(solver_name)
+        if loadable is None:
+            self._reloads.append((self._solves, f'{solver_name} cannot stay loaded between solves'))
+            return None
+        self._reloads.append((self._solves, why))
+        self._session = loadable(tables, batch_rows, solver_options)
+        self._session_of = solver_name
+        return self._session
+
+    def _close_session(self) -> None:
+        if self._session is not None:
+            self._session.close()
+        self._session = self._session_of = None
+
+    def reloads(self) -> pl.DataFrame:
+        """``(solve, reason)`` — the solves that loaded the model from scratch.
+
+        A rebind whose new numbers moved a label cannot be pushed onto a loaded
+        solver, so that solve loads it again: correct, and slower. One row on a
+        driver taking the fast path — the first solve, which had nothing to
+        keep — and a row per iteration on one that is not, which is the
+        difference between "lpspec is slow" and "this model masks on a
+        parameter that varies".
+
+        **Advisory.** Nothing about the answer depends on which path ran, so
+        this is here to be read and not to be branched on.
+        """
+        return pl.DataFrame(
+            {'solve': [n for n, _ in self._reloads], 'reason': [why for _, why in self._reloads]},
+            schema={'solve': pl.UInt32, 'reason': pl.String},
         )
 
     def _solution_frame(self, name: str, values: pl.Series | None) -> pl.LazyFrame:
@@ -575,8 +685,10 @@ class PolarsExecutor:
 
         ``BoundSources`` is frozen, so it cannot be emptied in place the way
         the registries can: what frees the bound frames is dropping every
-        reference to them, and the compiler holds one.
+        reference to them, and the compiler holds one. A loaded solver goes
+        too, being the one thing here that is not this process's memory.
         """
+        self._close_session()
         self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
         self._variables.clear()
         self._constraints.clear()

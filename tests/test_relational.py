@@ -37,6 +37,7 @@ from lpspec.relational.plan import (
     VariableDeclaration,
 )
 from lpspec.relational.sinks import SOLVERS
+from lpspec.relational.sinks.solvers.highs import HighsSession
 from tests.conftest import by_coord, override, solve_lp_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, transport_eager_objective, xr
@@ -391,7 +392,7 @@ def test_a_variable_appearing_twice_in_a_row_is_summed_not_duplicated():
     }
     sources = {'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
     with lps.build(model, sources) as ex:
-        matrix = ex._tables().matrix
+        matrix = ex._engine._tables().matrix
         assert matrix.height == 2, 'one entry per row, not one per fragment'
         assert sorted(matrix['coeff'].to_list()) == [3.0, 3.0]
         result = ex.solve()
@@ -449,7 +450,7 @@ def test_a_masked_variable_is_labelled_in_declaration_order():
     ]
 
     with lps.build(model, sources) as ex:
-        labelled = ex._variables['p'].collect()
+        labelled = ex._engine._variables['p'].collect()
 
     assert labelled['var_label'].to_list() == list(range(len(expected))), 'labels must be dense and ascending'
     assert list(labelled.select('snapshot', 'node', 'tech').iter_rows()) == expected
@@ -506,7 +507,7 @@ def test_a_string_dimension_is_enum_encoded_up_to_the_read_back():
     declared = pl.Enum(['c', 'a', 'b'])
 
     with lps.build(model, {'cap': cap}) as ex:
-        assert ex._variables['x'].collect_schema()['node'] == declared
+        assert ex._engine._variables['x'].collect_schema()['node'] == declared
         primal = ex.solve().primal('x')
 
     assert primal.schema['node'] == pl.String, 'what leaves is what a caller can join against'
@@ -527,7 +528,7 @@ def test_a_where_orders_string_labels_bytewise_not_by_declaration():
     cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
 
     with lps.build(model, {'cap': cap}) as ex:
-        assert sorted(ex._variables['x'].collect()['node'].to_list()) == ['b', 'c']
+        assert sorted(ex._engine._variables['x'].collect()['node'].to_list()) == ['b', 'c']
         assert ex.solve().objective == pytest.approx(5.0)
 
 
@@ -544,7 +545,7 @@ def test_a_where_naming_an_undeclared_label_masks_nothing_in():
     cap = pl.DataFrame({'node': ['a', 'b'], 'value': [1.0, 2.0]})
 
     with lps.build(model, {'cap': cap}) as ex:
-        assert ex._tables().rows.height == 0, 'the mask holds nowhere, so no constraint row is built'
+        assert ex._engine._tables().rows.height == 0, 'the mask holds nowhere, so no constraint row is built'
         assert ex.solve().objective == pytest.approx(0.0)
 
 
@@ -558,8 +559,8 @@ def test_an_objective_naming_a_variable_twice_sums_its_coefficients():
         'objectives': {'o': {'sense': 'minimize', 'expression': 'x + 4 * x'}},
     }
     with lps.build(model, {'lb': pl.DataFrame({'i': [0], 'value': [2.0]})}) as ex:
-        assert ex._tables().obj.height == 1
-        assert ex._tables().obj['coeff'].to_list() == [5.0]
+        assert ex._engine._tables().obj.height == 1
+        assert ex._engine._tables().obj['coeff'].to_list() == [5.0]
         assert ex.solve().objective == pytest.approx(10.0)
 
 
@@ -622,7 +623,7 @@ def test_a_mask_a_missing_value_can_satisfy_keeps_the_rows_with_no_value():
     }
     with lps.build(model, sources) as ex:
         surviving = {
-            name: sorted(ex._variables[name].select('i').collect().to_series().to_list())
+            name: sorted(ex._engine._variables[name].select('i').collect().to_series().to_list())
             for name in ('absent', 'either', 'both', 'mixed')
         }
     assert surviving == {
@@ -658,14 +659,14 @@ def test_every_declaration_owns_a_contiguous_run_of_labels():
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
     }
     with lps.build(model, {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as ex:
-        tables = ex._tables()
+        tables = ex._engine._tables()
         for names, total, frames, label in (
-            (['x', 'y', 'z'], tables.column_count, ex._variables, 'var_label'),
-            (['c1', 'c2'], tables.row_count, ex._constraints, 'row'),
+            (['x', 'y', 'z'], tables.column_count, ex._engine._variables, 'var_label'),
+            (['c1', 'c2'], tables.row_count, ex._engine._constraints, 'row'),
         ):
             at = 0
             for name in names:
-                start, height = ex._blocks[name]
+                start, height = ex._engine._blocks[name]
                 assert start == at, f'{name} does not start where the previous declaration ended'
                 labels = frames[name].select(label).collect().to_series()
                 assert sorted(labels) == list(range(start, start + height)), f'{name} is not a dense run'
@@ -694,13 +695,13 @@ def test_the_matrix_collapses_a_repeated_cell_and_leaves_the_rest_alone():
 
     disjoint = dict(base, constraints={'c': {'foreach': ['i'], 'expression': 'x + y >= rhs'}})
     with lps.build(disjoint, sources) as ex:
-        matrix = ex._tables().matrix
+        matrix = ex._engine._tables().matrix
         assert matrix.height == 4, 'two variables per row, nothing to collapse'
         assert matrix['coeff'].to_list() == [1.0, 1.0, 1.0, 1.0]
 
     overlapping = dict(base, constraints={'c': {'foreach': ['i'], 'expression': 'x + 3 * x >= rhs'}})
     with lps.build(overlapping, sources) as ex:
-        matrix = ex._tables().matrix
+        matrix = ex._engine._tables().matrix
         assert matrix.height == 2, 'one cell per row after the collapse'
         assert matrix['coeff'].to_list() == [4.0, 4.0]
 
@@ -752,10 +753,10 @@ def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet():
         model, sources = _network(self_loop)
         with lps.build(model, sources) as ex:
             program = lower_program(Model(**model))
-            terms = ex._q.expression(program.constraints[0].lhs, 'test').terms
+            terms = ex._engine._q.expression(program.constraints[0].lhs, 'test').terms
             assert len(terms) == 2
 
-            tables = ex._tables()
+            tables = ex._engine._tables()
             cells = tables.matrix_block(0, tables.row_count).select('row', 'col')
             assert cells.height == cells.unique().height, f'a cell reached the sinks twice (self_loop={self_loop})'
 
@@ -845,12 +846,12 @@ def test_a_solution_is_read_back_in_label_order_without_sorting_for_it():
         'load': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [1.0, 0.0, 2.0, 3.0]}),
     }
     with lps.build(model, sources) as ex:
-        primal = pl.Series('value', np.arange(ex._n_cols, dtype=np.float64))
-        dual = pl.Series('value', np.arange(ex._n_rows, dtype=np.float64))
-        variable = ex._solution_frame('p', primal)
+        primal = pl.Series('value', np.arange(ex._engine._n_cols, dtype=np.float64))
+        dual = pl.Series('value', np.arange(ex._engine._n_rows, dtype=np.float64))
+        variable = ex._engine._solution_frame('p', primal)
         assert 'SORT' not in variable.explain(optimized=False), 'the labeller already ordered this'
         assert variable.collect()['value'].to_list() == list(range(len(primal))), 'primal not in label order'
-        assert ex._dual('meet', dual)['value'].to_list() == list(range(len(dual))), 'dual not in label order'
+        assert ex._engine._dual('meet', dual)['value'].to_list() == list(range(len(dual))), 'dual not in label order'
 
 
 #: Three columns and three rows, the smallest model whose solution vector has a
@@ -876,17 +877,22 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
     read: the objective comes straight from the solver, so a `Result` built on
     a broken vector reports a plausible number and fails only if someone asks
     for a coordinate.
+
+    The double is a *session* because that is the hand-off `highs` takes — the
+    guard is one call after both branches, so crooking the branch that runs
+    covers it.
     """
     from lpspec.relational.engines.polars import executor as executor_module
 
     honest = executor_module.sinks.solver('highs')
 
-    def crooked(tables, batch_rows, options):
-        status, objective, primal, dual = honest(tables, batch_rows, options)
-        stretched = pl.Series('value', list(primal) + [0.0] * length)
-        return status, objective, stretched.head(length), dual
+    class Crooked(HighsSession):
+        def run(self, tables):
+            status, objective, primal, dual = honest(tables, None, None)
+            stretched = pl.Series('value', list(primal) + [0.0] * length)
+            return status, objective, stretched.head(length), dual
 
-    monkeypatch.setattr(executor_module.sinks, 'solver', lambda _name: crooked)
+    monkeypatch.setattr(executor_module.sinks, 'session', lambda _name: Crooked)
     with (
         lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as ex,
         pytest.raises(LpspecError, match=f'returned {length} primal values for a model with 3'),
@@ -905,7 +911,7 @@ def test_a_solver_hands_back_a_vector_and_not_an_index(solver_name):
     other half of it, and neither is visible from the numbers.
     """
     with lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as ex:
-        tables = ex._tables()
+        tables = ex._engine._tables()
         solution = ex.solve(solver_name=solver_name)
         assert solution.is_ok
         for values, count in (
@@ -946,7 +952,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(sum(p, over=g), over=t)'}},
     }
     with lps.build(model, {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}) as ex:
-        tables = ex._tables()
+        tables = ex._engine._tables()
         occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
         assert occupied == [0, 1], 'the block closes up around the gap'
         assert ex.omissions().to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
@@ -1493,7 +1499,7 @@ def test_dense_columns_does_not_edit_the_model_it_projects():
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
     }
     with lps.build(model, {'rhs': pl.DataFrame({'i': [0, 1], 'value': [1.0, 2.0]})}) as ex:
-        tables = ex._tables()
+        tables = ex._engine._tables()
         first, _, _, _ = tables.dense_columns(1e30)
         ub_after_first = tables.cols['ub'].to_list()
 
@@ -1537,11 +1543,11 @@ def test_cols_is_positional_so_a_row_index_is_its_solver_column(where):
         model['variables']['x']['where'] = where
 
     with lps.build(model, {'cap': pl.DataFrame(caps)}) as ex:
-        tables = ex._tables()
+        tables = ex._engine._tables()
         assert 'col' not in tables.cols.columns, 'cols carries an index it does not need'
         assert tables.cols.height == tables.column_count
 
-        labels = ex._variables['x'].collect().sort('var_label')
+        labels = ex._engine._variables['x'].collect().sort('var_label')
         raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(labels['j'].dtype))
         expected = labels.join(raw, on=['i', 'j'], how='left')['value'].to_list()
         assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'
@@ -1675,11 +1681,11 @@ def test_an_empty_index_keeps_the_dimension_s_declared_dtype():
     }
     empty = pl.DataFrame(schema={'cut': pl.Int64, 'value': pl.Float64})
     with lps.build(model, {'c': empty}, coords={'cut': []}) as ex:
-        assert ex._tables().column_count == 0
+        assert ex._engine._tables().column_count == 0
 
     grown = pl.DataFrame({'cut': [0, 1], 'value': [1.0, 2.0]})
     with lps.build(model, {'c': grown}, coords={'cut': [0, 1]}) as ex:
-        assert ex._tables().column_count == 2
+        assert ex._engine._tables().column_count == 2
 
 
 def test_an_empty_index_of_a_string_dimension_is_a_string_column():
@@ -1692,7 +1698,7 @@ def test_an_empty_index_of_a_string_dimension_is_a_string_column():
     }
     empty = pl.DataFrame(schema={'cut': pl.String, 'value': pl.Float64})
     with lps.build(model, {'c': empty}, coords={'cut': []}) as ex:
-        assert ex._tables().column_count == 0
+        assert ex._engine._tables().column_count == 0
 
 
 def test_two_solutions_over_different_members_concatenate():
