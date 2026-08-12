@@ -428,38 +428,35 @@ def solve_over(
 ) -> Runs:
     """Solve *model* once per slice of *axis* and fold the answers together.
 
-    The caller-facing rules — what a carry copies, how a key column is named,
-    which executor to choose — are the table in
-    [docs/api.md](../../docs/api.md#solving-one-model-many-times), so that they
-    are stated once. What this docstring adds is the order the work happens in.
+    A serial fold builds one model and rebinds each slice onto it; a pooled one
+    builds per slice. Either way one slice's model is alive at a time, so build
+    peak does not grow with the sweep, and what accumulates is the answers. A
+    carry hands each slice's result to the next, and the last slice carries
+    nothing. What a carry copies and how a key column is named are the table in
+    [docs/api.md](../../docs/api.md#solving-one-model-many-times).
 
-    **Everything answerable from the declarations is answered before a source
-    is read.** A mistyped carry, a key column that collides, an axis a carry
-    cannot run on: each costs a parse rather than a scan of every parquet file.
-    The schema then rides down to the slices already parsed, so no slice — and
-    no worker — reads the same YAML again.
-
-    **It is a fold.** The previous slice's model is released as the loop goes —
-    rebound in place, serially — so build peak stays at one slice however many
-    there are; what accumulates is the answer, which is what the caller asked
-    for.
-
-    **The last slice carries nothing**, there being no next slice to read it.
-    A short tail window can hold fewer coordinates than the carry index names,
-    and computing a value nothing will use would fail an otherwise complete
-    sweep at the final slice.
+    Every declaration is checked before a source is read: a mistyped carry, a
+    key column that collides, an axis a carry cannot run on all cost a parse
+    rather than a scan of every parquet file.
 
     **A process pool must not use the ``fork`` start method.** polars' thread
     pool does not survive a fork, and a forked worker hangs rather than
-    failing. This cannot be enforced here — a remote executor has no start
-    method to inspect — so pass the context, and give the entry point the
-    ``__main__`` guard that ``spawn`` requires:
+    failing. Pass a ``spawn`` context, and give the entry point the ``__main__``
+    guard it requires:
 
     .. code-block:: python
 
         ctx = multiprocessing.get_context('spawn')
         with ProcessPoolExecutor(4, mp_context=ctx) as pool:
             runs = lps.solve_over(model, sources, axis, executor=pool)
+
+    Returns:
+        Every slice's answers, keyed by slice.
+
+    Raises:
+        LpspecError: A carry together with an executor — a carried value makes
+            each slice depend on the one before, so they cannot run
+            concurrently — or a carry on an unordered axis.
     """
     if carry and executor is not None:
         raise LpspecError(
@@ -562,6 +559,9 @@ def _one_model(schema: Model, call: dict[str, Any]) -> Iterator[_Rebound]:
 
     Serial only. The pooled branch hands plain data to :func:`_run_slice` in
     another process, and a built model is the one thing that cannot cross.
+
+    Yields:
+        The holder to solve each slice on; its model is closed on the way out.
     """
     holder = _Rebound(schema, call)
     try:
