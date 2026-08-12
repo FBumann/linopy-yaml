@@ -878,19 +878,19 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
     a broken vector reports a plausible number and fails only if someone asks
     for a coordinate.
 
-    The double subclasses the sink rather than replacing it: what is crooked
-    is the read-back, and everything that reaches it — the load, the push, the
-    guard — is the real one.
+    The double overrides `_run`, which is the half a sink writes: the guard is
+    the base's `run` around it, so a sink cannot be added that forgets to be
+    checked. Everything else it goes through — the load, the push, the family's
+    own choice of which solver to keep — is the real one.
     """
-    from lpspec.relational.engines.polars import executor as executor_module
 
     class Crooked(Highs):
-        def run(self, tables):
+        def _run(self, tables):
             status, objective, primal, dual = solve_highs(tables)
             stretched = pl.Series('value', list(primal) + [0.0] * length)
             return status, objective, stretched.head(length), dual
 
-    monkeypatch.setattr(executor_module.sinks, 'solver', lambda _name: Crooked)
+    monkeypatch.setitem(SOLVERS, 'highs', Crooked)
     with (
         lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as ex,
         pytest.raises(LpspecError, match=f'returned {length} primal values for a model with 3'),

@@ -23,8 +23,11 @@ from lpspec.relational.sinks.solvers.highs import Highs
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from typing import Any
 
-__all__ = ['SOLVERS', 'Solver', 'solver']
+    from lpspec.relational.sinks.tables import ModelTables
+
+__all__ = ['SOLVERS', 'Solver', 'loaded', 'solver']
 
 #: Every solver a caller may name, and **closed** — a dict literal, not a
 #: registry something installed can add to. Which solver runs is the caller's
@@ -50,3 +53,42 @@ def solver(name: str) -> type[Solver]:
             f'unknown solver {name!r} — this build solves with {", ".join(sorted(SOLVERS))}. '
             'HiGHS ships with the package and is the default; gurobi needs the [gurobi] extra.'
         ) from None
+
+
+def loaded(
+    held: Solver | None,
+    name: str,
+    model: ModelTables,
+    batch_rows: int | None = None,
+    solver_options: Mapping[str, Any] | None = None,
+) -> tuple[Solver, str | None]:
+    """The solver to run *model* on, and why *held* could not be kept.
+
+    The whole of "reuse or load again", in the family that owns both halves —
+    a caller keeps the solver it is handed and nothing else, where the same
+    decision spread across the engine meant the engine tracking which sink was
+    loaded and closing it at the right moment.
+
+    The reason is ``None`` when the held solver took the model, and a sentence
+    when it did not: a diagnostic
+    (:meth:`~lpspec.api.BoundModel.diagnostics`), never a thing to branch on,
+    since the answer is the same either way.
+
+    A solver being replaced is closed here. It holds memory — and for one of
+    them a licence — that no frame in this process accounts for, so leaving it
+    to the collector would be leaving it to chance. *name* is resolved first,
+    so a caller who named nothing this build has does not first pay a release.
+    """
+    wanted = solver(name)
+    if held is not None:
+        if type(held) is wanted and held.takes(model, solver_options):
+            held.push(model)
+            return held, None
+        held.close()
+    return wanted(model, batch_rows, solver_options), (
+        'nothing was loaded yet'
+        if held is None
+        else f'the last solve ran {type(held).__name__}'
+        if type(held) is not wanted
+        else 'a rebuild moved the structure, or the solver options changed'
+    )

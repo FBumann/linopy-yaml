@@ -145,7 +145,7 @@ class Gurobi(Solver):
         self._m.ObjCon = model.objective_constant
         self._m.update()
 
-    def run(self, model: ModelTables) -> Answer:
+    def _run(self, model: ModelTables) -> Answer:
         """Gurobi refuses the attribute where there is no primal or no dual
         rather than handing back zeros, which is the one place it makes this
         easier than HiGHS."""

@@ -184,7 +184,7 @@ class Highs(Solver):
         rub = np.where(sense == SENSE_CODES['>='], inf, rhs)
         _loaded(self._handle, self._handle.changeRowsBounds(model.row_count, rows, rlb, rub), 'new right-hand sides')
 
-    def run(self, model: ModelTables) -> Answer:
+    def _run(self, model: ModelTables) -> Answer:
         import highspy
 
         self._handle.run()

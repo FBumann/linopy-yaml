@@ -20,6 +20,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
+from lpspec.errors import LpspecError
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -110,8 +112,36 @@ class Solver(ABC):
         model that would say which cells moved is the one this replaces.
         """
 
-    @abstractmethod
     def run(self, model: ModelTables) -> Answer:
+        """Solve what is loaded, read it back, and refuse a vector that lies.
+
+        Reading a solution back is positional, so a vector that does not span
+        the model is an answer about a *different* one. Refused here, where the
+        solver hands it over, rather than where it is read: the objective comes
+        back directly, so a result built on a broken vector would report a
+        plausible number and only fail if someone asked for a coordinate.
+
+        A member writes :meth:`_run`; this is the contract around it, so no
+        sink can be added that forgets to be checked.
+        """
+        status, objective, primal, dual = self._run(model)
+        self._spans('primal', primal, model.column_count)
+        self._spans('dual', dual, model.row_count)
+        return status, objective, primal, dual
+
+    def _spans(self, quantity: str, values: pl.Series | None, expected: int) -> None:
+        """``None`` is not a wrong length — a mixed-integer model has no duals,
+        and neither does a run stopped short of a simplex basis."""
+        if values is not None and len(values) != expected:
+            raise LpspecError(
+                f'{type(self).__name__} returned {len(values)} {quantity} values for a model with '
+                f'{expected}. Reading a solution back is positional, so a vector that does not span '
+                f'the model describes a different one. This is an engine bug rather than a problem '
+                f'with the model — please report it.'
+            )
+
+    @abstractmethod
+    def _run(self, model: ModelTables) -> Answer:
         """Solve what is loaded and read it back.
 
         *model* is asked only for what has no column and so was never loaded —

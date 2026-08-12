@@ -82,10 +82,9 @@ class PolarsExecutor:
         #: Bumped by every build, so a :class:`Result` can tell that the model
         #: it reads through is no longer the one it was an answer to.
         self._generation = 0
-        #: The loaded solver, kept between solves — the only thing a rebuild
-        #: does *not* throw away. ``None`` until a model has been solved once.
-        self._session: sinks.Solver | None = None
-        self._session_of: str | None = None
+        #: The solver holding this model, kept between solves — the only thing
+        #: a rebuild does *not* throw away. ``None`` until one has been solved.
+        self._solver: sinks.Solver | None = None
         #: ``(solve number, why)`` for every solve that loaded the model from
         #: scratch instead of pushing values onto a loaded one.
         self._reloads: list[tuple[int, str]] = []
@@ -156,8 +155,8 @@ class PolarsExecutor:
         here rather than where the tables are handed over.
         """
 
-        if self._session is not None and self._cols is not None:
-            self._session.remember(self._tables())
+        if self._solver is not None and self._cols is not None:
+            self._solver.remember(self._tables())
         self._reset()
         self._generation += 1
 
@@ -500,18 +499,20 @@ class PolarsExecutor:
         hand-off budget in elements, defaulting to the sink's own
         (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
 
-        **The solver stays loaded where it can.** A solve of a model that was
-        rebound to new numbers pushes bounds, costs and right-hand sides onto
-        the model the solver already holds and starts from the basis the last
-        solve ended on; one whose structure moved is loaded again. Which
-        happened is :meth:`reloads`, and it is a diagnostic — the answer is
-        the same either way.
+        **The solver stays loaded where it can**, which is
+        :func:`~lpspec.relational.sinks.solvers.loaded`'s decision and not this
+        method's: a rebound model has its new numbers pushed onto what the
+        solver already holds, and one whose structure moved is loaded again.
+        All that is kept here is the solver itself and the record of when it
+        could not be — :meth:`reloads`, a diagnostic, the answer being the same
+        either way.
         """
         tables = self._tables()
         self.solves += 1
-        status, objective, primal, dual = self._held(tables, batch_rows, solver_options, solver_name).run(tables)
-        _spanning(solver_name, 'primal', primal, self._n_cols)
-        _spanning(solver_name, 'dual', dual, self._n_rows)
+        self._solver, reloaded = sinks.loaded(self._solver, solver_name, tables, batch_rows, solver_options)
+        if reloaded is not None:
+            self._reloads.append((self.solves, reloaded))
+        status, objective, primal, dual = self._solver.run(tables)
         return Result(
             _status=status,
             _objective=objective,
@@ -520,47 +521,6 @@ class PolarsExecutor:
             _primal_values=primal,
             _dual_values=dual,
         )
-
-    def _held(
-        self,
-        tables: sinks.ModelTables,
-        batch_rows: int | None,
-        solver_options: Mapping[str, Any] | None,
-        solver_name: str,
-    ) -> sinks.Solver:
-        """The solver to run *tables* on — the one held, if it still fits.
-
-        A solver that no longer fits is closed here rather than left to the
-        collector: it holds memory, and for one of them a licence, that no
-        frame in this process accounts for. The named sink is resolved before
-        any of that, so a caller who named nothing does not first cost a
-        release.
-        """
-        loadable = sinks.solver(solver_name)
-        held = self._session
-        if held is not None and self._session_of == solver_name and held.takes(tables, solver_options):
-            held.push(tables)
-            return held
-
-        self._reloads.append(
-            (
-                self.solves,
-                'nothing was loaded yet'
-                if held is None
-                else f'the last solve ran {self._session_of!r}'
-                if self._session_of != solver_name
-                else 'a rebuild moved the structure, or the solver options changed',
-            )
-        )
-        self._close_session()
-        self._session = loadable(tables, batch_rows, solver_options)
-        self._session_of = solver_name
-        return self._session
-
-    def _close_session(self) -> None:
-        if self._session is not None:
-            self._session.close()
-        self._session = self._session_of = None
 
     def reloads(self) -> pl.DataFrame:
         """``(solve, reason)`` — the solves that loaded the model from scratch.
@@ -691,7 +651,9 @@ class PolarsExecutor:
         reference to them, and the compiler holds one. A loaded solver goes
         too, being the one thing here that is not this process's memory.
         """
-        self._close_session()
+        if self._solver is not None:
+            self._solver.close()
+            self._solver = None
         self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
         self._variables.clear()
         self._constraints.clear()
@@ -705,27 +667,6 @@ class PolarsExecutor:
     def __exit__(self, *exc: object) -> Literal[False]:
         self.close()
         return False
-
-
-def _spanning(solver: str, quantity: str, values: pl.Series | None, expected: int) -> None:
-    """Refuse a solver vector that does not span the model.
-
-    Reading a solution back is positional, so a wrong length is an answer about
-    a *different* model. Checked where the solver hands it over rather than
-    where it is read: the objective comes back directly, so a ``Result`` built
-    on a broken vector would report a plausible number and only fail if someone
-    asked for a coordinate.
-
-    ``None`` is not a wrong length — a mixed-integer model has no duals, and
-    neither does a run stopped short of a simplex basis.
-    """
-    if values is not None and len(values) != expected:
-        raise LpspecError(
-            f'{solver} returned {len(values)} {quantity} values for a model with {expected}. '
-            f'Reading a solution back is positional, so a vector that does not span the model '
-            f'describes a different one. This is an engine bug rather than a problem with the '
-            f'model — please report it.'
-        )
 
 
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
