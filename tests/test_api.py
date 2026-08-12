@@ -11,6 +11,7 @@ dataframe library beyond the engine's own. The tests that exercise the bridges
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import subprocess
@@ -322,15 +323,16 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
         result.primal('p')
 
 
-def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatch_frame_inputs):
+def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatch_frame_inputs, monkeypatch):
     """A result reports its own solve, not the executor's latest.
 
     Was: the values lived on the executor and every reader went back to them,
     so `objective` was a snapshot while `primal` was live — one result
     disagreeing with itself after a second solve, silently and with plausible
-    numbers. Nothing supported re-binds data yet, so the bound has to be moved
-    the way the planned in-place update will (#382: `changeColsBounds`
-    against labels that are already solver indices).
+    numbers. Nothing supported re-binds data yet, so the second solve is moved
+    at the sink seam — the frames a sink reads, which is what both engines have
+    in common — the way the planned in-place update will (#382:
+    `changeColsBounds` against labels that are already solver indices).
     """
     key = ['snapshot', 'generator']  # a read is a join, so compare on coordinates
     sources, coords = dispatch_frame_inputs
@@ -339,8 +341,9 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
         before = first.primal('p').sort(key)
         assert first.is_ok
 
-        assert ex._obj is not None
-        ex._obj = ex._obj.with_columns(-pl.col('coeff'))
+        built = ex._tables()
+        flipped = dataclasses.replace(built, obj=built.obj.with_columns(-pl.col('coeff')))
+        monkeypatch.setattr(ex, '_tables', lambda: flipped)
         second = ex.solve()
 
         assert not second.primal('p').sort(key).equals(before), 'the second solve really moved'
