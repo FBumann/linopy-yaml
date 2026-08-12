@@ -321,6 +321,11 @@ both declarations. Ordered resolution with shadowing is wrong for a fail-loud
 language: under it, declaring a parameter named `snapshot` would silently change
 what an existing `where: "snapshot > 0"` means.
 
+**Constraints and objectives are outside it**, no position resolving to one, so
+a model may name a constraint after a variable — `pypsa_unit_commitment` names
+both `start_up`. What reads a solve back keys on the label space as well as the
+name for that reason.
+
 | Position | Legal kinds |
 |---|---|
 | expression (`p * cost`) | variable, parameter |
