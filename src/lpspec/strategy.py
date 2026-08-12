@@ -11,9 +11,11 @@ stitch**. Only how slices are cut and whether they couple differs. (The
 :meth:`Runs.primal`'s ``original_index``.)
 
 *Bind* rather than *build*, because a serial fold builds once and rebinds each
-slice onto that model (:func:`_one_model`) — every slice being the same math
+slice onto that model (:func:`_serially`) — every slice being the same math
 over different numbers, which is what ``rebind`` is for. A fold under a process
-pool builds per slice, a built model being the one thing that cannot cross.
+pool builds per slice (:func:`_pooled`), a built model being the one thing that
+cannot cross. The two differ in that and nothing else: both yield
+:data:`_Answered`, and the fold that absorbs them is written once.
 
     scenario / sweep    ``EachCoordinate('scenario')``              independent
     myopic pathway      ``EachCoordinate('period', ordered=True)``  + ``carry``
@@ -30,8 +32,9 @@ The caller-facing rules are [docs/api.md](../../docs/api.md#solving-one-model-ma
 from __future__ import annotations
 
 import io
+from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -45,7 +48,7 @@ from lpspec.relational.frames import as_frame
 from lpspec.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Generator, Mapping, Sequence
 
     import pandas as pd
     import xarray as xr
@@ -59,6 +62,12 @@ _COMPRESSION = 'zstd'
 
 #: One cut: the slice key, its sources, and the coords the axis re-indexed.
 Cut = tuple[Any, dict[str, Any], dict[str, Any]]
+
+#: One slice answered: its key, its meta row, its primal and dual frames, and
+#: the one reason a sweep has no duals. What :func:`_serially` and
+#: :func:`_pooled` both yield, so that the fold reads the same either way and
+#: only *how a slice is solved* differs between them.
+_Answered = tuple[Any, dict[str, Any], dict[str, pl.DataFrame], dict[str, pl.DataFrame], str | None]
 
 
 @dataclass(frozen=True)
@@ -432,9 +441,14 @@ def solve_over(
     there are; what accumulates is the answer, which is what the caller asked
     for.
 
-    Every declaration is checked before a source is read: a mistyped carry, a
-    key column that collides, an axis a carry cannot run on all cost a parse
-    rather than a scan of every parquet file.
+    **A caller's own ``coords`` sit under the axis's**, which owns the dim it
+    re-indexed. They are merged into the cuts once, here, so neither of the two
+    ways a slice can be solved has to know the rule.
+
+    **The last slice carries nothing**, there being no next slice to read it.
+    A short tail window can hold fewer coordinates than the carry index names,
+    and computing a value nothing will use would fail an otherwise complete
+    sweep at the final slice.
 
     **A process pool must not use the ``fork`` start method.** polars' thread
     pool does not survive a fork, and a forked worker hangs rather than
@@ -470,137 +484,148 @@ def solve_over(
     key_name = _key_column(axis, key_name, schema)
 
     if isinstance(axis, (EachCoordinate, EachWindow)):
-        cuts, original = axis._slices(sources, key_name)
+        cut, original = axis._slices(sources, key_name)
     else:
-        cuts, original = list(axis), None
-    if not cuts:
+        cut, original = list(axis), None
+    if not cut:
         raise DataError('the axis produced no slices')
 
-    caller_coords = dict(build_kwargs.pop('coords', None) or {})
-    call = {'solver_name': solver_name, 'solver_options': dict(solver_options or {}) or None, **build_kwargs}
-    shared = _shares_filesystem(executor, workers_share_fs)
-    memo: dict[str, tuple[Any, Any]] = {}
+    under = dict(build_kwargs.pop('coords', None) or {})
+    cuts = [(key, sliced, {**under, **coords}) for key, sliced, coords in cut]
+    solving = {'solver_name': solver_name, 'solver_options': dict(solver_options or {}) or None}
     rows: list[dict[str, Any]] = []
-    primals: dict[str, list[pl.DataFrame]] = {name: [] for name in schema.variables}
-    shadow: dict[str, list[pl.DataFrame]] = {name: [] for name in schema.constraints}
+    primals: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
+    shadow: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
     no_duals: str | None = None
 
-    def arguments(sliced: dict[str, Any], coords: dict[str, Any], crosses: bool) -> tuple[Any, ...]:
-        """One slice's ``_run_slice`` arguments, as plain data.
-
-        The caller's own ``coords`` sit *under* the axis's, which owns the dim
-        it re-indexed. They are popped once rather than per slice, so the loop
-        stays a pure function of the cut.
-        """
-        return (
-            schema,
-            _encode(sliced, memo, workers_share_fs=shared) if crosses else dict(sliced),
-            {**caller_coords, **coords} or None,
-            crosses,
-            call,
-        )
-
-    def absorb(
-        key: Any, meta: dict[str, Any], frames: dict[str, pl.DataFrame], priced: dict[str, pl.DataFrame]
-    ) -> None:
-        """Fold one slice's answer in, its key prepended to every frame.
-
-        Called in **slice order, never completion order** — the concurrent
-        branch below walks the futures in the order it submitted them, so a
-        sweep cannot reorder itself under a pool.
-        """
-        rows.append({key_name: key, **meta})
-        for into, produced in ((primals, frames), (shadow, priced)):
-            for name, frame in produced.items():
-                into[name].append(frame.select(pl.lit(key).alias(key_name), pl.all()))
-
-    if executor is None:
-        state: dict[str, Any] = {}
-        last = len(cuts) - 1
-        with _one_model(schema, call) as bound:
-            for position, (key, sliced, coords) in enumerate(cuts):
-                result = bound.on({**sliced, **state}, {**caller_coords, **coords})
-                meta, frames, priced, reason = _answers(result, schema)
-                no_duals = no_duals or reason
-                absorb(key, meta, frames, priced)
-                if plan and position < last:
-                    state = _carried(plan, frames, key)
-    else:
-        crosses = _crosses_a_process(executor)
-        futures = [executor.submit(_run_slice, *arguments(sliced, coords, crosses)) for _key, sliced, coords in cuts]
-        for (key, _sliced, _coords), future in zip(cuts, futures, strict=True):
-            meta, returned, priced, reason = future.result()
+    answered = (
+        _serially(schema, cuts, build_kwargs, solving, plan)
+        if executor is None
+        else _pooled(executor, workers_share_fs, schema, cuts, build_kwargs, solving)
+    )
+    with closing(answered) as stream:
+        for key, meta, frames, priced, reason in stream:
             no_duals = no_duals or reason
-            absorb(key, meta, _decode(returned), _decode(priced))
+            rows.append({key_name: key, **meta})
+            for into, produced in ((primals, frames), (shadow, priced)):
+                for name, frame in produced.items():
+                    into[name].append(frame.select(pl.lit(key).alias(key_name), pl.all()))
 
     return Runs(
         key_name=key_name,
         meta=pl.DataFrame(rows),
-        _primals={name: frames for name, frames in primals.items() if frames},
-        _duals={name: frames for name, frames in shadow.items() if frames},
+        _primals=dict(primals),
+        _duals=dict(shadow),
         _no_duals=no_duals,
         _original=original,
     )
 
 
-@contextmanager
-def _one_model(schema: Model, call: dict[str, Any]) -> Iterator[_Rebound]:
-    """One built model for the whole fold, rebound per slice.
+def _serially(
+    schema: Model,
+    cuts: Sequence[Cut],
+    building: Mapping[str, Any],
+    solving: Mapping[str, Any],
+    plan: Mapping[str, tuple[str, str | None, int | None]],
+) -> Generator[_Answered, None, None]:
+    """Each slice's answer, off one model rebound in place.
 
     Every slice of a sweep is the same math over different numbers, which is
     what :meth:`~lpspec.api.BoundModel.rebind` is: the YAML is parsed once, the
     plan lowered once, and a slice whose structure matches the last one keeps
-    the loaded solver and re-solves from its basis. The peak is unchanged —
-    a rebuild releases the previous model before it starts — so this is still
-    a fold that holds one slice's model however many there are.
+    the loaded solver and re-solves from its basis. A rebuild releases the
+    previous model before it starts, so the fold still holds one slice's model
+    however many there are.
 
-    Serial only. The pooled branch hands plain data to :func:`_run_slice` in
-    another process, and a built model is the one thing that cannot cross.
+    **A generator because of the carry**, which is the one thing that makes a
+    slice depend on the one before it: slice ``i+1``'s sources are not known
+    until slice ``i``'s frames have been read, and resuming after the yield is
+    where that happens. The caller closes this — :func:`solve_over` does it
+    with ``closing`` — which is what releases the model when a fold is
+    abandoned part way.
     """
-    holder = _Rebound(schema, call)
+    bound: Any = None
+    state: dict[str, Any] = {}
     try:
-        yield holder
+        for position, (key, sliced, coords) in enumerate(cuts):
+            sources = {**sliced, **state}
+            if bound is None:
+                bound = build(schema, sources, coords=coords or None, **building)
+            else:
+                bound.rebind(sources, coords=coords)
+            meta, frames, priced, reason = _answers(bound.solve(**solving), schema)
+            yield key, meta, frames, priced, reason
+            if plan and position < len(cuts) - 1:
+                state = _carried(plan, frames, key)
     finally:
-        holder.close()
+        if bound is not None:
+            bound.close()
 
 
-class _Rebound:
-    """The fold's model, and which slice it currently holds."""
+def _pooled(
+    executor: Any,
+    workers_share_fs: bool | None,
+    schema: Model,
+    cuts: Sequence[Cut],
+    building: Mapping[str, Any],
+    solving: Mapping[str, Any],
+) -> Generator[_Answered, None, None]:
+    """The same, from slices built independently and possibly elsewhere.
 
-    def __init__(self, schema: Model, call: dict[str, Any]) -> None:
-        self._schema = schema
-        self._solve_with = {'solver_name': call['solver_name'], 'solver_options': call['solver_options']}
-        self._build_with = {k: v for k, v in call.items() if k not in self._solve_with}
-        self._bound: Any = None
+    Yielded in **slice order, never completion order**: the futures are walked
+    in the order they were submitted, so a sweep cannot reorder itself under a
+    pool.
 
-    def on(self, sources: Mapping[str, Any], coords: Mapping[str, Any]) -> Any:
-        """Solve this slice — the first builds, the rest rebind."""
-        if self._bound is None:
-            self._bound = build(self._schema, sources, coords=dict(coords) or None, **self._build_with)
-        else:
-            self._bound.rebind(sources, coords=coords)
-        return self._bound.solve(**self._solve_with)
-
-    def close(self) -> None:
-        if self._bound is not None:
-            self._bound.close()
+    A built model is the one thing that cannot cross a process, so this branch
+    builds per slice however many there are — the same fact that makes ``carry``
+    and ``executor`` mutually exclusive.
+    """
+    crosses = _crosses_a_process(executor)
+    shared = _shares_filesystem(executor, workers_share_fs)
+    call = {**building, **solving}
+    memo: dict[str, tuple[Any, Any]] = {}
+    futures = [
+        executor.submit(
+            _run_slice,
+            schema,
+            _encode(sliced, memo, workers_share_fs=shared) if crosses else dict(sliced),
+            coords or None,
+            crosses,
+            call,
+        )
+        for _key, sliced, coords in cuts
+    ]
+    for (key, _sliced, _coords), future in zip(cuts, futures, strict=True):
+        meta, frames, priced, reason = future.result()
+        yield key, meta, _decode(frames), _decode(priced), reason
 
 
 def _answers(result: Any, model: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str | None]:
-    """One slice's answer, read out of *result* before anything rebinds it.
+    """One slice's answer, read out of *result*: its meta row, and its frames.
 
-    Read here rather than held, which is the discipline a rebound model asks
-    of every driver and the fold already kept: what a sweep accumulates is
-    frames, never results.
+    Read here rather than held, so that what a sweep accumulates is frames and
+    never results — a result keeps reading across a rebind (#634), but holding
+    one per slice would hold that slice's label frames with it.
+
+    **A slice that answered nothing is not a failure**, and neither is one
+    whose duals are undefined: an integer variable makes them so, and one such
+    slice must not fail a whole sweep. ``Result.dual`` already writes the
+    sentence saying why and names the variable, so it is caught and carried
+    rather than rewritten — a sweep of one model has one answer, so the first
+    is the answer.
     """
     meta = {
         'status': result.status,
         'termination_condition': result.termination_condition,
         'objective': result.objective if result.has_primal else float('nan'),
     }
-    frames = {name: result.primal(name) for name in model.variables} if result.has_primal else {}
-    priced, no_duals = _prices(result, model)
-    return meta, frames, priced, no_duals
+    if not result.has_primal:
+        return meta, {}, {}, None
+    frames = {name: result.primal(name) for name in model.variables}
+    try:
+        return meta, frames, {name: result.dual(name) for name in model.constraints}, None
+    except LpspecError as exc:
+        return meta, frames, {}, str(exc)
 
 
 def _run_slice(
@@ -623,26 +648,6 @@ def _run_slice(
         if not encode_out:
             return meta, frames, priced, no_duals
         return meta, _encode(frames, {}), _encode(priced, {}), no_duals
-
-
-def _prices(result: Any, model: Any) -> tuple[dict[str, Any], str | None]:
-    """Every constraint's duals, or the one reason there are none.
-
-    An integer variable leaves duals undefined, and one such slice must not
-    fail a whole sweep, so the frames are simply absent as they are for a slice
-    that did not solve. ``Result.dual`` already writes the sentence saying why
-    and names the variable, so it is caught and carried rather than rewritten —
-    a sweep of one model has one answer, so the first is the answer.
-    """
-    if not result.has_primal:
-        return {}, None
-    priced: dict[str, Any] = {}
-    for name in model.constraints:
-        try:
-            priced[name] = result.dual(name)
-        except LpspecError as exc:
-            return {}, str(exc)
-    return priced, None
 
 
 def _key_column(
