@@ -515,7 +515,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
 
     The compiler is the consumer — it is the module that turns plan nodes into
     SQL, so a node it does not mention has no relational meaning however much
-    the executor moves around it. Grep-level drift alarm; the differential
+    the engine moves around it. Grep-level drift alarm; the differential
     tests prove semantics.
     """
     import lpspec.relational.plan as plan

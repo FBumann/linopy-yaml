@@ -28,7 +28,7 @@ def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
     parameter or an index and writes the message. *dims* names the columns an
     index becomes.
 
-    A bool stays boolean rather than widening to float: the executor reads a
+    A bool stays boolean rather than widening to float: the engine reads a
     mask's truthiness from the column type (#47).
     """
     import sys

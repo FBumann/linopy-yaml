@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from lpspec.errors import DataError, LpspecWarning
 from lpspec.language.validation import load_model
 from lpspec.lowering import advice, lower_program
-from lpspec.relational.engines.polars.executor import PolarsExecutor
+from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
 from lpspec.sources import tidy_sources
 
@@ -95,7 +95,7 @@ class BoundModel:
         self._program = lower_program(schema)
         self._sources = dict(sources)
         self._coords = dict(coords or {})
-        self._engine = PolarsExecutor()
+        self._engine = PolarsEngine()
         self._fill()
 
     def _fill(self) -> None:

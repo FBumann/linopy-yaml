@@ -2,7 +2,7 @@
 
 Three-way differential on examples/transport.yaml:
   1. eager lpspec_linopy.build + solve (sum via linopy groupby)
-  2. lowered Program -> PolarsExecutor -> the `highs` solver, plus the LP file
+  2. lowered Program -> PolarsEngine -> the `highs` solver, plus the LP file
   3. hand-built indicator-matrix linopy model (an independent oracle that
      involves no sum at all)
 
@@ -24,7 +24,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError
 from lpspec.lowering import _lower_expr, lower_program
-from lpspec.relational import PolarsExecutor
+from lpspec.relational import PolarsEngine
 from lpspec.relational.plan import (
     Add,
     GroupSum,
@@ -131,7 +131,7 @@ def test_grouping_an_expression_that_lacks_the_dim_is_refused():
 
 def _relationally(data, coords):
     schema = schema_of(TRANSPORT_YAML)
-    with PolarsExecutor() as engine:
+    with PolarsEngine() as engine:
         engine.build(lower_program(schema), tidy_sources(schema, data, coords))
 
 

@@ -77,7 +77,7 @@ flowchart TB
         subgraph ENG["engines/polars/ — the only part a second engine replaces"]
             direction TB
             COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> EXEC
-            BIND["binding.py<br/>→ BoundSources, frozen"] --> EXEC["executor.py + labels.py<br/>assemble the model frames"]
+            BIND["binding.py<br/>→ BoundSources, frozen"] --> EXEC["engine.py + labels.py<br/>assemble the model frames"]
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file (mps planned)"]
@@ -326,9 +326,9 @@ choice load-bearing in the language's rulebook.
 **The spine is one module per box above.** `binding.py` takes the tidy frames
 `sources.py` handed over the seam and freezes them into what every query is
 written against; `compiler.py` turns plan nodes into
-lazy frames and reads nothing; `executor.py` fills the model frames; `sinks/`
-drains them. Two more sit beside the executor rather than inside it, because
-each answers a question the executor merely *uses*: `labels.py` decides which
+lazy frames and reads nothing; `engine.py` fills the model frames; `sinks/`
+drains them. Two more sit beside the engine rather than inside it, because
+each answers a question the engine merely *uses*: `labels.py` decides which
 coordinate gets which solver index, and `result.py` is what a caller reads a
 solve back through. The remaining five are not on the spine and the diagram
 does not draw them — `plan.py` is the vocabulary the spine speaks, `frames.py`
@@ -341,7 +341,7 @@ That split is what makes the ceiling's admissibility test something you can
 read `.explain()` — `tests/test_compiler.py` does exactly that over empty
 frames, since a schema is all it takes to compile a query. It is also why a new
 sink is a module in one of two families rather than another method on the
-executor.
+engine.
 
 **What binding produces is a value.** `BoundSources` is frozen — parameters,
 dimensions, their cardinalities, and which parameters are boolean — because a
@@ -422,7 +422,7 @@ installed may change what either resolves to.
 The split is a directory rather than a convention for the reason `engines/` is:
 **how many solvers there are will change, and what a solver has to answer will
 not.** A new one is a module named for it and a line in `SOLVERS` — no method
-on the executor, no branch in `api.py`, no name on the Python surface. Members
+on the engine, no branch in `api.py`, no name on the Python surface. Members
 share the projection of `cols` and `obj` onto the solver's column index, which
 lives on `ModelTables` so two solvers cannot drift into loading different
 models; they never share hand-off code, because the currencies differ (HiGHS
@@ -458,7 +458,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
 | `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
 | `relational/engines/polars/binding.py` | a caller's sources → `BoundSources`, the frozen frames every query is written against |
-| `relational/engines/polars/executor.py` | assemble the model frames from the bound data |
+| `relational/engines/polars/engine.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
 | `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued coords |
 | `relational/sinks/tables.py` | what every sink reads and no more — the four frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
@@ -561,7 +561,7 @@ read back by joining labels to coordinates.
 **Add a sink:** a module in `relational/sinks/solvers/` named for the solver
 (`solve_<name>`, `build_<name>`, one line in `SOLVERS`, its dependency behind an
 extra and imported inside the function), or one in `writers/` keyed by suffix in
-`WRITERS`. Nothing above it changes — no method on the executor, no branch in
+`WRITERS`. Nothing above it changes — no method on the engine, no branch in
 `api.py`, no name on the Python surface. The
 [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md)
 is the full list, and `tests/test_architecture.py` checks the shape off the path.
@@ -574,7 +574,7 @@ a consumer, and the ceiling doc is the conversation to have first.
 **Add a primitive:** grammar (usually free — `f(x, k=v)` already parses) →
 signature in `helpers.BUILTINS` (arity and which arguments name dimensions —
 resolution, validation and lowering all read it from there, so the shape is
-declared once) → eager helper → plan node + locality class → executor →
+declared once) → eager helper → plan node + locality class → engine →
 lowering case → differential test through a solver *and* the LP writer → SPEC
 §5/§7, and this file if structural.
 

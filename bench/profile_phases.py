@@ -51,13 +51,13 @@ def main(argv: list[str] | None = None) -> int:
 
     from lpspec.language.validation import load_model
     from lpspec.lowering import lower_program
-    from lpspec.relational.engines.polars import executor as executor_module
-    from lpspec.relational.engines.polars.executor import PolarsExecutor
+    from lpspec.relational.engines.polars import engine as executor_module
+    from lpspec.relational.engines.polars.engine import PolarsEngine
     from lpspec.sources import tidy_sources
 
     spent: dict[str, list[float]] = collections.defaultdict(list)
     for name in PHASES:
-        setattr(PolarsExecutor, name, _timed(name, getattr(PolarsExecutor, name), spent))
+        setattr(PolarsEngine, name, _timed(name, getattr(PolarsEngine, name), spent))
 
     case = bench_cases.CASES[args.case]
     shape = case.shape(args.size)
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def one() -> float:
         """One build, timed. Called once untimed to fill the bind cache."""
-        engine = PolarsExecutor()
+        engine = PolarsEngine()
         started = time.perf_counter()
         engine.build(program, sources)
         elapsed = time.perf_counter() - started

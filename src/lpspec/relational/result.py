@@ -2,8 +2,8 @@
 
 The objects ``lps.solve`` and ``bound.diagnostics()`` hand back, so they are
 the pieces of this subpackage a reader meets without going looking. They live
-beside the executor rather than in it because they answer different questions:
-the executor *builds* a model, and these *read* one — the accessors are joins
+beside the engine rather than in it because they answer different questions:
+the engine *builds* a model, and these *read* one — the accessors are joins
 against the label frames plus whatever vector the solver left.
 
 Named for linopy's envelope (``Result`` = status + solution + report) rather
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     import polars as pl
     import xarray as xr
 
-    from lpspec.relational.engines.polars.executor import PolarsExecutor
+    from lpspec.relational.engines.polars.engine import PolarsEngine
     from lpspec.relational.status import SolveStatus
 
 
@@ -120,7 +120,7 @@ class Result:
     large one early but nothing breaks without it.
 
     **Its values are its own** — held here rather than read back off the
-    executor, so a later solve cannot rewrite what an earlier result reports.
+    engine, so a later solve cannot rewrite what an earlier result reports.
     Only the label frames are shared, and a re-solve does not touch them. That
     matters once a caller retains several results, which a sweep, a rolling
     horizon and Benders all do.
@@ -135,8 +135,8 @@ class Result:
 
     _status: SolveStatus
     _objective: float
-    _executor: PolarsExecutor
-    #: The build this answers. The executor's own counter moves past it when
+    _engine: PolarsEngine
+    #: The build this answers. The engine's own counter moves past it when
     #: something rebinds, which is how a stale result knows it is one. No
     #: default — a construction that forgot it would be born stale.
     _generation: int
@@ -147,7 +147,7 @@ class Result:
     @property
     def _current(self) -> bool:
         """Whether the model behind this result is still the one it answered."""
-        return self._generation == self._executor._generation
+        return self._generation == self._engine._generation
 
     @property
     def status(self) -> str:
@@ -211,7 +211,7 @@ class Result:
         can be diffed.
         """
         self._require_solution(f"the primal of '{name}'")
-        return self._executor._primal(name, self._primal_values)
+        return self._engine._primal(name, self._primal_values)
 
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name*: ``(dims…, value)``.
@@ -225,13 +225,13 @@ class Result:
         """
         self._require_solution(f"the dual of '{name}'")
         if self._dual_values is None:
-            raise LpspecError(self._executor._no_duals_reason(self.termination_condition))
-        return self._executor._dual(name, self._dual_values)
+            raise LpspecError(self._engine._no_duals_reason(self.termination_condition))
+        return self._engine._dual(name, self._dual_values)
 
     def to_pandas(self, name: str) -> pd.DataFrame:
         """:meth:`primal` as a tidy :class:`pandas.DataFrame`."""
         self._require_solution(f"the primal of '{name}'")
-        return tidy_to_pandas(self._executor._primal(name, self._primal_values))
+        return tidy_to_pandas(self._engine._primal(name, self._primal_values))
 
     def to_dataarray(self, name: str) -> xr.DataArray:
         """``primal(name)`` as a labelled :class:`xarray.DataArray`.
@@ -248,8 +248,8 @@ class Result:
         whatever the mask removed, and all of them at once. On a large model,
         name the few you need or use :meth:`to_parquet`.
         """
-        assert self._executor._program is not None
-        wanted = names or tuple(v.name for v in self._executor._program.variables)
+        assert self._engine._program is not None
+        wanted = names or tuple(v.name for v in self._engine._program.variables)
         return tidy_to_dataset(wanted, self.to_dataarray)
 
     def to_parquet(self, directory: str | Path) -> dict[str, Path]:
@@ -260,7 +260,7 @@ class Result:
         bytes.
         """
         self._require_solution('the solution')
-        return self._executor._solution_to_parquet(Path(directory), self._primal_values)
+        return self._engine._solution_to_parquet(Path(directory), self._primal_values)
 
     def close(self) -> None:
         """Release the built model early. Optional — see the class docstring.
@@ -276,7 +276,7 @@ class Result:
         self._primal_values = self._dual_values = None
         self._closed = True
         if self._current:
-            self._executor.close()
+            self._engine.close()
 
     def __enter__(self) -> Result:
         return self

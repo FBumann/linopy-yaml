@@ -196,7 +196,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
     sources, coords = dispatch_frame_inputs
     monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))
     monkeypatch.setattr(
-        api.PolarsExecutor, 'build', lambda *_a, **_k: pytest.fail('the model was built before the refusal')
+        api.PolarsEngine, 'build', lambda *_a, **_k: pytest.fail('the model was built before the refusal')
     )
 
     with pytest.raises(ModuleNotFoundError, match=r'not installed here.*\[gurobi\] extra'):
@@ -282,9 +282,9 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
 
 
 def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatch_frame_inputs):
-    """A result reports its own solve, not the executor's latest.
+    """A result reports its own solve, not the engine's latest.
 
-    Was: the values lived on the executor and every reader went back to them,
+    Was: the values lived on the engine and every reader went back to them,
     so `objective` was a snapshot while `primal` was live — one result
     disagreeing with itself after a second solve, silently and with plausible
     numbers. Nothing supported re-binds data yet, so the bound has to be moved
@@ -463,7 +463,7 @@ def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs
 
     The status gate cannot notice: closing frees the model, not the solve, so
     `is_readable` stays true and the reader used to fall through to a bare
-    `AssertionError` from the executor. Frames read before the close are their
+    `AssertionError` from the engine. Frames read before the close are their
     own data and stay valid, which is the half worth stating in the message.
     """
     sources, coords = dispatch_frame_inputs

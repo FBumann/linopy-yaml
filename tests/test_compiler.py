@@ -30,7 +30,7 @@ end-to-end test stands in for it:
 The frames are declared as **empty frames with the right schemas**, and that is
 the purity claim itself rather than a convenience: a lazy frame is a plan, so a
 schema is all it takes to compile one. It cannot be checked any other way —
-reach the compiler through the executor and it needs rows, at which point the
+reach the compiler through the engine and it needs rows, at which point the
 demonstration that a schema suffices has evaporated.
 
 The assertions are deliberately about shape, not exact text, so the query

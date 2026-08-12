@@ -134,7 +134,7 @@ jobs:
           Expected: <type>[(scope)][!]: <subject>
 
             types    ${TYPES//|/, }
-            examples feat: streaming executor for indexed constraints
+            examples feat: streaming engine for indexed constraints
                      fix(parser): where clauses with a trailing comma
                      refactor!: closed helper set, no monkey-patch
 
