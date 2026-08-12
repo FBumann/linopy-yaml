@@ -247,6 +247,8 @@ class DuckExecutor(Engine):
         self._obj_const = 0.0
         self._obj_sense = 'min'
         self._registered = 0
+        #: string dimension -> the duckdb ``ENUM`` its labels are stored as.
+        self._enums: dict[str, str] = {}
 
     # -- registration ---------------------------------------------------
 
@@ -273,7 +275,40 @@ class DuckExecutor(Engine):
             rel.create_view(name)
         return name
 
-    def _register(self, name: str, frame: pl.DataFrame) -> str:
+    def _declare_enums(self, dimensions: dict[str, pl.DataFrame], bound: BoundSources) -> None:
+        """A duckdb ``ENUM`` per string dimension, over its labels in ordinal order.
+
+        **The encoding binding already did, kept across the boundary.** A
+        dimension's labels are an `Enum` in polars (#541) and arrive here as
+        ``VARCHAR``, which is 16 bytes a value where a code is one — on
+        `profiled/l` that is 12M rows of two string dims, and it is the same
+        loss twice, since a join on them then hashes strings instead of codes.
+
+        Built from the dimension table itself, so the members and their order
+        are the ordinals, and two columns of one dimension always meet as the
+        same type. duckdb compares equal enums by code, orders them by member
+        position — which is ordinal order — and answers a comparison against a
+        label the dimension does not have with no rows rather than an error,
+        which is what polars does with the `Enum` it mirrors.
+        """
+        for d, frame in dimensions.items():
+            if not bound.is_enum_encoded(d):
+                continue
+            self._registered += 1
+            name = f'enum_{self._registered}'
+            source = f'__labels {d}__'
+            self._con.register(source, frame.select('val'))
+            try:
+                self._con.execute(f'CREATE TYPE {q(name)} AS ENUM (SELECT {q("val")} FROM {q(source)})')
+            finally:
+                self._con.unregister(source)
+            self._enums[d] = name
+
+    def _encoded(self, columns: Sequence[tuple[str, str]]) -> dict[str, str]:
+        """``column -> enum type`` for those *columns* whose dimension has one."""
+        return {c: self._enums[d] for c, d in columns if d in self._enums}
+
+    def _register(self, name: str, frame: pl.DataFrame, encode: dict[str, str] | None = None) -> str:
         """Copy *frame* into a table of its own, and return the table's name.
 
         **Copied, not scanned in place.** A registered frame stays a Python
@@ -289,9 +324,11 @@ class DuckExecutor(Engine):
         duckdb's own storage for every scan after the first.
         """
         source = f'__source {name}__'
+        encode = encode or {}
+        picked = ', '.join(f'{q(c)}::{q(encode[c])} AS {q(c)}' if c in encode else q(c) for c in frame.columns)
         self._con.register(source, frame)
         try:
-            self._con.sql(f'SELECT * FROM {q(source)}').create(name)
+            self._con.sql(f'SELECT {picked} FROM {q(source)}').create(name)
         finally:
             self._con.unregister(source)
         return name
@@ -324,8 +361,17 @@ class DuckExecutor(Engine):
         self._name_dims = plan.name_dims(program)
         bound = self._bound = bind(program, sources)
         materialised = {n: f.collect() for n, f in bound.dimensions.items()}
-        dims = {n: self._register(f'dim_{n}', f) for n, f in materialised.items()}
-        params = {n: self._register(f'par_{n}', f.collect()) for n, f in bound.parameters.items()}
+        self._declare_enums(materialised, bound)
+        dims = {
+            n: self._register(f'dim_{n}', f, self._encoded([('val', n), *program.dimension(n).coordinates]))
+            for n, f in materialised.items()
+        }
+        params = {
+            p.name: self._register(
+                f'par_{p.name}', bound.parameters[p.name].collect(), self._encoded([(d, d) for d in p.dims])
+            )
+            for p in program.parameters
+        }
         self._compiler = DuckCompiler(
             self._con, program, dims, params, bound.cardinality, bound.boolean_parameters, self._var_tables
         )
