@@ -37,8 +37,9 @@ lps.write('model.yaml', sources, 'model.lp')  # sink chosen by the suffix
 **Nothing has to be released.** The built model is frames this process owns, so
 `primal` and the `to_*` readers stay valid for as long as the `Result` does.
 `close()` and the context-manager protocol exist to hand a large model back
-early, not because forgetting them breaks anything. `lps.build` returns the
-executor when one build should feed more than one sink:
+early, not because forgetting them breaks anything. `lps.build` returns a
+`BoundModel` — the math with your data on it — when one build should feed more
+than one sink, or be solved more than once:
 
 ```python
 ex = lps.build('model.yaml', sources)
@@ -46,6 +47,34 @@ ex.write('model.lp')
 ex.omissions()  # rows a constraint declared but did not build, and why it matters
 result = ex.solve()
 ```
+
+### Re-solving with new numbers
+
+`rebind` puts new data on a model that is already built, so a loop that solves
+the same math over and over pays for the YAML, the plan and the build once:
+
+```python
+ex = lps.build('sub.yaml', sources)
+for capacity in search:
+    result = ex.rebind({'cap_hat': capacity}).solve()
+    price = result.dual('capacity')  # read it out before the next rebind
+    ex.reloads()  # did that push values, or load the model again?
+```
+
+| | |
+|---|---|
+| **it names what changed** | everything else keeps what `build` bound. A parameter, or a dimension index — a coordinate set grows by handing over a longer table and the `coords=` to match, which is how a Benders cut family is *data* |
+| **the answer is the reference build's** | `bound.rebind(x)` solves what `build(model, sources \| x)` solves, always. That is an equality a test asserts, not a promise — it is also the oracle to reach for when a loop looks wrong |
+| **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
+| **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model HiGHS already holds, and the next solve starts from the basis the last one ended on. A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, and that model is loaded again and solved cold |
+| **which one ran is `bound.reloads()`** | `(solve, reason)`, one row per solve that had to load from scratch. A driver on the fast path leaves it one row long however many times it goes round; a row per iteration is the difference between "lpspec is slow" and "this model masks on a parameter that varies". Advisory — nothing about the answer depends on it |
+| **earlier results stop reading** | a rebind replaces the label frames every reader joins through, so a `Result` from before it raises rather than laying its values out over coordinates they were not computed on. Frames already read are their own data and stay valid |
+| **a rebind that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
+
+`solve_over` is the other spelling and the one to reach for first — a sweep,
+a rolling horizon or a myopic pathway is a *fold*, and it is written for you.
+`rebind` is the primitive underneath: reach for it when the next set of numbers
+depends on the last answer, which is what a fold cannot express.
 
 What `sources` accepts is [SPEC §8](SPEC.md#8-data-binding). Nothing on this
 path imports linopy, and `primal` returns a `polars.DataFrame` — Arrow-backed, so it exports the same protocol the
@@ -197,6 +226,7 @@ it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
 | Rule | |
 |---|---|
 | **a partition is a filter on the sources** | not a narrower `coords` — the containment check refuses parameter rows outside the declared coordinates, by design. The axis rewrites the sources and supplies the matching `coords` together |
+| **one model, rebound per slice** | every slice is the same math over different numbers, so a serial sweep builds once and [rebinds](#re-solving-with-new-numbers): the YAML is parsed once, the plan lowered once, and a slice whose structure matches the last keeps the loaded solver. Peak is unchanged, a rebuild releasing the previous model before it starts. A sweep under `executor=` cannot — a built model is the one thing that does not cross a process — so it builds per slice, which is also why `carry` and `executor` are mutually exclusive |
 | **everything a slice produced is kept** | every variable's primals and every constraint's duals, read back through `runs.primal(name)` and `runs.dual(name)`. It is still a fold — each slice's *model* is released as the loop goes, so build peak stays at one slice however many there are, and what accumulates is the answer. Narrowing that is a later addition and an easy one; it is absent because it would need *two* keywords, a constraint being allowed to carry a variable's name |
 | **duals are keyed, never combined** | `runs.dual(name)` is `runs.primal(name)`'s shape. Averaging window prices, taking the last, and reading one slice alone are all defensible, so the reduction is the caller's. A slice whose model had an integer variable contributes none, and `runs.objective` says which |
 | **no aggregate objective** | `objective` is a frame keyed by slice. Scenarios are a distribution, not a sum; summing window objectives double-counts whatever the overlap discards |

@@ -211,13 +211,14 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | | *watch what a build is doing* | | |
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
 | | *will that solver take it, and how big is it* | | |
-| **run it** | stream it straight into a solver | `solve`, or `build` to drive several sinks off one build | **yes** |
+| **run it** | stream it straight into a solver | `solve`, or `build` → `BoundModel` to drive several sinks off one build | **yes** |
+| | re-solve one built model with new numbers | `bound.rebind(...)` — the label contract, spent | **yes** |
 | | write an LP file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | put the same math on a `linopy.Model` | `lpspec.linopy.build` · `.extend` (`data=`, its own coercion) | **yes** |
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
-| | *derived results; re-solve with new numbers, same labels* | | |
+| | *derived results* | | |
 | **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` | — |
 
 **Flat, and a namespace marks a lane rather than a topic.** `lpspec.linopy` is
@@ -231,12 +232,19 @@ moves them out from under the list a reviewer reads. **Grouping trades an
 enforced surface for a tidier one**, which is the opposite of what the count is
 for.
 
-**A return type is not a name.** `solve` returns a `Result` and `solve_over` a
-`Runs`, and neither is exported — you reach them by calling, and import them
-from their module only to write an annotation. What the objects themselves
-carry (`Result` alone has twelve readers) is documented in
-[docs/api.md](api.md) rather than counted here, which is why capability grows
+**A return type is not a name.** `build` returns a `BoundModel`, `solve` a
+`Result` and `solve_over` a `Runs`, and none is exported — you reach them by
+calling, and import them from their module only to write an annotation. What
+the objects themselves carry (`Result` alone has twelve readers) is documented
+in [docs/api.md](api.md) rather than counted here, which is why capability grows
 much faster than this table does.
+
+The discipline that keeps that from being a way to dodge the count: **a handle's
+methods answer "what do I do with this", never "what is this"**. `solve`,
+`write`, `close` and `rebind` pass; anything that changed a declaration would be
+a language feature wearing a method, and hard rule 5 refuses it wherever it is
+spelled. It is also why these are named for what they *are* rather than for what
+built them — a second engine must not change a top-level verb's return type.
 
 **What the data arrow carries** is [SPEC §8](SPEC.md#8-data-binding) and is not
 restated here. The one structural fact: **binding is by name at both levels** —
@@ -360,9 +368,11 @@ rewrite a fragment's dim tuple, and duplicates collapse in the terminal
 in the lane is order-free, which is what lets the query planner rearrange it.
 
 - Labels are dense `0..n-1` by construction, so `var_label` **is** the solver
-  column index and `row` the solver row index — no remapping. That is why
-  value-only re-solve is cheap, why appending rows is safe, and why structural
-  editing is out of scope.
+  column index and `row` the solver row index — no remapping. That is what
+  `rebind` spends: new bounds, costs and right-hand sides go onto a loaded
+  solver by position, and appending rows moves no column and renumbers no
+  existing row. Structural editing stays out of scope; a rebind that *does*
+  move a label is a rebuild, and the answer is the same either way.
 - They are **row-major over the masked coordinate product**, sorted on the
   dimensions' declared ordinals. A contract, not a side effect: it is what makes
   a build reproducible run to run.
