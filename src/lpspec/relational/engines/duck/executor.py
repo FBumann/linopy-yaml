@@ -195,6 +195,15 @@ class DuckExecutor(Engine):
 
     def __init__(self) -> None:
         self._con = duckdb.connect()
+        # **Asked for, not assumed.** A label is positional here: `_factored`
+        # and `_repeating_bounds` read the head product in the order duckdb
+        # scans it, and `_stacked` reads the shares in the order they were
+        # built. duckdb states that as a setting — "if set to false the system
+        # is allowed to re-order any results that do not contain ORDER BY
+        # clauses" — and it is *global*, so the default being right is not the
+        # same as this connection getting it. Off, the model is silently
+        # mislabelled rather than slow.
+        self._con.execute('SET preserve_insertion_order = true')
         self._bound: BoundSources | None = None
         self._compiler: DuckCompiler | None = None
         self._program: plan.Program | None = None
@@ -567,9 +576,9 @@ class DuckExecutor(Engine):
 
         Both this and the label arithmetic above it read the head product in
         the order duckdb scans it, which is the order it was written in —
-        `preserve_insertion_order`, on by default and never turned off here.
-        `test_engine_parity.py` compares byte-identical LP files, where a
-        column out of place moves every bound after it.
+        `preserve_insertion_order`, which `__init__` asks for rather than
+        inherits. `test_engine_parity.py` compares byte-identical LP files,
+        where a column out of place moves every bound after it.
         """
         found = self._bounds_run(v)
         if found is None:
