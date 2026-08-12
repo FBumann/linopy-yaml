@@ -41,6 +41,17 @@ if TYPE_CHECKING:
 #: solver indexes its own spelling with these, so the two cannot drift.
 SENSE_CODES = {'<=': 0, '>=': 1, '==': 2}
 
+#: The dtype the ``rows`` frame holds a comparison in — the argument that made
+#: ``vtype`` an ``Enum`` (#189), applied to the other one-word-per-row column.
+#:
+#: **Built from :data:`SENSE_CODES`, so a category's index is its code.** That
+#: is what lets :meth:`ModelTables.dense_rows` read the physical column rather
+#: than hash every row's string through a lookup, and it is why the two are
+#: defined together: spelling the categories out a second time is how the order
+#: would come to disagree, and a permuted comparison is a different model that
+#: every solver answers confidently.
+SENSE = pl.Enum(list(SENSE_CODES))
+
 
 @dataclass(frozen=True)
 class ModelTables:
@@ -150,10 +161,15 @@ class ModelTables:
         side, both this pair spelled differently. A row with no entry gets a
         comparison nothing can fail (``>=`` against ``-infinity``) rather than
         the ``== 0`` that would be an equality the model never stated.
+
+        **The code is read off the column, not looked up per row.** ``sense``
+        is a :data:`SENSE` ``Enum`` built from :data:`SENSE_CODES`, so its
+        physical value already *is* the code and the byte a solver wants costs
+        a cast rather than a string hash for every row of the model.
         """
         sided = self.rows.select(
             'row',
-            pl.col('sense').replace_strict(SENSE_CODES, return_dtype=pl.UInt8).alias('op'),
+            pl.col('sense').to_physical().cast(pl.UInt8).alias('op'),
             'rhs',
         )
         at = sided['row'].to_numpy()
