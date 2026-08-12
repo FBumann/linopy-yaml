@@ -140,6 +140,16 @@ class TermFragment:
     label_dims: frozenset[str] = frozenset()
     presence: Relation | None = None
     presence_dims: tuple[str, ...] | None = None
+    variable: str | None = None
+    """The variable whose labels this fragment carries; ``None`` for a constant part."""
+    mapping: tuple[tuple[str, ...], ...] = ()
+    """What has moved a label since it was read, oldest first.
+
+    A ``GroupSum`` records ``('group', over, coordinate, into)`` and a
+    ``Translate`` ``('shift', dimension, by, wrap)``. Read only to compare two
+    fragments of one variable — :meth:`DuckCompiler.may_share_a_column` — and
+    never to build a relation.
+    """
 
     @property
     def value_column(self) -> str:
@@ -400,7 +410,13 @@ class DuckCompiler:
         masked = self.program.variable(name).where is not None
         presence = table.select(*(col(d) for d in dims or (UNIT,))) if masked else None
         return TermFragment(
-            dims, rel, True, label_dims=frozenset(dims), presence=presence, presence_dims=dims if masked else None
+            dims,
+            rel,
+            True,
+            label_dims=frozenset(dims),
+            presence=presence,
+            presence_dims=dims if masked else None,
+            variable=name,
         )
 
     def _product(self, a: CompiledExpression, b: CompiledExpression, context: str) -> CompiledExpression:
@@ -442,6 +458,8 @@ class DuckCompiler:
             p.is_term,
             p.survives_dropping(dropped),
             p.label_dims - dropped,
+            variable=p.variable,
+            mapping=p.mapping,
         )
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
@@ -460,7 +478,15 @@ class DuckCompiler:
             )
         )
         keyed = p.keyed and g.over in p.label_dims
-        return TermFragment((*keep, g.into), rel, p.is_term, keyed, _relabel(p.label_dims, g.over, g.into))
+        return TermFragment(
+            (*keep, g.into),
+            rel,
+            p.is_term,
+            keyed,
+            _relabel(p.label_dims, g.over, g.into),
+            variable=p.variable,
+            mapping=(*p.mapping, ('group', g.over, g.coordinate, g.into)),
+        )
 
     def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
         """Spread ``into`` back out over ``over`` — the adjoint of a group.
@@ -491,7 +517,14 @@ class DuckCompiler:
                 *(col(c, of='l') for c in p.carried),
             )
         )
-        return TermFragment((*keep, a.over), rel, p.is_term, keyed=False, label_dims=p.label_dims - {a.into})
+        return TermFragment(
+            (*keep, a.over),
+            rel,
+            p.is_term,
+            keyed=False,
+            label_dims=p.label_dims - {a.into},
+            variable=p.variable,
+        )
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
         """A pointwise remap of the dim through its ord.
@@ -532,7 +565,13 @@ class DuckCompiler:
                 presence = presence.union(vacated).distinct()
         elif not s.wrap and s.fill is None:
             presence, presence_dims = self._edge(s, card, vacated=False), (s.dimension,)
-        return replace(p, rel=rel, presence=presence, presence_dims=presence_dims)
+        return replace(
+            p,
+            rel=rel,
+            presence=presence,
+            presence_dims=presence_dims,
+            mapping=(*p.mapping, ('shift', s.dimension, str(s.by), str(s.wrap))),
+        )
 
     @staticmethod
     def _moved(s: plan.Translate, card: int) -> Expression:
@@ -579,6 +618,65 @@ class DuckCompiler:
         return coordinates.cross(edge.set_alias('e')).select(
             *(col(d, of='o') for d in others), col(s.dimension, of='e')
         )
+
+    # ------------------------------------------------------------------
+    # assembly helpers used by the executor
+    # ------------------------------------------------------------------
+
+    def may_share_a_column(self, a: TermFragment, b: TermFragment) -> bool:
+        """Whether two fragments of one variable can put a row on one column.
+
+        **Distinct variables never do.** Labels are dense and assigned one
+        declaration at a time, so two fragments naming different variables draw
+        from disjoint ranges however either was reshaped (#408). What is left is
+        whether two fragments of *one* variable send some label to the same
+        **row**.
+
+        A label's row is decided by what moved it, so equal
+        :attr:`~TermFragment.mapping` means the same row and a certain
+        collision. Mappings that differ **only in a coordinate** — the network
+        shape, ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``
+        — send it to the same row exactly where those coordinates agree, which
+        is a question about a *dimension table*: is there a line whose ends are
+        one bus? The `line` table is forty rows where the matrix is 12.6M.
+
+        Anything else is answered **yes**. A shift on one side and not the
+        other, a reduction that left them over different dims, a product that
+        broadcast one wider — each changes where a label lands in a way this
+        does not model, and the cost of being wrong is a silently wrong model
+        against the cost of a sort.
+
+        The polars twin, reasoning included: two engines answering this
+        differently is two engines aggregating differently, and the frame a
+        sink reads has to be the same either way.
+        """
+        if a.variable is None or b.variable is None:
+            return True
+        if a.variable != b.variable:
+            return False
+        if a.dims != b.dims or a.label_dims != b.label_dims:
+            return True
+        if len(a.mapping) != len(b.mapping):
+            return True
+        differing = []
+        for one, other in zip(a.mapping, b.mapping, strict=True):
+            if one == other:
+                continue
+            kind, *rest = one
+            if kind != 'group' or other[0] != 'group' or (rest[0], rest[2]) != (other[1], other[3]):
+                return True
+            differing.append((rest[0], rest[1], other[2]))
+        return all(self._coordinates_meet(over, one, other) for over, one, other in differing)
+
+    def _coordinates_meet(self, dimension: str, one: str, other: str) -> bool:
+        """Whether any label of *dimension* carries the same value in both.
+
+        One row is the whole answer, so the scan stops at the first — where the
+        polars twin reduces the column. The table is the model's shape rather
+        than its size: forty lines against 12.6M nonzeros.
+        """
+        table = self.con.table(self.dimensions[dimension])
+        return table.filter(col(one) == col(other)).limit(1).fetchone() is not None
 
     @staticmethod
     def constant_scalar(p: TermFragment) -> Relation:
@@ -650,7 +748,7 @@ def _join_mul(a: TermFragment, c: TermFragment, *, is_term: bool, divide: bool =
         *((col('var_label', of='l'),) if is_term else ()),
         (numerator / divisor if divide else numerator * divisor).alias(value),
     )
-    return TermFragment(dims, rel, is_term, a.keyed, a.label_dims, a.presence, a.presence_dims)
+    return TermFragment(dims, rel, is_term, a.keyed, a.label_dims, a.presence, a.presence_dims, a.variable, a.mapping)
 
 
 def restrict_to(rel: Relation, on: Sequence[str], presence: Relation) -> Relation:

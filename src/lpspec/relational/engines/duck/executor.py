@@ -30,7 +30,7 @@ from duckdb import CoalesceOperator, ConstantExpression, Expression, FunctionExp
 from lpspec.errors import DataError, LanguageError, null_bounds_message
 from lpspec.relational import plan, sinks
 from lpspec.relational.binding import bind
-from lpspec.relational.engine import Engine
+from lpspec.relational.engine import Engine, needs_aggregate
 from lpspec.relational.engines.duck.compiler import (
     UNIT,
     DuckCompiler,
@@ -530,7 +530,7 @@ class DuckExecutor(Engine):
                 )
             )
         stacked = union_all(pieces[0], pieces[1:])
-        if not _needs_aggregate([f for f, _ in terms]):
+        if not needs_aggregate([f for f, _ in terms], self._q.may_share_a_column):
             return stacked
         # `sum` over `(row, col)` is the terminal aggregate — where duplicates
         # from Sum and GroupSum, which project rather than aggregate, collapse.
@@ -603,7 +603,7 @@ class DuckExecutor(Engine):
             return None
         pieces = [p.rel.select(col('var_label').cast('INTEGER').alias('col'), col('coeff')) for p in comp.terms]
         stacked = union_all(pieces[0], pieces[1:])
-        if _needs_aggregate(comp.terms, projected=True):
+        if needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
             total = FunctionExpression('sum', col('coeff')).alias('coeff')
             return stacked.aggregate([col('col'), total], q('col')).pl()
         return stacked.pl()
@@ -659,13 +659,6 @@ def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame
     if not kept:
         return pl.DataFrame(schema={name: sinks.DTYPES[name] for name in columns})
     return pl.concat([f.select(columns) for f in kept])
-
-
-def _needs_aggregate(terms: Sequence[TermFragment], *, projected: bool = False) -> bool:
-    """Whether two rows can land on one ``(row, col)`` — see the polars twin."""
-    if len(terms) > 1:
-        return True
-    return any(not (p.keyed and (not projected or p.label_dims >= set(p.dims))) for p in terms)
 
 
 def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str, ...], Relation]]:
