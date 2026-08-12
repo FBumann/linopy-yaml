@@ -411,10 +411,11 @@ zero coefficient (law 8) — three ways to reach one shape, *a row asserting
 something about constants only*, and the shape decides, not the provenance.
 Such a row constrains nothing a solver can act on.
 
-It is **reported**, never silent: `omissions()` on the executor gives
+It is **reported**, never silent: `diagnostics().omissions` on a built model gives
 `(constraint, rows_not_built)`, empty for a model whose every declared row was
 built. A declared constraint that goes unenforced is a thing the caller has to
-be able to see.
+be able to see — which is a reason to `build` a model you mean to inspect
+rather than to `solve` it, an answer being the one thing that cannot report it.
 
 ### How absence travels
 

@@ -8,8 +8,8 @@ and the Benders monolith check.
 
 The second is that the fast path is *only* a fast path. A rebind that moves a
 mask renumbers labels and cannot be pushed onto a loaded solver, so the engine
-rebuilds and solves cold; nothing about the answer changes, and `reloads()` is
-where a driver finds out which happened.
+rebuilds and solves cold; nothing about the answer changes, and `diagnostics().reloads`
+is where a driver finds out which happened.
 """
 
 from __future__ import annotations
@@ -70,17 +70,19 @@ def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, 
     """The fast path is taken exactly when the structure held.
 
     The first solve always loads — there was nothing to keep — so a driver on
-    the fast path leaves `reloads()` one row long however many times it goes
+    the fast path leaves `diagnostics().reloads` one row long however many times
     round.
     """
     with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
         bound.solve()
-        assert bound.reloads().height == 1, 'the first solve has nothing loaded to keep'
+        assert bound.diagnostics().reloads.height == 1, 'the first solve has nothing loaded to keep'
 
         bound.rebind(change).solve()
+        seen = bound.diagnostics()
         expected = 1 if keeps_the_solver else 2
-        assert bound.reloads().height == expected, (
-            f'{bound.reloads().to_dicts()} — a rebind that keeps every label pushes values onto '
+        assert seen.solves == 2, 'both solves are counted whichever path each took'
+        assert seen.reloads.height == expected, (
+            f'{seen.reloads.to_dicts()} — a rebind that keeps every label pushes values onto '
             f'the loaded solver; one that moves a label has to load the model again'
         )
 
@@ -109,7 +111,7 @@ def test_a_rebind_may_be_repeated_and_each_answer_is_its_own(dispatch_yaml):
             served.append(bound.rebind({'load': load}).solve().primal('p')['value'].sum())
 
         assert served == sorted(served), f'{served} — more load must dispatch more power'
-        assert bound.reloads().height == 1, 'a scaled right-hand side moves no label'
+        assert bound.diagnostics().reloads.height == 1, 'a scaled right-hand side moves no label'
 
 
 def test_a_result_from_before_a_rebind_refuses_to_read(dispatch_yaml):
@@ -221,7 +223,7 @@ def test_a_rebind_can_grow_a_dimension(tmp_path):
 
         assert grown.objective == pytest.approx(reference.objective)
         assert grown.primal('cap').equals(reference.primal('cap'))
-        assert bound.reloads().height == 2, 'more rows than the solver holds is a load, not a push'
+        assert bound.diagnostics().reloads.height == 2, 'more rows than the solver holds is a load, not a push'
     reference.close()
 
 
@@ -250,3 +252,28 @@ def test_a_rebind_that_cannot_build_leaves_nothing_half_built(dispatch_yaml):
 
         with pytest.raises(lps.LpspecError, match='no built model to hand over'):
             bound.solve()
+
+
+def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
+    """The size question `check` cannot answer, needing no data where this needs all of it.
+
+    `examples/dispatch.yaml` masks on `p_max > 0`, so the shape is what
+    *survived* the mask rather than what the declarations multiply out to —
+    which is the whole reason it is read off the built model.
+    """
+    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
+        bound.solve()
+        seen = bound.diagnostics()
+
+        assert (seen.columns, seen.rows) == (len(SNAPSHOTS) * len(GENERATORS), len(SNAPSHOTS))
+        assert seen.nonzeros == seen.columns, 'one balance row per snapshot, one entry per generator in it'
+        assert seen.omissions.is_empty(), 'every declared row reached the solver'
+
+    assert bound.diagnostics().nonzeros == seen.nonzeros, 'a released model still says how big it was'
+
+
+def test_a_mask_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
+    """Read off the built model, so a mask that moved moves the counts with it."""
+    zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
+    with lps.build(dispatch_yaml, zeroed, coords=COORDS) as bound:
+        assert bound.diagnostics().columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)

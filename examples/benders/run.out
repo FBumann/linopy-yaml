@@ -9,5 +9,5 @@ decomposed: 9600.00 in 4 steps
 monolithic: 9600.00
 difference: 0.0e+00
 cuts: 1 optimality, 3 feasibility
-the subproblem loaded the solver 1 time(s) in 4 steps
-the master, growing a row each step, 4
+the subproblem loaded the solver 1 time(s) in 4 solves
+the master loaded the solver 4 time(s) in 4 solves

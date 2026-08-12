@@ -24,8 +24,8 @@ iteration's numbers on the model that is already there, where a path would
 re-parse a model that cannot have moved and a rebuild would re-derive a model
 that did not change. The subproblem's ``cap_hat`` reaches its rows as a
 right-hand side, so HiGHS keeps the model it holds and re-solves from the last
-basis; the master grows a row a step and is loaded again, which ``reloads()``
-is what says. Any driver over a fixed model does this, whether it decomposes,
+basis; the master grows a row a step and is loaded again, which
+``diagnostics().reloads`` is what says. Any driver over a fixed model does this, whether it decomposes,
 rolls a horizon or sweeps data.
 """
 
@@ -152,8 +152,9 @@ def main() -> None:
         print(f'monolithic: {truth:.2f}')
         print(f'difference: {abs(upper - truth):.1e}')
         print(f'cuts: {tables["cut_const"].height} optimality, {tables["fcut_const"].height} feasibility')
-        print(f'the subproblem loaded the solver {sub_model.reloads().height} time(s) in {step + 1} steps')
-        print(f'the master, growing a row each step, {master.reloads().height}')
+        for name, model in (('the subproblem', sub_model), ('the master', master)):
+            seen = model.diagnostics()
+            print(f'{name} loaded the solver {seen.reloads.height} time(s) in {seen.solves} solves')
 
 
 if __name__ == '__main__':

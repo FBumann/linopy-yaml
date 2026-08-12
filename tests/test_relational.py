@@ -936,7 +936,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
 
     **The omission is reported, and that is what makes dropping defensible.**
     An unenforced constraint the caller cannot see is the failure this used to
-    guard against by keeping the row; `omissions()` answers it without asking
+    guard against by keeping the row; `diagnostics().omissions` answers it without asking
     the solver to carry a comparison nothing can fail.
 
     Ragged batches because the range loop is where a *surviving* seat would be
@@ -955,7 +955,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
         tables = ex._engine._tables()
         occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
         assert occupied == [0, 1], 'the block closes up around the gap'
-        assert ex.omissions().to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
+        assert ex.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
         solution = ex.solve(batch_rows=batch_rows, solver_name=solver_name)
         assert solution.termination_condition == 'optimal'
         assert solution.objective == pytest.approx(4.0 + 6.0, rel=RTOL), 'the two built rows still bind'
@@ -971,7 +971,7 @@ def test_omissions_is_empty_when_every_declared_row_is_built():
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
     }
     with lps.build(model, {'load': pl.DataFrame({'t': [0, 1], 'value': [1.0, 2.0]})}) as ex:
-        assert ex.omissions().is_empty()
+        assert ex.diagnostics().omissions.is_empty()
 
 
 def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():

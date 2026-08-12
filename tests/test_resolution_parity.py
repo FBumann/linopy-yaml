@@ -169,7 +169,7 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, data, coords):
 
     with lps.build(path, data, coords=coords) as ex:
         relational_status = ex.solve().termination_condition
-        assert ex.omissions().to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}], (
+        assert ex.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}], (
             'a dropped row has to be reported, or a declared constraint goes quietly unenforced'
         )
 

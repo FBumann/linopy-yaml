@@ -90,7 +90,10 @@ class PolarsExecutor:
         #: ``(solve number, why)`` for every solve that loaded the model from
         #: scratch instead of pushing values onto a loaded one.
         self._reloads: list[tuple[int, str]] = []
-        self._solves = 0
+        #: How many solves this model has been through — what :attr:`_reloads`
+        #: is read against, and public because a count of loads alone says
+        #: nothing about whether a driver is on the fast path.
+        self.solves = 0
         self._reset()
 
     def _reset(self) -> None:
@@ -120,6 +123,10 @@ class PolarsExecutor:
         self._matrix_starts: Any = None
         self._n_cols = 0
         self._n_rows = 0
+        #: Entries in the matrix, kept as a count rather than read off the
+        #: frame: the frames go when the model is released and this is what a
+        #: caller asking how big it *was* is asking for.
+        self._n_entries = 0
         self._obj_const = 0.0
         self._obj_sense: str = 'min'
 
@@ -168,6 +175,7 @@ class PolarsExecutor:
         ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
         self._matrix_starts = _row_starts(ordered, self._n_rows)
         self._matrix = ordered.select('col', 'coeff').rechunk()
+        self._n_entries = self._matrix.height
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -501,7 +509,7 @@ class PolarsExecutor:
         the same either way.
         """
         tables = self._tables()
-        self._solves += 1
+        self.solves += 1
         live = self._loaded_solver(tables, batch_rows, solver_options, solver_name)
         if live is None:
             status, objective, primal, dual = sinks.solver(solver_name)(tables, batch_rows, solver_options)
@@ -547,9 +555,9 @@ class PolarsExecutor:
         self._close_session()
         loadable = sinks.session(solver_name)
         if loadable is None:
-            self._reloads.append((self._solves, f'{solver_name} cannot stay loaded between solves'))
+            self._reloads.append((self.solves, f'{solver_name} cannot stay loaded between solves'))
             return None
-        self._reloads.append((self._solves, why))
+        self._reloads.append((self.solves, why))
         self._session = loadable(tables, batch_rows, solver_options)
         self._session_of = solver_name
         return self._session

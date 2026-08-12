@@ -44,7 +44,10 @@ dependencies = [
     # the documented class. 2.0 flattens every model error to SchemaError.
     "pydantic>=2.1",
     "pyyaml>=6.0",
-    "highspy>=1.10",
+    # 1.13 is where `changeRowsBounds` arrives — the bulk form the loaded
+    # solver pushes a rebound model's right-hand sides through. 1.10 has only
+    # the per-row `changeRowBounds`, which is a Python call per constraint.
+    "highspy>=1.13",
 ]
 
 [project.optional-dependencies]

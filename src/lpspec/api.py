@@ -24,6 +24,7 @@ Example::
 from __future__ import annotations
 
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -36,6 +37,8 @@ from lpspec.sources import tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    import polars as pl
 
     from lpspec.language.model import Model
     from lpspec.relational.result import Result
@@ -66,6 +69,49 @@ def check(model: str | Path | dict[str, Any] | Model) -> Model:
     return schema
 
 
+@dataclass(frozen=True)
+class Diagnostics:
+    """What a build and its solves did that the answer does not show.
+
+    One accessor rather than a reader per fact, so that watching a build stays
+    one question — and because these answer *what is this model*, where the
+    handle's own methods answer *what do I do with it*
+    (docs/ARCHITECTURE.md, "the Python surface").
+
+    **Advisory, both of them.** Nothing about an answer depends on either, and
+    a caller who branches on one has made this engine's bookkeeping part of
+    their model. They are here to be read when a loop is slower or smaller than
+    it should be.
+    """
+
+    #: The shape the solver was handed: columns, rows, and matrix entries.
+    #: What ``check`` cannot answer, needing no data where this needs all of
+    #: it, and the thing to report when a model is bigger than its author
+    #: expected — a broadcast that multiplied rows shows up here first.
+    columns: int
+    rows: int
+    nonzeros: int
+
+    #: ``(constraint, rows_not_built)`` — every row that lost all its terms and
+    #: so was not built (SPEC §6). Empty for a model whose every declared row
+    #: reached the solver. Counts rather than coordinates: the label of an
+    #: unbuilt row does not exist.
+    omissions: pl.DataFrame
+
+    #: How many times this model has been solved. The denominator ``reloads``
+    #: is read against: one load in one solve is a cold start, one load in
+    #: twenty-five is a driver on the fast path.
+    solves: int
+
+    #: ``(solve, reason)`` — the solves that loaded the model from scratch
+    #: instead of pushing values onto a solver that already held it. One row on
+    #: a driver taking the fast path, being the first solve, which had nothing
+    #: to keep; a row per iteration on one that is not, which is the difference
+    #: between "lpspec is slow" and "this model masks on a parameter that
+    #: varies".
+    reloads: pl.DataFrame
+
+
 class BoundModel:
     """A model with your data bound to it — what :func:`build` returns.
 
@@ -79,10 +125,10 @@ class BoundModel:
     something a top-level verb's return type should say.
 
     One build feeds more than one sink — :meth:`solve` and :meth:`write` on the
-    same object — and :meth:`rebind` puts new numbers on it without re-reading
-    the YAML or re-lowering the plan. **Nothing has to be released**: the built
-    model is frames this process owns, and :meth:`close` hands a large one back
-    early.
+    same object — :meth:`rebind` puts new numbers on it without re-reading the
+    YAML or re-lowering the plan, and :meth:`diagnostics` says what it did.
+    **Nothing has to be released**: the built model is frames this process owns,
+    and :meth:`close` hands a large one back early.
     """
 
     def __init__(
@@ -132,7 +178,7 @@ class BoundModel:
         mask — a parameter a ``where`` compares against — renumbers labels
         under a caller who cannot tell, and the engine rebuilds and solves cold
         instead of pushing values onto a loaded solver. Which one ran is
-        :meth:`reloads`.
+        :attr:`Diagnostics.reloads`.
 
         The answer is the reference build's, always: ``bound.rebind(x)`` solves
         what ``build(model, sources | x)`` solves, and that equality is what
@@ -190,17 +236,20 @@ class BoundModel:
         """Sink the built model to a file; the **suffix** picks the writer."""
         self._engine.write(path)
 
-    def omissions(self) -> Any:
-        """``(constraint, rows_not_built)`` — every row that lost all its terms."""
-        return self._engine.omissions()
+    def diagnostics(self) -> Diagnostics:
+        """What this build and its solves did that the answer does not show.
 
-    def reloads(self) -> Any:
-        """``(solve, reason)`` — the solves that loaded the model from scratch.
-
-        The diagnostic a driver reads to find out whether its loop is taking
-        the fast path. Advisory: the answer does not depend on which ran.
+        Answerable after :meth:`close`: every field is a count or a small frame
+        this keeps, not a read of the model it releases.
         """
-        return self._engine.reloads()
+        return Diagnostics(
+            columns=self._engine._n_cols,
+            rows=self._engine._n_rows,
+            nonzeros=self._engine._n_entries,
+            omissions=self._engine.omissions(),
+            solves=self._engine.solves,
+            reloads=self._engine.reloads(),
+        )
 
     def close(self) -> None:
         """Release the built model, and any solver still holding it."""

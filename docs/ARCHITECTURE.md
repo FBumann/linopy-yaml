@@ -208,11 +208,11 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | **load it** | parse and validate, and stop there | `load_model` → `Model` | no |
 | **show it** | typeset for a paper or a review | `to_latex` · `to_typst` · `to_markdown` (spelling: `SymbolTable`) | no |
 | | render one from a Makefile | `python -m lpspec <format>` — the only shell front, and typeset-only | no |
-| | *watch what a build is doing* | | |
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
-| | *will that solver take it, and how big is it* | | |
+| | *will that solver take it* | | |
 | **run it** | stream it straight into a solver | `solve`, or `build` → `BoundModel` to drive several sinks off one build | **yes** |
 | | re-solve one built model with new numbers | `bound.rebind(...)` — the label contract, spent | **yes** |
+| | how big is it, and what did the build and its solves do | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `omissions` · `solves` · `reloads`, all advisory | **yes** |
 | | write an LP file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | put the same math on a `linopy.Model` | `lpspec.linopy.build` · `.extend` (`data=`, its own coercion) | **yes** |
