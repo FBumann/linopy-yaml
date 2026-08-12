@@ -507,7 +507,6 @@ def test_a_string_dimension_leaves_the_read_back_as_string():
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
     }
     cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
-    declared = pl.Enum(['c', 'a', 'b'])
 
     with lps.build(model, {'cap': cap}) as ex:
         primal = ex.solve().primal('x')
