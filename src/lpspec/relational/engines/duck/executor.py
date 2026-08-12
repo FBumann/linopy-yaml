@@ -10,7 +10,7 @@ which engine filled the four frames.
 Scope: the affine core — variables with bounds and masks, constraints over
 sum/group_sum/translate, one objective. Enough to build every model in
 `bench/models/` and diff the result against polars, which is what pricing the
-SQL is for. Not the whole language: piecewise expansion happens above this
+port is for. Not the whole language: piecewise expansion happens above this
 layer anyway, and duals/solution read-back are the polars executor's business
 since they are joins against label frames rather than engine work.
 """
@@ -18,17 +18,31 @@ since they are joins against label frames rather than engine work.
 from __future__ import annotations
 
 import math
+import operator
 from collections.abc import Mapping
+from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 import duckdb
 import polars as pl
+from duckdb import CoalesceOperator, ConstantExpression, Expression, FunctionExpression, SQLExpression
 
 from lpspec.errors import DataError, LanguageError, null_bounds_message
 from lpspec.relational import plan, sinks
 from lpspec.relational.binding import bind
 from lpspec.relational.engine import Engine
-from lpspec.relational.engines.duck.compiler import UNIT, DuckCompiler, Rel, TermFragment, _ordinal, lit, q
+from lpspec.relational.engines.duck.compiler import (
+    UNIT,
+    DuckCompiler,
+    Relation,
+    TermFragment,
+    _ordinal,
+    col,
+    matching,
+    q,
+    restrict_to,
+    union_all,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -37,6 +51,19 @@ if TYPE_CHECKING:
 #: `sinks/tables.py`, which is what reads them. Shared with the polars engine
 #: for the reason the frames are: a sink cannot see which engine filled them.
 _COLS, _OBJ, _ROWS, _MATRIX = sinks.COLS, sinks.OBJ, sinks.ROWS, sinks.MATRIX
+
+
+def _ranked(order: Sequence[str], offset: int) -> Expression:
+    """A row's position in *order*, counted from *offset*.
+
+    ``ROW_NUMBER`` is the one construct here with no expression-API form —
+    `Expression` has no `over`, and `DuckDBPyRelation.row_number` takes its
+    window spec and its projection as SQL anyway. So the window is written out
+    and the arithmetic around it is not: the names still go through :func:`q`,
+    and the offset is a number rather than an identifier.
+    """
+    by = ', '.join(q(c) for c in order) or '1'
+    return (SQLExpression(f'ROW_NUMBER() OVER (ORDER BY {by})') + ConstantExpression(offset - 1)).cast('BIGINT')
 
 
 class _Labels(Mapping[str, 'pl.LazyFrame']):
@@ -63,7 +90,7 @@ class _Labels(Mapping[str, 'pl.LazyFrame']):
         """The frame, **in label order and in binding's dtypes** — read, not imposed.
 
         `Engine._read_back` stopped sorting once every labelling path produced
-        an ordered frame. polars' paths do and verify it; a SQL relation
+        an ordered frame. polars' paths do and verify it; a duckdb relation
         promises no order at all, and two of the three here are views over a
         cross join. So the order is asked for on the way out, where it is paid
         only by a caller that reads a solution back.
@@ -76,8 +103,7 @@ class _Labels(Mapping[str, 'pl.LazyFrame']):
         Declaration order is the model's order; alphabetical is nobody's.
         """
         if name not in self._frames:
-            sql = f'SELECT * FROM {q(self._tables[name])} ORDER BY {q(self._label)}'
-            frame = self._con.execute(sql).pl()
+            frame = self._con.table(self._tables[name]).order(q(self._label)).pl()
             casts = [pl.col(d).cast(e) for d, e in self.enums.items() if d in frame.columns]
             self._frames[name] = (frame.with_columns(casts) if casts else frame).lazy()
         return self._frames[name]
@@ -94,7 +120,7 @@ class _Labels(Mapping[str, 'pl.LazyFrame']):
 
 
 class DuckExecutor(Engine):
-    """The duckdb engine: plan → SQL → `sinks.ModelTables`.
+    """The duckdb engine: plan → relations → `sinks.ModelTables`.
 
     Everything past the four frames — both sinks, the solution read-back, the
     context manager — comes from `Engine` and is shared with the polars
@@ -135,8 +161,8 @@ class DuckExecutor(Engine):
 
     # -- registration ---------------------------------------------------
 
-    def _relation(self, sql: str, prefix: str, *, materialise: bool) -> str:
-        """Name *sql* as a table or a view, and return the name.
+    def _relation(self, rel: Relation, prefix: str, *, materialise: bool) -> str:
+        """Name *rel* as a table or a view, and return the name.
 
         **Materialise when the derivation is the expensive part, not when the
         result is read often.** A label relation is read three or four times
@@ -152,7 +178,10 @@ class DuckExecutor(Engine):
         """
         self._registered += 1
         name = f'{prefix}_{self._registered}'
-        self._con.execute(f'CREATE {"TABLE" if materialise else "VIEW"} {q(name)} AS {sql}')
+        if materialise:
+            rel.create(name)
+        else:
+            rel.create_view(name)
         return name
 
     def _register(self, name: str, frame: pl.DataFrame) -> str:
@@ -177,7 +206,7 @@ class DuckExecutor(Engine):
         source = f'__source {name}__'
         self._con.register(source, frame)
         try:
-            self._con.execute(f'CREATE TABLE {q(name)} AS SELECT * FROM {q(source)}')
+            self._con.sql(f'SELECT * FROM {q(source)}').create(name)
         finally:
             self._con.unregister(source)
         return name
@@ -198,7 +227,7 @@ class DuckExecutor(Engine):
         dims = {n: self._register(f'dim_{n}', f) for n, f in materialised.items()}
         params = {n: self._register(f'par_{n}', f.collect()) for n, f in bound.parameters.items()}
         self._compiler = DuckCompiler(
-            program, dims, params, bound.cardinality, bound.boolean_parameters, self._var_tables
+            self._con, program, dims, params, bound.cardinality, bound.boolean_parameters, self._var_tables
         )
 
         cols = [self._build_variable(v) for v in program.variables]
@@ -232,7 +261,7 @@ class DuckExecutor(Engine):
         where: plan.Predicate | None,
         label: str,
         start: int,
-        restrictions: Sequence[tuple[tuple[str, ...], Rel]] = (),
+        restrictions: Sequence[tuple[tuple[str, ...], Relation]] = (),
     ) -> tuple[str, int]:
         """The masked coord product of *dims* with a dense *label* from *start*.
 
@@ -250,10 +279,10 @@ class DuckExecutor(Engine):
         if not restrictions:
             if where is None:
                 rows = math.prod(self._q.cardinality[d] for d in dims)
-                cols = ', '.join(q(d) for d in dims) or q(UNIT)
-                rel = self._q.frame(dims, None)
-                sql = f'SELECT {cols}, ({self._row_major(dims, start)})::BIGINT AS {q(label)} FROM {rel.alias("p")}'
-                return self._relation(sql, 'lbl', materialise=False), start + rows
+                rel = self._q.frame(dims, None).select(
+                    *_coordinates(dims), self._row_major(dims, start).cast('BIGINT').alias(label)
+                )
+                return self._relation(rel, 'lbl', materialise=False), start + rows
 
             free = plan.free_prefix(dims, plan.predicate_dims(where, self._name_dims))
             if free:
@@ -261,23 +290,10 @@ class DuckExecutor(Engine):
 
         carrier = self._q.frame(dims, where)
         for on, presence in restrictions:
-            keep = ', '.join(f'l.{q(c)}' for c in carrier.columns)
-            # A scalar variable is present or it is not, with no key to match
-            # on: the restriction is then whether the presence relation has any
-            # row at all, and it removes every row of the carrier or none.
-            exists = (
-                f'(SELECT 1 FROM (SELECT DISTINCT {", ".join(q(d) for d in on)} FROM {presence.alias("p")}) AS r '
-                f'WHERE {" AND ".join(f"l.{q(d)} IS NOT DISTINCT FROM r.{q(d)}" for d in on)})'
-                if on
-                else f'(SELECT 1 FROM {presence.alias("p")})'
-            )
-            carrier = Rel(
-                f'SELECT {keep} FROM {carrier.alias("l")} WHERE EXISTS {exists}',
-                carrier.columns,
-            )
+            carrier = restrict_to(carrier, on, presence)
         return self._counted(carrier, dims, label, start)
 
-    def _row_major(self, dims: tuple[str, ...], start: int, alias: str = '') -> str:
+    def _row_major(self, dims: tuple[str, ...], start: int, alias: str = '') -> Expression:
         """Row-major position in *dims*' coordinate product, offset by *start*.
 
         The trailing dim has stride 1 and every other is the product of the
@@ -287,27 +303,24 @@ class DuckExecutor(Engine):
         is `Labeller.row_major`, and both arithmetic paths reach a label
         through it for the reason the label itself is written once.
         """
-        prefix = f'{alias}.' if alias else ''
-        terms: list[str] = []
+        offset = ConstantExpression(start)
+        if not dims:
+            return offset
+        terms: list[Expression] = []
         stride = 1
         for d in reversed(dims):
-            terms.append(f'{prefix}{q(_ordinal(d))} * {stride}')
+            terms.append(col(_ordinal(d), of=alias) * ConstantExpression(stride))
             stride *= self._q.cardinality[d]
-        return ' + '.join([*reversed(terms), str(start)])
+        return reduce(operator.add, reversed(terms)) + offset
 
-    def _counted(self, carrier: Rel, dims: tuple[str, ...], label: str, start: int) -> tuple[str, int]:
+    def _counted(self, carrier: Relation, dims: tuple[str, ...], label: str, start: int) -> tuple[str, int]:
         """Rank the surviving rows of *carrier*: the ordered window, and a count.
 
         The general answer and the expensive one — a global sort of the whole
         product, which is what the two arithmetic paths exist to avoid.
         """
-        order = ', '.join(q(_ordinal(d)) for d in dims) or '1'
-        cols = ', '.join(q(d) for d in dims) or q(UNIT)
-        sql = (
-            f'SELECT {cols}, (ROW_NUMBER() OVER (ORDER BY {order}) - 1 + {start})::BIGINT AS {q(label)} '
-            f'FROM {carrier.alias("c")}'
-        )
-        name = self._relation(sql, 'lbl', materialise=True)
+        ranked = _ranked([_ordinal(d) for d in dims], start).alias(label)
+        name = self._relation(carrier.select(*_coordinates(dims), ranked), 'lbl', materialise=True)
         return name, start + self._height(name)
 
     def _factored(
@@ -338,9 +351,9 @@ class DuckExecutor(Engine):
         """
         head, kept = dims[:free], dims[free:]
         ranked = self._relation(
-            f'SELECT {", ".join(q(d) for d in kept)}, '
-            f'(ROW_NUMBER() OVER (ORDER BY {", ".join(q(_ordinal(d)) for d in kept)}) - 1)::BIGINT AS "__rank" '
-            f'FROM {self._q.frame(kept, where).alias("k")}',
+            self._q.frame(kept, where).select(
+                *(col(d) for d in kept), _ranked([_ordinal(d) for d in kept], 0).alias('__rank')
+            ),
             'srv',
             # the one relation here worth writing down: it is small, it is
             # counted, and its window is the work the rectangle exists to avoid
@@ -352,23 +365,29 @@ class DuckExecutor(Engine):
             # The counted path returns the right columns and dtypes for free.
             return self._counted(self._q.frame(dims, where), dims, label, start)
 
-        product = self._q.frame(head, None)
-        picked = ', '.join([*(f'h.{q(d)}' for d in head), *(f's.{q(d)}' for d in kept)])
+        survivors = self._con.table(ranked).set_alias('s')
         position = self._row_major(head, 0, alias='h')
-        sql = (
-            f'SELECT {picked}, (({position}) * {width} + s."__rank" + {start})::BIGINT AS {q(label)} '
-            f'FROM {product.alias("h")} CROSS JOIN {q(ranked)} AS s'
+        placed = (position * ConstantExpression(width) + col('__rank', of='s') + ConstantExpression(start)).cast(
+            'BIGINT'
+        )
+        rel = (
+            self._q.frame(head, None)
+            .set_alias('h')
+            .cross(survivors)
+            .select(
+                *(col(d, of='h') for d in head),
+                *(col(d, of='s') for d in kept),
+                placed.alias(label),
+            )
         )
         rows = math.prod(self._q.cardinality[d] for d in head) * width
         #: the rectangle, kept for `_repeating_bounds` — a caller that only
         #: reads the trailing dims can be answered once and repeated
         self._rectangle = (head, kept, ranked, width)
-        return self._relation(sql, 'lbl', materialise=False), start + rows
+        return self._relation(rel, 'lbl', materialise=False), start + rows
 
     def _height(self, table: str) -> int:
-        got = self._con.execute(f'SELECT count(*) FROM {q(table)}').fetchone()
-        assert got is not None
-        return int(got[0])
+        return self._con.table(table).shape[0]
 
     # -- declarations ---------------------------------------------------
 
@@ -379,27 +398,40 @@ class DuckExecutor(Engine):
         name, self._n_cols = self._label_frame(v.dims, v.where, 'var_label', start)
         self._var_tables[v.name] = name
         self._blocks[v.name] = (start, self._n_cols - start)
-        labelled = Rel(f'SELECT * FROM {q(name)}', (*v.dims, 'var_label'))
 
         # **`cols` has no `col`, so a row's place in this frame is its solver
         # column index** (`sinks/tables.py`). The polars engine gets that order
-        # from the emission order of a cross join and only *verifies* it; SQL
-        # promises no order at all, so here it is produced deliberately —
-        # cheaply where the bounds repeat, and by sorting where they do not.
-        sql = self._repeating_bounds(v) or (
-            f'SELECT lb::DOUBLE AS lb, ub::DOUBLE AS ub '
-            f'FROM {self._q.bounds(labelled, v).alias("b")} ORDER BY var_label'
-        )
-        # `vtype` is attached here rather than selected as a literal in SQL:
-        # one word per column is one *copy* of that word per row over the wire,
-        # and the frame's stated dtype is an Enum holding four bytes.
-        cols = self._fetch(sql).with_columns(pl.lit(v.variable_type, dtype=sinks.VTYPE).alias('vtype'))
+        # from the emission order of a cross join and only *verifies* it; a
+        # duckdb relation promises no order at all, so here it is produced
+        # deliberately — cheaply where the bounds repeat, and by sorting where
+        # they do not.
+        repeating = self._repeating_bounds(v)
+        bounds = repeating if repeating is not None else self._sorted_bounds(v, name)
+        # `vtype` is attached here rather than selected as a literal: one word
+        # per column is one *copy* of that word per row over the wire, and the
+        # frame's stated dtype is an Enum holding four bytes.
+        cols = bounds.pl().with_columns(pl.lit(v.variable_type, dtype=sinks.VTYPE).alias('vtype'))
         bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
         if bad:
             raise DataError(null_bounds_message(v.name, bad))
         return cols
 
-    def _repeating_bounds(self, v: plan.VariableDeclaration) -> str | None:
+    def _sorted_bounds(self, v: plan.VariableDeclaration, labels: str) -> Relation:
+        """``(lb, ub)`` in label order, by sorting — always available.
+
+        The projection is applied *over* the ordered relation rather than
+        beside it, because ``var_label`` is what orders the frame and is not
+        one of the two columns a sink wants. duckdb keeps a subquery's order,
+        and the parity gate is what would notice if it stopped:
+        `test_engine_parity.py` compares byte-for-byte LP files, where a column
+        out of place moves every bound after it.
+        """
+        bounds = self._q.bounds(self._con.table(labels), v)
+        return bounds.order(q('var_label')).select(
+            col('lb').cast('DOUBLE').alias('lb'), col('ub').cast('DOUBLE').alias('ub')
+        )
+
+    def _repeating_bounds(self, v: plan.VariableDeclaration) -> Relation | None:
         """Bounds in label order without a sort, when the same run repeats.
 
         A factored label frame is a rectangle: every leading coordinate carries
@@ -423,11 +455,17 @@ class DuckExecutor(Engine):
         if any(not set(self._q.program.parameter(p).dims) <= set(kept) for p in reads):
             return None
 
-        run = self._q.bounds(Rel(f'SELECT * FROM {q(ranked)}', (*kept, '__rank')), v)
-        lists = f'SELECT list(lb ORDER BY "__rank") AS lbs, list(ub ORDER BY "__rank") AS ubs FROM {run.alias("r")}'
+        run = self._q.bounds(self._con.table(ranked), v)
+        # An ordered aggregate has no expression form; the two names it orders
+        # and collects are the compiler's own, not the model's.
+        lists = run.aggregate(f'list(lb ORDER BY {q("__rank")}) AS lbs, list(ub ORDER BY {q("__rank")}) AS ubs')
         return (
-            f'SELECT unnest(k.lbs)::DOUBLE AS lb, unnest(k.ubs)::DOUBLE AS ub '
-            f'FROM {self._q.frame(head, None).alias("h")}, ({lists}) AS k'
+            self._q.frame(head, None)
+            .cross(lists.set_alias('k'))
+            .select(
+                FunctionExpression('unnest', col('lbs', of='k')).cast('DOUBLE').alias('lb'),
+                FunctionExpression('unnest', col('ubs', of='k')).cast('DOUBLE').alias('ub'),
+            )
         )
 
     def _build_constraint(self, c: plan.ConstraintDeclaration) -> tuple[pl.DataFrame, pl.DataFrame | None]:
@@ -449,53 +487,58 @@ class DuckExecutor(Engine):
         name, self._n_rows = self._label_frame(c.dims, c.where, 'row', start, restrictions)
         self._row_tables[c.name] = name
         self._blocks[c.name] = (start, self._n_rows - start)
-        frame = Rel(f'SELECT * FROM {q(name)}', (*c.dims, 'row'))
+        frame = self._con.table(name)
 
-        carrier = frame
-        accumulated: list[str] = []
-        for i, (p, sign) in enumerate(consts):
-            column = f'__const {i}__'
-            aggregated = self._q.constant_scalar(p)
-            keep = ', '.join(f'l.{q(x)}' for x in carrier.columns)
-            if p.dims:
-                on = ' AND '.join(f'l.{q(d)} IS NOT DISTINCT FROM r.{q(d)}' for d in p.dims)
-                join = f'{carrier.alias("l")} LEFT JOIN {aggregated.alias("r")} ON {on}'
-            else:
-                join = f'{carrier.alias("l")} CROSS JOIN {aggregated.alias("r")}'
-            carrier = Rel(f'SELECT {keep}, r.cval AS {q(column)} FROM {join}', (*carrier.columns, column))
-            accumulated.append(f'{lit(sign)} * coalesce({q(column)}, 0.0)')
-        total = ' + '.join(accumulated) or '0.0'
-        rows = self._fetch(f'SELECT row, {lit(c.sense)} AS sense, ({total})::DOUBLE AS rhs FROM {carrier.alias("r")}')
+        rows = self._constant_side(frame, consts, c.sense).pl()
 
         if not terms:
             self._omitted[c.name] = rows.height
             self._blocks[c.name] = (start, 0)
             self._n_rows = start
-            self._row_tables[c.name] = self._relation(f'SELECT * FROM {q(name)} WHERE false', 'lbl', materialise=False)
+            self._row_tables[c.name] = self._relation(frame.filter(ConstantExpression(False)), 'lbl', materialise=False)
             return rows.clear(), None
 
-        pieces = []
-        for p, sign in terms:
-            if p.dims:
-                on = ' AND '.join(f'l.{q(d)} IS NOT DISTINCT FROM r.{q(d)}' for d in p.dims)
-                join = f'{frame.alias("l")} JOIN {p.rel.alias("r")} ON {on}'
-            else:
-                join = f'{frame.alias("l")} CROSS JOIN {p.rel.alias("r")}'
-            pieces.append(
-                f'SELECT l.row AS row, r.var_label::INTEGER AS col, ({lit(sign)} * r.coeff)::DOUBLE AS coeff FROM {join}'
-            )
-        stacked = ' UNION ALL '.join(f'({s})' for s in pieces)
-        if not _needs_aggregate([f for f, _ in terms]):
-            matrix = self._fetch(stacked)
-        else:
-            # `sum` over `(row, col)` is the terminal aggregate — where duplicates
-            # from Sum and GroupSum, which project rather than aggregate, collapse.
-            # Unordered: every sink sorts the matrix into the order it needs
-            # (`lp_file` by `(row, col)`, `solver_direct` by `row`), so an ORDER BY
-            # here is a second sort of the largest frame in the model for nothing.
-            matrix = self._fetch(f'SELECT row, col, sum(coeff) AS coeff FROM ({stacked}) GROUP BY row, col')
+        matrix = self._matrix_side(frame, terms).pl()
         rows, matrix, self._n_rows = self._drop_termless_rows(c.name, name, rows, matrix, start)
         return rows, matrix
+
+    def _constant_side(self, frame: Relation, consts: list[tuple[TermFragment, float]], sense: str) -> Relation:
+        """``(row, sense, rhs)`` — every constant fragment folded onto the frame."""
+        carrier = frame
+        accumulated: list[Expression] = []
+        for i, (p, sign) in enumerate(consts):
+            column = f'__const {i}__'
+            aggregated = self._q.constant_scalar(p).set_alias('r')
+            left = carrier.set_alias('l')
+            joined = left.join(aggregated, matching(p.dims), how='left') if p.dims else left.cross(aggregated)
+            carrier = joined.select(*(col(x, of='l') for x in carrier.columns), col('cval', of='r').alias(column))
+            accumulated.append(ConstantExpression(sign) * CoalesceOperator(col(column), ConstantExpression(0.0)))
+        total = reduce(operator.add, accumulated) if accumulated else ConstantExpression(0.0)
+        return carrier.select(col('row'), ConstantExpression(sense).alias('sense'), total.cast('DOUBLE').alias('rhs'))
+
+    def _matrix_side(self, frame: Relation, terms: list[tuple[TermFragment, float]]) -> Relation:
+        """``(row, col, coeff)`` for one constraint, aggregated only when it must be."""
+        pieces = []
+        for p, sign in terms:
+            left, right = frame.set_alias('l'), p.rel.set_alias('r')
+            joined = left.join(right, matching(p.dims)) if p.dims else left.cross(right)
+            pieces.append(
+                joined.select(
+                    col('row', of='l'),
+                    col('var_label', of='r').cast('INTEGER').alias('col'),
+                    (ConstantExpression(sign) * col('coeff', of='r')).cast('DOUBLE').alias('coeff'),
+                )
+            )
+        stacked = union_all(pieces[0], pieces[1:])
+        if not _needs_aggregate([f for f, _ in terms]):
+            return stacked
+        # `sum` over `(row, col)` is the terminal aggregate — where duplicates
+        # from Sum and GroupSum, which project rather than aggregate, collapse.
+        # Unordered: every sink sorts the matrix into the order it needs
+        # (`lp_file` by `(row, col)`, `solver_direct` by `row`), so ordering
+        # here is a second sort of the largest frame in the model for nothing.
+        total = FunctionExpression('sum', col('coeff')).alias('coeff')
+        return stacked.aggregate([col('row'), col('col'), total], f'{q("row")}, {q("col")}')
 
     def _drop_termless_rows(
         self, constraint: str, labels: str, rows: pl.DataFrame, matrix: pl.DataFrame, start: int
@@ -504,11 +547,11 @@ class DuckExecutor(Engine):
 
         The polars engine's twin, and the reason it is written twice rather
         than shared: the frames are polars on both sides, but the *label
-        relation* is a SQL table here, so the renumbering that follows the drop
-        is a window over that table rather than a `replace_strict` on a frame.
-        The rule itself is the language's (SPEC §6) and must not differ — a row
-        with no variables asserts something about constants, which the solver
-        cannot act on.
+        relation* is a duckdb table here, so the renumbering that follows the
+        drop is a window over that table rather than a `replace_strict` on a
+        frame. The rule itself is the language's (SPEC §6) and must not differ —
+        a row with no variables asserts something about constants, which the
+        solver cannot act on.
 
         Labels are dense, and the dual read-back reads a block by position, so
         a dropped row cannot leave a gap: the survivors are renumbered from
@@ -523,16 +566,26 @@ class DuckExecutor(Engine):
         self._omitted[constraint] = rows.height - surviving.height
         self._blocks[constraint] = (start, surviving.height)
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
+        dropped = rows.filter(~pl.col('row').is_in(kept)).select('row')
         rows = surviving.with_columns(pl.col('row').replace_strict(remap))
         matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
-        survivors = ', '.join(str(int(r)) for r in kept.sort())
         self._row_tables[constraint] = self._relation(
-            f'SELECT * REPLACE ((ROW_NUMBER() OVER (ORDER BY row) - 1 + {start})::BIGINT AS row) '
-            f'FROM {q(labels)} WHERE row IN ({survivors})',
-            'lbl',
-            materialise=True,
+            self._surviving_labels(constraint, labels, dropped, start), 'lbl', materialise=True
         )
         return rows, matrix, start + surviving.height
+
+    def _surviving_labels(self, constraint: str, labels: str, dropped: pl.DataFrame, start: int) -> Relation:
+        """The label relation without the *dropped* rows, renumbered from *start*.
+
+        Anti-joined against the labels that went rather than restricted to the
+        ones that stayed: a row loses all its terms rarely, so the dropped side
+        is the small frame and the survivors are most of the model.
+        """
+        table = self._con.table(labels)
+        absent = self._con.table(self._register(f'__dropped {constraint}__', dropped)).set_alias('r')
+        remaining = table.set_alias('l').join(absent, matching(('row',)), how='anti')
+        coordinates = [c for c in table.columns if c != 'row']
+        return remaining.select(*(col(c) for c in coordinates), _ranked(['row'], start).alias('row'))
 
     def _build_objective(self, o: plan.ObjectiveDeclaration) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms."""
@@ -543,22 +596,19 @@ class DuckExecutor(Engine):
                     'objective constant part has dims — wrap parameter terms in '
                     'Mul with a Var, or pre-aggregate to a scalar'
                 )
-            row = self._con.execute(f'SELECT sum(cval) FROM {p.rel.alias("c")}').fetchone()
+            row = p.rel.aggregate([FunctionExpression('sum', col('cval')).alias('cval')]).fetchone()
             self._obj_const += (row[0] if row else None) or 0.0
         self._obj_sense = o.sense
         if not comp.terms:
             return None
-        pieces = [f'(SELECT var_label::INTEGER AS col, coeff FROM {p.rel.alias("o")})' for p in comp.terms]
-        stacked = ' UNION ALL '.join(pieces)
+        pieces = [p.rel.select(col('var_label').cast('INTEGER').alias('col'), col('coeff')) for p in comp.terms]
+        stacked = union_all(pieces[0], pieces[1:])
         if _needs_aggregate(comp.terms, projected=True):
-            return self._fetch(f'SELECT col, sum(coeff) AS coeff FROM ({stacked}) GROUP BY col')
-        return self._fetch(stacked)
+            total = FunctionExpression('sum', col('coeff')).alias('coeff')
+            return stacked.aggregate([col('col'), total], q('col')).pl()
+        return stacked.pl()
 
     # -- the sink seam --------------------------------------------------
-
-    def _fetch(self, sql: str) -> pl.DataFrame:
-        """One query out, as the polars frame the sinks read."""
-        return self._con.execute(sql).pl()
 
     def _tables(self) -> sinks.ModelTables:
         assert self._cols is not None and self._obj is not None
@@ -586,6 +636,16 @@ class DuckExecutor(Engine):
         self._con.close()
 
 
+def _coordinates(dims: tuple[str, ...]) -> list[Expression]:
+    """The columns a label frame carries beside its label.
+
+    A scalar declaration has none, and a relation with an empty projection is
+    not a relation — so it carries the unit column the empty coordinate product
+    is made of.
+    """
+    return [col(d) for d in dims] if dims else [col(UNIT)]
+
+
 def _parameters(expression: plan.Expression) -> set[str]:
     """Every parameter name under *expression*."""
     found = {expression.name} if isinstance(expression, plan.Parameter) else set()
@@ -608,6 +668,6 @@ def _needs_aggregate(terms: Sequence[TermFragment], *, projected: bool = False) 
     return any(not (p.keyed and (not projected or p.label_dims >= set(p.dims))) for p in terms)
 
 
-def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str, ...], Rel]]:
+def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str, ...], Relation]]:
     """Where a masked variable says a constraint row must not exist."""
     return [(p.presence_dims or p.dims, p.presence) for p in terms if p.presence is not None]

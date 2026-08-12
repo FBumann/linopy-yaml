@@ -78,7 +78,7 @@ flowchart TB
         ENGB["engine.py<br/>both sinks + the label read-back,<br/>written once"] --> ENG
         subgraph ENG["engines/ — one is chosen by LPSPEC_ENGINE"]
             direction TB
-            DUCK["duck/ (default)<br/>plan → SQL"]
+            DUCK["duck/ (default)<br/>plan → duckdb relations"]
             POL["polars/<br/>compiler · executor · labels"]
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A"]
@@ -437,7 +437,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/__init__.py` | name → engine, a closed set; `LPSPEC_ENGINE` resolves through it, and unset means `duckdb` |
 | `relational/binding.py` | a caller's sources → `BoundSources`, the frozen frames every engine is written against |
 | `relational/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued coords |
-| `relational/engines/duck/compiler.py` | plan → SQL; the duckdb twin of the polars compiler |
+| `relational/engines/duck/compiler.py` | plan → duckdb relations; the duckdb twin of the polars compiler |
 | `relational/engines/duck/executor.py` | assemble the model frames through duckdb |
 | `relational/frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol |
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |

@@ -1,4 +1,4 @@
-"""The duckdb engine: plan → SQL → `sinks.ModelTables`.
+"""The duckdb engine: plan → duckdb relations → `sinks.ModelTables`.
 
 **The default engine**, and what `LPSPEC_ENGINE` unset selects. Not routed to:
 there is no routing here, only a choice, and the two engines answer the same
