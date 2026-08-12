@@ -189,22 +189,19 @@ class BoundModel:
         which is what a Benders loop does anyway, taking its duals before it
         moves the cut table.
         """
-        self._sources.update(self._known(sources, 'sources'))
-        self._coords.update(self._known(coords or {}, 'coords'))
+        self._sources.update(self._known(sources, {**self._schema.parameters, **self._schema.dimensions}, 'sources'))
+        self._coords.update(self._known(coords or {}, self._schema.dimensions, 'coords'))
         self._fill()
         return self
 
-    def _known(self, given: Mapping[str, Any], where: str) -> Mapping[str, Any]:
-        """*given*, or an error naming what the model does not declare.
+    def _known(self, given: Mapping[str, Any], declared: Mapping[str, Any], where: str) -> Mapping[str, Any]:
+        """*given*, or an error naming what *declared* does not hold.
 
         A rebind that names nothing re-solves the same numbers and reports it
         as an answer, which is the one failure a driver cannot see. ``build``
         does not ask this — it binds every declared name or fails — where a
         rebind is *partial* by construction and so has to.
         """
-        declared = (
-            self._schema.dimensions if where == 'coords' else {**self._schema.parameters, **self._schema.dimensions}
-        )
         unknown = sorted(set(given) - set(declared))
         if unknown:
             raise DataError(
