@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.106](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.105...v0.0.1-alpha.106) (2026-08-12)
+
+
+### Bug Fixes
+
+* **bench:** the marginal-cost caption is rendered, and says what it measures ([#621](https://github.com/fluxopt/lpspec/issues/621)) ([93cd5fe](https://github.com/fluxopt/lpspec/commit/93cd5fe37deb30d7df29700a2fd020f1bc10555f))
+
 ## [0.0.1-alpha.105](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.104...v0.0.1-alpha.105) (2026-08-12)
 
 
