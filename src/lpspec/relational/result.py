@@ -1,10 +1,10 @@
-"""What a solve returned — the caller's end of the relational lane.
+"""What a caller reads back — a solve's :class:`Result`, a build's :class:`Diagnostics`.
 
-The object ``lps.solve`` hands back, so it is the one piece of this subpackage a
-reader meets without going looking. It lives beside the executor rather than in
-it because the two answer different questions: the executor *builds* a model,
-and this *reads* one — the accessors are joins against the label frames plus
-whatever vector the solver left.
+The objects ``lps.solve`` and ``bound.diagnostics()`` hand back, so they are
+the pieces of this subpackage a reader meets without going looking. They live
+beside the executor rather than in it because they answer different questions:
+the executor *builds* a model, and these *read* one — the accessors are joins
+against the label frames plus whatever vector the solver left.
 
 Named for linopy's envelope (``Result`` = status + solution + report) rather
 than for our own decomposition, because our audience arrives from linopy and a
@@ -89,9 +89,12 @@ class Diagnostics:
     nonzeros: int
 
     #: ``(constraint, rows_not_built)`` — every row that lost all its terms and
-    #: so was not built (SPEC §6). Empty for a model whose every declared row
-    #: reached the solver. Counts rather than coordinates: the label of an
-    #: unbuilt row does not exist.
+    #: so was not built (SPEC §6): without this record a declared constraint
+    #: could go unenforced with no way to notice. Empty for a model whose every
+    #: declared row reached the solver. Counts rather than coordinates: the
+    #: label of an unbuilt row does not exist, so naming which went would mean
+    #: holding the pre-drop frame — memory proportional to the omission, on the
+    #: path this package measures hardest.
     omissions: pl.DataFrame
 
     #: How many times this model has been solved, and how many of those solves

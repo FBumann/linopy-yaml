@@ -449,23 +449,6 @@ class PolarsExecutor:
             objective_constant=self._obj_const,
         )
 
-    def omissions(self) -> pl.DataFrame:
-        """``(constraint, rows_not_built)`` — every row that lost all its terms.
-
-        A row with no variable terms is not built (SPEC §6), so without this
-        record a declared constraint could go unenforced with no way to notice.
-        Empty for a model whose every declared row reached the solver.
-
-        Counts rather than coordinates: the label of an unbuilt row does not
-        exist, so naming which went would mean holding the pre-drop frame —
-        memory proportional to the omission, on the path this package measures
-        hardest.
-        """
-        return pl.DataFrame(
-            {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
-            schema={'constraint': pl.String, 'rows_not_built': pl.UInt32},
-        )
-
     def write(self, path: str | Path) -> None:
         """Sink the built model to a file; the **suffix** picks the writer.
 
@@ -478,9 +461,10 @@ class PolarsExecutor:
 
     def solve(
         self,
-        batch_rows: int | None = None,
-        solver_options: Mapping[str, Any] | None = None,
         solver_name: str = 'highs',
+        *,
+        solver_options: Mapping[str, Any] | None = None,
+        batch_rows: int | None = None,
     ) -> Result:
         """Sink the built model straight into a solver and solve it.
 
@@ -505,7 +489,8 @@ class PolarsExecutor:
         held = self._solver
         self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
         self._solves += 1
-        self._loads += self._solver is not held
+        if self._solver is not held:
+            self._loads += 1
         status, objective, primal, dual = self._solver.run(tables)
         return Result(
             _status=status,
@@ -526,7 +511,10 @@ class PolarsExecutor:
             columns=self._n_cols,
             rows=self._n_rows,
             nonzeros=self._n_entries,
-            omissions=self.omissions(),
+            omissions=pl.DataFrame(
+                {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
+                schema={'constraint': pl.String, 'rows_not_built': pl.UInt32},
+            ),
             solves=self._solves,
             loads=self._loads,
         )

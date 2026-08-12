@@ -167,7 +167,7 @@ class ModelTables:
         return _scattered(
             self.row_count,
             self.rows['row'].to_numpy(),
-            _sense_codes(self.rows).to_numpy(),
+            self.rows['sense'].replace_strict(SENSE_CODES, return_dtype=pl.UInt8).to_numpy(),
             SENSE_CODES['>='],
         )
 
@@ -262,16 +262,6 @@ def solver_vector(values: Any) -> pl.Series:
     import numpy as np
 
     return pl.Series('value', np.asarray(values, dtype=np.float64))
-
-
-def _sense_codes(rows: pl.DataFrame) -> pl.Series:
-    """Each row's comparison as its :data:`SENSE_CODES` byte.
-
-    Shared by the two readers that must agree about what a row compares —
-    the dense vector a solver loads, and the digest that says whether it may
-    keep the one it loaded.
-    """
-    return rows['sense'].replace_strict(SENSE_CODES, return_dtype=pl.UInt8)
 
 
 def _scattered(count: int, at: Any, values: Any, absent: Any) -> Any:
