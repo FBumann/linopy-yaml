@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.107](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.106...v0.0.1-alpha.107) (2026-08-12)
+
+
+### Refactoring
+
+* every claim lives where it is read, not in a comment ([#612](https://github.com/fluxopt/lpspec/issues/612)) ([a5404d7](https://github.com/fluxopt/lpspec/commit/a5404d7f340c015fa6a3001f3b59116a4b441589))
+
 ## [0.0.1-alpha.106](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.105...v0.0.1-alpha.106) (2026-08-12)
 
 
