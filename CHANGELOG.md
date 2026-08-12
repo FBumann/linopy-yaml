@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.110](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.109...v0.0.1-alpha.110) (2026-08-12)
+
+
+### Bug Fixes
+
+* **engine:** a variable and a constraint may share a name ([#645](https://github.com/fluxopt/lpspec/issues/645)) ([e4329cf](https://github.com/fluxopt/lpspec/commit/e4329cf0b045583aed01e16d07ca192c1eeeceb2))
+
 ## [0.0.1-alpha.109](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.108...v0.0.1-alpha.109) (2026-08-12)
 
 
