@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.104](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.103...v0.0.1-alpha.104) (2026-08-12)
+
+
+### Documentation
+
+* **agents:** a PR with no intent line shows the prompt that produced it ([#616](https://github.com/fluxopt/lpspec/issues/616)) ([aa134ab](https://github.com/fluxopt/lpspec/commit/aa134abbfbfbdafca58b242636bd2c1d8b12938d))
+
 ## [0.0.1-alpha.103](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.102...v0.0.1-alpha.103) (2026-08-11)
 
 
