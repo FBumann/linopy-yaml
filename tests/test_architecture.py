@@ -238,6 +238,46 @@ def test_engine_is_isolated():
     assert not offenders, f'engine reaches outside its subpackage: {offenders}'
 
 
+#: The one contract module that may name an implementation: ``relational``
+#: re-exports the execution surface, which is the import site every caller
+#: outside the subpackage uses. Path relative to ``relational/``.
+CONTRACT_MAY_NAME_AN_ENGINE = {'__init__.py'}
+
+
+def test_no_contract_module_names_an_engine():
+    """``relational/__init__.py``'s own split: contract above, ``engines/`` below.
+
+    ``plan.py``, ``sinks/``, ``status.py``, ``chunking.py``, ``result.py`` and
+    ``frames.py`` say what a model *is*, what an engine answers to and what a
+    sink reads; ``engines/`` implements that. A contract module naming a class
+    out of ``engines/`` inverts the two, and a second engine then has to
+    satisfy a type written for the first.
+
+    **Type-only imports count here**, where the lane fences above prune them: a
+    ``TYPE_CHECKING`` guard is enough to erase a dependency and nowhere near
+    enough to erase a design. ``Result`` held ``_engine: PolarsExecutor`` behind
+    one and called five of its privates.
+    """
+    offenders = {}
+    for path in (PKG / 'relational').rglob('*.py'):
+        rel = path.relative_to(PKG / 'relational').as_posix()
+        if '__pycache__' in path.parts or rel.startswith('engines/') or rel in CONTRACT_MAY_NAME_AN_ENGINE:
+            continue
+        named = []
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.Import):
+                named += [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                named.append('.' * node.level + (node.module or ''))
+        engines = sorted({m for m in named if 'engines' in m.split('.')})
+        if engines:
+            offenders[rel] = engines
+    assert not offenders, (
+        f'a contract module names an implementation: {offenders}. Either the fact belongs '
+        f'under engines/, or what crosses the seam should be a type the contract already owns'
+    )
+
+
 #: What ``language/`` may reach: itself, and the same dependency-free leaves the
 #: engine may reach. Both fences point at ``errors.py`` for the same reason —
 #: one exception hierarchy, owned by neither side. Widening this is a decision,
