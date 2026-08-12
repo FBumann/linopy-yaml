@@ -79,6 +79,20 @@ DTYPES = {
 VTYPE = DTYPES['vtype']
 
 
+def stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
+    """Every declaration's share of one frame, as the frame a sink reads.
+
+    Here for :func:`compress_rows`' reason: a model may legitimately have
+    nothing to stack — no objective terms, no constraints — and a sink still
+    has to find the columns and dtypes it reads, which is the contract's
+    answer rather than either engine's.
+    """
+    kept = [f for f in frames if f.height]
+    if not kept:
+        return pl.DataFrame(schema={name: DTYPES[name] for name in columns})
+    return pl.concat([f.select(columns) for f in kept])
+
+
 def compress_rows(matrix: pl.DataFrame, row_count: int) -> tuple[pl.DataFrame, npt.NDArray[np.int64]]:
     """A ``(row, col, coeff)`` matrix as the CSR pair `ModelTables` takes.
 
