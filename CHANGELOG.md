@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.109](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.108...v0.0.1-alpha.109) (2026-08-12)
+
+
+### Documentation
+
+* **agents:** the package's docstrings have one checkable form ([#632](https://github.com/fluxopt/lpspec/issues/632)) ([bdc301f](https://github.com/fluxopt/lpspec/commit/bdc301f1c05bd313a8e87000a67cc22914c27a8e))
+
 ## [0.0.1-alpha.108](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.107...v0.0.1-alpha.108) (2026-08-12)
 
 
