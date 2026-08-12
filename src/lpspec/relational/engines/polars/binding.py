@@ -107,8 +107,9 @@ class _Binder:
         """Bind one parameter's source and register it as a tidy frame.
 
         The one collect in this file on the streaming engine, its result being
-        the one that is model-sized: switching every collect costs wall time on
-        a small join-heavy model to save the peak this one saves alone.
+        the one that is model-sized: switching every collect costs a double-digit
+        percentage of wall on a small join-heavy model, to save the peak this one
+        saves alone (#370).
 
         Validation runs before the string cast — a dictionary-encoded column
         compares on its codes, and widening to strings first doubles the check.

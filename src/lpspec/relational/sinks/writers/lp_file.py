@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 #: it is sunk, so this is the knob that bounds the writer's peak rather than its
 #: speed: chunking at this width takes most of the constraint section out of
 #: peak for no change in the bytes written. Wider costs memory for nothing; much
-#: narrower pays per-chunk overhead on every range.
+#: narrower pays per-chunk overhead on every range (#189).
 EMIT_BUDGET = 2_000_000
 
 
@@ -97,7 +97,7 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
 
     One row per *output line*, interleaved by sorting, so nothing gathers a
     row's terms into a string list first — a ``group_by('row')`` into a list
-    column and an explode measured several times slower. *entries* is the
+    column and an explode measured a large multiple of this (#520). *entries* is the
     chunk's slice of the matrix from :meth:`ModelTables.labeled_blocks`, and the
     anti-join gives a termless row the line a solver still needs to parse.
 
@@ -113,8 +113,8 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
 
     The terms are sorted although they arrive sorted: the union subsumes the
     order and the bytes are identical without it, but the union sort merges
-    pre-ordered runs rather than permuting them, which is cheaper than letting
-    the emit find its own order.
+    pre-ordered runs rather than permuting them, and dropping it costs emit on
+    every case measured (#520).
     """
     slots = model.cols.height + 3
 

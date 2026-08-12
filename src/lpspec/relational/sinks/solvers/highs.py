@@ -42,8 +42,8 @@ if TYPE_CHECKING:
 #: cost almost nothing and only residency scales with the budget — where an
 #: engine whose every chunk re-ran an ordered query would want the opposite. A
 #: wider budget buys a fraction of a second on a hand-off that precedes a
-#: minute of simplex, and pays for it in the invariant this budget exists to
-#: hold.
+#: minute of simplex, and pays for it in a large fraction of the invariant this
+#: budget exists to hold (#189).
 HANDOFF_BUDGET = 100_000
 
 #: HiGHS model status -> termination condition. Copied from linopy's own

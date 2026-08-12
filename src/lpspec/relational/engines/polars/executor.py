@@ -52,7 +52,8 @@ _MATRIX = ('row', 'col', 'coeff')
 #: variable types the plan declares, rather than a string: it holds one word
 #: per column and the same handful of words for the whole model, so as a string
 #: it stores that word once per row, where an Enum stores a code: on a wide
-#: model that is most of the ``cols`` frame. The Enum also makes the vocabulary
+#: model that is most of the ``cols`` frame (#189). The Enum also makes the
+#: vocabulary
 #: explicit, so a fourth variable type added to
 #: :data:`~lpspec.relational.plan.VariableType` and not reaching here fails
 #: where the column is built rather than in whichever sink first compares
@@ -366,8 +367,9 @@ class PolarsExecutor:
         shapes and loses it on others differing only in data (`dispatch` keeps
         it, `nodal` and `profiled` do not, all three the same lone masked
         ``p * cost``), so no static gate can say when the tax will pay; and
-        paid for nothing it multiplies the objective phase against a best case
-        that is a wash. ``obj`` carries no order contract anyway.
+        paid for nothing it multiplies the objective phase several times over,
+        against a best case that is a wash (#581). ``obj`` carries no order
+        contract anyway.
         """
 
         comp = self._q.expression(o.expression, 'objective')
@@ -509,8 +511,9 @@ class PolarsExecutor:
 
         The cast sits inside this projection rather than after it, so the
         string column is produced once instead of widened from an Enum that
-        also exists. Declaration order is the *row* order and survives, never
-        having been the dtype's to carry.
+        also exists, which is cheaper in both wall and peak (#593). Declaration
+        order is the *row* order and survives, never having been the dtype's to
+        carry.
         """
         start, height = self._blocks[name]
         labelled = coordinates.select(*dims).with_columns(values.slice(start, height))
@@ -629,8 +632,9 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
     """Each row's first entry in the row-ordered *ordered* — CSR's own index.
 
     Run-length, scatter, cumulative sum — robust to the model's shape where the
-    alternatives are not: ``bincount`` pays per entry and ``searchsorted`` per
-    row times log entries.
+    alternatives are not: ``bincount`` pays per entry — several times rle's
+    cost on a large matrix (#550) — and ``searchsorted`` per row times log
+    entries.
     Computed here so ``row`` can then be dropped, since every consumer either
     slices by these starts or asks
     :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to spell
@@ -638,7 +642,7 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
 
     The kept matrix is then **rechunked, once**: a sink slices it per row
     block, and against a chunked frame every block's ``to_numpy`` is a
-    gather-copy where against one contiguous buffer it is a view.
+    gather-copy where against one contiguous buffer it is a view (#550).
     """
     import numpy as np
 

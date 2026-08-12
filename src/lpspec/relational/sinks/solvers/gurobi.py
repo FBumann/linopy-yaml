@@ -142,8 +142,8 @@ def _load(
     model built on it. ``OutputFlag`` leads so a caller can put the log back.
 
     ``vtype`` is passed only when some column is integral — an LP otherwise
-    pays a share of the column hand-off for an array of one repeated letter,
-    and linopy skips it the same way. ``batch_rows``
+    pays a double-digit percentage of the column hand-off for an array of one
+    repeated letter (#434), and linopy skips it the same way. ``batch_rows``
     goes straight through un-defaulted: one call unless a caller asks
     otherwise (#434).
     """

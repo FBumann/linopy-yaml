@@ -126,7 +126,8 @@ class ModelTables:
 
         **Nothing textual crosses into numpy**: a polars ``String`` converts by
         boxing every value as a Python object, so the test against
-        ``'continuous'`` is made in polars and only its answer crosses.
+        ``'continuous'`` is made in polars and only its answer crosses — an
+        order of magnitude apart at the top of the ladder (#418).
         """
         import numpy as np
 
