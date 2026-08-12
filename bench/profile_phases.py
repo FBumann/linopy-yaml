@@ -75,11 +75,11 @@ def main(argv: list[str] | None = None) -> int:
 
     def one() -> float:
         """One build, timed. Called once untimed to fill the bind cache."""
-        ex = PolarsExecutor()
+        engine = PolarsExecutor()
         started = time.perf_counter()
-        ex.build(program, sources)
+        engine.build(program, sources)
         elapsed = time.perf_counter() - started
-        ex.close()
+        engine.close()
         return elapsed
 
     full = [one() for _ in range(args.rounds)]

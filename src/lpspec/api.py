@@ -256,11 +256,11 @@ def solve(
     model.
     """
     solver(solver_name)
-    ex = build(model, sources, **build_kwargs)
+    bound = build(model, sources, **build_kwargs)
     try:
-        return ex.solve(solver_name, solver_options=solver_options)
+        return bound.solve(solver_name, solver_options=solver_options)
     except BaseException:
-        ex.close()
+        bound.close()
         raise
 
 
@@ -278,6 +278,6 @@ def write(
     """
     out = Path(out)
     writer(out.suffix.lower())
-    with build(model, sources, **build_kwargs) as ex:
-        ex.write(out)
+    with build(model, sources, **build_kwargs) as bound:
+        bound.write(out)
     return out

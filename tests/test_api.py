@@ -39,8 +39,8 @@ def test_solve(dispatch_yaml, dispatch_frame_inputs):
 
 def test_build_context_manager_and_write(dispatch_yaml, dispatch_frame_inputs, tmp_path):
     sources, coords = dispatch_frame_inputs
-    with lps.build(dispatch_yaml, sources, coords=coords) as ex:
-        result = ex.solve()
+    with lps.build(dispatch_yaml, sources, coords=coords) as bound:
+        result = bound.solve()
         assert result.is_ok
         objective_direct = result.objective
 
@@ -293,14 +293,14 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
     """
     key = ['snapshot', 'generator']  # a read is a join, so compare on coordinates
     sources, coords = dispatch_frame_inputs
-    with lps.build(dispatch_yaml, sources, coords=coords) as ex:
-        first = ex.solve()
+    with lps.build(dispatch_yaml, sources, coords=coords) as bound:
+        first = bound.solve()
         before = first.primal('p').sort(key)
         assert first.is_ok
 
-        assert ex._engine._obj is not None
-        ex._engine._obj = ex._engine._obj.with_columns(-pl.col('coeff'))
-        second = ex.solve()
+        assert bound._engine._obj is not None
+        bound._engine._obj = bound._engine._obj.with_columns(-pl.col('coeff'))
+        second = bound.solve()
 
         assert not second.primal('p').sort(key).equals(before), 'the second solve really moved'
         assert first.primal('p').sort(key).equals(before), 'and the first still reports its own'

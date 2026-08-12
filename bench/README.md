@@ -56,7 +56,7 @@ closely. `git checkout` gets it back; noticing is the hard part.
 
 | | `lp` | `highs` | `gurobi` |
 |---|---|---|---|
-| `lpspec` | `lps.build(...)` then `ex.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
+| `lpspec` | `lps.build(...)` then `bound.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
 | `linopy` | `lpspec.linopy.build(...)` then `Model.to_file(io_api='lp-polars')` | … then `Model.to_highspy(set_names=False)` | … then `Model.to_gurobipy(set_names=False)` |
 
 `gurobi` is opt-in (`--sinks gurobi`): it needs the `[gurobi]` extra, where the
@@ -132,8 +132,8 @@ the other never does. The boundaries are therefore explicit:
 | **before the clock** | splitting parquet paths into parameters vs dimensions (harness bookkeeping — it re-parses the YAML only because the *runner* decides which file is which) | — |
 | `import` | `import lpspec` | `import lpspec.linopy` → linopy, xarray |
 | `build` | `lps.build(...)` — the engine scans the parquet itself | `read_parquet` + reshape + `lpspec.linopy.build(...)` |
-| `emit` | `ex.write(path)` / `build_highs(ex._tables())` | `Model.to_file(path, io_api='lp-polars')` / `Model.to_highspy()` |
-| `teardown` | `ex.close()` — releases the built model | — (nothing to release) |
+| `emit` | `bound.write(path)` / `build_highs(_tables(bound))` | `Model.to_file(path, io_api='lp-polars')` / `Model.to_highspy()` |
+| `teardown` | `bound.close()` — releases the built model | — (nothing to release) |
 | **after the clock** | row, column and nonzero counts off the built frames | `nvars` / `ncons` |
 
 Three of those are deliberate calls rather than defaults:

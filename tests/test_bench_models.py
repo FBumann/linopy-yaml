@@ -57,8 +57,8 @@ def test_a_bench_case_builds_on_the_smallest_rung(case: str, tmp_path: Path):
 
     spec = bench_cases.CASES[case]
     sources = spec.write(spec.shape('xs'), tmp_path)
-    with lps.build(spec.model, sources) as ex:
-        assert ex is not None
+    with lps.build(spec.model, sources) as bound:
+        assert bound is not None
 
 
 def test_every_model_backs_a_case():

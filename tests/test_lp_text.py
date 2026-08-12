@@ -115,8 +115,8 @@ def test_written_bounds_are_bit_exact() -> None:
     }
     with tempfile.TemporaryDirectory() as tmp:
         lp = Path(tmp) / 'model.lp'
-        with lps.build(DISPATCH_MODEL, data) as ex:
-            ex.write(lp)
+        with lps.build(DISPATCH_MODEL, data) as bound:
+            bound.write(lp)
         text = lp.read_text()
 
     section = text.split('bounds\n')[1].split('\nend')[0]
@@ -148,10 +148,10 @@ def test_one_model_writes_the_same_bytes_every_time(tmp_path: Path) -> None:
     }
 
     written = []
-    with lps.build(schema, data) as ex:
+    with lps.build(schema, data) as bound:
         for attempt in range(3):
             lp = tmp_path / f'{attempt}.lp'
-            ex.write(lp)
+            bound.write(lp)
             written.append(hashlib.sha256(lp.read_bytes()).hexdigest())
 
     assert len(set(written)) == 1, 'the same model wrote different bytes'
@@ -176,10 +176,10 @@ def test_chunking_the_constraint_section_leaves_the_bytes_alone(
         'load': pl.DataFrame({'snapshot': list(range(snapshots)), 'value': [50.0 + t % 7 for t in range(snapshots)]}),
     }
 
-    with lps.build(schema, data) as ex:
-        ex.write(tmp_path / 'one.lp')
+    with lps.build(schema, data) as bound:
+        bound.write(tmp_path / 'one.lp')
         monkeypatch.setattr(lp_file, 'EMIT_BUDGET', 3)
-        ex.write(tmp_path / 'many.lp')
+        bound.write(tmp_path / 'many.lp')
 
     assert (tmp_path / 'one.lp').read_bytes() == (tmp_path / 'many.lp').read_bytes()
 
@@ -204,8 +204,8 @@ def test_section_keywords_survive_sections_far_larger_than_a_buffer(tmp_path: Pa
     }
 
     lp = tmp_path / 'model.lp'
-    with lps.build(schema, data) as ex:
-        ex.write(lp)
+    with lps.build(schema, data) as bound:
+        bound.write(lp)
     lines = lp.read_text().splitlines()
 
     keywords = ['min', 'obj:', 's.t.', 'bounds', 'end']
