@@ -30,12 +30,12 @@ from lpspec.errors import (
 )
 from lpspec.relational import plan, sinks
 from lpspec.relational.binding import BoundSources, bind
-from lpspec.relational.engine import Engine
+from lpspec.relational.engine import Engine, needs_aggregate
 from lpspec.relational.engines.polars.compiler import PolarsCompiler, TermFragment
 from lpspec.relational.engines.polars.labels import Labeller
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
 
     from polars._typing import MaintainOrderJoin
 
@@ -177,7 +177,7 @@ class PolarsExecutor(Engine):
 
         The terminal aggregate is where duplicates from ``Sum`` and
         ``GroupSum`` — which project rather than aggregate — collapse, and it
-        is skipped where nothing can (:func:`_needs_aggregate`).
+        is skipped where nothing can (:func:`~lpspec.relational.engine.needs_aggregate`).
 
         **Either way the share leaves ordered by ``row``.** Every sink reads
         the matrix a row range at a time, so one that is handed an unordered
@@ -261,7 +261,7 @@ class PolarsExecutor(Engine):
                 )
             )
         stacked = pl.concat(pieces)
-        if not _needs_aggregate([fragment for fragment, _ in terms], self._q.may_share_a_column):
+        if not needs_aggregate([fragment for fragment, _ in terms], self._q.may_share_a_column):
             ordered = stacked if len(pieces) == 1 else stacked.sort('row')
             matrix = ordered.collect(engine='streaming')
             self._check_no_undefined_divisor(f"constraint '{c.name}'", matrix, c.lhs, c.rhs)
@@ -319,7 +319,7 @@ class PolarsExecutor(Engine):
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
 
         **This projection drops the dims, so it asks for the stronger key** —
-        ``_needs_aggregate(..., projected=True)``. Where the matrix keeps a
+        ``needs_aggregate(..., projected=True)``. Where the matrix keeps a
         fragment's dims in ``row``, here only ``var_label`` survives, and a dim
         that arrived by broadcast then puts several rows on one column.
 
@@ -345,7 +345,7 @@ class PolarsExecutor(Engine):
             p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
         ]
         stacked = pl.concat(pieces)
-        if _needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
+        if needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
             stacked = stacked.group_by('col').agg(pl.col('coeff').sum())
         return stacked.collect(engine='streaming')
 
@@ -407,56 +407,10 @@ def _spanning(solver: str, quantity: str, values: pl.Series | None, expected: in
         )
 
 
-def _needs_aggregate(
-    terms: Sequence[TermFragment],
-    may_share: Callable[[TermFragment, TermFragment], bool],
-    *,
-    projected: bool = False,
-) -> bool:
-    """Whether stacking *terms* can put two rows on one solver column.
-
-    Named for the answer, not the condition: an inverted test here is a wrong
-    model rather than a slow one.
-
-    Two things can put a label twice into the stack, asked separately. A
-    fragment that is not
-    :attr:`~lpspec.relational.engines.polars.compiler.TermFragment.keyed`
-    already holds one twice on its own. Whether a *pair* can is *may_share*,
-    which answers no for distinct variables and otherwise asks whether two
-    fragments of one variable send a label to one **row** — for
-    ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``, only
-    where a line's two ends are one bus. See
-    :meth:`~lpspec.relational.engines.polars.compiler.PolarsCompiler.may_share_a_column`.
-    That second half is what makes the ordinary multi-term constraint free:
-    reading only a fragment count says the aggregate is reachable for
-    ``reserve_up + reserve_down <= p_max``, which on the `fleet` rungs sorts
-    every nonzero in the model to collapse nothing.
-
-    *projected* is what the two call sites do not share. The matrix keeps a
-    fragment's dims, so ``keyed`` — one row per ``(dims…, var_label)`` —
-    carries straight into ``(row, col)``. The objective keeps only
-    ``var_label``, so it asks the stronger question: does the key survive
-    losing *all* dims? It does exactly when ``var_label`` determines every dim
-    the fragment still carries. ``p * cost`` is keyed on dims that are all the
-    variable's own, so a column cannot repeat; ``y * w`` — ``y`` over buses,
-    ``w`` over snapshots — is just as keyed, but ``snapshot`` arrived by
-    broadcast, so one column holds a row per snapshot and their *sum* is the
-    coefficient.
-
-    Worth 2-4x of build time on the matrix and little on the objective, but the
-    argument is the same at both, so it is written once. On the duckdb engine
-    the same change measured at nothing — the value is engine-specific even
-    though the reasoning is not (#161).
-    """
-    if any(not t.survives_dropping(set(t.dims) if projected else set()) for t in terms):
-        return True
-    return any(may_share(a, b) for i, a in enumerate(terms) for b in terms[i + 1 :])
-
-
 def _has_repeated_entry(matrix: pl.DataFrame) -> bool:
     """Whether a matrix sorted by ``(row, col)`` holds one cell twice.
 
-    :func:`_needs_aggregate` answers whether a stack *can* repeat a cell, which
+    :func:`~lpspec.relational.engine.needs_aggregate` answers whether a stack *can* repeat a cell, which
     is all a static reading of the fragments can say. This answers whether it
     *did*, which is one pass over a sorted frame and lets the aggregate be
     skipped in the case the static answer is conservative about.

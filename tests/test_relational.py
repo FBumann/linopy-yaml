@@ -22,7 +22,8 @@ from lpspec.relational import (
     PolarsExecutor,
     chunking,
 )
-from lpspec.relational.engines.polars.executor import _needs_aggregate
+from lpspec.relational.engine import needs_aggregate
+from lpspec.relational.engines.duck.executor import DuckExecutor
 from lpspec.relational.plan import (
     Constant,
     ConstraintDeclaration,
@@ -41,6 +42,11 @@ from lpspec.relational.sinks import SOLVERS
 from tests.conftest import by_coord, override, solve_lp_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, transport_eager_objective, xr
+
+#: Both executors, for the few claims that are about the *model* rather than
+#: about an engine. The aggregate decision is one: it reads fragments neither
+#: engine shares and has to come out the same on each anyway.
+ENGINES = [pytest.param(PolarsExecutor, id='polars'), pytest.param(DuckExecutor, id='duckdb')]
 
 # ---------------------------------------------------------------------------
 # model 1: dispatch (the spec example)
@@ -647,7 +653,7 @@ def test_every_declaration_owns_a_contiguous_run_of_labels():
 def test_the_matrix_aggregate_runs_on_what_repeats_and_not_on_what_might():
     """Both branches of the collapse, on models that differ only in overlap.
 
-    `_needs_aggregate` reads the fragments and can only say whether a cell
+    `needs_aggregate` reads the fragments and can only say whether a cell
     *can* repeat. Two fragments over disjoint variables satisfy it and repeat
     nothing; two over the same variable repeat every cell. The first must come
     out untouched and the second must be summed — the point being that the
@@ -706,7 +712,8 @@ def _network(self_loop: bool) -> tuple[dict, dict]:
     return model, sources
 
 
-def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(engine_internals):
+@pytest.mark.parametrize('executor', ENGINES)
+def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(executor):
     """`group_by=to` and `group_by=from` reach one cell exactly on a line to itself.
 
     Both fragments carry `f`, so counting variables says the aggregate is
@@ -722,11 +729,12 @@ def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(engine
     """
     for self_loop, expected in ((False, False), (True, True)):
         model, sources = _network(self_loop)
-        with lps.build(model, sources) as ex:
-            program = lower_program(Model(**model))
+        program = lower_program(Model(**model))
+        with executor() as ex:
+            ex.build(program, sources)
             terms = ex._q.expression(program.constraints[0].lhs, 'test').terms
             assert len(terms) == 2 and {t.variable for t in terms} == {'f'}
-            assert _needs_aggregate(terms, ex._q.may_share_a_column) is expected, f'self_loop={self_loop}'
+            assert needs_aggregate(terms, ex._q.may_share_a_column) is expected, f'self_loop={self_loop}'
 
             tables = ex._tables()
             cells = tables.matrix_block(0, tables.row_count).select('row', 'col')
@@ -736,12 +744,12 @@ def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(engine
 def test_a_self_loop_collapses_its_two_fragments_on_every_engine():
     """The property the decision above is only allowed to be *fast* about.
 
-    Whether an engine reaches the line table or just sorts is its own business
-    — the duckdb engine takes the conservative branch and aggregates whenever a
-    constraint has more than one term. What neither may do is hand a sink the
-    same `(row, col)` twice: an LP reader sums the pair and a solver handed
-    duplicate entries is entitled to do either, so the two would disagree about
-    a model both loaded without error.
+    Both engines now reach the line table for the answer, and neither has to:
+    a build that sorts every nonzero to collapse nothing produces the same
+    rows. What neither may do is hand a sink the same `(row, col)` twice — an
+    LP reader sums the pair and a solver handed duplicate entries is entitled
+    to do either, so the two would disagree about a model both loaded without
+    error.
     """
     for self_loop in (False, True):
         model, sources = _network(self_loop)
@@ -751,14 +759,15 @@ def test_a_self_loop_collapses_its_two_fragments_on_every_engine():
             assert cells.height == cells.unique().height, f'a cell reached the sinks twice (self_loop={self_loop})'
 
 
-def test_stacking_distinct_variables_asks_for_no_aggregate():
+@pytest.mark.parametrize('executor', ENGINES)
+def test_stacking_distinct_variables_asks_for_no_aggregate(executor):
     """The static answer itself, which no end-to-end assertion can reach.
 
     `test_the_matrix_aggregate_runs_on_what_repeats_and_not_on_what_might`
     pins the *rows*, and both branches produce the same ones — a build that
     sorts every nonzero to collapse nothing is indistinguishable from one that
     never sorted. So the question of whether the aggregate was asked for has
-    to be put to `_needs_aggregate` directly.
+    to be put to `needs_aggregate` directly.
 
     Reading the count alone answers 'yes' to every multi-term constraint,
     which is most of them.
@@ -777,12 +786,12 @@ def test_stacking_distinct_variables_asks_for_no_aggregate():
                 objectives={'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
             )
         )
-        with PolarsExecutor() as ex:
+        with executor() as ex:
             ex.build(program, sources)
             return ex._q.expression(program.constraints[0].lhs, 'test').terms, ex._q.may_share_a_column
 
-    assert not _needs_aggregate(*fragments('x + y'))
-    assert _needs_aggregate(*fragments('x + 3 * x'))
+    assert not needs_aggregate(*fragments('x + y'))
+    assert needs_aggregate(*fragments('x + 3 * x'))
 
 
 def test_the_objective_skips_the_aggregate_only_when_a_column_cannot_repeat():
