@@ -45,11 +45,12 @@ SOLVERS: Mapping[str, Solve] = {
     'gurobi': solve_gurobi,
 }
 
-#: Those of :data:`SOLVERS` that can stay loaded between solves, and what a
-#: session has to answer is :class:`~...highs.HighsSession` and ../README.md.
-#: A subset, and the uneven capability Track 3 (#472) exists to declare:
-#: absence costs a driver the warm basis and nothing else, so it is read where
-#: the model is handed over rather than asked about at the call.
+#: Those of :data:`SOLVERS` that can stay loaded between solves. What a
+#: session answers is ``../README.md``'s table, and ``highs.HighsSession`` is
+#: the member that does. A subset, and the uneven capability Track 3 (#472)
+#: exists to declare: absence costs a driver the warm basis and nothing else,
+#: so it is read where the model is handed over rather than asked about at
+#: the call.
 SESSIONS: Mapping[str, type[Any]] = {
     'highs': HighsSession,
 }

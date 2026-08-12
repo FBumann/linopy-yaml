@@ -188,9 +188,8 @@ class ModelTables:
 
         **A digest rather than the frames.** Keeping the previous matrix to
         compare against would hold two models alive across a rebuild, which is
-        the memory the rebuild exists not to spend — and it is why this cannot
-        be linopy's diff (`persistent/diff.py`), whose snapshot pins the
-        buffers it may later need. The cost is one linear pass over the
+        the memory the rebuild exists not to spend (the trade against a diff
+        is argued in `README.md`). The cost is one linear pass over the
         matrix, paid only by a caller who rebinds.
 
         Each vector is hashed through its own **buffer**, so the matrix is read

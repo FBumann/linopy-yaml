@@ -147,13 +147,11 @@ class HighsSession:
     holds and starts from the basis the last solve ended on, where loading
     again would hand over the matrix a second time and start cold.
 
-    **Values are re-pushed, never diffed.** linopy's persistent layer
-    (``persistent/diff.py``) computes a delta against a snapshot of the
-    previous model; here the previous model is *gone* by the time the new one
-    exists — releasing it is what keeps a rebound build at one model's peak —
-    so what a delta would need is exactly what is not kept. Pushing the whole
-    vectors costs a pass over the columns and the rows, against the matrix
-    pass that loading would cost.
+    **Values are re-pushed, never diffed** — the previous model is *gone* by
+    the time the new one exists, so there is nothing held to diff against;
+    the trade is argued once, in ``../README.md``. Pushing the whole vectors
+    costs a pass over the columns and the rows, against the matrix pass that
+    loading would cost.
 
     :meth:`takes` is the guard, and it is asked of every reuse: a model whose
     :meth:`~lpspec.relational.sinks.tables.ModelTables.structure` moved is a
