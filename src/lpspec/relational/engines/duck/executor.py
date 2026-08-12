@@ -48,7 +48,10 @@ if TYPE_CHECKING:
 #: The four frames a sink reads, and their dtypes — both stated by
 #: `sinks/tables.py`, which is what reads them. Shared with the polars engine
 #: for the reason the frames are: a sink cannot see which engine filled them.
-_COLS, _OBJ, _ROWS, _MATRIX = sinks.COLS, sinks.OBJ, sinks.ROWS, sinks.MATRIX
+_COLS, _OBJ, _ROWS = sinks.COLS, sinks.OBJ, sinks.ROWS
+
+#: What a `cols` table holds. `vtype` is not stored beside them — see `_vtypes`.
+_BOUNDS = ('lb', 'ub')
 
 
 def _ranked(order: Sequence[str], offset: int) -> Expression:
@@ -109,6 +112,46 @@ class _Labels(Mapping[str, 'pl.LazyFrame']):
         self._frames.clear()
 
 
+#: What a matrix block carries. No ``row``: which row an entry belongs to is
+#: its position between two CSR offsets (`sinks.MatrixBlocks`).
+_ENTRY = ('col', 'coeff')
+
+
+def _stacked(
+    con: duckdb.DuckDBPyConnection,
+    tables: Sequence[str],
+    columns: tuple[str, ...],
+    keep: Expression | None = None,
+) -> Relation | None:
+    """*tables* as one relation of *columns*, in the order they were built.
+
+    The model is a table per declaration, and both things that read it back —
+    the three frames a sink takes whole, and one block of the matrix — read it
+    the same way: stack, project, fetch. `None` for no tables at all, which is
+    a model with nothing of that kind rather than an error.
+
+    *keep* filters **before** the projection, so a block can select on ``row``
+    and then not carry it.
+    """
+    if not tables:
+        return None
+    parts = [con.table(t) for t in tables]
+    if keep is not None:
+        parts = [p.filter(keep) for p in parts]
+    projected = [p.select(*(col(c) for c in columns)) for p in parts]
+    return union_all(projected[0], projected[1:])
+
+
+def _fetch(rel: Relation | None, columns: tuple[str, ...]) -> pl.DataFrame:
+    """*rel* as a frame, or the empty one a sink still has to be able to read.
+
+    Empty is not nothing: a model may declare no objective term, and a sink
+    still has to find the columns and dtypes it reads. `sinks.stack` states
+    them, for both engines.
+    """
+    return rel.pl() if rel is not None else sinks.stack([], columns)
+
+
 class _DuckMatrix:
     """The constraint matrix, left in duckdb and read a row range at a time.
 
@@ -136,15 +179,8 @@ class _DuckMatrix:
     def block(self, lo: int, hi: int) -> pl.DataFrame:
         """``(col, coeff)`` for rows ``[lo, hi)``, in row-major order."""
         overlapping = [t for t, first, last in self._spans if first < hi and last > lo]
-        if not overlapping:
-            return sinks.stack([], ('col', 'coeff'))
-        bounded = [
-            self._con.table(t)
-            .filter((col('row') >= ConstantExpression(lo)) & (col('row') < ConstantExpression(hi)))
-            .select(col('col'), col('coeff'))
-            for t in overlapping
-        ]
-        return union_all(bounded[0], bounded[1:]).pl()
+        keep = (col('row') >= ConstantExpression(lo)) & (col('row') < ConstantExpression(hi))
+        return _fetch(_stacked(self._con, overlapping, _ENTRY, keep), _ENTRY)
 
 
 class DuckExecutor(Engine):
@@ -610,20 +646,13 @@ class DuckExecutor(Engine):
     def _matrix_side(self, frame: Relation, terms: list[tuple[TermFragment, float]]) -> Relation:
         """``(row, col, coeff)`` for one constraint, in row order, aggregated only when it must be.
 
-        **Someone has to sort, and past a few million nonzeros duckdb is the
-        cheaper someone.** `compress_rows` needs an ascending ``row``; sorting
-        here means each constraint's share, inside duckdb, before it crosses
-        the boundary, and leaves polars nothing to do. Sorting there means one
-        pass over the whole stacked matrix at the moment the build is holding
-        all of it. At the `l` rung that is worth 0.87x of build on `storage`
-        and 0.89x on `transport` (#399).
-
-        It is not free below that: `nodal/l`, at 3M nonzeros against those two's
-        12.6M and 16M, is 1.14x — polars sorts a small matrix faster than
-        duckdb materialises a pipeline that was streaming. Sorting the small
-        ones on one side and the large ones on the other does not work, because
-        polars re-sorts the *stack* if any share arrives out of order, so this
-        is one decision for the model, taken where it pays most.
+        **The order is a requirement, not a preference.** A sink reads this
+        matrix a row range at a time and gets back ``(col, coeff)`` with no
+        ``row`` beside it, so which row an entry belongs to is *its position*
+        between two CSR offsets. Entries arriving out of order inside a block
+        would be attributed to the wrong rows — a different model that still
+        solves. `test_engine_parity.py` compares LP files byte for byte, which
+        is what would notice.
         """
         pieces = []
         for p, sign in terms:
@@ -749,7 +778,7 @@ class DuckExecutor(Engine):
         """
         if self._cached is None:
             self._cached = sinks.ModelTables(
-                cols=self._drain(self._col_tables, _COLS[:2]).with_columns(self._vtypes()),
+                cols=self._drain(self._col_tables, _BOUNDS).with_columns(self._vtypes()),
                 obj=self._drain(self._obj_tables, _OBJ),
                 rows=self._drain(self._row_shares, _ROWS),
                 matrix=_DuckMatrix(self._con, tuple(self._matrix_spans), self._starts()),
@@ -761,16 +790,8 @@ class DuckExecutor(Engine):
         return self._cached
 
     def _drain(self, tables: list[str], columns: tuple[str, ...]) -> pl.DataFrame:
-        """*tables* stacked and fetched, in the order they were built.
-
-        Empty is not nothing: a model may declare no objective term and no
-        constraint, and a sink still has to find the columns and dtypes it
-        reads. `sinks.stack` states them for both engines.
-        """
-        if not tables:
-            return sinks.stack([], columns)
-        projected = [self._con.table(t).select(*(col(c) for c in columns)) for t in tables]
-        return union_all(projected[0], projected[1:]).pl()
+        """*tables* stacked and fetched, in the order they were built."""
+        return _fetch(_stacked(self._con, tables, columns), columns)
 
     def _vtypes(self) -> pl.Series:
         """``cols``' variable-type column, one run per declaration.
