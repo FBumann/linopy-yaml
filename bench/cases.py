@@ -131,6 +131,34 @@ def _dump(frames: dict[str, pd.DataFrame], dest: Path) -> dict[str, str]:
     return paths
 
 
+def _installed_frame(nodes: list[str], techs: list[str], installed: np.ndarray, capacity: np.ndarray) -> pd.DataFrame:
+    """The (node, tech) pairs that exist, tidy — the table *is* the sparsity."""
+    live = installed.reshape(-1)
+    return pd.DataFrame(
+        {
+            'node': np.repeat(nodes, len(techs))[live],
+            'tech': np.tile(techs, len(nodes))[live],
+            'value': capacity.reshape(-1)[live],
+        }
+    )
+
+
+def _dense_pairs(path: str, index: pd.Series, columns: pd.Series) -> pd.DataFrame:
+    """A sparse two-key table reindexed over its full product.
+
+    The eager lane has nowhere to put an absent pair, so this is where
+    structural sparsity becomes NaN padding. Done in the open, because doing it
+    at all is the point of the sparse cases.
+    """
+    return (
+        pd.read_parquet(path)
+        .set_index([index.name, columns.name])['value']
+        .unstack()
+        .reindex(index=index, columns=columns)
+        .fillna(0.0)
+    )
+
+
 # --------------------------------------------------------------------------
 # dispatch
 
@@ -234,13 +262,7 @@ def _nodal_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     return _dump(
         {
-            'installed': pd.DataFrame(
-                {
-                    'node': np.repeat(nodes, len(techs))[installed.reshape(-1)],
-                    'tech': np.tile(techs, n_node)[installed.reshape(-1)],
-                    'value': capacity.reshape(-1)[installed.reshape(-1)],
-                }
-            ),
+            'installed': _installed_frame(nodes, techs, installed, capacity),
             'cost': pd.DataFrame({'tech': techs, 'value': cost}),
             'demand': pd.DataFrame(
                 {
@@ -271,13 +293,7 @@ def _nodal_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]
     techs = pd.read_parquet(paths['tech'])['tech']
     cost = pd.read_parquet(paths['cost']).set_index('tech')['value']
     demand = pd.read_parquet(paths['demand'])
-    installed = (
-        pd.read_parquet(paths['installed'])
-        .set_index(['node', 'tech'])['value']
-        .unstack()
-        .reindex(index=nodes, columns=techs)
-        .fillna(0.0)
-    )
+    installed = _dense_pairs(paths['installed'], nodes, techs)
     data = {
         'installed': installed,
         'cost': cost,
@@ -328,13 +344,7 @@ def _sector_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     return _dump(
         {
-            'installed': pd.DataFrame(
-                {
-                    'node': np.repeat(nodes, len(techs))[installed.reshape(-1)],
-                    'tech': np.tile(techs, n_node)[installed.reshape(-1)],
-                    'value': capacity.reshape(-1)[installed.reshape(-1)],
-                }
-            ),
+            'installed': _installed_frame(nodes, techs, installed, capacity),
             'produces': pd.DataFrame({'tech': techs, 'carrier': [carriers[c] for c in serves], 'value': efficiency}),
             'cost': pd.DataFrame({'tech': techs, 'value': rng.uniform(10.0, 100.0, len(techs))}),
             'demand': pd.DataFrame(
@@ -367,13 +377,7 @@ def _sector_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]
     techs = pd.read_parquet(paths['tech'])['tech']
     carriers = pd.read_parquet(paths['carrier'])['carrier']
     demand = pd.read_parquet(paths['demand'])
-    installed = (
-        pd.read_parquet(paths['installed'])
-        .set_index(['node', 'tech'])['value']
-        .unstack()
-        .reindex(index=nodes, columns=techs)
-        .fillna(0.0)
-    )
+    installed = _dense_pairs(paths['installed'], nodes, techs)
     produces = (
         pd.read_parquet(paths['produces'])
         .set_index(['tech', 'carrier'])['value']

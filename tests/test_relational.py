@@ -853,6 +853,18 @@ def test_a_solution_is_read_back_in_label_order_without_sorting_for_it():
         assert ex._dual('meet', dual)['value'].to_list() == list(range(len(dual))), 'dual not in label order'
 
 
+#: Three columns and three rows, the smallest model whose solution vector has a
+#: length worth disagreeing about.
+SOLVER_VECTOR_MODEL = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'parameters': {'load': {'dims': ['t']}},
+    'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
+    'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
+}
+SOLVER_VECTOR_LOAD = {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
+
+
 @pytest.mark.parametrize('length', [2, 5], ids=['short', 'long'])
 def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, length):
     """A wrong length is a different model's answer, not a short one.
@@ -867,13 +879,6 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
     """
     from lpspec.relational.engines.polars import executor as executor_module
 
-    model = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
-        'parameters': {'load': {'dims': ['t']}},
-        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
-        'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
-    }
     honest = executor_module.sinks.solver('highs')
 
     def crooked(tables, batch_rows, options):
@@ -883,7 +888,7 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
 
     monkeypatch.setattr(executor_module.sinks, 'solver', lambda _name: crooked)
     with (
-        lps.build(model, {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as ex,
+        lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as ex,
         pytest.raises(LpspecError, match=f'returned {length} primal values for a model with 3'),
     ):
         ex.solve()
@@ -899,14 +904,7 @@ def test_a_solver_hands_back_a_vector_and_not_an_index(solver_name):
     held. The same argument took ``col`` off ``cols`` in #433; this is the
     other half of it, and neither is visible from the numbers.
     """
-    model = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
-        'parameters': {'load': {'dims': ['t']}},
-        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
-        'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
-    }
-    with lps.build(model, {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as ex:
+    with lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as ex:
         tables = ex._tables()
         solution = ex.solve(solver_name=solver_name)
         assert solution.is_ok

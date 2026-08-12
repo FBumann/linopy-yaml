@@ -16,7 +16,6 @@ import pytest
 
 from lpspec.relational import plan
 from tests.differential import differential
-from tests.oracle import pd
 
 COMMITMENT_YAML = """
 dimensions:
@@ -50,27 +49,6 @@ objectives:
     sense: minimize
     expression: sum(p * cost, over=generator) + sum(u * fix_cost, over=generator)
 """
-
-
-@pytest.fixture
-def commitment_inputs():
-    rng = np.random.default_rng(5)
-    n_s = 24
-    p_max = pd.Series({'coal': 120.0, 'gas': 80.0, 'peaker': 60.0})
-    data = {
-        'p_max': p_max,
-        'cost': pd.Series({'coal': 10.0, 'gas': 30.0, 'peaker': 90.0}),
-        'fix_cost': pd.Series({'coal': 400.0, 'gas': 150.0, 'peaker': 20.0}),
-        'load': pd.Series(
-            (rng.uniform(0.3, 0.9, n_s) * p_max.sum()).round(1),
-            index=pd.RangeIndex(n_s, name='snapshot'),
-        ),
-    }
-    coords = {
-        'snapshot': pd.RangeIndex(n_s, name='snapshot'),
-        'generator': pd.Index(p_max.index, name='generator'),
-    }
-    return data, coords
 
 
 def test_commitment_milp_agrees_and_stays_integral(commitment_inputs):

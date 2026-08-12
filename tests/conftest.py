@@ -148,13 +148,6 @@ def resolved(text, schema):
     return expression_of(text, schema, Namespace.of(schema), 't')
 
 
-def resolved_where(text, schema):
-    """Parse + resolve a where string."""
-    from lpspec.language.resolution import Namespace, where_of
-
-    return where_of(text, Namespace.of(schema), 't')
-
-
 # ---------------------------------------------------------------------------
 # data
 # ---------------------------------------------------------------------------
