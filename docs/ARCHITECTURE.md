@@ -358,8 +358,13 @@ what makes it visible in a signature rather than only in a docstring.
 `(frame dims…, var_label, coeff)` plus a constant part; constraint rows are
 `(row, sense, rhs)`; the coefficient matrix is COO `(row, col, coeff)` while
 declarations build, and lands as CSR at assembly — `(col, coeff)` in row-major
-order plus a `row_starts` offset array, the same three arrays a solver takes,
-at 12 bytes per entry. Masks
+order plus a `starts` offset array, the same three arrays a solver takes,
+at 12 bytes per entry. **The matrix is the one frame a sink may not ask for
+whole**: `MatrixBlocks` gives it a row range at a time, because it is the only
+part of a model with no bound a caller can see — the other three are one row
+per declaration coordinate, this one is one per nonzero. That is what lets an
+engine keep it where it built it: the polars engine slices a frame, the duckdb
+engine answers each block with a query, and no sink can tell. Masks
 are **row absence** — no NaN sentinels, no `-1` labels. Broadcasting is a join,
 `sum` drops coordinate columns, `sum(group_by=)` joins the dim table and projects a
 declared coordinate in place of the grouped dim. Neither aggregates: both
@@ -467,7 +472,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
 | `relational/engines/polars/executor.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
-| `relational/sinks/tables.py` | what every sink reads and no more — the four frames, their dtypes and the batching scalars, and their projection onto the solver's column index; what an engine produces |
+| `relational/sinks/tables.py` | what every sink reads and no more — three frames, the matrix a row range at a time (`MatrixBlocks`), their dtypes and the batching scalars, and their projection onto the solver's column index; what an engine produces |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
 | `linopy/__init__.py` | opt-in shim: `build` / `extend` on a `linopy.Model` |
 | `linopy/loader.py` | data coercion to `xr.Dataset`, master coords |
