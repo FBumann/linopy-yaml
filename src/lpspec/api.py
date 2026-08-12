@@ -88,12 +88,11 @@ class BoundModel:
     def __init__(
         self,
         schema: Model,
-        program: Any,
         sources: Mapping[str, Any],
         coords: Mapping[str, Any] | None = None,
     ) -> None:
         self._schema = schema
-        self._program = program
+        self._program = lower_program(schema)
         self._sources = dict(sources)
         self._coords = dict(coords or {})
         self._engine = PolarsExecutor()
@@ -143,45 +142,27 @@ class BoundModel:
         which is what a Benders loop does anyway, taking its duals before it
         moves the cut table.
         """
-        self._sources.update(self._known(sources, {**self._schema.parameters, **self._schema.dimensions}, 'sources'))
-        self._coords.update(self._known(coords or {}, self._schema.dimensions, 'coords'))
+        self._sources.update(_known(sources, {**self._schema.parameters, **self._schema.dimensions}, 'sources'))
+        self._coords.update(_known(coords or {}, self._schema.dimensions, 'coords'))
         self._fill()
         return self
 
-    def _known(self, given: Mapping[str, Any], declared: Mapping[str, Any], where: str) -> Mapping[str, Any]:
-        """*given*, or an error naming what *declared* does not hold.
-
-        A rebind that names nothing re-solves the same numbers and reports it
-        as an answer, which is the one failure a driver cannot see. ``build``
-        does not ask this — it binds every declared name or fails — where a
-        rebind is *partial* by construction and so has to.
-        """
-        unknown = sorted(set(given) - set(declared))
-        if unknown:
-            raise DataError(
-                f'rebind: {where} names {unknown}, which this model does not declare — '
-                f'it has {sorted(declared)}. A rebind names what changed, so a name nothing '
-                f'reads would silently re-solve the numbers already bound.'
-            )
-        return given
-
     def solve(
         self,
-        batch_rows: int | None = None,
-        solver_options: Mapping[str, Any] | None = None,
         solver_name: str = 'highs',
+        *,
+        solver_options: Mapping[str, Any] | None = None,
     ) -> Result:
         """Sink the built model straight into a solver and solve it.
 
         ``solver_name`` picks the sink and ``solver_options`` is forwarded
         verbatim in that solver's vocabulary; both are the *caller's* choice at
-        the call, no YAML file being able to express either. ``batch_rows`` is
-        the hand-off budget in elements.
+        the call, no YAML file being able to express either.
 
         A solver that can stay loaded is kept between calls, so a rebound model
         re-solves from the basis the last one ended on.
         """
-        return self._engine.solve(batch_rows, solver_options, solver_name)
+        return self._engine.solve(solver_name, solver_options=solver_options)
 
     def write(self, path: str | Path) -> None:
         """Sink the built model to a file; the **suffix** picks the writer."""
@@ -207,6 +188,24 @@ class BoundModel:
         return False
 
 
+def _known(given: Mapping[str, Any], declared: Mapping[str, Any], where: str) -> Mapping[str, Any]:
+    """*given*, or an error naming what *declared* does not hold.
+
+    A rebind that names nothing re-solves the same numbers and reports it
+    as an answer, which is the one failure a driver cannot see. ``build``
+    does not ask this — it binds every declared name or fails — where a
+    rebind is *partial* by construction and so has to.
+    """
+    unknown = sorted(set(given) - set(declared))
+    if unknown:
+        raise DataError(
+            f'rebind: {where} names {unknown}, which this model does not declare — '
+            f'it has {sorted(declared)}. A rebind names what changed, so a name nothing '
+            f'reads would silently re-solve the numbers already bound.'
+        )
+    return given
+
+
 def build(
     model: str | Path | dict[str, Any] | Model,
     sources: Mapping[str, Any],
@@ -226,15 +225,15 @@ def build(
         If the model uses a construct outside the streaming language —
         the message names the construct and its context.
     """
-    schema = load_model(model)
-    return BoundModel(schema, lower_program(schema), sources, coords)
+    return BoundModel(load_model(model), sources, coords)
 
 
 def solve(
     model: str | Path | dict[str, Any] | Model,
     sources: Mapping[str, Any],
-    solver_options: Mapping[str, Any] | None = None,
     solver_name: str = 'highs',
+    *,
+    solver_options: Mapping[str, Any] | None = None,
     **build_kwargs: Any,
 ) -> Result:
     """Build and solve in one call.
@@ -257,11 +256,11 @@ def solve(
     model.
     """
     solver(solver_name)
-    ex = build(model, sources, **build_kwargs)
+    bound = build(model, sources, **build_kwargs)
     try:
-        return ex.solve(solver_options=solver_options, solver_name=solver_name)
+        return bound.solve(solver_name, solver_options=solver_options)
     except BaseException:
-        ex.close()
+        bound.close()
         raise
 
 
@@ -279,6 +278,6 @@ def write(
     """
     out = Path(out)
     writer(out.suffix.lower())
-    with build(model, sources, **build_kwargs) as ex:
-        ex.write(out)
+    with build(model, sources, **build_kwargs) as bound:
+        bound.write(out)
     return out

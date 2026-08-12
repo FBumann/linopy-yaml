@@ -100,19 +100,19 @@ def differential(
         oracle = float(m.objective.value)
         assert np.isfinite(oracle), 'the eager oracle is infeasible or unbounded — fix the data, not the tolerance'
 
-        with PolarsExecutor() as ex:
-            ex.build(lower_program(schema), tidy_sources(schema, data, coords))
-            result = ex.solve()
+        with PolarsExecutor() as engine:
+            engine.build(lower_program(schema), tidy_sources(schema, data, coords))
+            result = engine.solve()
             assert result.is_ok
             assert result.objective == pytest.approx(oracle, rel=rel)
 
             lp_path = None
             if lp:
                 lp_path = work / 'model.lp'
-                ex.write(lp_path)
+                engine.write(lp_path)
                 assert solve_lp_file(lp_path) == pytest.approx(oracle, rel=rel)
 
-            yield Agreement(oracle=oracle, model=m, result=result, schema=schema, executor=ex, lp=lp_path)
+            yield Agreement(oracle=oracle, model=m, result=result, schema=schema, executor=engine, lp=lp_path)
 
 
 def _write(path: Path, model: str | dict[str, Any]) -> Path:
