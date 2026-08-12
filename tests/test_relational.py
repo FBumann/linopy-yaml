@@ -848,12 +848,10 @@ def test_a_solution_is_read_back_in_label_order_without_sorting_for_it():
     with lps.build(model, sources) as bound:
         primal = pl.Series('value', np.arange(bound._engine._n_cols, dtype=np.float64))
         dual = pl.Series('value', np.arange(bound._engine._n_rows, dtype=np.float64))
-        read = bound._engine._readback()
-        variable = read.variable('p').frame(primal)
-        assert 'SORT' not in variable.explain(optimized=False), 'the labeller already ordered this'
-        assert variable.collect()['value'].to_list() == list(range(len(primal))), 'primal not in label order'
-        rows = read.constraint('meet').frame(dual).collect()
-        assert rows['value'].to_list() == list(range(len(dual))), 'dual not in label order'
+        primals, duals = bound._engine._read_back(primal, dual)
+        assert 'SORT' not in primals['p'].explain(optimized=False), 'the labeller already ordered this'
+        assert primals['p'].collect()['value'].to_list() == list(range(len(primal))), 'primal not in label order'
+        assert duals['meet'].collect()['value'].to_list() == list(range(len(dual))), 'dual not in label order'
 
 
 #: Three columns and three rows, the smallest model whose solution vector has a
@@ -909,15 +907,17 @@ def test_a_solver_hands_back_a_vector_and_not_an_index(solver_name):
     the read-back never reads, 8 bytes a column for as long as the result is
     held. The same argument took ``col`` off ``cols`` in #433; this is the
     other half of it, and neither is visible from the numbers.
+
+    Read off the hand-off rather than off the `Result`, which lays these
+    vectors into its frames and keeps no second copy of them.
     """
     with lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as bound:
-        tables = bound._engine._tables()
-        solution = bound.solve(solver_name=solver_name)
-        assert solution.is_ok
-        for values, count in (
-            (solution._primal_values, tables.column_count),
-            (solution._dual_values, tables.row_count),
-        ):
+        assert bound.solve(solver_name=solver_name).is_ok
+        engine = bound._engine
+        assert engine._solver is not None, 'a solve leaves the solver holding the model'
+        tables = engine._tables()
+        _status, _objective, primal, dual = engine._solver.run(tables)
+        for values, count in ((primal, tables.column_count), (dual, tables.row_count)):
             assert isinstance(values, pl.Series), 'a frame here is an index column nothing reads'
             assert values.name == 'value'
             assert len(values) == count, 'the read-back slices it positionally, so it spans the model'

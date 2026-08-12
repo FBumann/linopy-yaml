@@ -20,7 +20,7 @@ import difflib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
 
 class LpspecError(ValueError):
@@ -152,6 +152,26 @@ def null_bounds_message(name: str, rows: int) -> str:
         f'language will not pick one:\n'
         f'  supply the value           the variable exists there, bounded (`inf` is a value)\n'
         f'  where: "<the parameter>"   the variable does not exist there at all'
+    )
+
+
+def no_duals_message(discrete: Sequence[str], termination_condition: str) -> str:
+    """Why a solve that *did* leave values still has no duals.
+
+    Integrality is decidable from the model, and naming the variable is
+    actionable where "the solver reported none" is not.
+    """
+    if discrete:
+        names = ', '.join(f"'{n}'" for n in discrete)
+        return (
+            f'duals are undefined for a mixed-integer model: {names} '
+            f'{"is" if len(discrete) == 1 else "are"} not continuous. '
+            f'Drop the integrality to price the LP relaxation instead.'
+        )
+    return (
+        f'the solver returned no dual solution, though the solve terminated '
+        f'{termination_condition!r}. Duals come from a simplex basis, which a '
+        f'run stopped short of one does not have.'
     )
 
 
