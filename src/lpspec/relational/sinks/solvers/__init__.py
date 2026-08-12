@@ -46,17 +46,16 @@ SOLVERS: Mapping[str, type[Solver]] = {
 def solver(name: str) -> type[Solver]:
     """The solver called *name*, or why this build cannot give you it.
 
-    Two refusals, because they are two mistakes: a name outside the closed set,
-    and a name inside it whose package this environment does not have. Both land
-    where the sink is resolved — before the build — which is what makes naming a
-    sink nothing can serve cost no model. The second was only half true while a
-    known name always resolved.
+    Both refusals land where the sink is resolved — before the build — which is
+    what makes naming a sink nothing can serve cost no model. What to do about
+    a missing package is the *member's* sentence
+    (:attr:`~lpspec.relational.sinks.solvers.base.Solver.unavailable_message`),
+    whether a solver ships or needs an extra being its own fact.
 
-    What to do about the second is the *member's* sentence
-    (:attr:`~lpspec.relational.sinks.solvers.base.Solver.unavailable_message`), not one
-    written here: whether a solver ships or needs an extra is its own fact, and
-    the one written here would have told a caller whose HiGHS is broken about
-    gurobi's extra.
+    Raises:
+        LpspecError: A name outside the closed set.
+        ModuleNotFoundError: A name inside it whose package this environment
+            does not have.
     """
     try:
         found = SOLVERS[name]

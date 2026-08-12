@@ -47,17 +47,21 @@ __all__ = ['build', 'check', 'load_model', 'solve', 'write']
 
 
 def check(model: str | Path | dict[str, Any] | Model) -> Model:
-    """Compile-check a model without data: parse, expand, validate, lower.
+    """Parse, expand, validate and lower a model; bind no data.
 
-    Lowering needs no sources, so this works on a bare YAML file — the CI
-    verb for model repositories. Raises :class:`LanguageError` when the model
-    uses a construct outside the streaming language, ``ValueError`` for
-    schema/expression problems. Returns the validated schema.
+    Args:
+        model: A YAML path, a mapping, or a loaded :class:`Model`.
 
-    Advice that stops short of an error — a declared dimension nothing uses as
-    an axis, say — is issued as :class:`~lpspec.errors.LpspecWarning`, here
-    and only here: ``check`` is the explicit gate, so the advice never costs a
-    build or a solve.
+    Returns:
+        The validated schema.
+
+    Raises:
+        LanguageError: A construct outside the streaming language.
+        ValueError: A schema or expression that does not parse.
+
+    Warns:
+        LpspecWarning: Advice short of an error — a declared dimension nothing
+            uses as an axis, say. Issued here and nowhere else.
     """
     schema = load_model(model)
     program = lower_program(schema)
@@ -74,15 +78,10 @@ class BoundModel:
 
         ``load_model`` → ``Model`` → ``build`` → ``BoundModel`` → ``solve`` → ``Result``
 
-    Named for what it holds rather than for what built it. The engine
-    underneath is the swappable half of the package, and which one ran is not
-    something a top-level verb's return type should say.
-
-    One build feeds more than one sink — :meth:`solve` and :meth:`write` on the
-    same object — :meth:`rebind` puts new numbers on it without re-reading the
-    YAML or re-lowering the plan, and :meth:`diagnostics` says what it did.
-    **Nothing has to be released**: the built model is frames this process owns,
-    and :meth:`close` hands a large one back early.
+    One build feeds any number of sinks — :meth:`solve` and :meth:`write` on
+    the same object — :meth:`rebind` puts new numbers on it without re-reading
+    the YAML or re-lowering the plan, and :meth:`diagnostics` says what it did.
+    Nothing has to be released; :meth:`close` hands a large model back early.
     """
 
     def __init__(
@@ -117,30 +116,34 @@ class BoundModel:
         *,
         coords: Mapping[str, Any] | None = None,
     ) -> BoundModel:
-        """Same model, new numbers. Returns this object, so a driver can chain.
+        """Put new numbers on the same model, in place.
 
-        *sources* names only what changed — the rest keeps what :func:`build`
-        bound — and it may name a dimension index as well as a parameter, which
-        is how a coordinate set grows::
+        ::
 
             bound.rebind({'cap_hat': capacity}).solve()
 
-        **Total.** There is no shape of new data it refuses and no capability to
-        query first: what a value change can cost is the *fast path*, never the
-        answer. Reading back is keyed by coordinate, so a rebind that moves a
-        mask — a parameter a ``where`` compares against — renumbers labels
-        under a caller who cannot tell, and the engine rebuilds and solves cold
-        instead of pushing values onto a loaded solver. Which one ran is
-        :attr:`~lpspec.relational.result.Diagnostics.loads`.
+        Any new data is accepted: ``bound.rebind(x)`` answers what
+        ``build(model, sources | x)`` answers, whatever changed. What a change
+        costs is the fast path, never the answer — data that moves a mask
+        renumbers labels, so the model is rebuilt and solved cold instead of
+        pushed onto a loaded solver, and
+        :attr:`~lpspec.relational.result.Diagnostics.loads` says which ran.
 
-        The answer is the reference build's, always: ``bound.rebind(x)`` solves
-        what ``build(model, sources | x)`` solves, and that equality is what
-        ``tests/test_rebind.py`` asserts rather than assuming.
+        Results taken before the rebind stop reading: it replaces the label
+        frames every reader joins through, so read out what you need first.
 
-        **Results from before it stop reading.** A rebind replaces the label
-        frames every reader joins through, so read out what you need first —
-        which is what a Benders loop does anyway, taking its duals before it
-        moves the cut table.
+        Args:
+            sources: Only what changed; the rest keeps what :func:`build`
+                bound. A dimension index as well as a parameter, which is how
+                a coordinate set grows.
+            coords: Dimension labels, likewise only where they changed.
+
+        Returns:
+            This object, so a driver can chain.
+
+        Raises:
+            DataError: A name the model does not declare — a rebind that named
+                nothing would silently re-solve the numbers already bound.
         """
         self._sources.update(_known(sources, {**self._schema.parameters, **self._schema.dimensions}, 'sources'))
         self._coords.update(_known(coords or {}, self._schema.dimensions, 'coords'))
@@ -153,19 +156,33 @@ class BoundModel:
         *,
         solver_options: Mapping[str, Any] | None = None,
     ) -> Result:
-        """Sink the built model straight into a solver and solve it.
-
-        ``solver_name`` picks the sink and ``solver_options`` is forwarded
-        verbatim in that solver's vocabulary; both are the *caller's* choice at
-        the call, no YAML file being able to express either.
+        """Hand the built model to a solver and solve it.
 
         A solver that can stay loaded is kept between calls, so a rebound model
         re-solves from the basis the last one ended on.
+
+        Args:
+            solver_name: ``highs``, which ships with the package, or
+                ``gurobi``, which needs the ``[gurobi]`` extra.
+            solver_options: Forwarded to the solver verbatim, in its own
+                vocabulary (``{'time_limit': 60}``).
+
+        Returns:
+            The solution, holding this model.
+
+        Raises:
+            LpspecError: A solver name nothing serves, or one this environment
+                cannot run.
         """
         return self._engine.solve(solver_name, solver_options=solver_options)
 
     def write(self, path: str | Path) -> None:
-        """Sink the built model to a file; the **suffix** picks the writer."""
+        """Stream the built model to *path*, in the format its suffix names.
+
+        Raises:
+            ValueError: A suffix nothing writes.
+            NotImplementedError: A format that is planned and not here yet.
+        """
         self._engine.write(path)
 
     def diagnostics(self) -> Diagnostics:
@@ -214,16 +231,20 @@ def build(
 ) -> BoundModel:
     """Bind *sources* to *model* and build it — the model with your data on it.
 
-    ``sources`` maps parameter names to parquet paths or in-memory tables (and
-    optionally dimension names to index tables). One build can feed more than
-    one sink: call ``bound.solve()`` and ``bound.write(path)`` on the same
-    object, and ``bound.rebind(...)`` to put new numbers on it.
+    Args:
+        model: A YAML path, a mapping, or a loaded :class:`Model`.
+        sources: Parameter names to parquet paths or in-memory tables, and
+            optionally dimension names to index tables.
+        coords: Dimension labels neither *sources* nor the YAML carries.
 
-    Raises
-    ------
-    LanguageError
-        If the model uses a construct outside the streaming language —
-        the message names the construct and its context.
+    Returns:
+        The bound model. It feeds any number of sinks — ``bound.solve()`` and
+        ``bound.write(path)`` on the same object — and ``bound.rebind(...)``
+        puts new numbers on it.
+
+    Raises:
+        LanguageError: A construct outside the streaming language.
+        DataError: A source that is missing, unreadable, or the wrong shape.
     """
     return BoundModel(load_model(model), sources, coords)
 
@@ -236,24 +257,26 @@ def solve(
     solver_options: Mapping[str, Any] | None = None,
     **build_kwargs: Any,
 ) -> Result:
-    """Build and solve in one call.
+    """Build *model* and solve it in one call.
 
-    ``solver_name`` picks the sink — ``highs``, which ships with the package,
-    or ``gurobi``, needing the ``[gurobi]`` extra. linopy's spelling, and the
-    *caller's* decision: the same file solves the same model either way, so
-    nothing in the YAML names a solver. ``solver_options`` is forwarded
-    verbatim in that solver's vocabulary; build options stay separate, never
-    reaching the solver.
+    The one-shot spelling: a caller who will solve the same model again with
+    new numbers wants :func:`build` and :meth:`BoundModel.rebind`.
 
-    The built model stays attached to the returned :class:`Result`, whose label
-    frames back ``result.primal(...)``; nothing has to be released, though
-    ``result.close()`` drops a large model early. A caller who will solve the
-    same model again with new numbers wants :func:`build` and ``rebind``, this
-    being the one-shot spelling.
+    Args:
+        model: A YAML path, a mapping, or a loaded :class:`Model`.
+        sources: As :func:`build` takes them.
+        solver_name: ``highs``, which ships with the package, or ``gurobi``,
+            which needs the ``[gurobi]`` extra.
+        solver_options: Forwarded to the solver verbatim, in its own
+            vocabulary (``{'time_limit': 60}``).
+        **build_kwargs: Passed to :func:`build`.
 
-    The sink is resolved before the build, as ``write`` checks the suffix
-    first: a caller who named a sink nothing can serve should not pay for a
-    model.
+    Returns:
+        The solution, the built model still attached to it. ``result.close()``
+        releases that model.
+
+    Raises:
+        LpspecError: A solver name nothing serves — checked before the build.
     """
     solver(solver_name)
     bound = build(model, sources, **build_kwargs)
@@ -270,11 +293,20 @@ def write(
     out: str | Path,
     **build_kwargs: Any,
 ) -> Path:
-    """Build and stream the model to a file; format from the suffix.
+    """Build *model* and stream it to a file, in the format *out*'s suffix names.
 
-    Which formats exist is the writer family's answer, not a branch here — this
-    verb owns *when* to build. The suffix is checked **before** the build, so a
-    caller who named a format nothing can write does not pay for a model first.
+    Args:
+        model: A YAML path, a mapping, or a loaded :class:`Model`.
+        sources: As :func:`build` takes them.
+        out: Where to write; ``.lp`` is what ships.
+        **build_kwargs: Passed to :func:`build`.
+
+    Returns:
+        The path written.
+
+    Raises:
+        ValueError: A suffix nothing writes — checked before the build.
+        NotImplementedError: A format that is planned and not here yet.
     """
     out = Path(out)
     writer(out.suffix.lower())

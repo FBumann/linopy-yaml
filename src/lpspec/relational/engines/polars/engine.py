@@ -151,7 +151,6 @@ class PolarsEngine:
         so a driver that re-solves in a loop stays at one model's peak; what
         the loaded solver holds survives as the digest it recorded at its load.
         """
-
         self._reset()
         self._generation += 1
 
@@ -244,7 +243,6 @@ class PolarsEngine:
         than materialising them to be dropped. The label then goes too, having
         been the order's witness and nothing else.
         """
-
         start = self._n_cols
         labelled, self._n_cols = labels.frame(self._q, v.dims, v.where, 'var_label', start)
         self._variables[v.name] = labelled.lazy()
@@ -280,7 +278,6 @@ class PolarsEngine:
         narrows when rows go termless: the run of labels a declaration owns is
         what survived, not what it declared (#561).
         """
-
         lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs")
         rhs = self._q.expression(c.rhs, f"constraint '{c.name}' rhs")
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
@@ -405,7 +402,6 @@ class PolarsEngine:
         against a best case that is a wash (#581). ``obj`` carries no order
         contract anyway.
         """
-
         comp = self._q.expression(o.expression, 'objective')
         for p in comp.consts:
             if p.dims:
@@ -450,11 +446,11 @@ class PolarsEngine:
         )
 
     def write(self, path: str | Path) -> None:
-        """Sink the built model to a file; the **suffix** picks the writer.
+        """Stream the built model to *path*, in the format its suffix names.
 
-        The caller names an output rather than a writer, unlike :meth:`solve`:
-        a file's format is a property of the file, where which solver runs is a
-        property of nothing but the call.
+        Raises:
+            ValueError: A suffix nothing writes.
+            NotImplementedError: A format that is planned and not here yet.
         """
         path = Path(path)
         sinks.writer(path.suffix.lower())(self._tables(), path)
@@ -466,26 +462,28 @@ class PolarsEngine:
         solver_options: Mapping[str, Any] | None = None,
         batch_rows: int | None = None,
     ) -> Result:
-        """Sink the built model straight into a solver and solve it.
+        """Hand the built model to a solver and solve it.
 
-        ``solver_name`` picks the sink — ``highs``, which ships with the
-        package, or ``gurobi``, needing the ``[gurobi]`` extra. A *caller's*
-        choice at the call, spelled linopy's way: no YAML file can express it,
-        a model meaning the same thing whoever solves it.
-
-        ``solver_options`` is forwarded verbatim in the solver's own vocabulary
-        (``{'time_limit': 60, 'mip_rel_gap': 0.01}``). ``batch_rows`` is the
-        hand-off budget in elements, defaulting to the sink's own
-        (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`) — this
-        engine method's parameter alone, kept off the public handle: nothing
-        outside the chunking tests sets it.
-
-        **The solver stays loaded where it can**, which is
+        The solver stays loaded where it can, which is
         :func:`~lpspec.relational.sinks.solvers.loaded`'s decision and not this
         method's: a rebound model has its new numbers pushed onto what the
         solver already holds, and one whose structure moved is loaded again.
         All that is kept here is the solver itself and the two counters
         :meth:`diagnostics` reports, the answer being the same either way.
+
+        Args:
+            solver_name: ``highs``, which ships with the package, or
+                ``gurobi``, which needs the ``[gurobi]`` extra.
+            solver_options: Forwarded to the solver verbatim, in its own
+                vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
+            batch_rows: The hand-off budget in elements, defaulting to the
+                sink's own
+                (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
+                This method's parameter alone, kept off the public handle:
+                nothing outside the chunking tests sets it.
+
+        Returns:
+            The solution, holding this engine and the build it answered.
         """
         tables = self._tables()
         held = self._solver

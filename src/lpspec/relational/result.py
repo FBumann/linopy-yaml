@@ -69,15 +69,9 @@ def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) ->
 class Diagnostics:
     """What a build and its solves did that the answer does not show.
 
-    One accessor rather than a reader per fact, so that watching a build stays
-    one question — and because these answer *what is this model*, where the
-    handle's own methods answer *what do I do with it*
-    (docs/ARCHITECTURE.md, "the Python surface").
-
-    **Advisory, all of it.** Nothing about an answer depends on any field, and
-    a caller who branches on one has made this engine's bookkeeping part of
-    their model. They are here to be read when a loop is slower or smaller
-    than it should be.
+    Advisory, all of it: no answer depends on any field, and a caller who
+    branches on one has made this engine's bookkeeping part of their model.
+    Read them when a loop is slower or smaller than it should be.
     """
 
     #: The shape the solver was handed: columns, rows, and matrix entries.
@@ -111,26 +105,16 @@ class Diagnostics:
 class Result:
     """What a solve returned — the outcome, and access to any values.
 
-    Named for linopy's envelope rather than its ``Solution``: it is returned
-    when the solve produced *nothing*, so "solution" would be a lie in exactly
-    the case a caller most needs to notice.
+    Returned whatever the solve concluded: test :attr:`has_primal` before
+    reading values, or catch :class:`~lpspec.errors.NoSolutionError`. The
+    values are this result's own, so a later solve on the same model does not
+    rewrite them, and there is no lifetime to manage — :meth:`close` releases
+    a large model early, and nothing breaks without it.
 
-    **No lifetime to manage.** The model is frames this process owns, so the
-    readers stay valid as long as the object does; :meth:`close` releases a
-    large one early but nothing breaks without it.
-
-    **Its values are its own** — held here rather than read back off the
-    engine, so a later solve cannot rewrite what an earlier result reports.
-    Only the label frames are shared, and a re-solve does not touch them. That
-    matters once a caller retains several results, which a sweep, a rolling
-    horizon and Benders all do.
-
-    **A rebind is the exception, and it is the one lifetime here.** Rebinding
-    replaces the label frames the readers join through, so a result from before
-    it stops reading rather than laying its values out over coordinates that
-    are no longer the ones they were computed on. Read out what you need first
-    — ``to_pandas``, ``to_parquet``, or ``primal`` itself, all of which return
-    frames that are their own data.
+    A rebind is the one exception: it replaces the label frames the readers
+    join through, so a result taken before it stops reading. Read out what you
+    need first — ``to_pandas``, ``to_parquet``, or ``primal`` itself, all of
+    which return frames that are their own data.
     """
 
     _status: SolveStatus
@@ -156,12 +140,12 @@ class Result:
 
     @property
     def termination_condition(self) -> str:
-        """What the solver said — ``optimal``, ``infeasible``, ``time_limit``…"""
+        """What the solver said — ``optimal``, ``infeasible``, ``time_limit`` and so on."""
         return self._status.termination_condition
 
     @property
     def is_ok(self) -> bool:
-        """linopy's rollup: not an error, an abort or a refusal."""
+        """The linopy rollup: not an error, an abort or a refusal."""
         return self._status.is_ok
 
     @property
@@ -203,25 +187,29 @@ class Result:
         )
 
     def primal(self, name: str) -> pl.DataFrame:
-        """The tidy solution of *name* — ``(dims…, value)``.
+        """The tidy solution of variable *name* — ``(dims…, value)``.
 
-        Rows come back in **label order** — row-major over the variable's
-        coordinate product, what ``var_label`` already encodes and what the LP
-        sink writes — so two reads agree, two runs agree, and a solution file
-        can be diffed.
+        Rows come back in label order, row-major over the variable's coordinate
+        product, so two reads and two runs agree.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            LpspecError: The model was rebound after this solve.
+            KeyError: No variable is called *name*.
         """
         self._require_solution(f"the primal of '{name}'")
         return self._engine._primal(name, self._primal_values)
 
     def dual(self, name: str) -> pl.DataFrame:
-        """Shadow prices of constraint *name*: ``(dims…, value)``.
+        """Shadow prices of constraint *name* — ``(dims…, value)``.
 
-        :meth:`primal` against the row frame rather than a column one, in that
-        method's order. The two empty cases are different failures and both
-        raise rather than return zeros: no values at all is
-        :class:`~lpspec.errors.NoSolutionError`, primals without duals — any
-        integer variable makes them undefined — a
-        :class:`~lpspec.errors.LpspecError`.
+        :meth:`primal`'s shape and order, over constraint rows.
+
+        Raises:
+            NoSolutionError: The solve left no values at all.
+            LpspecError: It left primals but no duals — an integer variable
+                makes them undefined — or the model was rebound since.
+            KeyError: No constraint is called *name*.
         """
         self._require_solution(f"the dual of '{name}'")
         if self._dual_values is None:
@@ -234,44 +222,41 @@ class Result:
         return tidy_to_pandas(self._engine._primal(name, self._primal_values))
 
     def to_dataarray(self, name: str) -> xr.DataArray:
-        """``primal(name)`` as a labelled :class:`xarray.DataArray`.
+        """:meth:`primal` as a labelled :class:`xarray.DataArray`.
 
-        The bridge to array post-processing — ``.sel``, resampling, duration
-        curves. A masked coordinate has no row and comes back NaN.
+        Dense over the variable's dims: a masked coordinate comes back NaN.
         """
         return tidy_to_dataarray(self.to_pandas(name), name)
 
     def to_dataset(self, *names: str) -> xr.Dataset:
-        """Variables as one :class:`xarray.Dataset`; all of them by default.
+        """The named variables as one :class:`xarray.Dataset`; all by default.
 
-        Costs what it says: each variable arrives dense over its own dims,
-        whatever the mask removed, and all of them at once. On a large model,
-        name the few you need or use :meth:`to_parquet`.
+        Each arrives dense over its own dims, all at once — on a large model
+        name the few you need, or use :meth:`to_parquet`.
         """
         assert self._engine._program is not None
         wanted = names or tuple(v.name for v in self._engine._program.variables)
         return tidy_to_dataset(wanted, self.to_dataarray)
 
     def to_parquet(self, directory: str | Path) -> dict[str, Path]:
-        """One parquet file per variable, ``(dims…, value)``. Returns name → path.
+        """Write one parquet file per variable into *directory*.
 
-        Sunk straight to disk, never copied into a second representation, in
-        :meth:`primal`'s order — so the same model and data write the same
-        bytes.
+        Streamed to disk in :meth:`primal`'s order, so the same model and data
+        write the same bytes.
+
+        Returns:
+            Each variable's name, mapped to the file it was written to.
         """
         self._require_solution('the solution')
         return self._engine._solution_to_parquet(Path(directory), self._primal_values)
 
     def close(self) -> None:
-        """Release the built model early. Optional — see the class docstring.
+        """Release the built model and this result's values. Optional.
 
-        Drops this result's own values as well as the shared model, so closing
-        still frees everything one solve allocated; a sibling result keeps its.
-
-        A result the model has outgrown releases only its own values: the
-        built model it names is no longer the one it answered, and closing a
-        rebound model on the way out of an old ``with`` block would take the
-        live one down.
+        Frames already read stay valid; the readers stop working. A result the
+        model has outgrown releases only its own values — the built model it
+        names is no longer the one it answered, and closing a rebound model on
+        the way out of an old ``with`` block would take the live one down.
         """
         self._primal_values = self._dual_values = None
         self._closed = True

@@ -151,9 +151,12 @@ class Gurobi(Solver):
         self._m.update()
 
     def _run(self, model: ModelTables) -> Answer:
-        """Gurobi refuses the attribute where there is no primal or no dual
+        """Solve what is loaded and read it back.
+
+        Gurobi refuses the attribute where there is no primal or no dual
         rather than handing back zeros, which is the one place it makes this
-        easier than HiGHS."""
+        easier than HiGHS.
+        """
         self._m.optimize()
         status = _status_of(self._m)
         if not status.is_readable:
@@ -249,8 +252,11 @@ def _spelled(gurobipy: Any) -> Any:
 
 
 def _gurobipy() -> Any:
-    """The optional dependency, or :attr:`Gurobi.unavailable_message` — the same sentence
-    the early refusal prints, since it is the same fact arriving later."""
+    """The optional dependency, or :attr:`Gurobi.unavailable_message`.
+
+    The same sentence the early refusal prints, since it is the same fact
+    arriving later.
+    """
     try:
         import gurobipy
         import scipy.sparse  # noqa: F401 — guarded here so the message covers it
@@ -260,9 +266,12 @@ def _gurobipy() -> Any:
 
 
 def _status_of(m: Any) -> SolveStatus:
-    """What the solve concluded, on both axes. ``SolCount`` answers "is there
-    anything here", which the termination condition does not: a run stopped at
-    a limit may or may not hold an incumbent."""
+    """What the solve concluded, on both axes.
+
+    ``SolCount`` answers "is there anything here", which the termination
+    condition does not: a run stopped at a limit may or may not hold an
+    incumbent.
+    """
     code = int(m.Status)
     return SolveStatus(
         termination_condition=_CONDITION_OF_GUROBI_STATUS.get(code, 'unknown'),
@@ -272,9 +281,11 @@ def _status_of(m: Any) -> SolveStatus:
 
 
 def _wording(code: int) -> str:
-    """Gurobi's own name for a status code, read off ``GRB.Status`` rather than
-    tabulated — so one this package has never heard of still arrives
-    searchable."""
+    """Gurobi's own name for a status code.
+
+    Read off ``GRB.Status`` rather than tabulated — so one this package has
+    never heard of still arrives searchable.
+    """
     gurobipy = _gurobipy()
     names = {getattr(gurobipy.GRB.Status, name): name for name in dir(gurobipy.GRB.Status) if not name.startswith('_')}
     return names.get(code, str(code))

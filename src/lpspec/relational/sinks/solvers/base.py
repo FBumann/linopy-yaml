@@ -129,6 +129,10 @@ class Solver(ABC):
 
         A member writes :meth:`_run`; this is the contract around it, so no
         sink can be added that forgets to be checked.
+
+        Returns:
+            The status pair, the objective, and the primal and dual vectors —
+            either of which may be ``None``, as :meth:`_run` describes.
         """
         status, objective, primal, dual = self._run(model)
         self._spans('primal', primal, model.column_count)
@@ -136,8 +140,15 @@ class Solver(ABC):
         return status, objective, primal, dual
 
     def _spans(self, quantity: str, values: pl.Series | None, expected: int) -> None:
-        """``None`` is not a wrong length — a mixed-integer model has no duals,
-        and neither does a run stopped short of a simplex basis."""
+        """Check that a solver vector spans the model.
+
+        ``None`` is not a wrong length — a mixed-integer model has no duals,
+        and neither does a run stopped short of a simplex basis.
+
+        Raises:
+            LpspecError: A vector of any other length, which describes a
+                different model.
+        """
         if values is not None and len(values) != expected:
             raise LpspecError(
                 f'{type(self).__name__} returned {len(values)} {quantity} values for a model with '
