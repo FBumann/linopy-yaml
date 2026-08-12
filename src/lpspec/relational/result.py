@@ -95,8 +95,9 @@ class Result:
     _objective: float
     _executor: PolarsExecutor
     #: The build this answers. The executor's own counter moves past it when
-    #: something rebinds, which is how a stale result knows it is one.
-    _generation: int = 0
+    #: something rebinds, which is how a stale result knows it is one. No
+    #: default — a construction that forgot it would be born stale.
+    _generation: int
     _primal_values: pl.Series | None = None
     _dual_values: pl.Series | None = None
     _closed: bool = False
