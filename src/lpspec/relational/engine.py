@@ -96,9 +96,11 @@ def needs_aggregate(
     per snapshot and their *sum* is the coefficient.
 
     Worth 2-4x of build time on the polars engine's matrix and little on its
-    objective (#408), but the argument is the same at both call sites, so it is
-    written once. What it is worth on the duckdb engine is measured in the PR
-    that gave it one.
+    objective (#408); on the duckdb engine, 0.90-0.94x of build on the three
+    ladder cases with multi-term constraints and nothing on the other four
+    (#638). The gap is what the skipped operator costs: a sort on one engine, a
+    hash aggregate on the other. The argument is the same at both call sites on
+    both engines, so it is written once.
     """
     if any(not t.survives_dropping(set(t.dims) if projected else set()) for t in terms):
         return True
