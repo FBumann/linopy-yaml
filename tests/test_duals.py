@@ -43,9 +43,10 @@ def test_dual_matches_the_eager_lane(dispatch_yaml, dispatch_inputs):
 
         assert actual == pytest.approx(expected.sort_index().to_numpy(), rel=DUAL_RTOL)
 
-        # a price is what the marginal unit costs: with distinct costs and a
-        # binding balance, every dual sits on one of the generator costs.
-        assert set(np.round(actual, 6)) <= set(np.round(data['cost'].to_numpy(), 6))
+        assert set(np.round(actual, 6)) <= set(np.round(data['cost'].to_numpy(), 6)), (
+            'a price is what the marginal unit costs: with distinct costs and a binding balance, '
+            'every dual sits on one of the generator costs'
+        )
 
 
 def test_dual_respects_the_where_mask(dispatch_yaml, dispatch_inputs):
@@ -86,8 +87,7 @@ def test_milp_refuses_duals_and_names_the_variable(commitment_inputs):
         message = str(excinfo.value)
         assert 'mixed-integer' in message
         assert "'u'" in message, 'the refusal should name the non-continuous variable'
-        # the primal is still perfectly readable — only duals are undefined
-        assert len(run.result.primal('u')) > 0
+        assert len(run.result.primal('u')) > 0, 'the primal is still perfectly readable — only duals are undefined'
 
 
 def test_infeasible_solve_refuses_duals(dispatch_yaml, dispatch_inputs):
@@ -98,8 +98,7 @@ def test_infeasible_solve_refuses_duals(dispatch_yaml, dispatch_inputs):
     than reporting the narrower "this model has no duals".
     """
     data, coords = dispatch_inputs
-    # demand every generator together cannot meet, at every snapshot
-    data = dict(data, load=pd.Series(1e6, index=coords['snapshot']))
+    data = dict(data, load=pd.Series(1e6, index=coords['snapshot']))  # more than every generator together
 
     with lps.solve(dispatch_yaml, data, coords=coords) as result:
         assert not result.has_primal
@@ -107,8 +106,7 @@ def test_infeasible_solve_refuses_duals(dispatch_yaml, dispatch_inputs):
 
         with pytest.raises(NoSolutionError, match='cannot read the dual'):
             result.dual('power_balance')
-        # …and the same refusal, same class, for the primal
-        with pytest.raises(NoSolutionError):
+        with pytest.raises(NoSolutionError):  # the same refusal, same class, for the primal
             result.primal('p')
 
 
@@ -137,11 +135,13 @@ RAMP_BLOCK = {
 @pytest.mark.parametrize(
     ('asked', 'expected'),
     [
-        # a family name: nearest-match is actively unhelpful, since it picks one
-        # sibling and implies the other is not there
-        ('ramp', 'but 2 begin with it — ramp_down, ramp_up'),
-        ('ramp_dwn', "Did you mean 'ramp_down'?"),
-        ('zzz', 'Declared: ramp_down, ramp_up.'),
+        pytest.param(
+            'ramp',
+            'but 2 begin with it — ramp_down, ramp_up',
+            id='a-family-name-where-nearest-match-would-imply-the-sibling-is-absent',
+        ),
+        pytest.param('ramp_dwn', "Did you mean 'ramp_down'?", id='a-typo'),
+        pytest.param('zzz', 'Declared: ramp_down, ramp_up.', id='nothing-like-it'),
     ],
 )
 def test_reading_back_an_unknown_name_says_what_was_built(asked, expected):

@@ -5,14 +5,11 @@ the Arrow PyCapsule protocol — and *what the query is written against*. Bindin
 is the only phase that touches a caller's data; everything downstream reads
 :class:`BoundSources` and nothing else.
 
-**It is frozen, and that is the point.** The four things here are written once,
-during the three passes below, and are then read exactly twice: to construct
-the compiler and the labeller. Holding them as a value rather than as four
-dicts on the executor is what says so — and it separates them from the one
-registry that is deliberately *live*, the variable frames, which appear as
-declarations are built and which a constraint compiled afterwards has to see.
-Three adjacent ``dict[str, pl.LazyFrame]`` attributes could not say which of
-them was which.
+**It is frozen, and that is the point.** Written once by the passes below,
+then read to construct the compiler and the labeller. Holding it as a value
+rather than as four dicts on the executor is what separates it from the one
+registry that is deliberately *live* — the variable frames, which appear as
+declarations build and which a constraint compiled afterwards has to see.
 """
 
 from __future__ import annotations
@@ -57,19 +54,31 @@ class BoundSources:
     cardinality: Mapping[str, int]
     boolean_parameters: frozenset[str]
 
+    def is_enum_encoded(self, dim: str) -> bool:
+        """Whether :meth:`_Binder.encode_dimensions` gave *dim* an ``Enum``.
+
+        Asked by both consumers of the encoding — the compiler reads the
+        physical code as an ordinal for free, and the executor casts back to
+        ``String`` on the way out — and answered here, where the encoding is
+        decided, so the two cannot come to disagree about which dims have one.
+        """
+        return self.dimensions[dim].collect_schema()['val'] == pl.Enum
+
 
 def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
     """Adapt *sources* to the frames *program* is written against.
 
     Four passes, and the order is load-bearing. Dimensions with an index of
-    their own come first, so a parameter's labels can be checked against them
-    in the pass that binds it rather than in a second one over the same rows.
-    The parameters follow. The remaining dimensions are *derived* from those
-    parameters, so they cannot be built until they exist — and a derived
-    dimension has no strangers to find, its labels being the union of what
-    arrived. Encoding comes last for the same reason: a dimension's ``Enum``
-    is built from its labels, and a derived dimension has none until the
-    parameters have all bound.
+    their own come first, so a parameter's labels are checked in the pass that
+    binds it rather than a second one over the same rows. The remaining
+    dimensions are *derived* from those parameters and cannot be built until
+    they exist — and have no strangers to find, their labels being the union of
+    what arrived. Encoding comes last: a dimension's ``Enum`` is built from its
+    labels, which a derived dimension has only once the parameters have bound.
+
+    Raises:
+        DataError: A source missing, unreadable, or not carrying what its
+            declaration needs.
     """
     binder = _Binder(program, sources)
     binder.sourced_dimensions()
@@ -99,43 +108,53 @@ class _Binder:
     # -- parameters --------------------------------------------------------
 
     def parameter(self, p: plan.ParameterDeclaration) -> None:
-        """Bind one parameter's source and register it as a tidy frame."""
+        """Bind one parameter's source and register it as a tidy frame.
 
+        The one collect in this file on the streaming engine, its result being
+        the one that is model-sized: switching every collect costs a double-digit
+        percentage of wall on a small join-heavy model, to save the peak this one
+        saves alone (#370).
+
+        Validation runs before the string cast — a dictionary-encoded column
+        compares on its codes, and widening to strings first doubles the check.
+        """
         if p.name not in self.sources:
             raise DataError(f"no source bound for parameter '{p.name}'")
-        frame = self._source_frame(p.name, self.sources[p.name])
+        frame = self._read(
+            self.sources[p.name],
+            f"source for parameter '{p.name}' must be a parquet path or a table polars can "
+            f'read — polars, pyarrow, pandas (got {type(self.sources[p.name]).__name__})',
+        )
         wanted = [*p.dims, 'value']
-        missing = set(wanted) - set(frame.collect_schema().names())
+        available = frame.collect_schema().names()
+        missing = set(wanted) - set(available)
         if missing:
             raise DataError(
                 f"source for parameter '{p.name}' is missing columns {sorted(missing)} "
-                f"(need dims {list(p.dims)} plus 'value')"
+                f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
+                f'the declared dims, or drop the index names to bind positionally.'
             )
-        # streaming here and nowhere else in this file: this is the one
-        # collect whose result is model-sized, so it is the one the engine
-        # choice moves. `collect()` defaults to the in-memory engine — unlike
-        # `sink_csv`, whose default resolves to streaming — and switching every
-        # collect costs 29% on a small join-heavy model to save the same 0.15 GB
-        # this one saves alone.
         frame = frame.select(wanted).collect(engine='streaming').lazy()
-        # before the cast, not after: a dictionary-encoded column compares on
-        # its codes, and widening it to strings first doubles the check
         data_validation.check_one_row_per_coordinate(p, frame, self.dimensions)
         frame = _plain_strings(frame, p.dims)
         if frame.collect_schema()['value'] == pl.Boolean:
             self.boolean.add(p.name)
         self.parameters[p.name] = frame
 
-    def _source_frame(self, name: str, source: Any) -> pl.LazyFrame:
+    def _read(self, source: Any, unreadable: str) -> pl.LazyFrame:
+        """A caller's source as a lazy frame, or *unreadable* as a data error.
+
+        The one place a path is told from a table: a path is scanned, so the
+        engine reads it directly, and anything else has to be table-shaped.
+        The message is the caller's because what the source was *for* — a
+        parameter, a dimension's index — is what makes it actionable.
+        """
         if isinstance(source, (str, Path)):
             return pl.scan_parquet(source)
         frame = as_frame(source)
-        if frame is not None:
-            return frame
-        raise DataError(
-            f"source for '{name}' must be a parquet path or a table polars can "
-            f'read — polars, pyarrow, pandas (got {type(source).__name__})'
-        )
+        if frame is None:
+            raise DataError(unreadable)
+        return frame
 
     # -- dimensions --------------------------------------------------------
 
@@ -149,14 +168,14 @@ class _Binder:
         """Build every dimension's frame, then check its coordinates.
 
         A dimension with no explicit index has no declared order, so its labels
-        are sorted. Containment runs once every frame exists: it stops a
+        are sorted. Dimensions already registered by :meth:`sourced_dimensions`
+        are skipped. Containment runs once every frame exists: it stops a
         mistyped coordinate from vanishing in the join that places its terms,
         leaving a model that builds and solves without them.
         """
-
         dims = self._declared_dims()
         for d in sorted(dims):
-            if d in self.dimensions:  # built by `sourced_dimensions`
+            if d in self.dimensions:
                 continue
             carried = self.program.dimension(d).carried
             if d in self.sources:
@@ -192,20 +211,19 @@ class _Binder:
     def _explicit_frame(self, d: str, source: Any, names: list[str]) -> pl.LazyFrame:
         """A dimension's ``(val, ord, coordinates…)`` from a caller's index.
 
-        Ordinals follow the source's own order, so a translation moves by
-        position exactly as the eager lane does even for string labels. A
-        label's position is the row it first appears at.
-        """
+        Ordinals follow the source's own order — a label's position is the row
+        it first appears at — so a translation moves by position exactly as the
+        eager lane does, even for string labels.
 
-        if isinstance(source, (str, Path)):
-            frame = pl.scan_parquet(source)
-        else:
-            frame = as_frame(source)
-            if frame is None:
-                raise DataError(
-                    f"explicit index for dimension '{d}' must be a table polars can read "
-                    f"with a '{d}' column, or a parquet path"
-                )
+        Collected once, the frame being a scan: every pass over a lazy view
+        re-reads the source (#273), and both the single-valued check and the
+        grouping below read that one collect.
+        """
+        frame = self._read(
+            source,
+            f"explicit index for dimension '{d}' must be a table polars can read "
+            f"with a '{d}' column, or a parquet path",
+        )
         available = frame.collect_schema().names()
         if d not in available:
             raise DataError(
@@ -217,26 +235,15 @@ class _Binder:
             raise DataError(
                 f"index for dimension '{d}' is missing declared coordinate column(s) {missing} (has {available})"
             )
-        # One pass, and one collect. The single-valued check needs an
-        # `n_unique` per coordinate grouped by `d`, which is the aggregate this
-        # is already running — so the counts ride in it rather than costing a
-        # `group_by` each, over a frame that is a scan and would be re-read
-        # every time (#273).
-        grouped = (
-            frame.select(d, *names)
-            .with_row_index(_ROW_POSITION)
-            .group_by(d)
-            .agg(
-                pl.col(_ROW_POSITION).min(),
-                *(pl.col(c).first() for c in names),
-                *data_validation.nunique_exprs(names),
-            )
+        labelled = frame.select(d, *names).with_row_index(_ROW_POSITION).collect().lazy()
+        data_validation.check_coordinates_single_valued(d, names, labelled)
+        return (
+            labelled.group_by(d)
+            .agg(pl.col(_ROW_POSITION).min(), *(pl.col(c).first() for c in names))
             .sort(_ROW_POSITION)
             .with_row_index('ord')
-            .collect()
+            .select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64), *names)
         )
-        data_validation.check_coordinates_single_valued(d, names, grouped)
-        return grouped.lazy().select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64), *names)
 
     def _register(self, d: str, table: pl.LazyFrame) -> None:
         materialised = table.collect()
@@ -246,15 +253,15 @@ class _Binder:
     def encode_dimensions(self) -> None:
         """Every string dimension becomes an ``Enum`` over its labels, in ordinal order.
 
-        One dictionary per dimension, applied to every frame carrying it, so
-        downstream joins meet ``Enum`` against ``Enum`` with equal categories
-        by construction. A dim column costs a code instead of a string for the
-        model's lifetime — retained label frames -23%, emit 0.90-0.95x, the
-        encode itself ~16 ms per 10M rows (PR #541).
+        One dictionary per dimension applied to every frame carrying it, so
+        downstream joins meet ``Enum`` against ``Enum`` with equal categories by
+        construction. A dim column then costs a code instead of a string for the
+        model's lifetime, which shrinks the retained label frames and the emit
+        alike for an encode that is cheap per row (#541).
 
-        Running after every check is what makes the strict cast safe: each
-        label was already probed against its dimension, so a failure here is
-        an engine bug, not a data error.
+        Running after every check is what makes the strict cast safe — each
+        label was already probed against its dimension, so a failure here is an
+        engine bug rather than a data error.
         """
         materialised = {d: table.collect() for d, table in self.dimensions.items()}
         enums = {d: pl.Enum(f['val']) for d, f in materialised.items() if f.schema['val'] == pl.String}

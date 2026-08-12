@@ -1,0 +1,38 @@
+myopic pathway — each period sees only itself, and inherits the last
+
+shape: (3, 3)
+┌──────┬───────────────────────┬────────────┐
+│ year ┆ termination_condition ┆ objective  │
+│ ---  ┆ ---                   ┆ ---        │
+│ i64  ┆ str                   ┆ f64        │
+╞══════╪═══════════════════════╪════════════╡
+│ 2030 ┆ optimal               ┆ 7.956625e6 │
+│ 2035 ┆ optimal               ┆ 9.792319e6 │
+│ 2040 ┆ optimal               ┆ 9.732388e6 │
+└──────┴───────────────────────┴────────────┘
+
+fleet after each period (MW)
+shape: (3, 3)
+┌──────┬───────┬───────┐
+│ year ┆ solar ┆ gas   │
+│ ---  ┆ ---   ┆ ---   │
+│ i32  ┆ f64   ┆ f64   │
+╞══════╪═══════╪═══════╡
+│ 2030 ┆ 25.0  ┆ 86.2  │
+│ 2035 ┆ 144.7 ┆ 106.2 │
+│ 2040 ┆ 173.7 ┆ 127.5 │
+└──────┴───────┴───────┘
+
+built in each period (MW)
+shape: (3, 3)
+┌──────┬───────┬──────┐
+│ year ┆ solar ┆ gas  │
+│ ---  ┆ ---   ┆ ---  │
+│ i32  ┆ f64   ┆ f64  │
+╞══════╪═══════╪══════╡
+│ 2030 ┆ 25.0  ┆ 26.2 │
+│ 2035 ┆ 119.7 ┆ 20.0 │
+│ 2040 ┆ 28.9  ┆ 21.2 │
+└──────┴───────┴──────┘
+
+each period starts from the fleet the last one left, across 3 periods

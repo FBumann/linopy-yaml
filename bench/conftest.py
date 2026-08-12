@@ -93,10 +93,6 @@ TRACKED = (
 )
 
 
-# `optionalhook` because this is pytest-benchmark's hook and pytest-benchmark is
-# not always installed: the CodSpeed job runs this same suite with only
-# pytest-codspeed, and pluggy rejects an implementation whose spec no plugin
-# registered — as an INTERNALERROR, before a single test runs.
 @pytest.hookimpl(optionalhook=True)
 def pytest_benchmark_update_machine_info(config: pytest.Config, machine_info: dict[str, Any]) -> None:
     """Stamp the result file with what was installed when it ran.
@@ -105,6 +101,11 @@ def pytest_benchmark_update_machine_info(config: pytest.Config, machine_info: di
     commit *and whether the tree was dirty*, which is the fingerprint the old
     runner shelled out to git for. It does not record dependency versions, and
     those are what a published ratio is actually a ratio of.
+
+    ``optionalhook`` because the spec is pytest-benchmark's and that plugin is
+    not always installed: the CodSpeed job runs this same suite with only
+    pytest-codspeed, and pluggy rejects an implementation whose spec no plugin
+    registered — as an INTERNALERROR, before a single test runs.
     """
     from importlib.metadata import PackageNotFoundError, version
 

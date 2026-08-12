@@ -28,10 +28,8 @@ and at the declaration level::
 The direction that matters most is the *stray* dim: one the frame does not
 declare broadcasts silently in the eager lane and adds coordinate columns in
 the relational one, so the same YAML quietly builds a bigger model than it
-reads as — exactly what a memory budget cannot absorb. The missing direction
-is checked too, since a foreach dim the equation never uses just repeats one
-row across it, which is nearly always a typo. Requiring equality costs
-nothing: every model in `examples/` and the test suite already satisfies it.
+reads as. The missing direction is checked too, a foreach dim the equation
+never uses just repeating one row across it — nearly always a typo.
 """
 
 from __future__ import annotations
@@ -88,6 +86,9 @@ def dims_of(
     ``external`` gives the dims of variables that live on a model rather than
     in this schema — ``linopy.extend()``'s case, mirroring how
     ``known_variables`` widens the namespace.
+
+    Raises:
+        DimensionError: On the first rule broken.
     """
     if isinstance(node, ComparisonNode):
         return _dims(node.left, schema, context, external) | _dims(node.right, schema, context, external)
@@ -102,14 +103,13 @@ def _dims(
 ) -> frozenset[str]:
     """The recursive worker under :func:`dims_of`.
 
-    A binary operator takes the *union* of its sides, deliberately without a
-    subset check: an outer product is legitimate when the frame declares the
-    result — the convex-piecewise epigraph multiplies a per-segment slope by
-    a per-snapshot variable and wants one row per (snapshot, generator,
-    segment). What must not be silent is the *declaration* disagreeing, and
-    ``dims == foreach`` in :func:`check_schema` catches that at the point
-    where model size is actually decided. A variable absent from the schema
-    is one already on the model, with its dims in ``external``.
+    A binary operator takes the *union* of its sides with no subset check: an
+    outer product is legitimate when the frame declares the result — the
+    convex-piecewise epigraph multiplies a per-segment slope by a per-snapshot
+    variable and wants one row per (snapshot, generator, segment). What must
+    not be silent is the *declaration* disagreeing, which ``dims == foreach``
+    in :func:`check_schema` catches where model size is decided. A variable
+    absent from the schema is one already on the model, its dims in *external*.
     """
     if isinstance(node, NumberNode):
         return frozenset()
@@ -146,12 +146,10 @@ def _dims_call(
 ) -> frozenset[str]:
     """The dim rule of one helper call.
 
-    ``group_by`` reduces the ``over`` dim *into* another rather than away:
-    the terms land on the dim the coordinate targets instead of on nothing.
-    ``at`` is the adjoint of ``sum``, and deliberately takes the same two
-    arguments — ``(over, by)`` names one mapping table, and which way it is
-    walked is the helper: ``sum`` consumes the dim that *declares* the
-    coordinate, ``at`` the dim it *targets*.
+    ``group_by`` reduces the ``over`` dim *into* another rather than away.
+    ``at`` is the adjoint of ``sum`` and takes the same two arguments, one
+    mapping table walked either way: ``sum`` consumes the dim that *declares*
+    the coordinate, ``at`` the dim it *targets*.
     """
     if node.name == 'sum':
         inner = _dims(node.args[0], schema, context, external)
@@ -224,11 +222,14 @@ def check_schema(
     schema: Model,
     external: Mapping[str, Sequence[str]] = MappingProxyType({}),
 ) -> None:
-    """Check every declaration's dim rules. Raises :class:`DimensionError`.
+    """Check every declaration's dim rules.
 
     ``external`` maps variables already on a model to their dims, so
     ``linopy.extend()`` can reference them (hard rule 5 keeps parameters
     schema-local, but variables legitimately come from the model argument).
+
+    Raises:
+        DimensionError: On the first declaration that breaks one.
     """
     ns = Namespace.of(schema, external)
 
@@ -278,9 +279,9 @@ def _check_where_dims(
 ) -> None:
     """A predicate may only test dims the frame carries.
 
-    The eager lane used to reduce an outside dim with ``any()`` before
-    broadcasting — a mask that fails *open*, silently including everything.
-    Both lanes reject it now, and they reject it here, at load time.
+    Reducing an outside dim to fit — with ``any()``, say — is a mask that fails
+    *open*, silently including everything. Both lanes reject it, and they
+    reject it here, at load time.
     """
     if node is None:
         return

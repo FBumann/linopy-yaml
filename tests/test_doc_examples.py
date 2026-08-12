@@ -59,11 +59,7 @@ from lpspec.relational.result import Result
 try:
     from lpspec import linopy as linopy_lane
 except ModuleNotFoundError:
-    # Bare install, no [linopy] extra. The rest of this file is linopy-free and
-    # must still run on the native lane, so the module cannot skip itself the
-    # way tests/oracle.py does — only the checks that need the lane step aside,
-    # and they do it by skipping rather than by quietly checking less.
-    linopy_lane = None
+    linopy_lane = None  # bare install, no [linopy] extra
 
 REPO = Path(__file__).resolve().parent.parent
 TRACKED = [
@@ -74,10 +70,11 @@ TRACKED = [
     'docs/ARCHITECTURE.md',
     'docs/design/ceiling.md',
     'docs/ROADMAP.md',
+    'docs/design/decomposition.md',
 ]
 
-# Names an example may dot into, and the object that decides what is valid.
-# Anything else (pd, np, network, ...) is external and not our contract.
+#: Names an example may dot into, and the object that decides what is valid.
+#: Anything else (pd, np, network, ...) is external and not our contract.
 ROOTS: dict[str, Any] = {
     'lps': lps,
     'lpspec_linopy': linopy_lane,
@@ -86,9 +83,9 @@ ROOTS: dict[str, Any] = {
     'schema': Model,
 }
 
-# Every root an example may name, whether or not this install can resolve it.
-# Recognising an example must not depend on the extras: a linopy-lane example is
-# is still one on a bare install, it just cannot be name-checked.
+#: Every root an example may name, whether or not this install can resolve it.
+#: Recognising an example must not depend on the extras: a linopy-lane example
+#: is still one on a bare install, it just cannot be name-checked.
 ROOT_NAMES = frozenset(ROOTS)
 ROOTS = {name: obj for name, obj in ROOTS.items() if obj is not None}
 
@@ -100,11 +97,11 @@ def _unresolvable(code: str) -> set[str]:
 
 _EXTRA = 'needs the [linopy] extra to check {}'
 
-# A fence may be ``` or ~~~, three or more, indented (inside a list item), and
-# may carry an info string after the language (```python title="a.py"). Matching
-# only the bare form is how a block goes unchecked *without* tripping the
-# coverage guard, which only ever inspects blocks it already matched —
-# `test_every_fence_is_seen` is what actually closes that.
+#: A fence may be ``` or ~~~, three or more, indented (inside a list item), and
+#: may carry an info string after the language (```python title="a.py").
+#: Matching only the bare form is how a block goes unchecked *without* tripping
+#: the coverage guard, which only ever inspects blocks it already matched —
+#: `test_every_fence_is_seen` is what actually closes that.
 _FENCE = re.compile(
     r'(?:^[ \t]*<!--\s*doctest:\s*(?P<note>[^>]*?)\s*-->[ \t]*\n)?'
     r'^[ \t]*(?P<fence>`{3,}|~{3,})[ \t]*(?P<lang>python|yaml)\b[^\n]*\n'
@@ -113,8 +110,8 @@ _FENCE = re.compile(
     re.DOTALL | re.MULTILINE,
 )
 
-# Any fenced block, whatever its language — used only to prove _FENCE saw
-# every block it should have.
+#: Any fenced block, whatever its language — used only to prove _FENCE saw
+#: every block it should have.
 _ANY_FENCE = re.compile(r'^[ \t]*(?P<fence>`{3,}|~{3,})[ \t]*(?P<info>[^\n]*)$', re.MULTILINE)
 
 
@@ -147,6 +144,13 @@ class Block(NamedTuple):
 
 
 def _blocks(lang: str | None = None) -> list[Block]:
+    """Every tracked fenced block, optionally narrowed to one language.
+
+    A block nested in a list item is indented, so it is dedented here: without
+    that every such example fails on `unexpected indent` rather than on
+    anything a reader would call a mistake. The recorded line is the fence
+    itself, not the doctest comment above it.
+    """
     out: list[Block] = []
     for doc in TRACKED:
         text = (REPO / doc).read_text()
@@ -160,12 +164,8 @@ def _blocks(lang: str | None = None) -> list[Block]:
                     doc=doc,
                     lang=got,
                     index=i,
-                    # a block nested in a list item is indented; dedent it, or
-                    # every such example fails on `unexpected indent` instead
-                    # of on anything a reader would call a mistake
                     code=textwrap.dedent(m.group('code')),
                     note=(m.group('note') or '').strip(),
-                    # the fence itself, not the doctest comment above it
                     line=text.count('\n', 0, m.start('fence')) + 1,
                 )
             )
@@ -224,7 +224,11 @@ def test_python_block_uses_real_api(block: Block) -> None:
 
 def test_readme_example_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The front-door example must actually solve, and produce the number the
-    README claims it produces."""
+    README claims it produces.
+
+    The README states its objective in a trailing comment; this is what keeps
+    the two in sync.
+    """
     yaml_blocks = [b for b in _blocks('yaml') if b.doc == 'README.md']
     py_blocks = [b for b in _blocks('python') if b.doc == 'README.md']
     model = next(b for b in yaml_blocks if '# dispatch.yaml' in b.code)
@@ -239,7 +243,6 @@ def test_readme_example_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     result = ns['result']
     assert result.is_ok
 
-    # the README states the objective in a trailing comment; keep them in sync
     claimed = re.search(r'#\s*([0-9]+\.?[0-9]*)\s*$', script.code, re.MULTILINE)
     assert claimed, 'README example no longer states its objective in a comment'
     assert result.objective == pytest.approx(float(claimed.group(1))), (
@@ -356,7 +359,7 @@ def test_every_block_is_covered() -> None:
         if block.note == 'skip' or block.note.startswith('wrap='):
             continue
         if block.lang == 'python':
-            continue  # every python block is parsed and name-checked
+            continue  # parsed and name-checked by test_docstring_example_uses_real_api
         keys = yaml.safe_load(block.code)
         if not isinstance(keys, dict) or not set(keys) <= set(Model.model_fields):
             unhandled.append(block.where)
@@ -440,12 +443,15 @@ def test_module_documents_its_api(module: str) -> None:
 
 @pytest.mark.parametrize('example', _docstring_cases(), ids=lambda e: e.where)
 def test_docstring_example_uses_real_api(example: Example) -> None:
+    """Every name a module docstring's example dots into has to exist.
+
+    Syntax is checked on every install; only the name check needs the object
+    behind the root, so only that part stands down on a bare one.
+    """
     try:
         tree = ast.parse(example.code)
     except SyntaxError as exc:
         pytest.fail(f'{example.where} is not valid Python: {exc}\n{example.code}')
-    # syntax is checked above on every install; only the name check below needs
-    # the object behind the root, so only that part stands down
     if missing := _unresolvable(example.code):
         pytest.skip(_EXTRA.format(sorted(missing)))
     bad = [

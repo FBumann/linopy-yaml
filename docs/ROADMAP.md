@@ -199,7 +199,8 @@ COO matrix is swapping two column names.
 
 **Ahead of comparable declarative layers:** sparse-by-construction build with no
 dense intermediate, and a hand-off straight to the solver rather than through a
-file; parameterised `macros:` (Calliope's sub-expressions take no arguments);
+file; parameterised `macros:` ([Calliope](design/prior-art.md)'s sub-expressions
+take no arguments);
 binary and integer variables; piecewise as N links with per-link signs, convex
 mode and `active` gating; load-time validation of every expression, `where`
 string and *uncalled* macro template.

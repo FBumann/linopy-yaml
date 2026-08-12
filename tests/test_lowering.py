@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import lpspec as lps
 from lpspec.errors import DataError, DimensionError, LanguageError
 from lpspec.language.model import Model
 from lpspec.language.resolution import Namespace
@@ -41,16 +42,18 @@ def dispatch_schema() -> Model:
 
 
 def test_dispatch_yaml_agrees_variable_by_variable(dispatch_yaml, dispatch_inputs):
+    """The two lanes agree variable by variable, not only in total.
+
+    An objective can agree while the dispatch behind it differs, which is what
+    this rules out.
+    """
     data, coords = dispatch_inputs
 
     with differential(DISPATCH_YAML, data, coords, lp=True) as run:
-        # primal agrees with the eager solution variable-by-variable, not only
-        # in total — an objective can agree while the dispatch behind it differs
         eager_p = run.model.solution['p'].to_dataframe(name='value').reset_index()
         rel_p = run.result.to_pandas('p')
         merged = eager_p.merge(rel_p, on=['snapshot', 'generator'], suffixes=('_eager', '_rel'))
-        # masked (gas is unmasked; all p_max > 0 here) rows align 1:1
-        assert len(merged) == len(rel_p)
+        assert len(merged) == len(rel_p), 'nothing is masked here, so the rows align 1:1'
         assert np.allclose(merged['value_eager'], merged['value_rel'], atol=1e-6)
 
 
@@ -77,19 +80,22 @@ def test_lower_program_structure(dispatch_schema):
     assert c.rhs == Parameter('load')
 
     assert program.objective.sense == 'min'
-    # no sum: an objective totals every dim it carries, so writing one would
-    # only restate what the objective already is
-    assert program.objective.expression == Variable('p') * Parameter('cost')
+    assert program.objective.expression == Variable('p') * Parameter('cost'), (
+        'no sum: an objective totals every dim it carries, so writing one would restate it'
+    )
 
 
 @pytest.mark.parametrize(
     ('where', 'expected'),
     [
-        (None, None),
-        ('True', None),  # True == no mask
-        ('p_max', ParameterDefined('p_max')),
-        # dimension coordinates compare like parameters (ROADMAP 5b)
-        ('snapshot > 5', DimensionComparison('snapshot', '>', 5)),
+        pytest.param(None, None, id='no-where-at-all'),
+        pytest.param('True', None, id='True-is-no-mask'),
+        pytest.param('p_max', ParameterDefined('p_max'), id='a-bare-parameter-name'),
+        pytest.param(
+            'snapshot > 5',
+            DimensionComparison('snapshot', '>', 5),
+            id='a-dimension-coordinate-compares-like-a-parameter',
+        ),
     ],
 )
 def test_where_lowering(dispatch_schema, where, expected):
@@ -150,11 +156,14 @@ CAPS = {('n1', 'n1'): 1.0, ('n2', 'n1'): 5.0, ('n1', 'n2'): 500.0, ('n2', 'n2'):
 
 
 def _tidy_cap(names):
+    """`cap` keyed by (from_bus, to_bus), read back off the normalised frame.
+
+    ``tidy_sources`` normalises to a frame, so the columns come back by name —
+    which is the point: a transposition shows up as swapped values.
+    """
     import pandas as pd
 
     index = pd.MultiIndex.from_tuples(list(CAPS), names=names)
-    # tidy_sources normalises to a frame, so read the columns back by name —
-    # which is the point: a transposition would show up as swapped values
     frame = tidy_sources(Model(**NETWORK), {'cap': pd.Series(list(CAPS.values()), index=index)})['cap'].collect()
     table = frame.to_dict(as_series=False)
     return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
@@ -175,8 +184,16 @@ def test_an_unnamed_index_still_binds_positionally():
 
 
 def test_an_index_name_outside_the_declared_dims_is_an_error():
-    with pytest.raises(DataError, match='do not match its declared dims'):
-        _tidy_cap(['banana', 'to_bus'])
+    """Refused by binding, which asks it of a parquet path as well as a frame.
+
+    ``tidy_sources`` only ever sees the in-memory half, so asking there too
+    would be a second wording of one defect covering fewer sources.
+    """
+    import pandas as pd
+
+    index = pd.MultiIndex.from_tuples(list(CAPS), names=['banana', 'to_bus'])
+    with pytest.raises(DataError, match='is missing columns'):
+        lps.build(Model(**NETWORK), {'cap': pd.Series(list(CAPS.values()), index=index)})
 
 
 def test_a_divisor_under_a_pullback_is_still_named():

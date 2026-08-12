@@ -27,23 +27,28 @@ from typing import Any
 
 from bench import cases as bench_cases
 
-#: The methods a collection is attributed to, as ``(module path, class,
-#: method)``. Named against the classes that own them rather than against one
-#: of them, because the three steps a build spends its time in no longer live
-#: on the executor: binding reads the sources, the labeller assigns the solver
-#: indices, and only the assembly is the executor's own.
+#: What a collection is attributed to, as ``(module path, owner or None,
+#: name)`` — a method on the class that owns it, or a module-level function.
+#: Named against the owners rather than against one of them, because the steps
+#: a build spends its time in no longer live on the executor: binding reads the
+#: sources, labelling assigns the solver indices, and only the assembly is the
+#: executor's own.
 STEPS = (
     ('lpspec.relational.engines.polars.executor', 'PolarsExecutor', '_build_variable'),
     ('lpspec.relational.engines.polars.executor', 'PolarsExecutor', '_build_constraint'),
     ('lpspec.relational.engines.polars.executor', 'PolarsExecutor', '_build_objective'),
-    ('lpspec.relational.engines.polars.labels', 'Labeller', 'frame'),
+    ('lpspec.relational.engines.polars.labels', None, 'frame'),
     ('lpspec.relational.engines.polars.binding', '_Binder', 'parameter'),
     ('lpspec.relational.engines.polars.binding', '_Binder', '_register'),
 )
 
 
 def _instrument(timings: dict[Any, list[float]], phase: dict[str, str]) -> None:
-    """Tag each collection with the build step that issued it."""
+    """Tag each collection with the build step that issued it.
+
+    A query is identified by its flattened plan — the same role the SQL text
+    plays in a statement-level profiler.
+    """
     import importlib
 
     import polars as pl
@@ -56,8 +61,6 @@ def _instrument(timings: dict[Any, list[float]], phase: dict[str, str]) -> None:
             return original_collect(self, *args, **kwargs)
         finally:
             elapsed = time.perf_counter() - started
-            # the plan, flattened, is what identifies a query here — the same
-            # role the SQL text plays in a statement-level profiler
             key = (phase['now'], ' '.join(self.explain(optimized=False).split())[:88])
             entry = timings.setdefault(key, [0.0, 0])
             entry[0] += elapsed
@@ -66,20 +69,21 @@ def _instrument(timings: dict[Any, list[float]], phase: dict[str, str]) -> None:
     pl.LazyFrame.collect = collect
 
     for module_path, class_name, name in STEPS:
-        owner = getattr(importlib.import_module(module_path), class_name)
+        module = importlib.import_module(module_path)
+        owner = module if class_name is None else getattr(module, class_name)
         original_step = getattr(owner, name)
 
         def wrap(step, label):
-            def wrapper(self, *args, **kwargs):
+            def wrapper(*args, **kwargs):
                 previous, phase['now'] = phase['now'], label
                 try:
-                    return step(self, *args, **kwargs)
+                    return step(*args, **kwargs)
                 finally:
                     phase['now'] = previous
 
             return wrapper
 
-        setattr(owner, name, wrap(original_step, f'{class_name}.{name}'))
+        setattr(owner, name, wrap(original_step, f'{class_name}.{name}' if class_name else name))
 
 
 def main() -> None:

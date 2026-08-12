@@ -119,7 +119,15 @@ def _decades(lo: float, hi: float) -> list[float]:
 
 
 def render(figure: Figure, scheme: Scheme) -> str:
-    """*figure* as a standalone SVG document for *scheme*."""
+    """*figure* as a standalone SVG document for *scheme*.
+
+    Drawing order and the rules behind it: gridlines first and recessive, so
+    they orient without competing; x labels drop alternates — keeping the first
+    and the last — where a multi-panel figure has no room for every decade;
+    markers carry a surface-coloured ring so they stay legible where lines
+    cross; and the last panel labels its series directly, nudging them apart
+    where two converge, so identity is never colour alone.
+    """
     n = len(figure.panels)
     pad_l, pad_r, pad_t, pad_b = 58, 104, 62, 46
     gap = 34
@@ -167,7 +175,6 @@ def render(figure: Figure, scheme: Scheme) -> str:
                 f'<text x="{offset:.0f}" y="{pad_t - 6:.0f}" font-size="11" '
                 f'fill="{scheme.muted}">{_esc(panel.note)}</text>'
             )
-        # gridlines first, and recessive: they orient, they do not compete
         for tick in y_ticks:
             y = sy(tick)
             out.append(
@@ -181,8 +188,6 @@ def render(figure: Figure, scheme: Scheme) -> str:
                     f'font-family="{MONO}" fill="{scheme.muted}">{label}</text>'
                 )
         decades = [d for d in _decades(x0, x1) if x0 <= d <= x1]
-        # a six-panel figure has no room for every decade; drop alternates
-        # rather than let the labels touch, keeping the first and the last
         stride = 1 if inner_w / max(len(decades), 1) > 42 else 2
         for di, tick in enumerate(decades):
             if di % stride and di != len(decades) - 1:
@@ -204,16 +209,14 @@ def render(figure: Figure, scheme: Scheme) -> str:
                 f'stroke-linejoin="round" stroke-linecap="round"{dash}/>'
             )
             for px, py in s.points:
-                # a 2px surface ring keeps markers legible where lines cross
                 out.append(
                     f'<circle cx="{sx(px, offset):.1f}" cy="{sy(py):.1f}" r="3.4" fill="{colour}" '
                     f'stroke="{scheme.surface}" stroke-width="2"/>'
                 )
-        if index == n - 1:  # direct labels, so identity is never colour alone
+        if index == n - 1:
             placed: list[float] = []
             for s in sorted(panel.series, key=lambda s: sy(s.points[-1][1])):
                 y = sy(s.points[-1][1]) + 4
-                # nudge apart where two lines converge, rather than overprint
                 while any(abs(y - taken) < 14 for taken in placed):
                     y += 14
                 placed.append(y)
@@ -266,6 +269,10 @@ def bars(
     Where the line charts answer *how much*, this answers *where* — and it is
     the chart the tables cannot be read for at all, since they publish one
     total per row.
+
+    The segments are one hue light to dark rather than the categorical
+    palette: phases are parts of a magnitude, not identities that could be
+    confused for each other.
     """
     pad_l, pad_r, pad_t, pad_b = 124, 132, 34, 56
     row_h, row_gap, group_gap, head_h = 24, 8, 20, 22
@@ -274,8 +281,6 @@ def bars(
     inner_w = width - pad_l - pad_r
     longest = max(sum(value for _, value in values) for _, arms in groups for _, values in arms)
 
-    # phase shades: one hue, light to dark, because phases are parts of a
-    # magnitude rather than identities that could be confused for each other
     shades = (
         ('#7cb8f5', '#3987e5', '#1b4f8f', '#0d2c52')
         if scheme.name == 'dark'

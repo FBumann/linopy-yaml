@@ -216,7 +216,11 @@ DATA = Path(__file__).resolve().parent.parent / 'data' / 'transport_pwl.json'
 
 
 def build(data: dict) -> linopy.Model:
-    """The port's tables as a linopy model, column for column."""
+    """The port's tables as a linopy model, column for column.
+
+    ``scaled`` is what the objective is actually charged on — ``sqrt(shipment)``
+    read off the discretised curve rather than computed.
+    """
     plants = pd.Index(data['plant']['plant'], name='plant')
     markets = pd.Index(data['market']['market'], name='market')
 
@@ -231,8 +235,6 @@ def build(data: dict) -> linopy.Model:
 
     m = linopy.Model()
     shipment = m.add_variables(lower=0, coords=[plants, markets], name='shipment')
-    # what the objective is actually charged on: sqrt(shipment), read off the
-    # discretised curve rather than computed
     scaled = m.add_variables(lower=0, coords=[plants, markets], name='scaled')
 
     m.add_piecewise_formulation(

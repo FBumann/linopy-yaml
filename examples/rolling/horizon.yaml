@@ -1,0 +1,56 @@
+# Storage dispatch over one window of a rolling horizon.
+#
+# The model never mentions the global clock. It is written over `t`, a local
+# index dense 0..n-1 that `EachWindow(..., into='t')` supplies, because "the
+# first snapshot of *this* window" is not a literal in global numbering.
+#
+# The seam is `soc_open` and `soc_step`, and it needs nothing that does not
+# ship: a dimension comparison picks the first local row, and `shift` without
+# `edge=` drops the vacated one rather than wrapping it.
+version: 0
+
+dimensions:
+  t: {dtype: int}
+  generator: {dtype: str}
+
+parameters:
+  p_max: {dims: [t, generator]} # availability: wind blows at night, not by day
+  cost: {dims: [generator]}
+  load: {dims: [t]}
+  soc_initial: {dims: []} # what the previous window carried across
+
+variables:
+  p:
+    foreach: [t, generator]
+    bounds: {lower: 0, upper: p_max}
+  charge:
+    foreach: [t]
+    bounds: {lower: 0, upper: 25}
+  discharge:
+    foreach: [t]
+    bounds: {lower: 0, upper: 25}
+  soc:
+    foreach: [t]
+    bounds: {lower: 0, upper: 120}
+
+constraints:
+  balance:
+    foreach: [t]
+    expression: sum(p, over=generator) + discharge - charge == load
+
+  # the seam: at the window's first local row the level comes from the carry
+  soc_open:
+    foreach: [t]
+    where: 't == 0'
+    expression: soc == soc_initial + charge * 0.9 - discharge
+
+  # everywhere else it comes from the row before; no edge=, so t == 0 drops out
+  soc_step:
+    foreach: [t]
+    where: 't > 0'
+    expression: soc == shift(soc, over=t, by=1) + charge * 0.9 - discharge
+
+objectives:
+  total:
+    sense: minimize
+    expression: sum(p * cost, over=generator)

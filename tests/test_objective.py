@@ -54,23 +54,29 @@ def data():
 @pytest.mark.parametrize(
     ('expression', 'expected', 'broadcast_would_give'),
     [
-        ('x * a + y * b', 32.0, 66.0),
-        ('x * a - y * b', -28.0, -54.0),
-        ('-(x * a + y * b)', -32.0, -66.0),
-        # the sum has to survive an operator applied to the group, or the fix
-        # only holds at the top of the expression
-        ('(x * a + y * b) * c', 6400.0, 13200.0),
-        ('(x * a + y * b) / 2', 16.0, 33.0),
-        # already scalar per term: the case that always agreed, kept as the
-        # control that says the fix changed nothing it should not have
-        ('sum(x * a, over=i) + sum(y * b, over=j)', 32.0, 32.0),
+        pytest.param('x * a + y * b', 32.0, 66.0, id='a-sum-of-two-terms'),
+        pytest.param('x * a - y * b', -28.0, -54.0, id='a-difference'),
+        pytest.param('-(x * a + y * b)', -32.0, -66.0, id='negated'),
+        pytest.param('(x * a + y * b) * c', 6400.0, 13200.0, id='an-operator-applied-to-the-group'),
+        pytest.param('(x * a + y * b) / 2', 16.0, 33.0, id='a-divisor-applied-to-the-group'),
+        pytest.param(
+            'sum(x * a, over=i) + sum(y * b, over=j)',
+            32.0,
+            32.0,
+            id='already-scalar-per-term-the-control-that-always-agreed',
+        ),
     ],
 )
 def test_a_term_is_summed_over_its_own_dims(data, expression, expected, broadcast_would_give):
+    """Each term totals its own dims, whatever is wrapped around the group.
+
+    ``differential`` already asserts the two lanes agree; what it cannot know is
+    whether they agree on the *right* number, and before #197 they disagreed in
+    exactly this shape. The operator cases are what say the rule survives
+    something applied to the group rather than holding only at the top of the
+    expression.
+    """
     model = {**DISJOINT_MODEL, 'objectives': {'o': {'sense': 'minimize', 'expression': expression}}}
     with differential(model, data) as run:
-        # `differential` already asserts the two lanes agree; what it cannot
-        # know is whether they agree on the right number, and before #197 they
-        # disagreed in exactly this shape
         assert run.oracle == pytest.approx(expected)
         assert run.oracle != pytest.approx(broadcast_would_give) or expected == broadcast_would_give

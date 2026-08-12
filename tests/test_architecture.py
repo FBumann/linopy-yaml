@@ -9,6 +9,10 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 REPO = Path(__file__).parent.parent
 PKG = REPO / 'src' / 'lpspec'
@@ -54,6 +58,92 @@ def _all_modules() -> list[Path]:
     return [p for p in PKG.rglob('*.py') if '__pycache__' not in p.parts]
 
 
+def _reaches_past(package: str, allowed: tuple[str, ...], allowlist: set[str]) -> dict[str, list[str]]:
+    """Modules under *package* importing an ``lpspec`` name its fence forbids.
+
+    Lazy imports are included: a fence a function body could step over is not
+    one. Membership is read off the path, so a new module cannot land outside
+    the fence by being spelled differently.
+    """
+    offenders = {}
+    for path in (PKG / package).rglob('*.py'):
+        if '__pycache__' in path.parts:
+            continue
+        names = []
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.Import):
+                names += [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names.append(node.module)
+        bad = [n for n in names if n.startswith('lpspec') and not n.startswith(allowed) and n not in allowlist]
+        if bad:
+            offenders[str(path.relative_to(PKG))] = sorted(set(bad))
+    return offenders
+
+
+def _runtime_nodes(tree: ast.AST) -> Iterator[ast.AST]:
+    """Every node the interpreter can reach — ``if TYPE_CHECKING:`` bodies pruned.
+
+    The lane fences below exist to stop *running* code from needing the
+    oracle's dependencies: that is what breaks a bare install and what would
+    stop ``relational/`` being lifted out. A ``TYPE_CHECKING`` body is erased
+    before any of that — it is not lazy, it is not executed at all — so
+    counting it buys no isolation and costs a public return type, which is how
+    ``to_dataarray`` came to be annotated ``Any`` while its own docstring one
+    line below says it returns an ``xarray.DataArray``.
+
+    This is not a new position: :func:`_module_level_imports` has always read
+    "top-level (non-lazy, non-TYPE_CHECKING)". These walks simply lost the
+    distinction by reaching for :func:`ast.walk`, which sees everything.
+
+    The ``else`` branch of such a guard *does* run, so it stays in.
+    """
+    stack: list[ast.AST] = [tree]
+    while stack:
+        node = stack.pop()
+        yield node
+        if isinstance(node, ast.If) and _is_type_checking(node.test):
+            stack.extend(node.orelse)
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def _is_type_checking(test: ast.expr) -> bool:
+    """``TYPE_CHECKING`` or ``typing.TYPE_CHECKING``, however it was spelled."""
+    if isinstance(test, ast.Name):
+        return test.id == 'TYPE_CHECKING'
+    return isinstance(test, ast.Attribute) and test.attr == 'TYPE_CHECKING'
+
+
+def test_the_lane_fences_see_running_code_and_only_running_code():
+    """The pruner itself, pinned — because both halves have been wrong once.
+
+    Walking everything cost `Result.to_dataarray` its return type: the fence
+    read an erased annotation as a dependency and the method was widened to
+    `Any` to satisfy it. Walking too little would be worse — a lazy
+    `import xarray` in a function body is exactly what the allowlist exists
+    to make deliberate. So the line is *does the interpreter reach it*, and
+    it is checked in both directions rather than described.
+    """
+    erased, executed, otherwise = (
+        'if TYPE_CHECKING:\n    import xarray\n',
+        'def f():\n    import xarray\n',
+        'if TYPE_CHECKING:\n    import xarray\nelse:\n    import linopy\n',
+    )
+
+    def imported(source: str) -> set[str]:
+        return {
+            alias.name
+            for node in _runtime_nodes(ast.parse(source))
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        }
+
+    assert imported(erased) == set(), 'an annotation-only import is not a dependency'
+    assert imported(executed) == {'xarray'}, 'a lazy import inside a function still runs'
+    assert imported(otherwise) == {'linopy'}, 'the else branch of a TYPE_CHECKING guard does run'
+
+
 def test_runtime_lane_never_imports_linopy_or_xarray():
     """Hard rule 3: linopy is the eager/oracle lane only — never a runtime import."""
     offenders = {}
@@ -91,7 +181,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
             continue
         tree = ast.parse(path.read_text())
         bad = set()
-        for node in ast.walk(tree):  # anywhere, at any nesting
+        for node in _runtime_nodes(tree):
             if isinstance(node, ast.Import):
                 bad |= {a.name for a in node.names if a.name.split('.')[0] in FORBIDDEN_RUNTIME}
             elif isinstance(node, ast.ImportFrom) and node.module and node.module.split('.')[0] in FORBIDDEN_RUNTIME:
@@ -125,7 +215,7 @@ def test_engine_is_isolated():
             continue
         tree = ast.parse(path.read_text())
         bad = []
-        for node in ast.walk(tree):  # include lazy imports — the rule is total
+        for node in _runtime_nodes(tree):
             if isinstance(node, ast.Import):
                 bad += [
                     a.name
@@ -164,30 +254,9 @@ def test_language_never_reaches_a_consumer():
     ``sources``, ``api``, or the relational / linopy / typeset subpackages.
 
     That is what makes ``lps.check()`` a pass with no data and no plan, and a
-    second consumer cheap rather than a second opinion. Membership is read off
-    the path, so a new front-end module cannot land outside the fence by being
-    spelled differently.
+    second consumer cheap rather than a second opinion.
     """
-    offenders = {}
-    for path in (PKG / 'language').rglob('*.py'):
-        if '__pycache__' in path.parts:
-            continue
-        bad = []
-        for node in ast.walk(ast.parse(path.read_text())):  # lazy imports included — the rule is total
-            names = (
-                [a.name for a in node.names]
-                if isinstance(node, ast.Import)
-                else [node.module]
-                if isinstance(node, ast.ImportFrom) and node.module
-                else []
-            )
-            bad += [
-                n
-                for n in names
-                if n.startswith('lpspec') and not n.startswith('lpspec.language') and n not in LANGUAGE_MAY_IMPORT
-            ]
-        if bad:
-            offenders[str(path.relative_to(PKG))] = sorted(set(bad))
+    offenders = _reaches_past('language', ('lpspec.language',), LANGUAGE_MAY_IMPORT)
     assert not offenders, (
         f'the language reaches forward to a consumer: {offenders} — a front-end module '
         f'may not depend on what is done with the AST it produces'
@@ -209,32 +278,8 @@ def test_typeset_reads_the_language_and_reaches_no_engine():
     the plan, a sink, a solver or a dataframe — so ``import lpspec.typeset``
     must not drag in an engine. It used to, through ``api.load_model``, and
     nothing failed; the module map said otherwise and no test read it.
-
-    Membership is off the path, like the other three, so a new renderer cannot
-    land outside the fence by being spelled differently.
     """
-    offenders = {}
-    for path in (PKG / 'typeset').rglob('*.py'):
-        if '__pycache__' in path.parts:
-            continue
-        bad = []
-        for node in ast.walk(ast.parse(path.read_text())):  # lazy imports included — the rule is total
-            names = (
-                [a.name for a in node.names]
-                if isinstance(node, ast.Import)
-                else [node.module]
-                if isinstance(node, ast.ImportFrom) and node.module
-                else []
-            )
-            bad += [
-                n
-                for n in names
-                if n.startswith('lpspec')
-                and not n.startswith(('lpspec.language', 'lpspec.typeset'))
-                and n not in TYPESET_MAY_IMPORT
-            ]
-        if bad:
-            offenders[str(path.relative_to(PKG))] = sorted(set(bad))
+    offenders = _reaches_past('typeset', ('lpspec.language', 'lpspec.typeset'), TYPESET_MAY_IMPORT)
     assert not offenders, (
         f'typeset reaches past the language: {offenders} — a renderer reads the AST '
         f'and writes text; it may not reach a plan, a sink, a solver or a dataframe'
@@ -254,6 +299,9 @@ def test_typesets_import_closure_needs_no_third_party_engine():
     importing a submodule runs ``lpspec/__init__.py``, which eagerly exposes
     ``build``/``solve`` and so loads the runner whatever this subpackage does.
     That is a property of the top-level namespace, not of ``typeset/``.
+
+    The walk follows module-level ``from lpspec.x import y`` edges, resolved
+    back to modules.
     """
     heavy = {'polars', 'highspy', 'numpy', 'pandas'} | FORBIDDEN_RUNTIME
     by_module = {
@@ -269,7 +317,6 @@ def test_typesets_import_closure_needs_no_third_party_engine():
         for imported in _module_level_imports(by_module[mod]):
             if imported in heavy:
                 reached.setdefault(imported, []).append(mod)
-        # module-level `from lpspec.x import y` edges, resolved to modules
         for node in ast.walk(ast.parse(by_module[mod].read_text())):
             if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith('lpspec'):
                 stack.append(node.module)
@@ -287,6 +334,7 @@ def test_typesets_import_closure_needs_no_third_party_engine():
 #: reviewer reads; the fences elsewhere in this file work the same way.
 PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
+    'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
     'load it': {'load_model', 'Model'},
     'show it': {'to_latex', 'to_markdown', 'to_typst', 'SymbolTable'},
     'catch it': {
@@ -462,6 +510,10 @@ def test_both_lanes_implement_exactly_the_closed_helper_set():
 
     Read statically: ``linopy/builder.py`` imports xarray at module level (it
     is linopy lane), and this check must still run on a bare install.
+
+    The eager lane keeps a table; the relational lane spells its cases out in
+    ``lowering.py``, so every declared name has to appear there as a lowering
+    branch.
     """
     from lpspec.language.helpers import BUILTIN_NAMES
 
@@ -476,8 +528,6 @@ def test_both_lanes_implement_exactly_the_closed_helper_set():
         f'eager lane implements {sorted(eager)}, language declares {sorted(BUILTIN_NAMES)}'
     )
 
-    # the relational lane spells its cases out in lowering.py rather than in a
-    # table; every declared name must appear there as a lowering branch
     lowering_src = (PKG / 'lowering.py').read_text()
     missing = [name for name in BUILTIN_NAMES if f"'{name}'" not in lowering_src]
     assert not missing, f'built-in helpers with no lowering case: {missing}'

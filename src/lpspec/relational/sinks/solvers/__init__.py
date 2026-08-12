@@ -35,8 +35,8 @@ __all__ = ['SOLVERS', 'solver']
 
 #: Every solver a caller may name, and **closed** — a dict literal, not a
 #: registry something installed can add to. Which solver runs is the caller's
-#: choice at the call and never the file's, so an installed package that could
-#: change what ``solver_name='x'`` resolves to is hard rule 5 one level down.
+#: choice at the call, so an installed package able to change what
+#: ``solver_name='x'`` resolves to would be hard rule 5 one level down.
 SOLVERS: Mapping[str, Solve] = {
     'highs': solve_highs,
     'gurobi': solve_gurobi,

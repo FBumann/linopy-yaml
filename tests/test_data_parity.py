@@ -84,9 +84,7 @@ def _cases() -> list[Case]:
             'bound parameter sparse',
             {**good_r, 'cap': _tidy(f=['a'], value=[5.0])},
             {**good_e, 'cap': pd.Series({'a': 5.0})},
-            # No reading of a missing bound contributes nothing, so law 8
-            # refuses rather than guessing (`null_bounds_message`).
-            DataError,
+            DataError,  # a missing bound has no reading, so law 8 refuses rather than guessing
         ),
         Case(
             'coefficient sparse',

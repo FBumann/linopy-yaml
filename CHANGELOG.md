@@ -1,5 +1,157 @@
 # Changelog
 
+## [0.0.1-alpha.109](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.108...v0.0.1-alpha.109) (2026-08-12)
+
+
+### Documentation
+
+* **agents:** the package's docstrings have one checkable form ([#632](https://github.com/fluxopt/lpspec/issues/632)) ([bdc301f](https://github.com/fluxopt/lpspec/commit/bdc301f1c05bd313a8e87000a67cc22914c27a8e))
+
+## [0.0.1-alpha.108](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.107...v0.0.1-alpha.108) (2026-08-12)
+
+
+### Documentation
+
+* **agents:** what is non-negotiable, and what is a default you may argue with ([#624](https://github.com/fluxopt/lpspec/issues/624)) ([526c11a](https://github.com/fluxopt/lpspec/commit/526c11a09df7d6e3483278177f8f04574e378fcf))
+
+## [0.0.1-alpha.107](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.106...v0.0.1-alpha.107) (2026-08-12)
+
+
+### Refactoring
+
+* every claim lives where it is read, not in a comment ([#612](https://github.com/fluxopt/lpspec/issues/612)) ([a5404d7](https://github.com/fluxopt/lpspec/commit/a5404d7f340c015fa6a3001f3b59116a4b441589))
+
+## [0.0.1-alpha.106](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.105...v0.0.1-alpha.106) (2026-08-12)
+
+
+### Bug Fixes
+
+* **bench:** the marginal-cost caption is rendered, and says what it measures ([#621](https://github.com/fluxopt/lpspec/issues/621)) ([93cd5fe](https://github.com/fluxopt/lpspec/commit/93cd5fe37deb30d7df29700a2fd020f1bc10555f))
+
+## [0.0.1-alpha.105](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.104...v0.0.1-alpha.105) (2026-08-12)
+
+
+### Documentation
+
+* **agents:** a number leaves only with a pointer, and vagueness is not a conclusion ([#618](https://github.com/fluxopt/lpspec/issues/618)) ([5489607](https://github.com/fluxopt/lpspec/commit/54896072d7b57c5d172eef77ac2135496f34e8b9))
+
+## [0.0.1-alpha.104](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.103...v0.0.1-alpha.104) (2026-08-12)
+
+
+### Documentation
+
+* **agents:** a PR with no intent line shows the prompt that produced it ([#616](https://github.com/fluxopt/lpspec/issues/616)) ([aa134ab](https://github.com/fluxopt/lpspec/commit/aa134abbfbfbdafca58b242636bd2c1d8b12938d))
+
+## [0.0.1-alpha.103](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.102...v0.0.1-alpha.103) (2026-08-11)
+
+
+### Performance
+
+* **examples:** the benders loop parses each model once ([#613](https://github.com/fluxopt/lpspec/issues/613)) ([5f03dbd](https://github.com/fluxopt/lpspec/commit/5f03dbd07154c13798dfbe3b1ef008467886af86))
+
+## [0.0.1-alpha.102](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.101...v0.0.1-alpha.102) (2026-08-11)
+
+
+### Features
+
+* **strategy:** one model solved over scenarios, windows and pathways ([#459](https://github.com/fluxopt/lpspec/issues/459)) ([5d4c4ce](https://github.com/fluxopt/lpspec/commit/5d4c4cea287512a70c2cc23e910309abe07e3bea))
+
+## [0.0.1-alpha.101](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.100...v0.0.1-alpha.101) (2026-08-11)
+
+
+### Documentation
+
+* **agents:** a claim belongs in the message that prints ([#608](https://github.com/fluxopt/lpspec/issues/608)) ([d0b1e86](https://github.com/fluxopt/lpspec/commit/d0b1e86397935c70ac9773e538e5f2577909ddd4))
+
+## [0.0.1-alpha.100](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.99...v0.0.1-alpha.100) (2026-08-11)
+
+
+### Documentation
+
+* **agents:** a reader can tell the maintainer's voice from an agent's ([#605](https://github.com/fluxopt/lpspec/issues/605)) ([b987971](https://github.com/fluxopt/lpspec/commit/b98797149cc4e5e61931de7ba2ffae0ede7bbb65))
+
+## [0.0.1-alpha.99](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.98...v0.0.1-alpha.99) (2026-08-11)
+
+
+### Documentation
+
+* AGENTS.md carries how we work, CLAUDE.md just imports it ([#599](https://github.com/fluxopt/lpspec/issues/599)) ([e815252](https://github.com/fluxopt/lpspec/commit/e815252c5ce40e72104ca79300d57321d51d08f1))
+
+## [0.0.1-alpha.98](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.97...v0.0.1-alpha.98) (2026-08-11)
+
+
+### Documentation
+
+* the copyright line names whoever wrote it, and that was never PyPSA ([#601](https://github.com/fluxopt/lpspec/issues/601)) ([06fb7d5](https://github.com/fluxopt/lpspec/commit/06fb7d5ddcbf2753e780afe1d0f8434f33334485))
+
+## [0.0.1-alpha.97](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.96...v0.0.1-alpha.97) (2026-08-11)
+
+
+### Documentation
+
+* the surface is Calliope's, the vocabulary is linopy's — say so ([#598](https://github.com/fluxopt/lpspec/issues/598)) ([a1042fc](https://github.com/fluxopt/lpspec/commit/a1042fccc070c5cc730445eb7da180d5a66705e6))
+
+## [0.0.1-alpha.96](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.95...v0.0.1-alpha.96) (2026-08-11)
+
+
+### Refactoring
+
+* cut the prose, keep the facts ([#592](https://github.com/fluxopt/lpspec/issues/592)) ([dcc279b](https://github.com/fluxopt/lpspec/commit/dcc279b6c0cc4d8a7b84e9f5f610cbd12fa6d88c))
+
+
+### Documentation
+
+* **design:** decomposition, as evidence rather than as a feature ([#597](https://github.com/fluxopt/lpspec/issues/597)) ([c736da9](https://github.com/fluxopt/lpspec/commit/c736da9f046766b80915499b7bec24ab7ee8cf76))
+
+## [0.0.1-alpha.95](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.94...v0.0.1-alpha.95) (2026-08-11)
+
+
+### Bug Fixes
+
+* **engine:** a returned frame speaks String, so it joins the caller's own ([#593](https://github.com/fluxopt/lpspec/issues/593)) ([69b9ad2](https://github.com/fluxopt/lpspec/commit/69b9ad21f2772232c3d19245b764dbebf231f1ea))
+
+## [0.0.1-alpha.94](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.93...v0.0.1-alpha.94) (2026-08-11)
+
+
+### Refactoring
+
+* one answer per question ([#589](https://github.com/fluxopt/lpspec/issues/589)) ([8a831cc](https://github.com/fluxopt/lpspec/commit/8a831cc86f1089654ba22b3773e70852911b9c49))
+
+## [0.0.1-alpha.93](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.92...v0.0.1-alpha.93) (2026-08-11)
+
+
+### Bug Fixes
+
+* **api:** a closed result says it was closed ([#587](https://github.com/fluxopt/lpspec/issues/587)) ([45cc1d0](https://github.com/fluxopt/lpspec/commit/45cc1d0f68364d8a7ca591cc2d2c3b37ae884837))
+
+## [0.0.1-alpha.92](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.91...v0.0.1-alpha.92) (2026-08-11)
+
+
+### Bug Fixes
+
+* **data:** an empty index keeps the dimension's declared dtype ([#585](https://github.com/fluxopt/lpspec/issues/585)) ([b5bd409](https://github.com/fluxopt/lpspec/commit/b5bd4091671aa7614386d9545ff7084b0c1842fa))
+
+## [0.0.1-alpha.91](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.90...v0.0.1-alpha.91) (2026-08-11)
+
+
+### Performance
+
+* **engine:** the objective keeps the hash count — bought order was a shape-dependent bet ([#581](https://github.com/fluxopt/lpspec/issues/581)) ([d30598f](https://github.com/fluxopt/lpspec/commit/d30598feb563ecbcd58ea73311901bac123b4246))
+
+## [0.0.1-alpha.90](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.89...v0.0.1-alpha.90) (2026-08-11)
+
+
+### Refactoring
+
+* **engine:** ask the data, not the declarations ([#520](https://github.com/fluxopt/lpspec/issues/520)) ([17f8e5d](https://github.com/fluxopt/lpspec/commit/17f8e5d0f79072bbaffc7df5d174e17ca24387a7))
+
+## [0.0.1-alpha.89](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.88...v0.0.1-alpha.89) (2026-08-11)
+
+
+### Bug Fixes
+
+* **plan:** a divisor under a pullback is still named ([#571](https://github.com/fluxopt/lpspec/issues/571)) ([2591995](https://github.com/fluxopt/lpspec/commit/2591995bb5bf6f66eefdfd1fd24e0f856d70a8b4))
+
 ## [0.0.1-alpha.88](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.87...v0.0.1-alpha.88) (2026-08-11)
 
 

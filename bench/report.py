@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import statistics
 import sys
 from pathlib import Path
 from typing import Any
@@ -113,14 +114,17 @@ FIGURES = (
 
 
 def figures() -> str:
-    """The figure embeds, as markdown that renders in both places."""
+    """The figure embeds, as markdown that renders in both places.
+
+    One pointer at the interactive page for the whole set rather than one per
+    figure: these are pictures, and reading a value off one is what that page
+    is for.
+    """
     out = []
     for name, alt in FIGURES:
         out.append(f'![{alt}](charts/{name}-light.svg#only-light)')
         out.append(f'![{alt}](charts/{name}-dark.svg#only-dark)')
         out.append('')
-    # one pointer for the four, not four for the four: these are pictures, and
-    # reading a value off one is what the interactive page is for
     out.append(
         '*Static, so they render anywhere. The same data with a cursor: [the chart page](benchmarks-scaling.html).*'
     )
@@ -156,6 +160,12 @@ _SEAM = {
 
 
 def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
+    """One case's rungs through one sink, as a markdown table.
+
+    The caption is bold rather than a heading: these live inside a collapsed
+    ``<details>``, and a heading in there still lands in the table of contents
+    — a rail full of entries for tables the page has just called the appendix.
+    """
     cols = ARMS
     head = (
         ['variables', 'live', 'rows']
@@ -166,9 +176,6 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
     )
     seam = _SEAM[sink] if 'linopy' in cols else _SEAM_ENGINE[sink]
     lines = [
-        # bold, not a heading: these live inside a collapsed <details>, and a
-        # heading in there still lands in the table of contents — twelve rail
-        # entries for tables the page has just decided are the appendix
         f'**{case} — {sink} sink**',
         '',
         seam,
@@ -208,19 +215,46 @@ def _live(r: Row) -> str:
     return '—' if frac is None else f'{frac * 100:.0f}%'
 
 
+def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]]) -> str:
+    """How far the first recorded round sits from steady state, per arm.
+
+    Rendered from the results file rather than stated, so a refresh moves it
+    (#619). What the pair measures is one recorded round against the best of
+    the rest: the harness warms up before recording, so **neither end carries
+    the one-time import cost** and this is the loop settling, not a cold start.
+    Measuring that cost needs a fresh interpreter per arm, which no rung takes.
+    """
+    per_arm = []
+    for arm in ARMS:
+        deltas = sorted(
+            (best[(case, size, arm)]['first_build_seconds'] - best[(case, size, arm)]['steady_build_seconds']) * 1000
+            for case, size in seen
+            if (case, size, arm) in best and best[(case, size, arm)].get('first_build_seconds') is not None
+        )
+        if deltas:
+            per_arm.append(f'{statistics.median(deltas):+.1f} ms on {arm}')
+    if not per_arm:
+        return ''
+    return (
+        'The harness warms up before it records, so neither column carries the '
+        'one-time import cost: the median gap between them is ' + ' and '.join(per_arm) + '.'
+    )
+
+
 def marginal(loop_rows: list[Row]) -> str:
     """First model in a process, against every model after it.
 
     Two questions with two answers, and the gap between them is larger than
     most of the differences this file reports — so publishing one figure would
     misreport whichever use case it was not.
+
+    The density rungs are skipped: they are several masks at one model size and
+    would render as rows sharing a label. They have their own table.
     """
     best: dict[tuple[str, str, str], Row] = {}
     for r in loop_rows:
         if 'error' in r or r.get('steady_build_seconds') is None:
             continue
-        # the density sweep is four masks at one model size, so it would render
-        # as four rows with the same label; it has its own table
         if _DENSITY_RUNG.match(r['size']):
             continue
         key = (r['case'], r['size'], r['arm'])
@@ -229,21 +263,20 @@ def marginal(loop_rows: list[Row]) -> str:
     if not best:
         return ''
 
-    lines = [
-        '### Marginal cost per model',
-        '',
-        'Build only, repeated in one process. **first** is what a caller pays who '
-        'builds one model and solves it; **steady** is what every model after the '
-        'first costs in a rolling horizon. Every lane does lazy first-call work '
-        'that a loop never pays again — ~180 ms of it on the eager lane, ~4 ms here.',
-        '',
-        '| case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | steady vs linopy |',
-        '|---|---|---|---|---|---|---|',
-    ]
     seen = sorted(
         {(c, s) for c, s, _ in best},
         key=lambda k: best[(k[0], k[1], 'lpspec')].get('nominal_variables', 0),
     )
+    lines = [
+        '### Marginal cost per model',
+        '',
+        'Build only, repeated in one process. **first** is the first recorded round '
+        'and **steady** the best of the rounds after it, so the pair is what a '
+        'rolling horizon pays for its second window against its first. ' + _settling(best, seen),
+        '',
+        '| case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | steady vs linopy |',
+        '|---|---|---|---|---|---|---|',
+    ]
     for case, size in seen:
         ours, eager = best.get((case, size, 'lpspec')), best.get((case, size, 'linopy'))
         if not ours or not eager:
@@ -315,6 +348,18 @@ def density(rows: dict[Key, Row]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Print the published page for the given result files.
+
+    The parity gate is enforced by the harness now rather than recorded by it —
+    a case whose arms disagree fails its measurements outright, so a file that
+    exists at all was gated. Older files still carry the records, which is why
+    both branches are here.
+
+    Per-case tables are collapsed, and in ``<details>`` rather than mkdocs'
+    ``???`` because these pages are read on GitHub too, where only the HTML
+    form folds. The figures are the reading; the numbers stay one click away,
+    because a chart nobody can check is decoration.
+    """
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('results', type=Path, nargs='*', default=[Path('bench/results/latest.json')])
     ap.add_argument(
@@ -346,9 +391,6 @@ def main(argv: list[str] | None = None) -> int:
     versions = ', '.join(f'{k} {v}' for k, v in run.get('versions', {}).items() if v)
     print(f'{run.get("platform", "?")}, python {run.get("python", "?")} — {versions}.')
     print()
-    # The gate is enforced by the harness now rather than recorded by it: a
-    # case whose arms disagree fails its measurements outright, so a file that
-    # exists at all was gated. Older files still carry the records.
     if gates:
         print(
             'Parity gate: '
@@ -369,10 +411,6 @@ def main(argv: list[str] | None = None) -> int:
         if not sinks:
             continue
         print()
-        # Collapsed, and `<details>` rather than mkdocs' `???` because these
-        # pages are read on GitHub too, where only the HTML form folds. The
-        # figures above are the reading; the numbers stay one click away
-        # because a chart nobody can check is decoration.
         print(f'<details markdown="1">\n<summary><b>{case}</b> — every rung, every sink</summary>\n')
         for sink in sinks:
             print(table(case, rows, sink))

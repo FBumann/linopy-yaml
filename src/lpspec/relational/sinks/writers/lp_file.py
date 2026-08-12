@@ -1,8 +1,8 @@
 """The ``lp_file`` sink: the model as LP text.
 
-Portability, debugging, and the differential oracle. Every section is sunk
-straight into the open file, so the LP text never exists in this process's
-memory — and no byte is written twice.
+Portability, debugging, and the differential oracle. Every section is a lazy
+frame sunk straight into the open file, so the rendered text is polars' to
+stream and no byte is written twice.
 
 Numbers go through polars' float cast, which round-trips exactly: the text a
 solver reads back is the double the engine computed.
@@ -23,42 +23,37 @@ if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
 
 
-#: Nonzeros per constraint chunk. The stream a chunk sorts is its terms plus a
-#: header and a footer per row, carrying rendered text — so this is the knob
-#: that bounds the writer's peak rather than its speed. Measured on
-#: `transport/l`, chunking at this width takes the constraint section's peak
-#: contribution from +0.88 GB to a fraction of it, for no change in the bytes.
-#: Wider costs memory for nothing; much narrower pays per-chunk overhead on
-#: every range.
+#: Nonzeros per constraint chunk. A chunk's rendered lines live in memory until
+#: it is sunk, so this is the knob that bounds the writer's peak rather than its
+#: speed: chunking at this width takes most of the constraint section out of
+#: peak for no change in the bytes written. Wider costs memory for nothing; much
+#: narrower pays per-chunk overhead on every range (#189).
 EMIT_BUDGET = 2_000_000
 
 
 def _sink(frame: pl.LazyFrame, f: IO[bytes]) -> None:
     """Append a one-column frame to *f*, one raw line per row.
 
-    A CSV writer with the CSV switched off: no header, no quoting, so the bytes
-    on disk are exactly the strings the frame holds.
+    A CSV writer with the CSV switched off, straight into the handle the caller
+    holds: polars writes through its buffer, so an ``f.write()`` between two
+    sinks lands between them and no concatenation pass rereads the file.
 
-    The frame goes into the file the caller is already holding rather than into
-    a part file to be concatenated afterwards. Sections are produced in the
-    order the LP format wants them, so there is nothing to reorder — and a
-    concatenation pass would read and rewrite the whole file, which at these
-    sizes costs more than producing it did. polars writes through the handle's
-    own buffer, so a ``f.write()`` between two sinks lands between them.
+    ``maintain_order`` is polars' default, stated rather than inherited because
+    the parameter is documented as unstable and a flipped default would make
+    the bytes non-reproducible in silence (#109).
     """
-    # `maintain_order` is polars' default and is what #109 rests on, so it is
-    # stated rather than inherited: the parameter is documented as unstable,
-    # and a default that flips would make the bytes non-reproducible silently.
     frame.sink_csv(f, include_header=False, quote_style='never', maintain_order=True)
 
 
 def write_lp_file(model: ModelTables, path: str | Path) -> None:
-    """Write the model as LP text."""
+    """Write the model as LP text.
 
+    ``cols`` is positional, so the bounds section's index is added inside the
+    streamed pipeline. The constraint section goes out one row range at a time,
+    since a chunk's rendered lines are held until it is sunk.
+    """
     path = Path(path)
     objective = model.obj.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')))
-    # `cols` is positional, so the index is added inside the streamed pipeline
-    # rather than sorted out of a column the model carried all along.
     bounds = (
         model.cols.lazy()
         .with_row_index('col')
@@ -80,12 +75,8 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         _sink(objective, f)
 
         f.write(b'\ns.t.\n\n')
-        # One range at a time. The stream a chunk sorts carries rendered text,
-        # so sorting the whole model at once is what the writer's peak *is*;
-        # ranges are ascending and each is internally sorted, so the bytes are
-        # the same ones #109 pins.
         for lo, hi, entries in model.labeled_blocks(EMIT_BUDGET):
-            _sink(_constraint_blocks(model, lo, hi, entries), f)
+            _sink(_constraint_lines(model, lo, hi, entries), f)
 
         f.write(b'\nbounds\n')
         _sink(bounds, f)
@@ -100,32 +91,29 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         f.write(b'\nend\n')
 
 
-def _constraint_blocks(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
-    """Every constraint line, as one sorted stream of ``(key, line)``.
+def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+    """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
-    One line per output line rather than one block per row: the pieces are
-    built independently and interleaved by sorting, so nothing has to gather a
-    row's terms into a string first. That is what makes the bytes reproducible
-    — a hash join hands back groups in whatever order it finishes them, and no
-    amount of sorting the *rows* afterwards fixes the order *within* one.
+    One row per *output line*, interleaved by sorting, so nothing gathers a
+    row's terms into a string list first — a ``group_by('row')`` into a list
+    column and an explode measured a large multiple of this (#520). *entries* is the
+    chunk's slice of the matrix from :meth:`ModelTables.labeled_blocks`, and the
+    anti-join gives a termless row the line a solver still needs to parse.
 
-    A row with no terms still needs a line a solver can parse, and the anti-join
-    is what a group-by gave for free — anti rather than a count, because the
-    question is whether the row has *a* term and not how many, so the matrix
-    goes in as it is. Distinguishing its repeated ``row`` values would be a
-    hash pass over every nonzero in the chunk to reach the same answer.
+    **The order is one integer, and the only other column.** A row's lines
+    occupy ``slots`` consecutive keys — header, placeholder, each term at its
+    column index, sense — so one sort settles both the row order and the order
+    within a row, which is what #109 pins.
 
-    **The order is one integer, and it is the only other column.** A row's lines
-    occupy ``slots`` consecutive keys and each piece picks one — header first,
-    then the placeholder, then each term at its own column index, then the
-    sense. Sorting one column beats sorting ``(row, ord)``, and carrying nothing
-    else means the sort permutes the rendered text and nothing beside it.
+    The key is **chunk-relative**: each range is sunk before the next is built,
+    so ``row - lo`` bounds the product by a chunk's height rather than the
+    model's, where a global row would be one careless model away from
+    overflowing ``Int64`` and reordering the file in silence.
 
-    **Chunk-relative**, because that is what bounds the key. Each range is sunk
-    before the next is built, so only the order *within* one has to hold, and
-    ``row - lo`` is a chunk's height rather than the model's. A global row would
-    put the product one careless model away from overflowing ``Int64`` and
-    reordering the file in silence.
+    The terms are sorted although they arrive sorted: the union subsumes the
+    order and the bytes are identical without it, but the union sort merges
+    pre-ordered runs rather than permuting them, and dropping it costs emit on
+    every case measured (#520).
     """
     slots = model.cols.height + 3
 
@@ -142,9 +130,6 @@ def _constraint_blocks(model: ModelTables, lo: int, hi: int, entries: pl.DataFra
         _key(pl.lit(1, dtype=pl.Int64)),
         pl.lit('+0 x0').alias('line'),
     )
-    # Redundant for correctness — the ordering below subsumes it and the bytes
-    # are identical without it — and kept anyway: whether it is redundant for
-    # *speed* has been measured twice and settled neither time.
     terms = matrix.sort('row', 'col').select(
         _key(pl.col('col').cast(pl.Int64) + 2),
         _term(pl.col('coeff'), pl.col('col')).alias('line'),
@@ -157,34 +142,31 @@ def _constraint_blocks(model: ModelTables, lo: int, hi: int, entries: pl.DataFra
 
 
 def _term(coeff: pl.Expr, col: pl.Expr) -> pl.Expr:
-    """One ``+1.5 x7`` term.
+    """One ``+1.5 x7`` term, allocated once.
 
-    Built by a single ``concat_str`` rather than by chaining ``+``. Every ``+``
-    is its own pass allocating its own full-width string column, and a term has
-    four pieces; this way the line is allocated once.
+    Chaining ``+`` would make each of the four pieces its own pass over a
+    full-width string column.
     """
     return pl.concat_str(*_signed(coeff), pl.lit(' x'), _digits(col))
 
 
 def _number(value: pl.Expr) -> pl.Expr:
     """A float as LP text."""
-
     return value.cast(pl.String)
 
 
 def _signed(value: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
     """A coefficient, sign always explicit — the LP format needs the ``+``.
 
-    Two pieces for ``concat_str`` rather than one finished string, because the
-    cast already carries the ``-``: only a non-negative value needs a sign
-    glued on, and the sign column is one character wide however large the
-    model. Deciding the sign and then rendering ``abs()`` would render the
-    magnitude in both arms of the ``when``, at full width, to discard one.
+    Two pieces rather than one finished string: the cast already carries the
+    ``-``, so only a non-negative value needs a sign glued on and the sign
+    column stays one character wide. Rendering ``abs()`` under a ``when``
+    instead would render the magnitude at full width in both arms to discard
+    one.
 
-    ``-0.0`` is why zero is spelled out rather than cast: it is ``>= 0``, so it
-    takes the ``+`` arm while the cast still renders ``-0.0``, giving
-    ``+-0.0``, which no LP parser accepts. It is reachable from any negative
-    coefficient times a zero parameter, so it is a real file, not a curiosity.
+    Zero is spelled out rather than cast because ``-0.0`` is ``>= 0``: it takes
+    the ``+`` arm while the cast renders ``-0.0``, giving ``+-0.0``, which no LP
+    parser accepts. Any negative coefficient times a zero parameter reaches it.
     """
     return (
         pl.when(value >= 0).then(pl.lit('+')).otherwise(pl.lit('')).alias('sign'),
@@ -194,11 +176,9 @@ def _signed(value: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
 
 def _bound(value: pl.Expr, infinite: str) -> pl.Expr:
     """A bound, with the LP format's own spelling for an unbounded one."""
-
     return pl.when(value.is_infinite()).then(pl.lit(infinite)).otherwise(_number(value))
 
 
 def _digits(value: pl.Expr) -> pl.Expr:
     """An index as text — never in scientific notation, whatever its size."""
-
     return value.cast(pl.Int64).cast(pl.String)

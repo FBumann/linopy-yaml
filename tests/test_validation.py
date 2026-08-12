@@ -165,6 +165,13 @@ class TestValidateExpressions:
         )
 
 
+#: An extension whose only free name is the variable ``p``, so whether it loads
+#: is exactly whether the model it extends already declares one.
+CAP_EXTENSION = (
+    'dimensions:\n  g:\n    values: [wind, solar]\nconstraints:\n  cap:\n    foreach: [g]\n    expression: p <= 100\n'
+)
+
+
 class TestLoadTimeIntegration:
     def test_from_yaml_fails_before_data_validation(self, tmp_path):
         """A typo in an expression errors even when data= is absent."""
@@ -190,30 +197,14 @@ class TestLoadTimeIntegration:
         model.add_variables(coords={'g': pd.Index(['wind', 'solar'], name='g')}, name='p')
 
         f = tmp_path / 'ext.yaml'
-        f.write_text(
-            'dimensions:\n'
-            '  g:\n'
-            '    values: [wind, solar]\n'
-            'constraints:\n'
-            '  cap:\n'
-            '    foreach: [g]\n'
-            '    expression: p <= 100\n'
-        )
+        f.write_text(CAP_EXTENSION)
         lpspec_linopy.extend(model, f)
         assert 'cap' in model.constraints
 
     def test_extend_flags_unknown_variable(self, tmp_path):
         model = linopy.Model()
         f = tmp_path / 'ext.yaml'
-        f.write_text(
-            'dimensions:\n'
-            '  g:\n'
-            '    values: [wind, solar]\n'
-            'constraints:\n'
-            '  cap:\n'
-            '    foreach: [g]\n'
-            '    expression: p <= 100\n'
-        )
+        f.write_text(CAP_EXTENSION)
         with pytest.raises(ValueError, match="'p' not found"):
             lpspec_linopy.extend(model, f)
 
@@ -227,15 +218,16 @@ class TestDimensionKwargs:
 
     @staticmethod
     def _schema(expression: str, foreach: list[str] | None = None) -> Model:
-        # `or` would turn an explicit [] into ['snapshot']; a scalar constraint
-        # is a legitimate thing to ask for
-        foreach = ['snapshot'] if foreach is None else foreach
+        """A model over (snapshot, generator), with `zone` a coordinate of `bus`.
+
+        `zone` deliberately targets a dim `p` does *not* carry: grouping into
+        one it already has needs that dim twice, which is its own error.
+        """
+        foreach = ['snapshot'] if foreach is None else foreach  # an explicit [] is a scalar constraint
         return load_model(
             {
                 'dimensions': {
                     'snapshot': {'dtype': 'int'},
-                    # `zone` targets a dim `p` does NOT carry: grouping into one
-                    # it already has needs that dim twice, which is its own error
                     'bus': {'values': ['n']},
                     'generator': {'values': ['wind'], 'coords': {'zone': 'bus'}},
                 },

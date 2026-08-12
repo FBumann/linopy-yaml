@@ -197,7 +197,7 @@ new primitive is taxed. What is planned, and why, is
 
 ### The Python surface
 
-**Sixteen names, and that is the feature.** The model is the YAML file; Python
+**Nineteen names, and the count is the feature.** The model is the YAML file; Python
 is how you *run* it — so the whole surface is the diagram above written out,
 with nothing that constructs math and nothing that reaches the plan. Names are
 `lpspec.` unless shown otherwise, and what each one *does* is
@@ -215,11 +215,30 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | | *will that solver take it, and how big is it* | | |
 | **run it** | stream it straight into a solver | `solve`, or `build` to drive several sinks off one build | **yes** |
 | | write an LP file for anything else | `write` | **yes** |
+| | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | put the same math on a `linopy.Model` | `lpspec.linopy.build` · `.extend` (`data=`, its own coercion) | **yes** |
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
 | | *derived results; re-solve with new numbers, same labels* | | |
 | **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` | — |
+
+**Flat, and a namespace marks a lane rather than a topic.** `lpspec.linopy` is
+the only one, and it earns it by being a different lane — its own dependencies,
+its own oracle, its own two-verb surface with its own test. `strategy.py` is not
+a lane, so `solve_over` and its axes sit at the top level beside `solve`.
+
+That is a rule with teeth rather than a taste: the surface test exempts
+submodules (`not inspect.ismodule`), so moving names under `lpspec.something`
+moves them out from under the list a reviewer reads. **Grouping trades an
+enforced surface for a tidier one**, which is the opposite of what the count is
+for.
+
+**A return type is not a name.** `solve` returns a `Result` and `solve_over` a
+`Runs`, and neither is exported — you reach them by calling, and import them
+from their module only to write an annotation. What the objects themselves
+carry (`Result` alone has twelve readers) is documented in
+[docs/api.md](api.md) rather than counted here, which is why capability grows
+much faster than this table does.
 
 **What the data arrow carries** is [SPEC §8](SPEC.md#8-data-binding) and is not
 restated here. The one structural fact: **binding is by name at both levels** —
@@ -299,8 +318,9 @@ choice load-bearing in the language's rulebook.
    we ship and document; the contract underneath is `Model`, and whether
    that seam is ever blessed is open
    ([#381](https://github.com/fluxopt/lpspec/issues/381)). The Python surface is
-   the runner (`api.py`); the plan is internal. The whole of it is
-   [sixteen names](#the-python-surface), pinned by a test — so the surface grows
+   the runner (`api.py`) and the driver over it (`strategy.py`); the plan is
+   internal. The whole of it is
+   [nineteen names](#the-python-surface), pinned by a test — so the surface grows
    through a list a reviewer reads, like every other fence here.
 
 ## The relational lane
@@ -357,17 +377,17 @@ in the lane is order-free, which is what lets the query planner rearrange it.
   dimensions' declared ordinals. A contract, not a side effect: it is what makes
   a build reproducible run to run.
 - Variables and constraint rows are the same operation over different frames and
-  it is written once (`Labeller.frame`), which reaches the number three ways
-  depending on how much of the product survives the mask — arithmetic, factored,
-  counted — and they must agree integer for integer. That agreement is why
-  labelling is a module with stated inputs rather than three methods among
-  twenty: nothing else about a build can move an index. **Which** of the three
-  is a property of the plan, not of an engine, so both engines ask
-  `plan.free_prefix` and only the executions are written twice.
-- The same order comes **back**: `primal` / `dual` / `to_parquet` sort on the
-  label before handing rows over, the order the LP sink writes. Stated at the
-  read rather than assumed, because a `where` decides which rows survive and a
-  join decides nothing about the order they arrive in.
+  it is written once (`labels.frame`): number the surviving coordinates by their
+  row-major position in the declared product. A mask that cannot see the leading
+  dims leaves the survivors a *rectangle*, so only the masked suffix is
+  materialised — a guarded shortcut inside that one function, which must reach
+  the integers the general path would have. That is why labelling is a module
+  with stated inputs rather than a method among twenty: nothing else about a
+  build can move an index. **Which** route a mask allows is a property of the
+  plan rather than of an engine, so both engines ask `plan.free_prefix` and
+  only the executions are written twice.
+- The same order comes **back**: `primal` / `dual` / `to_parquet` read the
+  label frame, which was numbered in that order, and the LP sink writes it.
 
 **The plan is affine-by-design.** No node introduces variables or constraints as
 a side effect of an expression; formulations are model *transformations*.
@@ -432,6 +452,7 @@ must stay off the import path of a caller who does not use it.
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the exception hierarchy; the one module either fenced side may import |
 | `_notes.py` | attach context to an exception on the way out; no package imports, no opinions |
+| `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `relational/plan.py` | frozen logical-plan dataclasses — what an engine consumes |
 | `relational/engine.py` | the engine base: what one must supply, and the sinks and label joins it gets for free |
 | `relational/engines/__init__.py` | name → engine, a closed set; `LPSPEC_ENGINE` resolves through it, and unset means `duckdb` |
@@ -443,7 +464,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/chunking.py` | how a batched pass sizes its chunk: budget ÷ the width of one unit |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
-| `relational/engines/polars/labels.py` | which coordinate gets which solver index; three routes to one number, which must agree |
+| `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
 | `relational/engines/polars/executor.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
 | `relational/sinks/tables.py` | what every sink reads and no more — the four frames, their dtypes and the batching scalars, and their projection onto the solver's column index; what an engine produces |

@@ -1,0 +1,26 @@
+# The subproblem with no crutch: dispatch at a given capacity, or nothing.
+# Below some capacity there is no feasible dispatch at all, and this says so by
+# being infeasible — which is the case `benders.py` avoided with `unserved`.
+dimensions:
+  snapshot: {dtype: int}
+  generator: {values: [wind, gas]}
+parameters:
+  cost: {dims: [generator]}
+  load: {dims: [snapshot]}
+  avail: {dims: [snapshot, generator]}
+  cap_hat: {dims: [generator]}
+variables:
+  p:
+    foreach: [snapshot, generator]
+    bounds: {lower: 0}
+constraints:
+  capacity:
+    foreach: [snapshot, generator]
+    expression: p <= cap_hat * avail
+  balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) >= load
+objectives:
+  operating_cost:
+    sense: minimize
+    expression: p * cost

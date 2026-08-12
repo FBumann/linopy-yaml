@@ -11,14 +11,21 @@ end-to-end test stands in for it:
 
 - ``AGGREGATE`` absent from ``Sum`` and ``GroupSum``. They *project*; duplicates
   collapse once, in the terminal ``SUM(coeff) GROUP BY row, col`` at assembly.
-  Make either of them aggregate and the answers stay right while the skipped
-  aggregate — 2-4x of build time, see ``executor._needs_aggregate`` — quietly
-  becomes dead code.
+  Make either of them aggregate and the answers stay right while the single
+  place duplicates are meant to collapse quietly becomes two.
 - ``OVER`` absent from a translation, which joins the dim table twice instead.
   A window function answers correctly and gives up bounded-halo locality.
 - the modulo appearing only when a translation wraps.
 - a dimension comparison *filtering* a column the frame already carries rather
   than joining to find it, and a constant bound costing no join at all.
+- ``SEMI JOIN`` present for a mask that reads some of the frame's dims and
+  absent for one that reads them all. A full-width truth set is as wide as the
+  product, so the semi-join builds the product twice to save no width; the
+  fallback filter answers identically, which is why only shape can hold it.
+- ``INNER`` rather than ``LEFT`` for a name the mask is certain of, and ``LEFT``
+  again once that name sits under an ``Or``. Both give the same rows — the
+  filter drops what the left join kept — so the asymmetry is invisible to any
+  test that reads an answer.
 
 The frames are declared as **empty frames with the right schemas**, and that is
 the purity claim itself rather than a convenience: a lazy frame is a plan, so a
@@ -31,8 +38,6 @@ planner stays free to change underneath them.
 """
 
 from __future__ import annotations
-
-from dataclasses import replace
 
 import polars as pl
 import pytest
@@ -279,11 +284,29 @@ def test_a_dimension_comparison_filters_a_column_already_in_the_frame():
     assert 'JOIN' not in text
 
 
-def test_a_parameter_predicate_needs_a_left_join():
+def test_a_parameter_predicate_needs_a_join():
     frame = compiler().frame(('generator',), plan.ParameterDefined('available'))
     text = query(frame)
     assert 'JOIN' in text
     assert 'FILTER' in text
+
+
+def test_a_name_the_mask_is_certain_of_is_inner_joined():
+    """The rows a left join would keep here are rows the filter then drops, so
+    all it adds is the width of the product they are dropped from."""
+    text = query(compiler().frame(('generator',), plan.ParameterDefined('available')))
+    assert 'INNER JOIN' in text
+    assert 'LEFT JOIN' not in text
+
+
+def test_the_same_predicate_under_an_or_is_left_joined_again():
+    """Certainty is the whole of the caution: under an ``Or`` a missing value
+    can be what makes the mask true, so the rows an inner join would drop are
+    rows the answer may need."""
+    where = plan.Or(plan.ParameterDefined('available'), plan.DimensionComparison('generator', '==', 'g'))
+    text = query(compiler().frame(('generator',), where))
+    assert 'LEFT JOIN' in text
+    assert 'INNER JOIN' not in text
 
 
 def test_defined_on_a_boolean_parameter_tests_the_value_not_its_finiteness():
@@ -314,6 +337,25 @@ def test_an_unmasked_frame_has_nothing_to_filter():
     assert 'FILTER' not in query(compiler().frame(('snapshot', 'generator'), None))
 
 
+def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
+    """The predicate is a function of only the dims it reads, so it is evaluated
+    over *their* product and the full product is semi-joined against the truth
+    set — the mask's parameter columns never touch the full product, and the
+    left side's order survives, which is what keeps labelling's verify a verify.
+    """
+    frame = compiler().frame(('snapshot', 'generator'), plan.ParameterDefined('available'))
+    assert 'SEMI JOIN' in query(frame)
+
+
+def test_a_mask_reading_every_dim_filters_instead():
+    """A full-width truth set is as wide as the product itself, so the semi-join
+    would build the product twice to save no width. `sector`'s balance mask is
+    exactly that shape and paid 6.6% of the `m` pipeline for it before this
+    branch existed; the filter it falls back to keeps order the same way."""
+    where = plan.And(plan.ParameterDefined('load'), plan.ParameterDefined('available'))
+    assert 'SEMI JOIN' not in query(compiler().frame(('snapshot', 'generator'), where))
+
+
 def test_a_parameter_bound_joins_on_the_variable_frame():
     variable = plan.VariableDeclaration('p', ('snapshot', 'generator'), upper=plan.Parameter('cost'))
     bounded = compiler().bounds(VARIABLES['p'], variable)
@@ -331,136 +373,6 @@ def test_a_bound_carrying_a_variable_is_refused():
     variable = plan.VariableDeclaration('p', ('snapshot', 'generator'), upper=plan.Variable('p'))
     with pytest.raises(LanguageError, match='bounds must be variable-free'):
         compiler().bounds(VARIABLES['p'], variable)
-
-
-# ---------------------------------------------------------------------------
-# keyed — what lets the assembly skip its terminal aggregate
-# ---------------------------------------------------------------------------
-
-
-def test_a_variable_and_its_shape_operators_stay_keyed():
-    """A term keeps one row per (dims…, var_label) through every operator.
-
-    `Sum` drops a coordinate column, but the rows it merges came from distinct
-    coordinates and so carry distinct labels; `sum` and `roll` join a dim
-    table one-to-one. None of them can put a variable on a row twice.
-    """
-    for node in (
-        plan.Variable('p'),
-        plan.Sum(plan.Variable('p'), ('generator',)),
-        plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus'),
-        plan.Translate(plan.Variable('p'), 'snapshot', by=1),
-        plan.Multiply(plan.Variable('p'), plan.Parameter('cost')),
-        -plan.Variable('p'),
-    ):
-        assert compiler().expression(node, 'test').terms[0].keyed, node
-
-
-def test_two_fragments_of_one_variable_are_compared_by_what_moved_their_labels():
-    """A shared variable is necessary for a shared column, and not sufficient.
-
-    Two `sum`s of one variable through *different* coordinates of one dim
-    reach the same row only where those coordinates agree, which is a question
-    about the dimension table. Everything else answers yes: the cost of being
-    wrong is a model whose sinks disagree, against the cost of a sort.
-    """
-    q = compiler()
-    by_bus = plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus')
-    one = q.expression(by_bus, 'test').terms[0]
-    same = q.expression(by_bus, 'test').terms[0]
-    assert one.mapping == (('group', 'generator', 'bus', 'bus'),)
-    assert q.may_share_a_column(one, same), 'one mapping, so one row — certain'
-
-    plain = q.expression(plan.Variable('p'), 'test').terms[0]
-    assert q.may_share_a_column(one, plain), 'different dims are not modelled'
-
-    shifted = q.expression(plan.Translate(by_bus, 'snapshot', by=1), 'test').terms[0]
-    assert shifted.mapping[-1][0] == 'shift'
-    assert q.may_share_a_column(one, shifted), 'a shift on one side is not modelled'
-
-    other = q.expression(plan.Variable('p'), 'test').terms[0]
-    assert not q.may_share_a_column(one, replace(other, variable='q')), 'distinct variables never share'
-
-
-def test_a_term_names_its_variable_through_every_operator():
-    """What lets two fragments be compared without reading either.
-
-    `keyed` says a fragment cannot repeat a label on its own; this says which
-    labels it could possibly hold, and the two together are what the assembly
-    reads to decide whether its terminal aggregate has anything to collapse.
-    An operator that drops the name is not wrong — the aggregate runs — it
-    just puts every constraint back on the sorting path.
-    """
-    for node in (
-        plan.Variable('p'),
-        plan.Sum(plan.Variable('p'), ('generator',)),
-        plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus'),
-        plan.Translate(plan.Variable('p'), 'snapshot', by=1),
-        plan.Multiply(plan.Variable('p'), plan.Parameter('cost')),
-        plan.Divide(plan.Variable('p'), plan.Parameter('cost')),
-        -plan.Variable('p'),
-    ):
-        assert compiler().expression(node, 'test').terms[0].variable == 'p', node
-
-    assert compiler().expression(plan.Parameter('cost'), 'test').consts[0].variable is None
-
-
-def test_summing_a_constant_part_over_a_dim_stops_it_being_keyed():
-    """The exception, and the reason the flag is not just "is it a term".
-
-    Dropping a dim from a constant part genuinely merges rows — there is no
-    label left to tell them apart — so a term multiplied by one inherits that.
-    """
-    summed = plan.Sum(plan.Parameter('cost'), ('generator',))
-    assert not compiler().expression(summed, 'test').consts[0].keyed
-    product = plan.Multiply(plan.Variable('p'), summed)
-    assert not compiler().expression(product, 'test').terms[0].keyed
-
-
-def test_a_sum_that_drops_nothing_leaves_a_constant_part_keyed():
-    """Summing over a dim the operand lacks scales it; no rows merge."""
-    scaled = plan.Sum(plan.Multiply(plan.Variable('p'), plan.Parameter('cost')), ('snapshot',))
-    assert compiler().expression(scaled, 'test').terms[0].keyed
-
-
-def test_sum_over_a_broadcast_dim_is_not_keyed():
-    """Which dim is grouped decides whether the key survives.
-
-    `generator` is `p`'s own, so grouping it merges rows with distinct labels.
-    Reaching the fragment by broadcast — a parameter carrying a dim the
-    variable does not — merges rows carrying the same one, and nothing
-    downstream can tell those apart.
-    """
-    own = plan.GroupSum(plan.Variable('p'), over='generator', coordinate='bus', into='bus')
-    assert compiler().expression(own, 'test').terms[0].keyed
-
-    broadcast = plan.GroupSum(
-        plan.Multiply(plan.Variable('p'), plan.Parameter('cost')),
-        over='generator',
-        coordinate='bus',
-        into='bus',
-    )
-    assert compiler().expression(broadcast, 'test').terms[0].keyed  # still p's own dim
-
-    lone = plan.Program(
-        parameters=PROGRAM.parameters,
-        variables=(plan.VariableDeclaration('q', ('snapshot',)),),
-        constraints=(),
-        objective=plan.ObjectiveDeclaration('min', plan.Variable('q')),
-        dimensions=PROGRAM.dimensions,
-    )
-    lonely = PolarsCompiler(
-        lone,
-        bound(),
-        {'q': pl.LazyFrame(schema={'snapshot': pl.Int64, 'var_label': pl.Int64})},
-    )
-    node = plan.GroupSum(
-        plan.Multiply(plan.Variable('q'), plan.Parameter('cost')),
-        over='generator',
-        coordinate='bus',
-        into='bus',
-    )
-    assert not lonely.expression(node, 'test').terms[0].keyed
 
 
 def test_a_zero_edge_writes_its_rows_like_any_other_fill():

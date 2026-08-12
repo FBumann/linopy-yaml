@@ -29,8 +29,8 @@ from duckdb import CoalesceOperator, ConstantExpression, Expression, FunctionExp
 
 from lpspec.errors import DataError, LanguageError, null_bounds_message
 from lpspec.relational import plan, sinks
-from lpspec.relational.binding import bind
-from lpspec.relational.engine import Engine, needs_aggregate
+from lpspec.relational.binding import BoundSources, bind
+from lpspec.relational.engine import Engine
 from lpspec.relational.engines.duck.compiler import (
     UNIT,
     DuckCompiler,
@@ -45,7 +45,7 @@ from lpspec.relational.engines.duck.compiler import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
 #: The four frames a sink reads, and their dtypes — both stated by
 #: `sinks/tables.py`, which is what reads them. Shared with the polars engine
@@ -82,9 +82,6 @@ class _Labels(Mapping[str, 'pl.LazyFrame']):
         self._tables = tables
         self._label = label
         self._frames: dict[str, pl.LazyFrame] = {}
-        #: dim -> the ``Enum`` binding encoded it as, for the cast on the way
-        #: out. Filled by `DuckExecutor.build`, empty until then.
-        self.enums: dict[str, pl.Enum] = {}
 
     def __getitem__(self, name: str) -> pl.LazyFrame:
         """The frame, **in label order and in binding's dtypes** — read, not imposed.
@@ -95,17 +92,12 @@ class _Labels(Mapping[str, 'pl.LazyFrame']):
         cross join. So the order is asked for on the way out, where it is paid
         only by a caller that reads a solution back.
 
-        The ``Enum`` is restored on the same trip. A string dimension is an
-        ``Enum`` over its labels in ordinal order (`binding.encode_dimensions`),
-        which crosses into duckdb as a plain ``VARCHAR`` and would come back as
-        one — so a caller reading the same model back would get a different
-        dtype, and a *different sort order*, depending on which engine built it.
-        Declaration order is the model's order; alphabetical is nobody's.
+        The dtypes are binding's own: a string dimension crosses into duckdb as
+        ``VARCHAR`` and comes back as ``String``, which is what
+        `Engine._read_back` hands a caller from either engine (#541, #593).
         """
         if name not in self._frames:
-            frame = self._con.table(self._tables[name]).order(q(self._label)).pl()
-            casts = [pl.col(d).cast(e) for d, e in self.enums.items() if d in frame.columns]
-            self._frames[name] = (frame.with_columns(casts) if casts else frame).lazy()
+            self._frames[name] = self._con.table(self._tables[name]).order(q(self._label)).pl().lazy()
         return self._frames[name]
 
     def __iter__(self) -> Iterator[str]:
@@ -136,6 +128,7 @@ class DuckExecutor(Engine):
 
     def __init__(self) -> None:
         self._con = duckdb.connect()
+        self._bound: BoundSources | None = None
         self._compiler: DuckCompiler | None = None
         self._program: plan.Program | None = None
         self._var_tables: dict[str, str] = {}
@@ -220,10 +213,8 @@ class DuckExecutor(Engine):
         """
         self._program = program
         self._name_dims = plan.name_dims(program)
-        bound = bind(program, sources)
+        bound = self._bound = bind(program, sources)
         materialised = {n: f.collect() for n, f in bound.dimensions.items()}
-        enums = {n: f.schema['val'] for n, f in materialised.items() if isinstance(f.schema['val'], pl.Enum)}
-        self._var_labels.enums = self._row_labels.enums = enums
         dims = {n: self._register(f'dim_{n}', f) for n, f in materialised.items()}
         params = {n: self._register(f'par_{n}', f.collect()) for n, f in bound.parameters.items()}
         self._compiler = DuckCompiler(
@@ -530,7 +521,7 @@ class DuckExecutor(Engine):
                 )
             )
         stacked = union_all(pieces[0], pieces[1:])
-        if not needs_aggregate([f for f, _ in terms], self._q.may_share_a_column):
+        if not _needs_aggregate([f for f, _ in terms], self._q.may_share_a_column):
             return stacked
         # `sum` over `(row, col)` is the terminal aggregate — where duplicates
         # from Sum and GroupSum, which project rather than aggregate, collapse.
@@ -603,7 +594,7 @@ class DuckExecutor(Engine):
             return None
         pieces = [p.rel.select(col('var_label').cast('INTEGER').alias('col'), col('coeff')) for p in comp.terms]
         stacked = union_all(pieces[0], pieces[1:])
-        if needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
+        if _needs_aggregate(comp.terms, self._q.may_share_a_column, projected=True):
             total = FunctionExpression('sum', col('coeff')).alias('coeff')
             return stacked.aggregate([col('col'), total], q('col')).pl()
         return stacked.pl()
@@ -628,6 +619,7 @@ class DuckExecutor(Engine):
     def close(self) -> None:
         """Drop the built model. Calling twice is not an error."""
         self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
+        self._bound = None
         self._var_labels.clear()
         self._row_labels.clear()
         self._blocks.clear()
@@ -659,6 +651,45 @@ def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame
     if not kept:
         return pl.DataFrame(schema={name: sinks.DTYPES[name] for name in columns})
     return pl.concat([f.select(columns) for f in kept])
+
+
+def _needs_aggregate(
+    terms: Sequence[TermFragment],
+    may_share: Callable[[TermFragment, TermFragment], bool],
+    *,
+    projected: bool = False,
+) -> bool:
+    """Whether stacking *terms* can put two rows on one solver column.
+
+    Named for the answer, not the condition: an inverted test here is a wrong
+    model rather than a slow one.
+
+    Two things can put a label twice into the stack, asked separately. A
+    fragment that is not `keyed` already holds one twice on its own. Whether a
+    *pair* can is *may_share*, which answers no for distinct variables and
+    otherwise asks whether two fragments of one variable send a label to one
+    **row** — see `DuckCompiler.may_share_a_column`. That second half is what
+    makes the ordinary multi-term constraint free: reading only a fragment
+    count says the aggregate is reachable for ``reserve_up + reserve_down <=
+    p_max``, which sorts every nonzero in the model to collapse nothing. Worth
+    0.90-0.94x of build on the three ladder cases with multi-term constraints,
+    and nothing on the other four (#638).
+
+    *projected* is what the two call sites do not share. The matrix keeps a
+    fragment's dims, so `keyed` — one row per ``(dims…, var_label)`` — carries
+    straight into ``(row, col)``. The objective keeps only ``var_label``, so it
+    asks the stronger question: does the key survive losing *all* dims?
+
+    **This is not how the polars engine answers any more.** #520 replaced the
+    same reasoning there with three linear probes over the built matrix — is it
+    ordered, does any cell repeat — which is exact where this is conservative,
+    and costs a pass rather than a dimension-table query. Whether that is the
+    better trade here is unmeasured: this engine builds its matrix in duckdb
+    and would have to fetch it unaggregated to probe it.
+    """
+    if any(not t.survives_dropping(set(t.dims) if projected else set()) for t in terms):
+        return True
+    return any(may_share(a, b) for i, a in enumerate(terms) for b in terms[i + 1 :])
 
 
 def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str, ...], Relation]]:

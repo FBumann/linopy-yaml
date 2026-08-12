@@ -69,12 +69,12 @@ def test_the_multi_period_page_number():
         assert result.objective == pytest.approx(750.0)
 
     built = {(row['period'], row['generator']): row['value'] for row in nominal.to_dicts()}
-    # 2030 peaks at 30 and splits the build; 2050 peaks at 60 with every
-    # snapshot weighted four times, so the operating term takes it all to wind
-    assert built[(2030, 'wind')] == pytest.approx(20.0)
-    assert built[(2030, 'gas')] == pytest.approx(10.0)
-    assert built[(2050, 'wind')] == pytest.approx(60.0)
-    assert built[(2050, 'gas')] == pytest.approx(0.0)
+    assert built[(2030, 'wind')] == pytest.approx(20.0), '2030 peaks at 30 and splits the build'
+    assert built[(2030, 'gas')] == pytest.approx(10.0), '2030 peaks at 30 and splits the build'
+    assert built[(2050, 'wind')] == pytest.approx(60.0), (
+        '2050 peaks at 60 with every snapshot weighted four times, so the operating term takes it all to wind'
+    )
+    assert built[(2050, 'gas')] == pytest.approx(0.0), 'gas is priced out of 2050 entirely'
 
     assert '750.0' in PAGE.read_text(), 'the page quotes an optimum this test does not hold'
 
@@ -83,13 +83,13 @@ def test_a_period_bound_actually_binds():
     """Not vacuous: halving what 2050 may build has to move the answer.
 
     A pullback that silently dropped its rows would leave `p` unbounded above
-    and the objective unchanged, which is the failure this rules out.
+    and the objective unchanged, which is the failure this rules out. The cap
+    is applied by making 2050 capacity ruinously expensive.
     """
     sources = _sources()
     with lps.solve(MULTI_PERIOD, sources) as unbounded:
         base = unbounded.objective
 
-    # cap the build by making 2050 capacity ruinously expensive
     sources['capex'] = pl.DataFrame(
         {
             'generator': GENERATORS * 2,
@@ -159,11 +159,11 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
 
     Summing the pulled-back term back over `flow` is what forces that, so this
     is deliberately not the pointwise case the tests above cover.
+
+    The oracle is imported in the body rather than at module scope: every other
+    test here is linopy-free and has to keep running on the bare install, so
+    this one test skips there instead of failing on a missing pandas.
     """
-    # Imported here, not at module scope: every other test in this file is
-    # linopy-free and has to keep running on the bare install. Both names come
-    # from the guarded module, so this one test skips there instead of failing
-    # on a missing pandas.
     from tests.differential import differential
     from tests.oracle import pd
 
@@ -178,8 +178,7 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
             'take': {'foreach': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
         },
         'constraints': {
-            # the pulled-back term is *summed*, so one `level` label lands in
-            # this row once per flow of its component
+            # summed, so one `level` label lands in this row once per flow of its component
             'draw': {'foreach': [], 'expression': 'sum(at(level, onto=flow, by=component) * share, over=flow) >= 9'},
             'link': {'foreach': ['flow'], 'expression': 'take <= at(level, onto=flow, by=component)'},
         },
