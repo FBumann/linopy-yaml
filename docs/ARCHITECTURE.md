@@ -76,8 +76,8 @@ flowchart TB
         PLAN["plan.py<br/>frozen logical plan"] --> ENG
         subgraph ENG["engines/polars/ — the only part a second engine replaces"]
             direction TB
-            COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> EXEC
-            BIND["binding.py<br/>→ BoundSources, frozen"] --> EXEC["engine.py + labels.py<br/>assemble the model frames"]
+            COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> ENGINE
+            BIND["binding.py<br/>→ BoundSources, frozen"] --> ENGINE["engine.py + labels.py<br/>assemble the model frames"]
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file (mps planned)"]
