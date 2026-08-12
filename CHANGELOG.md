@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.108](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.107...v0.0.1-alpha.108) (2026-08-12)
+
+
+### Documentation
+
+* **agents:** what is non-negotiable, and what is a default you may argue with ([#624](https://github.com/fluxopt/lpspec/issues/624)) ([526c11a](https://github.com/fluxopt/lpspec/commit/526c11a09df7d6e3483278177f8f04574e378fcf))
+
 ## [0.0.1-alpha.107](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.106...v0.0.1-alpha.107) (2026-08-12)
 
 
