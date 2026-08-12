@@ -215,6 +215,48 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers():
     assert by_key['low'] < by_key['mid'] < by_key['high'], 'a bigger load is a costlier dispatch'
 
 
+def test_a_serial_fold_builds_once_and_rebinds(monkeypatch):
+    """The fold is a rebind loop, and it has to stay one.
+
+    Every slice is the same math over different numbers, so nothing after the
+    first pays for the YAML, the plan or a fresh solver. Counted at `build`
+    because the difference is invisible in the answer, which is the whole point
+    of `rebind` being total — a regression here is silent.
+    """
+    built = []
+    original = strategy.build
+    monkeypatch.setattr(strategy, 'build', lambda *a, **k: built.append(original(*a, **k)) or built[-1])
+
+    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+
+    assert len(runs) == 3, 'three slices'
+    assert len(built) == 1, f'{len(built)} builds for three slices — the fold stopped rebinding'
+    seen = built[0].diagnostics()
+    assert (seen.loads, seen.solves) == (1, 3), 'one solver load, the slices differing only in numbers'
+
+
+def test_a_pooled_fold_builds_per_slice(monkeypatch):
+    """The exception, and the reason for it: a built model cannot be pickled.
+
+    Stated as a test because the two branches now differ in more than where
+    they run, and a `BoundModel` handed to `_run_slice` would fail in the
+    worker rather than here. Counted at `lpspec.api.build`, which is what a
+    slice reaches through `solve`; the serial branch holds its own reference
+    and is counted at that one.
+    """
+    from lpspec import api
+
+    built = []
+    original = api.build
+    monkeypatch.setattr(api, 'build', lambda *a, **k: built.append(original(*a, **k)) or built[-1])
+
+    with ThreadPoolExecutor(2) as pool:
+        runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), executor=pool)
+
+    assert len(runs) == 3
+    assert len(built) == 3, 'a slice that may run in another process builds its own model'
+
+
 def test_each_slice_matches_solving_that_slice_alone():
     """The fold must not change the answer — the oracle is `solve` itself."""
     runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))

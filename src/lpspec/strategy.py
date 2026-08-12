@@ -5,10 +5,15 @@ shape fixed before its own data (docs/design/ceiling.md). So a strategy is
 never a language feature and never an engine feature — it is a driver above
 :mod:`lpspec.api`, built from the public verbs, and no lane learns a new word.
 
-Every strategy is the same fold: **partition → build → solve → carry →
+Every strategy is the same fold: **partition → bind → solve → carry →
 stitch**. Only how slices are cut and whether they couple differs. (The
 *stage* stitches; a reader asks for its result by the index it wants, which is
 :meth:`Runs.primal`'s ``original_index``.)
+
+*Bind* rather than *build*, because a serial fold builds once and rebinds each
+slice onto that model (:func:`_one_model`) — every slice being the same math
+over different numbers, which is what ``rebind`` is for. A fold under a process
+pool builds per slice, a built model being the one thing that cannot cross.
 
     scenario / sweep    ``EachCoordinate('scenario')``              independent
     myopic pathway      ``EachCoordinate('period', ordered=True)``  + ``carry``
@@ -26,20 +31,21 @@ from __future__ import annotations
 
 import io
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import polars as pl
 
-from lpspec.api import check
+from lpspec.api import build, check
 from lpspec.api import solve as _solve
 from lpspec.errors import DataError, LpspecError
 from lpspec.relational.frames import as_frame
 from lpspec.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
 
     import pandas as pd
     import xarray as xr
@@ -410,12 +416,21 @@ def solve_over(
 ) -> Runs:
     """Solve *model* once per slice of *axis* and fold the answers together.
 
-    One slice is built, solved and released before the next begins, so build
-    peak stays at one slice however many there are; what accumulates is the
-    answers. A carry hands each slice's result to the next, and the last slice
-    carries nothing. What a carry copies and how a key column is named are the
-    table in
-    [docs/api.md](../../docs/api.md#solving-one-model-many-times).
+    The caller-facing rules — what a carry copies, how a key column is named,
+    which executor to choose — are the table in
+    [docs/api.md](../../docs/api.md#solving-one-model-many-times), so that they
+    are stated once. What this docstring adds is the order the work happens in.
+
+    **Everything answerable from the declarations is answered before a source
+    is read.** A mistyped carry, a key column that collides, an axis a carry
+    cannot run on: each costs a parse rather than a scan of every parquet file.
+    The schema then rides down to the slices already parsed, so no slice — and
+    no worker — reads the same YAML again.
+
+    **It is a fold.** The previous slice's model is released as the loop goes —
+    rebound in place, serially — so build peak stays at one slice however many
+    there are; what accumulates is the answer, which is what the caller asked
+    for.
 
     Every declaration is checked before a source is read: a mistyped carry, a
     key column that collides, an axis a carry cannot run on all cost a parse
@@ -502,12 +517,14 @@ def solve_over(
     if executor is None:
         state: dict[str, Any] = {}
         last = len(cuts) - 1
-        for position, (key, sliced, coords) in enumerate(cuts):
-            meta, frames, priced, reason = _run_slice(*arguments({**sliced, **state}, coords, False))
-            no_duals = no_duals or reason
-            absorb(key, meta, frames, priced)
-            if plan and position < last:
-                state = _carried(plan, frames, key)
+        with _one_model(schema, call) as bound:
+            for position, (key, sliced, coords) in enumerate(cuts):
+                result = bound.on({**sliced, **state}, {**caller_coords, **coords})
+                meta, frames, priced, reason = _answers(result, schema)
+                no_duals = no_duals or reason
+                absorb(key, meta, frames, priced)
+                if plan and position < last:
+                    state = _carried(plan, frames, key)
     else:
         crosses = _crosses_a_process(executor)
         futures = [executor.submit(_run_slice, *arguments(sliced, coords, crosses)) for _key, sliced, coords in cuts]
@@ -526,6 +543,66 @@ def solve_over(
     )
 
 
+@contextmanager
+def _one_model(schema: Model, call: dict[str, Any]) -> Iterator[_Rebound]:
+    """One built model for the whole fold, rebound per slice.
+
+    Every slice of a sweep is the same math over different numbers, which is
+    what :meth:`~lpspec.api.BoundModel.rebind` is: the YAML is parsed once, the
+    plan lowered once, and a slice whose structure matches the last one keeps
+    the loaded solver and re-solves from its basis. The peak is unchanged —
+    a rebuild releases the previous model before it starts — so this is still
+    a fold that holds one slice's model however many there are.
+
+    Serial only. The pooled branch hands plain data to :func:`_run_slice` in
+    another process, and a built model is the one thing that cannot cross.
+    """
+    holder = _Rebound(schema, call)
+    try:
+        yield holder
+    finally:
+        holder.close()
+
+
+class _Rebound:
+    """The fold's model, and which slice it currently holds."""
+
+    def __init__(self, schema: Model, call: dict[str, Any]) -> None:
+        self._schema = schema
+        self._solve_with = {'solver_name': call['solver_name'], 'solver_options': call['solver_options']}
+        self._build_with = {k: v for k, v in call.items() if k not in self._solve_with}
+        self._bound: Any = None
+
+    def on(self, sources: Mapping[str, Any], coords: Mapping[str, Any]) -> Any:
+        """Solve this slice — the first builds, the rest rebind."""
+        if self._bound is None:
+            self._bound = build(self._schema, sources, coords=dict(coords) or None, **self._build_with)
+        else:
+            self._bound.rebind(sources, coords=coords)
+        return self._bound.solve(**self._solve_with)
+
+    def close(self) -> None:
+        if self._bound is not None:
+            self._bound.close()
+
+
+def _answers(result: Any, model: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str | None]:
+    """One slice's answer, read out of *result* before anything rebinds it.
+
+    Read here rather than held, which is the discipline a rebound model asks
+    of every driver and the fold already kept: what a sweep accumulates is
+    frames, never results.
+    """
+    meta = {
+        'status': result.status,
+        'termination_condition': result.termination_condition,
+        'objective': result.objective if result.has_primal else float('nan'),
+    }
+    frames = {name: result.primal(name) for name in model.variables} if result.has_primal else {}
+    priced, no_duals = _prices(result, model)
+    return meta, frames, priced, no_duals
+
+
 def _run_slice(
     model: Any,
     encoded: dict[str, Any],
@@ -533,21 +610,16 @@ def _run_slice(
     encode_out: bool,
     call: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str | None]:
-    """One slice, start to finish, over plain data.
+    """One slice, start to finish, over plain data — the *pooled* branch.
 
     Module-level and closure-free on purpose: a remote executor has to pickle
     what it is handed, and a bound method or a lambda over the axis object
     cannot cross. Everything in the signature is a path, a frame, a string or a
-    number.
+    number — which is also why this one builds per slice where the serial
+    branch rebinds.
     """
     with _solve(model, _decode(encoded), coords=coords, **call) as result:
-        meta = {
-            'status': result.status,
-            'termination_condition': result.termination_condition,
-            'objective': result.objective if result.has_primal else float('nan'),
-        }
-        frames = {name: result.primal(name) for name in model.variables} if result.has_primal else {}
-        priced, no_duals = _prices(result, model)
+        meta, frames, priced, no_duals = _answers(result, model)
         if not encode_out:
             return meta, frames, priced, no_duals
         return meta, _encode(frames, {}), _encode(priced, {}), no_duals
