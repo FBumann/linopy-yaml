@@ -1,4 +1,4 @@
-"""Logical plan → SQL. The duckdb twin of `relational/compiler.py`.
+"""Logical plan → duckdb relations. The duckdb twin of `relational/compiler.py`.
 
 Written to be read **beside** its polars original, not instead of it: the
 method names, the argument order and the column conventions are the same, so a
@@ -19,29 +19,47 @@ term fragment        ``dims…``, ``var_label``, ``coeff``
 const fragment       ``dims…``, ``cval``
 ===================  ==========================================
 
+**A fragment is a `DuckDBPyRelation` and a value is an `Expression`**, which is
+what makes this a twin of the polars compiler rather than a string builder
+wearing its method names: `LazyFrame` and `pl.Expr` are the same two objects.
+An arithmetic node is composed, so precedence is structural rather than
+parenthesised by hand, a literal carries the type the plan holds rather than
+the one SQL would read out of its spelling, and a name or an arity that does
+not exist raises where it is written instead of when duckdb parses the query
+against data.
+
 **An identifier is a value here, never syntax** — the same rule the polars
 compiler states, and the one that cost the original engine a `sql.py` module
-and an identifier restriction (#189 deleted both). Every name that reaches SQL
-goes through :func:`q`, which quotes it. Nothing is interpolated raw.
+and an identifier restriction (#189 deleted both). Every name that reaches a
+relation goes through :func:`col`. Four constructs have no expression form and
+are written out where they are needed, each in a helper that says so:
+null-matching joins (:func:`matching`), window functions and ordered
+aggregates (both in the executor), and group-by lists.
 """
 
 from __future__ import annotations
 
-import datetime
 import math
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
+
+import duckdb
+from duckdb import CoalesceOperator, ConstantExpression, Expression, FunctionExpression, SQLExpression
 
 from lpspec.errors import LanguageError
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    import datetime
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
-#: Scratch columns. The spaces make them unrepresentable as declared names, so
-#: they cannot collide with a dimension or coordinate the model already has.
-_RHS = '__rhs value__'
+#: Scratch column. The spaces make it unrepresentable as a declared name, so it
+#: cannot collide with a dimension or coordinate the model already has.
 UNIT = '__unit__'
+
+#: What a fragment is. Aliased because `duckdb.DuckDBPyRelation` appears in
+#: every signature here and reads as machinery rather than as the thing.
+Relation = duckdb.DuckDBPyRelation
 
 
 def q(name: str) -> str:
@@ -49,54 +67,62 @@ def q(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def lit(value: object) -> str:
-    """A Python value as a SQL literal, quoted if it is a string.
+def col(name: str, *, of: str = '') -> Expression:
+    """Column *name*, of the relation aliased *of* where one is given.
 
-    Dates and timestamps are spelled ISO and cast, not `repr`-ed: `repr` of a
-    `datetime.date` is `datetime.date(2030, 1, 3)`, which SQL reads as a call
-    to its own `DATE` function and rejects for the arity.
+    `SQLExpression` over a quoted name rather than `ColumnExpression`, which
+    parses its argument as a *qualified* name: a dimension called ``a.b`` binds
+    as column ``b`` of a table ``a`` that does not exist, and one holding a
+    quote raises a parser error. Both are legal model names — a name comes from
+    the caller's YAML and no language rule constrains it — so an identifier
+    becomes syntax in :func:`q` and nowhere else.
     """
-    if isinstance(value, str):
-        return "'" + value.replace("'", "''") + "'"
-    if isinstance(value, bool):
-        return 'TRUE' if value else 'FALSE'
-    if value is None:
-        return 'NULL'
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            return "'Infinity'::DOUBLE" if value > 0 else "'-Infinity'::DOUBLE"
-        # `::DOUBLE`, or SQL reads `0.1` as DECIMAL(2,1) — a different number
-        # from the double the plan holds, and a different one from what the
-        # polars engine multiplies by. Decimal also propagates: a coefficient
-        # built from one stays decimal all the way into `obj`.
-        return f'{value!r}::DOUBLE'
-    if isinstance(value, datetime.datetime):
-        return f"'{value.isoformat(sep=' ')}'::TIMESTAMP"
-    if isinstance(value, datetime.date):
-        return f"'{value.isoformat()}'::DATE"
-    return repr(value)
+    return SQLExpression(f'{of}.{q(name)}' if of else q(name))
+
+
+def matching(dims: Sequence[str], left: str = 'l', right: str = 'r') -> Expression:
+    """Join condition over *dims*, **matching null to null**.
+
+    ``IS NOT DISTINCT FROM``, which has no expression-API form and so is
+    written out. A coordinate may legitimately be null — it says the label
+    belongs to no group — and an equi-join would drop the row rather than
+    match it.
+    """
+    return SQLExpression(' AND '.join(f'{left}.{q(d)} IS NOT DISTINCT FROM {right}.{q(d)}' for d in dims))
+
+
+def falsy_if_null(condition: Expression) -> Expression:
+    """A row the mask cannot judge is absent rather than kept.
+
+    SQL three-valued logic makes a null mask neither true nor false. The polars
+    side spells this `_falsy_if_null`, and both engines apply it at the same
+    two points — the top-level filter and inside a negation — because collapsing
+    before the negation and collapsing after it give opposite answers.
+    """
+    return CoalesceOperator(condition, ConstantExpression(False))
+
+
+def cross_all(first: Relation, rest: Iterable[Relation]) -> Relation:
+    """*first* crossed with each of *rest*, left to right."""
+    for other in rest:
+        first = first.cross(other)
+    return first
+
+
+def union_all(first: Relation, rest: Iterable[Relation]) -> Relation:
+    """*first* stacked with each of *rest*, keeping duplicates.
+
+    `DuckDBPyRelation.union` is ``UNION ALL``; the deduplicating one is
+    `union` followed by `distinct`, which is what the presence sets ask for
+    and the value fragments must not.
+    """
+    for other in rest:
+        first = first.union(other)
+    return first
 
 
 def _ordinal(dim: str) -> str:
     return f'__ord {dim}__'
-
-
-@dataclass(frozen=True)
-class Rel:
-    """A SELECT, and the columns it is known to carry.
-
-    Composition is by nesting rather than by CTE. A CTE would read better in
-    isolation and worse in aggregate: every operator would have to invent a
-    unique name, and the names would then appear in the plan of every operator
-    above it. Nesting keeps a fragment a value, which is what the polars side
-    gets for free from `LazyFrame`.
-    """
-
-    sql: str
-    columns: tuple[str, ...]
-
-    def alias(self, name: str) -> str:
-        return f'({self.sql}) AS {q(name)}'
 
 
 @dataclass(frozen=True)
@@ -108,12 +134,22 @@ class TermFragment:
     """
 
     dims: tuple[str, ...]
-    rel: Rel
+    rel: Relation
     is_term: bool
     keyed: bool = True
     label_dims: frozenset[str] = frozenset()
-    presence: Rel | None = None
+    presence: Relation | None = None
     presence_dims: tuple[str, ...] | None = None
+    variable: str | None = None
+    """The variable whose labels this fragment carries; ``None`` for a constant part."""
+    mapping: tuple[tuple[str, ...], ...] = ()
+    """What has moved a label since it was read, oldest first.
+
+    A ``GroupSum`` records ``('group', over, coordinate, into)`` and a
+    ``Translate`` ``('shift', dimension, by, wrap)``. Read only to compare two
+    fragments of one variable — :meth:`DuckCompiler.may_share_a_column` — and
+    never to build a relation.
+    """
 
     @property
     def value_column(self) -> str:
@@ -137,8 +173,9 @@ class CompiledExpression:
 
 @dataclass
 class DuckCompiler:
-    """Plan → SQL, against relations already registered on *con*."""
+    """Plan → relations, against tables already registered on *con*."""
 
+    con: duckdb.DuckDBPyConnection
     program: plan.Program
     dimensions: Mapping[str, str]
     parameters: Mapping[str, str]
@@ -150,57 +187,55 @@ class DuckCompiler:
     # frames — the masked coordinate product a declaration is instantiated over
     # ------------------------------------------------------------------
 
-    def frame(self, dims: tuple[str, ...], where: plan.Predicate | None) -> Rel:
+    def frame(self, dims: tuple[str, ...], where: plan.Predicate | None) -> Relation:
         """The masked coordinate product over *dims*: labels, plus the ordinals
         a caller sorts by so labels follow declaration order."""
         out = self._coordinate_product(dims)
         if where is None:
             return out
         out, condition = self._predicate(out, where, dims)
-        keep = ', '.join(q(c) for c in out.columns if not c.startswith('__where'))
-        cols = tuple(c for c in out.columns if not c.startswith('__where'))
-        # `coalesce(cond, FALSE)`: SQL three-valued logic makes a null mask
-        # neither true nor false, and a row a mask cannot judge is absent —
-        # the polars side spells this `_falsy_if_null`.
-        return Rel(f'SELECT {keep} FROM {out.alias("m")} WHERE coalesce({condition}, FALSE)', cols)
+        kept = [c for c in out.columns if not c.startswith('__where')]
+        return out.filter(falsy_if_null(condition)).select(*(col(c) for c in kept))
 
-    def _coordinate_product(self, dims: tuple[str, ...]) -> Rel:
+    def unit(self) -> Relation:
+        """The one row an empty coordinate product is.
+
+        Not nothing: a `where` on a scalar declaration filters this relation,
+        and a filter needs a row to reject.
+        """
+        return self.con.sql(f'SELECT 0 AS {q(UNIT)}')
+
+    def _coordinate_product(self, dims: tuple[str, ...]) -> Relation:
         """Cross join of the dim tables: labels and ordinals, nothing else."""
         if not dims:
-            # The empty cross join's unit is one row, not nothing — and the row
-            # has to be real, since a `where` on a scalar declaration filters
-            # this relation and nothing survives a filter.
-            return Rel(f'SELECT 0 AS {q(UNIT)}', (UNIT,))
-        selects: list[str] = []
-        froms: list[str] = []
-        for i, d in enumerate(dims):
-            t = f'd{i}'
-            selects += [f'{t}.val AS {q(d)}', f'{t}.ord AS {q(_ordinal(d))}']
-            froms.append(f'{q(self.dimensions[d])} AS {t}')
-        cols = tuple(c for d in dims for c in (d, _ordinal(d)))
-        return Rel(f'SELECT {", ".join(selects)} FROM ' + ' CROSS JOIN '.join(froms), cols)
+            return self.unit()
+        tables = [self.con.table(self.dimensions[d]).set_alias(f'd{i}') for i, d in enumerate(dims)]
+        picked = [
+            e
+            for i, d in enumerate(dims)
+            for e in (col('val', of=f'd{i}').alias(d), col('ord', of=f'd{i}').alias(_ordinal(d)))
+        ]
+        return cross_all(tables[0], tables[1:]).select(*picked)
 
-    def parameter_join(self, rel: Rel, param: str, frame_dims: tuple[str, ...], alias: str, subject: str) -> Rel:
+    def parameter_join(
+        self, rel: Relation, param: str, frame_dims: tuple[str, ...], alias: str, subject: str
+    ) -> Relation:
         """Left-join *param* onto *rel*, its value column renamed to *alias*."""
         declaration = self.program.parameter(param)
         extra = set(declaration.dims) - set(frame_dims)
         if extra:
             raise LanguageError(f'{subject} has dims {sorted(extra)} outside the foreach dims {list(frame_dims)}')
-        carried = ', '.join(f'l.{q(c)}' for c in rel.columns)
-        table = q(self.parameters[param])
-        if not declaration.dims:
-            join = f'{rel.alias("l")} CROSS JOIN {table} AS r'
-        else:
-            on = ' AND '.join(f'l.{q(d)} IS NOT DISTINCT FROM r.{q(d)}' for d in declaration.dims)
-            join = f'{rel.alias("l")} LEFT JOIN {table} AS r ON {on}'
-        return Rel(f'SELECT {carried}, r.value AS {q(alias)} FROM {join}', (*rel.columns, alias))
+        left = rel.set_alias('l')
+        right = self.con.table(self.parameters[param]).set_alias('r')
+        joined = left.cross(right) if not declaration.dims else left.join(right, matching(declaration.dims), how='left')
+        return joined.select(*(col(c, of='l') for c in rel.columns), col('value', of='r').alias(alias))
 
     # ------------------------------------------------------------------
     # predicates (where masks — row absence)
     # ------------------------------------------------------------------
 
-    def _predicate(self, rel: Rel, pred: plan.Predicate, dims: tuple[str, ...]) -> tuple[Rel, str]:
-        """``(rel with the mask's parameters joined, boolean SQL)``."""
+    def _predicate(self, rel: Relation, pred: plan.Predicate, dims: tuple[str, ...]) -> tuple[Relation, Expression]:
+        """``(rel with the mask's parameters joined, boolean expression)``."""
         joined: set[str] = set()
         carrier = rel
 
@@ -212,56 +247,67 @@ class DuckCompiler:
                 joined.add(alias)
             return alias
 
-        def walk(p: plan.Predicate) -> str:
+        def walk(p: plan.Predicate) -> Expression:
             if isinstance(p, plan.ParameterComparison):
-                return _compare(f'm.{q(join_param(p.parameter))}', p.op, p.value)
+                return _compare(col(join_param(p.parameter)), p.op, p.value)
             if isinstance(p, plan.DimensionComparison):
                 if p.dimension not in dims:
                     raise LanguageError(
                         f"where-comparison on dimension '{p.dimension}' is outside the foreach dims "
                         f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
                     )
-                return _compare(f'm.{q(p.dimension)}', p.op, p.value)
+                return _compare(col(p.dimension), p.op, p.value)
             if isinstance(p, plan.ParameterDefined):
-                col = f'm.{q(join_param(p.parameter))}'
+                value = col(join_param(p.parameter))
                 if p.parameter in self.boolean_parameters:
-                    return f'({col} IS NOT NULL AND {col}::BOOLEAN)'
-                return f'({col} IS NOT NULL AND isfinite({col}))'
+                    return value.isnotnull() & value.cast('BOOLEAN')
+                return value.isnotnull() & FunctionExpression('isfinite', value)
             if isinstance(p, plan.VariableDefined):
                 nonlocal carrier
                 flag = f'__where defined {p.variable}__'
                 if flag not in joined:
-                    on_dims = list(self.program.variable(p.variable).dims)
-                    carried = ', '.join(f'l.{q(c)}' for c in carrier.columns)
-                    marked = (
-                        f'(SELECT DISTINCT {", ".join(q(d) for d in on_dims)}, TRUE AS {q(flag)} '
-                        f'FROM {q(self.variables[p.variable])}) AS r'
-                    )
-                    on = ' AND '.join(f'l.{q(d)} IS NOT DISTINCT FROM r.{q(d)}' for d in on_dims)
-                    carrier = Rel(
-                        f'SELECT {carried}, r.{q(flag)} FROM {carrier.alias("l")} LEFT JOIN {marked} ON {on}',
-                        (*carrier.columns, flag),
-                    )
+                    carrier = self._mark_defined(carrier, p.variable, flag)
                     joined.add(flag)
-                return f'coalesce(m.{q(flag)}, FALSE)'
+                return falsy_if_null(col(flag))
             if isinstance(p, plan.BooleanConstant):
-                return 'TRUE' if p.value else 'FALSE'
+                return ConstantExpression(p.value)
             if isinstance(p, plan.And):
-                return f'({walk(p.left)} AND {walk(p.right)})'
+                return walk(p.left) & walk(p.right)
             if isinstance(p, plan.Or):
-                return f'({walk(p.left)} OR {walk(p.right)})'
+                return walk(p.left) | walk(p.right)
             if isinstance(p, plan.Not):
-                return f'(NOT coalesce({walk(p.operand)}, FALSE))'
+                return ~falsy_if_null(walk(p.operand))
             raise LanguageError(f'unsupported predicate node {type(p).__name__}')
 
         condition = walk(pred)
         return carrier, condition
 
+    def _mark_defined(self, carrier: Relation, variable: str, flag: str) -> Relation:
+        """*carrier* with *flag* true where *variable* has a row.
+
+        A left join rather than a semi-join, because the predicate this feeds
+        may be negated: a semi-join answers "keep the ones that exist", and
+        `not defined(x)` needs the ones that do not to still be here.
+        """
+        on = list(self.program.variable(variable).dims)
+        marked = (
+            self.con.table(self.variables[variable])
+            .select(*(col(d) for d in on))
+            .distinct()
+            .select(*(col(d) for d in on), ConstantExpression(True).alias(flag))
+            .set_alias('r')
+        )
+        return (
+            carrier.set_alias('l')
+            .join(marked, matching(on), how='left')
+            .select(*(col(c, of='l') for c in carrier.columns), col(flag, of='r'))
+        )
+
     # ------------------------------------------------------------------
     # bounds
     # ------------------------------------------------------------------
 
-    def bounds(self, rel: Rel, v: plan.VariableDeclaration) -> Rel:
+    def bounds(self, rel: Relation, v: plan.VariableDeclaration) -> Relation:
         """*rel* with ``lb``/``ub`` columns for variable *v*.
 
         Joins and arithmetic are one object, so a bound cannot be evaluated
@@ -270,10 +316,10 @@ class DuckCompiler:
         carrier = rel
         joined: set[str] = set()
 
-        def walk(e: plan.Expression) -> str:
+        def walk(e: plan.Expression) -> Expression:
             nonlocal carrier
             if isinstance(e, plan.Constant):
-                return f'{lit(float(e.value))}::DOUBLE'
+                return ConstantExpression(float(e.value))
             if isinstance(e, plan.Parameter):
                 alias = f'__bound {e.name}__'
                 if alias not in joined:
@@ -281,24 +327,20 @@ class DuckCompiler:
                         carrier, e.name, v.dims, alias, f"bound parameter '{e.name}' of variable '{v.name}'"
                     )
                     joined.add(alias)
-                return f'b.{q(alias)}::DOUBLE'
+                return col(alias).cast('DOUBLE')
             if isinstance(e, plan.Negate):
-                return f'(-{walk(e.operand)})'
+                return -walk(e.operand)
             if isinstance(e, plan.Add):
-                return f'({walk(e.left)} + {walk(e.right)})'
+                return walk(e.left) + walk(e.right)
             if isinstance(e, plan.Multiply):
-                return f'({walk(e.left)} * {walk(e.right)})'
+                return walk(e.left) * walk(e.right)
             raise LanguageError(
                 f"unsupported node {type(e).__name__} in bounds of variable '{v.name}' "
                 f'(bounds must be variable-free arithmetic over Constant/Parameter)'
             )
 
         lower, upper = walk(v.lower), walk(v.upper)
-        carried = ', '.join(f'b.{q(c)}' for c in rel.columns)
-        return Rel(
-            f'SELECT {carried}, {lower} AS lb, {upper} AS ub FROM {carrier.alias("b")}',
-            (*rel.columns, 'lb', 'ub'),
-        )
+        return carrier.select(*(col(c) for c in rel.columns), lower.alias('lb'), upper.alias('ub'))
 
     # ------------------------------------------------------------------
     # expressions
@@ -354,25 +396,27 @@ class DuckCompiler:
         raise LanguageError(f'unsupported expression node {type(expr).__name__} in {context}')
 
     def _constant_fragment(self, value: float) -> TermFragment:
-        return TermFragment((), Rel(f'SELECT {lit(float(value))} AS cval', ('cval',)), False)
+        return TermFragment((), self.unit().select(ConstantExpression(float(value)).alias('cval')), False)
 
     def _parameter_fragment(self, name: str) -> TermFragment:
         dims = self.program.parameter(name).dims
-        cols = ', '.join(q(d) for d in dims)
-        select = f'SELECT {cols + ", " if cols else ""}value AS cval FROM {q(self.parameters[name])}'
-        return TermFragment(dims, Rel(select, (*dims, 'cval')), False)
+        table = self.con.table(self.parameters[name])
+        return TermFragment(dims, table.select(*(col(d) for d in dims), col('value').alias('cval')), False)
 
     def _variable_fragment(self, name: str) -> TermFragment:
         dims = self.program.variable(name).dims
-        # a scalar declaration has no dims, and `SELECT , var_label` is a
-        # syntax error rather than an empty projection
-        prefix = ''.join(f'{q(d)}, ' for d in dims)
-        table = q(self.variables[name])
-        rel = Rel(f'SELECT {prefix}var_label, 1.0::DOUBLE AS coeff FROM {table}', (*dims, 'var_label', 'coeff'))
+        table = self.con.table(self.variables[name])
+        rel = table.select(*(col(d) for d in dims), col('var_label'), ConstantExpression(1.0).alias('coeff'))
         masked = self.program.variable(name).where is not None
-        presence = Rel(f'SELECT {", ".join(q(d) for d in dims) or q(UNIT)} FROM {table}', dims) if masked else None
+        presence = table.select(*(col(d) for d in dims or (UNIT,))) if masked else None
         return TermFragment(
-            dims, rel, True, label_dims=frozenset(dims), presence=presence, presence_dims=dims if masked else None
+            dims,
+            rel,
+            True,
+            label_dims=frozenset(dims),
+            presence=presence,
+            presence_dims=dims if masked else None,
+            variable=name,
         )
 
     def _product(self, a: CompiledExpression, b: CompiledExpression, context: str) -> CompiledExpression:
@@ -404,26 +448,45 @@ class DuckCompiler:
         keep = tuple(d for d in p.dims if d not in over)
         dropped = {d for d in p.dims if d not in keep}
         scale = math.prod(self.cardinality[d] for d in missing)
-        value = f'{q(p.value_column)}' if scale == 1 else f'{q(p.value_column)} * {lit(float(scale))}'
-        carried = [q(c) for c in p.carried[:-1]] + [f'{value} AS {q(p.value_column)}']
-        cols = ', '.join([*(q(d) for d in keep), *carried])
-        rel = Rel(f'SELECT {cols} FROM {p.rel.alias("s")}', (*keep, *p.carried))
-        return TermFragment(keep, rel, p.is_term, p.survives_dropping(dropped), p.label_dims - dropped)
+        value = col(p.value_column)
+        if scale != 1:
+            value = value * ConstantExpression(float(scale))
+        carried = [col(c) for c in p.carried[:-1]] + [value.alias(p.value_column)]
+        return TermFragment(
+            keep,
+            p.rel.select(*(col(d) for d in keep), *carried),
+            p.is_term,
+            p.survives_dropping(dropped),
+            p.label_dims - dropped,
+            variable=p.variable,
+            mapping=p.mapping,
+        )
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
         """Relabel dim ``over`` to ``into`` through a declared coordinate."""
         if g.over not in p.dims:
             raise LanguageError(f"in {context}: GroupSum over '{g.over}' but the expression has dims {list(p.dims)}")
         keep = tuple(x for x in p.dims if x != g.over)
-        carried = ', '.join(f'l.{q(c)}' for c in p.carried)
-        kept = ''.join(f'l.{q(d)}, ' for d in keep)
-        rel = Rel(
-            f'SELECT {kept}r.{q(g.coordinate)} AS {q(g.into)}, {carried} '
-            f'FROM {p.rel.alias("l")} JOIN {q(self.dimensions[g.over])} AS r ON l.{q(g.over)} = r.val',
-            (*keep, g.into, *p.carried),
+        table = self.con.table(self.dimensions[g.over]).set_alias('r')
+        rel = (
+            p.rel.set_alias('l')
+            .join(table, col(g.over, of='l') == col('val', of='r'))
+            .select(
+                *(col(d, of='l') for d in keep),
+                col(g.coordinate, of='r').alias(g.into),
+                *(col(c, of='l') for c in p.carried),
+            )
         )
         keyed = p.keyed and g.over in p.label_dims
-        return TermFragment((*keep, g.into), rel, p.is_term, keyed, _relabel(p.label_dims, g.over, g.into))
+        return TermFragment(
+            (*keep, g.into),
+            rel,
+            p.is_term,
+            keyed,
+            _relabel(p.label_dims, g.over, g.into),
+            variable=p.variable,
+            mapping=(*p.mapping, ('group', g.over, g.coordinate, g.into)),
+        )
 
     def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
         """Spread ``into`` back out over ``over`` — the adjoint of a group.
@@ -444,15 +507,24 @@ class DuckCompiler:
         if a.into not in p.dims:
             raise LanguageError(f"in {context}: At through '{a.into}' but the expression has dims {list(p.dims)}")
         keep = tuple(x for x in p.dims if x != a.into)
-        carried = ', '.join(f'l.{q(c)}' for c in p.carried)
-        kept = ''.join(f'l.{q(d)}, ' for d in keep)
-        rel = Rel(
-            f'SELECT {kept}r.val AS {q(a.over)}, {carried} '
-            f'FROM {p.rel.alias("l")} JOIN {q(self.dimensions[a.over])} AS r '
-            f'ON l.{q(a.into)} = r.{q(a.coordinate)}',
-            (*keep, a.over, *p.carried),
+        table = self.con.table(self.dimensions[a.over]).set_alias('r')
+        rel = (
+            p.rel.set_alias('l')
+            .join(table, col(a.into, of='l') == col(a.coordinate, of='r'))
+            .select(
+                *(col(d, of='l') for d in keep),
+                col('val', of='r').alias(a.over),
+                *(col(c, of='l') for c in p.carried),
+            )
         )
-        return TermFragment((*keep, a.over), rel, p.is_term, keyed=False, label_dims=p.label_dims - {a.into})
+        return TermFragment(
+            (*keep, a.over),
+            rel,
+            p.is_term,
+            keyed=False,
+            label_dims=p.label_dims - {a.into},
+            variable=p.variable,
+        )
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
         """A pointwise remap of the dim through its ord.
@@ -467,88 +539,160 @@ class DuckCompiler:
             )
         card = self.cardinality[s.dimension]
         others = [d for d in p.dims if d != s.dimension]
-        table = q(self.dimensions[s.dimension])
-        # SQL's % keeps the sign of its left operand, so a negative `by` would
-        # land outside the table and simply fail to join — dropping the row
-        # instead of wrapping it. The doubled modulo is not redundant.
-        moved = f'(i.ord + {s.by})' if not s.wrap else f'((i.ord + {s.by}) % {card} + {card}) % {card}'
+        moved = self._moved(s, card)
 
-        def remap(rel: Rel, carried: Sequence[str]) -> Rel:
-            picked = ''.join(f'v.{q(d)}, ' for d in others)
-            extra = ''.join(f', v.{q(c)}' for c in carried)
-            return Rel(
-                f'SELECT {picked}o.val AS {q(s.dimension)}{extra} '
-                f'FROM {rel.alias("v")} '
-                f'JOIN {table} AS i ON v.{q(s.dimension)} = i.val '
-                f'JOIN {table} AS o ON o.ord = {moved}',
-                (*others, s.dimension, *carried),
+        def remap(rel: Relation, carried: Sequence[str]) -> Relation:
+            table = self.dimensions[s.dimension]
+            return (
+                rel.set_alias('v')
+                .join(self.con.table(table).set_alias('i'), col(s.dimension, of='v') == col('val', of='i'))
+                .join(self.con.table(table).set_alias('o'), col('ord', of='o') == moved)
+                .select(
+                    *(col(d, of='v') for d in others),
+                    col('val', of='o').alias(s.dimension),
+                    *(col(c, of='v') for c in carried),
+                )
             )
 
         rel = remap(p.rel, p.carried)
         if not s.wrap and s.fill:
-            rel = Rel(
-                f'{rel.sql} UNION ALL {self._filled_edge(s, card, others, s.fill).sql}',
-                (*others, s.dimension, *p.carried),
-            )
+            rel = rel.union(self._filled_edge(s, card, others, s.fill))
         presence, presence_dims = None, None
         if p.presence is not None:
             presence = remap(p.presence, ())
             if not s.wrap and s.fill is not None:
-                vac = self._vacated(p, s, card, others)
-                cols = ', '.join(q(c) for c in presence.columns)
-                presence = Rel(
-                    f'SELECT {cols} FROM ({presence.sql}) UNION SELECT {cols} FROM ({vac.sql})', presence.columns
-                )
+                vacated = self._vacated(p, s, card, others).select(*(col(c) for c in presence.columns))
+                presence = presence.union(vacated).distinct()
         elif not s.wrap and s.fill is None:
             presence, presence_dims = self._edge(s, card, vacated=False), (s.dimension,)
-        return replace(p, rel=rel, presence=presence, presence_dims=presence_dims)
-
-    def _filled_edge(self, s: plan.Translate, card: int, others: Sequence[str], fill: float) -> Rel:
-        """``(dims…, cval=fill)`` at every coordinate the shift vacated."""
-        edge = self._edge(s, card, vacated=True)
-        picked = ''.join(f'o{i}.val AS {q(d)}, ' for i, d in enumerate(others))
-        joins = ''.join(f' CROSS JOIN {q(self.dimensions[d])} AS o{i}' for i, d in enumerate(others))
-        return Rel(
-            f'SELECT {picked}e.{q(s.dimension)}, {lit(float(fill))} AS cval FROM ({edge.sql}) AS e{joins}',
-            (*others, s.dimension, 'cval'),
+        return replace(
+            p,
+            rel=rel,
+            presence=presence,
+            presence_dims=presence_dims,
+            mapping=(*p.mapping, ('shift', s.dimension, str(s.by), str(s.wrap))),
         )
 
-    def _edge(self, s: plan.Translate, card: int, *, vacated: bool) -> Rel:
+    @staticmethod
+    def _moved(s: plan.Translate, card: int) -> Expression:
+        """The ordinal a shifted row reads from, wrapped where the shift is cyclic.
+
+        SQL's ``%`` keeps the sign of its left operand, so a negative ``by``
+        would land outside the dim table and simply fail to join — dropping the
+        row instead of wrapping it. The doubled modulo is not redundant here,
+        and is inert on the polars side, where ``%`` already floors.
+        """
+        shifted = col('ord', of='i') + ConstantExpression(s.by)
+        if not s.wrap:
+            return shifted
+        modulus = ConstantExpression(card)
+        return (shifted % modulus + modulus) % modulus
+
+    def _filled_edge(self, s: plan.Translate, card: int, others: Sequence[str], fill: float) -> Relation:
+        """``(dims…, cval=fill)`` at every coordinate the shift vacated."""
+        edge = self._edge(s, card, vacated=True).set_alias('e')
+        tables = [self.con.table(self.dimensions[d]).set_alias(f'o{i}') for i, d in enumerate(others)]
+        return cross_all(edge, tables).select(
+            *(col('val', of=f'o{i}').alias(d) for i, d in enumerate(others)),
+            col(s.dimension, of='e'),
+            ConstantExpression(float(fill)).alias('cval'),
+        )
+
+    def _edge(self, s: plan.Translate, card: int, *, vacated: bool) -> Relation:
         """The labels of ``s.dimension`` an acyclic shift vacates, or keeps.
 
         One predicate negated rather than two kept in step — a fill and the
         presence set it implies must not be able to disagree.
         """
-        outside = f'(ord - {s.by} < 0 OR ord - {s.by} >= {card})'
-        keep = outside if vacated else f'NOT {outside}'
-        return Rel(
-            f'SELECT val AS {q(s.dimension)} FROM {q(self.dimensions[s.dimension])} WHERE {keep}', (s.dimension,)
-        )
+        origin = col('ord') - ConstantExpression(s.by)
+        outside = (origin < ConstantExpression(0)) | (origin >= ConstantExpression(card))
+        table = self.con.table(self.dimensions[s.dimension])
+        return table.filter(outside if vacated else ~outside).select(col('val').alias(s.dimension))
 
-    def _vacated(self, p: TermFragment, s: plan.Translate, card: int, others: Sequence[str]) -> Rel:
+    def _vacated(self, p: TermFragment, s: plan.Translate, card: int, others: Sequence[str]) -> Relation:
         """The edge positions ``shift`` leaves with nothing to move in."""
         edge = self._edge(s, card, vacated=True)
         if not others or p.presence is None:
             return edge
-        picked = ', '.join(f'o.{q(d)}' for d in others)
-        return Rel(
-            f'SELECT {picked}, e.{q(s.dimension)} '
-            f'FROM (SELECT DISTINCT {picked.replace("o.", "")} FROM {p.presence.alias("x")}) AS o '
-            f'CROSS JOIN ({edge.sql}) AS e',
-            (*others, s.dimension),
+        coordinates = p.presence.select(*(col(d) for d in others)).distinct().set_alias('o')
+        return coordinates.cross(edge.set_alias('e')).select(
+            *(col(d, of='o') for d in others), col(s.dimension, of='e')
         )
 
+    # ------------------------------------------------------------------
+    # assembly helpers used by the executor
+    # ------------------------------------------------------------------
+
+    def may_share_a_column(self, a: TermFragment, b: TermFragment) -> bool:
+        """Whether two fragments of one variable can put a row on one column.
+
+        **Distinct variables never do.** Labels are dense and assigned one
+        declaration at a time, so two fragments naming different variables draw
+        from disjoint ranges however either was reshaped (#408). What is left is
+        whether two fragments of *one* variable send some label to the same
+        **row**.
+
+        A label's row is decided by what moved it, so equal
+        :attr:`~TermFragment.mapping` means the same row and a certain
+        collision. Mappings that differ **only in a coordinate** — the network
+        shape, ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``
+        — send it to the same row exactly where those coordinates agree, which
+        is a question about a *dimension table*: is there a line whose ends are
+        one bus? The `line` table is forty rows where the matrix is 12.6M.
+
+        Anything else is answered **yes**. A shift on one side and not the
+        other, a reduction that left them over different dims, a product that
+        broadcast one wider — each changes where a label lands in a way this
+        does not model, and the cost of being wrong is a silently wrong model
+        against the cost of a sort.
+
+        The polars twin, reasoning included: two engines answering this
+        differently is two engines aggregating differently, and the frame a
+        sink reads has to be the same either way.
+        """
+        if a.variable is None or b.variable is None:
+            return True
+        if a.variable != b.variable:
+            return False
+        if a.dims != b.dims or a.label_dims != b.label_dims:
+            return True
+        if len(a.mapping) != len(b.mapping):
+            return True
+        differing = []
+        for one, other in zip(a.mapping, b.mapping, strict=True):
+            if one == other:
+                continue
+            kind, *rest = one
+            if kind != 'group' or other[0] != 'group' or (rest[0], rest[2]) != (other[1], other[3]):
+                return True
+            differing.append((rest[0], rest[1], other[2]))
+        return all(self._coordinates_meet(over, one, other) for over, one, other in differing)
+
+    def _coordinates_meet(self, dimension: str, one: str, other: str) -> bool:
+        """Whether any label of *dimension* carries the same value in both.
+
+        One row is the whole answer, so the scan stops at the first — where the
+        polars twin reduces the column. The table is the model's shape rather
+        than its size: forty lines against 12.6M nonzeros.
+        """
+        table = self.con.table(self.dimensions[dimension])
+        return table.filter(col(one) == col(other)).limit(1).fetchone() is not None
+
     @staticmethod
-    def constant_scalar(p: TermFragment) -> Rel:
-        """The const fragment summed per coordinate: ``(dims…, cval)``."""
+    def constant_scalar(p: TermFragment) -> Relation:
+        """The const fragment summed per coordinate: ``(dims…, cval)``.
+
+        The group-by list is spelled rather than composed: `aggregate` takes its
+        grouping as SQL, so the names go through :func:`q` on the way in.
+        """
+        total = FunctionExpression('sum', col('cval')).alias('cval')
         if not p.dims:
-            return Rel(f'SELECT sum(cval) AS cval FROM {p.rel.alias("c")}', ('cval',))
-        keys = ', '.join(q(d) for d in p.dims)
-        return Rel(f'SELECT {keys}, sum(cval) AS cval FROM {p.rel.alias("c")} GROUP BY {keys}', (*p.dims, 'cval'))
+            return p.rel.aggregate([total])
+        return p.rel.aggregate([*(col(d) for d in p.dims), total], ', '.join(q(d) for d in p.dims))
 
 
 # --------------------------------------------------------------------------
-# free functions — the polars module's, with SQL underneath
+# free functions — the polars module's, with duckdb underneath
 # --------------------------------------------------------------------------
 
 
@@ -556,16 +700,35 @@ def _relabel(label_dims: frozenset[str], over: str, into: str) -> frozenset[str]
     return (label_dims - {over}) | {into} if over in label_dims else label_dims
 
 
-def _compare(column: str, op: plan.ComparisonOperator, value: float | str | datetime.date) -> str:
+#: The five comparisons whose SQL answer is already the one the mask wants.
+#: `!=` is not among them — see :func:`_compare`.
+_COMPARISONS: Mapping[str, Callable[[Expression, Expression], Expression]] = {
+    '==': lambda a, b: a == b,
+    '<=': lambda a, b: a <= b,
+    '>=': lambda a, b: a >= b,
+    '<': lambda a, b: a < b,
+    '>': lambda a, b: a > b,
+}
+
+
+def _compare(column: Expression, op: plan.ComparisonOperator, value: float | str | datetime.date) -> Expression:
+    """*column* against *value*, where an absent value is not the one asked for.
+
+    `!=` is the asymmetric one. SQL's is null where the column is, and
+    :func:`falsy_if_null` then drops the row — so a coordinate the parameter
+    says nothing about would fail a test it plainly passes. ``IS DISTINCT
+    FROM`` is the SQL for that, and coalescing to true is the same answer
+    composed, since *value* is never null.
+    """
+    literal = ConstantExpression(value)
     if op == '!=':
-        return f'({column} IS DISTINCT FROM {lit(value)})'
-    return f'({column} {op if op != "==" else "="} {lit(value)})'
+        return CoalesceOperator(column != literal, ConstantExpression(True))
+    return _COMPARISONS[op](column, literal)
 
 
 def _negate(p: TermFragment) -> TermFragment:
-    others = [q(c) for c in p.rel.columns if c != p.value_column]
-    cols = ', '.join([*others, f'-{q(p.value_column)} AS {q(p.value_column)}'])
-    return replace(p, rel=Rel(f'SELECT {cols} FROM {p.rel.alias("n")}', p.rel.columns))
+    others = [col(c) for c in p.rel.columns if c != p.value_column]
+    return replace(p, rel=p.rel.select(*others, (-col(p.value_column)).alias(p.value_column)))
 
 
 def _join_mul(a: TermFragment, c: TermFragment, *, is_term: bool, divide: bool = False) -> TermFragment:
@@ -573,30 +736,33 @@ def _join_mul(a: TermFragment, c: TermFragment, *, is_term: bool, divide: bool =
     shared = [d for d in a.dims if d in c.dims]
     dims = (*a.dims, *(d for d in c.dims if d not in a.dims))
     value = 'coeff' if is_term else 'cval'
-    op = '/' if divide else '*'
-    left_cols = ''.join(f'l.{q(d)}, ' for d in a.dims)
-    right_cols = ''.join(f'r.{q(d)}, ' for d in c.dims if d not in a.dims)
-    label = 'l.var_label, ' if is_term else ''
-    on = ' AND '.join(f'l.{q(d)} IS NOT DISTINCT FROM r.{q(d)}' for d in shared) or 'TRUE'
+    left, right = a.rel.set_alias('l'), c.rel.set_alias('r')
     # Left for a divide, so a coordinate the divisor has no value for yields a
     # *null* coefficient instead of silently dropping the term: the question is
     # not "is this divisor dense" but "is it defined where the model divides".
-    join = ('LEFT JOIN' if divide else 'JOIN') if shared else 'CROSS JOIN'
-    clause = f' ON {on}' if shared else ''
-    sql = (
-        f'SELECT {left_cols}{right_cols}{label}'
-        f'l.{q(a.value_column)} {op} r.cval AS {q(value)} '
-        f'FROM {a.rel.alias("l")} {join} {c.rel.alias("r")}{clause}'
+    joined = left.join(right, matching(shared), how='left' if divide else 'inner') if shared else left.cross(right)
+    numerator, divisor = col(a.value_column, of='l'), col('cval', of='r')
+    rel = joined.select(
+        *(col(d, of='l') for d in a.dims),
+        *(col(d, of='r') for d in c.dims if d not in a.dims),
+        *((col('var_label', of='l'),) if is_term else ()),
+        (numerator / divisor if divide else numerator * divisor).alias(value),
     )
-    return TermFragment(
-        dims,
-        Rel(sql, (*dims, *(('var_label',) if is_term else ()), value)),
-        is_term,
-        a.keyed,
-        a.label_dims,
-        a.presence,
-        a.presence_dims,
-    )
+    return TermFragment(dims, rel, is_term, a.keyed, a.label_dims, a.presence, a.presence_dims, a.variable, a.mapping)
+
+
+def restrict_to(rel: Relation, on: Sequence[str], presence: Relation) -> Relation:
+    """*rel*, keeping only the rows *presence* has a coordinate for.
+
+    A semi-join is the whole of it: `how='semi'` filters without widening,
+    which is what a correlated ``EXISTS`` was standing in for. Empty *on* is a
+    scalar's presence — it holds a row or it does not, and the restriction then
+    removes every row of *rel* or none, which a semi-join on a constant already
+    says without a branch below it.
+    """
+    keys = presence.select(*(col(d) for d in on)).distinct() if on else presence
+    condition = matching(on) if on else SQLExpression('TRUE')
+    return rel.set_alias('l').join(keys.set_alias('r'), condition, how='semi')
 
 
 def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
@@ -606,10 +772,6 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     each additive stream would be summed over its own coordinates —
     ``sum(x + size, over=f)`` silently becoming ``sum(x) + sum(size)``, which
     reads an absent ``size`` as zero (SPEC §6, §7).
-
-    The semi-join is ``WHERE EXISTS``, which is the one place SQL says this
-    more plainly than the dataframe does: polars needs `how='semi'` to mean
-    "filter, do not widen", and a reader has to know that `semi` is not a join.
     """
     restrictions = [
         (p.presence_dims or p.dims, p.presence) for p in (*compiled.terms, *compiled.consts) if p.presence is not None
@@ -621,14 +783,7 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
         rel = p.rel
         for on, presence in restrictions:
             if all(d in p.dims for d in on):
-                keep = ', '.join(f'l.{q(c)}' for c in rel.columns)
-                names = ', '.join(q(d) for d in on)
-                on_sql = ' AND '.join(f'l.{q(d)} IS NOT DISTINCT FROM r.{q(d)}' for d in on)
-                rel = Rel(
-                    f'SELECT {keep} FROM {rel.alias("l")} WHERE EXISTS '
-                    f'(SELECT 1 FROM (SELECT DISTINCT {names} FROM {presence.alias("p")}) AS r WHERE {on_sql})',
-                    rel.columns,
-                )
+                rel = restrict_to(rel, on, presence)
         return replace(p, rel=rel, presence=None, presence_dims=None)
 
     return _map_fragments(compiled, restrict)

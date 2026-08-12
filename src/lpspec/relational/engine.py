@@ -17,12 +17,17 @@ So they live here once. An engine supplies four things:
 
 and inherits the rest. That split is the actual claim `engines/` makes, and it
 is why a second engine is a compiler and an assembler rather than a whole lane.
+
+:func:`needs_aggregate` is here for a different reason from the sinks: it is
+not work an engine is spared, it is a rule both must reach the *same* answer
+to. Inverting it builds a wrong model rather than a slow one, so it has one
+home.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
 
 import polars as pl
 
@@ -31,10 +36,75 @@ from lpspec.relational import sinks
 from lpspec.relational.result import Result
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
     from lpspec.relational import plan
+
+
+class Fragment(Protocol):
+    """The part of a compiled term :func:`needs_aggregate` reads.
+
+    Stated rather than imported: the two compilers' `TermFragment`s hold a
+    lazy frame and a duckdb relation respectively, and this decision reads
+    neither.
+    """
+
+    @property
+    def dims(self) -> tuple[str, ...]:
+        """The coordinates the fragment still carries."""
+
+    def survives_dropping(self, dropped: set[str]) -> bool:
+        """Whether one row per ``(dims…, var_label)`` still holds after *dropped* goes."""
+
+
+#: Each engine passes its *own* fragment type, and `may_share` reads that
+#: engine's dimension tables — so the two travel together or not at all.
+F = TypeVar('F', bound=Fragment)
+
+
+def needs_aggregate(
+    terms: Sequence[F],
+    may_share: Callable[[F, F], bool],
+    *,
+    projected: bool = False,
+) -> bool:
+    """Whether stacking *terms* can put two rows on one solver column.
+
+    Named for the answer, not the condition: an inverted test here is a wrong
+    model rather than a slow one.
+
+    Two things can put a label twice into the stack, asked separately. A
+    fragment that is not keyed already holds one twice on its own. Whether a
+    *pair* can is *may_share* — the engine's own, because it reads a dimension
+    table — which answers no for distinct variables and otherwise asks whether
+    two fragments of one variable send a label to one **row**: for
+    ``sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)``, only
+    where a line's two ends are one bus. That second half is what makes the
+    ordinary multi-term constraint free: reading only a fragment count says the
+    aggregate is reachable for ``reserve_up + reserve_down <= p_max``, which on
+    the `fleet` rungs sorts every nonzero in the model to collapse nothing.
+
+    *projected* is what the two call sites do not share. The matrix keeps a
+    fragment's dims, so keyed — one row per ``(dims…, var_label)`` — carries
+    straight into ``(row, col)``. The objective keeps only ``var_label``, so it
+    asks the stronger question: does the key survive losing *all* dims? It does
+    exactly when ``var_label`` determines every dim the fragment still carries.
+    ``p * cost`` is keyed on dims that are all the variable's own, so a column
+    cannot repeat; ``y * w`` — ``y`` over buses, ``w`` over snapshots — is just
+    as keyed, but ``snapshot`` arrived by broadcast, so one column holds a row
+    per snapshot and their *sum* is the coefficient.
+
+    Worth 2-4x of build time on the polars engine's matrix and little on its
+    objective (#408); on the duckdb engine, 0.90-0.94x of build on the three
+    ladder cases with multi-term constraints and nothing on the other four
+    (#638). The gap is what the skipped operator costs: a sort on one engine, a
+    hash aggregate on the other. The argument is the same at both call sites on
+    both engines, so it is written once.
+    """
+    if any(not t.survives_dropping(set(t.dims) if projected else set()) for t in terms):
+        return True
+    return any(may_share(a, b) for i, a in enumerate(terms) for b in terms[i + 1 :])
 
 
 class Engine(ABC):
