@@ -15,10 +15,12 @@ Code is checked; a discussion is trusted. Mark which is which —
 2. **The intent line is the human's**, unless they ask you to write the whole
    thing — then write it. Usually they add a few sentences at the top. Never
    paraphrase their ask into a first-person "I want this because…".
-   **Where they wrote no intent, quote the prompt in its place** — verbatim,
-   labelled as the prompt, and above the note; several prompts, several quotes,
-   in the order they were given. An empty slot tells a reader nothing, while the
-   prompt tells them exactly what was asked for, in the human's own words.
+   **Where they wrote no intent, quote the ask that defines the PR** in its
+   place — verbatim, labelled as the prompt, above the note. Usually that is one
+   sentence. It is not a transcript: a follow-up that changed the work is a line
+   in the body, and one that did not ("rebase", "fix CI", "now the other one")
+   belongs nowhere. Quote a second prompt only where it genuinely set scope, and
+   trim each to the part that did.
 3. **Do not hold the conversation.** Post marked information — a log, a
    benchmark, a diff. Do not reply, concede, agree or decide as someone else.
 
@@ -99,9 +101,18 @@ In the tree nothing is marked: `Co-Authored-By: Claude …` is the record.
   the model.
 - **Cut**: restatement, argument for a settled decision, narration of how the
   answer was found.
-- **No measured numbers in the tree.** They belong in the PR that produced them,
-  next to their method, base commit and ladder; the docstring keeps the
-  conclusion and the `#nnn`.
+- **Measured numbers live in the PR that took them**, beside their method, base
+  commit and ladder. What stays in the docstring is the conclusion **and a
+  `#nnn`, which is not optional** — the ref is the whole reason the number was
+  allowed to leave. `git log -S'<the number>' -- src/` finds the PR when it is
+  not to hand; if nothing does, **keep the number** rather than lose it.
+- **A vague qualifier is not a conclusion.** "measurably slower", "several times
+  slower" and "a large multiple" can be neither checked nor refuted, and are
+  worse than the number they replaced. State the direction and the shape of the
+  trade: *"the ordered join costs more than the sort it saves, on wide
+  frames (#576)"*.
+- **A number the code acts on stays inline** — a budget, a cap, a chunk size, a
+  tolerance. There the number *is* the decision, not evidence for one.
 
 ## Commit messages and PR titles
 
