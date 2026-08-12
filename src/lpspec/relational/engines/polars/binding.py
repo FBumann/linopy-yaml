@@ -7,7 +7,7 @@ is the only phase that touches a caller's data; everything downstream reads
 
 **It is frozen, and that is the point.** Written once by the passes below,
 then read to construct the compiler and the labeller. Holding it as a value
-rather than as four dicts on the executor is what separates it from the one
+rather than as four dicts on the engine is what separates it from the one
 registry that is deliberately *live* — the variable frames, which appear as
 declarations build and which a constraint compiled afterwards has to see.
 """
@@ -58,7 +58,7 @@ class BoundSources:
         """Whether :meth:`_Binder.encode_dimensions` gave *dim* an ``Enum``.
 
         Asked by both consumers of the encoding — the compiler reads the
-        physical code as an ordinal for free, and the executor casts back to
+        physical code as an ordinal for free, and the engine casts back to
         ``String`` on the way out — and answered here, where the encoding is
         decided, so the two cannot come to disagree about which dims have one.
         """

@@ -1,6 +1,6 @@
 # Sinks
 
-How a built model leaves the engine — the boxes downstream of the executor in
+How a built model leaves the engine — the boxes downstream of the engine in
 [docs/ARCHITECTURE.md](../../../../docs/ARCHITECTURE.md)'s pipeline, which
 carries the argument for the split. This page is the membership list.
 
@@ -67,9 +67,9 @@ A sink takes a `ModelTables` and nothing else: the frames `cols`
 constant — those last two live outside the tables because a constant has no
 column to attach to.
 
-A sink never learns how the tables were filled, and the executor never learns
+A sink never learns how the tables were filled, and the engine never learns
 how they are drained. That is the point: adding `mps` is a new module in
-`writers/`, not another method on `PolarsExecutor`.
+`writers/`, not another method on `PolarsEngine`.
 
 The one thing sinks may share is a *projection* of those frames, never a step
 of the work — `ModelTables.dense_columns`, which both solvers read.
@@ -90,7 +90,7 @@ deliberately diverge.
 moved out of `PLANNED_WRITERS` if it was there.
 
 Either way: stream — nothing here may materialise the model a second time —
-and nothing above changes. No method on the executor, no branch in `api.py`,
+and nothing above changes. No method on the engine, no branch in `api.py`,
 no name on the Python surface.
 
 ## When Track 3 lands

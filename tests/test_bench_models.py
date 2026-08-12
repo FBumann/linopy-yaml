@@ -49,7 +49,7 @@ def test_the_corpus_is_not_empty():
 @pytest.mark.parametrize('case', CASE_NAMES)
 def test_a_bench_case_builds_on_the_smallest_rung(case: str, tmp_path: Path):
     """Loading is not building, which is why both gates exist: `sector` passed
-    `check()` and then died in the executor on a presence key a broadcast had
+    `check()` and then died in the engine on a presence key a broadcast had
     widened (#345). The smallest rung costs milliseconds, so that difference is
     worth holding here rather than on a labelled runner.
     """

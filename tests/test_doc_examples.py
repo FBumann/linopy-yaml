@@ -4,7 +4,7 @@ Every example here was wrong at some point: ``lps.write_lp`` never existed, a
 dimension index was passed as a bare ``RangeIndex`` where the streaming lane
 wants a ``coords=`` entry, the ``piecewise:`` block carried a sign on three
 links while the prose two lines below said a sign needs exactly two, and four
-module docstrings leaked the executor by never closing the ``Result``. Three
+module docstrings leaked the engine by never closing the ``Result``. Three
 separate hand sweeps found three separate batches, which is the argument for
 this file: an example nobody runs is a claim nobody checked.
 
@@ -371,7 +371,7 @@ def test_every_block_is_covered() -> None:
 
 
 # --------------------------------------------------------------------------
-# module docstrings — where the executor leak actually lived
+# module docstrings — where the engine leak actually lived
 # --------------------------------------------------------------------------
 
 DOCSTRING_MODULES = ['src/lpspec/__init__.py', 'src/lpspec/api.py', 'src/lpspec/linopy/__init__.py']

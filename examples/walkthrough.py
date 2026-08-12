@@ -31,7 +31,7 @@ import lpspec as lps
 from lpspec.language.expansion import parse_and_expand
 from lpspec.language.expression_parser import parse_expression
 from lpspec.lowering import lower_program
-from lpspec.relational.engines.polars.executor import PolarsExecutor
+from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 
 HERE = Path(__file__).parent
@@ -77,7 +77,7 @@ def main() -> None:
     schema = validated_model()
     expanded_ast(schema)
     program = relational_ir(schema)
-    with PolarsExecutor() as engine:
+    with PolarsEngine() as engine:
         model_frames(engine, schema, program)
         lp_file(engine)
         solution(engine)
@@ -139,10 +139,10 @@ def relational_ir(schema: lps.Model) -> Any:
     return program
 
 
-def model_frames(engine: PolarsExecutor, schema: lps.Model, program: Any) -> None:
+def model_frames(engine: PolarsEngine, schema: lps.Model, program: Any) -> None:
     """Stage 4 — plan plus data to the model frames, the first stage to see a number.
 
-    Sources are adapted to tidy frames (dims..., value) and the executor
+    Sources are adapted to tidy frames (dims..., value) and the engine
     assembles the model from them.
 
     The private attributes read here are the one place this script reaches past
@@ -150,7 +150,7 @@ def model_frames(engine: PolarsExecutor, schema: lps.Model, program: Any) -> Non
     plan is internal and the query is backend-private), and looking at them is
     the whole point.
     """
-    banner(4, 'plan + data -> the model frames', 'relational/engines/polars/executor.py')
+    banner(4, 'plan + data -> the model frames', 'relational/engines/polars/engine.py')
     engine.build(program, tidy_sources(schema, SOURCES, COORDS))
     model = engine._tables()
     for name, frame in (
@@ -171,7 +171,7 @@ def model_frames(engine: PolarsExecutor, schema: lps.Model, program: Any) -> Non
     print(_indent(variables.sort('var_label').head(4)))
 
 
-def lp_file(engine: PolarsExecutor) -> None:
+def lp_file(engine: PolarsEngine) -> None:
     """Stage 5 — the same frames, second sink.
 
     The other one (the ``highs`` solver, stage 6) hands COO batches to highspy
@@ -186,7 +186,7 @@ def lp_file(engine: PolarsExecutor) -> None:
         print(f'    ... ({len(text)} lines total)')
 
 
-def solution(engine: PolarsExecutor) -> None:
+def solution(engine: PolarsEngine) -> None:
     """Stage 6 — batches to highspy, and the solution read back by label join.
 
     Never densified. ``primal()`` hands back a frame: the engine's own shape,

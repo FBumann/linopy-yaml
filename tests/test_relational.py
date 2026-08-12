@@ -1,8 +1,8 @@
 """Phase-2 gate: two real models round-trip through solve on the relational backend.
 
 Each model is built three ways and must agree on the objective:
-  1. relational executor -> the `highs` solver (batched addCols/addRows)
-  2. relational executor -> lp_file sink -> HiGHS reads and solves the file
+  1. relational engine -> the `highs` solver (batched addCols/addRows)
+  2. relational engine -> lp_file sink -> HiGHS reads and solves the file
   3. eager linopy build (the correctness oracle)
 """
 
@@ -19,7 +19,7 @@ from lpspec.errors import DataError, LanguageError, LpspecError
 from lpspec.language.model import Model
 from lpspec.lowering import lower_program
 from lpspec.relational import (
-    PolarsExecutor,
+    PolarsEngine,
     chunking,
 )
 from lpspec.relational.plan import (
@@ -131,7 +131,7 @@ def test_dispatch_roundtrip(dispatch_data, tmp_path):
     gens, load = dispatch_data
     oracle = dispatch_eager_objective(gens, load)
 
-    with PolarsExecutor() as engine:
+    with PolarsEngine() as engine:
         engine.build(dispatch_program(), dispatch_sources(gens, load))
 
         result = engine.solve()
@@ -224,7 +224,7 @@ def test_transport_roundtrip(transport_data, tmp_path):
     oracle = transport_eager_objective(gens, lines, load)
     assert np.isfinite(oracle), 'oracle model must be feasible'
 
-    with PolarsExecutor() as engine:
+    with PolarsEngine() as engine:
         engine.build(transport_program(), transport_sources(gens, lines, load))
 
         result = engine.solve()
@@ -255,7 +255,7 @@ def test_nonlinear_product_rejected(dispatch_data):
         constraints=prog.constraints,
         objective=ObjectiveDeclaration('min', Sum(Variable('p') * Variable('p'), over=('generator', 'snapshot'))),
     )
-    with PolarsExecutor() as engine, pytest.raises(LanguageError, match='nonlinear'):
+    with PolarsEngine() as engine, pytest.raises(LanguageError, match='nonlinear'):
         engine.build(bad, dispatch_sources(gens, load))
 
 
@@ -263,7 +263,7 @@ def test_missing_source_rejected(dispatch_data):
     gens, load = dispatch_data
     sources = dispatch_sources(gens, load)
     del sources['cost']
-    with PolarsExecutor() as engine, pytest.raises(DataError, match="no source bound for parameter 'cost'"):
+    with PolarsEngine() as engine, pytest.raises(DataError, match="no source bound for parameter 'cost'"):
         engine.build(dispatch_program(), sources)
 
 
@@ -343,7 +343,7 @@ def test_out_of_foreach_dims_rejected(dispatch_data):
         ),
         objective=prog.objective,
     )
-    with PolarsExecutor() as engine, pytest.raises(LanguageError, match='missing a Sum'):
+    with PolarsEngine() as engine, pytest.raises(LanguageError, match='missing a Sum'):
         engine.build(bad, dispatch_sources(gens, load))
 
 
@@ -578,7 +578,7 @@ def test_a_mask_that_removes_nothing_labels_exactly_like_no_mask(dispatch_data):
     for where in (None, ParameterComparison('p_max', '>', 0)):
         base = dispatch_program()
         program = replace(base, variables=(replace(base.variables[0], where=where),))
-        with PolarsExecutor() as engine:
+        with PolarsEngine() as engine:
             engine.build(program, dispatch_sources(gens, load))
             labels.append(engine._variables['p'].collect().sort('var_label'))
     assert labels[0].equals(labels[1])
@@ -586,7 +586,7 @@ def test_a_mask_that_removes_nothing_labels_exactly_like_no_mask(dispatch_data):
 
 def _objective_of(program, sources):
     """`obj` as `{col: coeff}`, plus whether the aggregate was skipped."""
-    with PolarsExecutor() as engine:
+    with PolarsEngine() as engine:
         engine.build(program, sources)
         obj = engine._tables().obj
         return dict(zip(obj['col'].to_list(), obj['coeff'].to_list(), strict=True)), obj.height
@@ -816,7 +816,7 @@ def test_infinite_bounds_survive_the_handoff(dispatch_data):
     gens, load = dispatch_data
     base = dispatch_program()
     unbounded = replace(base, variables=(replace(base.variables[0], upper=Constant(float('inf'))),))
-    with PolarsExecutor() as engine:
+    with PolarsEngine() as engine:
         engine.build(unbounded, dispatch_sources(gens, load))
         assert engine._tables().cols['ub'].is_infinite().all()
         assert engine.solve().is_ok
@@ -997,7 +997,7 @@ def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
     )
     load = pd.DataFrame({'snapshot': np.arange(n_s), 'value': np.full(n_s, 100.0)})
 
-    with PolarsExecutor() as engine:
+    with PolarsEngine() as engine:
         engine.build(dispatch_program(), dispatch_sources(gens, load))
         tables = engine._tables()
         assert tables.matrix.height == n_g * n_s

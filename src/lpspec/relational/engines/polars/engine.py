@@ -1,4 +1,4 @@
-"""Polars executor: fill the model frames, then hand them to a sink.
+"""Polars engine: fill the model frames, then hand them to a sink.
 
 Owns the *assembly* — turning each declaration into rows of the four model
 frames, and holding them until a sink drains them. Owns none of the three
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from polars._typing import MaintainOrderJoin
 
 
-#: The four frames a sink reads, as schemas. Stated here because the executor
+#: The four frames a sink reads, as schemas. Stated here because the engine
 #: is what fills them and an empty model still has to have them.
 _COLS = ('lb', 'ub', 'vtype')
 _OBJ = ('col', 'coeff')
@@ -75,7 +75,7 @@ _DTYPES = {
 }  # fmt: skip
 
 
-class PolarsExecutor:
+class PolarsEngine:
     """Build a :class:`Program` into polars frames, then sink it."""
 
     def __init__(self) -> None:
@@ -427,7 +427,7 @@ class PolarsExecutor:
         return stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
 
     # ------------------------------------------------------------------
-    # sinks — see relational/sinks/; the executor only supplies the frames
+    # sinks — see relational/sinks/; the engine only supplies the frames
     # ------------------------------------------------------------------
 
     def _tables(self) -> sinks.ModelTables:
@@ -497,7 +497,7 @@ class PolarsExecutor:
         return Result(
             _status=status,
             _objective=objective,
-            _executor=self,
+            _engine=self,
             _generation=self._generation,
             _primal_values=primal,
             _dual_values=dual,
@@ -642,7 +642,7 @@ class PolarsExecutor:
         self._bound = None
         self._compiler = None
 
-    def __enter__(self) -> PolarsExecutor:
+    def __enter__(self) -> PolarsEngine:
         return self
 
     def __exit__(self, *exc: object) -> Literal[False]:

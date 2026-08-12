@@ -34,14 +34,14 @@ def tidy_sources(
     data: dict[str, object],
     coords: dict[str, Any] | None = None,
 ) -> dict[str, object]:
-    """Adapt the caller's ``data=``/``coords=`` inputs to executor sources.
+    """Adapt the caller's ``data=``/``coords=`` inputs to engine sources.
 
     Every in-memory source becomes a tidy :class:`polars.LazyFrame` with columns
     ``(dims…, value)``; parquet paths pass through untouched for the engine to
     scan directly. Dimension indexes come from ``data``, ``coords``, declared YAML
-    values, or fall back to the executor's inference from parameter tables.
+    values, or fall back to the engine's inference from parameter tables.
 
-    Normalising here rather than at the executor is what lets the piecewise
+    Normalising here rather than at the engine is what lets the piecewise
     curvature guard see every in-memory shape alike (:mod:`relational.frames`
     is where the shapes are recognised).
 

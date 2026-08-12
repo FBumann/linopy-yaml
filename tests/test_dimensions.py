@@ -103,7 +103,7 @@ def test_sum_into_a_dim_the_operand_already_carries():
     raised polars' DuplicateError from outside the package's exception tree.
 
     Refusing it at load time is the only answer both lanes can give, which is
-    why the rule lives here rather than in either executor.
+    why the rule lives here rather than in either engine.
     """
     with pytest.raises(DimensionError, match='already carries'):
         _dims('sum(load * p, over=generator, group_by=bus)')

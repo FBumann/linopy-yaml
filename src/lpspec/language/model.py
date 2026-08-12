@@ -5,7 +5,7 @@ error naming the near miss rather than a shrug, because a dropped ``bounds:``
 leaves a variable unbounded and says nothing.
 
 :class:`Model` is the first of the three stages the pipeline names — what a
-file *declares*, before ``plan.Program`` (what it lowers to) and an executor
+file *declares*, before ``plan.Program`` (what it lowers to) and an engine
 (what a build holds). Nothing here has seen data.
 """
 
@@ -416,7 +416,7 @@ class Model(_StrictBlock):
     """The declared math — one YAML file, or one dict, validated.
 
     First of the three stages the pipeline names: ``Model`` is what a file
-    *says*, ``plan.Program`` what it lowers to, an executor what a build holds.
+    *says*, ``plan.Program`` what it lowers to, an engine what a build holds.
     Nothing here has seen data.
 
     **The API is the declarations, and two ways back out.** The eight sections

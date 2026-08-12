@@ -1,4 +1,4 @@
-"""Relational LP construction: the logical plan and its executor. **Internal.**
+"""Relational LP construction: the logical plan and its engine. **Internal.**
 
 The public interface of the package is YAML (see ``lpspec.api``).
 Constructing Programs in Python is not supported API; a stable plan API may be
@@ -20,10 +20,10 @@ not silently widen something that reads like public API, and the import site
 says which layer the caller is reaching into.
 """
 
-from lpspec.relational.engines.polars import PolarsExecutor
+from lpspec.relational.engines.polars import PolarsEngine
 from lpspec.relational.result import Result
 
 __all__ = [
-    'PolarsExecutor',
+    'PolarsEngine',
     'Result',
 ]
