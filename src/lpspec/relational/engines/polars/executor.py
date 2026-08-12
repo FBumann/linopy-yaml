@@ -476,7 +476,9 @@ class PolarsExecutor:
         ``solver_options`` is forwarded verbatim in the solver's own vocabulary
         (``{'time_limit': 60, 'mip_rel_gap': 0.01}``). ``batch_rows`` is the
         hand-off budget in elements, defaulting to the sink's own
-        (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
+        (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`) — this
+        engine method's parameter alone, kept off the public handle: nothing
+        outside the chunking tests sets it.
 
         **The solver stays loaded where it can**, which is
         :func:`~lpspec.relational.sinks.solvers.loaded`'s decision and not this

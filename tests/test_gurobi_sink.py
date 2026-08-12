@@ -128,7 +128,7 @@ def test_block_boundaries_do_not_move_the_answer() -> None:
     neighbouring row rather than dropping them."""
     with lps.build(LP, DATA['LP']) as ex:
         whole = ex.solve(solver_name='gurobi')
-        ragged = ex.solve(batch_rows=1, solver_name='gurobi')
+        ragged = ex._engine.solve('gurobi', batch_rows=1)
         assert ragged.objective == pytest.approx(whole.objective)
         assert ragged.primal('p')['value'].to_list() == pytest.approx(whole.primal('p')['value'].to_list())
 

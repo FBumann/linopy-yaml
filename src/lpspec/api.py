@@ -152,19 +152,17 @@ class BoundModel:
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, Any] | None = None,
-        batch_rows: int | None = None,
     ) -> Result:
         """Sink the built model straight into a solver and solve it.
 
         ``solver_name`` picks the sink and ``solver_options`` is forwarded
         verbatim in that solver's vocabulary; both are the *caller's* choice at
-        the call, no YAML file being able to express either. ``batch_rows`` is
-        the hand-off budget in elements.
+        the call, no YAML file being able to express either.
 
         A solver that can stay loaded is kept between calls, so a rebound model
         re-solves from the basis the last one ended on.
         """
-        return self._engine.solve(solver_name, solver_options=solver_options, batch_rows=batch_rows)
+        return self._engine.solve(solver_name, solver_options=solver_options)
 
     def write(self, path: str | Path) -> None:
         """Sink the built model to a file; the **suffix** picks the writer."""

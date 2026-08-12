@@ -954,7 +954,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
         occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
         assert occupied == [0, 1], 'the block closes up around the gap'
         assert ex.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
-        solution = ex.solve(batch_rows=batch_rows, solver_name=solver_name)
+        solution = ex._engine.solve(solver_name, batch_rows=batch_rows)
         assert solution.termination_condition == 'optimal'
         assert solution.objective == pytest.approx(4.0 + 6.0, rel=RTOL), 'the two built rows still bind'
 
