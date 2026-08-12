@@ -9,7 +9,7 @@ takes the tables and renders them to a file. Everything else follows.
 
 | | solvers/ | writers/ |
 |---|---|---|
-| answers | a `Solver` subclass holding one model; `solve_<name>(tables, batch_rows, options)` walks it once | `(tables, path) -> None` |
+| answers | a `Solver` subclass holding one model | `(tables, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS` + `PLANNED_WRITERS`, closed |
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), over `base.py` | `lp_file.py` (nothing beyond polars) |
@@ -17,28 +17,27 @@ takes the tables and renders them to a file. Everything else follows.
 ## Staying loaded
 
 `base.py` is what a solver **is**: a loaded model with a lifecycle, which is
-linopy's shape and its word — their `Solver` is the persistent object too, and a
-one-shot solve is one you throw away. It holds no solver of its own, which is
-the whole reason it is allowed to exist beside the leaves: it cannot carry an
-optional dependency across the fence below, and sharing through it is what stops
-one leaf importing the other.
+linopy's shape and its word — their `Solver` is the persistent object too. It
+holds no solver of its own, which is the whole reason it is allowed to exist
+beside the leaves: it cannot carry an optional dependency across the fence
+below, and sharing through it is what stops one leaf importing the other.
 
-The split is by who can answer. `Solver` owns **the rule** — may the loaded
-model be kept for another solve — because that is a property of the tables and
-identical for everyone; a subclass owns **the hand-off**:
+The split is by who can answer. `solvers.loaded(held, name, …)` is the whole of
+**reuse or load again**: it keeps a held solver exactly when it is the named
+class whose recorded digest and options match the new tables — and then pushes
+the new numbers onto it — closing and replacing it otherwise. The base records
+that evidence at the load; a subclass owns **the hand-off**:
 
 | | |
 |---|---|
-| `Solver.takes(tables, options)` | is the loaded model this one, differing in nothing but numbers? |
-| `Solver.remember(tables)` | asked before the frames a model was loaded from go |
+| `solvers.loaded(held, name, …)` | reuse or load again — the whole of that decision |
 | `Solver.run(tables)` | `_run`, plus the refusal of a vector that does not span the model |
-| `solvers.loaded(held, name, …)` | reuse or load again, and the reason — the whole of that decision |
 | `_load(tables, batch_rows)` | hand the model over and hold what reads it back |
-| `push(tables)` | only after `takes` said so — new bounds, costs and right-hand sides |
+| `push(tables)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
 | `_run(tables)` | solve what is loaded, and read it back |
 | `close()` | drop the handle, and any licence with it |
 
-The first four are the base's and identical for everyone; the last four are a
+The first two are the family's and identical for everyone; the last four are a
 member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over tables
 and is given an answer.
@@ -48,8 +47,8 @@ the solver already holds and solves from the basis the last one ended on. Both
 sinks do this; a solver that could not would be slower to re-solve and nothing
 else.
 
-The guard is `ModelTables.structure()` — a digest of everything a re-solve may
-not change. **Values are re-pushed, not diffed**: linopy's persistent layer
+The guard is `ModelTables.structure` — a digest of everything a re-solve may
+not change, recorded by the solver at its load and cached on the tables. **Values are re-pushed, not diffed**: linopy's persistent layer
 (`persistent/diff.py`) computes a delta against a snapshot of the previous
 model, where here the previous model is released before the new one exists, that
 release being what keeps a rebound build at one model's peak. What a diff would
@@ -78,9 +77,9 @@ of the work — `ModelTables.dense_columns`, which both solvers read.
 ## Adding one
 
 **A solver:** `solvers/<name>.py` named for the solver, defining a `Solver`
-subclass named for it — `_load`, `push`, `_run`, `close` — plus `solve_<name>`,
-the `build_<name>` seam `bench/` measures, and one line in `SOLVERS` holding
-the class.
+subclass named for it — `_load`, `push`, `_run`, `close` — plus the
+`build_<name>` seam `bench/` measures, and one line in `SOLVERS` holding the
+class.
 Import the solver **inside the function** and declare an extra for it — the
 module boundary is the fence, the lazy import is what keeps this package free
 to import for callers who will never use it. Copy linopy's status map for it

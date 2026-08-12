@@ -10,6 +10,7 @@ they loaded, which is the one thing neither may do.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -161,7 +162,7 @@ class ModelTables:
         Scattered rather than read off the column, because ``rows`` carries no
         order contract — two builds of one model can hand back the same rows in
         a different order, which is invisible to a scatter and would be the
-        whole answer to :meth:`structure`.
+        whole answer to :attr:`structure`.
         """
         return _scattered(
             self.row_count,
@@ -170,6 +171,7 @@ class ModelTables:
             SENSE_CODES['>='],
         )
 
+    @cached_property
     def structure(self) -> bytes:
         """A digest of everything a re-solve may **not** change.
 
@@ -190,7 +192,9 @@ class ModelTables:
         compare against would hold two models alive across a rebuild, which is
         the memory the rebuild exists not to spend (the trade against a diff
         is argued in `README.md`). The cost is one linear pass over the
-        matrix, paid only by a caller who rebinds.
+        matrix, cached on the instance — the frames are frozen — so the two
+        askers in one solve, the keep-or-reload comparison and the load that
+        records what it loaded, share one pass.
 
         Each vector is hashed through its own **buffer**, so the matrix is read
         where it lies rather than copied to bytes to be read once.

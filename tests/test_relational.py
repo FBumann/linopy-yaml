@@ -37,7 +37,7 @@ from lpspec.relational.plan import (
     VariableDeclaration,
 )
 from lpspec.relational.sinks import SOLVERS
-from lpspec.relational.sinks.solvers.highs import Highs, solve_highs
+from lpspec.relational.sinks.solvers.highs import Highs
 from tests.conftest import by_coord, override, solve_lp_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, transport_eager_objective, xr
@@ -886,7 +886,7 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
 
     class Crooked(Highs):
         def _run(self, tables):
-            status, objective, primal, dual = solve_highs(tables)
+            status, objective, primal, dual = super()._run(tables)
             stretched = pl.Series('value', list(primal) + [0.0] * length)
             return status, objective, stretched.head(length), dual
 

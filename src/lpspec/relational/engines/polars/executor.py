@@ -33,7 +33,7 @@ from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler, TermFragment
-from lpspec.relational.result import Result
+from lpspec.relational.result import Diagnostics, Result
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -85,13 +85,12 @@ class PolarsExecutor:
         #: The solver holding this model, kept between solves — the only thing
         #: a rebuild does *not* throw away. ``None`` until one has been solved.
         self._solver: sinks.Solver | None = None
-        #: ``(solve number, why)`` for every solve that loaded the model from
-        #: scratch instead of pushing values onto a loaded one.
-        self._reloads: list[tuple[int, str]] = []
-        #: How many solves this model has been through — what :attr:`_reloads`
-        #: is read against, and public because a count of loads alone says
-        #: nothing about whether a driver is on the fast path.
-        self.solves = 0
+        #: How many solves this model has been through, and how many of them
+        #: had to load the solver from scratch instead of pushing values onto
+        #: one that already held it. Read together: one load in many solves is
+        #: a driver on the fast path, a load per solve is one that is not.
+        self._solves = 0
+        self._loads = 0
         self._reset()
 
     def _reset(self) -> None:
@@ -149,14 +148,10 @@ class PolarsExecutor:
 
         **A second call rebuilds over the same object**, which is what
         ``rebind`` is. The previous build is released *before* this one starts,
-        so a driver that re-solves in a loop stays at one model's peak — which
-        is also the last moment a loaded solver can be told what it holds, and
-        why :meth:`~lpspec.relational.sinks.solvers.Session.remember` is asked
-        here rather than where the tables are handed over.
+        so a driver that re-solves in a loop stays at one model's peak; what
+        the loaded solver holds survives as the digest it recorded at its load.
         """
 
-        if self._solver is not None and self._cols is not None:
-            self._solver.remember(self._tables())
         self._reset()
         self._generation += 1
 
@@ -503,15 +498,14 @@ class PolarsExecutor:
         :func:`~lpspec.relational.sinks.solvers.loaded`'s decision and not this
         method's: a rebound model has its new numbers pushed onto what the
         solver already holds, and one whose structure moved is loaded again.
-        All that is kept here is the solver itself and the record of when it
-        could not be — :meth:`reloads`, a diagnostic, the answer being the same
-        either way.
+        All that is kept here is the solver itself and the two counters
+        :meth:`diagnostics` reports, the answer being the same either way.
         """
         tables = self._tables()
-        self.solves += 1
-        self._solver, reloaded = sinks.loaded(self._solver, solver_name, tables, batch_rows, solver_options)
-        if reloaded is not None:
-            self._reloads.append((self.solves, reloaded))
+        held = self._solver
+        self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
+        self._solves += 1
+        self._loads += self._solver is not held
         status, objective, primal, dual = self._solver.run(tables)
         return Result(
             _status=status,
@@ -522,22 +516,19 @@ class PolarsExecutor:
             _dual_values=dual,
         )
 
-    def reloads(self) -> pl.DataFrame:
-        """``(solve, reason)`` — the solves that loaded the model from scratch.
+    def diagnostics(self) -> Diagnostics:
+        """What this build and its solves did that the answer does not show.
 
-        A rebind whose new numbers moved a label cannot be pushed onto a loaded
-        solver, so that solve loads it again: correct, and slower. One row on a
-        driver taking the fast path — the first solve, which had nothing to
-        keep — and a row per iteration on one that is not, which is the
-        difference between "lpspec is slow" and "this model masks on a
-        parameter that varies".
-
-        **Advisory.** Nothing about the answer depends on which path ran, so
-        this is here to be read and not to be branched on.
+        Answerable after :meth:`close`: every field is a count or a small
+        frame this keeps, not a read of the model it releases.
         """
-        return pl.DataFrame(
-            {'solve': [n for n, _ in self._reloads], 'reason': [why for _, why in self._reloads]},
-            schema={'solve': pl.UInt32, 'reason': pl.String},
+        return Diagnostics(
+            columns=self._n_cols,
+            rows=self._n_rows,
+            nonzeros=self._n_entries,
+            omissions=self.omissions(),
+            solves=self._solves,
+            loads=self._loads,
         )
 
     def _solution_frame(self, name: str, values: pl.Series | None) -> pl.LazyFrame:

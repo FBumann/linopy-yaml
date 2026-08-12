@@ -204,8 +204,8 @@ def test_nothing_keeps_a_built_model_alive() -> None:
     :func:`build_gurobi` hands ownership over and disposes the environment
     through a finalizer on the model, so anything in this package still
     referencing that model would hold a Gurobi licence open for the life of
-    the process. The one-shot :func:`solve_gurobi` path does not depend on
-    this — it disposes both in a ``finally``.
+    the process. A held :class:`Gurobi` does not depend on this — its
+    ``close()`` disposes both explicitly.
     """
     with lps.build(MIP, DATA['MIP']) as ex:
         reference = weakref.ref(build_gurobi(ex._engine._tables()))

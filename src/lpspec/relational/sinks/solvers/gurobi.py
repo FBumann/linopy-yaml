@@ -110,7 +110,7 @@ class Gurobi(Solver):
       environment a held solver ends explicitly.
     - **Nothing pushes ``Sense``.** A row's comparison comes from the YAML and
       no data can move it, so a model whose senses differ is one
-      :meth:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
+      :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
       sent back to be loaded again. gurobipy would refuse the array anyway.
     - **``update`` before ``optimize``**, gurobipy's changes being queued.
     """
@@ -168,28 +168,6 @@ class Gurobi(Solver):
             self._env.dispose()
             self._m = self._x = self._env = None
             self._blocks = []
-
-
-def solve_gurobi(
-    model: ModelTables,
-    batch_rows: int | None = None,
-    solver_options: Mapping[str, Any] | None = None,
-) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
-    """Feed the model to Gurobi and solve it, keeping nothing.
-
-    Model and environment are disposed before returning, so the licence is
-    released when the solve ends rather than whenever the collector gets to
-    it. Everything read back is a numpy array taken before the dispose.
-    :func:`build_gurobi` cannot do this — its caller owns the model.
-
-    A caller that will solve the same model again holds a :class:`Gurobi`
-    instead; this is that, with the licence handed back.
-    """
-    session = Gurobi(model, batch_rows, solver_options)
-    try:
-        return session.run(model)
-    finally:
-        session.close()
 
 
 def _built(

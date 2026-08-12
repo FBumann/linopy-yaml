@@ -24,7 +24,6 @@ Example::
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -38,10 +37,8 @@ from lpspec.sources import tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    import polars as pl
-
     from lpspec.language.model import Model
-    from lpspec.relational.result import Result
+    from lpspec.relational.result import Diagnostics, Result
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a
 #: consumer that binds no data (``typeset``) must be able to reach it without
@@ -67,49 +64,6 @@ def check(model: str | Path | dict[str, Any] | Model) -> Model:
     for note in advice(program):
         warnings.warn(note, LpspecWarning, stacklevel=2)
     return schema
-
-
-@dataclass(frozen=True)
-class Diagnostics:
-    """What a build and its solves did that the answer does not show.
-
-    One accessor rather than a reader per fact, so that watching a build stays
-    one question — and because these answer *what is this model*, where the
-    handle's own methods answer *what do I do with it*
-    (docs/ARCHITECTURE.md, "the Python surface").
-
-    **Advisory, both of them.** Nothing about an answer depends on either, and
-    a caller who branches on one has made this engine's bookkeeping part of
-    their model. They are here to be read when a loop is slower or smaller than
-    it should be.
-    """
-
-    #: The shape the solver was handed: columns, rows, and matrix entries.
-    #: What ``check`` cannot answer, needing no data where this needs all of
-    #: it, and the thing to report when a model is bigger than its author
-    #: expected — a broadcast that multiplied rows shows up here first.
-    columns: int
-    rows: int
-    nonzeros: int
-
-    #: ``(constraint, rows_not_built)`` — every row that lost all its terms and
-    #: so was not built (SPEC §6). Empty for a model whose every declared row
-    #: reached the solver. Counts rather than coordinates: the label of an
-    #: unbuilt row does not exist.
-    omissions: pl.DataFrame
-
-    #: How many times this model has been solved. The denominator ``reloads``
-    #: is read against: one load in one solve is a cold start, one load in
-    #: twenty-five is a driver on the fast path.
-    solves: int
-
-    #: ``(solve, reason)`` — the solves that loaded the model from scratch
-    #: instead of pushing values onto a solver that already held it. One row on
-    #: a driver taking the fast path, being the first solve, which had nothing
-    #: to keep; a row per iteration on one that is not, which is the difference
-    #: between "lpspec is slow" and "this model masks on a parameter that
-    #: varies".
-    reloads: pl.DataFrame
 
 
 class BoundModel:
@@ -178,7 +132,7 @@ class BoundModel:
         mask — a parameter a ``where`` compares against — renumbers labels
         under a caller who cannot tell, and the engine rebuilds and solves cold
         instead of pushing values onto a loaded solver. Which one ran is
-        :attr:`Diagnostics.reloads`.
+        :attr:`~lpspec.relational.result.Diagnostics.loads`.
 
         The answer is the reference build's, always: ``bound.rebind(x)`` solves
         what ``build(model, sources | x)`` solves, and that equality is what
@@ -237,16 +191,9 @@ class BoundModel:
         """What this build and its solves did that the answer does not show.
 
         Answerable after :meth:`close`: every field is a count or a small frame
-        this keeps, not a read of the model it releases.
+        the engine keeps, not a read of the model it releases.
         """
-        return Diagnostics(
-            columns=self._engine._n_cols,
-            rows=self._engine._n_rows,
-            nonzeros=self._engine._n_entries,
-            omissions=self._engine.omissions(),
-            solves=self._engine.solves,
-            reloads=self._engine.reloads(),
-        )
+        return self._engine.diagnostics()
 
     def close(self) -> None:
         """Release the built model, and any solver still holding it."""

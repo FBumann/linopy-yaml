@@ -29,8 +29,6 @@ from lpspec.relational.status import SolveStatus
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    import polars as pl
-
     from lpspec.relational.sinks.solvers.base import Answer
     from lpspec.relational.sinks.tables import ModelTables
 
@@ -203,33 +201,6 @@ class Highs(Solver):
         if self._handle is not None:
             self._handle.clear()
         self._handle = None
-
-
-def solve_highs(
-    model: ModelTables,
-    batch_rows: int | None = None,
-    solver_options: Mapping[str, Any] | None = None,
-) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
-    """Feed the model to HiGHS and solve it, keeping nothing.
-
-    Returns ``(status, objective, primal, dual)`` as the solver's own vectors,
-    positional in the solver's index — which *is* our label — so there is
-    nothing to key them by and nothing to join.
-
-    Either can be ``None``, for different reasons: no primal means the solve
-    left nothing worth reading, while no dual is narrower, a mixed-integer
-    model having none at all and neither does a run stopped short of a simplex
-    basis. HiGHS hands back full-length vectors of zeros either way, and
-    returning them would only make them reachable.
-
-    A caller that will solve the same model again holds a :class:`Highs`
-    instead; this is that with the handle dropped.
-    """
-    session = Highs(model, batch_rows, solver_options)
-    try:
-        return session.run(model)
-    finally:
-        session.close()
 
 
 def _loaded(h: Any, status: Any, what: str) -> None:

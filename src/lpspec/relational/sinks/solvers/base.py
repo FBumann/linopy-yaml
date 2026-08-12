@@ -4,8 +4,7 @@ A solver sink holds the model it was given and outlives the solve it was loaded
 for, so that a rebound model (:meth:`~lpspec.api.BoundModel.rebind`) has its new
 numbers *pushed* onto what the solver already has and re-solves from the basis
 the last one ended on. linopy's shape, and its word: their ``Solver`` is the
-persistent object too, and a one-shot solve is one you throw away
-(``solve_<name>`` here). Copied rather than imported, and tested here.
+persistent object too. Copied rather than imported, and tested here.
 
 **This module imports no solver.** It is the one thing ``solvers/`` members may
 read besides ``tables.py``, and that is the whole reason it can exist: the fence
@@ -39,26 +38,19 @@ if TYPE_CHECKING:
 class Solver(ABC):
     """One solver, holding one model. Subclassed once per member of ``SOLVERS``.
 
-    The two halves are split by who can answer them. **This class owns the
-    rule** — whether the loaded model may be kept for another solve — because
-    it is a property of the *tables*, identical for every solver, and a second
-    copy of it would be a second answer that could drift. **A subclass owns the
-    hand-off**: loading, pushing values, running, releasing, all of which are
-    its own library's shape and nothing else's.
+    A driver never constructs one directly: :func:`~lpspec.relational.sinks.solvers.loaded`
+    is the whole of "reuse or load again", and what it hands back is run and,
+    eventually, closed::
 
-    The lifecycle a driver walks, and the only order that is defined::
-
-        solver = Solver(tables, batch_rows, options)  # loaded
+        solver = solvers.loaded(held, name, tables, batch_rows, options)
         solver.run(tables)  # …repeatedly
-        solver.remember(tables)  # before the tables go
-        if solver.takes(tables, options):  # after they are rebuilt
-            solver.push(tables)
         solver.close()
 
-    :meth:`takes` is asked of every reuse and is the correctness floor: a model
-    whose :meth:`~lpspec.relational.sinks.tables.ModelTables.structure` moved is
-    a different model wearing the same labels, and pushing values onto it would
-    answer a question nobody asked.
+    The two halves are split by who can answer them. **This class records the
+    rule's evidence** — the digest of what was loaded and the options it was
+    loaded with, identical bookkeeping for every solver. **A subclass owns the
+    hand-off**: loading, pushing values, running, releasing, all of which are
+    its own library's shape and nothing else's.
     """
 
     def __init__(
@@ -67,40 +59,23 @@ class Solver(ABC):
         batch_rows: int | None = None,
         solver_options: Mapping[str, Any] | None = None,
     ) -> None:
+        #: The options the loaded model was told. Set at the load, so a solve
+        #: asking for others has to be given something that was.
         self._options = dict(solver_options or {})
-        #: The structure of the model this holds, recorded when something
-        #: rebuilt the tables under it. ``None`` while nothing has, which is
-        #: every solve of a model nobody rebound — and the reason a one-shot
-        #: solve pays for no digest.
-        self._structure: bytes | None = None
         self._load(model, batch_rows)
-
-    def remember(self, model: ModelTables) -> None:
-        """Record what is loaded, before the frames it was loaded from go.
-
-        The last moment anything can say what the solver holds: a rebuild
-        releases the previous model *before* it starts, which is what keeps a
-        rebound build at one model's peak, so nothing afterwards could compare
-        against it.
-        """
-        self._structure = model.structure()
-
-    def takes(self, model: ModelTables, solver_options: Mapping[str, Any] | None) -> bool:
-        """Whether *model* is the loaded one differing in nothing but numbers.
-
-        Options count: they are set when the model is loaded, so a solve asking
-        for others has to be given something that was told them.
-        """
-        if dict(solver_options or {}) != self._options:
-            return False
-        return self._structure is None or self._structure == model.structure()
+        #: What the loaded model *is* —
+        #: :attr:`~lpspec.relational.sinks.tables.ModelTables.structure`, the
+        #: digest of everything a re-solve may not change. Sixteen bytes, where
+        #: holding the frames themselves would keep two models alive across a
+        #: rebuild.
+        self._structure = model.structure
 
     @abstractmethod
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         """Hand *model* to the solver and hold whatever reads it back.
 
         Called by ``__init__`` rather than by a caller, so that a subclass
-        cannot exist in a state where the other four have nothing to work on.
+        cannot exist in a state where the other three have nothing to work on.
         """
 
     @abstractmethod
@@ -108,8 +83,9 @@ class Solver(ABC):
         """*model*'s bounds, costs and right-hand sides onto the loaded model.
 
         Everything a rebind may change without moving a label, and only ever
-        after :meth:`takes` said so. Whole vectors rather than a diff: the
-        model that would say which cells moved is the one this replaces.
+        after *model*'s digest matched the loaded one. Whole vectors rather
+        than a diff: the model that would say which cells moved is the one
+        this replaces.
         """
 
     def run(self, model: ModelTables) -> Answer:

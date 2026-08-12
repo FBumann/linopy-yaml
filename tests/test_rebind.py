@@ -8,8 +8,8 @@ and the Benders monolith check.
 
 The second is that the fast path is *only* a fast path. A rebind that moves a
 mask renumbers labels and cannot be pushed onto a loaded solver, so the engine
-rebuilds and solves cold; nothing about the answer changes, and `diagnostics().reloads`
-is where a driver finds out which happened.
+rebuilds and solves cold; nothing about the answer changes, and
+`diagnostics().loads` is where a driver finds out which happened.
 """
 
 from __future__ import annotations
@@ -74,23 +74,23 @@ def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, 
     """The fast path is taken exactly when the structure held.
 
     The first solve always loads — there was nothing to keep — so a driver on
-    the fast path leaves `diagnostics().reloads` one row long however many times
-    round. The rule is the digest's, so it is the same rule for every sink that
-    can stay loaded.
+    the fast path leaves `diagnostics().loads` at one however many times round.
+    The rule is the digest's, so it is the same rule for every sink that can
+    stay loaded.
     """
     if solver_name == 'gurobi':
         pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
     with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
         bound.solve(solver_name=solver_name)
-        assert bound.diagnostics().reloads.height == 1, 'the first solve has nothing loaded to keep'
+        assert bound.diagnostics().loads == 1, 'the first solve has nothing loaded to keep'
 
         bound.rebind(change).solve(solver_name=solver_name)
         seen = bound.diagnostics()
         expected = 1 if keeps_the_solver else 2
         assert seen.solves == 2, 'both solves are counted whichever path each took'
-        assert seen.reloads.height == expected, (
-            f'{seen.reloads.to_dicts()} — a rebind that keeps every label pushes values onto '
-            f'the loaded solver; one that moves a label has to load the model again'
+        assert seen.loads == expected, (
+            'a rebind that keeps every label pushes values onto the loaded solver; '
+            'one that moves a label has to load the model again'
         )
 
 
@@ -118,7 +118,7 @@ def test_a_rebind_may_be_repeated_and_each_answer_is_its_own(dispatch_yaml):
             served.append(bound.rebind({'load': load}).solve().primal('p')['value'].sum())
 
         assert served == sorted(served), f'{served} — more load must dispatch more power'
-        assert bound.diagnostics().reloads.height == 1, 'a scaled right-hand side moves no label'
+        assert bound.diagnostics().loads == 1, 'a scaled right-hand side moves no label'
 
 
 def test_a_result_from_before_a_rebind_refuses_to_read(dispatch_yaml):
@@ -228,7 +228,7 @@ def test_a_rebind_can_grow_a_dimension():
 
         assert grown.objective == pytest.approx(reference.objective)
         assert grown.primal('cap').equals(reference.primal('cap'))
-        assert bound.diagnostics().reloads.height == 2, 'more rows than the solver holds is a load, not a push'
+        assert bound.diagnostics().loads == 2, 'more rows than the solver holds is a load, not a push'
     reference.close()
 
 

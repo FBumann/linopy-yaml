@@ -67,7 +67,7 @@ for capacity in search:
 | **the answer is the reference build's** | `bound.rebind(x)` solves what `build(model, sources \| x)` solves, always. That is an equality a test asserts, not a promise — it is also the oracle to reach for when a loop looks wrong |
 | **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
 | **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model HiGHS already holds, and the next solve starts from the basis the last one ended on. A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, and that model is loaded again and solved cold |
-| **which one ran is `bound.diagnostics().reloads`** | `(solve, reason)`, one row per solve that had to load from scratch. A driver on the fast path leaves it one row long however many times it goes round; a row per iteration is the difference between "lpspec is slow" and "this model masks on a parameter that varies". Advisory — nothing about the answer depends on it |
+| **which one ran is `bound.diagnostics()`** | `loads` counts the solves that had to load the model from scratch, against `solves` as its denominator. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies". Advisory — nothing about the answer depends on it |
 | **earlier results stop reading** | a rebind replaces the label frames every reader joins through, so a `Result` from before it raises rather than laying its values out over coordinates they were not computed on. Frames already read are their own data and stay valid |
 | **a rebind that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
 
@@ -80,8 +80,8 @@ depends on the last answer, which is what a fold cannot express.
 show: the shape handed to the solver (`columns`, `rows`, `nonzeros` — what
 `check` cannot answer, needing no data where this needs all of it, and where a
 broadcast that multiplied rows shows up first), `omissions` (rows a constraint
-declared but did not build, and why that matters), and `solves` with `reloads`
-(above; `solves` is the denominator to read `reloads` against). It answers after
+declared but did not build, and why that matters), and `solves` with `loads`
+(above; `solves` is the denominator to read `loads` against). It answers after
 `close()` too, every field being a count or a small frame it keeps rather than a
 read of the model it releases.
 
@@ -93,7 +93,7 @@ model.
 answer and `write` a path; the questions *about the model* — how big is it, what
 did it not build, how did its re-solves go — belong to the handle that **is** the
 model, so a caller who wants them builds and keeps it. That is also what keeps
-the record honest: read off a `Result`, `solves` and `reloads` would have to
+the record honest: read off a `Result`, `solves` and `loads` would have to
 report what happened *after* that answer was produced, which is not a fact about
 it. A `Result` reports its own solve, and nothing else does.
 

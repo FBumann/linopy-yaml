@@ -65,6 +65,45 @@ def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) ->
     return dataset
 
 
+@dataclass(frozen=True)
+class Diagnostics:
+    """What a build and its solves did that the answer does not show.
+
+    One accessor rather than a reader per fact, so that watching a build stays
+    one question — and because these answer *what is this model*, where the
+    handle's own methods answer *what do I do with it*
+    (docs/ARCHITECTURE.md, "the Python surface").
+
+    **Advisory, all of it.** Nothing about an answer depends on any field, and
+    a caller who branches on one has made this engine's bookkeeping part of
+    their model. They are here to be read when a loop is slower or smaller
+    than it should be.
+    """
+
+    #: The shape the solver was handed: columns, rows, and matrix entries.
+    #: What ``check`` cannot answer, needing no data where this needs all of
+    #: it, and the thing to report when a model is bigger than its author
+    #: expected — a broadcast that multiplied rows shows up here first.
+    columns: int
+    rows: int
+    nonzeros: int
+
+    #: ``(constraint, rows_not_built)`` — every row that lost all its terms and
+    #: so was not built (SPEC §6). Empty for a model whose every declared row
+    #: reached the solver. Counts rather than coordinates: the label of an
+    #: unbuilt row does not exist.
+    omissions: pl.DataFrame
+
+    #: How many times this model has been solved, and how many of those solves
+    #: loaded the solver from scratch instead of pushing values onto one that
+    #: already held it. Read together: ``loads == 1`` is a driver on the fast
+    #: path — the first solve had nothing to keep — and ``loads == solves`` on
+    #: an iterating driver is the difference between "lpspec is slow" and
+    #: "this model masks on a parameter that varies".
+    solves: int
+    loads: int
+
+
 @dataclass
 class Result:
     """What a solve returned — the outcome, and access to any values.

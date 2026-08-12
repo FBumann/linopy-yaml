@@ -439,15 +439,14 @@ def _family(name: str) -> set[str]:
 def test_each_sink_family_is_its_directory_and_its_registry():
     """One shape per family, checked off the path.
 
-    A solver is five things that must agree: a module under ``solvers/`` named
+    A solver is four things that must agree: a module under ``solvers/`` named
     for the solver, a ``Solver`` subclass defined *in that module*, a
-    ``solve_<name>``, a ``build_<name>`` seam for `bench/`, and the ``SOLVERS``
-    key holding the class. Writers are keyed by suffix instead, but the rule is
-    the same. Agreement is what makes adding one mechanical — nothing above the
-    module to teach, nothing to remember but the name.
+    ``build_<name>`` seam for `bench/`, and the ``SOLVERS`` key holding the
+    class. Writers are keyed by suffix instead, but the rule is the same.
+    Agreement is what makes adding one mechanical — nothing above the module
+    to teach, nothing to remember but the name.
 
-    The class rather than the function, because a solver holds a model between
-    solves and ``solve_<name>`` is that lifecycle walked once. Defined in its
+    The class, because a solver holds a model between solves. Defined in its
     own module, so the fence that keeps ``gurobipy`` off a HiGHS caller's
     import path holds.
     """
@@ -464,7 +463,6 @@ def test_each_sink_family_is_its_directory_and_its_registry():
         assert held.__module__.rsplit('.', 1)[-1] == name, (
             f"{name}'s solver is defined in {held.__module__} — it belongs to its own module"
         )
-        assert hasattr(module, f'solve_{name}'), f'{name} has no solve_{name}: the one-shot spelling'
         assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
     assert {w.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers')
