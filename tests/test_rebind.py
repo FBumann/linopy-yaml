@@ -14,6 +14,7 @@ rebuilds and solves cold; nothing about the answer changes, and
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import polars as pl
@@ -271,6 +272,32 @@ def test_the_digest_moves_where_a_declaration_moved(edited):
     assert _structure(REACH) != _structure({**REACH, **edited}), (
         'a model a re-solve may not be pushed onto has to hash differently'
     )
+
+
+#: The counts, which no edit of a declaration reaches either — and which no
+#: *vector* stands in for, the reason below.
+COUNTS = [pytest.param('column_count', id='the column count'), pytest.param('row_count', id='the row count')]
+
+
+@pytest.mark.parametrize('count', COUNTS)
+def test_the_digest_reads_the_counts_that_frame_its_vectors(count):
+    """The counts say where one hashed vector ends and the next begins.
+
+    Every vector goes in as raw bytes, one after another and with nothing
+    between them, so the concatenation alone does not say how it was split: a
+    model with one column more and one row fewer offers the digest the same
+    bytes in the same order. It is the counts that make the stream mean one
+    model, which is why they are not the redundant restatement of five vector
+    lengths they look like.
+
+    Asked of the tables rather than of two builds, since a build produces the
+    counts and the vectors together and so cannot pose the question.
+    """
+    with lps.build(REACH, reach_sources()) as bound:
+        tables = bound._engine._tables()
+
+    moved = replace(tables, **{count: getattr(tables, count) + 1})
+    assert moved.structure != tables.structure, f'{count} is framing, not decoration: the same bytes split elsewhere'
 
 
 #: One option each sink understands, at two values. The vocabulary is the
