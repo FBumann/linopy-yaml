@@ -19,8 +19,13 @@ engine is frame-native, and the module constants are the single source of both.
 
 from __future__ import annotations
 
+import contextlib
 import copy
+import difflib
+import importlib.util
+import io
 import json
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -30,6 +35,7 @@ import pytest
 import yaml as pyyaml
 
 from lpspec.language.validation import load_model
+from tools import constructs
 
 if TYPE_CHECKING:
     from lpspec.language.model import Model
@@ -56,6 +62,11 @@ def port(request: pytest.FixtureRequest) -> dict[str, Any]:
     """Each ported model in turn: its name, its file, and what it should reach."""
     return {'name': request.param, 'model': PORTS_DIR / f'{request.param}.yaml'} | PORT_REFERENCES[request.param]
 
+
+#: Every model in the repo, ports included — ``constructs.models()`` is the one
+#: list the gallery and the docs already build from, so a model added anywhere
+#: is covered the day it lands rather than when someone remembers a glob.
+MODEL_PATHS = [p for _, p in constructs.models()]
 
 #: The dispatch model as a dict, for tests that need to mutate a declaration
 #: rather than read a file. Deliberately the same math as
@@ -145,18 +156,20 @@ def solve_lp_file(path: Path | str) -> float:
     return h.getInfo().objective_function_value
 
 
-def by_coord(result: Any, name: str, dim: str) -> dict[Any, float]:
-    """A variable's primal as ``{coordinate: value}``, for a one-dim variable.
+def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
+    """A variable's primal as ``{coordinate: value}`` — tuple keys past one dim.
 
     One ``primal`` call, then one zip — and that is the whole reason this is a
     function. ``primal`` is a label join and promises row *order* but not that
     two separate calls line up column-wise, so the idiom has to read the frame
-    once and pair its columns in a single pass. Six tests do this and the
-    caveat was written down at one of them; here it applies to all six by
+    once and pair its columns in a single pass. A dozen tests do this and the
+    caveat was written down at one of them; here it applies to all by
     construction.
     """
     frame = result.primal(name)
-    return dict(zip(frame[dim], frame['value'], strict=True))
+    columns = [frame[dim] for dim in dims]
+    keys = columns[0] if len(dims) == 1 else zip(*columns, strict=True)
+    return dict(zip(keys, frame['value'], strict=True))
 
 
 def resolved(text, schema):
@@ -172,6 +185,50 @@ def resolved(text, schema):
 
 
 # ---------------------------------------------------------------------------
+# examples as evidence
+# ---------------------------------------------------------------------------
+
+
+def run_example(path: Path, name: str) -> str:
+    """Import a script as module ``name`` and capture what its ``main()`` prints.
+
+    ``StringIO`` is not a tty, so any banners come out unstyled — the same
+    plain text a shell redirect into a golden file would produce.
+    """
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            module.main()
+    finally:
+        del sys.modules[name]
+    return buffer.getvalue()
+
+
+def assert_golden(output: str, golden: Path, pytestconfig: pytest.Config, drifted: str) -> None:
+    """``output`` matches the committed golden, or ``--update-golden`` rewrites it.
+
+    Args:
+        output: What this run printed.
+        golden: The committed file to compare against or rewrite.
+        pytestconfig: The fixture, for the ``--update-golden`` flag.
+        drifted: What a mismatch means for this example — opens the failure
+            message, above the diff, and should say how to regenerate.
+    """
+    if pytestconfig.getoption('--update-golden'):
+        golden.write_text(output)
+        pytest.skip(f'rewrote {golden.name} from this run')
+    expected = golden.read_text()
+    if output != expected:
+        diff = '\n'.join(difflib.unified_diff(expected.splitlines(), output.splitlines(), 'committed', 'this run'))
+        pytest.fail(f'{drifted}\n{diff}', pytrace=False)
+
+
+# ---------------------------------------------------------------------------
 # data
 # ---------------------------------------------------------------------------
 
@@ -179,6 +236,26 @@ def resolved(text, schema):
 @pytest.fixture
 def dispatch_yaml() -> Path:
     return EXAMPLES_DIR / 'dispatch.yaml'
+
+
+@pytest.fixture
+def dispatch_model_inputs():
+    """``DISPATCH_MODEL``'s data as pandas — what the parity modules feed both lanes."""
+    import pandas as pd
+
+    data = {
+        'p_max': pd.Series({'wind': 100.0, 'gas': 200.0}),
+        'cost': pd.Series({'wind': 0.0, 'gas': 50.0}),
+        'load': pd.Series([80.0] * 4, index=pd.RangeIndex(4, name='snapshot')),
+    }
+    return data, {'snapshot': pd.RangeIndex(4, name='snapshot')}
+
+
+def dispatch_model_path(directory: Path, **patch: Any) -> Path:
+    """``DISPATCH_MODEL``, varied and written to disk — the eager lane only takes a path."""
+    path = directory / 'model.yaml'
+    path.write_text(pyyaml.safe_dump(override(DISPATCH_MODEL, **patch)))
+    return path
 
 
 #: Generators of ``examples/dispatch.yaml``, and the snapshot count. Distinct

@@ -24,7 +24,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import LpspecError, NoSolutionError
 from lpspec.relational.sinks.solvers.gurobi import build_gurobi
-from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_sources
+from tests.conftest import port_sources
 
 gurobipy = pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
 
@@ -108,18 +108,16 @@ def test_gurobi_and_highs_agree(name: str, variable: str, constraint: str | None
             assert gb.dual(constraint)['value'].to_list() == pytest.approx(highs.dual(constraint)['value'].to_list())
 
 
-@pytest.mark.parametrize('port', sorted(PORT_REFERENCES), ids=str)
-def test_every_port_reaches_its_reference_optimum_on_gurobi(port: str) -> None:
+def test_every_port_reaches_its_reference_optimum_on_gurobi(port: dict[str, Any]) -> None:
     """``test_ports.py``'s corpus, solved by the other solver.
 
     The one assertion here no part of this package produced. A sink that
     mis-loads the matrix — a block boundary off by a row, a sense inverted —
     still reaches *a* number; this is what that number is checked against.
     """
-    reference = PORT_REFERENCES[port]
-    with lps.solve(PORTS_DIR / f'{port}.yaml', port_sources(port), solver_name='gurobi') as solution:
-        assert solution.is_ok, f'{port} did not solve: {solution.status}'
-        assert solution.objective == pytest.approx(reference['objective'], rel=reference['rtol'])
+    with lps.solve(port['model'], port_sources(port['name']), solver_name='gurobi') as solution:
+        assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
+        assert solution.objective == pytest.approx(port['objective'], rel=port['rtol'])
 
 
 def test_block_boundaries_do_not_move_the_answer() -> None:
