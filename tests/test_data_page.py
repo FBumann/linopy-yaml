@@ -59,6 +59,7 @@ def test_the_preparation_code_runs_and_solves(monkeypatch: pytest.MonkeyPatch) -
 
 def test_the_linopy_shapes_block_runs_and_solves() -> None:
     """Indexed Series pass as sources unconverted — proven by solving with them."""
+    pytest.importorskip('pandas')
     scope: dict = {}
     exec(_block('pd.Series'), scope)
     with lps.solve(str(ROOT / 'examples' / 'dispatch.yaml'), scope['sources']) as solution:
@@ -78,7 +79,7 @@ def test_the_pypsa_shapes_block_produces_tidy_sources() -> None:
     """
     from types import SimpleNamespace
 
-    import pandas as pd
+    pd = pytest.importorskip('pandas')
 
     generators = pd.DataFrame(
         {'bus': ['north', 'south'], 'p_nom': [60.0, 150.0], 'marginal_cost': [10.0, 40.0]},
