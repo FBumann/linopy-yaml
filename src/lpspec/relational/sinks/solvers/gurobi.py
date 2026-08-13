@@ -23,6 +23,7 @@ import weakref
 from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import LpspecError
+from lpspec.relational.sinks.solvers.base import Solver
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from lpspec.relational.sinks.solvers.base import Answer
     from lpspec.relational.sinks.tables import ModelTables
 
 
@@ -90,41 +92,93 @@ def build_gurobi(
     One thing to own rather than two, which is why this returns a model rather
     than a pair.
     """
-    m, _x, _blocks, environment = _load(model, batch_rows, solver_options)
+    m, _x, _blocks, environment = _built(model, batch_rows, solver_options)
     weakref.finalize(m, environment.dispose)
     return m
 
 
-def solve_gurobi(
-    model: ModelTables,
-    batch_rows: int | None = None,
-    solver_options: Mapping[str, Any] | None = None,
-) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
-    """Feed the model to Gurobi and solve it.
+class Gurobi(Solver):
+    """Gurobi, holding one model — :class:`Solver`'s member for the opt-in sink.
 
-    Model and environment are disposed before returning, so the licence is
-    released when the solve ends rather than whenever the collector gets to
-    it. Everything read back is a numpy array taken before the dispose.
-    :func:`build_gurobi` cannot do this — its caller owns the model.
+    :class:`~lpspec.relational.sinks.solvers.highs.Highs`'s twin, and the same
+    lifecycle. Three things are gurobipy's shape rather than a choice:
 
-    Returns:
-        ``(status, objective, primal, dual)``, the family's shape — the two
-        ``None`` cases as in
-        :func:`~lpspec.relational.sinks.solvers.highs.solve_highs`.
+    - **A push writes through the read-back handles.** The ``MVar`` and the
+      constraint blocks are what carry the attributes, so this keeps what
+      :func:`_built` returns rather than the model alone — and it is why
+      :func:`build_gurobi` is not reused: its finalizer disposes an
+      environment a held solver ends explicitly.
+    - **Nothing pushes ``Sense``.** A row's comparison comes from the YAML and
+      no data can move it, so a model whose senses differ is one
+      :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
+      sent back to be loaded again. gurobipy would refuse the array anyway.
+    - **``update`` before ``optimize``**, gurobipy's changes being queued.
     """
-    m, x, blocks, environment = _load(model, batch_rows, solver_options)
-    try:
-        m.optimize()
-        status = _status_of(m)
+
+    #: The loaded model, the two handles that read it back, and the
+    #: environment to release. Declared rather than inferred, ``close``
+    #: dropping all four.
+    _m: Any
+    _x: Any
+    _blocks: list[Any]
+    _env: Any
+
+    #: Both halves of the extra, for the reason :attr:`unavailable_message`
+    #: names both: the missing one is as often scipy.
+    requires = ('gurobipy', 'scipy')
+    unavailable_message = 'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "lpspec[gurobi]"'
+
+    def _load(self, model: ModelTables, batch_rows: int | None) -> None:
+        self._m, self._x, self._blocks, self._env = _built(model, batch_rows, self._options)
+
+    def push(self, model: ModelTables) -> None:
+        """Whole vectors, in as many calls as there are blocks.
+
+        The matrix API writes an attribute across an ``MVar`` or an
+        ``MConstr`` at a time, so there is nothing here to batch that was not
+        batched at the load.
+        """
+        gurobipy = _gurobipy()
+        lb, ub, cost, _ = model.dense_columns(gurobipy.GRB.INFINITY)
+        self._x.LB, self._x.UB, self._x.Obj = lb, ub, cost
+
+        _sense, rhs = model.dense_rows(gurobipy.GRB.INFINITY)
+        at = 0
+        for block in self._blocks:
+            block.RHS = rhs[at : at + block.shape[0]]
+            at += block.shape[0]
+        self._m.ObjCon = model.objective_constant
+        self._m.update()
+
+    def _run(self, model: ModelTables) -> Answer:
+        """Solve what is loaded and read it back.
+
+        Gurobi refuses the attribute where there is no primal or no dual
+        rather than handing back zeros, which is the one place it makes this
+        easier than HiGHS.
+        """
+        self._m.optimize()
+        status = _status_of(self._m)
         if not status.is_readable:
             return status, float('nan'), None, None
-        return status, m.ObjVal, solver_vector(x.X), _duals(model.row_count, blocks)
-    finally:
-        m.dispose()
-        environment.dispose()
+        return status, self._m.ObjVal, solver_vector(self._x.X), _duals(model.row_count, self._blocks)
+
+    def close(self) -> None:
+        """Release the model and the licence its environment holds.
+
+        Both, and in that order: gurobipy has no ``Model.getEnv()``, so an
+        environment left behind holds the licence until the collector reaches
+        it — the hazard :func:`build_gurobi`'s finalizer exists for, and which
+        a solver held between solves answers by ending explicitly.
+        """
+        if self._m is not None:
+            self._m.dispose()
+            self._env.dispose()
+            self._m = self._x = self._env = None
+            self._blocks = []
 
 
-def _load(
+def _built(
     model: ModelTables,
     batch_rows: int | None,
     solver_options: Mapping[str, Any] | None,
@@ -198,16 +252,16 @@ def _spelled(gurobipy: Any) -> Any:
 
 
 def _gurobipy() -> Any:
-    """The optional dependency, or a message naming the extra.
+    """The optional dependency, or :attr:`Gurobi.unavailable_message`.
 
-    Both halves are named, because the missing one is as often scipy.
+    The same sentence the early refusal prints, since it is the same fact
+    arriving later.
     """
     try:
         import gurobipy
         import scipy.sparse  # noqa: F401 — guarded here so the message covers it
     except ModuleNotFoundError as exc:
-        msg = 'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "lpspec[gurobi]"'
-        raise ModuleNotFoundError(msg) from exc
+        raise ModuleNotFoundError(Gurobi.unavailable_message) from exc
     return gurobipy
 
 

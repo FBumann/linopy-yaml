@@ -1,10 +1,11 @@
-"""What a solve returned — the caller's end of the relational lane.
+"""What a caller reads back — a solve's :class:`Result`, a build's :class:`Diagnostics`.
 
-The object ``lps.solve`` hands back, so it is the one piece of this subpackage a
-reader meets without going looking. It lives beside the executor rather than in
-it because the two answer different questions: the executor *builds* a model,
-and this *reads* one — the accessors are joins against the label frames plus
-whatever vector the solver left.
+The objects ``lps.solve`` and ``bound.diagnostics()`` hand back, so they are
+the pieces of this subpackage a reader meets without going looking. They live
+beside the engine rather than in it because they answer different questions:
+the engine *builds* a model, and these *read* one — a :class:`Result` holds one
+finished frame per declaration, its values already laid out over the build's
+coordinates, so no reader ever goes back to the engine.
 
 Named for linopy's envelope (``Result`` = status + solution + report) rather
 than for our own decomposition, because our audience arrives from linopy and a
@@ -18,16 +19,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from lpspec.errors import LpspecError, NoSolutionError
+from lpspec.errors import LpspecError, NoSolutionError, unknown_name_message
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     import pandas as pd
     import polars as pl
     import xarray as xr
 
-    from lpspec.relational.engines.polars.executor import PolarsExecutor
     from lpspec.relational.status import SolveStatus
 
 
@@ -65,6 +65,49 @@ def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) ->
     return dataset
 
 
+@dataclass(frozen=True)
+class Diagnostics:
+    """What a build and its solves did that the answer does not show.
+
+    Advisory, all of it: no answer depends on any field, and a caller who
+    branches on one has made this engine's bookkeeping part of their model.
+    Read them when a loop is slower or smaller than it should be.
+    """
+
+    #: The shape the solver was handed: columns, rows, and matrix entries.
+    #: What ``check`` cannot answer, needing no data where this needs all of
+    #: it, and the thing to report when a model is bigger than its author
+    #: expected — a broadcast that multiplied rows shows up here first.
+    columns: int
+    rows: int
+    nonzeros: int
+
+    #: ``(constraint, rows_not_built)`` — every row that lost all its terms and
+    #: so was not built (SPEC §6): without this record a declared constraint
+    #: could go unenforced with no way to notice. Empty for a model whose every
+    #: declared row reached the solver. Counts rather than coordinates: the
+    #: label of an unbuilt row does not exist, so naming which went would mean
+    #: holding the pre-drop frame — memory proportional to the omission, on the
+    #: path this package measures hardest.
+    omissions: pl.DataFrame
+
+    #: How many times this model has been solved, and how many of those solves
+    #: loaded the solver from scratch instead of pushing values onto one that
+    #: already held it. Read together: ``loads == 1`` is a driver on the fast
+    #: path — the first solve had nothing to keep — and ``loads == solves`` on
+    #: an iterating driver is the difference between "lpspec is slow" and
+    #: "this model masks on a parameter that varies".
+    solves: int
+    loads: int
+
+
+def _named(frames: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyFrame:
+    try:
+        return frames[name]
+    except KeyError:
+        raise KeyError(unknown_name_message(kind, name, frames)) from None
+
+
 @dataclass
 class Result:
     """What a solve returned — the outcome, and access to any values.
@@ -73,15 +116,27 @@ class Result:
     reading values, or catch :class:`~lpspec.errors.NoSolutionError`. The
     values are this result's own, so a later solve on the same model does not
     rewrite them, and there is no lifetime to manage — :meth:`close` releases
-    a large model early, and nothing breaks without it.
+    what this result holds early, and nothing breaks without it.
+
+    A rebind is no exception. A result owns everything it reads — one finished
+    frame per declaration, its own values already laid out over the label frames
+    of the build it answered — so it outlives anything done to the model
+    afterwards: a rebind, another solve, ``bound.close()``. What retaining one
+    costs is those label frames staying alive, which matters once a caller keeps
+    several, as a sweep, a rolling horizon and Benders all do.
     """
 
     _status: SolveStatus
     _objective: float
-    _executor: PolarsExecutor
-    _primal_values: pl.Series | None = None
-    _dual_values: pl.Series | None = None
-    _closed: bool = False
+    #: One ``(dims…, value)`` frame per declaration, lazy and in label order —
+    #: a read is a collect. ``None`` is what :meth:`close` leaves behind, and
+    #: the primal's absence is what "closed" means: both go together, and an
+    #: empty mapping is a solve that left nothing, which the status reports.
+    _primals: Mapping[str, pl.LazyFrame] | None
+    _duals: Mapping[str, pl.LazyFrame] | None
+    #: Why there are no duals, when a solve that left values still has none.
+    #: ``None`` whenever :attr:`_duals` holds them.
+    _no_duals: str | None = None
 
     @property
     def status(self) -> str:
@@ -112,22 +167,30 @@ class Result:
         """The objective value, or ``nan`` when there is no solution."""
         return self._objective
 
-    def _require_solution(self, what: str) -> None:
-        if self._closed:
+    def _readable(self, frames: Mapping[str, pl.LazyFrame] | None, what: str) -> Mapping[str, pl.LazyFrame]:
+        """*frames*, or why they cannot be read — closed first, then the status.
+
+        Closedness is read off the primals whichever mapping was asked for,
+        because :meth:`close` releases both together and a solve may
+        legitimately leave the duals empty.
+        """
+        if self._primals is None:
             raise LpspecError(
-                f'cannot read {what}: this result was closed, and closing releases the model the '
-                f'readers join against. Frames already read stay valid — they are their own data — so '
-                f'read what you need before close(), or drop the `with` and close when you are done.'
+                f'cannot read {what}: this result was closed, and closing releases its values and its '
+                f'hold on the coordinates they lay out over. Frames already read stay valid — they are '
+                f'their own data — so read what you need before close(), or drop the `with` and close '
+                f'when you are done.'
             )
-        if self._status.is_readable:
-            return
-        raise NoSolutionError(
-            f'cannot read {what}: the solve terminated {self.termination_condition!r} '
-            f'({self._status.solver_wording}), so there are no values to read. Test '
-            f'`has_primal` first. This raises rather than returning, because the solver '
-            f'hands back a full-length vector of zeros either way and it is '
-            f'indistinguishable from an answer.'
-        )
+        if not self._status.is_readable:
+            raise NoSolutionError(
+                f'cannot read {what}: the solve terminated {self.termination_condition!r} '
+                f'({self._status.solver_wording}), so there are no values to read. Test '
+                f'`has_primal` first. This raises rather than returning, because the solver '
+                f'hands back a full-length vector of zeros either way and it is '
+                f'indistinguishable from an answer.'
+            )
+        assert frames is not None, 'close() releases the primal and the dual frames together'
+        return frames
 
     def primal(self, name: str) -> pl.DataFrame:
         """The tidy solution of variable *name* — ``(dims…, value)``.
@@ -137,10 +200,11 @@ class Result:
 
         Raises:
             NoSolutionError: The solve left no values to read.
+            LpspecError: The model was rebound after this solve.
             KeyError: No variable is called *name*.
         """
-        self._require_solution(f"the primal of '{name}'")
-        return self._executor._primal(name, self._primal_values)
+        frames = self._readable(self._primals, f"the primal of '{name}'")
+        return _named(frames, name, 'variable').collect(engine='streaming')
 
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name* — ``(dims…, value)``.
@@ -150,18 +214,17 @@ class Result:
         Raises:
             NoSolutionError: The solve left no values at all.
             LpspecError: It left primals but no duals — an integer variable
-                makes them undefined.
+                makes them undefined — or the model was rebound since.
             KeyError: No constraint is called *name*.
         """
-        self._require_solution(f"the dual of '{name}'")
-        if self._dual_values is None:
-            raise LpspecError(self._executor._no_duals_reason(self.termination_condition))
-        return self._executor._dual(name, self._dual_values)
+        frames = self._readable(self._duals, f"the dual of '{name}'")
+        if self._no_duals is not None:
+            raise LpspecError(self._no_duals)
+        return _named(frames, name, 'constraint').collect(engine='streaming')
 
     def to_pandas(self, name: str) -> pd.DataFrame:
         """:meth:`primal` as a tidy :class:`pandas.DataFrame`."""
-        self._require_solution(f"the primal of '{name}'")
-        return tidy_to_pandas(self._executor._primal(name, self._primal_values))
+        return tidy_to_pandas(self.primal(name))
 
     def to_dataarray(self, name: str) -> xr.DataArray:
         """:meth:`primal` as a labelled :class:`xarray.DataArray`.
@@ -176,8 +239,7 @@ class Result:
         Each arrives dense over its own dims, all at once — on a large model
         name the few you need, or use :meth:`to_parquet`.
         """
-        assert self._executor._program is not None
-        wanted = names or tuple(v.name for v in self._executor._program.variables)
+        wanted = names or tuple(self._readable(self._primals, 'the solution'))
         return tidy_to_dataset(wanted, self.to_dataarray)
 
     def to_parquet(self, directory: str | Path) -> dict[str, Path]:
@@ -189,17 +251,25 @@ class Result:
         Returns:
             Each variable's name, mapped to the file it was written to.
         """
-        self._require_solution('the solution')
-        return self._executor._solution_to_parquet(Path(directory), self._primal_values)
+        frames = self._readable(self._primals, 'the solution')
+        out = Path(directory)
+        out.mkdir(parents=True, exist_ok=True)
+        written = {name: out / f'{name}.parquet' for name in frames}
+        for name, frame in frames.items():
+            frame.sink_parquet(written[name])
+        return written
 
     def close(self) -> None:
-        """Release the built model and this result's values. Optional.
+        """Release what this result holds early. Optional.
 
-        Frames already read stay valid; the readers stop working.
+        Its frames, which carry both its own values and its hold on the label
+        frames of the build it answered. Frames already read stay valid. Never
+        the model or the solver, which are the
+        :class:`~lpspec.api.BoundModel`'s to close: a result closed on the way
+        out of a ``with`` block must not take down the model a loop is still
+        solving, and a sibling result keeps its own.
         """
-        self._primal_values = self._dual_values = None
-        self._closed = True
-        self._executor.close()
+        self._primals = self._duals = None
 
     def __enter__(self) -> Result:
         return self

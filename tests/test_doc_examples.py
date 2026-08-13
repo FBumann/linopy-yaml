@@ -4,7 +4,7 @@ Every example here was wrong at some point: ``lps.write_lp`` never existed, a
 dimension index was passed as a bare ``RangeIndex`` where the streaming lane
 wants a ``coords=`` entry, the ``piecewise:`` block carried a sign on three
 links while the prose two lines below said a sign needs exactly two, and four
-module docstrings leaked the executor by never closing the ``Result``. Three
+module docstrings leaked the engine by never closing the ``Result``. Three
 separate hand sweeps found three separate batches, which is the argument for
 this file: an example nobody runs is a claim nobody checked.
 
@@ -51,9 +51,10 @@ import pytest
 import yaml
 
 import lpspec as lps
+from lpspec.api import BoundModel
 from lpspec.language.model import Model
 from lpspec.language.validation import load_model
-from lpspec.relational.engines.polars.executor import PolarsExecutor, Result
+from lpspec.relational.result import Result
 
 try:
     from lpspec import linopy as linopy_lane
@@ -78,7 +79,7 @@ ROOTS: dict[str, Any] = {
     'lps': lps,
     'lpspec_linopy': linopy_lane,
     'result': Result,
-    'ex': PolarsExecutor,
+    'bound': BoundModel,
     'schema': Model,
 }
 
@@ -370,7 +371,7 @@ def test_every_block_is_covered() -> None:
 
 
 # --------------------------------------------------------------------------
-# module docstrings — where the executor leak actually lived
+# module docstrings — where the engine leak actually lived
 # --------------------------------------------------------------------------
 
 DOCSTRING_MODULES = ['src/lpspec/__init__.py', 'src/lpspec/api.py', 'src/lpspec/linopy/__init__.py']

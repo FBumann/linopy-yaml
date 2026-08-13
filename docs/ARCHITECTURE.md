@@ -76,8 +76,8 @@ flowchart TB
         PLAN["plan.py<br/>frozen logical plan"] --> ENG
         subgraph ENG["engines/polars/ — the only part a second engine replaces"]
             direction TB
-            COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> EXEC
-            BIND["binding.py<br/>→ BoundSources, frozen"] --> EXEC["executor.py + labels.py<br/>assemble the model frames"]
+            COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> ENGINE
+            BIND["binding.py<br/>→ BoundSources, frozen"] --> ENGINE["engine.py + labels.py<br/>assemble the model frames"]
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file (mps planned)"]
@@ -208,16 +208,17 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | **load it** | parse and validate, and stop there | `load_model` → `Model` | no |
 | **show it** | typeset for a paper or a review | `to_latex` · `to_typst` · `to_markdown` (spelling: `SymbolTable`) | no |
 | | render one from a Makefile | `python -m lpspec <format>` — the only shell front, and typeset-only | no |
-| | *watch what a build is doing* | | |
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
-| | *will that solver take it, and how big is it* | | |
-| **run it** | stream it straight into a solver | `solve`, or `build` to drive several sinks off one build | **yes** |
+| | *will that solver take it* | | |
+| **run it** | stream it straight into a solver | `solve`, or `build` → `BoundModel` to drive several sinks off one build | **yes** |
+| | re-solve one built model with new numbers | `bound.rebind(...)` — the label contract, spent | **yes** |
+| | how big is it, and what did the build and its solves do | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `omissions` · `solves` · `loads`, all advisory | **yes** |
 | | write an LP file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | put the same math on a `linopy.Model` | `lpspec.linopy.build` · `.extend` (`data=`, its own coercion) | **yes** |
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
-| | *derived results; re-solve with new numbers, same labels* | | |
+| | *derived results* | | |
 | **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` | — |
 
 **Flat, and a namespace marks a lane rather than a topic.** `lpspec.linopy` is
@@ -231,12 +232,19 @@ moves them out from under the list a reviewer reads. **Grouping trades an
 enforced surface for a tidier one**, which is the opposite of what the count is
 for.
 
-**A return type is not a name.** `solve` returns a `Result` and `solve_over` a
-`Runs`, and neither is exported — you reach them by calling, and import them
-from their module only to write an annotation. What the objects themselves
-carry (`Result` alone has twelve readers) is documented in
-[docs/api.md](api.md) rather than counted here, which is why capability grows
+**A return type is not a name.** `build` returns a `BoundModel`, `solve` a
+`Result` and `solve_over` a `Runs`, and none is exported — you reach them by
+calling, and import them from their module only to write an annotation. What
+the objects themselves carry (`Result` alone has twelve readers) is documented
+in [docs/api.md](api.md) rather than counted here, which is why capability grows
 much faster than this table does.
+
+The discipline that keeps that from being a way to dodge the count: **a handle's
+methods answer "what do I do with this", never "what is this"**. `solve`,
+`write`, `close` and `rebind` pass; anything that changed a declaration would be
+a language feature wearing a method, and hard rule 5 refuses it wherever it is
+spelled. It is also why these are named for what they *are* rather than for what
+built them — a second engine must not change a top-level verb's return type.
 
 **What the data arrow carries** is [SPEC §8](SPEC.md#8-data-binding) and is not
 restated here. The one structural fact: **binding is by name at both levels** —
@@ -318,9 +326,9 @@ choice load-bearing in the language's rulebook.
 **The spine is one module per box above.** `binding.py` takes the tidy frames
 `sources.py` handed over the seam and freezes them into what every query is
 written against; `compiler.py` turns plan nodes into
-lazy frames and reads nothing; `executor.py` fills the model frames; `sinks/`
-drains them. Two more sit beside the executor rather than inside it, because
-each answers a question the executor merely *uses*: `labels.py` decides which
+lazy frames and reads nothing; `engine.py` fills the model frames; `sinks/`
+drains them. Two more sit beside the engine rather than inside it, because
+each answers a question the engine merely *uses*: `labels.py` decides which
 coordinate gets which solver index, and `result.py` is what a caller reads a
 solve back through. The remaining five are not on the spine and the diagram
 does not draw them — `plan.py` is the vocabulary the spine speaks, `frames.py`
@@ -333,7 +341,7 @@ That split is what makes the ceiling's admissibility test something you can
 read `.explain()` — `tests/test_compiler.py` does exactly that over empty
 frames, since a schema is all it takes to compile a query. It is also why a new
 sink is a module in one of two families rather than another method on the
-executor.
+engine.
 
 **What binding produces is a value.** `BoundSources` is frozen — parameters,
 dimensions, their cardinalities, and which parameters are boolean — because a
@@ -360,9 +368,11 @@ rewrite a fragment's dim tuple, and duplicates collapse in the terminal
 in the lane is order-free, which is what lets the query planner rearrange it.
 
 - Labels are dense `0..n-1` by construction, so `var_label` **is** the solver
-  column index and `row` the solver row index — no remapping. That is why
-  value-only re-solve is cheap, why appending rows is safe, and why structural
-  editing is out of scope.
+  column index and `row` the solver row index — no remapping. That is what
+  `rebind` spends: new bounds, costs and right-hand sides go onto a loaded
+  solver by position, and appending rows moves no column and renumbers no
+  existing row. Structural editing stays out of scope; a rebind that *does*
+  move a label is a rebuild, and the answer is the same either way.
 - They are **row-major over the masked coordinate product**, sorted on the
   dimensions' declared ordinals. A contract, not a side effect: it is what makes
   a build reproducible run to run.
@@ -412,7 +422,7 @@ installed may change what either resolves to.
 The split is a directory rather than a convention for the reason `engines/` is:
 **how many solvers there are will change, and what a solver has to answer will
 not.** A new one is a module named for it and a line in `SOLVERS` — no method
-on the executor, no branch in `api.py`, no name on the Python surface. Members
+on the engine, no branch in `api.py`, no name on the Python surface. Members
 share the projection of `cols` and `obj` onto the solver's column index, which
 lives on `ModelTables` so two solvers cannot drift into loading different
 models; they never share hand-off code, because the currencies differ (HiGHS
@@ -448,7 +458,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
 | `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
 | `relational/engines/polars/binding.py` | a caller's sources → `BoundSources`, the frozen frames every query is written against |
-| `relational/engines/polars/executor.py` | assemble the model frames from the bound data |
+| `relational/engines/polars/engine.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
 | `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued coords |
 | `relational/sinks/tables.py` | what every sink reads and no more — the four frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
@@ -551,7 +561,7 @@ read back by joining labels to coordinates.
 **Add a sink:** a module in `relational/sinks/solvers/` named for the solver
 (`solve_<name>`, `build_<name>`, one line in `SOLVERS`, its dependency behind an
 extra and imported inside the function), or one in `writers/` keyed by suffix in
-`WRITERS`. Nothing above it changes — no method on the executor, no branch in
+`WRITERS`. Nothing above it changes — no method on the engine, no branch in
 `api.py`, no name on the Python surface. The
 [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md)
 is the full list, and `tests/test_architecture.py` checks the shape off the path.
@@ -564,7 +574,7 @@ a consumer, and the ceiling doc is the conversation to have first.
 **Add a primitive:** grammar (usually free — `f(x, k=v)` already parses) →
 signature in `helpers.BUILTINS` (arity and which arguments name dimensions —
 resolution, validation and lowering all read it from there, so the shape is
-declared once) → eager helper → plan node + locality class → executor →
+declared once) → eager helper → plan node + locality class → engine →
 lowering case → differential test through a solver *and* the LP writer → SPEC
 §5/§7, and this file if structural.
 

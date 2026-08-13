@@ -18,10 +18,15 @@ from data (SPEC §8) and never changes; an iteration appends rows to their
 parameter tables. No YAML is written at runtime, so the model a reviewer reads
 is the model that runs — which is the point of writing models in YAML at all.
 
-Because no file changes, each is parsed and validated **once**, above the loop.
-``lps.solve`` takes a ``Model`` wherever it takes a path, and a path re-parses a
-model that cannot have moved — three times an iteration here. Any driver over a
-fixed model does this, whether it decomposes, rolls a horizon or sweeps data.
+Because no file changes, each model is parsed **once** above the loop and
+*built* once: ``lps.build`` binds the data and ``rebind`` puts the next
+iteration's numbers on the model that is already there, where a path would
+re-parse a model that cannot have moved and a rebuild would re-derive a model
+that did not change. The subproblem's ``cap_hat`` reaches its rows as a
+right-hand side, so HiGHS keeps the model it holds and re-solves from the last
+basis; the master grows a row a step and is loaded again, which
+``diagnostics().loads`` is what says. Any driver over a fixed model does this, whether it decomposes,
+rolls a horizon or sweeps data.
 """
 
 from __future__ import annotations
@@ -112,36 +117,44 @@ def main() -> None:
     tables = dict(EMPTY)
     capacity = pl.DataFrame({'generator': GENERATORS, 'value': [0.0] * len(GENERATORS)})
     upper = float('inf')
+    empty = {'cut': [], 'fcut': []}
 
-    for step in range(25):
-        with lps.solve(SUB, {**DISPATCH, 'cap_hat': capacity}) as sub:
+    with (
+        lps.build(SUB, {**DISPATCH, 'cap_hat': capacity}) as sub_model,
+        lps.build(FEASIBILITY, {**DISPATCH, 'cap_hat': capacity}) as short_model,
+        lps.build(MASTER, {'invest': SOURCES['invest'], **tables}, coords=empty) as master,
+    ):
+        for step in range(25):
+            sub = sub_model.rebind({'cap_hat': capacity}).solve()
             dispatchable = sub.has_primal
             if dispatchable:
                 slope, here = slope_at(sub, capacity)
                 spent = capacity.join(SOURCES['invest'], on='generator', suffix='_rate')
                 upper = min(upper, spent.select((pl.col('value') * pl.col('value_rate')).sum()).item() + sub.objective)
                 appended(tables, 'cut', sub.objective - here, slope)
-
-        if not dispatchable:
-            with lps.solve(FEASIBILITY, {**DISPATCH, 'cap_hat': capacity}) as short:
+            else:
+                short = short_model.rebind({'cap_hat': capacity}).solve()
                 slope, here = slope_at(short, capacity)
                 appended(tables, 'fcut', here - short.objective, slope)
 
-        coordinates = {'cut': tables['cut_const']['cut'].to_list(), 'fcut': tables['fcut_const']['fcut'].to_list()}
-        with lps.solve(MASTER, {'invest': SOURCES['invest'], **tables}, coords=coordinates) as master:
-            lower = master.objective
-            capacity = master.primal('cap').select('generator', 'value')
+            coordinates = {'cut': tables['cut_const']['cut'].to_list(), 'fcut': tables['fcut_const']['fcut'].to_list()}
+            answer = master.rebind(tables, coords=coordinates).solve()
+            lower = answer.objective
+            capacity = answer.primal('cap').select('generator', 'value')
 
-        kind = 'optimality' if dispatchable else 'feasibility'
-        bound = f'{upper:.2f}' if upper < float('inf') else 'none yet'
-        print(f'  step {step}  {kind:11}  lower {lower:8.2f}   upper {bound}')
-        if upper < float('inf') and upper - lower <= 1e-6 * abs(upper):
-            break
+            kind = 'optimality' if dispatchable else 'feasibility'
+            bound = f'{upper:.2f}' if upper < float('inf') else 'none yet'
+            print(f'  step {step}  {kind:11}  lower {lower:8.2f}   upper {bound}')
+            if upper < float('inf') and upper - lower <= 1e-6 * abs(upper):
+                break
 
-    print(f'\ndecomposed: {upper:.2f} in {step + 1} steps')
-    print(f'monolithic: {truth:.2f}')
-    print(f'difference: {abs(upper - truth):.1e}')
-    print(f'cuts: {tables["cut_const"].height} optimality, {tables["fcut_const"].height} feasibility')
+        print(f'\ndecomposed: {upper:.2f} in {step + 1} steps')
+        print(f'monolithic: {truth:.2f}')
+        print(f'difference: {abs(upper - truth):.1e}')
+        print(f'cuts: {tables["cut_const"].height} optimality, {tables["fcut_const"].height} feasibility')
+        for name, model in (('the subproblem', sub_model), ('the master', master)):
+            seen = model.diagnostics()
+            print(f'{name} loaded the solver {seen.loads} time(s) in {seen.solves} solves')
 
 
 if __name__ == '__main__':

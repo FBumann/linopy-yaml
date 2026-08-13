@@ -30,13 +30,13 @@ from bench import cases as bench_cases
 #: What a collection is attributed to, as ``(module path, owner or None,
 #: name)`` — a method on the class that owns it, or a module-level function.
 #: Named against the owners rather than against one of them, because the steps
-#: a build spends its time in no longer live on the executor: binding reads the
+#: a build spends its time in no longer live on the engine: binding reads the
 #: sources, labelling assigns the solver indices, and only the assembly is the
-#: executor's own.
+#: engine's own.
 STEPS = (
-    ('lpspec.relational.engines.polars.executor', 'PolarsExecutor', '_build_variable'),
-    ('lpspec.relational.engines.polars.executor', 'PolarsExecutor', '_build_constraint'),
-    ('lpspec.relational.engines.polars.executor', 'PolarsExecutor', '_build_objective'),
+    ('lpspec.relational.engines.polars.engine', 'PolarsEngine', '_build_variable'),
+    ('lpspec.relational.engines.polars.engine', 'PolarsEngine', '_build_constraint'),
+    ('lpspec.relational.engines.polars.engine', 'PolarsEngine', '_build_objective'),
     ('lpspec.relational.engines.polars.labels', None, 'frame'),
     ('lpspec.relational.engines.polars.binding', '_Binder', 'parameter'),
     ('lpspec.relational.engines.polars.binding', '_Binder', '_register'),
@@ -106,11 +106,11 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory() as tmp:
         started = time.perf_counter()
-        with lps.build(case.model, sources) as executor:
+        with lps.build(case.model, sources) as engine:
             build = time.perf_counter() - started
             phase['now'] = 'emit'
             started = time.perf_counter()
-            executor.write(Path(tmp) / 'model.lp')
+            engine.write(Path(tmp) / 'model.lp')
             emit = time.perf_counter() - started
 
     print(f'\n{args.case}/{args.size}: build {build:.2f}s, emit {emit:.2f}s')

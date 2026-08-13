@@ -16,7 +16,7 @@ language could not state becomes a ledger row in
 
 **Primitives** (operators, `sum`, `sum(group_by=)`, `shift`, `where`
 predicates) set the expressive ceiling, and each costs the full two-backend tax:
-eager implementation, plan node + locality class, executor case, lowering case,
+eager implementation, plan node + locality class, engine case, lowering case,
 differential tests, SPEC entry. **`macros:` / `expressions:`** are pure AST
 substitution — every composition of primitives at zero marginal cost and zero
 divergence risk. **Formulations** (`piecewise:`) are taxed like a primitive but
@@ -60,7 +60,7 @@ the term stream first and read `.explain()`:
 This is the case analysis `_sum_fragment`, `_group_fragment` and
 `_translate_fragment` already implement — each rewriting one fragment on its
 own, which is what *pointwise* and *bounded-halo* mean in code — so a candidate
-fitting none of those shapes has no executor to be written into. One limit: it
+fitting none of those shapes has no engine to be written into. One limit: it
 presumes the terminal `sum(coeff)` over `(row, col)` stays the only aggregate a
 *term* passes through. Degree is decided elsewhere and deliberately — on the
 core AST by `language/degree.py`, which both lanes ask and neither states — so

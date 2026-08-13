@@ -87,7 +87,7 @@ def test_the_highs_solver_ingests_columns_in_order_whatever_the_chunking(commitm
 
     with differential(COMMITMENT_YAML, data, coords) as run:
         oracle = run.oracle
-        chunked = run.executor.solve(batch_rows=batch_rows)
+        chunked = run.engine.solve(batch_rows=batch_rows)
         assert chunked.is_ok
         assert chunked.objective == pytest.approx(oracle, rel=1e-9)
 
@@ -108,8 +108,8 @@ def test_cols_vtype_is_an_enum_over_every_declared_variable_type(commitment_inpu
     data, coords = commitment_inputs
 
     with differential(COMMITMENT_YAML, data, coords) as run:
-        vtype = run.executor._tables().cols.schema['vtype']
-        held = set(run.executor._tables().cols['vtype'].unique().to_list())
+        vtype = run.engine._tables().cols.schema['vtype']
+        held = set(run.engine._tables().cols['vtype'].unique().to_list())
 
     assert isinstance(vtype, pl.Enum), f'vtype is {vtype}, so it stores a word per column'
     assert set(vtype.categories.to_list()) == set(get_args(plan.VariableType))

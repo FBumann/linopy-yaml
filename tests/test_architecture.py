@@ -238,6 +238,46 @@ def test_engine_is_isolated():
     assert not offenders, f'engine reaches outside its subpackage: {offenders}'
 
 
+#: The one contract module that may name an implementation: ``relational``
+#: re-exports the execution surface, which is the import site every caller
+#: outside the subpackage uses. Path relative to ``relational/``.
+CONTRACT_MAY_NAME_AN_ENGINE = {'__init__.py'}
+
+
+def test_no_contract_module_names_an_engine():
+    """``relational/__init__.py``'s own split: contract above, ``engines/`` below.
+
+    ``plan.py``, ``sinks/``, ``status.py``, ``chunking.py``, ``result.py`` and
+    ``frames.py`` say what a model *is*, what an engine answers to and what a
+    sink reads; ``engines/`` implements that. A contract module naming a class
+    out of ``engines/`` inverts the two, and a second engine then has to
+    satisfy a type written for the first.
+
+    **Type-only imports count here**, where the lane fences above prune them: a
+    ``TYPE_CHECKING`` guard is enough to erase a dependency and nowhere near
+    enough to erase a design. ``Result`` held ``_engine: PolarsEngine`` behind
+    one and called five of its privates.
+    """
+    offenders = {}
+    for path in (PKG / 'relational').rglob('*.py'):
+        rel = path.relative_to(PKG / 'relational').as_posix()
+        if '__pycache__' in path.parts or rel.startswith('engines/') or rel in CONTRACT_MAY_NAME_AN_ENGINE:
+            continue
+        named = []
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.Import):
+                named += [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                named.append('.' * node.level + (node.module or ''))
+        engines = sorted({m for m in named if 'engines' in m.split('.')})
+        if engines:
+            offenders[rel] = engines
+    assert not offenders, (
+        f'a contract module names an implementation: {offenders}. Either the fact belongs '
+        f'under engines/, or what crosses the seam should be a type the contract already owns'
+    )
+
+
 #: What ``language/`` may reach: itself, and the same dependency-free leaves the
 #: engine may reach. Both fences point at ``errors.py`` for the same reason —
 #: one exception hierarchy, owned by neither side. Widening this is a decision,
@@ -440,20 +480,36 @@ def test_each_sink_family_is_its_directory_and_its_registry():
     """One shape per family, checked off the path.
 
     A solver is four things that must agree: a module under ``solvers/`` named
-    for the solver, a ``solve_<name>``, a ``build_<name>`` seam for `bench/`,
-    and the ``SOLVERS`` key. Writers are keyed by suffix instead, but the rule
-    is the same. Agreement is what makes adding one mechanical — nothing above
-    the module to teach, nothing to remember but the name.
+    for the solver, a ``Solver`` subclass defined *in that module*, a
+    ``build_<name>`` seam for `bench/`, and the ``SOLVERS`` key holding the
+    class. Writers are keyed by suffix instead, but the rule is the same.
+    Agreement is what makes adding one mechanical — nothing above the module
+    to teach, nothing to remember but the name.
+
+    The class, because a solver holds a model between solves. Defined in its
+    own module, so the fence that keeps ``gurobipy`` off a HiGHS caller's
+    import path holds.
     """
     import importlib
 
-    from lpspec.relational.sinks import PLANNED_WRITERS, SOLVERS, WRITERS
+    from lpspec.relational.sinks import PLANNED_WRITERS, SOLVERS, WRITERS, Solver
 
-    solvers = _family('solvers')
+    solvers = _family('solvers') - {'base'}
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
     for name in sorted(solvers):
         module = importlib.import_module(f'lpspec.relational.sinks.solvers.{name}')
-        assert SOLVERS[name] is getattr(module, f'solve_{name}'), f'SOLVERS[{name!r}] is not {name}.solve_{name}'
+        held = SOLVERS[name]
+        assert issubclass(held, Solver), f'SOLVERS[{name!r}] is not a Solver'
+        assert held.__module__.rsplit('.', 1)[-1] == name, (
+            f"{name}'s solver is defined in {held.__module__} — it belongs to its own module"
+        )
+        assert held.requires and all(isinstance(package, str) for package in held.requires), (
+            f'{name} does not name the packages it needs, so is_available() cannot answer for it'
+        )
+        assert isinstance(held.is_available(), bool), (
+            f'{name}.is_available() must answer without importing the solver or raising'
+        )
+        assert held.unavailable_message, f'{name} does not say what to do when is_available() is False'
         assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
     assert {w.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers')
@@ -465,9 +521,16 @@ def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
     ``gurobipy`` stays the ``gurobi`` module's alone only because no other
-    sink imports it, directly or by importing the module that does. Each leaf
-    reads ``tables.py`` and nothing else in the family.
+    sink imports it, directly or by importing the module that does. A leaf
+    reads ``tables.py``, its family's ``base``, and its own dependency —
+    nothing else in the family.
+
+    ``base`` is allowed for the reason the rest is not: it imports no solver,
+    so it cannot carry one across, and it is what stops the alternative — one
+    leaf importing the other to share a rule — from being the tempting option.
+    A ``base`` that reached for a leaf would fail the same check.
     """
+    shareable = ('.tables', '.base')
     offenders = {}
     for family in ('solvers', 'writers'):
         for path in sorted((SINKS / family).glob('*.py')):
@@ -477,13 +540,13 @@ def test_no_sink_reaches_a_sibling():
                 if isinstance(node, ast.ImportFrom)
                 and node.module
                 and node.module.startswith('lpspec.relational.sinks.')
-                and not node.module.endswith('.tables')
+                and not node.module.endswith(shareable)
             }
             if reached and path.stem != '__init__':
                 offenders[f'{family}/{path.name}'] = sorted(reached)
     assert not offenders, (
-        f'sink modules reaching a sibling: {offenders} — a sink reads tables.py and its own '
-        f'dependency; anything shared belongs on ModelTables, where both families can see it'
+        f'sink modules reaching a sibling: {offenders} — a sink reads tables.py, its family base '
+        f'and its own dependency; anything else shared belongs on one of those two'
     )
 
 
@@ -492,7 +555,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
 
     The compiler is the consumer — it is the module that turns plan nodes into
     SQL, so a node it does not mention has no relational meaning however much
-    the executor moves around it. Grep-level drift alarm; the differential
+    the engine moves around it. Grep-level drift alarm; the differential
     tests prove semantics.
     """
     import lpspec.relational.plan as plan

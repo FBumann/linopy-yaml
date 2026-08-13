@@ -12,6 +12,9 @@ here, the rule
 
 ``highspy`` is imported inside the function, being optional: importing this
 module stays free for callers that only write LP files.
+
+:class:`Highs` is the same hand-off held open — what a driver that re-solves
+one model with new numbers uses, and where the warm basis lives.
 """
 
 from __future__ import annotations
@@ -19,14 +22,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import LpspecError
+from lpspec.relational.sinks.solvers.base import Solver
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    import polars as pl
-
+    from lpspec.relational.sinks.solvers.base import Answer
     from lpspec.relational.sinks.tables import ModelTables
 
 
@@ -103,7 +106,11 @@ def build_highs(
     empty_f = np.empty(0, dtype=np.float64)
     lb, ub, cost, integral = model.dense_columns(inf)
     for lo, hi in model.col_chunks(batch):
-        _loaded(h, h.addCols(hi - lo, cost[lo:hi], lb[lo:hi], ub[lo:hi], 0, empty_i, empty_i, empty_f), 'columns')
+        _loaded(
+            h,
+            h.addCols(hi - lo, cost[lo:hi], lb[lo:hi], ub[lo:hi], 0, empty_i, empty_i, empty_f),
+            'a batch of columns',
+        )
         noncontinuous = np.flatnonzero(integral[lo:hi]).astype(np.int32) + np.int32(lo)
         if len(noncontinuous):
             integrality = np.full(len(noncontinuous), int(highspy.HighsVarType.kInteger), dtype=np.uint8)
@@ -124,7 +131,7 @@ def build_highs(
                 a['col'].to_numpy().astype(np.int32, copy=False),
                 a['coeff'].to_numpy(),
             ),
-            'rows',
+            'a batch of rows',
         )
 
     if model.objective_sense == 'max':
@@ -132,43 +139,78 @@ def build_highs(
     return h
 
 
-def solve_highs(
-    model: ModelTables,
-    batch_rows: int | None = None,
-    solver_options: Mapping[str, Any] | None = None,
-) -> tuple[SolveStatus, float, pl.Series | None, pl.Series | None]:
-    """Feed the model to HiGHS and solve it.
+class Highs(Solver):
+    """HiGHS, holding one model — :class:`Solver`'s member for the default sink.
 
-    Returns:
-        ``(status, objective, primal, dual)``, the last two the solver's own
-        vectors — positional in its index, which *is* our label, so there is
-        nothing to key them by and nothing to join. Either is ``None`` where
-        the solve left it: no values worth reading, or no duals at all, which
-        a mixed-integer model and a run stopped short of a simplex basis both
-        give. HiGHS hands back zeros either way, and returning them would only
-        make them reachable.
+    What makes an iterative driver cheap. The second solve of a rebound model
+    changes bounds, costs and right-hand sides on the model HiGHS already
+    holds and starts from the basis the last solve ended on, where loading
+    again would hand over the matrix a second time and start cold.
+
+    **Values are re-pushed, never diffed** — the previous model is *gone* by
+    the time the new one exists, so there is nothing held to diff against;
+    the trade is argued once, in ``../README.md``. Pushing the whole vectors
+    costs a pass over the columns and the rows, against the matrix pass that
+    loading would cost.
     """
-    import highspy
 
-    h = build_highs(model, batch_rows, solver_options)
-    h.run()
+    #: The loaded model. Declared rather than inferred, ``close`` dropping it.
+    _handle: Any
 
-    status = _status_of(h, highspy)
-    if not status.is_readable:
-        return status, float('nan'), None, None
+    requires = ('highspy',)
+    unavailable_message = 'highspy ships with lpspec, so a build without it is broken rather than missing an extra'
 
-    objective = h.getInfo().objective_function_value + model.objective_constant
-    solution = h.getSolution()
-    primal = solver_vector(solution.col_value)
-    dual = solver_vector(solution.row_dual) if solution.dual_valid else None
-    return status, objective, primal, dual
+    def _load(self, model: ModelTables, batch_rows: int | None) -> None:
+        self._handle = build_highs(model, batch_rows, self._options)
+
+    def push(self, model: ModelTables) -> None:
+        """*model*'s bounds, costs and right-hand sides onto the loaded model.
+
+        Everything a rebind may change without moving a label. The index
+        vectors are built here rather than held, an ``arange`` being cheaper
+        to make than to keep.
+        """
+        import highspy
+        import numpy as np
+
+        inf = highspy.kHighsInf
+        lb, ub, cost, _ = model.dense_columns(inf)
+        columns = np.arange(model.column_count, dtype=np.int32)
+        _loaded(self._handle, self._handle.changeColsCost(model.column_count, columns, cost), 'new costs')
+        _loaded(self._handle, self._handle.changeColsBounds(model.column_count, columns, lb, ub), 'new bounds')
+
+        sense, rhs = model.dense_rows(inf)
+        rows = np.arange(model.row_count, dtype=np.int32)
+        rlb = np.where(sense == SENSE_CODES['<='], -inf, rhs)
+        rub = np.where(sense == SENSE_CODES['>='], inf, rhs)
+        _loaded(self._handle, self._handle.changeRowsBounds(model.row_count, rows, rlb, rub), 'new right-hand sides')
+
+    def _run(self, model: ModelTables) -> Answer:
+        import highspy
+
+        self._handle.run()
+        status = _status_of(self._handle, highspy)
+        if not status.is_readable:
+            return status, float('nan'), None, None
+
+        objective = self._handle.getInfo().objective_function_value + model.objective_constant
+        solution = self._handle.getSolution()
+        primal = solver_vector(solution.col_value)
+        dual = solver_vector(solution.row_dual) if solution.dual_valid else None
+        return status, objective, primal, dual
+
+    def close(self) -> None:
+        """Release the loaded model. Idempotent."""
+        if self._handle is not None:
+            self._handle.clear()
+        self._handle = None
 
 
 def _loaded(h: Any, status: Any, what: str) -> None:
-    """Check that the solver accepted the batch.
+    """Raise unless the solver accepted the hand-off.
 
-    HiGHS reports a rejected batch by return value and carries on with an empty
-    model, so an unchecked call turns a malformed hand-off into a confident
+    HiGHS reports a rejected call by return value and carries on with whatever
+    it had, so an unchecked call turns a malformed hand-off into a confident
     answer to a different problem — an unconstrained one, if it was the rows.
 
     Raises:
@@ -178,9 +220,10 @@ def _loaded(h: Any, status: Any, what: str) -> None:
 
     if status == highspy.HighsStatus.kError:
         raise LpspecError(
-            f'the solver refused a batch of {what}: {h.modelStatusToString(h.getModelStatus())!r}. '
-            f'Nothing was loaded, so any answer would describe a different model. '
-            f'This is an engine bug rather than a problem with the model — please report it.'
+            f'the solver refused {what}: {h.modelStatusToString(h.getModelStatus())!r}. '
+            f'The model it holds is not the one handed over, so any answer would describe a '
+            f'different one. This is an engine bug rather than a problem with the model — '
+            f'please report it.'
         )
 
 

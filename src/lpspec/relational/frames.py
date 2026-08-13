@@ -25,7 +25,7 @@ def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
     """Normalise one in-memory source to a tidy lazy frame.
 
     *dims* names the columns an index becomes. A bool stays boolean rather than
-    widening to float: the executor reads a mask's truthiness from the column
+    widening to float: the engine reads a mask's truthiness from the column
     type (#47).
 
     Returns:

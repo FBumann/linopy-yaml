@@ -65,6 +65,17 @@ def split_sources(case: Case, paths: dict[str, str]) -> tuple[dict[str, str], di
     )
 
 
+def _tables(handle: Any) -> Any:
+    """The built model's frames, wherever the checkout under test keeps them.
+
+    ``build`` returns a handle *over* the engine; a checkout from before it
+    returned the engine itself. Written the tolerant way for the same reason
+    the nonzero count below is optional — the ladder is run across checkouts,
+    and a comparison that cannot reach the older one measures nothing.
+    """
+    return getattr(handle, '_engine', handle)._tables()
+
+
 def _engine(engine: str | None) -> None:
     """Select the engine the way a caller does, in this process.
 
@@ -106,20 +117,20 @@ def lpspec_build_and_emit(
 
     with (
         tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp,
-        lps.build(CASES[case_name].model, sources, coords=coords) as ex,
+        lps.build(CASES[case_name].model, sources, coords=coords) as bound,
     ):
         if sink == 'lp':
-            ex.write(Path(tmp) / 'model.lp')
+            bound.write(Path(tmp) / 'model.lp')
         elif sink == 'gurobi':
             from lpspec.relational.sinks.solvers.gurobi import build_gurobi
 
-            _handle = build_gurobi(ex._tables())
+            _handle = build_gurobi(_tables(bound))
         else:
             from lpspec.relational.sinks.solvers.highs import build_highs
 
-            _handle = build_highs(ex._tables())
+            _handle = build_highs(_tables(bound))
 
-        tables = ex._tables()
+        tables = _tables(bound)
         matrix = getattr(tables, 'matrix', None)
         return {
             'columns': tables.column_count,
@@ -177,8 +188,8 @@ def build_only(arm: str, case_name: str, paths: dict[str, str], engine: str | No
     import lpspec as lps
 
     sources, coords_ = split_sources(case, paths)
-    with lps.build(case.model, sources, coords=coords_) as ex:
-        tables = ex._tables()
+    with lps.build(case.model, sources, coords=coords_) as bound:
+        tables = _tables(bound)
         return {'columns': tables.column_count, 'rows': tables.row_count, 'nonzeros': None}
 
 

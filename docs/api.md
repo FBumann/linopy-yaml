@@ -37,15 +37,65 @@ lps.write('model.yaml', sources, 'model.lp')  # sink chosen by the suffix
 **Nothing has to be released.** The built model is frames this process owns, so
 `primal` and the `to_*` readers stay valid for as long as the `Result` does.
 `close()` and the context-manager protocol exist to hand a large model back
-early, not because forgetting them breaks anything. `lps.build` returns the
-executor when one build should feed more than one sink:
+early, not because forgetting them breaks anything. `lps.build` returns a
+`BoundModel` — the math with your data on it — when one build should feed more
+than one sink, or be solved more than once:
 
 ```python
-ex = lps.build('model.yaml', sources)
-ex.write('model.lp')
-ex.omissions()  # rows a constraint declared but did not build, and why it matters
-result = ex.solve()
+bound = lps.build('model.yaml', sources)
+bound.write('model.lp')
+bound.diagnostics()  # what the build and its solves did that the answer does not show
+result = bound.solve()
 ```
+
+### Re-solving with new numbers
+
+`rebind` puts new data on a model that is already built, so a loop that solves
+the same math over and over pays for the YAML, the plan and the build once:
+
+```python
+bound = lps.build('sub.yaml', sources)
+for capacity in search:
+    result = bound.rebind({'cap_hat': capacity}).solve()
+    price = result.dual('capacity')  # each result reads its own build, rebinds notwithstanding
+    bound.diagnostics()  # did that push values, or load the model again?
+```
+
+| | |
+|---|---|
+| **it names what changed** | everything else keeps what `build` bound. A parameter, or a dimension index — a coordinate set grows by handing over a longer table and the `coords=` to match, which is how a Benders cut family is *data* |
+| **the answer is the reference build's** | `bound.rebind(x)` solves what `build(model, sources \| x)` solves, always. That is an equality a test asserts, not a promise — it is also the oracle to reach for when a loop looks wrong |
+| **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
+| **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model HiGHS already holds, and the next solve starts from the basis the last one ended on. A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, and that model is loaded again and solved cold |
+| **which one ran is `bound.diagnostics()`** | `loads` counts the solves that had to load the model from scratch, against `solves` as its denominator. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies". Advisory — nothing about the answer depends on it |
+| **earlier results keep reading** | a `Result` owns its values and a reference to the label frames of the build it answered; a rebind builds new frames without touching those, so an old answer stays an answer over its own coordinates. What retaining one costs is those frames staying alive until it is dropped or `close()`d |
+| **a rebind that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
+
+`solve_over` is the other spelling and the one to reach for first — a sweep,
+a rolling horizon or a myopic pathway is a *fold*, and it is written for you.
+`rebind` is the primitive underneath: reach for it when the next set of numbers
+depends on the last answer, which is what a fold cannot express.
+
+`diagnostics()` is what a build and its solves did that the answer does not
+show: the shape handed to the solver (`columns`, `rows`, `nonzeros` — what
+`check` cannot answer, needing no data where this needs all of it, and where a
+broadcast that multiplied rows shows up first), `omissions` (rows a constraint
+declared but did not build, and why that matters), and `solves` with `loads`
+(above; `solves` is the denominator to read `loads` against). It answers after
+`close()` too, every field being a count or a small frame it keeps rather than a
+read of the model it releases.
+
+Advisory, all of it: nothing about an answer depends on any of them, and a
+caller who branches on one has made this engine's bookkeeping part of their
+model.
+
+**Inspecting a model is `build`'s job, not `solve`'s.** `solve` hands back an
+answer and `write` a path; the questions *about the model* — how big is it, what
+did it not build, how did its re-solves go — belong to the handle that **is** the
+model, so a caller who wants them builds and keeps it. That is also what keeps
+the record honest: read off a `Result`, `solves` and `loads` would have to
+report what happened *after* that answer was produced, which is not a fact about
+it. A `Result` reports its own solve, and nothing else does.
 
 What `sources` accepts is [SPEC §8](SPEC.md#8-data-binding). Nothing on this
 path imports linopy, and `primal` returns a `polars.DataFrame` — Arrow-backed, so it exports the same protocol the
