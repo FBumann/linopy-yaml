@@ -182,20 +182,16 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
         ``tables`` is the same mapping the lpspec call binds as ``sources``.
         """
-        load = tables['load'].set_index('snapshot')['value']
-        weight = tables['weight'].set_index('snapshot')['value']
-        opex = tables['opex'].set_index('generator')['value']
+        load: pd.Series = tables['load'].set_index('snapshot')['value']
+        weight: pd.Series = tables['weight'].set_index('snapshot')['value']
+        opex: pd.Series = tables['opex'].set_index('generator')['value']
         capex = xr.DataArray(tables['capex'].pivot(index='period', columns='generator', values='value'))
-
-        calendar = tables['snapshot'].set_index('snapshot')['period']
-        in_period = pd.DataFrame(0.0, index=calendar.index, columns=capex.indexes['period'])
-        for snapshot, period in calendar.items():
-            in_period.loc[snapshot, period] = 1.0
+        period = xr.DataArray(tables['snapshot'].set_index('snapshot')['period'])
 
         m = linopy.Model()
         p = m.add_variables(lower=0, coords=[load.index, opex.index], name='p')
         p_nom = m.add_variables(lower=0, upper=100, coords=[capex.indexes['period'], opex.index], name='p_nom')
-        m.add_constraints(p <= (p_nom * xr.DataArray(in_period)).sum('period'), name='within_cap')
+        m.add_constraints(p <= p_nom.sel(period=period), name='within_cap')
         m.add_constraints(p.sum('generator') == load, name='balance')
         m.add_objective((p * opex * weight).sum() + (p_nom * capex).sum())
         return m

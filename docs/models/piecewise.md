@@ -165,10 +165,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
         ``tables`` is the same mapping the lpspec call binds as ``sources``.
         """
-        p_max = tables['p_max'].set_index('generator')['value']
-        load = tables['load'].set_index('snapshot')['value']
-        curve_x = tables['bp_x'].pivot(index='generator', columns='bp', values='value').reindex(p_max.index)
-        curve_y = tables['bp_y'].pivot(index='generator', columns='bp', values='value').reindex(p_max.index)
+        p_max: pd.Series = tables['p_max'].set_index('generator')['value']
+        load: pd.Series = tables['load'].set_index('snapshot')['value']
+        curve_x: pd.DataFrame = tables['bp_x'].pivot(index='generator', columns='bp', values='value').reindex(p_max.index)
+        curve_y: pd.DataFrame = tables['bp_y'].pivot(index='generator', columns='bp', values='value').reindex(p_max.index)
         bp_x = linopy.breakpoints(curve_x, dim='generator')
         bp_y = linopy.breakpoints(curve_y, dim='generator')
 

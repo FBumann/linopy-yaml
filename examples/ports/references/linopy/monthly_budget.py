@@ -12,8 +12,10 @@ formulation, not a published figure — see ``dispatch.py`` next door.
 
 The line worth comparing is the budget. The YAML groups by a coordinate the
 snapshot dimension declares — ``sum(p, over=snapshot, group_by=month)`` —
-where this script builds the month x snapshot membership matrix by hand and
-multiplies through it.
+and linopy carries the same idea natively: ``p.groupby(month).sum()``, the
+way PyPSA's own optimization layer aggregates. The difference is where the
+calendar lives — a declared coordinate in the YAML, a data array the model
+author threads through by hand here.
 """
 
 from __future__ import annotations
@@ -38,20 +40,16 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
 
     ``tables`` is the same mapping the lpspec call binds as ``sources``.
     """
-    p_max = tables['p_max'].set_index('generator')['value']
-    cost = tables['cost'].set_index('generator')['value']
-    load = tables['load'].set_index('snapshot')['value']
+    p_max: pd.Series = tables['p_max'].set_index('generator')['value']
+    cost: pd.Series = tables['cost'].set_index('generator')['value']
+    load: pd.Series = tables['load'].set_index('snapshot')['value']
     cap = xr.DataArray(tables['monthly_cap'].pivot(index='month', columns='generator', values='value'))
-
-    calendar = tables['snapshot'].set_index('snapshot')['month']
-    in_month = pd.DataFrame(0.0, index=cap.indexes['month'], columns=calendar.index)
-    for snapshot, month in calendar.items():
-        in_month.loc[month, snapshot] = 1.0
+    month = xr.DataArray(tables['snapshot'].set_index('snapshot')['month'])
 
     m = linopy.Model()
     p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')
     m.add_constraints(p.sum('generator') == load, name='balance')
-    m.add_constraints((p * xr.DataArray(in_month)).sum('snapshot') <= cap, name='monthly_budget')
+    m.add_constraints(p.groupby(month).sum() <= cap, name='monthly_budget')
     m.add_objective((p * cost).sum())
     return m
 

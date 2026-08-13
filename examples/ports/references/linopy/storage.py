@@ -38,9 +38,9 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
 
     ``tables`` is the same mapping the lpspec call binds as ``sources``.
     """
-    p_max = tables['p_max'].set_index('generator')['value']
-    cost = tables['cost'].set_index('generator')['value']
-    load = tables['load'].set_index('snapshot')['value']
+    p_max: pd.Series = tables['p_max'].set_index('generator')['value']
+    cost: pd.Series = tables['cost'].set_index('generator')['value']
+    load: pd.Series = tables['load'].set_index('snapshot')['value']
     snapshots = load.index
 
     m = linopy.Model()

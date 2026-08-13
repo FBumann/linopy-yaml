@@ -78,6 +78,10 @@ jobs:
       # Only meaningful here, not below: missing-import is an error, and the
       # linopy lane imports linopy/xarray, which a bare install deliberately lacks.
       - run: uv run --no-sync pyrefly check --output-format=github
+      # The linopy reference scripts carry annotations the gallery shows, so
+      # they get their own config: a Series annotated as a DataFrame fails
+      # here rather than teaching a wrong type on the site.
+      - run: uv run --no-sync pyrefly check --output-format=github -c examples/ports/references/linopy/pyrefly.toml examples/ports/references/linopy
       - run: uv run --no-sync pytest -q
 
       # The site, built strictly: `strict: true` in mkdocs.yml turns every

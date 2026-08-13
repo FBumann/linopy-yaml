@@ -56,14 +56,14 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     ``scaled`` is what the objective is actually charged on — ``sqrt(shipment)``
     read off the discretised curve rather than computed.
     """
-    capacity = tables['capacity'].set_index('plant')['value']
-    demand = tables['demand'].set_index('market')['value']
-    distance = (
+    capacity: pd.Series = tables['capacity'].set_index('plant')['value']
+    demand: pd.Series = tables['demand'].set_index('market')['value']
+    distance: pd.DataFrame = (
         tables['distance']
         .pivot(index='plant', columns='market', values='value')
         .reindex(index=capacity.index)[demand.index]
     )
-    cost = distance * tables['freight'] / 1000
+    cost: pd.DataFrame = distance * tables['freight'] / 1000
 
     m = linopy.Model()
     shipment = m.add_variables(lower=0, coords=[capacity.index, demand.index], name='shipment')

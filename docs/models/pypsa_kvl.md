@@ -184,8 +184,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         n.set_snapshots(tables['snapshot']['snapshot'])
         n.add('Bus', tables['bus']['bus'])
 
-        generators = tables['generator'].set_index('generator')
-        lines = tables['line'].set_index('line')
+        generators: pd.DataFrame = tables['generator'].set_index('generator')
+        lines: pd.DataFrame = tables['line'].set_index('line')
 
         n.add(
             'Generator',
@@ -204,7 +204,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
             s_nom=tables['s_nom'].set_index('line')['value'],
         )
 
-        load = tables['load'].pivot(index='snapshot', columns='bus', values='value')
+        load: pd.DataFrame = tables['load'].pivot(index='snapshot', columns='bus', values='value')
         for bus in tables['bus']['bus']:
             n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
         return n

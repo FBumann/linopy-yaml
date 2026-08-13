@@ -56,9 +56,9 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.set_snapshots(tables['snapshot']['snapshot'])
     n.add('Bus', tables['bus']['bus'])
 
-    generators = tables['generator'].set_index('generator')
-    links = tables['link'].set_index('link')
-    storages = tables['storage'].set_index('storage')
+    generators: pd.DataFrame = tables['generator'].set_index('generator')
+    links: pd.DataFrame = tables['link'].set_index('link')
+    storages: pd.DataFrame = tables['storage'].set_index('storage')
 
     n.add(
         'Generator',
@@ -78,7 +78,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         p_min_pu=-1.0,
         efficiency=1.0,
     )
-    p_nom = tables['storage_p_nom'].set_index('storage')['value']
+    p_nom: pd.Series = tables['storage_p_nom'].set_index('storage')['value']
     n.add(
         'StorageUnit',
         storages.index,
@@ -92,7 +92,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         cyclic_state_of_charge=False,
     )
 
-    load = tables['load'].pivot(index='snapshot', columns='bus', values='value')
+    load: pd.DataFrame = tables['load'].pivot(index='snapshot', columns='bus', values='value')
     for bus in tables['bus']['bus']:
         n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
     return n

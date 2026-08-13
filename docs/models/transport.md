@@ -146,10 +146,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
         ``tables`` is the same mapping the lpspec call binds as ``sources``.
         """
-        p_max = tables['p_max'].set_index('generator')['value']
-        cost = tables['cost'].set_index('generator')['value']
-        cap = tables['cap'].set_index('line')['value']
-        neg_cap = tables['neg_cap'].set_index('line')['value']
+        p_max: pd.Series = tables['p_max'].set_index('generator')['value']
+        cost: pd.Series = tables['cost'].set_index('generator')['value']
+        cap: pd.Series = tables['cap'].set_index('line')['value']
+        neg_cap: pd.Series = tables['neg_cap'].set_index('line')['value']
         load = xr.DataArray(tables['load'].pivot(index='snapshot', columns='bus', values='value'))
         snapshots, buses = load.indexes['snapshot'], load.indexes['bus']
 
