@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from lpspec.relational.engines.polars.compiler import UNIT, ordinal, predicate_dims, restrict_by_presence
+from lpspec.relational.engines.polars.compiler import UNIT, ordinal, predicate_dims
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -80,7 +80,7 @@ def frame(
 
     surviving = compiler.frame(dims, where)
     for restriction in restrictions:
-        surviving = restrict_by_presence(surviving, restriction.frame, restriction.keyed_by or ())
+        surviving = restriction.restrict(surviving, restriction.keyed_by or ())
 
     dropped = where is not None or bool(restrictions)
     numbering = _row_major(compiler, dims)

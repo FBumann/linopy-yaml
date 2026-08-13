@@ -60,6 +60,11 @@ class MatrixBlock:
     entries: pl.DataFrame
     starts: npt.NDArray[np.int64]
 
+    @property
+    def height(self) -> int:
+        """How many rows the chunk spans — entries or not."""
+        return self.hi - self.lo
+
 
 #: ``sense`` as a number, so a row's comparison crosses into numpy as one byte
 #: rather than as a boxed Python string. The order is arbitrary and shared: a

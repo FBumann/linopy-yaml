@@ -93,6 +93,76 @@ class _CarryRule:
     dropped: str | None
     index: int | None
 
+    @classmethod
+    def resolved(cls, schema: Model, parameter: str, variable: str, index: int | None) -> _CarryRule:
+        """One carry checked against the schema — construction and validation, together.
+
+        The variable's dims minus the parameter's is the one dimension the
+        carry collapses, and ``index`` names a coordinate of it; everything
+        else passes through, which is what lets a myopic pathway hand a whole
+        capacity vector forward rather than one number at a time.
+
+        **Nothing here reads data**, which is why the plan resolves before the
+        axis cuts any.
+        """
+        if parameter not in schema.parameters:
+            raise LpspecError(f'carry writes parameter {parameter!r}, which the model does not declare')
+        if variable not in schema.variables:
+            raise LpspecError(f'carry reads variable {variable!r}, which the model does not declare')
+        over = list(schema.parameters[parameter].dims)
+        source = list(schema.variables[variable].foreach)
+        if missing := [d for d in over if d not in source]:
+            raise LpspecError(
+                f'carry {parameter!r} <- {variable!r} cannot line up: {parameter!r} is over {over}, and '
+                f'{variable!r} is over {source}, which has no {missing}. A carry copies a variable into a '
+                f'parameter, so the parameter cannot be over more than the variable is.'
+            )
+        dropped = [d for d in source if d not in over]
+        if len(dropped) > 1:
+            raise LpspecError(
+                f'carry {parameter!r} <- {variable!r} would collapse {dropped} at once: {variable!r} is over '
+                f'{source} and {parameter!r} over {over}. An index names a coordinate of one dimension, so '
+                f'reduce the others in the YAML — a derived variable is where the oracle can see the math.'
+            )
+        if dropped and index is None:
+            raise LpspecError(
+                f'carry {parameter!r} <- {variable!r} drops {dropped[0]!r} and so needs an index: '
+                f'({variable!r}, <{dropped[0]}>). With overlap the coordinate to carry is the last one you '
+                f'*keep* — EachWindow(length=48, step=24) carries at 23, not 47 — which is why there is no default.'
+            )
+        if not dropped and index is not None:
+            raise LpspecError(
+                f'carry {parameter!r} <- ({variable!r}, {index}) has nothing to index: both are over {over}, '
+                f'so the whole frame is what moves forward. Pass ({variable!r}, None).'
+            )
+        return cls(variable, dropped[0] if dropped else None, index)
+
+    def value_from(self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Any) -> pl.DataFrame:
+        """What this rule hands the next slice, read out of one slice's primals.
+
+        ``index`` is a **coordinate** of the dropped dimension, never a row
+        number. That is the same integer for the case this started with —
+        ``into`` is dense ``0..n-1``, so window position and coordinate
+        coincide — and it is the only one of the two that still means
+        something once a second dimension is there.
+
+        Raises:
+            LpspecError: ``index`` names a coordinate the slice does not have
+                — a short tail window has fewer than a full one.
+        """
+        frame = frames[self.variable]
+        if self.dropped is None:
+            return frame
+        picked = frame.filter(pl.col(self.dropped) == self.index).drop(self.dropped)
+        if picked.is_empty():
+            coordinates = frame[self.dropped].unique().sort().to_list()
+            raise LpspecError(
+                f'carry {parameter!r} <- ({self.variable!r}, {self.index}) is out of range: slice {key!r} has '
+                f'no {self.dropped} == {self.index}. Its coordinates run '
+                f'{coordinates[0]!r}..{coordinates[-1]!r}, and a short tail window has fewer than a full one.'
+            )
+        return picked
+
 
 @dataclass(frozen=True)
 class _Answer:
@@ -134,6 +204,19 @@ class _OriginalIndex:
     local: str
     dim: str
     owned: pl.DataFrame
+
+    def restore(self, frame: pl.DataFrame, key_name: str) -> pl.DataFrame:
+        """*frame* over the dimension the axis sliced, rather than over its slices.
+
+        The inner join against ``owned`` is the whole operation: it restores
+        the original coordinate, and because a coordinate may appear only once
+        under its own index, the lookahead rows have nowhere to go. Sorted on
+        the restored dimension, so a sweep reads back in the caller's order.
+        """
+        keys = [key_name, self.local]
+        restored = frame.join(self.owned, on=keys, how='inner').drop(keys)
+        rest = [column for column in restored.columns if column not in (self.dim, 'value')]
+        return restored.select(self.dim, *rest, 'value').sort(self.dim, *rest)
 
 
 # ---------------------------------------------------------------------------
@@ -356,10 +439,7 @@ class Runs:
         """
         if not original_index or self._original is None:
             return frame
-        keys = [self.key_name, self._original.local]
-        restored = frame.join(self._original.owned, on=keys, how='inner').drop(keys)
-        rest = [column for column in restored.columns if column not in (self._original.dim, 'value')]
-        return restored.select(self._original.dim, *rest, 'value').sort(self._original.dim, *rest)
+        return self._original.restore(frame, self.key_name)
 
     def to_pandas(self, name: str, *, original_index: bool = False) -> pd.DataFrame:
         """:meth:`primal` as a tidy :class:`pandas.DataFrame`.
@@ -525,7 +605,7 @@ def solve_over(
             f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
         )
     schema = check(model)
-    plan: dict[str, _CarryRule] = _carry_plan(schema, carry) if carry else {}
+    plan = {p: _CarryRule.resolved(schema, p, v, i) for p, (v, i) in (carry or {}).items()}
     key_name = _key_column(axis, key_name, schema)
 
     if isinstance(axis, (EachCoordinate, EachWindow)):
@@ -615,7 +695,7 @@ def _serially(
             answer = _answers(bound.solve(**solving), schema)
             yield cut.key, answer
             if plan and position < len(cuts) - 1:
-                state = _carried(plan, answer.primals, cut.key)
+                state = {p: rule.value_from(answer.primals, p, cut.key) for p, rule in plan.items()}
     finally:
         if bound is not None:
             bound.close()
@@ -746,85 +826,6 @@ def _key_column(
             f'with a column those frames already carry. Name it something the model does not use.'
         )
     return key_name
-
-
-def _carry_plan(
-    schema: Model,
-    carry: Mapping[str, tuple[str, int | None]],
-) -> dict[str, _CarryRule]:
-    """Resolve each carry against the schema: what is dropped, and what rides.
-
-    The variable's dims minus the parameter's is the one dimension the carry
-    collapses, and ``index`` names a coordinate of it; everything else passes
-    through, which is what lets a myopic pathway hand a whole capacity vector
-    forward rather than one number at a time.
-
-    **Nothing here reads data**, which is why it runs before the axis cuts any.
-    """
-    plan: dict[str, _CarryRule] = {}
-    for parameter, (variable, index) in carry.items():
-        if parameter not in schema.parameters:
-            raise LpspecError(f'carry writes parameter {parameter!r}, which the model does not declare')
-        if variable not in schema.variables:
-            raise LpspecError(f'carry reads variable {variable!r}, which the model does not declare')
-        over = list(schema.parameters[parameter].dims)
-        source = list(schema.variables[variable].foreach)
-        if missing := [d for d in over if d not in source]:
-            raise LpspecError(
-                f'carry {parameter!r} <- {variable!r} cannot line up: {parameter!r} is over {over}, and '
-                f'{variable!r} is over {source}, which has no {missing}. A carry copies a variable into a '
-                f'parameter, so the parameter cannot be over more than the variable is.'
-            )
-        dropped = [d for d in source if d not in over]
-        if len(dropped) > 1:
-            raise LpspecError(
-                f'carry {parameter!r} <- {variable!r} would collapse {dropped} at once: {variable!r} is over '
-                f'{source} and {parameter!r} over {over}. An index names a coordinate of one dimension, so '
-                f'reduce the others in the YAML — a derived variable is where the oracle can see the math.'
-            )
-        if dropped and index is None:
-            raise LpspecError(
-                f'carry {parameter!r} <- {variable!r} drops {dropped[0]!r} and so needs an index: '
-                f'({variable!r}, <{dropped[0]}>). With overlap the coordinate to carry is the last one you '
-                f'*keep* — EachWindow(length=48, step=24) carries at 23, not 47 — which is why there is no default.'
-            )
-        if not dropped and index is not None:
-            raise LpspecError(
-                f'carry {parameter!r} <- ({variable!r}, {index}) has nothing to index: both are over {over}, '
-                f'so the whole frame is what moves forward. Pass ({variable!r}, None).'
-            )
-        plan[parameter] = _CarryRule(variable, dropped[0] if dropped else None, index)
-    return plan
-
-
-def _carried(
-    plan: Mapping[str, _CarryRule],
-    frames: Mapping[str, pl.DataFrame],
-    key: Any,
-) -> dict[str, Any]:
-    """The next slice's carried parameters, read out of this slice's primals.
-
-    ``index`` is a **coordinate** of the dropped dimension, never a row number.
-    That is the same integer for the case this started with — ``into`` is dense
-    ``0..n-1``, so window position and coordinate coincide — and it is the only
-    one of the two that still means something once a second dimension is there.
-    """
-    state: dict[str, Any] = {}
-    for parameter, rule in plan.items():
-        frame = frames[rule.variable]
-        if rule.dropped is None:
-            state[parameter] = frame
-            continue
-        picked = frame.filter(pl.col(rule.dropped) == rule.index).drop(rule.dropped)
-        if picked.is_empty():
-            coordinates = frame[rule.dropped].unique().sort().to_list()
-            raise LpspecError(
-                f'carry {parameter!r} <- ({rule.variable!r}, {rule.index}) is out of range: slice {key!r} has no '
-                f'{rule.dropped} == {rule.index}. Its coordinates run {coordinates[0]!r}..{coordinates[-1]!r}, and a '
-                f'short tail window has fewer than a full one.'
-            )
-        state[parameter] = picked
-    return state
 
 
 # ---------------------------------------------------------------------------

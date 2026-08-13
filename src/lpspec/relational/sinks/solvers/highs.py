@@ -120,7 +120,7 @@ def build_highs(
         _loaded(
             h,
             h.addRows(
-                block.hi - block.lo,
+                block.height,
                 rlb[block.lo : block.hi],
                 rub[block.lo : block.hi],
                 block.entries.height,
@@ -188,7 +188,7 @@ class Highs(Solver):
         self._handle.run()
         status = _status_of(self._handle, highspy)
         if not status.is_readable:
-            return SolveAnswer(status, float('nan'), None, None)
+            return SolveAnswer.unreadable(status)
 
         objective = self._handle.getInfo().objective_function_value + model.objective_constant
         solution = self._handle.getSolution()

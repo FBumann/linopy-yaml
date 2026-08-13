@@ -159,7 +159,7 @@ class Gurobi(Solver):
         self._m.optimize()
         status = _status_of(self._m)
         if not status.is_readable:
-            return SolveAnswer(status, float('nan'), None, None)
+            return SolveAnswer.unreadable(status)
         return SolveAnswer(status, self._m.ObjVal, solver_vector(self._x.X), _duals(model.row_count, self._blocks))
 
     def close(self) -> None:
@@ -218,7 +218,7 @@ def _built(
         entries = chunk.entries
         block = scipy.sparse.csr_matrix(
             (entries['coeff'].to_numpy(), entries['col'].to_numpy(), np.append(chunk.starts, entries.height)),
-            shape=(chunk.hi - chunk.lo, model.column_count),
+            shape=(chunk.height, model.column_count),
         )
         blocks.append(m.addMConstr(block, x, spelling[rows.sense[chunk.lo : chunk.hi]], rows.rhs[chunk.lo : chunk.hi]))
 

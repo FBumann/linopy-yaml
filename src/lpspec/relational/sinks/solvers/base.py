@@ -47,6 +47,15 @@ class SolveAnswer:
     primal: pl.Series | None
     dual: pl.Series | None
 
+    @classmethod
+    def unreadable(cls, status: SolveStatus) -> SolveAnswer:
+        """The answer for a solve that left nothing worth reading.
+
+        One home for the fact that an unreadable status carries a NaN
+        objective and neither vector, so two sinks cannot spell it apart.
+        """
+        return cls(status, float('nan'), None, None)
+
 
 class Solver(ABC):
     """One solver, holding one model. Subclassed once per member of ``SOLVERS``.

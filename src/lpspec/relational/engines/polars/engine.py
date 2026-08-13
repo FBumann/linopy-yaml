@@ -90,6 +90,10 @@ class _Block:
     start: int
     height: int
 
+    def share(self, values: pl.Series) -> pl.Series:
+        """This declaration's share of a solver vector — a slice, never a join."""
+        return values.slice(self.start, self.height)
+
 
 class PolarsEngine:
     """Build a :class:`Program` into polars frames, then sink it."""
@@ -627,7 +631,7 @@ class PolarsEngine:
         order is the *row* order and survives, never having been the dtype's to
         carry.
         """
-        labelled = coordinates.select(*dims).with_columns(values.slice(block.start, block.height))
+        labelled = coordinates.select(*dims).with_columns(block.share(values))
         return labelled.with_columns(pl.col(d).cast(pl.String) for d in self._string_dims(dims))
 
     def _string_dims(self, dims: tuple[str, ...]) -> list[str]:

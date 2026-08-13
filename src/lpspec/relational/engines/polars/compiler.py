@@ -84,6 +84,19 @@ class Presence:
         """The columns this presence restricts by, for a fragment over *fragment_dims*."""
         return self.keyed_by if self.keyed_by is not None else fragment_dims
 
+    def restrict(self, frame: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
+        """Keep only the rows of *frame* this presence admits.
+
+        Keyed by *on* this is a semi-join. A **scalar** declaration has no
+        key, its presence being at most one row saying only whether it
+        exists, so the question becomes a cross join: every row survives a
+        present scalar and none survives an absent one — absence spreading
+        through arithmetic (SPEC §7) at no dimension.
+        """
+        if on:
+            return frame.join(self.frame.select(list(on)), on=list(on), how='semi')
+        return frame.join(self.frame.select(PRESENT), how='cross').drop(PRESENT)
+
 
 @dataclass(frozen=True)
 class TermFragment:
@@ -937,20 +950,6 @@ def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str | 
             return column >= literal
 
 
-def restrict_by_presence(frame: pl.LazyFrame, presence: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
-    """Keep only the rows of *frame* that *presence* admits.
-
-    Keyed by *on* this is a semi-join. A **scalar** declaration has no key, its
-    presence being at most one row saying only whether it exists, so the
-    question becomes a cross join: every row survives a present scalar and none
-    survives an absent one — absence spreading through arithmetic (SPEC §7) at
-    no dimension.
-    """
-    if on:
-        return frame.join(presence.select(list(on)), on=list(on), how='semi')
-    return frame.join(presence.select(PRESENT), how='cross').drop(PRESENT)
-
-
 def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     """Restrict every fragment to where the *whole* expression exists.
 
@@ -988,7 +987,7 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
                 continue
             on = list(source.presence.keys(source.dims))
             if all(d in p.dims for d in on):
-                frame = restrict_by_presence(frame, source.presence.frame, on)
+                frame = source.presence.restrict(frame, on)
         return p if frame is p.frame else replace(p, frame=frame)
 
     return _map_fragments(compiled, restrict)
