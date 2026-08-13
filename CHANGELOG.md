@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.119](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.118...v0.0.1-alpha.119) (2026-08-13)
+
+
+### Refactoring
+
+* dead code, one-entry registries and re-export shims are gone ([#675](https://github.com/fluxopt/lpspec/issues/675)) ([a1f61df](https://github.com/fluxopt/lpspec/commit/a1f61df2c1fa2d07c5acb6e86266831999485666))
+
 ## [0.0.1-alpha.118](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.117...v0.0.1-alpha.118) (2026-08-13)
 
 
