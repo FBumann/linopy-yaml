@@ -73,6 +73,45 @@ None of the three in-memory shapes is neutral ground — the files are. Each
 tab shows its own framework's journey and no one else's, which is what makes
 the side-by-sides comparable.
 
+## Already holding another framework's shapes?
+
+<details markdown="1">
+<summary>From linopy's shapes — pass them as they are</summary>
+
+An indexed pandas Series — or an xarray `DataArray` — *is* a source: index
+levels bind to dims by name, so there is nothing to convert. The
+[dispatch](dispatch.md) instance, linopy-style:
+
+```python
+import pandas as pd
+
+p_max = pd.Series({'wind': 80.0, 'solar': 0.0, 'gas': 200.0}).rename_axis('generator')
+cost = pd.Series({'wind': 10.0, 'solar': 25.0, 'gas': 50.0}).rename_axis('generator')
+load = pd.Series([60.0, 120.0, 180.0, 90.0]).rename_axis('snapshot')
+
+sources = {'p_max': p_max, 'cost': cost, 'load': load}
+```
+
+</details>
+
+<details markdown="1">
+<summary>From PyPSA's shapes — one rename, one stack</summary>
+
+An entity column is an indexed Series already, so a static attribute passes
+with a rename of its index; only the wide time series needs its `stack()`
+back to tidy — here mapped from load names onto buses on the way, the shape
+[transport](transport.md) binds:
+
+```python
+sources = {
+    'p_max': n.generators['p_nom'].rename_axis('generator'),
+    'cost': n.generators['marginal_cost'].rename_axis('generator'),
+    'load': n.loads_t.p_set.rename(columns=n.loads.bus).rename_axis(index='snapshot', columns='bus').stack(),
+}
+```
+
+</details>
+
 ---
 
 Back to [all models](index.md)

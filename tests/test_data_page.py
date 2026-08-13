@@ -28,6 +28,12 @@ def _fences(lang: str) -> list[str]:
     return re.findall(rf'^```{lang}\n(.*?)^```', PAGE.read_text(), re.MULTILINE | re.DOTALL)
 
 
+def _block(marker: str) -> str:
+    """The one python fence containing *marker* — each block has its test."""
+    (block,) = [b for b in _fences('python') if marker in b]
+    return block
+
+
 @pytest.mark.parametrize('name', ['generators', 'load'])
 def test_the_page_shows_the_file_that_is_committed(name: str) -> None:
     text = (FOLDER / f'{name}.csv').read_text()
@@ -43,12 +49,58 @@ def test_the_preparation_code_runs_and_solves(monkeypatch: pytest.MonkeyPatch) -
     still be the wrong tables.
     """
     monkeypatch.chdir(ROOT)
-    (block,) = _fences('python')
     scope: dict = {}
-    exec(block, scope)  # the page's code, run as the reader would
+    exec(_block('read_csv'), scope)  # the page's code, run as the reader would
     with lps.solve(str(ROOT / 'examples' / 'dispatch.yaml'), scope['sources']) as solution:
         assert solution.objective == pytest.approx(10500.0, rel=1e-9), (
             'the prepared sources do not reach the optimum references.json records for dispatch'
+        )
+
+
+def test_the_linopy_shapes_block_runs_and_solves() -> None:
+    """Indexed Series pass as sources unconverted — proven by solving with them."""
+    scope: dict = {}
+    exec(_block('pd.Series'), scope)
+    with lps.solve(str(ROOT / 'examples' / 'dispatch.yaml'), scope['sources']) as solution:
+        assert solution.objective == pytest.approx(10500.0, rel=1e-9), (
+            'linopy-shaped Series sources do not reach the recorded dispatch optimum'
+        )
+
+
+def test_the_pypsa_shapes_block_produces_tidy_sources() -> None:
+    """The PyPSA conversion, run against a stub carrying PyPSA's real shapes.
+
+    PyPSA is deliberately not a test dependency, so the stub stands in — its
+    index and column names (``name``, ``snapshot``) match what pypsa 1.2.4
+    actually produces, checked out of band with the real library. The claim
+    under test is the pandas transformation, and it ends in a full solve of
+    the transport instance.
+    """
+    import pandas as pd
+    from types import SimpleNamespace
+
+    generators = pd.DataFrame(
+        {'bus': ['north', 'south'], 'p_nom': [60.0, 150.0], 'marginal_cost': [10.0, 40.0]},
+        index=pd.Index(['wind_n', 'gas_s'], name='name'),
+    )
+    loads = pd.DataFrame({'bus': ['north', 'south']}, index=pd.Index(['ln', 'ls'], name='name'))
+    p_set = pd.DataFrame(
+        {'ln': [20.0, 30.0], 'ls': [70.0, 80.0]}, index=pd.Index([0, 1], name='snapshot')
+    ).rename_axis(columns='name')
+    n = SimpleNamespace(generators=generators, loads=loads, loads_t=SimpleNamespace(p_set=p_set))
+
+    scope: dict = {'n': n}
+    exec(_block('n.generators'), scope)
+    instance = json.loads((FOLDER.parent / 'transport.json').read_text())
+    sources = scope['sources'] | {
+        'line': pl.DataFrame(instance['line']),
+        'cap': pl.DataFrame(instance['cap']),
+        'neg_cap': pl.DataFrame(instance['neg_cap']),
+        'generator': pl.DataFrame(instance['generator']),
+    }
+    with lps.solve(str(ROOT / 'examples' / 'transport.yaml'), sources) as solution:
+        assert solution.objective == pytest.approx(4400.0, rel=1e-9), (
+            'pypsa-shaped sources do not reach the recorded transport optimum'
         )
 
 
