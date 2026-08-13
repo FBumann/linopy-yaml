@@ -199,12 +199,17 @@ against its reference.
 Four files per port:
 
 ```
-examples/ports/<name>.yaml              the model
-examples/ports/data/<name>.json         the instance
-examples/ports/references/<name>.py     a reference implementation, importing no lpspec
-examples/ports/references.json          the recorded objective and where it came from
-docs/models/<name>.md                   the gallery page — maths, model, side-by-side
+examples/ports/<name>.yaml                  the model
+examples/ports/data/<name>.json             the instance
+examples/ports/references/<arm>/<name>.py   a reference implementation, importing no lpspec
+examples/ports/references.json              the recorded objective and where it came from
+docs/models/<name>.md                       the gallery page — maths, model, side-by-side
 ```
+
+`<arm>` is the library the reference is written in — `linopy` or `pypsa` today,
+`pyomo` when one arrives. The gallery page shows each arm as a tab beside the
+YAML, and `tests/test_models_gallery.py` holds the two in lockstep: a script
+with no tab fails, and so does a tab with no script behind it.
 
 - **A published optimum needs no script.** `transport_dantzig`'s number comes
   from the literature, and the citation *is* its provenance. It also ships a
@@ -215,7 +220,7 @@ docs/models/<name>.md                   the gallery page — maths, model, side-
   dependencies inline ([PEP 723](https://peps.python.org/pep-0723/)), pinned to
   whatever produced the recorded number, and are run out of band:
   ```bash
-  uv run --script examples/ports/references/pypsa_transport.py
+  uv run --script examples/ports/references/pypsa/pypsa_transport.py
   ```
 - **Both sides read the same instance.** A reference optimum against a
   different instance means nothing. What must stay independent is the

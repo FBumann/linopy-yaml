@@ -118,74 +118,139 @@ $$\mathit{economies\_of\_scale\_seg}_{p,m,b} \in \{0, 1\} \qquad \forall\thinspa
 </details>
 <!-- math:end -->
 
-```yaml
-# Dantzig's transportation problem with economies of scale — GAMS model
-# library `trnspwl`. Shipping cost grows as sqrt(x) rather than linearly, so a
-# big consignment is cheaper per unit. Optimum 8.786852757777865, from linopy's
-# own piecewise formulation. See docs/models/index.md.
+=== "lpspec"
 
-dimensions:
-  plant:
-    values: [seattle, san-diego]
-  market:
-    values: [new-york, chicago, topeka]
-  bp:
-    dtype: int  # breakpoints of the discretised sqrt curve
+    ```yaml
+    # Dantzig's transportation problem with economies of scale — GAMS model
+    # library `trnspwl`. Shipping cost grows as sqrt(x) rather than linearly, so a
+    # big consignment is cheaper per unit. Optimum 8.786852757777865, from linopy's
+    # own piecewise formulation. See docs/models/index.md.
 
-parameters:
-  capacity:
-    dims: [plant]
-  demand:
-    dims: [market]
-  distance:
-    dims: [plant, market]
-  freight:
-    dims: []
-  # The curve is the same on every route, so it carries `bp` alone and
-  # broadcasts across (plant, market).
-  bp_x:
-    dims: [bp]
-  bp_y:
-    dims: [bp]
+    dimensions:
+      plant:
+        values: [seattle, san-diego]
+      market:
+        values: [new-york, chicago, topeka]
+      bp:
+        dtype: int  # breakpoints of the discretised sqrt curve
 
-variables:
-  shipment:
-    foreach: [plant, market]
-    bounds:
-      lower: 0
-  # What the objective is charged on: sqrt(shipment), read off the curve
-  # rather than computed. `sqrt` is not sayable in the language and does not
-  # need to be — the discretisation is the model GAMS publishes.
-  scaled:
-    foreach: [plant, market]
-    bounds:
-      lower: 0
+    parameters:
+      capacity:
+        dims: [plant]
+      demand:
+        dims: [market]
+      distance:
+        dims: [plant, market]
+      freight:
+        dims: []
+      # The curve is the same on every route, so it carries `bp` alone and
+      # broadcasts across (plant, market).
+      bp_x:
+        dims: [bp]
+      bp_y:
+        dims: [bp]
 
-piecewise:
-  economies_of_scale:
-    over: bp
-    links:
-      - [shipment, bp_x]
-      - [scaled, bp_y]
-    # Deliberately *not* `convex: true`. sqrt is concave and this is a
-    # minimisation, so the convex-hull relaxation would let the solver ride the
-    # chord underneath the true curve and buy transport cheaper than the model
-    # allows. Segment binaries are what make the answer right — and what make
-    # this port a MILP.
+    variables:
+      shipment:
+        foreach: [plant, market]
+        bounds:
+          lower: 0
+      # What the objective is charged on: sqrt(shipment), read off the curve
+      # rather than computed. `sqrt` is not sayable in the language and does not
+      # need to be — the discretisation is the model GAMS publishes.
+      scaled:
+        foreach: [plant, market]
+        bounds:
+          lower: 0
 
-constraints:
-  within_capacity:
-    foreach: [plant]
-    expression: sum(shipment, over=market) <= capacity
-  meet_demand:
-    foreach: [market]
-    expression: sum(shipment, over=plant) >= demand
+    piecewise:
+      economies_of_scale:
+        over: bp
+        links:
+          - [shipment, bp_x]
+          - [scaled, bp_y]
+        # Deliberately *not* `convex: true`. sqrt is concave and this is a
+        # minimisation, so the convex-hull relaxation would let the solver ride the
+        # chord underneath the true curve and buy transport cheaper than the model
+        # allows. Segment binaries are what make the answer right — and what make
+        # this port a MILP.
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: scaled * distance * freight / 1000
-```
+    constraints:
+      within_capacity:
+        foreach: [plant]
+        expression: sum(shipment, over=market) <= capacity
+      meet_demand:
+        foreach: [market]
+        expression: sum(shipment, over=plant) >= demand
+
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: scaled * distance * freight / 1000
+    ```
+
+=== "linopy"
+
+    `examples/ports/references/linopy/transport_pwl.py`:
+
+    ```python
+    from __future__ import annotations
+
+    import json
+    from pathlib import Path
+
+    import linopy
+    import pandas as pd
+
+    DATA = Path(__file__).resolve().parents[2] / 'data' / 'transport_pwl.json'
+
+
+    def build(data: dict) -> linopy.Model:
+        """The port's tables as a linopy model, column for column.
+
+        ``scaled`` is what the objective is actually charged on — ``sqrt(shipment)``
+        read off the discretised curve rather than computed.
+        """
+        plants = pd.Index(data['plant']['plant'], name='plant')
+        markets = pd.Index(data['market']['market'], name='market')
+
+        capacity = pd.Series(data['capacity']['value'], index=plants)
+        demand = pd.Series(data['demand']['value'], index=markets)
+        distance = (
+            pd.DataFrame(data['distance'])
+            .pivot(index='plant', columns='market', values='value')
+            .reindex(index=plants)[markets]
+        )
+        cost = distance * data['freight'] / 1000
+
+        m = linopy.Model()
+        shipment = m.add_variables(lower=0, coords=[plants, markets], name='shipment')
+        scaled = m.add_variables(lower=0, coords=[plants, markets], name='scaled')
+
+        m.add_piecewise_formulation(
+            (shipment, data['bp_x']['value']),
+            (scaled, data['bp_y']['value']),
+        )
+
+        m.add_constraints(shipment.sum('market') <= capacity, name='within_capacity')
+        m.add_constraints(shipment.sum('plant') >= demand, name='meet_demand')
+        m.add_objective((scaled * cost).sum())
+        return m
+
+
+    def main() -> float:
+        m = build(json.loads(DATA.read_text()))
+        status, condition = m.solve(solver_name='highs')
+        assert status == 'ok', f'{status}: {condition}'
+        print(f'linopy {linopy.__version__}')
+        print(f'objective {float(m.objective.value)!r}')
+        print(m.solution['shipment'].to_series())
+        return float(m.objective.value)
+
+
+    if __name__ == '__main__':
+        main()
+    ```
 
 **`convex: true` would be wrong here, and quietly so.** `sqrt` is concave and
 this is a minimisation, so the convex-hull relaxation lets the solver ride the
@@ -197,72 +262,6 @@ That is the one judgement a reader has to make when writing a `piecewise:`
 block, and it is not one the language can make for you: the curvature guard
 catches *mixed* curvature, but a consistently concave curve under minimisation
 is a modelling error, not a data error.
-
-## Side by side
-
-<details>
-<summary><b>linopy</b> — <code>examples/ports/references/transport_pwl.py</code></summary>
-
-```python
-from __future__ import annotations
-
-import json
-from pathlib import Path
-
-import linopy
-import pandas as pd
-
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'transport_pwl.json'
-
-
-def build(data: dict) -> linopy.Model:
-    """The port's tables as a linopy model, column for column.
-
-    ``scaled`` is what the objective is actually charged on — ``sqrt(shipment)``
-    read off the discretised curve rather than computed.
-    """
-    plants = pd.Index(data['plant']['plant'], name='plant')
-    markets = pd.Index(data['market']['market'], name='market')
-
-    capacity = pd.Series(data['capacity']['value'], index=plants)
-    demand = pd.Series(data['demand']['value'], index=markets)
-    distance = (
-        pd.DataFrame(data['distance'])
-        .pivot(index='plant', columns='market', values='value')
-        .reindex(index=plants)[markets]
-    )
-    cost = distance * data['freight'] / 1000
-
-    m = linopy.Model()
-    shipment = m.add_variables(lower=0, coords=[plants, markets], name='shipment')
-    scaled = m.add_variables(lower=0, coords=[plants, markets], name='scaled')
-
-    m.add_piecewise_formulation(
-        (shipment, data['bp_x']['value']),
-        (scaled, data['bp_y']['value']),
-    )
-
-    m.add_constraints(shipment.sum('market') <= capacity, name='within_capacity')
-    m.add_constraints(shipment.sum('plant') >= demand, name='meet_demand')
-    m.add_objective((scaled * cost).sum())
-    return m
-
-
-def main() -> float:
-    m = build(json.loads(DATA.read_text()))
-    status, condition = m.solve(solver_name='highs')
-    assert status == 'ok', f'{status}: {condition}'
-    print(f'linopy {linopy.__version__}')
-    print(f'objective {float(m.objective.value)!r}')
-    print(m.solution['shipment'].to_series())
-    return float(m.objective.value)
-
-
-if __name__ == '__main__':
-    main()
-```
-
-</details>
 
 ## What it exercises
 

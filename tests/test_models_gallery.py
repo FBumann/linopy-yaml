@@ -45,10 +45,25 @@ def test_every_model_has_a_page(model: tuple[str, Path]) -> None:
     )
 
 
+def _fences(markdown: str, lang: str) -> list[str]:
+    """Every ``lang`` fence, dedented.
+
+    A fence inside a content tab is indented by the tab's four spaces, and the
+    byte-for-byte checks below compare against file text — so the tab indent
+    is stripped from every line that carries it, and a blank line (which
+    markdown allows to stay empty inside an indented block) passes through.
+    """
+    bodies = []
+    for match in re.finditer(rf'^([ \t]*)```{lang}\n(.*?)^\1```', markdown, re.MULTILINE | re.DOTALL):
+        prefix, body = match.group(1), match.group(2)
+        bodies.append(''.join(line.removeprefix(prefix) for line in body.splitlines(keepends=True)))
+    return bodies
+
+
 def test_the_page_shows_the_model_that_runs(model: tuple[str, Path]) -> None:
     """A YAML fence on the page equals the model file, byte for byte."""
     name, path = model
-    fences = re.findall(r'^```yaml\n(.*?)^```', (GALLERY / f'{name}.md').read_text(), re.MULTILINE | re.DOTALL)
+    fences = _fences((GALLERY / f'{name}.md').read_text(), 'yaml')
     assert path.read_text().rstrip() + '\n' in fences, f'docs/models/{name}.md has drifted from {path}'
 
 
@@ -140,15 +155,30 @@ def test_every_construct_is_exercised_by_some_model(column: str, exercised: set[
 
 PORTS = Path(__file__).resolve().parent.parent / 'examples' / 'ports' / 'references'
 
+#: Directory name under ``references/`` -> the tab title the gallery shows.
+#: Adding an arm (``pyomo/``) means adding its display name here — the tests
+#: below then demand a tab for every script it holds, and refuse a tab with no
+#: script, so the docs and the corpus cannot say different things about which
+#: libraries a model is shown in.
+ARMS = {'linopy': 'linopy', 'pypsa': 'PyPSA'}
 
-@pytest.fixture(params=sorted(PORTS.glob('*.py')), ids=lambda p: p.stem)
+
+@pytest.fixture(params=sorted(PORTS.glob('*/*.py')), ids=lambda p: f'{p.parent.name}-{p.stem}')
 def reference(request: pytest.FixtureRequest) -> Path:
     return request.param
 
 
+def test_every_arm_directory_is_named(reference: Path) -> None:
+    arm = reference.parent.name
+    assert arm in ARMS, (
+        f'{reference} sits in an arm directory `{arm}` that ARMS does not name — '
+        f'without a display name the tab checks below cannot see it'
+    )
+
+
 def test_the_page_shows_the_reference_that_runs(reference: Path) -> None:
-    """The side-by-side embeds a reference script, and a comparison about
-    readability has to show code that still exists in that form.
+    """The reference tab embeds a script, and a comparison about readability
+    has to show code that still exists in that form.
 
     Caught its own first regression: `ruff format` reflowed a `pivot` chain in
     `transport_dantzig.py` after the page had copied it, and nothing else would
@@ -156,10 +186,35 @@ def test_the_page_shows_the_reference_that_runs(reference: Path) -> None:
     comparison is about the modelling.
     """
     page = GALLERY / f'{reference.stem}.md'
+    text = page.read_text()
+    title = ARMS[reference.parent.name]
+    assert f'=== "{title}"' in text, (
+        f'{page} shows no `=== "{title}"` tab — a reference with no tab is invisible to the reader it was written for'
+    )
+    assert '=== "lpspec"' in text, f'{page} has an arm tab but no `=== "lpspec"` tab beside it'
     script = reference.read_text()
     body = script[script.index('from __future__') :].rstrip() + '\n'
-    fences = re.findall(r'^```python\n(.*?)^```', page.read_text(), re.MULTILINE | re.DOTALL)
-    assert body in fences, f'{page} has drifted from {reference}'
+    assert body in _fences(text, 'python'), f'{page} has drifted from {reference}'
+
+
+def test_no_tab_without_a_reference() -> None:
+    """The reverse: a tab claiming an arm must have a script behind it.
+
+    The arm tabs exist to show code that ran and matched the recorded optimum;
+    a tab whose script was deleted or renamed would keep showing code nobody
+    can run, which is the drift the whole side-by-side machinery exists to
+    prevent.
+    """
+    arm_of = {display: arm for arm, display in ARMS.items()}
+    for page in sorted(GALLERY.glob('*.md')):
+        for title in re.findall(r'^=== "(.+)"$', page.read_text(), re.MULTILINE):
+            if title == 'lpspec':
+                continue
+            arm = arm_of.get(title)
+            assert arm is not None, f'{page} has a tab `{title}` that is neither lpspec nor a named arm'
+            assert (PORTS / arm / f'{page.stem}.py').exists(), (
+                f'{page} shows a `{title}` tab but examples/ports/references/{arm}/{page.stem}.py does not exist'
+            )
 
 
 GUIDE = Path(__file__).resolve().parent.parent / 'docs' / 'guide.md'

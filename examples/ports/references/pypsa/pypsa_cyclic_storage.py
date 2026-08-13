@@ -3,9 +3,9 @@
 # requires-python = ">=3.12"
 # dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
-"""Reference for ``pypsa_transport``: PyPSA's own LOPF. See docs/models/index.md.
+"""Reference for ``pypsa_cyclic_storage``: PyPSA's own LOPF. See docs/models/index.md.
 
-    uv run --script examples/ports/references/pypsa_transport.py
+    uv run --script examples/ports/references/pypsa/pypsa_cyclic_storage.py
 
 Pinned above to the versions that produced the number in ``references.json``,
 and run out of band — PyPSA is not a dependency of this project. linopy is
@@ -17,14 +17,13 @@ is only a floor: it reshapes the recorded duals and nothing else, and
 whose NA handling changed in 3.0. The floor is checked rather than assumed —
 this script emits byte-identical output on either side of that change.
 
-It reads the same instance the port binds, since a reference optimum means
-nothing against a different one, and builds the network with PyPSA's own
-objects. Nothing here imports lpspec.
+It reads the same instance the port binds and builds the network with PyPSA's
+own objects. Nothing here imports lpspec.
 
-Rung 1: transport model, linear marginal cost. Links rather than lines is what
-makes it one — a link's flow is a variable bounded by its rating, with no
-Kirchhoff voltage law. Hence efficiency 1.0, nothing extendable, no capital
-cost, no snapshot weightings.
+Rung 4: rung 3's storage with ``cyclic_state_of_charge``. The first
+snapshot's state of charge carries over from the *last* rather than from a
+seed, so the horizon closes on itself and there is no
+``state_of_charge_initial``. That is the whole delta from rung 3.
 """
 
 from __future__ import annotations
@@ -35,15 +34,14 @@ from pathlib import Path
 import pandas as pd
 import pypsa
 
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_transport.json'
+DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_cyclic_storage.json'
 
 
 def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
-    a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
-    it ships ``neg_rating`` as data instead. That is the ledger row.
+    ``max_hours`` is the ratio PyPSA stores; the port carries the product it
+    implies (``soc_max``), because a bound there takes a name, not arithmetic.
     """
     n = pypsa.Network()
     n.set_snapshots(data['snapshot']['snapshot'])
@@ -55,6 +53,8 @@ def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         bus=data['generator']['bus'],
         p_nom=data['p_nom']['value'],
         marginal_cost=data['marginal_cost']['value'],
+        ramp_limit_up=data['ramp_limit_up']['value'],
+        ramp_limit_down=data['ramp_limit_down']['value'],
     )
     n.add(
         'Link',
@@ -64,6 +64,18 @@ def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         p_nom=data['rating']['value'],
         p_min_pu=-1.0,
         efficiency=1.0,
+    )
+    p_nom = data['storage_p_nom']['value']
+    n.add(
+        'StorageUnit',
+        data['storage']['storage'],
+        bus=data['storage']['bus'],
+        p_nom=p_nom,
+        max_hours=[m / p for m, p in zip(data['soc_max']['value'], p_nom, strict=True)],
+        efficiency_store=data['efficiency_store']['value'],
+        efficiency_dispatch=data['efficiency_dispatch']['value'],
+        standing_loss=data['standing_loss']['value'],
+        cyclic_state_of_charge=True,
     )
 
     load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
@@ -90,10 +102,13 @@ def nodal_prices(n: pypsa.Network) -> dict[str, list]:
 
 def main() -> float:
     n = build(json.loads(DATA.read_text()))
-    n.optimize(solver_name='highs')
+    status, condition = n.optimize(solver_name='highs')
+    assert status == 'ok', f'{status}: {condition}'
     print(f'pypsa {pypsa.__version__}')
     print(f'objective {float(n.objective)!r}')
     print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
+    print(n.generators_t.p)
+    print(n.storage_units_t.state_of_charge)
     return float(n.objective)
 
 

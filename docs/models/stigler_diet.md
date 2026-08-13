@@ -63,47 +63,122 @@ $$\mathit{spend}_{f} \ge 0 \qquad \forall\thinspace f \in \mathcal{F}$$
 </details>
 <!-- math:end -->
 
-```yaml
-# Stigler's diet problem (1945): the cheapest set of foods meeting a year's
-# nutritional minimums. Laderman solved it in 1947 on desk calculators as the
-# first serious test of the simplex method — nine clerks, about 120 man-days,
-# for an annual cost of $39.69. See docs/models/index.md.
-#
-# Stigler's table is normalised per dollar spent, so a variable is *money on a
-# food per day* rather than a quantity, and the objective is simply the total.
+=== "lpspec"
 
-dimensions:
-  food:
-    dtype: str
-  nutrient:
-    dtype: str
+    ```yaml
+    # Stigler's diet problem (1945): the cheapest set of foods meeting a year's
+    # nutritional minimums. Laderman solved it in 1947 on desk calculators as the
+    # first serious test of the simplex method — nine clerks, about 120 man-days,
+    # for an annual cost of $39.69. See docs/models/index.md.
+    #
+    # Stigler's table is normalised per dollar spent, so a variable is *money on a
+    # food per day* rather than a quantity, and the objective is simply the total.
 
-parameters:
-  # How much of each nutrient a dollar of each food buys. Sparse on purpose:
-  # a food supplying none of a nutrient has no row, which is how this language
-  # spells absence everywhere. 570 of the 693 cells are non-zero.
-  nutrient_per_dollar:
-    dims: [food, nutrient]
-  daily_minimum:
-    dims: [nutrient]
+    dimensions:
+      food:
+        dtype: str
+      nutrient:
+        dtype: str
 
-variables:
-  # dollars per day spent on this food
-  spend:
-    foreach: [food]
-    bounds:
-      lower: 0
+    parameters:
+      # How much of each nutrient a dollar of each food buys. Sparse on purpose:
+      # a food supplying none of a nutrient has no row, which is how this language
+      # spells absence everywhere. 570 of the 693 cells are non-zero.
+      nutrient_per_dollar:
+        dims: [food, nutrient]
+      daily_minimum:
+        dims: [nutrient]
 
-constraints:
-  meet_requirement:
-    foreach: [nutrient]
-    expression: sum(spend * nutrient_per_dollar, over=food) >= daily_minimum
+    variables:
+      # dollars per day spent on this food
+      spend:
+        foreach: [food]
+        bounds:
+          lower: 0
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: spend
-```
+    constraints:
+      meet_requirement:
+        foreach: [nutrient]
+        expression: sum(spend * nutrient_per_dollar, over=food) >= daily_minimum
+
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: spend
+    ```
+
+=== "linopy"
+
+    `examples/ports/references/linopy/stigler_diet.py`:
+
+    ```python
+    from __future__ import annotations
+
+    import json
+    from pathlib import Path
+
+    import linopy
+    import pandas as pd
+
+    DATA = Path(__file__).resolve().parents[2] / 'data' / 'stigler_diet.json'
+
+    #: Laderman (1947), in 1939 dollars. What the port is checked against loosely;
+    #: `references.json` records this run's exact value for the tight check.
+    PUBLISHED_ANNUAL = 39.69
+
+
+    def build(data: dict) -> linopy.Model:
+        """The port's tables as a linopy model, column for column.
+
+        ``supply`` is the sparse table filled back out: a missing (food, nutrient)
+        pair means that food supplies none of that nutrient.
+        """
+        foods = pd.Index(data['food']['food'], name='food')
+        nutrients = pd.Index(data['nutrient']['nutrient'], name='nutrient')
+
+        minimum = pd.Series(data['daily_minimum']['value'], index=nutrients)
+        per_dollar = (
+            pd.DataFrame(data['nutrient_per_dollar'])
+            .pivot(index='food', columns='nutrient', values='value')
+            .reindex(index=foods, columns=nutrients)
+            .fillna(0.0)
+        )
+
+        m = linopy.Model()
+        spend = m.add_variables(lower=0, coords=[foods], name='spend')
+        m.add_constraints((spend * per_dollar).sum('food') >= minimum, name='meet_requirement')
+        m.add_objective(spend.sum())
+        return m
+
+
+    def shadow_prices(m: linopy.Model) -> dict[str, list]:
+        """What one more unit of each nutrient per day would cost.
+
+        The most legible dual in the corpus: it is the price of the binding
+        nutrient, and the nutrients that are *not* binding come back at zero
+        because they arrive free alongside the ones that are.
+        """
+        dual = m.constraints['meet_requirement'].dual
+        return {'nutrient': [str(v) for v in dual.indexes['nutrient']], 'value': [float(v) for v in dual.values]}
+
+
+    def main() -> float:
+        m = build(json.loads(DATA.read_text()))
+        status, condition = m.solve(solver_name='highs')
+        assert status == 'ok', f'{status}: {condition}'
+        daily = float(m.objective.value)
+        print(f'linopy {linopy.__version__}')
+        print(f'objective {daily!r}')
+        print(f'annual {daily * 365:.4f} vs published {PUBLISHED_ANNUAL}')
+        print(f'duals {json.dumps({"meet_requirement": shadow_prices(m)})}')
+        chosen = m.solution['spend'].to_series()
+        print((chosen[chosen > 1e-9] * 365).round(2))
+        return daily
+
+
+    if __name__ == '__main__':
+        main()
+    ```
 
 Stigler's table is normalised **per dollar spent**, so a variable is *money on
 a food per day* rather than a quantity, and the objective is just the total.
@@ -149,82 +224,6 @@ Four of the nine requirements cost nothing at the margin: they arrive free
 alongside the ones that bind. That is the diet problem's actual lesson, and it
 is a dual, not a primal — which is why the corpus checks duals as well as
 objectives.
-
-## Side by side
-
-<details>
-<summary><b>linopy</b> — <code>examples/ports/references/stigler_diet.py</code></summary>
-
-```python
-from __future__ import annotations
-
-import json
-from pathlib import Path
-
-import linopy
-import pandas as pd
-
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'stigler_diet.json'
-
-#: Laderman (1947), in 1939 dollars. What the port is checked against loosely;
-#: `references.json` records this run's exact value for the tight check.
-PUBLISHED_ANNUAL = 39.69
-
-
-def build(data: dict) -> linopy.Model:
-    """The port's tables as a linopy model, column for column.
-
-    ``supply`` is the sparse table filled back out: a missing (food, nutrient)
-    pair means that food supplies none of that nutrient.
-    """
-    foods = pd.Index(data['food']['food'], name='food')
-    nutrients = pd.Index(data['nutrient']['nutrient'], name='nutrient')
-
-    minimum = pd.Series(data['daily_minimum']['value'], index=nutrients)
-    per_dollar = (
-        pd.DataFrame(data['nutrient_per_dollar'])
-        .pivot(index='food', columns='nutrient', values='value')
-        .reindex(index=foods, columns=nutrients)
-        .fillna(0.0)
-    )
-
-    m = linopy.Model()
-    spend = m.add_variables(lower=0, coords=[foods], name='spend')
-    m.add_constraints((spend * per_dollar).sum('food') >= minimum, name='meet_requirement')
-    m.add_objective(spend.sum())
-    return m
-
-
-def shadow_prices(m: linopy.Model) -> dict[str, list]:
-    """What one more unit of each nutrient per day would cost.
-
-    The most legible dual in the corpus: it is the price of the binding
-    nutrient, and the nutrients that are *not* binding come back at zero
-    because they arrive free alongside the ones that are.
-    """
-    dual = m.constraints['meet_requirement'].dual
-    return {'nutrient': [str(v) for v in dual.indexes['nutrient']], 'value': [float(v) for v in dual.values]}
-
-
-def main() -> float:
-    m = build(json.loads(DATA.read_text()))
-    status, condition = m.solve(solver_name='highs')
-    assert status == 'ok', f'{status}: {condition}'
-    daily = float(m.objective.value)
-    print(f'linopy {linopy.__version__}')
-    print(f'objective {daily!r}')
-    print(f'annual {daily * 365:.4f} vs published {PUBLISHED_ANNUAL}')
-    print(f'duals {json.dumps({"meet_requirement": shadow_prices(m)})}')
-    chosen = m.solution['spend'].to_series()
-    print((chosen[chosen > 1e-9] * 365).round(2))
-    return daily
-
-
-if __name__ == '__main__':
-    main()
-```
-
-</details>
 
 ## What it exercises
 

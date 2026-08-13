@@ -6,7 +6,7 @@
 """Reference for ``transport_pwl``: the same model through linopy's own
 piecewise formulation. See docs/models/index.md.
 
-    uv run --script examples/ports/references/transport_pwl.py
+    uv run --script examples/ports/references/linopy/transport_pwl.py
 
 **The independence here is sharper than usual.** Every other reference is
 independent of lpspec because it is a different program; this one is
@@ -41,7 +41,7 @@ from pathlib import Path
 import linopy
 import pandas as pd
 
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'transport_pwl.json'
+DATA = Path(__file__).resolve().parents[2] / 'data' / 'transport_pwl.json'
 
 
 def build(data: dict) -> linopy.Model:
