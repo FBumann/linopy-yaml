@@ -156,21 +156,11 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
         expression: p * marginal_cost
     ```
 
-    Run against the committed instance:
-
     ```python
-    import json
-    from pathlib import Path
-
-    import lpspec as lps
-    import polars as pl
-
-    tables = json.loads(Path('examples/ports/data/pypsa_ramp.json').read_text())
-    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
-
+    # sources: parameter name -> frame or parquet path
     with lps.solve('examples/ports/pypsa_ramp.yaml', sources) as solution:
-        print(solution.objective)  # 18200.0
-        print(solution.dual('nodal_balance'))
+        solution.objective  # 18200.0
+        solution.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -178,20 +168,9 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
     The reference builds the same network with PyPSA's own objects. The delta from
     rung 1 is two keyword arguments:
 
-    `examples/ports/references/pypsa/pypsa_ramp.py`:
+    The model-building half of `examples/ports/references/pypsa/pypsa_ramp.py`:
 
     ```python
-    from __future__ import annotations
-
-    import json
-    from pathlib import Path
-
-    import pandas as pd
-    import pypsa
-
-    DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_ramp.json'
-
-
     def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column."""
         n = pypsa.Network()
@@ -221,43 +200,6 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
         for bus in data['bus']['bus']:
             n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
         return n
-
-
-    def nodal_prices(n: pypsa.Network) -> dict[str, list]:
-        """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
-        balance, and the output this community reads most often after the cost.
-
-        Recorded in references.json so the port is checked on a whole *vector*, not
-        just the objective. A sign convention that disagreed would be invisible to
-        a scalar comparison and wrong in every reported price.
-        """
-        mp = n.buses_t.marginal_price
-        return {
-            'snapshot': [s for s in mp.index for _ in mp.columns],
-            'bus': [b for _ in mp.index for b in mp.columns],
-            'value': [float(v) for row in mp.to_numpy() for v in row],
-        }
-
-
-    def main() -> float:
-        """Solve, and print what ``references.json`` records.
-
-        A ramp limit is the one rung that can make the instance infeasible rather
-        than merely different, and PyPSA reports that by leaving ``n.objective``
-        None — which would otherwise surface as a TypeError three lines down.
-        """
-        n = build(json.loads(DATA.read_text()))
-        status, condition = n.optimize(solver_name='highs')
-        assert status == 'ok', f'{status}: {condition} — the ramp limits are tighter than the load swing'
-        print(f'pypsa {pypsa.__version__}')
-        print(f'objective {float(n.objective)!r}')
-        print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
-        print(n.generators_t.p)
-        return float(n.objective)
-
-
-    if __name__ == '__main__':
-        main()
     ```
 
 `shift` vacates the first snapshot, and a vacated position is *absent*, so the

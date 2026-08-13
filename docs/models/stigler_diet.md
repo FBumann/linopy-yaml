@@ -107,43 +107,18 @@ $$\mathit{spend}_{f} \ge 0 \qquad \forall\thinspace f \in \mathcal{F}$$
         expression: spend
     ```
 
-    Run against the committed instance:
-
     ```python
-    import json
-    from pathlib import Path
-
-    import lpspec as lps
-    import polars as pl
-
-    tables = json.loads(Path('examples/ports/data/stigler_diet.json').read_text())
-    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
-
+    # sources: parameter name -> frame or parquet path
     with lps.solve('examples/ports/stigler_diet.yaml', sources) as solution:
-        print(solution.objective)  # 0.10866227820675685
-        print(solution.dual('meet_requirement'))
+        solution.objective  # 0.10866227820675685
+        solution.dual('meet_requirement')
     ```
 
 === "linopy"
 
-    `examples/ports/references/linopy/stigler_diet.py`:
+    The model-building half of `examples/ports/references/linopy/stigler_diet.py`:
 
     ```python
-    from __future__ import annotations
-
-    import json
-    from pathlib import Path
-
-    import linopy
-    import pandas as pd
-
-    DATA = Path(__file__).resolve().parents[2] / 'data' / 'stigler_diet.json'
-
-    #: Laderman (1947), in 1939 dollars. What the port is checked against loosely;
-    #: `references.json` records this run's exact value for the tight check.
-    PUBLISHED_ANNUAL = 39.69
-
-
     def build(data: dict) -> linopy.Model:
         """The port's tables as a linopy model, column for column.
 
@@ -166,35 +141,6 @@ $$\mathit{spend}_{f} \ge 0 \qquad \forall\thinspace f \in \mathcal{F}$$
         m.add_constraints((spend * per_dollar).sum('food') >= minimum, name='meet_requirement')
         m.add_objective(spend.sum())
         return m
-
-
-    def shadow_prices(m: linopy.Model) -> dict[str, list]:
-        """What one more unit of each nutrient per day would cost.
-
-        The most legible dual in the corpus: it is the price of the binding
-        nutrient, and the nutrients that are *not* binding come back at zero
-        because they arrive free alongside the ones that are.
-        """
-        dual = m.constraints['meet_requirement'].dual
-        return {'nutrient': [str(v) for v in dual.indexes['nutrient']], 'value': [float(v) for v in dual.values]}
-
-
-    def main() -> float:
-        m = build(json.loads(DATA.read_text()))
-        status, condition = m.solve(solver_name='highs')
-        assert status == 'ok', f'{status}: {condition}'
-        daily = float(m.objective.value)
-        print(f'linopy {linopy.__version__}')
-        print(f'objective {daily!r}')
-        print(f'annual {daily * 365:.4f} vs published {PUBLISHED_ANNUAL}')
-        print(f'duals {json.dumps({"meet_requirement": shadow_prices(m)})}')
-        chosen = m.solution['spend'].to_series()
-        print((chosen[chosen > 1e-9] * 365).round(2))
-        return daily
-
-
-    if __name__ == '__main__':
-        main()
     ```
 
 Stigler's table is normalised **per dollar spent**, so a variable is *money on

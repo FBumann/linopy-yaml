@@ -189,38 +189,17 @@ $$\mathit{economies\_of\_scale\_seg}_{p,m,b} \in \{0, 1\} \qquad \forall\thinspa
         expression: scaled * distance * freight / 1000
     ```
 
-    Run against the committed instance:
-
     ```python
-    import json
-    from pathlib import Path
-
-    import lpspec as lps
-    import polars as pl
-
-    tables = json.loads(Path('examples/ports/data/transport_pwl.json').read_text())
-    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
-
+    # sources: parameter name -> frame or parquet path
     with lps.solve('examples/ports/transport_pwl.yaml', sources) as solution:
-        print(solution.objective)  # 8.786852757777865
+        solution.objective  # 8.786852757777865
     ```
 
 === "linopy"
 
-    `examples/ports/references/linopy/transport_pwl.py`:
+    The model-building half of `examples/ports/references/linopy/transport_pwl.py`:
 
     ```python
-    from __future__ import annotations
-
-    import json
-    from pathlib import Path
-
-    import linopy
-    import pandas as pd
-
-    DATA = Path(__file__).resolve().parents[2] / 'data' / 'transport_pwl.json'
-
-
     def build(data: dict) -> linopy.Model:
         """The port's tables as a linopy model, column for column.
 
@@ -252,20 +231,6 @@ $$\mathit{economies\_of\_scale\_seg}_{p,m,b} \in \{0, 1\} \qquad \forall\thinspa
         m.add_constraints(shipment.sum('plant') >= demand, name='meet_demand')
         m.add_objective((scaled * cost).sum())
         return m
-
-
-    def main() -> float:
-        m = build(json.loads(DATA.read_text()))
-        status, condition = m.solve(solver_name='highs')
-        assert status == 'ok', f'{status}: {condition}'
-        print(f'linopy {linopy.__version__}')
-        print(f'objective {float(m.objective.value)!r}')
-        print(m.solution['shipment'].to_series())
-        return float(m.objective.value)
-
-
-    if __name__ == '__main__':
-        main()
     ```
 
 **`convex: true` would be wrong here, and quietly so.** `sqrt` is concave and

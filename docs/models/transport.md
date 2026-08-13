@@ -2,7 +2,7 @@
 
 A network: generators sit on buses, lines connect buses, and power balances at every bus.
 
-> **✔ Verified against linopy 0.9.0** — objective **4400**, matched to `rtol=1e-09`. A teaching model, so the check is agreement with an independent hand-written formulation, not a published figure.
+> **✔ Agrees with hand-written linopy 0.9.0** — objective **4400**, matched to `rtol=1e-09`.
 
 ## The problem
 
@@ -127,40 +127,18 @@ $$\underline{f}_{\ell} \le f_{s,\ell} \le \bar f_{\ell} \qquad \forall\thinspace
         expression: p * cost
     ```
 
-    Run against the committed instance:
-
     ```python
-    import json
-    from pathlib import Path
-
-    import lpspec as lps
-    import polars as pl
-
-    tables = json.loads(Path('examples/ports/data/transport.json').read_text())
-    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
-
+    # sources: parameter name -> frame or parquet path
     with lps.solve('examples/transport.yaml', sources) as solution:
-        print(solution.objective)  # 4400.0
-        print(solution.dual('balance'))
+        solution.objective  # 4400.0
+        solution.dual('balance')
     ```
 
 === "linopy"
 
-    `examples/ports/references/linopy/transport.py`:
+    The model-building half of `examples/ports/references/linopy/transport.py`:
 
     ```python
-    from __future__ import annotations
-
-    import json
-    from pathlib import Path
-
-    import linopy
-    import pandas as pd
-    import xarray as xr
-
-    DATA = Path(__file__).resolve().parents[2] / 'data' / 'transport.json'
-
-
     def build(data: dict) -> linopy.Model:
         """The instance's tables as a linopy model, row for row."""
         generators = pd.Index(data['generator']['generator'], name='generator')
@@ -193,30 +171,6 @@ $$\underline{f}_{\ell} \le f_{s,\ell} \le \bar f_{\ell} \qquad \forall\thinspace
         )
         m.add_objective((p * cost).sum())
         return m
-
-
-    def nodal_prices(m: linopy.Model) -> dict[str, list]:
-        """The balance dual, tidy: one price per (snapshot, bus)."""
-        dual = m.constraints['balance'].dual.transpose('snapshot', 'bus')
-        return {
-            'snapshot': [int(s) for s in dual.indexes['snapshot'] for _ in dual.indexes['bus']],
-            'bus': [str(b) for _ in dual.indexes['snapshot'] for b in dual.indexes['bus']],
-            'value': [float(v) for v in dual.values.ravel()],
-        }
-
-
-    def main() -> float:
-        m = build(json.loads(DATA.read_text()))
-        status, condition = m.solve(solver_name='highs')
-        assert status == 'ok', f'{status}: {condition}'
-        print(f'linopy {linopy.__version__}')
-        print(f'objective {float(m.objective.value)!r}')
-        print(f'duals {json.dumps({"balance": nodal_prices(m)})}')
-        return float(m.objective.value)
-
-
-    if __name__ == '__main__':
-        main()
     ```
 
 ## What it exercises

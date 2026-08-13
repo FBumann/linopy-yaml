@@ -2,7 +2,7 @@
   "dispatch": {
     "objective": 10500.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/dispatch.py — a teaching model, verified by agreement with an independent hand-written formulation rather than a published figure",
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/dispatch.py — agreement, not a published figure",
     "duals": {
       "power_balance": {
         "snapshot": [
@@ -320,7 +320,7 @@
   "storage": {
     "objective": 5650.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/storage.py — a teaching model, verified by agreement with an independent hand-written formulation rather than a published figure",
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure",
     "duals": {
       "power_balance": {
         "snapshot": [
@@ -341,7 +341,7 @@
   "transport": {
     "objective": 4400.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/transport.py — a teaching model, verified by agreement with an independent hand-written formulation rather than a published figure",
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/transport.py — agreement, not a published figure",
     "duals": {
       "balance": {
         "snapshot": [

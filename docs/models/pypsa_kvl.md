@@ -157,39 +157,18 @@ $$\mathit{neg\_s\_nom}_{l} \le f_{t,l} \le s^{\mathrm{nom}}_{l} \qquad \forall\t
         expression: p * marginal_cost
     ```
 
-    Run against the committed instance:
-
     ```python
-    import json
-    from pathlib import Path
-
-    import lpspec as lps
-    import polars as pl
-
-    tables = json.loads(Path('examples/ports/data/pypsa_kvl.json').read_text())
-    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
-
+    # sources: parameter name -> frame or parquet path
     with lps.solve('examples/ports/pypsa_kvl.yaml', sources) as solution:
-        print(solution.objective)  # 17000.0
-        print(solution.dual('nodal_balance'))
+        solution.objective  # 17000.0
+        solution.dual('nodal_balance')
     ```
 
 === "PyPSA"
 
-    `examples/ports/references/pypsa/pypsa_kvl.py`:
+    The model-building half of `examples/ports/references/pypsa/pypsa_kvl.py`:
 
     ```python
-    from __future__ import annotations
-
-    import json
-    from pathlib import Path
-
-    import pandas as pd
-    import pypsa
-
-    DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_kvl.json'
-
-
     def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
@@ -222,43 +201,6 @@ $$\mathit{neg\_s\_nom}_{l} \le f_{t,l} \le s^{\mathrm{nom}}_{l} \qquad \forall\t
         for bus in data['bus']['bus']:
             n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
         return n
-
-
-    def nodal_prices(n: pypsa.Network) -> dict[str, list]:
-        """PyPSA's marginal price per (snapshot, bus), tidy."""
-        mp = n.buses_t.marginal_price
-        return {
-            'snapshot': [s for s in mp.index for _ in mp.columns],
-            'bus': [b for _ in mp.index for b in mp.columns],
-            'value': [float(v) for row in mp.to_numpy() for v in row],
-        }
-
-
-    def cycle_basis(n: pypsa.Network) -> str:
-        """The KVL rows PyPSA built, so the port's incidence can be checked by eye.
-
-        PyPSA scales the coefficients for conditioning; the constraint is ``= 0``,
-        so any nonzero multiple of a cycle describes the same cycle space. What has
-        to match is which lines share a row and with what relative signs.
-        """
-        return str(n.model.constraints['Kirchhoff-Voltage-Law'])
-
-
-    def main() -> float:
-        n = build(json.loads(DATA.read_text()))
-        n.optimize.create_model(include_objective_constant=False)
-        print(cycle_basis(n))
-        status, condition = n.optimize(solver_name='highs')
-        assert status == 'ok', f'{status}: {condition}'
-        print(f'pypsa {pypsa.__version__}')
-        print(f'objective {float(n.objective)!r}')
-        print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
-        print(n.lines_t.p0)
-        return float(n.objective)
-
-
-    if __name__ == '__main__':
-        main()
     ```
 
 **The cycle basis is a parameter, not a coordinate.** This is the one shape
