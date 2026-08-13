@@ -235,6 +235,30 @@ def test_a_serial_fold_builds_once_and_rebinds(monkeypatch):
     assert (seen.loads, seen.solves) == (1, 3), 'one solver load, the slices differing only in numbers'
 
 
+def test_a_carried_fold_still_builds_once(monkeypatch):
+    """A carry writes a parameter, and a parameter the first slice already bound.
+
+    So the sources a carried slice names are the ones before it named, and the
+    rule that rebuilds a slice naming something else never fires here. Pinned
+    separately from the sweep above because it is the *reason* it does not
+    fire, not a second instance of it — and because a rolling horizon is the
+    driver with the most slices to lose the fast path on.
+    """
+    built = []
+    original = strategy.build
+    monkeypatch.setattr(strategy, 'build', lambda *a, **k: built.append(original(*a, **k)) or built[-1])
+
+    runs = lps.solve_over(
+        WINDOW,
+        horizon_sources(),
+        lps.EachWindow('snapshot', length=4, step=4, into='t'),
+        carry={'soc_initial': ('soc', 3)},
+    )
+
+    assert runs.keys == [0, 4, 8]
+    assert len(built) == 1, f'{len(built)} builds for three windows — the carry cost the fold its fast path'
+
+
 def test_a_pooled_fold_builds_per_slice(monkeypatch):
     """The exception, and the reason for it: a built model cannot be pickled.
 
@@ -993,6 +1017,45 @@ def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
     assert runs.keys == ['low', 'high']
     assert runs.meta.columns[0] == 'draw'
     assert runs.primal('p').columns[0] == 'draw', 'both frames key the same way, or they stop joining'
+
+
+def _draw(base: dict, scenario: str, snapshots: int = 4) -> pl.DataFrame:
+    """One scenario's load, cut to its first *snapshots* coordinates."""
+    return base['load'].filter(pl.col('scenario') == scenario).drop('scenario').head(snapshots)
+
+
+#: The second cut of a two-slice hand-built axis, each naming *less* than the
+#: first. Neither class axis can produce one — each rewrites a copy of the
+#: whole source mapping and supplies its own coords every slice — so this is
+#: where a cut being total stops being automatic.
+NARROWED = [
+    pytest.param(lambda base: ({'load': _draw(base, 'high')}, {'snapshot': range(4)}), id='fewer sources'),
+    pytest.param(lambda base: ({**base, 'load': _draw(base, 'high', 2)}, {}), id='no coords'),
+]
+
+
+@pytest.mark.parametrize('second', NARROWED)
+def test_a_hand_built_slice_that_names_less_does_not_inherit_the_last_one(second):
+    """A cut says what the whole model binds, whichever way the sweep runs.
+
+    A serial fold rebinds, and a rebind is partial by construction — it keeps
+    what the last slice bound. So a cut naming fewer sources, or no coords,
+    would be answered off the *previous slice's* data, where a pooled fold
+    builds it alone and answers off the cut. The two branches are run against
+    each other because the failure is a disagreement: either outcome on its own
+    reads as an answer.
+    """
+    base = scenario_sources()
+    cuts = [('low', {**base, 'load': _draw(base, 'low')}, {'snapshot': range(4)}), ('high', *second(base))]
+
+    def fold(executor: object) -> object:
+        try:
+            return lps.solve_over(DISPATCH, base, cuts, key_name='draw', executor=executor).objective.to_dicts()
+        except lps.DataError as exc:
+            return str(exc)
+
+    with ThreadPoolExecutor(2) as pool:
+        assert fold(None) == fold(pool), 'a sweep answers the cut it was given, not the slice before it'
 
 
 def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():

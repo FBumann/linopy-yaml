@@ -554,6 +554,16 @@ def _serially(
     previous model before it starts, so the fold still holds one slice's model
     however many there are.
 
+    **A slice that names something else is rebuilt, not rebound.** A cut is
+    *total* — it says what the whole model binds — where ``rebind`` is partial
+    by construction and keeps whatever the last slice bound. The two agree only
+    while every slice names the same sources and the same coordinates, which
+    the class axes guarantee (each rewrites a copy of the whole mapping) and a
+    hand-built list does not. Compared by *name*, values being what a rebind
+    exists to replace: a slice inheriting the previous one's data would answer
+    a question nobody asked, and would answer it differently from the same
+    sweep under ``executor=``.
+
     **A generator because of the carry**, which is the one thing that makes a
     slice depend on the one before it: slice ``i+1``'s sources are not known
     until slice ``i``'s frames have been read, and resuming after the yield is
@@ -562,14 +572,18 @@ def _serially(
     abandoned part way.
     """
     bound: Any = None
+    named: tuple[frozenset[str], frozenset[str]] | None = None
     state: dict[str, Any] = {}
     try:
         for position, (key, sliced, coords) in enumerate(cuts):
             sources = {**sliced, **state}
-            if bound is None:
-                bound = build(schema, sources, coords=coords or None, **building)
-            else:
+            names = (frozenset(sources), frozenset(coords))
+            if names == named:
                 bound.rebind(sources, coords=coords)
+            else:
+                if bound is not None:
+                    bound.close()
+                bound, named = build(schema, sources, coords=coords or None, **building), names
             answer = _answers(bound.solve(**solving), schema)
             yield key, answer
             if plan and position < len(cuts) - 1:
