@@ -496,11 +496,15 @@ assumed. The architectural reading is in
 [docs/design/ceiling.md](design/ceiling.md#capability-is-not-the-ceiling); the plan is
 [Track 3](https://github.com/fluxopt/lpspec/issues/472).
 
+The SOS row is the one this table has since been acted on: `sos:`
+([SPEC §4.1](SPEC.md#41-sos)) ships to all three, natively where the row says
+so and as binaries plus linking rows where it says *no concept*.
+
 | | `lp_file` | HiGHS direct | Gurobi direct |
 |---|---|---|---|
 | affine rows, COO, integrality | text | native | native |
 | semi-continuous | text | `kSemiContinuous` | native |
-| SOS1 / SOS2 | text section | **no concept** — `HighsLp` has no SOS field, no `addSos` | `addSOS` |
+| SOS1 / SOS2 | text section | **no concept** — `HighsLp` has no SOS field, no `addSos`, and `readModel` refuses a file with the section | `addSOS` |
 | indicator | text section | **no concept** | `addGenConstrIndicator` |
 | quadratic objective | text section | `passHessian` — but `Hessian + integrality` returns `kError`, so no MIQP | native, incl. MIQP |
 

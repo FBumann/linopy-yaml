@@ -24,7 +24,7 @@ Semantics mirror the eager builder exactly:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 from lpspec.errors import LanguageError
 from lpspec.language import degree
@@ -142,7 +142,18 @@ def lower_program(schema: Model) -> plan.Program:
         )
         for dname, ddef in schema.dimensions.items()
     )
-    return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions)
+    sos = tuple(
+        plan.SosDeclaration(
+            sname,
+            sdef.variable,
+            tuple(d for d in schema.variables[sdef.variable].foreach if d != sdef.over),
+            sdef.over,
+            sos_type=cast('Literal[1, 2]', sdef.type),
+            big_m=sdef.big_m,
+        )
+        for sname, sdef in schema.sos.items()
+    )
+    return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos)
 
 
 # ---------------------------------------------------------------------------

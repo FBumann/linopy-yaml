@@ -335,6 +335,28 @@ class ConstraintDeclaration:
 
 
 @dataclass(frozen=True)
+class SosDeclaration:
+    """One special-ordered set per coordinate of ``dims``, running along ``over``.
+
+    The only declaration that adds neither a column nor a row: it names
+    columns a sink already has and says what may be nonzero among them. ``dims``
+    is the variable's ``foreach`` minus ``over``, spelled out here so the engine
+    places the sets without asking the schema which dim was dropped.
+
+    ``big_m`` caps the linking coefficient a sink without the concept
+    reformulates with, and is ``None`` where the variable's own upper bound is
+    the only cap.
+    """
+
+    name: str
+    variable: str
+    dims: tuple[str, ...]
+    over: str
+    sos_type: Literal[1, 2]
+    big_m: float | None = None
+
+
+@dataclass(frozen=True)
 class ObjectiveDeclaration:
     """Objective; dims remaining after explicit Sums are implicitly summed."""
 
@@ -362,6 +384,7 @@ class Program:
     constraints: tuple[ConstraintDeclaration, ...]
     objective: ObjectiveDeclaration
     dimensions: tuple[DimensionDeclaration, ...] = ()
+    sos: tuple[SosDeclaration, ...] = ()
 
     def dimension(self, name: str) -> DimensionDeclaration:
         """The dimension called *name*.

@@ -14,6 +14,9 @@ takes the tables and renders them to a file. Everything else follows.
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), over `base.py` | `lp_file.py` (nothing beyond polars) |
 
+`sos.py` belongs to neither, which is what it is for: see *the one uneven
+stream* below.
+
 ## Staying loaded
 
 `base.py` is what a solver **is**: a loaded model with a lifecycle, which is
@@ -62,10 +65,10 @@ solves with HiGHS.
 ## The contract
 
 A sink takes a `ModelTables` and nothing else: the frames `cols`
-(col, lb, ub, vtype), `obj` (col, coeff), `rows` (row, sense, rhs) and `matrix`
-(row, col, coeff), plus the counts it chunks by and the objective's sense and
-constant — those last two live outside the tables because a constant has no
-column to attach to.
+(col, lb, ub, vtype), `obj` (col, coeff), `rows` (row, sense, rhs), `matrix`
+(row, col, coeff) and `sos` (set, type, col, weight, big_m), plus the counts it
+chunks by and the objective's sense and constant — those last two live outside
+the tables because a constant has no column to attach to.
 
 A sink never learns how the tables were filled, and the engine never learns
 how they are drained. That is the point: adding `mps` is a new module in
@@ -73,6 +76,32 @@ how they are drained. That is the point: adding `mps` is a new module in
 
 The one thing sinks may share is a *projection* of those frames, never a step
 of the work — `ModelTables.dense_columns`, which both solvers read.
+
+## The one uneven stream
+
+Four of the five are the same question to every sink. `sos` is not: Gurobi
+branches on a set, `lp_file` writes it as text, and HiGHS has no such concept
+at all. So a solver **declares** how it satisfies one —
+
+```python
+sos = 'native'  # gurobi: addSOS, no binaries and no bound to have
+sos = 'reformulated'  # highs: binaries and linking rows instead
+```
+
+— and `solvers.ingestible(name, tables)` acts on the answer, before the load,
+handing a member that cannot take a set the `sos.py` rewrite of it. Two
+properties make that a family decision rather than a member's:
+
+- **Nothing below it knows.** `_load`, `push`, `_run` and the span check all
+  see one model — the one the solver actually holds — so a member is written
+  as though the fifth stream were never there.
+- **The digest follows.** `ingestible` runs before `loaded` compares
+  structures, and a big-M is a matrix coefficient by then, so a rebind that
+  moved a member's bound reloads instead of pushing numbers onto a model whose
+  coefficients they contradict.
+
+A *writer* needs none of this today: LP text carries a set, and so does MPS.
+It is `solvers/`' function for that reason, not `sinks/`'.
 
 ## Adding one
 
@@ -92,14 +121,14 @@ Either way: stream — nothing here may materialise the model a second time —
 and nothing above changes. No method on the engine, no branch in `api.py`,
 no name on the Python surface.
 
-## When Track 3 lands
+## When the rest of Track 3 lands
 
-[Track 3](https://github.com/fluxopt/lpspec/issues/472)
-gives each sink a declared capability table so `check(model, sink=...)` can
-answer "will this sink take it". The table belongs in the sink's own module,
-collected by the family `__init__` rather than owned by it — and it stops
-being uniform at exactly the seam this directory draws: SOS is native in
-`gurobi`, a text section in `lp_file`, absent in `highs`.
+[Track 3](https://github.com/fluxopt/lpspec/issues/472) gives each sink a
+declared capability *table* so `check(model, sink=...)` can answer "will this
+sink take it". `Solver.sos` above is its first entry and its shape — declared
+in the sink's own module, read by the family — and what is still missing is
+the table around it: a second capability to put beside it, the writers
+answering the same questions, and a `check` that reads them without data.
 
 ## Stable output
 

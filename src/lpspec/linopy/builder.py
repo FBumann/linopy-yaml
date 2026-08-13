@@ -117,6 +117,7 @@ def build_model(
         dim_coords or {},
     )
     _build_variables(ctx)
+    _build_sos(ctx)
     _build_constraints(ctx)
     _build_objectives(ctx)
 
@@ -194,6 +195,34 @@ def _as_linopy_mask(mask: xr.DataArray) -> xr.DataArray | None:
     if mask.ndim == 0 and bool(mask):
         return None
     return mask
+
+
+# ---------------------------------------------------------------------------
+# Special-ordered sets
+# ---------------------------------------------------------------------------
+
+
+def _build_sos(ctx: EvaluationContext) -> None:
+    """Attach every ``sos:`` block to the variable it names.
+
+    linopy holds a set the same way the language declares one — a variable, a
+    dimension of it, a type — so this is the block handed over, not a
+    formulation rebuilt. Which is the point of copying its decomposition:
+    the eager lane is the oracle, and a set it had to *reformulate* to accept
+    would be an oracle for a different model.
+
+    It runs before the constraints because a set is a property of the
+    variable, so it belongs beside the declaration rather than after
+    everything that uses it.
+    """
+    for name, sos in ctx.schema.sos.items():
+        with note(f"while building sos '{name}'"):
+            ctx.model.add_sos_constraints(
+                ctx.model.variables[sos.variable],
+                sos_type=1 if sos.type == 1 else 2,
+                sos_dim=sos.over,
+                big_m=sos.big_m,
+            )
 
 
 # ---------------------------------------------------------------------------

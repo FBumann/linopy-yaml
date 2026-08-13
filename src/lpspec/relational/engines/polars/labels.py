@@ -27,7 +27,7 @@ import polars as pl
 from lpspec.relational.engines.polars.compiler import UNIT, ordinal, predicate_dims
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from lpspec.relational import plan
     from lpspec.relational.engines.polars.compiler import PolarsCompiler, Presence
@@ -170,7 +170,7 @@ def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
     return free if free < len(dims) else 0
 
 
-def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
+def row_major(compiler: PolarsCompiler, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
     """A coordinate's row-major position in the declared product.
 
     Horner over the declared ordinals — one multiply and one add per dim
@@ -179,11 +179,24 @@ def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
     caller that dropped rows renumbers with a row index (a label may not have
     gaps, a declaration's share of the solver vector being a slice) and one
     that dropped none has the label already, offset by ``start``.
+
+    *ordinals* says how the frame in hand carries a dim's ordinal, which is
+    the one thing the two askers differ on: a compiler frame has the column
+    beside the label (:func:`_row_major`), while a *built* variable frame kept
+    only the label, so a set numbers its members through
+    :meth:`~lpspec.relational.engines.polars.compiler.PolarsCompiler.ordinal_of`.
+    The rule itself is the same one, and stays here because a second copy is
+    how two builds of one model would come to disagree about an index.
     """
     position: pl.Expr = pl.lit(0, dtype=pl.Int64)
     for d in dims:
-        position = position * compiler.data.cardinality[d] + pl.col(ordinal(d))
+        position = position * compiler.data.cardinality[d] + ordinals(d)
     return position.cast(pl.Int64)
+
+
+def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
+    """:func:`row_major` over a compiler frame, which carries its ordinals."""
+    return row_major(compiler, dims, lambda d: pl.col(ordinal(d)))
 
 
 def in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame:

@@ -50,6 +50,7 @@ _COLS = ('lb', 'ub', 'vtype')
 _OBJ = ('col', 'coeff')
 _ROWS = ('row', 'sense', 'rhs')
 _MATRIX = ('row', 'col', 'coeff')
+_SOS = ('set', 'type', 'col', 'weight', 'big_m')
 
 #: The dtype of each of those columns. ``vtype`` is an ``Enum`` over the
 #: variable types the plan declares, rather than a string: it holds one word
@@ -75,6 +76,7 @@ _DTYPES = {
     'col': pl.Int32, 'row': pl.Int64,
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
     'sense': SENSE, 'vtype': pl.Enum(get_args(plan.VariableType)),
+    'set': pl.Int64, 'type': pl.UInt8, 'weight': pl.Int64, 'big_m': pl.Float64,
 }  # fmt: skip
 
 
@@ -135,9 +137,14 @@ class PolarsEngine:
         self._obj: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
         self._matrix: pl.DataFrame | None = None
+        self._sos: pl.DataFrame | None = None
         self._matrix_starts: Any = None
         self._n_cols = 0
         self._n_rows = 0
+        #: How many special-ordered sets have been numbered. Sets are dense
+        #: ``0..n-1`` across the model, like columns and rows, so a sink names
+        #: one by its number and two builds agree on which.
+        self._n_sets = 0
         #: Entries in the matrix, kept as a count rather than read off the
         #: frame: the frames go when the model is released and this is what a
         #: caller asking how big it *was* is asking for.
@@ -186,9 +193,11 @@ class PolarsEngine:
         self._compiler = PolarsCompiler(program, self._bound, self._variables)
 
         cols = [self._build_variable(v) for v in program.variables]
+        sets = [self._build_sos(s) for s in program.sos]
         built = [self._build_constraint(c) for c in program.constraints]
         objective = self._build_objective(program.objective)
 
+        self._sos = _stack(sets, _SOS)
         self._cols = _stack(cols, _COLS)
         self._rows = labels.in_position_order(_stack([r for r, _ in built], _ROWS), 'row')
         ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
@@ -288,6 +297,63 @@ class PolarsEngine:
         if bad:
             raise DataError(null_bounds_message(v.name, bad))
         return cols
+
+    def _build_sos(self, s: plan.SosDeclaration) -> pl.DataFrame:
+        """One declaration's sets as ``(set, type, col, weight, big_m)``.
+
+        Builds no column and no row: a set names columns the variable already
+        made, so this reads that variable's label frame and nothing else. It
+        runs after every variable and before any constraint, which is when
+        that frame exists and before rows a constraint may drop.
+
+        **A member's weight is its coordinate's position in the declared
+        order** — what ``shift`` walks, and the only order the language has.
+        Only the order matters to a solver, so a masked-out coordinate leaves
+        its neighbours adjacent rather than leaving a hole. **A set is numbered
+        by its position**, through
+        :func:`~lpspec.relational.engines.polars.labels.row_major` and a
+        run-length over it, which is the same first-occurrence rule a
+        variable's own labels follow.
+
+        **The stream leaves grouped by set and ascending in weight**, which is
+        what lets a sink read a set's edges off the neighbouring row rather
+        than aggregating. Within a set that is free — for fixed values of every
+        other dim, the ``over`` ordinal ascends with the label — and across
+        sets it is free too *when ``over`` is the last dim*, which the common
+        shapes have. So the order is verified and the sort runs only where
+        members genuinely interleave. It sorts on **both** columns rather than
+        through
+        :func:`~lpspec.relational.engines.polars.labels.in_position_order`,
+        which numbers a frame whose position is unique: here a position is a
+        whole set, and a sort that reordered ties would be a set whose members
+        arrive out of weight order.
+
+        ``big_m`` rides along per member, at ``inf`` where the block declared
+        none — the one thing here no sink taking a set natively reads.
+        """
+        placed = (
+            self._variables[s.variable]
+            .select(
+                labels.row_major(self._q, s.dims, self._q.ordinal_of).alias('#set position'),
+                (self._q.ordinal_of(s.over) + 1).cast(_DTYPES['weight']).alias('weight'),
+                pl.col('var_label').cast(_DTYPES['col']).alias('col'),
+            )
+            .collect(engine='streaming')
+        )
+        position = pl.col('#set position')
+        grouped = placed if placed.get_column('#set position').is_sorted() else placed.sort('#set position', 'weight')
+        built = grouped.select(
+            ((position != position.shift(1)).fill_null(True).cum_sum().cast(_DTYPES['set']) + (self._n_sets - 1)).alias(
+                'set'
+            ),
+            pl.lit(s.sos_type, dtype=_DTYPES['type']).alias('type'),
+            'col',
+            'weight',
+            pl.lit(float('inf') if s.big_m is None else s.big_m, dtype=_DTYPES['big_m']).alias('big_m'),
+        )
+        if built.height:
+            self._n_sets = built.item(-1, 'set') + 1
+        return built
 
     def _build_constraint(self, c: plan.ConstraintDeclaration) -> tuple[pl.DataFrame, pl.DataFrame | None]:
         """One constraint as its ``rows`` and its share of the matrix.
@@ -465,7 +531,7 @@ class PolarsEngine:
     # ------------------------------------------------------------------
 
     def _tables(self) -> sinks.ModelTables:
-        if self._cols is None or self._obj is None or self._rows is None or self._matrix is None:
+        if self._cols is None or self._obj is None or self._rows is None or self._matrix is None or self._sos is None:
             raise LpspecError(
                 'there is no built model to hand over: it was closed, or a rebind raised and released '
                 'it rather than leaving half of one behind. Build it again — rebind() with data it can '
@@ -476,6 +542,7 @@ class PolarsEngine:
             obj=self._obj,
             rows=self._rows,
             matrix=self._matrix,
+            sos=self._sos,
             row_starts=self._matrix_starts,
             column_count=self._n_cols,
             row_count=self._n_rows,
@@ -508,6 +575,13 @@ class PolarsEngine:
         All that is kept here is the solver itself and the two counters
         :meth:`diagnostics` reports, the answer being the same either way.
 
+        **What the solver is handed may be wider than what was built**, and
+        that too is the family's decision
+        (:func:`~lpspec.relational.sinks.solvers.ingestible`): a sink with no
+        SOS concept takes the sets as binaries and rows appended past the
+        model's own. The read-back is unaffected — a declaration's share is a
+        slice, and nothing was appended before one.
+
         Args:
             solver_name: ``highs``, which ships with the package, or
                 ``gurobi``, which needs the ``[gurobi]`` extra.
@@ -522,7 +596,8 @@ class PolarsEngine:
         Returns:
             The solution, holding this engine and the build it answered.
         """
-        tables = self._tables()
+        built = self._tables()
+        tables = sinks.ingestible(solver_name, built)
         held = self._solver
         self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
         self._solves += 1
@@ -540,7 +615,11 @@ class PolarsEngine:
             _duals=duals,
             _no_duals=None
             if answer.dual is not None
-            else no_duals_message(self._discrete(), answer.status.termination_condition),
+            else no_duals_message(
+                self._discrete(),
+                answer.status.termination_condition,
+                sets=self._reformulated_sets(tables is not built),
+            ),
         )
 
     def diagnostics(self) -> Diagnostics:
@@ -643,6 +722,16 @@ class PolarsEngine:
         assert self._program is not None
         return sorted(v.name for v in self._program.variables if v.variable_type != 'continuous')
 
+    def _reformulated_sets(self, reformulated: bool) -> list[str]:
+        """The sets that reached the solver as binaries, if any did.
+
+        What makes an otherwise continuous model come back without duals, and
+        the one such reason no declaration shows: the model declares no
+        integrality, and the sink added some.
+        """
+        assert self._program is not None
+        return sorted(s.name for s in self._program.sos) if reformulated else []
+
     # ------------------------------------------------------------------
 
     def close(self) -> None:
@@ -656,7 +745,7 @@ class PolarsEngine:
         if self._solver is not None:
             self._solver.close()
             self._solver = None
-        self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
+        self._cols = self._obj = self._rows = self._matrix = self._sos = self._matrix_starts = None
         self._variables.clear()
         self._constraints.clear()
         self._variable_blocks.clear()

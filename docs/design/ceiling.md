@@ -81,7 +81,7 @@ request can ever be met:
 
 | Tier | Bounded by | Members | Can it move? |
 |---|---|---|---|
-| **Capability-bounded** | what a given sink can ingest | SOS / indicator (#23); quadratic | per sink — see below |
+| **Capability-bounded** | what a given sink can ingest | indicator (#23); quadratic. `sos:` **shipped** on this tier, and is what the row predicted: native where a sink has the concept, reformulated where it does not | per sink — see below |
 | **Budget-bounded** | the escape *label* budget — a cap on the rows and columns an island may emit | global operators, arbitrary Python, non-relational manipulation | already movable — that is what an island is |
 | **Design-bounded** | our choice of where work belongs | data prep, domain helpers, Python declaring structure | movable any time; we don't want to |
 
@@ -141,8 +141,18 @@ as a text section and Gurobi natively), and what blocks quadratic is a
 so capability is not a flat set. The whole-Hessian handoff is an implementation
 difference, not a rule-4 violation.
 
-Making this a declared per-sink capability set, with `check` taking an optional
-sink, is [Track 3](https://github.com/fluxopt/lpspec/issues/472).
+**`sos:` is that finding cashed**, and it says what the axis is worth. The
+construct entered on the streamability argument alone — a set names columns a
+variable already made, so it is neither an expression node nor a formulation —
+and each sink then answers for itself, `native` or `reformulated`, so a
+capability gap costs a worse relaxation rather than a refusal. The third value,
+`absent`, is what is left for the constructs no rewrite reaches.
+
+What a rewrite cannot buy back is the argument *for* declaring capability: an
+LP carrying a set comes back from HiGHS without duals and from Gurobi with
+them, and that asymmetry should be visible and the caller's to choose between
+rather than papered over. The rest — a capability *table*, and `check` taking
+an optional sink — is [Track 3](https://github.com/fluxopt/lpspec/issues/472).
 
 ## Deliberate non-primitives
 
