@@ -164,12 +164,11 @@ class PolarsEngine:
         of the build. :func:`_row_starts` reads the CSR index off that order,
         after which ``row`` is dropped: 8 bytes per entry no sink reads.
 
-        **What a zero coefficient states, absence already states**, so the
-        matrix is pruned of them before the CSR index is read
-        (:func:`_without_zeros`) and the objective of its own. Sparsity that
-        arrives as absence never becomes a term at all; sparsity spelled out as
-        zeros used to become one, and a solver's own load is most of what a
-        hand-off costs.
+        **What a zero coefficient states, absence already states**, so each
+        share arrives already pruned of them (:func:`_without_zeros`) and the
+        objective of its own. Sparsity that arrives as absence never becomes a
+        term at all; sparsity spelled out as zeros used to become one, and a
+        solver's own load is most of what a hand-off costs.
 
         **``rows`` leaves in row order too**, which a solver reads as its own
         index — so :meth:`~lpspec.relational.sinks.tables.ModelTables.dense_rows`
@@ -198,7 +197,7 @@ class PolarsEngine:
 
         self._cols = _stack(cols, _COLS)
         self._rows = labels.in_position_order(_stack([r for r, _ in built], _ROWS), 'row')
-        ordered = _without_zeros(_in_row_order(_stack([m for _, m in built if m is not None], _MATRIX)))
+        ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
         self._matrix_starts = _row_starts(ordered, self._n_rows)
         self._matrix = ordered.select('col', 'coeff').rechunk()
         self._n_entries = self._matrix.height
@@ -223,7 +222,9 @@ class PolarsEngine:
             params = sorted(plan.divisor_parameters(*expressions))
             raise DataError(f'{name}: {sparse_divisor_message(", ".join(params), undefined)}')
 
-    def _matrix_share(self, pieces: list[pl.LazyFrame], name: str, *expressions: plan.Expression) -> pl.DataFrame:
+    def _matrix_share(
+        self, pieces: list[pl.LazyFrame], name: str, *expressions: plan.Expression
+    ) -> tuple[pl.DataFrame, pl.Series]:
         """One constraint's share: in ``(row, col)`` order, repeated cells summed.
 
         Nothing runs unconditionally except three linear probes — the null
@@ -240,9 +241,25 @@ class PolarsEngine:
         together beats probing as it arrives (#576). Not an extra copy, since
         the assembly needs a contiguous matrix anyway (#550). The objective's
         stack is left fragmented — measured, and it costs peak for no wall.
+
+        **Zeros go before any of that**, so the probes read them and the sort
+        orders them no longer — on a share that is mostly zeros they were most
+        of each. Pruned behind a probe, like everything else here: the filter
+        leaves a chunked frame and ``shift(1)`` pays at every boundary (#576),
+        so a share with nothing to drop must not pay a rechunk to find that
+        out. A cancelling pair survives to the aggregate and only becomes a
+        zero there, so the prune runs again on the path that aggregated, and
+        only on it.
+
+        Returns:
+            The share, and the rows that had *any* term. Those are read off the
+            stack before the prune, because that is the one question the pruned
+            share can no longer answer: a row whose every coefficient is zero
+            owns no entries and is not thereby a row with no terms.
         """
         stacked = pl.concat(pieces).collect(engine='streaming').rechunk()
         self._refuse_undefined_divisors(stacked, name, *expressions)
+        stacked, term_rows = _pruned(stacked)
         row, col = pl.col('row'), pl.col('col')
         tied, ahead = row == row.shift(1), row > row.shift(1)
         repeat = tied & (col == col.shift(1))
@@ -255,9 +272,16 @@ class PolarsEngine:
             stacked = stacked.sort('row', 'col')
             repeated = stacked.select(repeat.any()).item()
         if not repeated:
-            return stacked
-        matrix = stacked.lazy().group_by('row', 'col').agg(pl.col('coeff').sum()).sort('row', 'col')
-        return matrix.collect(engine='streaming')
+            return stacked, _rows_of(stacked, term_rows)
+        aggregated = (
+            stacked.lazy()
+            .group_by('row', 'col')
+            .agg(pl.col('coeff').sum())
+            .sort('row', 'col')
+            .collect(engine='streaming')
+        )
+        matrix, cancelled = _pruned(aggregated)
+        return matrix, _rows_of(matrix, term_rows if term_rows is not None else cancelled)
 
     # ------------------------------------------------------------------
     # declarations
@@ -391,12 +415,12 @@ class PolarsEngine:
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
-        matrix = self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
-        rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, start)
+        matrix, term_rows = self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
+        rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, term_rows, start)
         return rows, matrix
 
     def _drop_termless_rows(
-        self, name: str, rows: pl.DataFrame, matrix: pl.DataFrame, start: int
+        self, name: str, rows: pl.DataFrame, matrix: pl.DataFrame, kept: pl.Series, start: int
     ) -> tuple[pl.DataFrame, pl.DataFrame, int]:
         """Rows that kept no variable term are not built, and the block closes up.
 
@@ -406,12 +430,18 @@ class PolarsEngine:
         coefficient) and all three drop the row, so the rule is stated once
         here rather than per provenance.
 
+        *kept* is the row set the share had terms for, which is
+        :meth:`_matrix_share`'s to answer and not this one's to re-derive: the
+        share it returns has been pruned of zero coefficients, so a row missing
+        from it may have had every term and every one of them zero. That row
+        stays — it asserts something the solver *can* act on, ``0 >= 10`` being
+        infeasible — where a row that never had a term goes.
+
         Labels are dense and the dual read-back reads a block by position, so a
         dropped row may not leave a gap: survivors renumber from *start* and
-        the row counter rewinds. Costs one ``n_unique`` on an in-memory frame
-        when nothing is dropped, which is every correct model.
+        the row counter rewinds. Costs one comparison when nothing is dropped,
+        which is every correct model.
         """
-        kept = matrix.get_column('row').unique()
         if kept.len() == rows.height:
             return rows, matrix, start + rows.height
 
@@ -704,17 +734,44 @@ def _without_zeros(matrix: pl.DataFrame) -> pl.DataFrame:
     a parameter that spells its zeros out reaches here as this, and on a table
     that is mostly zeros it is most of the matrix.
 
-    **After the termless rule, never before it.** A row whose every coefficient
-    is zero still asserts something — ``0 >= 10`` is infeasible — so it must
-    keep its place and its bounds and simply own no entries. Pruning earlier
-    would let :meth:`~PolarsEngine._drop_termless_rows` read it as a row with no
-    terms and drop it, turning an infeasible model into a feasible one.
+    **A pruned share can no longer say which rows had terms**, and a row whose
+    every coefficient is zero still asserts something — ``0 >= 10`` is
+    infeasible — so it keeps its place and its bounds and simply owns no
+    entries. :meth:`~PolarsEngine._matrix_share` reads that row set off the
+    stack before pruning and hands it on; deriving it from the pruned share
+    instead would drop such a row and turn an infeasible model into a feasible
+    one.
 
     Nulls cannot be here: a null coefficient is an undefined divisor and
     :meth:`~PolarsEngine._refuse_undefined_divisors` has already refused the
     build over it, which is why the comparison can be a bare ``!= 0``.
     """
     return matrix.filter(pl.col('coeff') != 0)
+
+
+def _pruned(matrix: pl.DataFrame) -> tuple[pl.DataFrame, pl.Series | None]:
+    """*matrix* without its zeros, and the rows it had before losing them.
+
+    Behind a probe, like everything else in :meth:`PolarsEngine._matrix_share`:
+    filtering leaves a chunked frame and the ``shift(1)`` probes downstream pay
+    at every boundary (#576), so a share with no zero to drop must not pay a
+    rechunk to discover that. The row set comes back only when the prune
+    actually ran, because only then can the pruned frame no longer answer it —
+    and reading it unconditionally costs a hash of the *unaggregated* stack on
+    every model, which is the whole of a wide build's regression.
+
+    Returns:
+        The pruned matrix and the rows that owned an entry before it, or the
+        matrix unchanged and ``None`` when there was nothing to prune.
+    """
+    if not matrix.select(pl.col('coeff').eq(0).any()).item():
+        return matrix, None
+    return _without_zeros(matrix).rechunk(), matrix.get_column('row').unique()
+
+
+def _rows_of(matrix: pl.DataFrame, before: pl.Series | None) -> pl.Series:
+    """The rows that had a term: *before* where a prune took the answer away."""
+    return matrix.get_column('row').unique() if before is None else before
 
 
 def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
