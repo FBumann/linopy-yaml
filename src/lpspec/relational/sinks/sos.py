@@ -24,13 +24,21 @@ the same slice either way.
 order, so every question about a set — where it starts, where it ends, which
 binary a member reaches — is a comparison against the neighbouring row, and the
 rows it emits are produced in the order CSR wants them.
+
+**It asks them in numpy rather than in polars**, the one place this lane
+departs from the rest of the sink (``tables._scattered`` and the engine's own
+CSR index are the precedents): every question above is a scan or a scatter over
+one contiguous buffer, where an expression frame would carry a dozen columns
+across the whole member stream to answer them — a factor of two at 2M members
+(#687).
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+import numpy as np
 import polars as pl
 
 from lpspec.errors import DataError
@@ -39,16 +47,7 @@ from lpspec.relational.sinks.tables import SENSE, ModelTables
 if TYPE_CHECKING:
     from typing import Any
 
-#: Scratch columns of the member frame every projection below reads. The space
-#: keeps them unrepresentable as a stream's own column name.
-_CARDINALITY = '#cardinality row'
-_CLOSES = '#closes'
-_ENTRIES = '#entries'
-_FIRST = '#first in set'
-_HOLDS = '#holds a binary'
-_LAST = '#last in set'
-_M = '#big m'
-_OPENS = '#opens'
+    import numpy.typing as npt
 
 
 def reformulated(model: ModelTables) -> ModelTables:
@@ -70,24 +69,58 @@ def reformulated(model: ModelTables) -> ModelTables:
             bound — neither is a set a big-M can stand in for.
     """
     members = _members(model)
-    binaries = int(members.get_column(_HOLDS).sum())
-    cardinality = members.filter(pl.col(_HOLDS))
-    rows = members.height + cardinality.get_column('set').n_unique()
+    binaries = len(members.cardinality)
+    linking, sets = len(members.entries), len(members.set_widths)
 
     return replace(
         model,
         cols=pl.concat([model.cols, _binary_columns(binaries, model.cols)]),
-        rows=pl.concat([model.rows, _rows(members.height, rows, model)]),
-        matrix=pl.concat([model.matrix, _linking_matrix(members), _cardinality_matrix(cardinality)]),
+        rows=pl.concat([model.rows, _rows(linking, linking + sets, model)]),
+        matrix=pl.concat([model.matrix, _linking_matrix(members), _cardinality_matrix(members)]),
         sos=model.sos.clear(),
-        row_starts=_row_starts(model, members, cardinality),
+        row_starts=_row_starts(model, members),
         column_count=model.column_count + binaries,
-        row_count=model.row_count + rows,
+        row_count=model.row_count + linking + sets,
     )
 
 
-def _members(model: ModelTables) -> pl.DataFrame:
-    """Every member of every set, with the rows and columns it is about to make.
+@dataclass(frozen=True)
+class _Members:
+    """Every member of every set, with the row and column it is about to make.
+
+    One pass over the stream produces the whole arithmetic, so each frame
+    below is a scatter into a buffer rather than a second walk over the sets.
+
+    Attributes:
+        col: The model column each member already is, in ``(set, weight)``
+            order.
+        magnitude: :math:`-M_i`, the coefficient linking a member to the
+            binaries that admit it.
+        binary: The binary a member opens — or, where it opens none, the next
+            one to be assigned, which is one past the segment closing into it.
+        closes: Whether a segment closes into a member — every member of a
+            SOS2 set but its first.
+        entries: How many matrix entries a member's linking row holds: its own
+            column, plus the segment it opens and the one closing into it,
+            each where there is one.
+        cardinality: Every binary, in set order, which is the whole of the
+            cardinality block's columns.
+        set_widths: How many of them each set owns — one cardinality row's
+            width, counted where the counting is free rather than off the
+            finished block.
+    """
+
+    col: npt.NDArray[Any]
+    magnitude: npt.NDArray[np.float64]
+    binary: npt.NDArray[Any]
+    closes: npt.NDArray[np.bool_]
+    entries: npt.NDArray[np.int64]
+    cardinality: npt.NDArray[Any]
+    set_widths: npt.NDArray[np.int64]
+
+
+def _members(model: ModelTables) -> _Members:
+    """The stream read once into the arithmetic every frame below scatters.
 
     **A set's shape is read off its edges**, never off a group-by: a member is
     the first of its set when the row above belongs to another and the last
@@ -96,65 +129,87 @@ def _members(model: ModelTables) -> pl.DataFrame:
     dropped whole (one nonzero is already at most two, and there is no segment
     to hold a binary; linopy returns early on the same case).
 
-    Which binaries a member reaches is the running count of those assigned
-    before it: its own is the next, and the segment closing into it the one
-    before that — the previous member of a SOS2 set always holding one.
+    Which binary a member reaches is the running count of those assigned
+    before it, its own being the next to be assigned.
+
+    **Nothing is dropped unless a set is that singleton**, which no common
+    shape has, so whether any is is asked before every array is compacted for
+    the answer.
 
     Raises:
         DataError: A member a big-M cannot stand in for.
     """
-    at = model.sos.get_column('col')
-    members = model.sos.with_columns(
-        model.cols.get_column('lb').gather(at),
-        pl.min_horizontal(model.cols.get_column('ub').gather(at), pl.col('big_m')).alias(_M),
-        (pl.col('set') != pl.col('set').shift(1)).fill_null(True).alias(_FIRST),
-        (pl.col('set') != pl.col('set').shift(-1)).fill_null(True).alias(_LAST),
-    )
-    _refuse_unbounded(members)
+    col = model.sos.get_column('col').to_numpy()
+    magnitude = np.minimum(model.cols.get_column('ub').to_numpy()[col], model.sos.get_column('big_m').to_numpy())
+    _refuse_unbounded(model, col, magnitude)
 
-    members = members.filter((pl.col('type') == 1) | pl.col(_FIRST).not_() | pl.col(_LAST).not_()).with_columns(
-        ((pl.col('type') == 1) | pl.col(_LAST).not_()).alias(_HOLDS),
-        ((pl.col('type') == 2) & pl.col(_FIRST).not_()).alias(_CLOSES),
-    )
-    column, row = model.matrix.schema['col'], model.rows.schema['row']
-    assigned = pl.col(_HOLDS).cast(pl.Int64)
-    before = (assigned.cum_sum() - assigned + model.column_count).cast(column)
-    return members.with_columns(
-        pl.when(pl.col(_HOLDS)).then(before).alias(_OPENS),
-        pl.when(pl.col(_CLOSES)).then(before - 1).alias(_CLOSES),
-        (assigned + pl.col(_CLOSES).cast(pl.Int64) + 1).alias(_ENTRIES),
-        (
-            pl.col(_FIRST).cum_sum().cast(row) + (model.row_count + pl.len() - 1)  # the linking rows come first
-        ).alias(_CARDINALITY),
+    first, last = _edges(model.sos.get_column('set').to_numpy())
+    one = model.sos.get_column('type').to_numpy() == 1
+    kept = one | ~first | ~last
+    if not kept.all():
+        first, last, one, col, magnitude = (v[kept] for v in (first, last, one, col, magnitude))
+
+    opens, closes = one | ~last, ~one & ~first
+    binary = (np.cumsum(opens, dtype=np.int64) - opens + model.column_count).astype(col.dtype)
+    holders = np.flatnonzero(first[opens])
+    return _Members(
+        col=col,
+        magnitude=-magnitude,
+        binary=binary,
+        closes=closes,
+        entries=opens.astype(np.int64) + closes + 1,
+        cardinality=binary[opens],
+        set_widths=np.diff(holders, append=int(np.count_nonzero(opens))),
     )
 
 
-def _refuse_unbounded(members: pl.DataFrame) -> None:
+def _edges(sets: npt.NDArray[Any]) -> tuple[npt.NDArray[np.bool_], npt.NDArray[np.bool_]]:
+    """Which members begin and which end a run of one set.
+
+    The one comparison everything else here is derived from, and the reason
+    the stream's ``(set, weight)`` order is a contract rather than a
+    convenience.
+    """
+    first = np.empty(len(sets), dtype=np.bool_)
+    first[:1] = True
+    np.not_equal(sets[1:], sets[:-1], out=first[1:])
+    last = np.empty_like(first)
+    last[-1:] = True
+    last[:-1] = first[1:]
+    return first, last
+
+
+def _refuse_unbounded(model: ModelTables, col: npt.NDArray[Any], magnitude: npt.NDArray[np.float64]) -> None:
     """Refuse a member no finite big-M can stand in for — linopy's two conditions.
 
     Asked of the big-M rather than of the bound, in that order for the reason
     the order exists: ``big_m:`` is what a caller declares *because* the bound
     is open, so asking first would refuse the model the answer was given for.
 
+    The first is asked of the whole model's bounds before it is asked of the
+    members: no member can have a negative lower bound where no column does,
+    and that is one comparison against a column already in hand rather than a
+    gather of one bound per member.
+
     Raises:
         DataError: Either condition, counted rather than located: a member is
             a column index, and what a caller acts on is the bound.
     """
-    for condition, what, fix in (
+    lb = model.cols.get_column('lb')
+    for offending, what, fix in (
         (
-            pl.col('lb') < 0,
+            int(np.count_nonzero(lb.to_numpy()[col] < 0)) if lb.lt(0).any() else 0,
             'a negative lower bound',
             'A set says which members are nonzero, and the big-M form a sink without SOS is handed '
             'can only say that of a non-negative variable. Give the variable `bounds: {lower: 0}`',
         ),
         (
-            pl.col(_M).is_infinite(),
+            int(np.count_nonzero(np.isinf(magnitude))),
             'no upper bound and no big_m',
             'so there is no finite coefficient to link them to a binary with. Bound the variable, or '
             'set `big_m:` on the sos block',
         ),
     ):
-        offending = members.select(condition.sum()).item()
         if offending:
             raise DataError(
                 f'{offending} SOS member(s) have {what}: {fix} — or solve with a sink that takes '
@@ -162,42 +217,41 @@ def _refuse_unbounded(members: pl.DataFrame) -> None:
             )
 
 
-def _linking_matrix(members: pl.DataFrame) -> pl.DataFrame:
+def _linking_matrix(members: _Members) -> pl.DataFrame:
     """``x_i - M_i * (the binaries that admit it) <= 0``, one row per member.
 
     **Each member owns a span, and its entries are written into it**, which is
     what keeps the block in CSR order with nothing sorted: a row holds its own
     column, then the segment closing into it, then the segment it opens, and
-    those are already ascending. So every destination is arithmetic on the
-    member's own width, and the three writes are scatters into it — the shape
-    :func:`~lpspec.relational.sinks.tables._scattered` and the engine's CSR
-    index are built with. Sorting the block in polars instead is the largest
-    thing here, and a list column per member exploded costs more than the sort.
+    those are already ascending — a model column comes before any appended
+    binary, and a closing segment is the one before the opening. Sorting the
+    block in polars instead is the largest thing here.
+
+    So a span is **broadcast and then corrected**, twice, rather than
+    scattered entry by entry: every entry of a member's row but the first
+    carries :math:`-M_i` and names the binary it opens, and the one entry that
+    is neither is its own. What is left over is the segment closing into a
+    member, which is the binary before that one — the previous member of a
+    SOS2 set always opening one, only a last member not — so it is the same
+    broadcast, decremented where it lands.
     """
-    import numpy as np
+    at = np.cumsum(members.entries) - members.entries
+    col = np.repeat(members.binary, members.entries)
+    coeff = np.repeat(members.magnitude, members.entries)
 
-    widths = members.get_column(_ENTRIES).to_numpy()
-    at = np.cumsum(widths) - widths
-    own = members.get_column('col').to_numpy()
-    col = np.empty(int(widths.sum()), dtype=own.dtype)
-    coeff = np.empty(len(col), dtype=np.float64)
-    magnitude = -members.get_column(_M).to_numpy()
-
-    col[at] = own
+    col[at] = members.col
     coeff[at] = 1.0
-    for slot, present in ((_CLOSES, at + 1), (_OPENS, at + widths - 1)):
-        reached = members.get_column(slot).is_not_null().to_numpy()
-        col[present[reached]] = members.get_column(slot).drop_nulls().to_numpy()
-        coeff[present[reached]] = magnitude[reached]
+    col[(at + 1)[members.closes]] -= 1
     return pl.DataFrame({'col': col, 'coeff': coeff})
 
 
-def _cardinality_matrix(cardinality: pl.DataFrame) -> pl.DataFrame:
+def _cardinality_matrix(members: _Members) -> pl.DataFrame:
     """``sum(a set's binaries) <= 1``, one row per set.
 
-    In order already: sets ascend, and within one, so do the binaries.
+    Every binary, keyed by its set's row rather than by the member that opened
+    it. In order already: sets ascend, and within one, so do the binaries.
     """
-    return cardinality.select(pl.col(_OPENS).alias('col'), pl.lit(1.0).alias('coeff'))
+    return pl.DataFrame({'col': members.cardinality, 'coeff': np.ones(len(members.cardinality))})
 
 
 def _rows(linking: int, total: int, model: ModelTables) -> pl.DataFrame:
@@ -222,21 +276,12 @@ def _binary_columns(count: int, cols: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def _row_starts(model: ModelTables, members: pl.DataFrame, cardinality: pl.DataFrame) -> Any:
+def _row_starts(model: ModelTables, members: _Members) -> Any:
     """The CSR index, extended by what each appended row owns.
 
-    Counted where the counting is free rather than off the finished block: a
-    linking row's width is the member's own arithmetic, and a cardinality
-    row's is the length of a run in a column already sorted by set. Reading it
-    back off the entries would mean a pass over every one of them, which is
-    the largest thing here.
+    Counted where the counting was free rather than off the finished block:
+    reading it back off the entries would mean a pass over every one of them,
+    which is the largest thing here.
     """
-    import numpy as np
-
-    lengths = np.concatenate(
-        [
-            members.get_column(_ENTRIES).to_numpy(),
-            cardinality.get_column('set').rle().struct.field('len').to_numpy(),
-        ]
-    )
+    lengths = np.concatenate([members.entries, members.set_widths])
     return np.concatenate([model.row_starts, model.row_starts[-1] + np.cumsum(lengths)])
