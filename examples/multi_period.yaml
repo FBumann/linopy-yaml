@@ -1,16 +1,3 @@
-# Multi-period investment on a *flat* snapshot index.
-#
-# `snapshot` is one dimension carrying `period` as a coordinate, rather than a
-# `period x snapshot` rectangle. That is what lets the periods be **ragged** —
-# four snapshots in 2030 and two in 2050 here — because a coordinate is a
-# per-row column and nothing assumes every period has the same shape. A
-# rectangle cannot say it: it forces one resolution on every period.
-#
-# `within_cap` reads the mapping the other way round from a grouping: capacity
-# is decided per period and binds at every snapshot in that period, so a
-# coarse-dim quantity is read at a fine-dim row. A per-period *parameter* could
-# be pre-joined in data prep; `p_nom` is a variable, and a variable is not data
-# to be joined.
 dimensions:
   snapshot:
     dtype: int

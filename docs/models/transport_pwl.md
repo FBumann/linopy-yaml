@@ -126,7 +126,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     # Dantzig's transportation problem with economies of scale — GAMS model
     # library `trnspwl`. Shipping cost grows as sqrt(x) rather than linearly, so a
     # big consignment is cheaper per unit. Optimum 8.786852757777865, from linopy's
-    # own piecewise formulation. See docs/models/index.md.
+    # own piecewise formulation.
 
     dimensions:
       plant:
@@ -158,8 +158,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         bounds:
           lower: 0
       # What the objective is charged on: sqrt(shipment), read off the curve
-      # rather than computed. `sqrt` is not sayable in the language and does not
-      # need to be — the discretisation is the model GAMS publishes.
+      # rather than computed — the discretisation is the model GAMS publishes.
       scaled:
         foreach: [plant, market]
         bounds:

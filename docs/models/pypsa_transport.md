@@ -67,7 +67,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     ```yaml
     # PyPSA linear optimal power flow, rung 1: transport model, linear marginal
-    # cost, no KVL. Optimum 22000.0, from PyPSA itself. See docs/models/index.md.
+    # cost, no KVL. Optimum 22000.0, from PyPSA itself.
 
     dimensions:
       snapshot:

@@ -90,16 +90,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # Dispatch with piecewise-linear generation costs via the piecewise: block.
-    #
-    # Each generator has its own convex cost curve: the breakpoint parameters
-    # carry [generator, bp], so curves vary per generator — something flat
-    # breakpoint lists cannot express. With convex: true the expansion emits no
-    # binaries (pure-LP convex hull, exact for convex curves under minimisation)
-    # and the model stays relational-eligible as an LP. Drop convex: true for
-    # nonconvex curves — the expansion then adds segment binaries + adjacency,
-    # and the model becomes a (still relational-eligible) MILP.
-
     dimensions:
       snapshot:
         dtype: int

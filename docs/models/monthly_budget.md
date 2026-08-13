@@ -111,9 +111,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       balance:
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
-      # The per-month total, and the whole point of this model: `month` is a
-      # coordinate the snapshot dimension declares, so the grouping is a column in
-      # the snapshot index rather than anything the language knows about calendars.
       monthly_budget:
         foreach: [month, generator]
         expression: sum(p, over=snapshot, group_by=month) <= monthly_cap

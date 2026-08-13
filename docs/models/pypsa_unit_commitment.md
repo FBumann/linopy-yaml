@@ -111,7 +111,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     ```yaml
     # PyPSA unit commitment: binary status per generator per snapshot, with
     # start-up and shut-down charges. Optimum 24900.0, from PyPSA itself.
-    # See docs/models/index.md.
 
     dimensions:
       snapshot:
