@@ -41,6 +41,7 @@ nav:
   - Writing a model: guide.md
   - Models:
       - models/index.md
+      - Preparing the data: models/data.md
       - Teaching models:
           - dispatch: models/dispatch.md
           - storage: models/storage.md

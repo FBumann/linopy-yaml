@@ -70,6 +70,8 @@ $$\underline{f}_{\ell} \le f_{s,\ell} \le \bar f_{\ell} \qquad \forall\thinspace
 </details>
 <!-- math:end -->
 
+The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+
 === "lpspec"
 
     ```yaml

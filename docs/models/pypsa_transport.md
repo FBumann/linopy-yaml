@@ -61,6 +61,8 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
 </details>
 <!-- math:end -->
 
+The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+
 === "lpspec"
 
     ```yaml
