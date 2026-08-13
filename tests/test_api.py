@@ -25,16 +25,20 @@ from lpspec.language.model import Model
 from tests.conftest import schema_of, solve_lp_file
 
 
-def test_solve(dispatch_yaml, dispatch_frame_inputs):
+@pytest.fixture
+def dispatch_solution(dispatch_yaml, dispatch_frame_inputs):
+    """The dispatch model solved on the native lane, closed after the test."""
     sources, coords = dispatch_frame_inputs
-    result = lps.solve(dispatch_yaml, sources, coords=coords)
-    try:
-        assert result.is_ok
-        assert np.isfinite(result.objective)
-        balance = result.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
-        assert np.allclose(balance['value'], sources['load']['value'])
-    finally:
-        result.close()
+    with lps.solve(dispatch_yaml, sources, coords=coords) as result:
+        yield result
+
+
+def test_solve(dispatch_solution, dispatch_frame_inputs):
+    sources, _coords = dispatch_frame_inputs
+    assert dispatch_solution.is_ok
+    assert np.isfinite(dispatch_solution.objective)
+    balance = dispatch_solution.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
+    assert np.allclose(balance['value'], sources['load']['value'])
 
 
 def test_build_context_manager_and_write(dispatch_yaml, dispatch_frame_inputs, tmp_path):
@@ -56,17 +60,12 @@ def test_parquet_path_sources(dispatch_yaml, dispatch_frame_inputs, tmp_path):
         frame.write_parquet(p)
         paths[name] = str(p)
 
-    result = lps.solve(dispatch_yaml, paths, coords=coords)
-    try:
+    with lps.solve(dispatch_yaml, paths, coords=coords) as result:
         assert result.is_ok
-    finally:
-        result.close()
+        objective = result.objective
 
-    ref = lps.solve(dispatch_yaml, sources, coords=coords)
-    try:
-        assert result.objective == pytest.approx(ref.objective, rel=1e-9)
-    finally:
-        ref.close()
+    with lps.solve(dispatch_yaml, sources, coords=coords) as ref:
+        assert objective == pytest.approx(ref.objective, rel=1e-9)
 
 
 def test_runtime_is_linopy_free(dispatch_yaml):
@@ -223,16 +222,14 @@ def test_write_suffix_dispatch(dispatch_yaml, dispatch_frame_inputs, tmp_path):
         lps.write(dispatch_yaml, sources, tmp_path / 'm.nc', coords=coords)
 
 
-def test_solution_to_parquet(dispatch_yaml, dispatch_frame_inputs, tmp_path):
+def test_solution_to_parquet(dispatch_solution, tmp_path):
     """One file per variable, tidy, streamed straight to disk."""
-    sources, coords = dispatch_frame_inputs
-    result = lps.solve(dispatch_yaml, sources, coords=coords)
-    assert result.is_ok
-    written = result.to_parquet(tmp_path / 'solution')
+    assert dispatch_solution.is_ok
+    written = dispatch_solution.to_parquet(tmp_path / 'solution')
     assert set(written) == {'p'}
     frame = pl.read_parquet(written['p'])
     assert set(frame.columns) == {'snapshot', 'generator', 'value'}
-    assert frame.height == result.primal('p').height
+    assert frame.height == dispatch_solution.primal('p').height
 
 
 def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_frame_inputs, tmp_path):
@@ -307,20 +304,18 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
         assert first.objective != pytest.approx(second.objective)
 
 
-def test_primal_is_a_frame_and_to_pandas_is_the_bridge(dispatch_yaml, dispatch_frame_inputs):
+def test_primal_is_a_frame_and_to_pandas_is_the_bridge(dispatch_solution):
     """A frame is the shape results come in; pandas is an exit, not a shape.
 
     The two must describe the same table — the bridge is a conversion, not a
     second query with its own opinion about column order or dtypes.
     """
-    sources, coords = dispatch_frame_inputs
-    result = lps.solve(dispatch_yaml, sources, coords=coords)
-    frame = result.primal('p')
+    frame = dispatch_solution.primal('p')
     assert isinstance(frame, pl.DataFrame)
     assert frame.columns == ['snapshot', 'generator', 'value']
 
     pandas = pytest.importorskip('pandas')
-    converted = result.to_pandas('p')
+    converted = dispatch_solution.to_pandas('p')
     assert isinstance(converted, pandas.DataFrame)
     assert list(converted.columns) == frame.columns
     assert len(converted) == frame.height
@@ -342,15 +337,12 @@ def test_no_helper_registry_anywhere():
     assert not hasattr(helpers, '_REGISTRY')
 
 
-def test_solution_to_dataarray(dispatch_yaml, dispatch_frame_inputs):
+def test_solution_to_dataarray(dispatch_solution):
     """Long tables are right for joining, wrong for the array math that
     post-processing is mostly made of. `to_dataarray` is the bridge."""
     pytest.importorskip('xarray')
-    sources, coords = dispatch_frame_inputs
-
-    with lps.solve(dispatch_yaml, sources, coords=coords) as result:
-        arr = result.to_dataarray('p')
-        tidy = result.to_pandas('p')
+    arr = dispatch_solution.to_dataarray('p')
+    tidy = dispatch_solution.to_pandas('p')
 
     assert arr.name == 'p', "named for the variable, not 'value' — the tidy column it came from"
     assert sorted(arr.dims) == ['generator', 'snapshot']
@@ -361,14 +353,11 @@ def test_solution_to_dataarray(dispatch_yaml, dispatch_frame_inputs):
     )
 
 
-def test_solution_to_dataset(dispatch_yaml, dispatch_frame_inputs):
+def test_solution_to_dataset(dispatch_solution):
     """Several variables at once, each keeping its own dims."""
     pytest.importorskip('xarray')
-    sources, coords = dispatch_frame_inputs
-
-    with lps.solve(dispatch_yaml, sources, coords=coords) as result:
-        ds = result.to_dataset('p')
-        tidy = result.to_pandas('p')
+    ds = dispatch_solution.to_dataset('p')
+    tidy = dispatch_solution.to_pandas('p')
 
     assert list(ds.data_vars) == ['p']
     assert sorted(ds['p'].dims) == ['generator', 'snapshot']
@@ -414,13 +403,12 @@ def test_to_dataset_defaults_to_every_variable():
 
 
 @pytest.mark.parametrize(
-    ('mistake', 'raw'),
+    'raw',
     [
-        pytest.param('unknown key', {'dimensionz': {}}, id='unknown-key'),
-        pytest.param('bad dtype', {'dimensions': {'g': {'dtype': 'complex'}}}, id='bad-dtype'),
-        pytest.param('unknown version', {'version': 99}, id='unknown-version'),
+        pytest.param({'dimensionz': {}}, id='unknown-key'),
+        pytest.param({'dimensions': {'g': {'dtype': 'complex'}}}, id='bad-dtype'),
+        pytest.param({'version': 99}, id='unknown-version'),
         pytest.param(
-            'undeclared name',
             {
                 'dimensions': {'g': {'dtype': 'str', 'values': ['a']}},
                 'constraints': {'c': {'foreach': ['g'], 'expression': 'nope <= 1'}},
@@ -429,7 +417,7 @@ def test_to_dataset_defaults_to_every_variable():
         ),
     ],
 )
-def test_a_wrong_model_raises_one_tree(mistake: str, raw: dict[str, object], tmp_path):
+def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
     """Every documented door answers with `LpspecError` (#527).
 
     Model checking happens in two places — pydantic's validators and the
@@ -450,12 +438,9 @@ def test_a_wrong_model_raises_one_tree(mistake: str, raw: dict[str, object], tmp
         'Model.model_validate_json': lambda: Model.model_validate_json(json.dumps(raw)),
     }
     for door, call in doors.items():
-        with pytest.raises(lps.LpspecError):
+        with pytest.raises(lps.LpspecError) as ei:
             call()
-        try:
-            call()
-        except lps.LpspecError as exc:
-            assert 'errors.pydantic.dev' not in str(exc), f"{door}: {mistake} leaks pydantic's envelope"
+        assert 'errors.pydantic.dev' not in str(ei.value), f"{door} leaks pydantic's envelope"
 
 
 def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs):

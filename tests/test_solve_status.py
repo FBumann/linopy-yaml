@@ -159,7 +159,8 @@ def test_reading_results_without_a_solution_raises(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _knapsack():
+@pytest.fixture(scope='module')
+def knapsack():
     """A MIP big enough that HiGHS does not finish it instantly."""
     import random
 
@@ -180,24 +181,24 @@ def _knapsack():
     return model, sources
 
 
-def test_solver_options_reach_the_solver():
+def test_solver_options_reach_the_solver(knapsack):
     """Forwarded verbatim, the way linopy's are. `time_limit=0` is the cheapest
     proof: without it this model solves to optimality."""
-    model, sources = _knapsack()
+    model, sources = knapsack
     with lps.solve(model, sources, solver_options={'time_limit': 0.0}) as result:
         assert result.termination_condition == 'time_limit'
     with lps.solve(model, sources) as result:
         assert result.termination_condition == 'optimal'
 
 
-def test_a_time_limit_with_no_incumbent_is_ok_but_unreadable():
+def test_a_time_limit_with_no_incumbent_is_ok_but_unreadable(knapsack):
     """The gap `is_ok` alone cannot see, and where we go beyond linopy.
 
     A MIP stopped before it found any feasible point rolls up to `ok` —
     linopy's `safe_get_solution` would read its zero-filled `col_value` as an
     answer. `has_primal` carries the solver's own verdict instead.
     """
-    model, sources = _knapsack()
+    model, sources = knapsack
     with lps.solve(model, sources, solver_options={'time_limit': 0.0}) as result:
         assert result.is_ok, "linopy's rollup says the run was not an error"
         assert not result.has_primal, 'but nothing was found'
@@ -206,8 +207,8 @@ def test_a_time_limit_with_no_incumbent_is_ok_but_unreadable():
             result.primal('x')
 
 
-def test_an_optimal_solve_is_both_ok_and_readable():
-    model, sources = _knapsack()
+def test_an_optimal_solve_is_both_ok_and_readable(knapsack):
+    model, sources = knapsack
     with lps.solve(model, sources) as result:
         assert result.is_ok
         assert result.has_primal

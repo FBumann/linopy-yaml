@@ -12,9 +12,7 @@ import pytest
 from lpspec.language.expansion import parse_and_expand
 from lpspec.language.expression_parser import parse_expression
 from lpspec.language.model import Model
-from lpspec.language.validation import load_model
-from tests.differential import differential
-from tests.oracle import pd
+from tests.conftest import DISPATCH_MODEL, schema_of
 
 WEIGHTED_SUM = {
     'args': ['array', 'weights'],
@@ -28,41 +26,12 @@ def make_schema(
     macros: dict | None = None,
     **overrides,
 ) -> Model:
-    base = {
-        'dimensions': {
-            'snapshot': {'dtype': 'int'},
-            'generator': {'values': ['wind', 'gas']},
-        },
-        'parameters': {
-            'p_max': {'dims': ['generator']},
-            'cost': {'dims': ['generator']},
-            'load': {'dims': ['snapshot']},
-        },
-        'variables': {
-            'p': {
-                'foreach': ['snapshot', 'generator'],
-                'bounds': {'lower': 0, 'upper': 'p_max'},
-            }
-        },
-        'constraints': {
-            'balance': {
-                'foreach': ['snapshot'],
-                'expression': 'sum(p, over=generator) == load',
-            }
-        },
-        'objectives': {
-            'total': {
-                'sense': 'minimize',
-                'expression': 'sum(p * cost, over=generator)',
-            }
-        },
-    }
+    """``DISPATCH_MODEL`` as a loaded schema, with whole sections swapped in."""
     if expressions is not None:
-        base['expressions'] = expressions
+        overrides['expressions'] = expressions
     if macros is not None:
-        base['macros'] = macros
-    base.update(overrides)
-    return load_model(base)
+        overrides['macros'] = macros
+    return schema_of(DISPATCH_MODEL, **overrides)
 
 
 # ---------------------------------------------------------------------------
@@ -84,19 +53,22 @@ def test_named_expressions_nest():
     assert got == want
 
 
-def test_named_expression_cycle_raises():
-    with pytest.raises(ValueError, match='circular expression reference: a -> b -> a'):
-        make_schema({'a': 'b + 1', 'b': 'a + 1'})
-
-
-def test_named_expression_no_comparison():
-    with pytest.raises(ValueError, match='must not contain a comparison'):
-        make_schema({'bad': 'p == load'})
-
-
-def test_name_collision_rejected_at_schema_level():
-    with pytest.raises(ValueError, match='collides with the parameter of the same name'):
-        make_schema({'load': 'p * cost'})
+@pytest.mark.parametrize(
+    ('expressions', 'match'),
+    [
+        pytest.param({'a': 'b + 1', 'b': 'a + 1'}, 'circular expression reference: a -> b -> a', id='a-cycle'),
+        pytest.param({'bad': 'p == load'}, 'must not contain a comparison', id='a-comparison'),
+        pytest.param({'load': 'p * cost'}, 'collides with the parameter of the same name', id='a-parameter-collision'),
+        pytest.param(
+            {'broken': 'sum(nope, over=generator)'},
+            "Named expression 'broken'",
+            id='a-typo-in-a-named-expression',
+        ),
+    ],
+)
+def test_a_bad_named_expression_is_refused_at_load(expressions, match):
+    with pytest.raises(ValueError, match=match):
+        make_schema(expressions)
 
 
 def test_expand_handles_comparison_at_top():
@@ -104,11 +76,6 @@ def test_expand_handles_comparison_at_top():
     got = parse_and_expand('total_gen == load', schema)
     want = parse_expression('sum(p, over=generator) == load')
     assert got == want
-
-
-def test_validation_reports_bad_named_expression():
-    with pytest.raises(ValueError, match="Named expression 'broken'"):
-        make_schema({'broken': 'sum(nope, over=generator)'})
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +242,14 @@ objectives:
 
 def test_a_macro_and_a_named_expression_mean_the_same_on_both_lanes():
     """One end-to-end test carries the whole feature: both constructs expand to
-    core AST before dispatch, so if the lanes agree here they agree at all."""
+    core AST before dispatch, so if the lanes agree here they agree at all.
+
+    Imported here rather than at module scope so this one differential test is
+    all that the [linopy] extra gates — the rest of the module is pure language.
+    """
+    from tests.differential import differential
+    from tests.oracle import pd
+
     rng = np.random.default_rng(5)
     n_s = 24
     data = {

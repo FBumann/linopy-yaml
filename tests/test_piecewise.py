@@ -18,11 +18,14 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml as pyyaml
 
+import lpspec as lps
+from lpspec.errors import DimensionError
 from lpspec.language.piecewise import PiecewiseExpansionError, expand_piecewise
 from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources, validate_piecewise_data
-from tests.conftest import override, raw_of, schema_of
+from tests.conftest import by_coord, override, raw_of, schema_of
 from tests.differential import differential
 from tests.oracle import lpspec_linopy, pd
 
@@ -61,6 +64,13 @@ objectives:
     sense: minimize
     expression: sum(op_cost, over=snapshot)
 """
+
+#: The same model with the hull instead of the curve — `convex: true` and
+#: nothing else changed.
+CONVEX_MODEL = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.convex': True})
+
+#: Breakpoints whose x goes backwards — the shape the curvature guard refuses.
+BACKWARDS_BP_X = pd.Series([0.0, 50.0, 40.0], index=pd.RangeIndex(3, name='bp'))
 
 
 #: two dims in the frame, so the emitted ``foreach`` has an order to get wrong.
@@ -136,32 +146,27 @@ def test_the_solution_sits_on_the_curve_not_on_its_hull(nonconvex_inputs):
     with differential(NONCONVEX_YAML, data, coords) as run:
         assert run.oracle == pytest.approx(expected, rel=1e-6), 'ON the curve, not on the hull'
 
-        cost = run.result.to_pandas('op_cost').set_index('snapshot')['value']
+        cost = by_coord(run.result, 'op_cost', 'snapshot')
         for s, load_v in data['load'].items():
             assert cost[s] == pytest.approx(curve(load_v, data['bp_x'], data['bp_y']), abs=1e-6)
 
 
-def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs, tmp_path):
+def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs):
     """`convex: true` drops the binaries, and says so in the answer.
 
     The same concave curve relaxes to its hull, whose lower envelope is the
     chord, so the objective must land below the curve.
     """
     data, coords = nonconvex_inputs
-    yaml_text = NONCONVEX_YAML.replace('over: bp', 'over: bp\n    convex: true')
 
-    program = lower_program(schema_of(yaml_text))
+    program = lower_program(schema_of(CONVEX_MODEL))
     assert all(v.variable_type == 'continuous' for v in program.variables), 'convex: true is a pure LP'
-
-    path = tmp_path / 'hull.yaml'
-    path.write_text(yaml_text)
-    m = lpspec_linopy.build(path, data=data, coords=coords)
-    m.solve(solver_name='highs', output_flag=False)
 
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
     chord = sum(0.55 * v for v in data['load'])  # the (100, 55) chord from the origin
-    assert float(m.objective.value) == pytest.approx(chord, rel=1e-6)
-    assert float(m.objective.value) < on_curve, 'the hull undercuts a concave curve'
+    with differential(CONVEX_MODEL, data, coords) as run:
+        assert run.oracle == pytest.approx(chord, rel=1e-6)
+        assert run.oracle < on_curve, 'the hull undercuts a concave curve'
 
 
 CHP_YAML = """
@@ -217,8 +222,8 @@ def test_three_links_all_track_the_same_curve_position():
     coords = {'snapshot': load.index, 'bp': power_bp.index}
 
     with differential(CHP_YAML, data, coords) as run:
-        fuel = run.result.to_pandas('fuel').set_index('snapshot')['value']
-        heat = run.result.to_pandas('heat').set_index('snapshot')['value']
+        fuel = by_coord(run.result, 'fuel', 'snapshot')
+        heat = by_coord(run.result, 'heat', 'snapshot')
         for s, load_v in load.items():
             assert fuel[s] == pytest.approx(curve(load_v, power_bp, fuel_bp), abs=1e-6)
             assert heat[s] == pytest.approx(curve(load_v, power_bp, heat_bp), abs=1e-6)
@@ -280,7 +285,7 @@ def test_active_gates_the_curve_off(nonconvex_inputs):
     data = {**data, 'on_flag': on_flag}
 
     with differential(GATED_YAML, data, coords) as run:
-        cost = run.result.to_pandas('op_cost').set_index('snapshot')['value']
+        cost = by_coord(run.result, 'op_cost', 'snapshot')
         for s in on_flag.index:
             expected = curve(data['load'][s], data['bp_x'], data['bp_y']) if on_flag[s] else 0.0
             assert cost[s] == pytest.approx(expected, abs=1e-6)
@@ -314,8 +319,8 @@ def test_breakpoints_may_vary_along_another_dim():
     lower_program(schema_of(example))
 
     with differential(example, data, coords) as run:
-        p = run.result.to_pandas('p').set_index(['snapshot', 'generator'])['value']
-        cost = run.result.to_pandas('op_cost').set_index(['snapshot', 'generator'])['value']
+        p = by_coord(run.result, 'p', 'snapshot', 'generator')
+        cost = by_coord(run.result, 'op_cost', 'snapshot', 'generator')
         for (s, g), pv in p.items():
             expected = curve(pv, bp_x.sel(generator=g), bp_y.sel(generator=g))
             assert cost[(s, g)] == pytest.approx(expected, abs=1e-5)
@@ -410,23 +415,30 @@ def test_an_inline_expression_is_a_legal_link():
     assert expanded.constraints['cost_curve_link0'].expression.startswith('(p * 2) ==')
 
 
-def test_a_link_naming_an_undeclared_parameter_is_refused():
-    raw = raw_of(NONCONVEX_YAML)
-    raw['piecewise']['cost_curve']['links'][1][1] = 'nope'
-    with pytest.raises(PiecewiseExpansionError, match="undeclared parameter 'nope'"):
-        expand_piecewise(schema_of(raw))
-
-
 @pytest.mark.parametrize(
     ('model', 'patch', 'match'),
     [
-        (
+        pytest.param(
             NONCONVEX_YAML,
             {'piecewise.cost_curve.links': [['p', 'bp_x', '<='], ['op_cost', 'bp_y', '>=']]},
             'at most one link',
+            id='at-most-one-link',
         ),
-        (CHP_YAML, {'piecewise.chp.convex': True}, 'exactly two links'),
-        (GATED_YAML, {'variables.u': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}}}, 'must be binary'),
+        pytest.param(
+            CHP_YAML, {'piecewise.chp.convex': True}, 'exactly two links', id='convex-needs-exactly-two-links'
+        ),
+        pytest.param(
+            GATED_YAML,
+            {'variables.u': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}}},
+            'must be binary',
+            id='active-must-be-binary',
+        ),
+        pytest.param(
+            NONCONVEX_YAML,
+            {'piecewise.cost_curve.links': [['p', 'bp_x'], ['op_cost', 'nope']]},
+            "undeclared parameter 'nope'",
+            id='undeclared-parameter',
+        ),
     ],
 )
 def test_a_malformed_block_is_refused(model, patch, match):
@@ -469,11 +481,6 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
     validate the file as written, which made ``lps.check()`` pass on a model
     ``lpspec_linopy.build`` refused: the same YAML, two answers (hard rule 3).
     """
-    import yaml as pyyaml
-
-    import lpspec as lps
-    from lpspec.errors import DimensionError
-
     raw = override(
         raw_of(NONCONVEX_YAML),
         **{'dimensions.zone': {'dtype': 'str'}, 'parameters.bp_y': {'dims': ['zone', 'bp']}},
@@ -506,7 +513,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
             id='convex-then-concave-the-hull-would-cut-corners',
         ),
         pytest.param(
-            {'bp_x': pd.Series([0.0, 50.0, 40.0], index=pd.RangeIndex(3, name='bp'))},
+            {'bp_x': BACKWARDS_BP_X},
             'strictly increasing',
             id='breakpoints-that-go-backwards',
         ),
@@ -514,7 +521,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
 )
 def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, breakpoints, match):
     data, _ = nonconvex_inputs
-    schema = schema_of(NONCONVEX_YAML, **{'piecewise.cost_curve.convex': True})
+    schema = schema_of(CONVEX_MODEL)
 
     with pytest.raises(PiecewiseExpansionError, match=match):
         validate_piecewise_data(schema, {**data, **breakpoints})
@@ -524,11 +531,11 @@ def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex
     """`tidy_sources` is the streaming lane's only door for data, so the guard
     has to live behind it too — not only in the eager loader."""
     data, coords = nonconvex_inputs
-    schema = schema_of(NONCONVEX_YAML, **{'piecewise.cost_curve.convex': True})
+    schema = schema_of(CONVEX_MODEL)
 
     validate_piecewise_data(schema, data)  # consistent (concave) curvature passes
 
-    bad = {**data, 'bp_x': pd.Series([0.0, 50.0, 40.0], index=pd.RangeIndex(3, name='bp'))}
+    bad = {**data, 'bp_x': BACKWARDS_BP_X}
     with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
         tidy_sources(schema, bad, coords)
 
@@ -629,8 +636,8 @@ def test_the_epigraph_pattern_needs_no_formulation_machinery(epigraph_inputs):
     assert all(v.variable_type == 'continuous' for v in program.variables), 'the epigraph pattern is a pure LP'
 
     with differential(EPIGRAPH_YAML, data, coords, lp=True) as run:
-        p = run.result.to_pandas('p').set_index(['snapshot', 'generator'])['value']
-        gc = run.result.to_pandas('gen_cost').set_index(['snapshot', 'generator'])['value']
+        p = by_coord(run.result, 'p', 'snapshot', 'generator')
+        gc = by_coord(run.result, 'gen_cost', 'snapshot', 'generator')
         slopes = data['seg_slope'].to_series().unstack('segment')
         icepts = data['seg_intercept'].to_series().unstack('segment')
         for (s, g), pv in p.items():

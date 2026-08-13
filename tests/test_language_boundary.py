@@ -8,32 +8,24 @@ Errors must carry the construct and its context, verbatim.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from lpspec.errors import LanguageError
 from lpspec.lowering import lower_program
-from tests.conftest import schema_of
-from tools import constructs
+from tests.conftest import EXAMPLES_DIR, MODEL_PATHS, schema_of
 
-DISPATCH = Path('examples/dispatch.yaml')
+DISPATCH = EXAMPLES_DIR / 'dispatch.yaml'
 
 
 def _objective(expression: str) -> dict:
     return {'objectives.total_cost.expression': expression}
 
 
-@pytest.mark.parametrize('path', [p for _, p in constructs.models()], ids=lambda p: p.name)
+@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)
 def test_every_shipped_example_is_inside_the_language(path):
     """The examples are the language's own claim about itself — one of them
     falling outside the streaming subset would be a documentation bug that
-    only shows up when a reader runs it.
-
-    The corpus is ``constructs.models()`` — the one list the gallery and the
-    construct matrix are also built from — rather than a glob of
-    ``examples/*.yaml``, which is not recursive and so silently skipped every
-    model under ``examples/ports/``."""
+    only shows up when a reader runs it."""
     lower_program(schema_of(path))
 
 

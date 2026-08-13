@@ -217,10 +217,10 @@ objectives:
 """
 
 
-def _partial_inputs(grp_labels):
-    """`item` carries coordinate `grp`; *grp_labels* is one label per item."""
+def _partial_inputs():
+    """`item` carries coordinate `grp`: i0 and i1 in group g0, i2 in none."""
     items = ['i0', 'i1', 'i2']
-    index = pd.DataFrame({'item': items, 'grp': grp_labels})
+    index = pd.DataFrame({'item': items, 'grp': ['g0', 'g0', None]})
     return (
         {  # relational sources
             'item': index,
@@ -246,7 +246,7 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
     """
     path = tmp_path / 'partial.yaml'
     path.write_text(PARTIAL_YAML)
-    sources, data, coords = _partial_inputs(['g0', 'g0', None])
+    sources, data, coords = _partial_inputs()
 
     with lps.solve(path, sources) as result:
         assert result.is_ok
@@ -283,7 +283,7 @@ BROADCAST_GROUP_SUM = {
 BROADCAST_SOURCES = {
     'w': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'value': [1.0, 2.0, 5.0]}),
     'limit': pl.DataFrame({'snapshot': [0, 0, 1, 1], 'bus': ['b1', 'b2'] * 2, 'value': [9.0, 100.0, 9.0, 100.0]}),
-    'generator': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b2'] * 1 + ['b1']}),
+    'generator': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     'bus': pl.DataFrame({'bus': ['b1', 'b2']}),
 }
 
@@ -297,11 +297,7 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     this point can tell them apart — a solver handed a row with a column twice
     is entitled to reject the whole model, and HiGHS does.
     """
-    sources = dict(
-        BROADCAST_SOURCES,
-        generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
-    )
-    with lps.build(BROADCAST_GROUP_SUM, sources) as bound:
+    with lps.build(BROADCAST_GROUP_SUM, BROADCAST_SOURCES) as bound:
         tables = bound._engine._tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 4, 'a column appears twice on a row'
@@ -322,11 +318,7 @@ def test_sum_over_a_foreach_dim_needs_no_such_collapse():
             'constraints.cap.expression': 'sum(x * w, over=generator, group_by=bus) <= limit',
         },
     )
-    sources = dict(
-        BROADCAST_SOURCES,
-        generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
-    )
-    with lps.build(model, sources) as bound:
+    with lps.build(model, BROADCAST_SOURCES) as bound:
         tables = bound._engine._tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 6, 'one entry per (row, generator-on-that-bus), not one per bus'
@@ -408,8 +400,10 @@ MONTHLY_YAML = Path('examples/monthly_budget.yaml')
 MONTHLY_PAGE = Path('docs/models/monthly_budget.md')
 
 
-def _monthly_sources():
-    """Six snapshots over three calendar months, wind capped in the first.
+@pytest.fixture
+def monthly():
+    """The snapshot index and sources: six snapshots over three calendar months,
+    wind capped in the first.
 
     The `month` column is data prep — one polars expression — which is the
     page's whole point: the language never learns what a calendar is.
@@ -422,7 +416,6 @@ def _monthly_sources():
     gens = ['wind', 'gas']
     return (
         index,
-        months,
         {
             'snapshot': index,
             'month': pl.DataFrame({'month': months}),
@@ -440,7 +433,7 @@ def _monthly_sources():
     )
 
 
-def test_a_monthly_budget_binds_and_prices_itself():
+def test_a_monthly_budget_binds_and_prices_itself(monthly):
     """The number the gallery page quotes, held by a test.
 
     January caps wind at 5 where three snapshots could carry 30, so the cap
@@ -448,7 +441,7 @@ def test_a_monthly_budget_binds_and_prices_itself():
     instead — 50 against 1. February and March are slack and price at zero,
     which is what distinguishes a binding budget from a decorative one.
     """
-    index, _months, sources = _monthly_sources()
+    index, sources = monthly
     with lps.solve(MONTHLY_YAML, sources) as result:
         assert result.is_ok
         wind = (
@@ -467,14 +460,14 @@ def test_a_monthly_budget_binds_and_prices_itself():
         assert duals['value'].to_list() == pytest.approx([-49.0, 0.0, 0.0])
 
 
-def test_the_monthly_grouping_is_a_column_and_nothing_else():
+def test_the_monthly_grouping_is_a_column_and_nothing_else(monthly):
     """Re-grouping the same snapshots re-states the budget, model untouched.
 
     Quarters instead of months: one different column in the snapshot index,
     and the constraint now spans three-month blocks. That is the claim the
     page makes about weeks, seasons and representative periods, checked once.
     """
-    index, _months, sources = _monthly_sources()
+    index, sources = monthly
     quarters = index.with_columns(pl.lit('2030-Q1').alias('month')).select('snapshot', 'month')
     regrouped = {
         **sources,
@@ -489,7 +482,7 @@ def test_the_monthly_grouping_is_a_column_and_nothing_else():
         assert wind == pytest.approx(5.0), 'the cap now binds across the whole quarter'
 
 
-def test_a_mistyped_month_is_a_typo_and_not_a_new_group():
+def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
     """Why the target of a coordinate has to be a declared dimension.
 
     Without one there is nothing to check the snapshot index against, and
@@ -497,7 +490,7 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group():
     of its own — the model then solves a smaller problem and says nothing. The
     same check catches a generator assigned to a bus that does not exist.
     """
-    index, _months, sources = _monthly_sources()
+    index, sources = monthly
     typo = index.with_columns(
         pl.when(pl.col('month') == '2030-03').then(pl.lit('2030-3')).otherwise(pl.col('month')).alias('month')
     )
@@ -505,7 +498,7 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group():
         lps.solve(MONTHLY_YAML, {**sources, 'snapshot': typo})
 
 
-def test_the_index_the_page_prints_is_the_index_it_solves():
+def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
     """The frame printed on the page is the frame these tests build.
 
     `test_doc_examples.py` sweeps `python` and `yaml` fences and runs neither,
@@ -514,7 +507,7 @@ def test_the_index_the_page_prints_is_the_index_it_solves():
     Defaults are restored while formatting, so a contributor's `POLARS_FMT_*`
     environment cannot fail this.
     """
-    index, _months, _sources = _monthly_sources()
+    index, _sources = monthly
     fences = re.findall(r'^```text\n(.*?)^```', MONTHLY_PAGE.read_text(), re.MULTILINE | re.DOTALL)
     printed = [block for block in fences if block.startswith('shape: (')]
     assert len(printed) == 1, 'the page prints exactly one frame'

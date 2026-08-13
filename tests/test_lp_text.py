@@ -128,6 +128,25 @@ def test_written_bounds_are_bit_exact() -> None:
     assert coefficients == sorted(cost)
 
 
+def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
+    """``DISPATCH_MODEL`` widened to the given size, with data to match.
+
+    The three tests below differ only in how large the file has to be for
+    their property to be observable at all — the sizes stay at the call sites,
+    where each test argues for its own.
+    """
+    generators = [f'g{i}' for i in range(n_generators)]
+    schema = override(DISPATCH_MODEL, **{'dimensions.generator.values': generators})
+    data = {
+        'p_max': pl.DataFrame({'generator': generators, 'value': [100.0 + i for i in range(n_generators)]}),
+        'cost': pl.DataFrame({'generator': generators, 'value': [1.0 + i / 8 for i in range(n_generators)]}),
+        'load': pl.DataFrame(
+            {'snapshot': list(range(n_snapshots)), 'value': [50.0 + t % 7 for t in range(n_snapshots)]}
+        ),
+    }
+    return schema, data
+
+
 def test_one_model_writes_the_same_bytes_every_time(tmp_path: Path) -> None:
     """#109 — reproducible output, which is a property of the whole file.
 
@@ -138,14 +157,7 @@ def test_one_model_writes_the_same_bytes_every_time(tmp_path: Path) -> None:
     terms per row and enough rows for the engine to split the work — a handful
     of constraints would pass whatever the sink did.
     """
-    generators = [f'g{i}' for i in range(20)]
-    snapshots = 200
-    schema = override(DISPATCH_MODEL, **{'dimensions.generator.values': generators})
-    data = {
-        'p_max': pl.DataFrame({'generator': generators, 'value': [100.0 + i for i in range(len(generators))]}),
-        'cost': pl.DataFrame({'generator': generators, 'value': [1.0 + i / 8 for i in range(len(generators))]}),
-        'load': pl.DataFrame({'snapshot': list(range(snapshots)), 'value': [50.0 + t % 7 for t in range(snapshots)]}),
-    }
+    schema, data = _scaled_dispatch(n_generators=20, n_snapshots=200)
 
     written = []
     with lps.build(schema, data) as bound:
@@ -167,14 +179,7 @@ def test_chunking_the_constraint_section_leaves_the_bytes_alone(
     reordered a boundary row would pass everything else here. A budget of a few
     nonzeros puts a seam every handful of rows.
     """
-    generators = [f'g{i}' for i in range(5)]
-    snapshots = 40
-    schema = override(DISPATCH_MODEL, **{'dimensions.generator.values': generators})
-    data = {
-        'p_max': pl.DataFrame({'generator': generators, 'value': [100.0 + i for i in range(len(generators))]}),
-        'cost': pl.DataFrame({'generator': generators, 'value': [1.0 + i / 8 for i in range(len(generators))]}),
-        'load': pl.DataFrame({'snapshot': list(range(snapshots)), 'value': [50.0 + t % 7 for t in range(snapshots)]}),
-    }
+    schema, data = _scaled_dispatch(n_generators=5, n_snapshots=40)
 
     with lps.build(schema, data) as bound:
         bound.write(tmp_path / 'one.lp')
@@ -194,14 +199,8 @@ def test_section_keywords_survive_sections_far_larger_than_a_buffer(tmp_path: Pa
     megabytes: if a keyword ever lands somewhere other than between the two
     sections it separates, it lands in the middle of one of them.
     """
-    generators = [f'g{i}' for i in range(50)]
-    snapshots = 2000
-    schema = override(DISPATCH_MODEL, **{'dimensions.generator.values': generators})
-    data = {
-        'p_max': pl.DataFrame({'generator': generators, 'value': [100.0 + i for i in range(len(generators))]}),
-        'cost': pl.DataFrame({'generator': generators, 'value': [1.0 + i / 8 for i in range(len(generators))]}),
-        'load': pl.DataFrame({'snapshot': list(range(snapshots)), 'value': [50.0 + t % 7 for t in range(snapshots)]}),
-    }
+    n_generators, n_snapshots = 50, 2000
+    schema, data = _scaled_dispatch(n_generators, n_snapshots)
 
     lp = tmp_path / 'model.lp'
     with lps.build(schema, data) as bound:
@@ -212,7 +211,7 @@ def test_section_keywords_survive_sections_far_larger_than_a_buffer(tmp_path: Pa
     at = [i for i, line in enumerate(lines) if line in keywords]
     assert [lines[i] for i in at] == keywords, 'a section keyword is missing, doubled or out of order'
 
-    variables = len(generators) * snapshots
+    variables = n_generators * n_snapshots
     objective, bounds = at[1], at[3]
     assert lp.stat().st_size > 4_000_000, 'sections too small for the buffer boundary to be crossed'
     assert sum(1 for line in lines[objective + 1 : at[2]] if line.startswith(('+', '-'))) == variables

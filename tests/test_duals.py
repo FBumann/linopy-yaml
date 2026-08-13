@@ -110,16 +110,6 @@ def test_infeasible_solve_refuses_duals(dispatch_yaml, dispatch_inputs):
             result.primal('p')
 
 
-def test_unknown_constraint_is_a_keyerror(dispatch_yaml, dispatch_inputs):
-    data, coords = dispatch_inputs
-
-    with (
-        differential(dispatch_yaml, data, coords) as run,
-        pytest.raises(KeyError, match='unknown constraint'),
-    ):
-        run.result.dual('power_balnce')
-
-
 RAMP_BLOCK = {
     'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
     'parameters': {'lim': {'dims': ['t']}},
@@ -140,7 +130,7 @@ RAMP_BLOCK = {
             'but 2 begin with it — ramp_down, ramp_up',
             id='a-family-name-where-nearest-match-would-imply-the-sibling-is-absent',
         ),
-        pytest.param('ramp_dwn', "Did you mean 'ramp_down'?", id='a-typo'),
+        pytest.param('ramp_dwn', "unknown constraint 'ramp_dwn'. Did you mean 'ramp_down'?", id='a-typo'),
         pytest.param('zzz', 'Declared: ramp_down, ramp_up.', id='nothing-like-it'),
     ],
 )

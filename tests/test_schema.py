@@ -93,14 +93,9 @@ def test_a_declared_bound_parameter_is_accepted():
     assert s.variables['v'].bounds.upper == 'p_max'
 
 
-@pytest.mark.parametrize(
-    ('body', 'match'),
-    [
-        pytest.param({'foreach': ['x'], 'binary': True, 'integer': True}, 'both binary and integer', id='two-vtypes'),
-    ],
-)
-def test_a_contradictory_declaration_is_rejected(body, match):
-    with pytest.raises(SchemaError, match=match):
+def test_a_variable_cannot_be_both_binary_and_integer():
+    body = {'foreach': ['x'], 'binary': True, 'integer': True}
+    with pytest.raises(SchemaError, match='both binary and integer'):
         Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': body}})
 
 

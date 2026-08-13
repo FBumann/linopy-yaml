@@ -21,7 +21,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from tests.conftest import port_sources
+from tests.conftest import port_sources as sources
 
 
 def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
@@ -29,7 +29,7 @@ def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
     at a different vertex than the source prints, so a corpus pinned to a
     solution would fail on a solver upgrade that broke nothing. ``rtol`` is per
     port because a published optimum is rounded and a solved one is not."""
-    with lps.solve(port['model'], port_sources(port['name'])) as solution:
+    with lps.solve(port['model'], sources(port['name'])) as solution:
         assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol']), (
             f'{port["name"]} disagrees with {port["provenance"]}'
@@ -61,7 +61,7 @@ def test_port_reaches_the_reference_duals(port: dict[str, Any]) -> None:
     if not expected:
         pytest.skip(f'{port["name"]} records no duals (a MILP has none)')
 
-    with lps.solve(port['model'], port_sources(port['name'])) as solution:
+    with lps.solve(port['model'], sources(port['name'])) as solution:
         for constraint, table in expected.items():
             dims = [c for c in table if c != 'value']
             got = solution.dual(constraint).sort(dims)
