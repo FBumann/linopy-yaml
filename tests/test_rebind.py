@@ -22,6 +22,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.relational.sinks import SOLVERS
+from tests.conftest import port_sources
 
 GENERATORS = ['wind', 'solar', 'gas']
 SNAPSHOTS = [0, 1, 2, 3]
@@ -207,6 +208,135 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, case, change
         for name in _priced(schema):
             assert rebound.dual(name).equals(reference.dual(name)), f"'{name}' came back priced differently"
     reference.close()
+
+
+# ---------------------------------------------------------------------------
+# the same oracle, over models nobody here wrote
+# ---------------------------------------------------------------------------
+
+#: One walk over a port's own data. **1.0 first** pins determinism — two builds
+#: of one model have to hash alike or no driver ever takes the fast path, and a
+#: `rows` frame that came back in a different order each build was exactly that
+#: bug — then two scalings, each rebound off the state the last one left, so no
+#: step here is a single hop from the build.
+WALK = [1.0, 1.25, 0.8]
+
+#: `tsp_mtz` walks nowhere: gr17's branch-and-bound is seconds a solve and a
+#: walk takes three of them per model, which is a third of the suite's runtime
+#: for one port. The other three discrete ports reach the same paths in a tenth
+#: of the time.
+TOO_SLOW_TO_WALK = {'tsp_mtz'}
+
+
+def _declared(given: dict[str, Any], schema: Any) -> dict[str, Any]:
+    """*given* less the names the model never declares.
+
+    `build` binds what it recognises and ignores the rest; `rebind` refuses a
+    name it does not know, deliberately, a typo there being a silent re-solve.
+    So the two doors disagree about one mapping — `pypsa_kvl`'s data carries a
+    `reactance` its model reads through `cycle_incidence` instead — and this is
+    what hands both of them the same thing.
+    """
+    known = {**schema.parameters, **schema.dimensions}
+    return {name: value for name, value in given.items() if name in known}
+
+
+def _scaled(given: dict[str, Any], by: float) -> dict[str, Any]:
+    """*given* with every dimensioned real-valued table scaled, and nothing else.
+
+    Dimensioned, because a **scalar** in this corpus is as often a formulation
+    constant as a quantity — `tsp_mtz`'s ``n`` is the Miller-Tucker-Zemlin
+    bound — and scaling one of those writes a different *model* rather than
+    different numbers for the same one. Real-valued for the same reason: an
+    integer index or a label is structure.
+    """
+    scalable = pl.col('value') * by
+    return {
+        name: value.with_columns(scalable)
+        if isinstance(value, pl.DataFrame) and value.schema.get('value') == pl.Float64 and len(value.columns) > 1
+        else value
+        for name, value in given.items()
+    }
+
+
+def _prices(result: Any, schema: Any) -> dict[str, pl.DataFrame] | None:
+    """Every constraint's prices, or ``None`` where this answer carries none.
+
+    Asked of the answer rather than read off the declarations: what leaves
+    duals undefined is the solve's business, and `Result.dual` is where it is
+    already decided.
+    """
+    try:
+        return {name: result.dual(name) for name in schema.constraints}
+    except lps.LpspecError:
+        return None
+
+
+def _laid_out_alike(got: pl.DataFrame, want: pl.DataFrame, *, values: bool, where: str) -> None:
+    """*got* is *want*'s frame: same coordinates in the same order, same numbers."""
+    assert got.drop('value').equals(want.drop('value')), f'{where}: came back keyed or ordered differently'
+    if values:
+        assert got['value'].to_list() == pytest.approx(want['value'].to_list()), f'{where}: different numbers'
+
+
+def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
+    """The oracle again, over ported models, three rebinds deep.
+
+    `build` + `solve` is always available as the reference, so breadth costs
+    only the models — and there are ten here that nobody wrote to be a test:
+    networks, storage, ramping, unit commitment, a diet, a facility location,
+    two transports. The rungs above are models built to move one field of the
+    digest; these are models built to be models, walked through three data
+    states with the answer checked against a fresh build at every one.
+
+    What is compared is what a rebind may be held to:
+
+    - **The objective and the layout, always.** A read-back that sliced the
+      solver's vector wrongly puts the right numbers on the wrong coordinates,
+      and a corpus this wide is what finds it.
+    - **The numbers, where the answer carries prices** — which is to say where
+      the model is continuous. A discrete model's optimum is not unique, so a
+      rebound `tsp_mtz` reaches a different tour of the same length; that is
+      branch-and-bound's answer and not a rebind's mistake. On the continuous
+      ports the two agree to 1e-14 on both sinks, which is a different simplex
+      route rather than a different vertex — so `approx` rather than `equals`,
+      and the exact form stays on the rungs above, whose optima are unique by
+      construction.
+
+    On `highs` alone, the default. What a second sink pushes differently is the
+    rungs' question; this one is about the models.
+    """
+    if port['name'] in TOO_SLOW_TO_WALK:
+        pytest.skip(f'{port["name"]} is too slow to walk — see TOO_SLOW_TO_WALK')
+
+    schema = lps.load_model(port['model'])
+    given = _declared(port_sources(port['name']), schema)
+
+    with lps.build(port['model'], given) as bound:
+        bound.solve()
+        for step, factor in enumerate(WALK):
+            change = _scaled(given, factor)
+            where = f'{port["name"]} x{factor}'
+            with lps.solve(port['model'], change) as reference:
+                got = bound.rebind(change).solve()
+
+                assert got.termination_condition == reference.termination_condition, f'{where}: terminated differently'
+                assert got.has_primal == reference.has_primal, f'{where}: one left values and the other did not'
+                if reference.has_primal:
+                    assert got.objective == pytest.approx(reference.objective), f'{where}: a different optimum'
+                    wanted = _prices(reference, schema)
+                    assert (_prices(got, schema) is None) == (wanted is None), f'{where}: one is priced and one is not'
+                    for name in schema.variables:
+                        _laid_out_alike(
+                            got.primal(name), reference.primal(name), values=wanted is not None, where=f'{where} {name}'
+                        )
+                    for name in wanted or {}:
+                        _laid_out_alike(got.dual(name), wanted[name], values=True, where=f'{where} {name} price')
+
+            if not step:
+                assert bound.diagnostics().loads == 1, (
+                    'the same numbers rebound have to hash alike, or no driver ever takes the fast path'
+                )
 
 
 @pytest.mark.parametrize(('case', 'change', 'keeps_the_solver'), RUNGS)
