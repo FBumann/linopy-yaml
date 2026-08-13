@@ -73,11 +73,18 @@ _SOS = ('set', 'type', 'col', 'weight', 'big_m')
 #: `dispatch/l`'s peak RSS. A *label* stays ``Int64``: the arithmetic path
 #: computes it as a position in the full pre-mask coordinate product, which
 #: can pass 2^31 while every survivor fits.
+#:
+#: ``set`` and ``weight`` are ``Int32`` for the same reason ``col`` is, one
+#: step removed: a set holds at least one column and a weight counts along one
+#: dim of one variable, so both are bounded by a count that already has to fit
+#: a 32-bit index. The stream is one row per *member*, which on a model whose
+#: sets cover it is the largest frame after the matrix, and every pass over it
+#: — the digest included — is paid in its width (#687).
 _DTYPES = {
     'col': pl.Int32, 'row': pl.Int64,
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
     'sense': SENSE, 'vtype': pl.Enum(get_args(plan.VariableType)),
-    'set': pl.Int64, 'type': pl.UInt8, 'weight': pl.Int64, 'big_m': pl.Float64,
+    'set': pl.Int32, 'type': pl.UInt8, 'weight': pl.Int32, 'big_m': pl.Float64,
 }  # fmt: skip
 
 
