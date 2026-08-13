@@ -22,15 +22,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import LpspecError
-from lpspec.relational.sinks.solvers.base import Solver
+from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.relational.sinks.solvers.base import Answer
-    from lpspec.relational.sinks.tables import ModelTables
+    from lpspec.relational.sinks.tables import ModelTables, RowVectors
 
 
 #: Elements per hand-off chunk. No *build-side* pass batches any more, labels
@@ -104,32 +103,30 @@ def build_highs(
 
     empty_i = np.empty(0, dtype=np.int32)
     empty_f = np.empty(0, dtype=np.float64)
-    lb, ub, cost, integral = model.dense_columns(inf)
+    cols = model.dense_columns(inf)
     for lo, hi in model.col_chunks(batch):
         _loaded(
             h,
-            h.addCols(hi - lo, cost[lo:hi], lb[lo:hi], ub[lo:hi], 0, empty_i, empty_i, empty_f),
+            h.addCols(hi - lo, cols.cost[lo:hi], cols.lb[lo:hi], cols.ub[lo:hi], 0, empty_i, empty_i, empty_f),
             'a batch of columns',
         )
-        noncontinuous = np.flatnonzero(integral[lo:hi]).astype(np.int32) + np.int32(lo)
+        noncontinuous = np.flatnonzero(cols.integral[lo:hi]).astype(np.int32) + np.int32(lo)
         if len(noncontinuous):
             integrality = np.full(len(noncontinuous), int(highspy.HighsVarType.kInteger), dtype=np.uint8)
             h.changeColsIntegrality(len(noncontinuous), noncontinuous, integrality)
 
-    sense, rhs = model.dense_rows(inf)
-    rlb = np.where(sense == SENSE_CODES['<='], -inf, rhs)
-    rub = np.where(sense == SENSE_CODES['>='], inf, rhs)
-    for lo, hi, a, starts in model.row_blocks(batch):
+    rlb, rub = _row_bounds(model.dense_rows(inf), inf)
+    for block in model.row_blocks(batch):
         _loaded(
             h,
             h.addRows(
-                hi - lo,
-                rlb[lo:hi],
-                rub[lo:hi],
-                a.height,
-                starts.astype(np.int32),
-                a['col'].to_numpy().astype(np.int32, copy=False),
-                a['coeff'].to_numpy(),
+                block.height,
+                rlb[block.lo : block.hi],
+                rub[block.lo : block.hi],
+                block.entries.height,
+                block.starts.astype(np.int32),
+                block.entries['col'].to_numpy().astype(np.int32, copy=False),
+                block.entries['coeff'].to_numpy(),
             ),
             'a batch of rows',
         )
@@ -174,36 +171,50 @@ class Highs(Solver):
         import numpy as np
 
         inf = highspy.kHighsInf
-        lb, ub, cost, _ = model.dense_columns(inf)
+        cols = model.dense_columns(inf)
         columns = np.arange(model.column_count, dtype=np.int32)
-        _loaded(self._handle, self._handle.changeColsCost(model.column_count, columns, cost), 'new costs')
-        _loaded(self._handle, self._handle.changeColsBounds(model.column_count, columns, lb, ub), 'new bounds')
+        _loaded(self._handle, self._handle.changeColsCost(model.column_count, columns, cols.cost), 'new costs')
+        _loaded(
+            self._handle, self._handle.changeColsBounds(model.column_count, columns, cols.lb, cols.ub), 'new bounds'
+        )
 
-        sense, rhs = model.dense_rows(inf)
         rows = np.arange(model.row_count, dtype=np.int32)
-        rlb = np.where(sense == SENSE_CODES['<='], -inf, rhs)
-        rub = np.where(sense == SENSE_CODES['>='], inf, rhs)
+        rlb, rub = _row_bounds(model.dense_rows(inf), inf)
         _loaded(self._handle, self._handle.changeRowsBounds(model.row_count, rows, rlb, rub), 'new right-hand sides')
 
-    def _run(self, model: ModelTables) -> Answer:
+    def _run(self, model: ModelTables) -> SolveAnswer:
         import highspy
 
         self._handle.run()
         status = _status_of(self._handle, highspy)
         if not status.is_readable:
-            return status, float('nan'), None, None
+            return SolveAnswer.unreadable(status)
 
         objective = self._handle.getInfo().objective_function_value + model.objective_constant
         solution = self._handle.getSolution()
         primal = solver_vector(solution.col_value)
         dual = solver_vector(solution.row_dual) if solution.dual_valid else None
-        return status, objective, primal, dual
+        return SolveAnswer(status, objective, primal, dual)
 
     def close(self) -> None:
         """Release the loaded model. Idempotent."""
         if self._handle is not None:
             self._handle.clear()
         self._handle = None
+
+
+def _row_bounds(rows: RowVectors, inf: float) -> tuple[Any, Any]:
+    """HiGHS's ``(lower, upper)`` spelling of a sense code and right-hand side.
+
+    The one rule for it, asked by the load and the push alike, so the two
+    cannot drift: an inequality is open on the side its sense does not bound.
+    """
+    import numpy as np
+
+    return (
+        np.where(rows.sense == SENSE_CODES['<='], -inf, rows.rhs),
+        np.where(rows.sense == SENSE_CODES['>='], inf, rows.rhs),
+    )
 
 
 def _loaded(h: Any, status: Any, what: str) -> None:

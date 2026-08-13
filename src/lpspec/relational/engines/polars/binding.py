@@ -199,14 +199,14 @@ class _Binder:
             self._register(d, table)
 
         for d in sorted(dims):
-            for cname, target in sorted(self.program.dimension(d).coordinates):
-                if target not in self.cardinality:
+            for c in sorted(self.program.dimension(d).coordinates):
+                if c.target not in self.cardinality:
                     raise DataError(
-                        f"dimension '{d}' coordinate '{cname}' targets '{target}', which "
+                        f"dimension '{d}' coordinate '{c.name}' targets '{c.target}', which "
                         f'no declaration in this model uses, so it has no coordinate set '
                         f'to check against'
                     )
-                data_validation.check_coordinate_containment(d, cname, target, self.dimensions)
+                data_validation.check_coordinate_containment(d, c.name, c.target, self.dimensions)
 
     def _explicit_frame(self, d: str, source: Any, names: list[str]) -> pl.LazyFrame:
         """A dimension's ``(val, ord, coordinates…)`` from a caller's index.
@@ -270,9 +270,7 @@ class _Binder:
         for d, frame in materialised.items():
             casts = [pl.col('val').cast(enums[d])] if d in enums else []
             casts += [
-                pl.col(cname).cast(enums[target])
-                for cname, target in self.program.dimension(d).coordinates
-                if target in enums
+                pl.col(c.name).cast(enums[c.target]) for c in self.program.dimension(d).coordinates if c.target in enums
             ]
             if casts:
                 self.dimensions[d] = frame.with_columns(casts).lazy()

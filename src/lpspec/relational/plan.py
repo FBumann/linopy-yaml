@@ -18,7 +18,7 @@ Expressions support operator sugar so plans read naturally in Python:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Literal, NamedTuple, TypeVar
 
 from lpspec.errors import unknown_name_message
 
@@ -281,11 +281,18 @@ class Not(Predicate):
 # --------------------------------------------------------------------------
 
 
+class CoordinateTarget(NamedTuple):
+    """One declared coordinate and the dimension its values are labels of."""
+
+    name: str
+    target: str
+
+
 @dataclass(frozen=True)
 class DimensionDeclaration:
     """A dimension and the coordinates its labels carry.
 
-    ``coordinates`` maps a coordinate name to the dimension its values are
+    ``coordinates`` names each coordinate and the dimension its values are
     labels of, checked for containment once the dim tables exist — which keeps
     a mistyped label from silently dropping its terms in the join that places
     them.
@@ -297,13 +304,13 @@ class DimensionDeclaration:
     """
 
     name: str
-    coordinates: tuple[tuple[str, str], ...] = ()
+    coordinates: tuple[CoordinateTarget, ...] = ()
     labels: tuple[str, ...] = ()
 
     @property
     def carried(self) -> list[str]:
         """Every coordinate column the dimension's index source must supply."""
-        return sorted([*(c for c, _ in self.coordinates), *self.labels])
+        return sorted([*(c.name for c in self.coordinates), *self.labels])
 
 
 @dataclass(frozen=True)

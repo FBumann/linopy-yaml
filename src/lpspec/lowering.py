@@ -135,7 +135,11 @@ def lower_program(schema: Model) -> plan.Program:
     )
 
     dimensions = tuple(
-        plan.DimensionDeclaration(dname, tuple(ddef.targeted.items()), tuple(ddef.labels))
+        plan.DimensionDeclaration(
+            dname,
+            tuple(plan.CoordinateTarget(cname, target) for cname, target in ddef.targeted.items()),
+            tuple(ddef.labels),
+        )
         for dname, ddef in schema.dimensions.items()
     )
     return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions)
@@ -436,7 +440,7 @@ def advice(program: plan.Program) -> list[str]:
     for e in expressions:
         axes |= _produced_axes(e)
 
-    targeted = {target: (d.name, cname) for d in program.dimensions for cname, target in d.coordinates}
+    targeted = {c.target: (d.name, c.name) for d in program.dimensions for c in d.coordinates}
     notes: list[str] = []
     for d in program.dimensions:
         if d.name in axes:

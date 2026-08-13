@@ -58,7 +58,7 @@ PROGRAM = plan.Program(
     objective=plan.ObjectiveDeclaration('min', plan.Variable('p')),
     dimensions=(
         plan.DimensionDeclaration('snapshot'),
-        plan.DimensionDeclaration('generator', coordinates=(('bus', 'bus'),)),
+        plan.DimensionDeclaration('generator', coordinates=(plan.CoordinateTarget('bus', 'bus'),)),
         plan.DimensionDeclaration('bus'),
     ),
 )

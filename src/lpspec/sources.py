@@ -127,8 +127,8 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
         ctx = f"piecewise '{name}'"
         (x_link, y_link) = pw.links
         try:
-            xa = _as_dataarray(schema, x_link[1], values)
-            ya = _as_dataarray(schema, y_link[1], values)
+            xa = _as_dataarray(schema, x_link.values, values)
+            ya = _as_dataarray(schema, y_link.values, values)
         except KeyError:
             continue
         xa, ya = xr.broadcast(xa, ya)
@@ -139,14 +139,14 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
             dx = np.diff(xs)
             if not (dx > 0).all():
                 raise PiecewiseExpansionError(
-                    f"{ctx}: convex: true requires strictly increasing breakpoints in '{x_link[1]}' (got {xs.tolist()})"
+                    f"{ctx}: convex: true requires strictly increasing breakpoints in '{x_link.values}' (got {xs.tolist()})"
                 )
             curvature = np.diff(np.diff(ys) / dx)
             tol = 1e-9 * max(1.0, float(np.abs(ys).max()))
             if (curvature > tol).any() and (curvature < -tol).any():
                 raise PiecewiseExpansionError(
                     f'{ctx}: convex: true is not exact for the mixed-curvature '
-                    f"curve in '{y_link[1]}' — the hull relaxation would silently "
+                    f"curve in '{y_link.values}' — the hull relaxation would silently "
                     f'cut corners; drop convex: true to use the exact MILP form'
                 )
 

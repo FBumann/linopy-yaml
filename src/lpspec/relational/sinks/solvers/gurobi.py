@@ -23,7 +23,7 @@ import weakref
 from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import LpspecError
-from lpspec.relational.sinks.solvers.base import Solver
+from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from lpspec.relational.sinks.solvers.base import Answer
     from lpspec.relational.sinks.tables import ModelTables
 
 
@@ -139,10 +138,10 @@ class Gurobi(Solver):
         batched at the load.
         """
         gurobipy = _gurobipy()
-        lb, ub, cost, _ = model.dense_columns(gurobipy.GRB.INFINITY)
-        self._x.LB, self._x.UB, self._x.Obj = lb, ub, cost
+        cols = model.dense_columns(gurobipy.GRB.INFINITY)
+        self._x.LB, self._x.UB, self._x.Obj = cols.lb, cols.ub, cols.cost
 
-        _sense, rhs = model.dense_rows(gurobipy.GRB.INFINITY)
+        rhs = model.dense_rows(gurobipy.GRB.INFINITY).rhs
         at = 0
         for block in self._blocks:
             block.RHS = rhs[at : at + block.shape[0]]
@@ -150,7 +149,7 @@ class Gurobi(Solver):
         self._m.ObjCon = model.objective_constant
         self._m.update()
 
-    def _run(self, model: ModelTables) -> Answer:
+    def _run(self, model: ModelTables) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
         Gurobi refuses the attribute where there is no primal or no dual
@@ -160,8 +159,8 @@ class Gurobi(Solver):
         self._m.optimize()
         status = _status_of(self._m)
         if not status.is_readable:
-            return status, float('nan'), None, None
-        return status, self._m.ObjVal, solver_vector(self._x.X), _duals(model.row_count, self._blocks)
+            return SolveAnswer.unreadable(status)
+        return SolveAnswer(status, self._m.ObjVal, solver_vector(self._x.X), _duals(model.row_count, self._blocks))
 
     def close(self) -> None:
         """Release the model and the licence its environment holds.
@@ -208,19 +207,20 @@ def _built(
     environment = gurobipy.Env(params={'OutputFlag': 0, **dict(solver_options or {})})
     m = gurobipy.Model(env=environment)
 
-    lb, ub, cost, integral = model.dense_columns(gurobipy.GRB.INFINITY)
-    discrete: dict[str, Any] = {'vtype': np.where(integral, 'I', 'C')} if integral.any() else {}
-    x = m.addMVar(model.column_count, lb=lb, ub=ub, obj=cost, **discrete)
+    cols = model.dense_columns(gurobipy.GRB.INFINITY)
+    discrete: dict[str, Any] = {'vtype': np.where(cols.integral, 'I', 'C')} if cols.integral.any() else {}
+    x = m.addMVar(model.column_count, lb=cols.lb, ub=cols.ub, obj=cols.cost, **discrete)
 
-    sense, rhs = model.dense_rows(gurobipy.GRB.INFINITY)
+    rows = model.dense_rows(gurobipy.GRB.INFINITY)
     spelling = _spelled(gurobipy)
     blocks = []
-    for lo, hi, a, starts in model.row_blocks(batch_rows):
+    for chunk in model.row_blocks(batch_rows):
+        entries = chunk.entries
         block = scipy.sparse.csr_matrix(
-            (a['coeff'].to_numpy(), a['col'].to_numpy(), np.append(starts, a.height)),
-            shape=(hi - lo, model.column_count),
+            (entries['coeff'].to_numpy(), entries['col'].to_numpy(), np.append(chunk.starts, entries.height)),
+            shape=(chunk.height, model.column_count),
         )
-        blocks.append(m.addMConstr(block, x, spelling[sense[lo:hi]], rhs[lo:hi]))
+        blocks.append(m.addMConstr(block, x, spelling[rows.sense[chunk.lo : chunk.hi]], rows.rhs[chunk.lo : chunk.hi]))
 
     if model.objective_sense == 'max':
         m.ModelSense = gurobipy.GRB.MAXIMIZE

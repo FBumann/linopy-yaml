@@ -57,6 +57,48 @@ PRESENT = '__present__'
 
 
 @dataclass(frozen=True)
+class Presence:
+    """Where the *variable* under a fragment exists, and what keys it.
+
+    Not which rows the fragment's frame has. A fragment loses rows for two
+    unrelated reasons and a constraint row reacts to only one: a **masked
+    variable** is genuinely absent, a **sparse parameter** is a compressed
+    dense array whose missing rows mean a zero coefficient (SPEC §8).
+    Multiplied together the frame cannot tell them apart, so the variable's
+    coordinates ride alongside.
+
+    ``keyed_by`` is ``None`` where the frame is keyed by the fragment's own
+    dims — the implied key survives the dims being rewritten downstream (a
+    product broadcasts, a sum drops) where a stated one would silently become
+    a claim about columns the frame never had. Only an acyclic ``shift``
+    states it: the coordinates it vacates are an edge along *one* dimension,
+    so the restriction is one column wide however many dims the fragment
+    carries — where keying it by the fragment's dims would materialise the
+    whole coordinate product to name an edge.
+    """
+
+    frame: pl.LazyFrame
+    keyed_by: tuple[str, ...] | None = None
+
+    def keys(self, fragment_dims: tuple[str, ...]) -> tuple[str, ...]:
+        """The columns this presence restricts by, for a fragment over *fragment_dims*."""
+        return self.keyed_by if self.keyed_by is not None else fragment_dims
+
+    def restrict(self, frame: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
+        """Keep only the rows of *frame* this presence admits.
+
+        Keyed by *on* this is a semi-join. A **scalar** declaration has no
+        key, its presence being at most one row saying only whether it
+        exists, so the question becomes a cross join: every row survives a
+        present scalar and none survives an absent one — absence spreading
+        through arithmetic (SPEC §7) at no dimension.
+        """
+        if on:
+            return frame.join(self.frame.select(list(on)), on=list(on), how='semi')
+        return frame.join(self.frame.select(PRESENT), how='cross').drop(PRESENT)
+
+
+@dataclass(frozen=True)
 class TermFragment:
     """One additive piece of a compiled affine expression.
 
@@ -68,26 +110,12 @@ class TermFragment:
     frame: pl.LazyFrame
     is_term: bool
 
-    presence: pl.LazyFrame | None = None
-    """Where the *variable* under this fragment exists, keyed by :attr:`dims`.
+    presence: Presence | None = None
+    """Where the variable under this fragment exists — see :class:`Presence`.
 
-    Not which rows :attr:`frame` has. A fragment loses rows for two unrelated
-    reasons and a constraint row reacts to only one: a **masked variable** is
-    genuinely absent, a **sparse parameter** is a compressed dense array whose
-    missing rows mean a zero coefficient (SPEC §8). Multiplied together the
-    frame cannot tell them apart, so the variable's coordinates ride alongside.
-
-    ``None`` is nothing to report — a constant fragment has no variable, and a
+    ``None`` is nothing to report: a constant fragment has no variable, and a
     reduction clears it, ``sum`` skipping absent slots rather than propagating
     them (v1 ``convention.rst`` §13).
-    """
-    presence_dims: tuple[str, ...] | None = None
-    """The columns :attr:`presence` is keyed by; ``None`` means :attr:`dims`.
-
-    Only an acyclic ``shift`` sets it: the coordinates it vacates are an edge
-    along *one* dimension, so the restriction is one column wide however many
-    dims the fragment carries — where keying it by :attr:`dims` would
-    materialise the whole coordinate product to name an edge.
     """
 
     @property
@@ -564,16 +592,15 @@ class PolarsCompiler:
         declaration before any data is read: an unmasked one exists at every
         coordinate of its foreach and could restrict nothing.
 
-        ``presence_dims`` is stated rather than left to its ``None`` default,
-        because dims are rewritten downstream (a product broadcasts, a sum
-        drops) while the presence frame is not — an implied key silently
-        becomes a claim about columns it never had.
+        ``keyed_by`` is stated rather than left to its ``None`` default,
+        because dims are rewritten downstream while the presence frame is not
+        — the hazard :class:`Presence` names.
         """
         dims = self.program.variable(name).dims
         frame = self.variables[name].select(*dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff'))
         masked = self.program.variable(name).where is not None
-        presence = self._presence(name, dims) if masked else None
-        return TermFragment(dims, frame, True, presence=presence, presence_dims=dims if masked else None)
+        presence = Presence(self._presence(name, dims), dims) if masked else None
+        return TermFragment(dims, frame, True, presence=presence)
 
     def _presence(self, name: str, dims: tuple[str, ...]) -> pl.LazyFrame:
         """The coordinates a masked variable exists at.
@@ -712,7 +739,7 @@ class PolarsCompiler:
                 .select(*kept, s.dimension, *carried)
             )
 
-        def travelled_presence() -> tuple[pl.LazyFrame | None, tuple[str, ...] | None]:
+        def travelled_presence() -> Presence | None:
             """Where the variable exists after the shift, and what keys it.
 
             An existing presence **travels**: the coordinate set goes through
@@ -728,30 +755,29 @@ class PolarsCompiler:
             and the acyclic edge now is, where without this the vacated slot
             would merely fail to join and the row would survive with its term
             quietly gone (#239, #289). It is keyed by the one dimension it
-            speaks about, which is what :attr:`TermFragment.presence_dims` is
+            speaks about, which is what :attr:`Presence.keyed_by` is
             for — keying it by the fragment's dims would materialise the whole
             coordinate product to name an edge, which costs a fifth again of
             build on a wide ramp (#520), a shape no case in `bench/` covers.
             """
             if p.presence is None:
                 if s.wrap or s.fill is not None:
-                    return None, None
-                return self._edge(s, card, vacated=False), (s.dimension,)
+                    return None
+                return Presence(self._edge(s, card, vacated=False), (s.dimension,))
 
-            source, keyed_by = p.presence, p.presence_dims
+            source, keyed_by = p.presence.frame, p.presence.keyed_by
             if keyed_by is not None and s.dimension not in keyed_by:
                 source, keyed_by = self._widen(source, keyed_by, p.dims), None
             moved_presence = remap(source, [], keyed_by)
             if s.wrap or s.fill is None:
-                return moved_presence, keyed_by
+                return Presence(moved_presence, keyed_by)
             vacated = self._vacated(p, s, card, others)
-            return pl.concat([moved_presence, vacated], how='vertical_relaxed').unique(), None
+            return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique())
 
         frame = remap(p.frame, p.carried)
         if not s.wrap and s.fill is not None and not p.is_term:
             frame = pl.concat([frame, self._filled_edge(s, card, others, s.fill)], how='vertical_relaxed')
-        presence, presence_dims = travelled_presence()
-        return replace(p, frame=frame, presence=presence, presence_dims=presence_dims)
+        return replace(p, frame=frame, presence=travelled_presence())
 
     def _widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
         """*presence* over every dim in *want*, saying the same thing.
@@ -814,7 +840,7 @@ class PolarsCompiler:
         edge = self._edge(s, card, vacated=True)
         if not others:
             return edge
-        return p.presence.select(*others).unique().join(edge, how='cross') if p.presence is not None else edge
+        return p.presence.frame.select(*others).unique().join(edge, how='cross') if p.presence is not None else edge
 
     # ------------------------------------------------------------------
     # assembly helpers used by the engine
@@ -924,20 +950,6 @@ def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str | 
             return column >= literal
 
 
-def restrict_by_presence(frame: pl.LazyFrame, presence: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
-    """Keep only the rows of *frame* that *presence* admits.
-
-    Keyed by *on* this is a semi-join. A **scalar** declaration has no key, its
-    presence being at most one row saying only whether it exists, so the
-    question becomes a cross join: every row survives a present scalar and none
-    survives an absent one — absence spreading through arithmetic (SPEC §7) at
-    no dimension.
-    """
-    if on:
-        return frame.join(presence.select(list(on)), on=list(on), how='semi')
-    return frame.join(presence.select(PRESENT), how='cross').drop(PRESENT)
-
-
 def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     """Restrict every fragment to where the *whole* expression exists.
 
@@ -973,9 +985,9 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
         for source in absent:
             if source is p or source.presence is None:
                 continue
-            on = list(source.presence_dims or source.dims)
+            on = list(source.presence.keys(source.dims))
             if all(d in p.dims for d in on):
-                frame = restrict_by_presence(frame, source.presence, on)
+                frame = source.presence.restrict(frame, on)
         return p if frame is p.frame else replace(p, frame=frame)
 
     return _map_fragments(compiled, restrict)
