@@ -14,6 +14,8 @@ rebuilds and solves cold; nothing about the answer changes, and
 
 from __future__ import annotations
 
+from typing import Any
+
 import polars as pl
 import pytest
 
@@ -34,43 +36,182 @@ def sources() -> dict[str, pl.DataFrame]:
     }
 
 
-#: Each rung of the rebind table (docs/api.md), and whether it may keep the
-#: loaded solver. `p_max` appears twice on purpose: it gates ``where: p_max > 0``
-#: *and* bounds the variable, so whether it is structural is a property of the
-#: values and not of where the name appears.
+#: Which plants may serve which zone, and how well. Every matrix entry of
+#: `examples/dispatch.yaml` is a 1 — its only constraint is `sum(p) == load` —
+#: and its objective has no constant, so no change to its data can move a
+#: coefficient, move one to another column, move one to another row, or move
+#: the term that has no column at all. Those are the four things a rebind can
+#: move that the example cannot say, and this is the model that says them.
+ZONES = ['north', 'south']
+PLANTS = ['a', 'b', 'c', 'd']
+REACH = {
+    'dimensions': {'zone': {'values': ZONES}, 'plant': {'values': PLANTS}},
+    'parameters': {
+        'reach': {'dims': ['zone', 'plant']},
+        'cost': {'dims': ['plant']},
+        'demand': {'dims': ['zone']},
+        'levy': {'dims': []},
+    },
+    'variables': {'p': {'foreach': ['plant'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {'meet': {'foreach': ['zone'], 'expression': 'sum(reach * p, over=plant) >= demand'}},
+    #: `levy` is the objective's **constant** — the one term with no column, so
+    #: it reaches a solver by neither of the two routes the others take.
+    'objectives': {'total': {'sense': 'minimize', 'expression': 'p * cost + levy'}},
+}
+
+
+def reaching(*served: tuple[str, str, float]) -> pl.DataFrame:
+    """A `reach` frame. An absent row is a zero coefficient (SPEC §8), so it drops the entry."""
+    return pl.DataFrame(
+        {'zone': [z for z, _, _ in served], 'plant': [p for _, p, _ in served], 'value': [v for _, _, v in served]},
+        schema={'zone': pl.String, 'plant': pl.String, 'value': pl.Float64},
+    )
+
+
+def reach_sources() -> dict[str, pl.DataFrame]:
+    """North reached by the two cheap plants, south by the two dear ones."""
+    return {
+        'reach': reaching(('north', 'a', 1.0), ('north', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0)),
+        'cost': pl.DataFrame({'plant': PLANTS, 'value': [1.0, 2.0, 3.0, 4.0]}),
+        'demand': pl.DataFrame({'zone': ZONES, 'value': [60.0, 30.0]}),
+        'levy': pl.DataFrame({'value': [5.0]}),
+    }
+
+
+#: A knapsack, because nothing above declares a discrete variable — and a
+#: rebound mixed-integer model re-solves on a solver still holding the last
+#: solve's incumbent.
+ITEMS = [f'item{i}' for i in range(12)]
+KNAPSACK = {
+    'dimensions': {'item': {'values': ITEMS}},
+    'parameters': {'worth': {'dims': ['item']}, 'weight': {'dims': ['item']}, 'capacity': {'dims': []}},
+    'variables': {'take': {'foreach': ['item'], 'binary': True}},
+    'constraints': {'fits': {'foreach': [], 'expression': 'sum(weight * take, over=item) <= capacity'}},
+    'objectives': {'total': {'sense': 'maximize', 'expression': 'take * worth'}},
+}
+
+
+def knapsack_sources() -> dict[str, pl.DataFrame]:
+    return {
+        'worth': pl.DataFrame({'item': ITEMS, 'value': [float(7 * i % 13 + 1) for i in range(12)]}),
+        'weight': pl.DataFrame({'item': ITEMS, 'value': [float(5 * i % 11 + 1) for i in range(12)]}),
+        'capacity': pl.DataFrame({'value': [20.0]}),
+    }
+
+
+def _dispatch(yaml: Any) -> tuple[Any, dict[str, pl.DataFrame], dict[str, Any]]:
+    """The example, its data and its coordinates — what the table's own rungs move."""
+    return yaml, sources(), COORDS
+
+
+def _reach(yaml: Any) -> tuple[Any, dict[str, pl.DataFrame], dict[str, Any]]:
+    del yaml
+    return REACH, reach_sources(), {}
+
+
+def _knapsack(yaml: Any) -> tuple[Any, dict[str, pl.DataFrame], dict[str, Any]]:
+    del yaml
+    return KNAPSACK, knapsack_sources(), {}
+
+
+#: Each rung of the rebind table (docs/api.md): the model it moves, what
+#: changes, and whether the loaded solver may be kept. `p_max` appears twice on
+#: purpose: it gates ``where: p_max > 0`` *and* bounds the variable, so whether
+#: it is structural is a property of the values and not of where the name
+#: appears.
+#:
+#: The four `reach` rungs move **one field of the digest each**, which is what
+#: earns them a model of their own: a rung that moved two would still pass with
+#: either one dropped. Each changes the answer, so a solver wrongly kept
+#: reports a wrong number rather than a lucky one.
 RUNGS = [
-    pytest.param({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})}, True, id='rhs'),
-    pytest.param({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [9.0, 2.0, 1.0]})}, True, id='objective'),
-    pytest.param({'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [80.0, 70.0, 90.0]})}, True, id='bounds'),
-    pytest.param({'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}, False, id='mask'),
+    pytest.param(
+        _dispatch, {'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})}, True, id='rhs'
+    ),
+    pytest.param(
+        _dispatch, {'cost': pl.DataFrame({'generator': GENERATORS, 'value': [9.0, 2.0, 1.0]})}, True, id='objective'
+    ),
+    pytest.param(
+        _dispatch, {'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [80.0, 70.0, 90.0]})}, True, id='bounds'
+    ),
+    pytest.param(
+        _dispatch, {'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}, False, id='mask'
+    ),
+    pytest.param(_reach, {'levy': pl.DataFrame({'value': [500.0]})}, True, id='objective constant'),
+    pytest.param(
+        _reach,
+        {'reach': reaching(('north', 'a', 0.5), ('north', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
+        False,
+        id='a coefficient moved',
+    ),
+    pytest.param(
+        _reach,
+        {'reach': reaching(('north', 'c', 1.0), ('north', 'd', 1.0), ('south', 'a', 1.0), ('south', 'b', 1.0))},
+        False,
+        id='an entry changed column',
+    ),
+    pytest.param(
+        _reach,
+        {'reach': reaching(('north', 'a', 1.0), ('south', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
+        False,
+        id='an entry changed row',
+    ),
+    pytest.param(_knapsack, {'capacity': pl.DataFrame({'value': [9.0]})}, True, id='integer'),
 ]
 
 
-@pytest.mark.parametrize(('change', 'keeps_the_solver'), RUNGS)
-def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, change, keeps_the_solver):
+@pytest.fixture(params=sorted(SOLVERS))
+def solver_name(request: pytest.FixtureRequest) -> str:
+    """Every sink that can stay loaded, skipping one this build cannot run.
+
+    Asked through the sink's own availability rule rather than by naming its
+    package here, so a member that grows a second dependency does not also grow
+    a second skip.
+    """
+    if not SOLVERS[request.param].is_available():
+        pytest.skip(f'{request.param} is not installed here')
+    return str(request.param)
+
+
+def _priced(schema: Any) -> list[str]:
+    """The constraints an answer carries prices for — none, where a variable is discrete."""
+    if any(v.binary or v.integer for v in schema.variables.values()):
+        return []
+    return list(schema.constraints)
+
+
+@pytest.mark.parametrize(('case', 'change', 'keeps_the_solver'), RUNGS)
+def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, case, change, keeps_the_solver, solver_name):
     """The oracle. Every rung, one assertion: the reference build is the truth.
 
     Read-back is keyed by coordinate, so this holds even where the rung moved
     every label underneath — which is what makes `rebind` total rather than a
     method that refuses the data it cannot do quickly.
+
+    Over **every** declaration rather than a named one, and over **every** sink
+    that can stay loaded: each writes its own push, and a field one of them
+    forgets is a confident answer to the model before the rebind.
     """
     del keeps_the_solver
-    reference = lps.solve(dispatch_yaml, {**sources(), **change}, coords=COORDS)
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        bound.solve()
-        rebound = bound.rebind(change).solve()
+    model, given, coords = case(dispatch_yaml)
+    schema = lps.load_model(model)
+    reference = lps.solve(model, {**given, **change}, solver_name=solver_name, coords=coords)
+    with lps.build(model, given, coords=coords) as bound:
+        bound.solve(solver_name=solver_name)
+        rebound = bound.rebind(change).solve(solver_name=solver_name)
 
         assert rebound.objective == pytest.approx(reference.objective), 'the rebind reached a different optimum'
-        assert rebound.primal('p').equals(reference.primal('p')), 'the rebind laid its values out differently'
-        assert rebound.dual('power_balance').equals(reference.dual('power_balance')), (
-            'the rebind laid its duals out differently'
-        )
+        for name in schema.variables:
+            assert rebound.primal(name).equals(reference.primal(name)), f"'{name}' came back laid out differently"
+        for name in _priced(schema):
+            assert rebound.dual(name).equals(reference.dual(name)), f"'{name}' came back priced differently"
     reference.close()
 
 
-@pytest.mark.parametrize('solver_name', sorted(SOLVERS))
-@pytest.mark.parametrize(('change', 'keeps_the_solver'), RUNGS)
-def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, change, keeps_the_solver, solver_name):
+@pytest.mark.parametrize(('case', 'change', 'keeps_the_solver'), RUNGS)
+def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(
+    dispatch_yaml, case, change, keeps_the_solver, solver_name
+):
     """The fast path is taken exactly when the structure held.
 
     The first solve always loads — there was nothing to keep — so a driver on
@@ -78,9 +219,8 @@ def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, 
     The rule is the digest's, so it is the same rule for every sink that can
     stay loaded.
     """
-    if solver_name == 'gurobi':
-        pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
+    model, given, coords = case(dispatch_yaml)
+    with lps.build(model, given, coords=coords) as bound:
         bound.solve(solver_name=solver_name)
         assert bound.diagnostics().loads == 1, 'the first solve has nothing loaded to keep'
 
@@ -92,6 +232,69 @@ def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, 
             'a rebind that keeps every label pushes values onto the loaded solver; '
             'one that moves a label has to load the model again'
         )
+
+
+def _structure(model: Any) -> bytes:
+    """*model*'s digest, read off it built on the same data."""
+    with lps.build(model, reach_sources()) as bound:
+        return bound._engine._tables().structure
+
+
+#: The three fields of the digest **no rung above can reach**: a variable's
+#: type, a row's comparison and the objective's direction all come from the
+#: YAML, so no change to data moves one. They are hashed anyway — the digest's
+#: soundness must not rest on reasoning about which of a model's facts the
+#: language lets data touch — so they are pinned where they *are* reachable,
+#: one edit of the declaration apart. Each replaces its whole block.
+DECLARED = [
+    pytest.param(
+        {'variables': {'p': {'foreach': ['plant'], 'bounds': {'lower': 0, 'upper': 100}, 'integer': True}}},
+        id='a variable type',
+    ),
+    pytest.param(
+        {'constraints': {'meet': {'foreach': ['zone'], 'expression': 'sum(reach * p, over=plant) == demand'}}},
+        id="a row's comparison",
+    ),
+    pytest.param({'objectives': {'total': {'sense': 'maximize', 'expression': 'p * cost + levy'}}}, id='the sense'),
+]
+
+
+@pytest.mark.parametrize('edited', DECLARED)
+def test_the_digest_moves_where_a_declaration_moved(edited):
+    """What a re-solve may not change, checked directly for want of a rung.
+
+    A solver keeps the model it holds when the digest matches, so a field left
+    out of it is a push onto a model that is no longer the one being asked
+    about — and every such answer is confident. Two builds one declaration
+    apart is the only way to ask about a field the data cannot move.
+    """
+    assert _structure(REACH) != _structure({**REACH, **edited}), (
+        'a model a re-solve may not be pushed onto has to hash differently'
+    )
+
+
+#: One option each sink understands, at two values. The vocabulary is the
+#: solver's own — `solver_options` is forwarded verbatim — so there is one word
+#: per member rather than one shared word.
+LIMITS = {'highs': ('time_limit', 60.0, 120.0), 'gurobi': ('TimeLimit', 60.0, 120.0)}
+
+
+def test_a_solve_asking_for_other_options_loads_the_model_again(dispatch_yaml, solver_name):
+    """Options are recorded at the load, so they are part of what may be kept.
+
+    A solver holds what it was told when it took the model. Keeping it for a
+    solve that asked for others would run that solve under the *first* one's
+    limits and report the answer as the one asked for — a gap left loose, or a
+    time limit that was never the caller's.
+    """
+    option, first, second = LIMITS[solver_name]
+    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
+        bound.solve(solver_name=solver_name, solver_options={option: first})
+        bound.solve(solver_name=solver_name, solver_options={option: second})
+        assert bound.diagnostics().loads == 2, 'a solver told the first options cannot be told others'
+
+        bound.solve(solver_name=solver_name, solver_options={option: second})
+        assert bound.diagnostics().loads == 2, 'the same options ask for the model the solver already holds'
 
 
 def test_a_rebind_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml):
