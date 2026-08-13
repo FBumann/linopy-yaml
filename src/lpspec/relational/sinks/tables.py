@@ -131,23 +131,35 @@ class ModelTables:
         being genuinely sparse: a variable in no objective term is left free
         rather than holding whatever the allocator returned.
 
-        The bound vectors are rewritten with ``copy=True``, being views of the
-        frame — in place, an infinity would edit the built model to suit
-        whichever solver asked last.
+        **The three column vectors are prepared in one polars pass**, not three
+        numpy ones. Substituting the solver's infinity with ``nan_to_num``
+        walks the column once per special value and copies it again to leave
+        the built model alone; the same substitution as an expression is one
+        threaded pass that *produces* a new column, so the copy the old code
+        made defensively is the only materialisation left. Expressions in one
+        context evaluate in parallel, so the integrality test rides along for
+        free rather than taking a pass of its own.
+
+        Nothing here aliases the built model, which is what the copy was for:
+        every vector returned is freshly produced.
 
         **Nothing textual crosses into numpy**: a polars ``String`` converts by
         boxing every value as a Python object, so the test against
         ``'continuous'`` is made in polars and only its answer crosses — an
         order of magnitude apart at the top of the ladder (#418).
         """
-        import numpy as np
-
-        count = self.column_count
-        lb = np.nan_to_num(self.cols['lb'].to_numpy(), copy=True, neginf=-infinity, posinf=infinity)
-        ub = np.nan_to_num(self.cols['ub'].to_numpy(), copy=True, neginf=-infinity, posinf=infinity)
-        integral = self.cols.select(pl.col('vtype') != 'continuous').to_series().to_numpy()
-        cost = _scattered(count, self.obj['col'].to_numpy(), self.obj['coeff'].to_numpy(), 0.0)
-        return lb, ub, cost, integral
+        prepared = self.cols.select(
+            _finite(pl.col('lb'), infinity).alias('lb'),
+            _finite(pl.col('ub'), infinity).alias('ub'),
+            (pl.col('vtype') != 'continuous').alias('integral'),
+        )
+        cost = _scattered(self.column_count, self.obj['col'].to_numpy(), self.obj['coeff'].to_numpy(), 0.0)
+        return (
+            prepared['lb'].to_numpy(),
+            prepared['ub'].to_numpy(),
+            cost,
+            prepared['integral'].to_numpy(),
+        )
 
     def dense_rows(self, infinity: float) -> DenseRows:
         """``(sense, rhs)`` as numpy vectors over the solver's row index.
@@ -229,6 +241,26 @@ def solver_vector(values: Any) -> pl.Series:
     import numpy as np
 
     return pl.Series('value', np.asarray(values, dtype=np.float64))
+
+
+def _finite(value: pl.Expr, infinity: float) -> pl.Expr:
+    """*value* with the solver's spelling of an absent bound, and no ``NaN``.
+
+    The three substitutions ``numpy.nan_to_num(neginf=, posinf=)`` makes, as
+    one expression: a ``NaN`` bound is no bound (zero, as it was), and each
+    infinity becomes the finite sentinel the solver asking recognises. Kept
+    together because a bound that took one substitution and not another would
+    reach the solver as a number it reads as real.
+    """
+    return (
+        pl.when(value.is_nan())
+        .then(pl.lit(0.0))
+        .when(value == float('inf'))
+        .then(pl.lit(infinity))
+        .when(value == float('-inf'))
+        .then(pl.lit(-infinity))
+        .otherwise(value)
+    )
 
 
 def _scattered(count: int, at: Any, values: Any, absent: Any) -> Any:
