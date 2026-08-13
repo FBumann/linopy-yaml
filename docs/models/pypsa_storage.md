@@ -235,6 +235,23 @@ $$0 \le \mathit{soc}_{t,s} \le \mathit{soc}^{\mathrm{max}}_{s} \qquad \forall\th
         expression: p * marginal_cost
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/pypsa_storage.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/ports/pypsa_storage.yaml', sources) as solution:
+        print(solution.objective)  # 15253.178322993519
+        print(solution.dual('nodal_balance'))
+    ```
+
 === "PyPSA"
 
     `examples/ports/references/pypsa/pypsa_storage.py`:

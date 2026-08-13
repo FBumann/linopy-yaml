@@ -2,6 +2,8 @@
 
 Dispatch plus a battery, and the only construct in the language whose cost is not obviously linear.
 
+> **✔ Verified against linopy 0.9.0** — objective **5650**, matched to `rtol=1e-09`. A teaching model, so the check is agreement with an independent hand-written formulation, not a published figure.
+
 ## The problem
 
 State of charge links each snapshot to the one before it, cyclically:
@@ -82,57 +84,137 @@ $$0 \le \mathrm{soc}_{s} \le 100 \qquad \forall\thinspace s \in \mathcal{S}$$
 </details>
 <!-- math:end -->
 
-```yaml
-dimensions:
-  snapshot:
-    dtype: int
-  generator:
-    dtype: str
+=== "lpspec"
 
-parameters:
-  p_max:
-    dims: [generator]
-  cost:
-    dims: [generator]
-  load:
-    dims: [snapshot]
+    ```yaml
+    dimensions:
+      snapshot:
+        dtype: int
+      generator:
+        dtype: str
 
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds:
-      lower: 0
-      upper: p_max
-  charge:
-    foreach: [snapshot]
-    bounds:
-      lower: 0
-      upper: 30
-  discharge:
-    foreach: [snapshot]
-    bounds:
-      lower: 0
-      upper: 30
-  soc:
-    foreach: [snapshot]
-    bounds:
-      lower: 0
-      upper: 100
+    parameters:
+      p_max:
+        dims: [generator]
+      cost:
+        dims: [generator]
+      load:
+        dims: [snapshot]
 
-constraints:
-  power_balance:
-    foreach: [snapshot]
-    expression: sum(p, over=generator) + discharge - charge == load
-  soc_balance:
-    foreach: [snapshot]
-  # cyclic storage: soc wraps around the snapshot horizon
-    expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
+    variables:
+      p:
+        foreach: [snapshot, generator]
+        bounds:
+          lower: 0
+          upper: p_max
+      charge:
+        foreach: [snapshot]
+        bounds:
+          lower: 0
+          upper: 30
+      discharge:
+        foreach: [snapshot]
+        bounds:
+          lower: 0
+          upper: 30
+      soc:
+        foreach: [snapshot]
+        bounds:
+          lower: 0
+          upper: 100
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * cost
-```
+    constraints:
+      power_balance:
+        foreach: [snapshot]
+        expression: sum(p, over=generator) + discharge - charge == load
+      soc_balance:
+        foreach: [snapshot]
+      # cyclic storage: soc wraps around the snapshot horizon
+        expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
+
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: p * cost
+    ```
+
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/storage.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/storage.yaml', sources) as solution:
+        print(solution.objective)  # 5650.0
+        print(solution.dual('power_balance'))
+    ```
+
+=== "linopy"
+
+    `examples/ports/references/linopy/storage.py`:
+
+    ```python
+    from __future__ import annotations
+
+    import json
+    from pathlib import Path
+
+    import linopy
+    import pandas as pd
+
+    DATA = Path(__file__).resolve().parents[2] / 'data' / 'storage.json'
+
+
+    def build(data: dict) -> linopy.Model:
+        """The instance's tables as a linopy model, row for row."""
+        generators = pd.Index(data['p_max']['generator'], name='generator')
+        snapshots = pd.Index(data['load']['snapshot'], name='snapshot')
+
+        p_max = pd.Series(data['p_max']['value'], index=generators)
+        cost = pd.Series(data['cost']['value'], index=generators)
+        load = pd.Series(data['load']['value'], index=snapshots)
+
+        m = linopy.Model()
+        p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, generators], name='p')
+        charge = m.add_variables(lower=0, upper=30, coords=[snapshots], name='charge')
+        discharge = m.add_variables(lower=0, upper=30, coords=[snapshots], name='discharge')
+        soc = m.add_variables(lower=0, upper=100, coords=[snapshots], name='soc')
+
+        m.add_constraints(p.sum('generator') + discharge - charge == load, name='power_balance')
+        m.add_constraints(soc == soc.roll(snapshot=1) + 0.9 * charge - discharge, name='soc_balance')
+        m.add_objective((p * cost).sum())
+        return m
+
+
+    def marginal_prices(m: linopy.Model) -> dict[str, list]:
+        """The power-balance dual — what a unit of load costs each snapshot.
+
+        With cyclic storage the peak price falls below the peaker's cost: the
+        battery shaves it, and the price says by how much.
+        """
+        dual = m.constraints['power_balance'].dual
+        return {'snapshot': [int(v) for v in dual.indexes['snapshot']], 'value': [float(v) for v in dual.values]}
+
+
+    def main() -> float:
+        m = build(json.loads(DATA.read_text()))
+        status, condition = m.solve(solver_name='highs')
+        assert status == 'ok', f'{status}: {condition}'
+        print(f'linopy {linopy.__version__}')
+        print(f'objective {float(m.objective.value)!r}')
+        print(f'duals {json.dumps({"power_balance": marginal_prices(m)})}')
+        return float(m.objective.value)
+
+
+    if __name__ == '__main__':
+        main()
+    ```
 
 ## What it exercises
 

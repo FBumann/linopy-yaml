@@ -197,6 +197,50 @@ def test_the_page_shows_the_reference_that_runs(reference: Path) -> None:
     assert body in _fences(text, 'python'), f'{page} has drifted from {reference}'
 
 
+def _call_snippet(name: str) -> str:
+    """The lpspec tab's call block, derived rather than copied.
+
+    Everything in it is already recorded elsewhere — the model path, the
+    committed instance, the verified objective, the dual the corpus checks —
+    so the snippet is a projection of `references.json`, and this is its one
+    home. `test_ports.py` executes the same call on the same instance; the
+    page only has to match it.
+    """
+    entry = constructs.REFERENCES[name]
+    ports_yaml = constructs.ROOT / 'examples' / 'ports' / f'{name}.yaml'
+    model = f'examples/ports/{name}.yaml' if ports_yaml.exists() else f'examples/{name}.yaml'
+    lines = [
+        'import json',
+        'from pathlib import Path',
+        '',
+        'import lpspec as lps',
+        'import polars as pl',
+        '',
+        f"tables = json.loads(Path('examples/ports/data/{name}.json').read_text())",
+        'sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}',
+        '',
+        f"with lps.solve('{model}', sources) as solution:",
+        f'    print(solution.objective)  # {entry["objective"]!r}',
+    ]
+    if entry.get('duals'):
+        lines.append(f"    print(solution.dual('{next(iter(entry['duals']))}'))")
+    return '\n'.join(lines) + '\n'
+
+
+def test_the_lpspec_tab_shows_the_call(reference: Path) -> None:
+    """Beside a runnable script, a bare YAML file is half an answer.
+
+    The arm tab is a complete program — build, solve, read the duals — so the
+    lpspec tab carries the same journey: the model, then the call that takes
+    the committed instance to the verified optimum.
+    """
+    page = GALLERY / f'{reference.stem}.md'
+    assert _call_snippet(reference.stem) in _fences(page.read_text(), 'python'), (
+        f'{page} does not show the call for {reference.stem} — regenerate it from _call_snippet, '
+        f'which derives it from references.json'
+    )
+
+
 def test_no_tab_without_a_reference() -> None:
     """The reverse: a tab claiming an arm must have a script behind it.
 

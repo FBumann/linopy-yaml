@@ -1,4 +1,25 @@
 {
+  "dispatch": {
+    "objective": 10500.0,
+    "rtol": 1e-09,
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/dispatch.py — a teaching model, verified by agreement with an independent hand-written formulation rather than a published figure",
+    "duals": {
+      "power_balance": {
+        "snapshot": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "value": [
+          10.0,
+          50.0,
+          50.0,
+          50.0
+        ]
+      }
+    }
+  },
   "facility_location": {
     "objective": 932615.75,
     "rtol": 1e-09,
@@ -292,6 +313,54 @@
           0.016358032699276687,
           -0.0,
           0.00014411751545899708
+        ]
+      }
+    }
+  },
+  "storage": {
+    "objective": 5650.0,
+    "rtol": 1e-09,
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/storage.py — a teaching model, verified by agreement with an independent hand-written formulation rather than a published figure",
+    "duals": {
+      "power_balance": {
+        "snapshot": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "value": [
+          45.0,
+          50.0,
+          10.0,
+          50.0
+        ]
+      }
+    }
+  },
+  "transport": {
+    "objective": 4400.0,
+    "rtol": 1e-09,
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/transport.py — a teaching model, verified by agreement with an independent hand-written formulation rather than a published figure",
+    "duals": {
+      "balance": {
+        "snapshot": [
+          0,
+          0,
+          1,
+          1
+        ],
+        "bus": [
+          "north",
+          "south",
+          "north",
+          "south"
+        ],
+        "value": [
+          40.0,
+          40.0,
+          40.0,
+          40.0
         ]
       }
     }

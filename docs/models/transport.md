@@ -2,6 +2,8 @@
 
 A network: generators sit on buses, lines connect buses, and power balances at every bus.
 
+> **✔ Verified against linopy 0.9.0** — objective **4400**, matched to `rtol=1e-09`. A teaching model, so the check is agreement with an independent hand-written formulation, not a published figure.
+
 ## The problem
 
 $$\sum_{g \thinspace:\thinspace \mathrm{bus}(g) = b} p_{s,g} \quad+\quad \sum_{\ell \thinspace:\thinspace \mathrm{to}(\ell) = b} f_{s,\ell} \quad-\quad \sum_{\ell \thinspace:\thinspace \mathrm{from}(\ell) = b} f_{s,\ell} \quad=\quad d_{s,b}$$
@@ -68,60 +70,154 @@ $$\underline{f}_{\ell} \le f_{s,\ell} \le \bar f_{\ell} \qquad \forall\thinspace
 </details>
 <!-- math:end -->
 
-```yaml
-dimensions:
-  snapshot:
-    dtype: int
-  generator:
-    dtype: str
-    coords: [bus]  # every generator sits on a bus
-  bus:
-    dtype: str
-  line:
-    dtype: str
-    coords: {from: bus, to: bus}  # both endpoints are buses
+=== "lpspec"
 
-parameters:
-  p_max:
-    dims: [generator]
-  cost:
-    dims: [generator]
-  cap:
-    dims: [line]
-  neg_cap:
-    dims: [line]
-  load:
-    dims: [snapshot, bus]
+    ```yaml
+    dimensions:
+      snapshot:
+        dtype: int
+      generator:
+        dtype: str
+        coords: [bus]  # every generator sits on a bus
+      bus:
+        dtype: str
+      line:
+        dtype: str
+        coords: {from: bus, to: bus}  # both endpoints are buses
 
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds:
-      lower: 0
-      upper: p_max
-  f:
-    foreach: [snapshot, line]
-    bounds:
-      lower: neg_cap
-      upper: cap
+    parameters:
+      p_max:
+        dims: [generator]
+      cost:
+        dims: [generator]
+      cap:
+        dims: [line]
+      neg_cap:
+        dims: [line]
+      load:
+        dims: [snapshot, bus]
 
-# Naming the two halves of the nodal balance. Pure substitution before either
-# backend sees the model, so this costs nothing at build and nothing at solve —
-# what it buys is a constraint that reads as the sentence it is.
-expressions:
-  gen_at_bus: sum(p, over=generator, group_by=bus)
-  net_inflow: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+    variables:
+      p:
+        foreach: [snapshot, generator]
+        bounds:
+          lower: 0
+          upper: p_max
+      f:
+        foreach: [snapshot, line]
+        bounds:
+          lower: neg_cap
+          upper: cap
 
-constraints:
-  balance:
-    foreach: [snapshot, bus]
-    expression: gen_at_bus + net_inflow == load
+    # Naming the two halves of the nodal balance. Pure substitution before either
+    # backend sees the model, so this costs nothing at build and nothing at solve —
+    # what it buys is a constraint that reads as the sentence it is.
+    expressions:
+      gen_at_bus: sum(p, over=generator, group_by=bus)
+      net_inflow: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * cost
-```
+    constraints:
+      balance:
+        foreach: [snapshot, bus]
+        expression: gen_at_bus + net_inflow == load
+
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: p * cost
+    ```
+
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/transport.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/transport.yaml', sources) as solution:
+        print(solution.objective)  # 4400.0
+        print(solution.dual('balance'))
+    ```
+
+=== "linopy"
+
+    `examples/ports/references/linopy/transport.py`:
+
+    ```python
+    from __future__ import annotations
+
+    import json
+    from pathlib import Path
+
+    import linopy
+    import pandas as pd
+    import xarray as xr
+
+    DATA = Path(__file__).resolve().parents[2] / 'data' / 'transport.json'
+
+
+    def build(data: dict) -> linopy.Model:
+        """The instance's tables as a linopy model, row for row."""
+        generators = pd.Index(data['generator']['generator'], name='generator')
+        lines = pd.Index(data['line']['line'], name='line')
+        buses = pd.Index(sorted(set(data['load']['bus'])), name='bus')
+        snapshots = pd.Index(sorted(set(data['load']['snapshot'])), name='snapshot')
+
+        p_max = pd.Series(data['p_max']['value'], index=generators)
+        cost = pd.Series(data['cost']['value'], index=generators)
+        cap = pd.Series(data['cap']['value'], index=lines)
+        neg_cap = pd.Series(data['neg_cap']['value'], index=lines)
+        load = xr.DataArray(
+            pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value').reindex(columns=buses)
+        )
+
+        gen_at = pd.DataFrame(0.0, index=buses, columns=generators)
+        for gen, bus in zip(generators, data['generator']['bus'], strict=True):
+            gen_at.loc[bus, gen] = 1.0
+        flow_in = pd.DataFrame(0.0, index=buses, columns=lines)
+        for line, src, dst in zip(lines, data['line']['from'], data['line']['to'], strict=True):
+            flow_in.loc[dst, line] += 1.0
+            flow_in.loc[src, line] -= 1.0
+
+        m = linopy.Model()
+        p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, generators], name='p')
+        f = m.add_variables(lower=neg_cap, upper=cap, coords=[snapshots, lines], name='f')
+        m.add_constraints(
+            (p * xr.DataArray(gen_at)).sum('generator') + (f * xr.DataArray(flow_in)).sum('line') == load,
+            name='balance',
+        )
+        m.add_objective((p * cost).sum())
+        return m
+
+
+    def nodal_prices(m: linopy.Model) -> dict[str, list]:
+        """The balance dual, tidy: one price per (snapshot, bus)."""
+        dual = m.constraints['balance'].dual.transpose('snapshot', 'bus')
+        return {
+            'snapshot': [int(s) for s in dual.indexes['snapshot'] for _ in dual.indexes['bus']],
+            'bus': [str(b) for _ in dual.indexes['snapshot'] for b in dual.indexes['bus']],
+            'value': [float(v) for v in dual.values.ravel()],
+        }
+
+
+    def main() -> float:
+        m = build(json.loads(DATA.read_text()))
+        status, condition = m.solve(solver_name='highs')
+        assert status == 'ok', f'{status}: {condition}'
+        print(f'linopy {linopy.__version__}')
+        print(f'objective {float(m.objective.value)!r}')
+        print(f'duals {json.dumps({"balance": nodal_prices(m)})}')
+        return float(m.objective.value)
+
+
+    if __name__ == '__main__':
+        main()
+    ```
 
 ## What it exercises
 

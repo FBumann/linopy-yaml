@@ -157,6 +157,23 @@ $$\mathit{neg\_s\_nom}_{l} \le f_{t,l} \le s^{\mathrm{nom}}_{l} \qquad \forall\t
         expression: p * marginal_cost
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/pypsa_kvl.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/ports/pypsa_kvl.yaml', sources) as solution:
+        print(solution.objective)  # 17000.0
+        print(solution.dual('nodal_balance'))
+    ```
+
 === "PyPSA"
 
     `examples/ports/references/pypsa/pypsa_kvl.py`:
