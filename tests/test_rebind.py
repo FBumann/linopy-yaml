@@ -246,6 +246,16 @@ WALK = [1.0, 1.25, 0.8]
 #: of the time.
 TOO_SLOW_TO_WALK = {'tsp_mtz'}
 
+#: Constraints whose prices the walk compares for layout but not for numbers.
+#: An investment optimum sits on a kink of the piecewise-linear value of
+#: capacity — the marginal MW is worth more than capex on one side of a load
+#: level and less on the other — so how the capacity rent splits across the
+#: snapshots binding there is a free dual ray, and a warm-started re-solve
+#: legitimately lands on a different split than a cold one. The objective, the
+#: layouts and every other price (`balance`, whose degeneracy would move the
+#: objective) stay exact.
+NONUNIQUE_PRICES: dict[str, set[str]] = {'multi_period': {'within_cap'}}
+
 
 def _declared(given: dict[str, Any], schema: Any) -> dict[str, Any]:
     """*given* less the names the model never declares.
@@ -350,7 +360,8 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
                             got.primal(name), reference.primal(name), values=wanted is not None, where=f'{where} {name}'
                         )
                     for name in wanted or {}:
-                        _laid_out_alike(got.dual(name), wanted[name], values=True, where=f'{where} {name} price')
+                        exact = name not in NONUNIQUE_PRICES.get(port['name'], set())
+                        _laid_out_alike(got.dual(name), wanted[name], values=exact, where=f'{where} {name} price')
 
             if not step:
                 assert bound.diagnostics().loads == 1, (

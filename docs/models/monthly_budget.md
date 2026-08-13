@@ -4,6 +4,8 @@ A cap on what each technology may generate per calendar month — an aggregate
 over a *coarser grouping of time*, written with the same primitive that places
 a generator on a bus.
 
+> **✔ Agrees with hand-written linopy 0.9.0** — objective **9500**, matched to `rtol=1e-09`.
+
 ## The problem
 
 $$\sum_{t \thinspace:\thinspace \mathrm{month}(t) = m} p_{t,g} \quad\le\quad \bar E_{m,g}$$
@@ -73,50 +75,89 @@ $$0 \le p_{t,g} \le \bar p_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspa
 </details>
 <!-- math:end -->
 
-```yaml
-dimensions:
-  snapshot:
-    dtype: datetime
-    coords: [month]  # every snapshot falls in a month, exactly as a generator sits on a bus
-  month:
-    dtype: str
-  generator:
-    dtype: str
+The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-parameters:
-  p_max:
-    dims: [generator]
-  cost:
-    dims: [generator]
-  load:
-    dims: [snapshot]
-  # the budget the group sum is checked against, one per month and technology
-  monthly_cap:
-    dims: [month, generator]
+=== "lpspec"
 
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds:
-      lower: 0
-      upper: p_max
+    ```yaml
+    dimensions:
+      snapshot:
+        dtype: datetime
+        coords: [month]  # every snapshot falls in a month, exactly as a generator sits on a bus
+      month:
+        dtype: str
+      generator:
+        dtype: str
 
-constraints:
-  balance:
-    foreach: [snapshot]
-    expression: sum(p, over=generator) == load
-  # The per-month total, and the whole point of this model: `month` is a
-  # coordinate the snapshot dimension declares, so the grouping is a column in
-  # the snapshot index rather than anything the language knows about calendars.
-  monthly_budget:
-    foreach: [month, generator]
-    expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
+    parameters:
+      p_max:
+        dims: [generator]
+      cost:
+        dims: [generator]
+      load:
+        dims: [snapshot]
+      # the budget the group sum is checked against, one per month and technology
+      monthly_cap:
+        dims: [month, generator]
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: sum(p * cost, over=generator)
-```
+    variables:
+      p:
+        foreach: [snapshot, generator]
+        bounds:
+          lower: 0
+          upper: p_max
+
+    constraints:
+      balance:
+        foreach: [snapshot]
+        expression: sum(p, over=generator) == load
+      # The per-month total, and the whole point of this model: `month` is a
+      # coordinate the snapshot dimension declares, so the grouping is a column in
+      # the snapshot index rather than anything the language knows about calendars.
+      monthly_budget:
+        foreach: [month, generator]
+        expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
+
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: sum(p * cost, over=generator)
+    ```
+
+    ```python
+    # sources: parameter name -> frame or parquet path
+    with lps.solve('examples/monthly_budget.yaml', sources) as solution:
+        solution.objective  # 9500.0
+        solution.dual('monthly_budget')
+    ```
+
+=== "linopy"
+
+    The model-building half of `examples/ports/references/linopy/monthly_budget.py`:
+
+    ```python
+    def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
+        """The instance's tables as a linopy model, row for row.
+
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        """
+        p_max = tables['p_max'].set_index('generator')['value']
+        cost = tables['cost'].set_index('generator')['value']
+        load = tables['load'].set_index('snapshot')['value']
+        cap = xr.DataArray(tables['monthly_cap'].pivot(index='month', columns='generator', values='value'))
+
+        calendar = tables['snapshot'].set_index('snapshot')['month']
+        in_month = pd.DataFrame(0.0, index=cap.indexes['month'], columns=calendar.index)
+        for snapshot, month in calendar.items():
+            in_month.loc[month, snapshot] = 1.0
+
+        m = linopy.Model()
+        p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')
+        m.add_constraints(p.sum('generator') == load, name='balance')
+        m.add_constraints((p * xr.DataArray(in_month)).sum('snapshot') <= cap, name='monthly_budget')
+        m.add_objective((p * cost).sum())
+        return m
+    ```
 
 ## The grouping is data
 

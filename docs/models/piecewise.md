@@ -2,6 +2,8 @@
 
 Per-generator convex cost curves, expanded into a λ-formulation.
 
+> **✔ Agrees with hand-written linopy 0.9.0** — objective **3850**, matched to `rtol=1e-09`.
+
 ## The problem
 
 Each generator gets its own breakpoint list, so the curve varies per unit —
@@ -83,64 +85,101 @@ $$0 \le \lambda_{t,g,k} \le 1 \qquad \forall\thinspace t \in \mathcal{T},\enspac
 </details>
 <!-- math:end -->
 
-```yaml
-# Dispatch with piecewise-linear generation costs via the piecewise: block.
-#
-# Each generator has its own convex cost curve: the breakpoint parameters
-# carry [generator, bp], so curves vary per generator — something flat
-# breakpoint lists cannot express. With convex: true the expansion emits no
-# binaries (pure-LP convex hull, exact for convex curves under minimisation)
-# and the model stays relational-eligible as an LP. Drop convex: true for
-# nonconvex curves — the expansion then adds segment binaries + adjacency,
-# and the model becomes a (still relational-eligible) MILP.
+The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-dimensions:
-  snapshot:
-    dtype: int
-  generator:
-    dtype: str
-  bp:
-    dtype: int
+=== "lpspec"
 
-parameters:
-  p_max:
-    dims: [generator]
-  load:
-    dims: [snapshot]
-  bp_x:
-    dims: [generator, bp]  # per-generator breakpoint positions
-  bp_y:
-    dims: [generator, bp]  # per-generator cost at each breakpoint
+    ```yaml
+    # Dispatch with piecewise-linear generation costs via the piecewise: block.
+    #
+    # Each generator has its own convex cost curve: the breakpoint parameters
+    # carry [generator, bp], so curves vary per generator — something flat
+    # breakpoint lists cannot express. With convex: true the expansion emits no
+    # binaries (pure-LP convex hull, exact for convex curves under minimisation)
+    # and the model stays relational-eligible as an LP. Drop convex: true for
+    # nonconvex curves — the expansion then adds segment binaries + adjacency,
+    # and the model becomes a (still relational-eligible) MILP.
 
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds:
-      lower: 0
-      upper: p_max
-  op_cost:
-    foreach: [snapshot, generator]
-    bounds:
-      lower: 0
+    dimensions:
+      snapshot:
+        dtype: int
+      generator:
+        dtype: str
+      bp:
+        dtype: int
 
-piecewise:
-  cost_curve:
-    over: bp
-    links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
-    convex: true
+    parameters:
+      p_max:
+        dims: [generator]
+      load:
+        dims: [snapshot]
+      bp_x:
+        dims: [generator, bp]  # per-generator breakpoint positions
+      bp_y:
+        dims: [generator, bp]  # per-generator cost at each breakpoint
 
-constraints:
-  balance:
-    foreach: [snapshot]
-    expression: sum(p, over=generator) == load
+    variables:
+      p:
+        foreach: [snapshot, generator]
+        bounds:
+          lower: 0
+          upper: p_max
+      op_cost:
+        foreach: [snapshot, generator]
+        bounds:
+          lower: 0
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: op_cost
-```
+    piecewise:
+      cost_curve:
+        over: bp
+        links:
+          - [p, bp_x]
+          - [op_cost, bp_y]
+        convex: true
+
+    constraints:
+      balance:
+        foreach: [snapshot]
+        expression: sum(p, over=generator) == load
+
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: op_cost
+    ```
+
+    ```python
+    # sources: parameter name -> frame or parquet path
+    with lps.solve('examples/piecewise.yaml', sources) as solution:
+        solution.objective  # 3850.0
+        solution.dual('balance')
+    ```
+
+=== "linopy"
+
+    The model-building half of `examples/ports/references/linopy/piecewise.py`:
+
+    ```python
+    def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
+        """The instance's tables as a linopy model, row for row.
+
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        """
+        p_max = tables['p_max'].set_index('generator')['value']
+        load = tables['load'].set_index('snapshot')['value']
+        curve_x = tables['bp_x'].pivot(index='generator', columns='bp', values='value').reindex(p_max.index)
+        curve_y = tables['bp_y'].pivot(index='generator', columns='bp', values='value').reindex(p_max.index)
+        bp_x = linopy.breakpoints(curve_x, dim='generator')
+        bp_y = linopy.breakpoints(curve_y, dim='generator')
+
+        m = linopy.Model()
+        p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')
+        op_cost = m.add_variables(lower=0, coords=[load.index, p_max.index], name='op_cost')
+        m.add_piecewise_formulation((p, bp_x), (op_cost, bp_y, '>='))
+        m.add_constraints(p.sum('generator') == load, name='balance')
+        m.add_objective(op_cost.sum())
+        return m
+    ```
 
 ## What it exercises
 
