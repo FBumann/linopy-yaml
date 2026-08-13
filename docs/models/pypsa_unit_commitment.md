@@ -195,38 +195,17 @@ $$\mathit{shut\_down}_{t,g} \in \{0, 1\} \qquad \forall\thinspace t \in \mathcal
         expression: p * marginal_cost + start_up * start_up_cost + shut_down * shut_down_cost
     ```
 
-    Run against the committed instance:
-
     ```python
-    import json
-    from pathlib import Path
-
-    import lpspec as lps
-    import polars as pl
-
-    tables = json.loads(Path('examples/ports/data/pypsa_unit_commitment.json').read_text())
-    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
-
+    # sources: parameter name -> frame or parquet path
     with lps.solve('examples/ports/pypsa_unit_commitment.yaml', sources) as solution:
-        print(solution.objective)  # 24900.0
+        solution.objective  # 24900.0
     ```
 
 === "PyPSA"
 
-    `examples/ports/references/pypsa/pypsa_unit_commitment.py`:
+    The model-building half of `examples/ports/references/pypsa/pypsa_unit_commitment.py`:
 
     ```python
-    from __future__ import annotations
-
-    import json
-    from pathlib import Path
-
-    import pandas as pd
-    import pypsa
-
-    DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_unit_commitment.json'
-
-
     def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column."""
         n = pypsa.Network()
@@ -248,21 +227,6 @@ $$\mathit{shut\_down}_{t,g} \in \{0, 1\} \qquad \forall\thinspace t \in \mathcal
         load = pd.Series(data['load']['value'], index=data['load']['snapshot'])
         n.add('Load', 'load', bus='bus', p_set=load)
         return n
-
-
-    def main() -> float:
-        n = build(json.loads(DATA.read_text()))
-        status, condition = n.optimize(solver_name='highs')
-        assert status == 'ok', f'{status}: {condition}'
-        print(f'pypsa {pypsa.__version__}')
-        print(f'objective {float(n.objective)!r}')
-        print(n.generators_t.p)
-        print(n.generators_t.status)
-        return float(n.objective)
-
-
-    if __name__ == '__main__':
-        main()
     ```
 
 **The first snapshot is not like the others.** PyPSA's default is that a unit

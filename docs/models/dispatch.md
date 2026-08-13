@@ -2,7 +2,7 @@
 
 Least-cost generation against a load profile — the smallest model that is still a model.
 
-> **✔ Verified against linopy 0.9.0** — objective **10500**, matched to `rtol=1e-09`. A teaching model, so the check is agreement with an independent hand-written formulation, not a published figure.
+> **✔ Agrees with hand-written linopy 0.9.0** — objective **10500**, matched to `rtol=1e-09`.
 
 ## The problem
 
@@ -97,39 +97,18 @@ $$0 \le p_{s,g} \le \bar p_{g} \qquad \forall\thinspace s \in \mathcal{S},\enspa
         expression: p * cost
     ```
 
-    Run against the committed instance:
-
     ```python
-    import json
-    from pathlib import Path
-
-    import lpspec as lps
-    import polars as pl
-
-    tables = json.loads(Path('examples/ports/data/dispatch.json').read_text())
-    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
-
+    # sources: parameter name -> frame or parquet path
     with lps.solve('examples/dispatch.yaml', sources) as solution:
-        print(solution.objective)  # 10500.0
-        print(solution.dual('power_balance'))
+        solution.objective  # 10500.0
+        solution.dual('power_balance')
     ```
 
 === "linopy"
 
-    `examples/ports/references/linopy/dispatch.py`:
+    The model-building half of `examples/ports/references/linopy/dispatch.py`:
 
     ```python
-    from __future__ import annotations
-
-    import json
-    from pathlib import Path
-
-    import linopy
-    import pandas as pd
-
-    DATA = Path(__file__).resolve().parents[2] / 'data' / 'dispatch.json'
-
-
     def build(data: dict) -> linopy.Model:
         """The instance's tables as a linopy model, row for row."""
         generators = pd.Index(data['p_max']['generator'], name='generator')
@@ -144,31 +123,6 @@ $$0 \le p_{s,g} \le \bar p_{g} \qquad \forall\thinspace s \in \mathcal{S},\enspa
         m.add_constraints(p.sum('generator') == load, name='power_balance')
         m.add_objective((p * cost).sum())
         return m
-
-
-    def marginal_prices(m: linopy.Model) -> dict[str, list]:
-        """The power-balance dual: the classic price signal.
-
-        One price per snapshot — the cost of the marginal generator, which is what
-        makes dispatch worth checking on duals: a snapshot where wind covers the
-        load prices at wind, the moment gas has to run the price jumps to gas.
-        """
-        dual = m.constraints['power_balance'].dual
-        return {'snapshot': [int(v) for v in dual.indexes['snapshot']], 'value': [float(v) for v in dual.values]}
-
-
-    def main() -> float:
-        m = build(json.loads(DATA.read_text()))
-        status, condition = m.solve(solver_name='highs')
-        assert status == 'ok', f'{status}: {condition}'
-        print(f'linopy {linopy.__version__}')
-        print(f'objective {float(m.objective.value)!r}')
-        print(f'duals {json.dumps({"power_balance": marginal_prices(m)})}')
-        return float(m.objective.value)
-
-
-    if __name__ == '__main__':
-        main()
     ```
 
 ## What it exercises

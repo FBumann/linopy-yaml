@@ -177,13 +177,12 @@ def test_every_arm_directory_is_named(reference: Path) -> None:
 
 
 def test_the_page_shows_the_reference_that_runs(reference: Path) -> None:
-    """The reference tab embeds a script, and a comparison about readability
-    has to show code that still exists in that form.
+    """The reference tab embeds the script's modelling half, and a comparison
+    about readability has to show code that still exists in that form.
 
     Caught its own first regression: `ruff format` reflowed a `pivot` chain in
     `transport_dantzig.py` after the page had copied it, and nothing else would
-    have noticed. The PEP 723 header is excluded — it is provenance, and the
-    comparison is about the modelling.
+    have noticed.
     """
     page = GALLERY / f'{reference.stem}.md'
     text = page.read_text()
@@ -192,38 +191,43 @@ def test_the_page_shows_the_reference_that_runs(reference: Path) -> None:
         f'{page} shows no `=== "{title}"` tab — a reference with no tab is invisible to the reader it was written for'
     )
     assert '=== "lpspec"' in text, f'{page} has an arm tab but no `=== "lpspec"` tab beside it'
-    script = reference.read_text()
-    body = script[script.index('from __future__') :].rstrip() + '\n'
-    assert body in _fences(text, 'python'), f'{page} has drifted from {reference}'
+    assert _build_slice(reference) in _fences(text, 'python'), (
+        f'{page} has drifted from the build function of {reference}'
+    )
+
+
+def _build_slice(reference: Path) -> str:
+    """The reference's ``build`` function, exactly as the file holds it.
+
+    The slice ends at the next top-level statement, so the run harness — the
+    solve, the printing protocol, the dual extraction — never reaches the
+    page. A reader comparing formulations wants the modelling against the
+    YAML, like against like; the harness is a click away at the file itself.
+    """
+    body = reference.read_text()
+    body = body[body.index('def build') :]
+    end = min(i for i in (body.find('\n\n\ndef '), body.find('\n\n\nif ')) if i != -1)
+    return body[:end].rstrip() + '\n'
 
 
 def _call_snippet(name: str) -> str:
     """The lpspec tab's call block, derived rather than copied.
 
-    Everything in it is already recorded elsewhere — the model path, the
-    committed instance, the verified objective, the dual the corpus checks —
-    so the snippet is a projection of `references.json`, and this is its one
-    home. `test_ports.py` executes the same call on the same instance; the
-    page only has to match it.
+    Three lines: the solve, the objective it reaches, the dual the corpus
+    checks — a projection of `references.json`, and this is its one home.
+    `test_ports.py` executes the same call against the committed instance;
+    the page only has to match it.
     """
     entry = constructs.REFERENCES[name]
     ports_yaml = constructs.ROOT / 'examples' / 'ports' / f'{name}.yaml'
     model = f'examples/ports/{name}.yaml' if ports_yaml.exists() else f'examples/{name}.yaml'
     lines = [
-        'import json',
-        'from pathlib import Path',
-        '',
-        'import lpspec as lps',
-        'import polars as pl',
-        '',
-        f"tables = json.loads(Path('examples/ports/data/{name}.json').read_text())",
-        'sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}',
-        '',
+        '# sources: parameter name -> frame or parquet path',
         f"with lps.solve('{model}', sources) as solution:",
-        f'    print(solution.objective)  # {entry["objective"]!r}',
+        f'    solution.objective  # {entry["objective"]!r}',
     ]
     if entry.get('duals'):
-        lines.append(f"    print(solution.dual('{next(iter(entry['duals']))}'))")
+        lines.append(f"    solution.dual('{next(iter(entry['duals']))}')")
     return '\n'.join(lines) + '\n'
 
 

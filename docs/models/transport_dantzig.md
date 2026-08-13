@@ -109,21 +109,11 @@ $$x_{i,j} \ge 0 \qquad \forall\thinspace i \in \mathcal{I},\enspace j \in \mathc
         expression: shipment * distance * freight / 1000
     ```
 
-    Run against the committed instance:
-
     ```python
-    import json
-    from pathlib import Path
-
-    import lpspec as lps
-    import polars as pl
-
-    tables = json.loads(Path('examples/ports/data/transport_dantzig.json').read_text())
-    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
-
+    # sources: parameter name -> frame or parquet path
     with lps.solve('examples/ports/transport_dantzig.yaml', sources) as solution:
-        print(solution.objective)  # 153.675
-        print(solution.dual('within_capacity'))
+        solution.objective  # 153.675
+        solution.dual('within_capacity')
     ```
 
 === "linopy"
@@ -133,20 +123,9 @@ $$x_{i,j} \ge 0 \qquad \forall\thinspace i \in \mathcal{I},\enspace j \in \mathc
     solve to **153.675**; this script is run out of band and its number is recorded
     in `references.json`.
 
-    `examples/ports/references/linopy/transport_dantzig.py`:
+    The model-building half of `examples/ports/references/linopy/transport_dantzig.py`:
 
     ```python
-    from __future__ import annotations
-
-    import json
-    from pathlib import Path
-
-    import linopy
-    import pandas as pd
-
-    DATA = Path(__file__).resolve().parents[2] / 'data' / 'transport_dantzig.json'
-
-
     def build(data: dict) -> linopy.Model:
         """The port's tables as a linopy model, term for term."""
         plants = pd.Index(data['plant']['plant'], name='plant')
@@ -167,41 +146,6 @@ $$x_{i,j} \ge 0 \qquad \forall\thinspace i \in \mathcal{I},\enspace j \in \mathc
         m.add_constraints(shipment.sum('plant') >= demand, name='meet_demand')
         m.add_objective((shipment * cost).sum())
         return m
-
-
-    def shadow_prices(m: linopy.Model, name: str, dim: str) -> dict[str, list]:
-        """The dual of constraint *name*, tidy.
-
-        Both of this model's constraints are *inequalities*, which is where sign
-        conventions diverge most between implementations — a capacity's shadow
-        price and a demand's carry opposite signs, and getting one backwards still
-        produces a plausible-looking table. Recorded so the port is checked on
-        them rather than only on the objective.
-        """
-        dual = m.constraints[name].dual
-        return {dim: [str(v) for v in dual.indexes[dim]], 'value': [float(v) for v in dual.values]}
-
-
-    def main() -> float:
-        """Solve, and print what ``references.json`` records.
-
-        The status assertion is what every reference carries: without it a failed
-        solve prints an objective of whatever linopy left behind, and a dual table
-        read off a solution that does not exist — recorded as fact.
-        """
-        m = build(json.loads(DATA.read_text()))
-        status, condition = m.solve(solver_name='highs')
-        assert status == 'ok', f'{status}: {condition}'
-        print(f'linopy {linopy.__version__}')
-        print(f'objective {float(m.objective.value)!r}')
-        print(
-            f'duals {json.dumps({"within_capacity": shadow_prices(m, "within_capacity", "plant"), "meet_demand": shadow_prices(m, "meet_demand", "market")})}'
-        )
-        return float(m.objective.value)
-
-
-    if __name__ == '__main__':
-        main()
     ```
 
 The YAML is 40 lines and names the maths; the linopy version is ~25 lines
