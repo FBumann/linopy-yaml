@@ -391,7 +391,8 @@ def test_a_variable_appearing_twice_in_a_row_is_summed_not_duplicated():
     }
     sources = {'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
     with lps.build(model, sources) as ex:
-        matrix = ex._tables().matrix
+        tables = ex._tables()
+        matrix = tables.matrix.block(0, tables.row_count)
         assert matrix.height == 2, 'one entry per row, not one per fragment'
         assert sorted(matrix['coeff'].to_list()) == [3.0, 3.0]
         result = ex.solve()
@@ -712,13 +713,15 @@ def test_the_matrix_collapses_a_repeated_cell_and_leaves_the_rest_alone():
 
     disjoint = dict(base, constraints={'c': {'foreach': ['i'], 'expression': 'x + y >= rhs'}})
     with lps.build(disjoint, sources) as ex:
-        matrix = ex._tables().matrix
+        tables = ex._tables()
+        matrix = tables.matrix.block(0, tables.row_count)
         assert matrix.height == 4, 'two variables per row, nothing to collapse'
         assert matrix['coeff'].to_list() == [1.0, 1.0, 1.0, 1.0]
 
     overlapping = dict(base, constraints={'c': {'foreach': ['i'], 'expression': 'x + 3 * x >= rhs'}})
     with lps.build(overlapping, sources) as ex:
-        matrix = ex._tables().matrix
+        tables = ex._tables()
+        matrix = tables.matrix.block(0, tables.row_count)
         assert matrix.height == 2, 'one cell per row after the collapse'
         assert matrix['coeff'].to_list() == [4.0, 4.0]
 
@@ -1014,10 +1017,11 @@ def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
     with PolarsExecutor() as ex:
         ex.build(dispatch_program(), dispatch_sources(gens, load))
         tables = ex._tables()
-        assert tables.matrix.height == n_g * n_s
+        assert tables.matrix.nonzeros == n_g * n_s
 
         def widest(ranges):
-            return max(int(tables.row_starts[hi] - tables.row_starts[lo]) for lo, hi in ranges)
+            starts = tables.matrix.starts
+            return max(int(starts[hi] - starts[lo]) for lo, hi in ranges)
 
         budget = 100
         assert widest(tables._spans(budget)) <= budget

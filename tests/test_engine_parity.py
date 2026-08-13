@@ -123,19 +123,24 @@ def test_both_engines_produce_the_declared_schema(model, sources):
     SQL reads `1.0` as a decimal — a different number from the double the plan
     holds, and one that overflows above 9.9.
 
-    `matrix` is checked against `(col, coeff)` rather than `sinks.MATRIX`: the
-    frame a sink reads is CSR, so `row` was compressed into `row_starts` and is
-    not a column on either engine.
+    The matrix is asked for a **block**, which is the only shape both engines
+    have — one holds a frame and slices it, the other leaves it in duckdb — and
+    the only shape a sink reads. Against `(col, coeff)` rather than
+    `sinks.MATRIX`, the layout being CSR: `row` is the index, not a column.
     """
     from lpspec.relational import sinks
 
-    declared = {'cols': sinks.COLS, 'obj': sinks.OBJ, 'rows': sinks.ROWS, 'matrix': ('col', 'coeff')}
+    declared = {'cols': sinks.COLS, 'obj': sinks.OBJ, 'rows': sinks.ROWS}
     for name in ENGINES:
         with using(name), lps.build(ROOT / model, sources) as ex:
             tables = ex._tables()
             for frame, columns in declared.items():
                 schema = dict(getattr(tables, frame).schema)
                 assert schema == {c: sinks.DTYPES[c] for c in columns}, f'{name}: {frame} is not the declared schema'
+            block = dict(tables.matrix.block(0, tables.row_count).schema)
+            assert block == {c: sinks.DTYPES[c] for c in ('col', 'coeff')}, (
+                f'{name}: a matrix block is not the declared schema'
+            )
 
 
 @pytest.mark.parametrize(('model', 'sources'), MODELS)

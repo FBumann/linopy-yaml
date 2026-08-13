@@ -153,13 +153,13 @@ def model_frames(ex: PolarsExecutor, schema: lps.Model, program: Any) -> None:
     banner(4, 'plan + data -> the model frames', 'relational/engines/polars/executor.py')
     ex.build(program, tidy_sources(schema, SOURCES, COORDS))
     model = ex._tables()
-    for name, frame in (
-        ('cols', model.cols),
-        ('obj', model.obj),
-        ('rows', model.rows),
-        ('A', model.matrix),
+    for name, height in (
+        ('cols', model.cols.height),
+        ('obj', model.obj.height),
+        ('rows', model.rows.height),
+        ('A', model.matrix.nonzeros),
     ):
-        print(f'    {name:<20} {frame.height:>4} rows')
+        print(f'    {name:<20} {height:>4} rows')
     print('\n    cols/rows/A/obj = the LP itself, in COO form:')
     print('    a column is a bound and a cost, a row a sense and a rhs,')
     print('    and A is every nonzero coefficient as (row, col, coeff).')

@@ -3,7 +3,7 @@
 Owns the *assembly* — turning each declaration into rows of the four model
 frames, and holding them until a sink drains them. Owns none of the three
 questions it asks on the way: what the data is
-(:mod:`lpspec.relational.engines.polars.binding`), what a query over it looks like
+(:mod:`lpspec.relational.binding`), what a query over it looks like
 (:mod:`lpspec.relational.engines.polars.compiler`), which coordinate gets which solver index
 (:mod:`lpspec.relational.engines.polars.labels`). The lane is described in
 docs/ARCHITECTURE.md.
@@ -11,19 +11,18 @@ docs/ARCHITECTURE.md.
 The two registries it does own are the ones that fill *during* assembly — the
 variable and constraint frames — because a declaration built later has to see
 what earlier ones produced. Everything binding produced is frozen by contrast,
-which is what :class:`~lpspec.relational.engines.polars.binding.BoundSources` says.
+which is what :class:`~lpspec.relational.binding.BoundSources` says.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
 from lpspec.errors import (
     DataError,
     LanguageError,
-    LpspecError,
     null_bounds_message,
     sparse_divisor_message,
     uncovered_constant_message,
@@ -40,38 +39,10 @@ if TYPE_CHECKING:
     from polars._typing import MaintainOrderJoin
 
 
-#: The four frames a sink reads, as schemas. Stated here because the executor
-#: is what fills them and an empty model still has to have them.
-_COLS = ('lb', 'ub', 'vtype')
-_OBJ = ('col', 'coeff')
-_ROWS = ('row', 'sense', 'rhs')
-_MATRIX = ('row', 'col', 'coeff')
-
-#: The dtype of each of those columns. ``vtype`` is an ``Enum`` over the
-#: variable types the plan declares, rather than a string: it holds one word
-#: per column and the same handful of words for the whole model, so as a string
-#: it stores that word once per row, where an Enum stores a code: on a wide
-#: model that is most of the ``cols`` frame (#189). The Enum also makes the
-#: vocabulary
-#: explicit, so a fourth variable type added to
-#: :data:`~lpspec.relational.plan.VariableType` and not reaching here fails
-#: where the column is built rather than in whichever sink first compares
-#: against a name it does not know.
-#:
-#: ``col`` is ``Int32`` — the solver's own index width, HiGHS and Gurobi both
-#: being 32-bit indexed, so a count past 2^31 has no sink that could take it
-#: and the strict cast raises there rather than wrapping. The cast sits where
-#: the column is *produced*, inside the per-declaration streaming collect, and
-#: must stay there: narrowing the stacked frame instead allocates the narrow
-#: copy while the wide one is still alive, a transient visible in
-#: `dispatch/l`'s peak RSS. A *label* stays ``Int64``: the arithmetic path
-#: computes it as a position in the full pre-mask coordinate product, which
-#: can pass 2^31 while every survivor fits.
-_DTYPES = {
-    'col': pl.Int32, 'row': pl.Int64,
-    'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
-    'sense': pl.String, 'vtype': pl.Enum(get_args(plan.VariableType)),
-}  # fmt: skip
+#: The four frames a sink reads, their dtypes, and how a stack of them is
+#: compressed — all `sinks/tables.py`'s, because a sink cannot see which engine
+#: filled them.
+_COLS, _OBJ, _ROWS, _MATRIX = sinks.COLS, sinks.OBJ, sinks.ROWS, sinks.MATRIX
 
 
 class PolarsExecutor(Engine):
@@ -94,8 +65,7 @@ class PolarsExecutor(Engine):
         self._cols: pl.DataFrame | None = None
         self._obj: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
-        self._matrix: pl.DataFrame | None = None
-        self._matrix_starts: Any = None
+        self._matrix: sinks.FrameMatrix | None = None
         self._n_cols = 0
         self._n_rows = 0
         self._obj_const = 0.0
@@ -113,12 +83,9 @@ class PolarsExecutor(Engine):
         one at a time and concatenate at the end; their rows are independent,
         which is what lets the model be four frames rather than a graph.
 
-        The matrix leaves in ``(row, col)`` order, as ``ModelTables`` promises
-        its sinks. The stack already has it — each share leaves sorted and owns
-        the next run of rows — so :func:`_in_row_order` *checks* with one
-        linear scan rather than sorting the model's largest frame at the peak
-        of the build. :func:`_row_starts` reads the CSR index off that order,
-        after which ``row`` is dropped: 8 bytes per entry no sink reads.
+        The matrix leaves compressed, as ``ModelTables`` promises its sinks —
+        through :func:`~lpspec.relational.sinks.compress_rows`, which both
+        engines owe the same answer.
         """
         self._program = program
         self._bound = bind(program, sources)
@@ -128,12 +95,11 @@ class PolarsExecutor(Engine):
         built = [self._build_constraint(c) for c in program.constraints]
         objective = self._build_objective(program.objective)
 
-        self._cols = _stack(cols, _COLS)
-        self._rows = _stack([r for r, _ in built], _ROWS)
-        ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
-        self._matrix_starts = _row_starts(ordered, self._n_rows)
-        self._matrix = ordered.select('col', 'coeff').rechunk()
-        self._obj = _stack([objective] if objective is not None else [], _OBJ)
+        self._cols = sinks.stack(cols, _COLS)
+        self._rows = sinks.stack([r for r, _ in built], _ROWS)
+        stacked = sinks.stack([m for _, m in built if m is not None], _MATRIX)
+        self._matrix = sinks.compress_rows(stacked, self._n_rows)
+        self._obj = sinks.stack([objective] if objective is not None else [], _OBJ)
 
     @property
     def _variables(self) -> Mapping[str, pl.LazyFrame]:
@@ -227,7 +193,7 @@ class PolarsExecutor(Engine):
             .collect(engine='streaming'),
             'var_label',
         )
-        cols = bounded.select('lb', 'ub', pl.lit(v.variable_type, dtype=_DTYPES['vtype']).alias('vtype'))
+        cols = bounded.select('lb', 'ub', pl.lit(v.variable_type, dtype=sinks.VTYPE).alias('vtype'))
 
         bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
         if bad:
@@ -315,7 +281,7 @@ class PolarsExecutor(Engine):
             pieces.append(
                 placed.select(
                     'row',
-                    pl.col('var_label').cast(_DTYPES['col']).alias('col'),
+                    pl.col('var_label').cast(sinks.DTYPES['col']).alias('col'),
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
@@ -387,7 +353,8 @@ class PolarsExecutor(Engine):
         if not comp.terms:
             return None
         pieces = [
-            p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
+            p.frame.select(pl.col('var_label').cast(sinks.DTYPES['col']).alias('col'), pl.col('coeff'))
+            for p in comp.terms
         ]
         stacked = pl.concat(pieces).collect(engine='streaming')
         self._refuse_undefined_divisors(stacked, 'objective', o.expression)
@@ -407,7 +374,6 @@ class PolarsExecutor(Engine):
             obj=self._obj,
             rows=self._rows,
             matrix=self._matrix,
-            row_starts=self._matrix_starts,
             column_count=self._n_cols,
             row_count=self._n_rows,
             objective_sense=self._obj_sense,
@@ -423,83 +389,12 @@ class PolarsExecutor(Engine):
         the registries can: what frees the bound frames is dropping every
         reference to them, and the compiler holds one.
         """
-        self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
+        self._cols = self._obj = self._rows = self._matrix = None
         self._var_frames.clear()
         self._row_frames.clear()
         self._blocks.clear()
         self._bound = None
         self._compiler = None
-
-
-def _spanning(solver: str, quantity: str, values: pl.Series | None, expected: int) -> None:
-    """Refuse a solver vector that does not span the model.
-
-    Reading a solution back is positional, so a wrong length is an answer about
-    a *different* model. Checked where the solver hands it over rather than
-    where it is read: the objective comes back directly, so a ``Result`` built
-    on a broken vector would report a plausible number and only fail if someone
-    asked for a coordinate.
-
-    ``None`` is not a wrong length — a mixed-integer model has no duals, and
-    neither does a run stopped short of a simplex basis.
-    """
-    if values is not None and len(values) != expected:
-        raise LpspecError(
-            f'{solver} returned {len(values)} {quantity} values for a model with {expected}. '
-            f'Reading a solution back is positional, so a vector that does not span the model '
-            f'describes a different one. This is an engine bug rather than a problem with the '
-            f'model — please report it.'
-        )
-
-
-def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
-    """*matrix* with ``row`` known to ascend — checked, not assumed.
-
-    Ordered by construction, each constraint's share sorted and stacked in
-    ascending row ranges. Worth *checking* because :func:`_row_starts` reads one
-    run per row off this column and scatters the lengths by value: a row whose
-    entries arrived in two runs would have the first overwritten and the CSR
-    spans would be silently wrong. The correctness floor of the layout, not a
-    speed choice — ``is_sorted`` is a linear scan and the sort never runs.
-    """
-    if matrix.height and not matrix['row'].is_sorted():
-        return matrix.sort('row')
-    return matrix
-
-
-def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
-    """Each row's first entry in the row-ordered *ordered* — CSR's own index.
-
-    Run-length, scatter, cumulative sum — robust to the model's shape where the
-    alternatives are not: ``bincount`` pays per entry — several times rle's
-    cost on a large matrix (#550) — and ``searchsorted`` per row times log
-    entries.
-    Computed here so ``row`` can then be dropped, since every consumer either
-    slices by these starts or asks
-    :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to spell
-    the labels back out.
-
-    The kept matrix is then **rechunked, once**: a sink slices it per row
-    block, and against a chunked frame every block's ``to_numpy`` is a
-    gather-copy where against one contiguous buffer it is a view (#550).
-    """
-    import numpy as np
-
-    runs = ordered['row'].rle()
-    starts = np.zeros(row_count + 1, dtype=np.int64)
-    starts[runs.struct.field('value').to_numpy() + 1] = runs.struct.field('len').to_numpy()
-    return np.cumsum(starts, out=starts)
-
-
-def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
-    """Concatenate *frames*, or an empty frame of *columns* when there are none.
-
-    Named rather than inferred because a model may legitimately have nothing to
-    stack, and a sink still has to find what it reads.
-    """
-    if frames:
-        return pl.concat(frames)
-    return pl.DataFrame(schema={name: _DTYPES[name] for name in columns})
 
 
 def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str, ...], pl.LazyFrame]]:

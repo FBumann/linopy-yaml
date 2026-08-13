@@ -20,17 +20,12 @@ from typing import Any
 
 from bench import results as bench_results
 
-#: The published ladder's pair: the eager lane is what the engine is judged
-#: against, so the ratio columns are lpspec ÷ linopy.
+#: What `--arms` defaults to: the published ladder's pair, ratios being
+#: subject ÷ against — the eager lane is what the engine is judged against.
+#: A pair rather than a constant because the ladder is not the only comparison
+#: this renders — `--arms lpspec polars` prices the engine choice itself
+#: (duckdb-spike.md) — and a second renderer for it would drift from this one.
 DEFAULT_ARMS = ('lpspec', 'linopy')
-
-#: The arms this run tabulates and the one the ratio divides by, set from
-#: `--arms`. Rebindable because the published ladder is not the only comparison
-#: this renders: `--arms lpspec polars` prices the engine choice itself
-#: (duckdb-spike.md), and hard-coding the pair would mean a second renderer
-#: that drifts from this one.
-ARMS = DEFAULT_ARMS
-_RATIO_AGAINST = DEFAULT_ARMS[1]
 
 
 def load(
@@ -159,14 +154,14 @@ _SEAM = {
 }
 
 
-def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
+def table(case: str, rows: dict[Key, Row], arms: tuple[str, str], sink: str = 'lp') -> str:
     """One case's rungs through one sink, as a markdown table.
 
     The caption is bold rather than a heading: these live inside a collapsed
     ``<details>``, and a heading in there still lands in the table of contents
     — a rail full of entries for tables the page has just called the appendix.
     """
-    cols = ARMS
+    cols = arms
     head = (
         ['variables', 'live', 'rows']
         + [f'wall: {a}' for a in cols]
@@ -184,20 +179,20 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
         '|' + '---|' * len(head),
     ]
     for size in sizes_of(case, rows, sink):
-        arms = {a: rows.get((case, size, sink, a)) for a in cols}
-        ref = next((r for r in arms.values() if r), None)
+        measured = {a: rows.get((case, size, sink, a)) for a in cols}
+        ref = next((r for r in measured.values() if r), None)
         if ref is None:
             continue
-        wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
-        peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
+        wall = {a: (r['wall_seconds'] if r else None) for a, r in measured.items()}
+        peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in measured.items()}
         cells = [
             _si(ref['counts']['columns']),
             _live(ref),
             _si(ref['counts']['rows']),
             *(f'{wall[a]:.2f} s' if wall[a] else '—' for a in cols),
-            _ratio(wall[ARMS[0]], wall[_RATIO_AGAINST]),
+            _ratio(wall[arms[0]], wall[arms[1]]),
             *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
-            _ratio(peak[ARMS[0]], peak[_RATIO_AGAINST]),
+            _ratio(peak[arms[0]], peak[arms[1]]),
             f'{ref["lp_bytes"] / 1e6:.0f} MB' if ref.get('lp_bytes') else '—',
         ]
         lines.append('| ' + ' | '.join(cells) + ' |')
@@ -215,7 +210,7 @@ def _live(r: Row) -> str:
     return '—' if frac is None else f'{frac * 100:.0f}%'
 
 
-def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]]) -> str:
+def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]], arms: tuple[str, str]) -> str:
     """How far the first recorded round sits from steady state, per arm.
 
     Rendered from the results file rather than stated, so a refresh moves it
@@ -225,7 +220,7 @@ def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]]
     Measuring that cost needs a fresh interpreter per arm, which no rung takes.
     """
     per_arm = []
-    for arm in ARMS:
+    for arm in arms:
         deltas = sorted(
             (best[(case, size, arm)]['first_build_seconds'] - best[(case, size, arm)]['steady_build_seconds']) * 1000
             for case, size in seen
@@ -241,7 +236,7 @@ def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]]
     )
 
 
-def marginal(loop_rows: list[Row]) -> str:
+def marginal(loop_rows: list[Row], arms: tuple[str, str]) -> str:
     """First model in a process, against every model after it.
 
     Two questions with two answers, and the gap between them is larger than
@@ -272,7 +267,7 @@ def marginal(loop_rows: list[Row]) -> str:
         '',
         'Build only, repeated in one process. **first** is the first recorded round '
         'and **steady** the best of the rounds after it, so the pair is what a '
-        'rolling horizon pays for its second window against its first. ' + _settling(best, seen),
+        'rolling horizon pays for its second window against its first. ' + _settling(best, seen, arms),
         '',
         '| case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | steady vs linopy |',
         '|---|---|---|---|---|---|---|',
@@ -299,7 +294,7 @@ def marginal(loop_rows: list[Row]) -> str:
     return '\n'.join(lines)
 
 
-def density(rows: dict[Key, Row]) -> str:
+def density(rows: dict[Key, Row], arms: tuple[str, str]) -> str:
     """One model size, four mask densities — the axis the ladder cannot show.
 
     A mask is row absence relationally and a NaN-padded dense array eagerly, so
@@ -309,7 +304,7 @@ def density(rows: dict[Key, Row]) -> str:
     cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, 'lp', density=True)]
     if not cases:
         return ''
-    cols = ARMS
+    cols = arms
     head = (
         ['case', 'live', 'variables']
         + [f'wall: {a}' for a in cols]
@@ -328,20 +323,20 @@ def density(rows: dict[Key, Row]) -> str:
     ]
     for case in cases:
         for size in reversed(sizes_of(case, rows, 'lp', density=True)):
-            arms = {a: rows.get((case, size, 'lp', a)) for a in cols}
-            ref = next((r for r in arms.values() if r), None)
+            measured = {a: rows.get((case, size, 'lp', a)) for a in cols}
+            ref = next((r for r in measured.values() if r), None)
             if ref is None:
                 continue
-            wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
-            peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
+            wall = {a: (r['wall_seconds'] if r else None) for a, r in measured.items()}
+            peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in measured.items()}
             cells = [
                 case,
                 _live(ref),
                 _si(ref['counts']['columns']),
                 *(f'{wall[a]:.2f} s' if wall[a] else '—' for a in cols),
-                _ratio(wall[ARMS[0]], wall[_RATIO_AGAINST]),
+                _ratio(wall[arms[0]], wall[arms[1]]),
                 *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
-                _ratio(peak[ARMS[0]], peak[_RATIO_AGAINST]),
+                _ratio(peak[arms[0]], peak[arms[1]]),
             ]
             lines.append('| ' + ' | '.join(cells) + ' |')
     return '\n'.join(lines)
@@ -371,9 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     opts = ap.parse_args(argv)
 
-    global ARMS, _RATIO_AGAINST
-    ARMS = tuple(opts.arms)
-    _RATIO_AGAINST = opts.arms[1]
+    arms: tuple[str, str] = (opts.arms[0], opts.arms[1])
 
     run: dict[str, Any] = {}
     gates: list[Row] = []
@@ -413,14 +406,14 @@ def main(argv: list[str] | None = None) -> int:
         print()
         print(f'<details markdown="1">\n<summary><b>{case}</b> — every rung, every sink</summary>\n')
         for sink in sinks:
-            print(table(case, rows, sink))
+            print(table(case, rows, arms, sink))
             print()
         print('</details>')
-    loop_table = marginal(loop)
+    loop_table = marginal(loop, arms)
     if loop_table:
         print()
         print(loop_table)
-    density_table = density(rows)
+    density_table = density(rows, arms)
     if density_table:
         print()
         print(density_table)
