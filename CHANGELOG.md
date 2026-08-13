@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.0.1-alpha.121](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.120...v0.0.1-alpha.121) (2026-08-13)
+
+
+### Documentation
+
+* **models:** both tabs start from the same tables ([#678](https://github.com/fluxopt/lpspec/issues/678)) ([dc50136](https://github.com/fluxopt/lpspec/commit/dc501361225efc61c992c1a1b3e49bf0d846fc4d))
+* **models:** every teaching model is verified and reads in linopy ([#680](https://github.com/fluxopt/lpspec/issues/680)) ([613a8e8](https://github.com/fluxopt/lpspec/commit/613a8e85fc752eb64808c0fab624dd8f16044eb7))
+* **models:** the journey from files to the shared tables has one page ([#679](https://github.com/fluxopt/lpspec/issues/679)) ([bdc636d](https://github.com/fluxopt/lpspec/commit/bdc636dbc4c04b75114db4007c9499f4b33f811e))
+* **models:** the linopy tabs read as linopy users write, types said where hidden ([#681](https://github.com/fluxopt/lpspec/issues/681)) ([840e79e](https://github.com/fluxopt/lpspec/commit/840e79ee48b9c9d885638ed5d489a39c2c95ec23))
+* **models:** the model files speak as a modeller, the pages teach the language ([#682](https://github.com/fluxopt/lpspec/issues/682)) ([07c58b4](https://github.com/fluxopt/lpspec/commit/07c58b4c559268f9238649737e6d9be553ab01e5))
+
 ## [0.0.1-alpha.120](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.119...v0.0.1-alpha.120) (2026-08-13)
 
 
