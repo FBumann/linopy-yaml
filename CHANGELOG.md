@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.117](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.116...v0.0.1-alpha.117) (2026-08-13)
+
+
+### Documentation
+
+* **models:** the teaching models are verified, read in linopy, and show their call ([#671](https://github.com/fluxopt/lpspec/issues/671)) ([83ab265](https://github.com/fluxopt/lpspec/commit/83ab265817a9828a37a6801031cee11d869165f5))
+
 ## [0.0.1-alpha.116](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.115...v0.0.1-alpha.116) (2026-08-13)
 
 
