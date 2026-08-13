@@ -120,6 +120,23 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
         expression: p * marginal_cost
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/pypsa_transport.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/ports/pypsa_transport.yaml', sources) as solution:
+        print(solution.objective)  # 22000.0
+        print(solution.dual('nodal_balance'))
+    ```
+
 === "PyPSA"
 
     `examples/ports/references/pypsa/pypsa_transport.py`:

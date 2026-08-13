@@ -189,6 +189,22 @@ $$\mathit{economies\_of\_scale\_seg}_{p,m,b} \in \{0, 1\} \qquad \forall\thinspa
         expression: scaled * distance * freight / 1000
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/transport_pwl.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/ports/transport_pwl.yaml', sources) as solution:
+        print(solution.objective)  # 8.786852757777865
+    ```
+
 === "linopy"
 
     `examples/ports/references/linopy/transport_pwl.py`:
