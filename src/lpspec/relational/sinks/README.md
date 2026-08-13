@@ -11,7 +11,7 @@ takes the tables and renders them to a file. Everything else follows.
 |---|---|---|
 | answers | a `Solver` subclass holding one model | `(tables, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
-| registry | `SOLVERS`, closed, holding the classes | `WRITERS` + `PLANNED_WRITERS`, closed |
+| registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), over `base.py` | `lp_file.py` (nothing beyond polars) |
 
 ## Staying loaded
@@ -86,8 +86,7 @@ to import for callers who will never use it. Copy linopy's status map for it
 and pin the copy in `tests/test_solve_status.py`, including anywhere you
 deliberately diverge.
 
-**A writer:** `writers/<format>.py`, one line in `WRITERS` keyed by suffix,
-moved out of `PLANNED_WRITERS` if it was there.
+**A writer:** `writers/<format>.py`, one line in `WRITERS` keyed by suffix.
 
 Either way: stream — nothing here may materialise the model a second time —
 and nothing above changes. No method on the engine, no branch in `api.py`,

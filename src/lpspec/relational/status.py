@@ -15,28 +15,6 @@ reading.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
-
-SolverStatusName = Literal['ok', 'warning', 'error', 'aborted', 'unknown']
-
-TerminationConditionName = Literal[
-    'unknown',
-    'optimal',
-    'time_limit',
-    'iteration_limit',
-    'terminated_by_limit',
-    'suboptimal',
-    'imprecise',
-    'unbounded',
-    'infeasible',
-    'infeasible_or_unbounded',
-    'other',
-    'internal_solver_error',
-    'error',
-    'user_interrupt',
-    'resource_interrupt',
-    'licensing_problems',
-]
 
 #: Which termination conditions roll up to which coarse status.
 STATUS_TO_TERMINATION_CONDITIONS: dict[str, frozenset[str]] = {

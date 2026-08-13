@@ -37,7 +37,7 @@ import numpy as np
 import pytest
 
 from lpspec.lowering import lower_program
-from lpspec.relational import PolarsEngine
+from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 from tests.conftest import raw_of, schema_of, solve_lp_file
 from tests.oracle import linopy, lpspec_linopy

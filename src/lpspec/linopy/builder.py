@@ -48,7 +48,6 @@ from lpspec.language.where_parser import (
     VariableDefinedNode,
     WhereNode,
 )
-from lpspec.linopy import semantics
 from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover, gaps_under
 
 if TYPE_CHECKING:
@@ -330,7 +329,7 @@ def _eval_ast(
         return ctx.model.variables[node.name]
 
     if isinstance(node, ParameterNode):
-        return semantics.coefficient(ctx.dataset[node.name])
+        return _coefficient(ctx.dataset[node.name])
 
     if isinstance(node, EdgeNode):
         msg = f'EdgeNode({node.policy!r}) reached the evaluator: an edge policy is a shift() kwarg, not a value.'
@@ -533,7 +532,7 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
         return array.shift(amount, fill_value=fill if fill is not None else np.nan)
     if hasattr(array, 'shift'):
         shifted = array.shift(amount)
-        return shifted if fill is None else semantics.vacated(shifted, fill)
+        return shifted if fill is None else _vacated(shifted, fill)
     raise _unsupported('shift()', array)
 
 
@@ -642,3 +641,39 @@ def _eval_node(
         return evaluate(node.left) | evaluate(node.right)
 
     assert_never(node)
+
+
+def _coefficient(parameter: Any) -> Any:
+    """A parameter in a coefficient position, its uncovered slots at zero.
+
+    Where this lane answers linopy's v1 absence convention (linopy's
+    ``doc/design/convention.rst``): the answer is *positional* — one missing
+    row means zero in a coefficient, an error in ``bounds:``, false in a
+    ``where`` operand — so it lives at the read, not as one fill in
+    ``load_parameters`` that would be wrong for the other two. A tidy
+    parameter table is a compressed dense array, not a record of absence:
+    rows only for the live coordinates says the coefficient is zero elsewhere
+    (SPEC §8). ``load_parameters`` reindexes to the master coordinates, so an
+    uncovered slot arrives as NaN — and v1 §5 refuses a NaN in a
+    user-supplied constant. Correct under the legacy convention too, so not
+    conditional on ``linopy.options['semantics']``.
+    """
+    return parameter.fillna(0.0)
+
+
+def _vacated(expression: Any, fill: float) -> Any:
+    """A shifted expression with its vacated edge positions filled.
+
+    linopy v1 counts ``.shift()`` among the operations that *create* absence
+    (§4), so the edge propagates and drops the row — the language's answer too
+    (SPEC §7, #289). This is the opt-out, reached only from ``shift(...,
+    fill=0)``, and is the escape v1 itself prescribes rather than a rule of
+    ours on top.
+
+    ``to_linexpr()`` first when the operand is still a bare ``Variable``:
+    ``Variable.fillna`` means a label fill on the released line and an
+    expression fill on the v1 branch, and only the expression method is stable.
+    """
+    if hasattr(expression, 'to_linexpr'):
+        expression = expression.to_linexpr()
+    return expression.fillna(fill)

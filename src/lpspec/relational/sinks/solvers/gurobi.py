@@ -22,7 +22,6 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
-from lpspec.errors import LpspecError
 from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
@@ -160,7 +159,7 @@ class Gurobi(Solver):
         status = _status_of(self._m)
         if not status.is_readable:
             return SolveAnswer.unreadable(status)
-        return SolveAnswer(status, self._m.ObjVal, solver_vector(self._x.X), _duals(model.row_count, self._blocks))
+        return SolveAnswer(status, self._m.ObjVal, solver_vector(self._x.X), _duals(self._blocks))
 
     def close(self) -> None:
         """Release the model and the licence its environment holds.
@@ -291,13 +290,13 @@ def _wording(code: int) -> str:
     return names.get(code, str(code))
 
 
-def _duals(row_count: int, blocks: list[Any]) -> pl.Series | None:
+def _duals(blocks: list[Any]) -> pl.Series | None:
     """Shadow prices in row order, or ``None`` where the model has none.
 
     Blocks were added in ascending row ranges, so concatenating their slices
-    reproduces the row index without a sort. Gurobi refuses ``Pi`` on a
-    mixed-integer model, and that refusal *is* the answer — no zero vector to
-    test.
+    reproduces the row index without a sort — and :meth:`Solver.run` checks
+    the vector spans the model. Gurobi refuses ``Pi`` on a mixed-integer
+    model, and that refusal *is* the answer — no zero vector to test.
     """
     import numpy as np
 
@@ -307,10 +306,4 @@ def _duals(row_count: int, blocks: list[Any]) -> pl.Series | None:
     except (AttributeError, gurobipy.GurobiError):
         return None
     values = np.concatenate(slices) if slices else np.empty(0, dtype=np.float64)
-    if len(values) != row_count:
-        raise LpspecError(
-            f'the solver returned {len(values)} duals for {row_count} rows. The read-back is '
-            f'positional, so a short vector would drop rows silently. This is an '
-            f'engine bug rather than a problem with the model — please report it.'
-        )
     return solver_vector(values)

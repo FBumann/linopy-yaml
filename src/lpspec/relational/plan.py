@@ -38,37 +38,24 @@ VariableType = Literal['continuous', 'binary', 'integer']
 
 @dataclass(frozen=True)
 class Expression:
-    """Base class for affine expressions over variables and parameters."""
+    """Base class for affine expressions over variables and parameters.
 
-    def __add__(self, other: Expression | float | int) -> Expression:
-        return Add(self, _coerce(other))
+    The four operators exist for the tests that compose plans by hand;
+    constructing Programs in Python is not supported API, so there is no
+    scalar coercion and no reflected form.
+    """
 
-    def __radd__(self, other: Expression | float | int) -> Expression:
-        return Add(_coerce(other), self)
+    def __add__(self, other: Expression) -> Expression:
+        return Add(self, other)
 
-    def __sub__(self, other: Expression | float | int) -> Expression:
-        return Add(self, Negate(_coerce(other)))
+    def __sub__(self, other: Expression) -> Expression:
+        return Add(self, Negate(other))
 
-    def __rsub__(self, other: Expression | float | int) -> Expression:
-        return Add(_coerce(other), Negate(self))
-
-    def __mul__(self, other: Expression | float | int) -> Expression:
-        return Multiply(self, _coerce(other))
-
-    def __rmul__(self, other: Expression | float | int) -> Expression:
-        return Multiply(_coerce(other), self)
-
-    def __truediv__(self, other: Expression | float | int) -> Expression:
-        return Divide(self, _coerce(other))
+    def __mul__(self, other: Expression) -> Expression:
+        return Multiply(self, other)
 
     def __neg__(self) -> Expression:
         return Negate(self)
-
-
-def _coerce(x: Expression | float | int) -> Expression:
-    if isinstance(x, Expression):
-        return x
-    return Constant(float(x))
 
 
 @dataclass(frozen=True)
@@ -392,9 +379,6 @@ class Program:
 
     def variable(self, name: str) -> VariableDeclaration:
         return _declared(self.variables, name, 'variable')
-
-    def constraint(self, name: str) -> ConstraintDeclaration:
-        return _declared(self.constraints, name, 'constraint')
 
 
 def parameters_of(*expressions: Expression) -> frozenset[str]:

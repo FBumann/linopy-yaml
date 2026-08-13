@@ -237,7 +237,7 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     return f"unknown {kind} '{name}'. {did_you_mean(name, candidates)}"
 
 
-def schema_error(exc: Any, context: str = '') -> LanguageError:
+def schema_error(exc: Any) -> LanguageError:
     """A pydantic ``ValidationError`` as one of ours, keeping the class.
 
     Pydantic wraps whatever a validator raises, so our own class cannot reach
@@ -251,8 +251,7 @@ def schema_error(exc: Any, context: str = '') -> LanguageError:
         message = str(error.get('msg', '')).removeprefix('Value error, ')
         where = '.'.join(str(part) for part in error.get('loc', ()))
         lines.append(f'{where}: {message}' if where else message)
-    body = '\n'.join(lines) or str(exc)
-    text = f'{context}: {body}' if context else body
+    text = '\n'.join(lines) or str(exc)
 
     if len(errors) == 1:
         original = errors[0].get('ctx', {}).get('error')

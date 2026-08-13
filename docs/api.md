@@ -179,7 +179,7 @@ Reading a result:
 | `dual` **raises rather than zero-filling** | no values at all is `NoSolutionError`; values but no duals — any integer or binary variable makes them undefined — is `LpspecError`, because only this quantity is missing |
 | duals exist only where a solver ran | either solver sink hands them back through the same join; a model written to LP and solved elsewhere never passes back through here. Reduced costs and slacks ride that join too and are not exposed yet |
 | `to_dataset` costs what it says | each variable arrives dense over its own dims — name a subset, or use `to_parquet` |
-| `write` | the **suffix** picks the writer — `.lp` today, `.mps` a `NotImplementedError` naming it as planned, anything else a `ValueError` listing both sets. Checked before the build, so a format nothing can write costs no model |
+| `write` | the **suffix** picks the writer — `.lp` today, anything else a `ValueError` listing what can be written. Checked before the build, so a format nothing can write costs no model |
 
 ## Solving one model many times
 

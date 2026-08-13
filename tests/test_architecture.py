@@ -253,10 +253,9 @@ def test_engine_is_isolated():
     assert not offenders, f'engine reaches outside its subpackage: {offenders}'
 
 
-#: The one contract module that may name an implementation: ``relational``
-#: re-exports the execution surface, which is the import site every caller
-#: outside the subpackage uses. Path relative to ``relational/``.
-CONTRACT_MAY_NAME_AN_ENGINE = {'__init__.py'}
+#: No contract module may name an implementation — the re-export that once
+#: earned ``__init__.py`` a place here is gone. Path relative to ``relational/``.
+CONTRACT_MAY_NAME_AN_ENGINE: set[str] = set()
 
 
 def test_no_contract_module_names_an_engine():
@@ -502,7 +501,7 @@ def test_each_sink_family_is_its_directory_and_its_registry():
     """
     import importlib
 
-    from lpspec.relational.sinks import PLANNED_WRITERS, SOLVERS, WRITERS, Solver
+    from lpspec.relational.sinks import SOLVERS, WRITERS, Solver
 
     solvers = _family('solvers') - {'base'}
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
@@ -523,8 +522,21 @@ def test_each_sink_family_is_its_directory_and_its_registry():
         assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
     assert {w.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers')
-    assert all(s.startswith('.') for s in (*WRITERS, *PLANNED_WRITERS)), 'writers are keyed by file suffix'
-    assert not set(WRITERS) & set(PLANNED_WRITERS), 'a format is either written or planned, never both'
+    assert all(s.startswith('.') for s in WRITERS), 'writers are keyed by file suffix'
+
+
+def test_the_engine_dtype_table_matches_the_declared_vocabulary():
+    """``frames._DECLARED`` spells the dtype set the language validates.
+
+    One vocabulary, two homes by necessity — the engine may not import the
+    language (hard rule 2) — so a test is what keeps the copy honest: a dtype
+    added to ``DIMENSION_DTYPES`` without a polars dtype here would fail
+    ``labels_frame`` on the empty-index path with a ``KeyError``.
+    """
+    from lpspec.language.model import DIMENSION_DTYPES
+    from lpspec.relational.frames import _DECLARED
+
+    assert set(_DECLARED) == set(DIMENSION_DTYPES), 'the two homes of the dimension dtype vocabulary disagree'
 
 
 def test_no_sink_reaches_a_sibling():
