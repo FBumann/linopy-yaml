@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.114](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.113...v0.0.1-alpha.114) (2026-08-13)
+
+
+### Features
+
+* **api:** a built model takes new numbers without being rebuilt ([#626](https://github.com/fluxopt/lpspec/issues/626)) ([5123215](https://github.com/fluxopt/lpspec/commit/5123215731ab1b67481ace086f5e34e1ef2e3303))
+
+
+### Performance
+
+* **strategy:** a serial sweep binds one model instead of building each slice ([#627](https://github.com/fluxopt/lpspec/issues/627)) ([cfdcc95](https://github.com/fluxopt/lpspec/commit/cfdcc9563c73c4aee9dd38006820142696c9c623))
+
 ## [0.0.1-alpha.113](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.112...v0.0.1-alpha.113) (2026-08-13)
 
 
