@@ -3,6 +3,8 @@
 Capacity decided once per investment period, binding at every snapshot inside
 it — and the periods need not be the same size.
 
+> **✔ Agrees with hand-written linopy 0.9.0** — objective **10020**, matched to `rtol=1e-09`.
+
 ## The problem
 
 $$p_{t,g} \quad\le\quad \hat p_{\thinspace\mathrm{period}(t),\thinspace g}$$
@@ -99,65 +101,105 @@ $$0 \le p^{\mathrm{nom}}_{e,g} \le 100 \qquad \forall\thinspace e \in \mathcal{E
 </details>
 <!-- math:end -->
 
-```yaml
-# Multi-period investment on a *flat* snapshot index.
-#
-# `snapshot` is one dimension carrying `period` as a coordinate, rather than a
-# `period x snapshot` rectangle. That is what lets the periods be **ragged** —
-# four snapshots in 2030 and two in 2050 here — because a coordinate is a
-# per-row column and nothing assumes every period has the same shape. A
-# rectangle cannot say it: it forces one resolution on every period.
-#
-# `within_cap` reads the mapping the other way round from a grouping: capacity
-# is decided per period and binds at every snapshot in that period, so a
-# coarse-dim quantity is read at a fine-dim row. A per-period *parameter* could
-# be pre-joined in data prep; `p_nom` is a variable, and a variable is not data
-# to be joined.
-dimensions:
-  snapshot:
-    dtype: int
-    coords: [period]
-  period:
-    dtype: int
-  generator:
-    dtype: str
+The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-parameters:
-  load:
-    dims: [snapshot]
-  # what one snapshot stands for: a 2050 snapshot represents four hours, so the
-  # operating cost of a coarse period is not understated against a fine one
-  weight:
-    dims: [snapshot]
-  opex:
-    dims: [generator]
-  capex:
-    dims: [generator, period]
+=== "lpspec"
 
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds:
-      lower: 0
-  p_nom:
-    foreach: [period, generator]
-    bounds:
-      lower: 0
-      upper: 100
+    ```yaml
+    # Multi-period investment on a *flat* snapshot index.
+    #
+    # `snapshot` is one dimension carrying `period` as a coordinate, rather than a
+    # `period x snapshot` rectangle. That is what lets the periods be **ragged** —
+    # four snapshots in 2030 and two in 2050 here — because a coordinate is a
+    # per-row column and nothing assumes every period has the same shape. A
+    # rectangle cannot say it: it forces one resolution on every period.
+    #
+    # `within_cap` reads the mapping the other way round from a grouping: capacity
+    # is decided per period and binds at every snapshot in that period, so a
+    # coarse-dim quantity is read at a fine-dim row. A per-period *parameter* could
+    # be pre-joined in data prep; `p_nom` is a variable, and a variable is not data
+    # to be joined.
+    dimensions:
+      snapshot:
+        dtype: int
+        coords: [period]
+      period:
+        dtype: int
+      generator:
+        dtype: str
 
-constraints:
-  within_cap:
-    foreach: [snapshot, generator]
-    expression: p <= at(p_nom, onto=snapshot, by=period)
-  balance:
-    foreach: [snapshot]
-    expression: sum(p, over=generator) == load
+    parameters:
+      load:
+        dims: [snapshot]
+      # what one snapshot stands for: a 2050 snapshot represents four hours, so the
+      # operating cost of a coarse period is not understated against a fine one
+      weight:
+        dims: [snapshot]
+      opex:
+        dims: [generator]
+      capex:
+        dims: [generator, period]
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * opex * weight + p_nom * capex
-```
+    variables:
+      p:
+        foreach: [snapshot, generator]
+        bounds:
+          lower: 0
+      p_nom:
+        foreach: [period, generator]
+        bounds:
+          lower: 0
+          upper: 100
+
+    constraints:
+      within_cap:
+        foreach: [snapshot, generator]
+        expression: p <= at(p_nom, onto=snapshot, by=period)
+      balance:
+        foreach: [snapshot]
+        expression: sum(p, over=generator) == load
+
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: p * opex * weight + p_nom * capex
+    ```
+
+    ```python
+    # sources: parameter name -> frame or parquet path
+    with lps.solve('examples/multi_period.yaml', sources) as solution:
+        solution.objective  # 10020.0
+        solution.dual('balance')
+    ```
+
+=== "linopy"
+
+    The model-building half of `examples/ports/references/linopy/multi_period.py`:
+
+    ```python
+    def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
+        """The instance's tables as a linopy model, row for row.
+
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        """
+        load = tables['load'].set_index('snapshot')['value']
+        weight = tables['weight'].set_index('snapshot')['value']
+        opex = tables['opex'].set_index('generator')['value']
+        capex = xr.DataArray(tables['capex'].pivot(index='period', columns='generator', values='value'))
+
+        calendar = tables['snapshot'].set_index('snapshot')['period']
+        in_period = pd.DataFrame(0.0, index=calendar.index, columns=capex.indexes['period'])
+        for snapshot, period in calendar.items():
+            in_period.loc[snapshot, period] = 1.0
+
+        m = linopy.Model()
+        p = m.add_variables(lower=0, coords=[load.index, opex.index], name='p')
+        p_nom = m.add_variables(lower=0, upper=100, coords=[capex.indexes['period'], opex.index], name='p_nom')
+        m.add_constraints(p <= (p_nom * xr.DataArray(in_period)).sum('period'), name='within_cap')
+        m.add_constraints(p.sum('generator') == load, name='balance')
+        m.add_objective((p * opex * weight).sum() + (p_nom * capex).sum())
+        return m
+    ```
 
 ## Reading the answer
 

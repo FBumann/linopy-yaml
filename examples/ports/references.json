@@ -25,6 +25,77 @@
     "rtol": 1e-09,
     "provenance": "published by OR-Library (Beasley) for instance cap71 of the uncapacitated warehouse location set, in the file uncapopt: http://people.brunel.ac.uk/~mastjjb/jeb/orlib/uncapinfo.html"
   },
+  "monthly_budget": {
+    "objective": 9500.0,
+    "rtol": 1e-09,
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure",
+    "duals": {
+      "monthly_budget": {
+        "month": [
+          "feb",
+          "feb",
+          "jan",
+          "jan"
+        ],
+        "generator": [
+          "gas",
+          "hydro",
+          "gas",
+          "hydro"
+        ],
+        "value": [
+          0.0,
+          -45.0,
+          0.0,
+          -45.0
+        ]
+      }
+    }
+  },
+  "multi_period": {
+    "objective": 10020.0,
+    "rtol": 1e-09,
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure",
+    "duals": {
+      "balance": {
+        "snapshot": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "value": [
+          5.0,
+          60.0,
+          10.0,
+          5.0,
+          55.0,
+          10.0
+        ]
+      }
+    }
+  },
+  "piecewise": {
+    "objective": 3850.0,
+    "rtol": 1e-09,
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure",
+    "duals": {
+      "balance": {
+        "snapshot": [
+          0,
+          1,
+          2
+        ],
+        "value": [
+          15.0,
+          25.0,
+          15.0
+        ]
+      }
+    }
+  },
   "pypsa_cyclic_storage": {
     "objective": 17228.77962151063,
     "rtol": 1e-09,

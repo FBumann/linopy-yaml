@@ -42,9 +42,9 @@ drift from what the engine builds.
 | model | verified | `sum` | `sum(group_by)` | `shift` | `shift(edge='wrap')` | `where` | `bounds` | `piecewise` | MILP |
 |---|---|---|---|---|---|---|---|---|---|
 | [dispatch](dispatch.md) | **✔** 10500 | **✓** | · | · | · | **✓** | **✓** | · | · |
-| [monthly_budget](monthly_budget.md) | · | **✓** | **✓** | · | · | · | **✓** | · | · |
-| [multi_period](multi_period.md) | · | **✓** | · | · | · | · | **✓** | · | · |
-| [piecewise](piecewise.md) | · | **✓** | · | · | · | · | **✓** | **✓** | · |
+| [monthly_budget](monthly_budget.md) | **✔** 9500 | **✓** | **✓** | · | · | · | **✓** | · | · |
+| [multi_period](multi_period.md) | **✔** 10020 | **✓** | · | · | · | · | **✓** | · | · |
+| [piecewise](piecewise.md) | **✔** 3850 | **✓** | · | · | · | · | **✓** | **✓** | · |
 | [storage](storage.md) | **✔** 5650 | **✓** | · | · | **✓** | · | **✓** | · | · |
 | [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | **✓** | · | · |
 | [walkthrough](walkthrough.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · |
@@ -95,6 +95,9 @@ that class, and the evidence behind
 |---|---|---|---|---|
 | [dispatch](dispatch.md) | 10500.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/dispatch.py — agreement, not a published figure |
 | [facility_location](facility_location.md) | 932615.75 | 1e-09 | · | published by OR-Library (Beasley) for instance cap71 of the uncapacitated warehouse location set, in the file uncapopt: http://people.brunel.ac.uk/~mastjjb/jeb/orlib/uncapinfo.html |
+| [monthly_budget](monthly_budget.md) | 9500.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure |
+| [multi_period](multi_period.md) | 10020.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure |
+| [piecewise](piecewise.md) | 3850.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | 17228.77962151063 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py |
 | [pypsa_kvl](pypsa_kvl.md) | 17000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py |
 | [pypsa_ramp](pypsa_ramp.md) | 18200.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py |
