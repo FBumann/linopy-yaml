@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.112](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.111...v0.0.1-alpha.112) (2026-08-13)
+
+
+### Performance
+
+* **engine:** a solver reads the row vectors instead of scattering them ([#651](https://github.com/fluxopt/lpspec/issues/651)) ([ba1587d](https://github.com/fluxopt/lpspec/commit/ba1587db8221b039022977b30bf3951f3a5768b8))
+
 ## [0.0.1-alpha.111](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.110...v0.0.1-alpha.111) (2026-08-13)
 
 
