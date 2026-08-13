@@ -84,6 +84,8 @@ $$0 \le \mathrm{soc}_{s} \le 100 \qquad \forall\thinspace s \in \mathcal{S}$$
 </details>
 <!-- math:end -->
 
+The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+
 === "lpspec"
 
     ```yaml

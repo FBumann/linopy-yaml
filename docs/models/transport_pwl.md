@@ -118,6 +118,8 @@ $$\mathit{economies\_of\_scale\_seg}_{p,m,b} \in \{0, 1\} \qquad \forall\thinspa
 </details>
 <!-- math:end -->
 
+The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+
 === "lpspec"
 
     ```yaml
