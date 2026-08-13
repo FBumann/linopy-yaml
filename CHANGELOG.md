@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.115](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.114...v0.0.1-alpha.115) (2026-08-13)
+
+
+### Documentation
+
+* **agents:** a guard nobody can delete unseen is the coverage bar ([#662](https://github.com/fluxopt/lpspec/issues/662)) ([4b90f6e](https://github.com/fluxopt/lpspec/commit/4b90f6ee7f529f7998708d3a8d28a491acccbc4f))
+
 ## [0.0.1-alpha.114](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.113...v0.0.1-alpha.114) (2026-08-13)
 
 
