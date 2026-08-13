@@ -65,9 +65,13 @@ objectives:
     expression: sum(op_cost, over=snapshot)
 """
 
-#: The same model with the hull instead of the curve — `convex: true` and
+#: The same model with the hull instead of the curve — `method: convex` and
 #: nothing else changed.
-CONVEX_MODEL = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.convex': True})
+CONVEX_MODEL = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'convex'})
+
+#: And the same restriction as the default's, said as a set rather than built
+#: out of binaries. The two must reach the same optimum on every sink.
+SOS2_MODEL = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'sos2'})
 
 #: Breakpoints whose x goes backwards — the shape the curvature guard refuses.
 BACKWARDS_BP_X = pd.Series([0.0, 50.0, 40.0], index=pd.RangeIndex(3, name='bp'))
@@ -152,7 +156,7 @@ def test_the_solution_sits_on_the_curve_not_on_its_hull(nonconvex_inputs):
 
 
 def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs):
-    """`convex: true` drops the binaries, and says so in the answer.
+    """`method: convex` drops the binaries, and says so in the answer.
 
     The same concave curve relaxes to its hull, whose lower envelope is the
     chord, so the objective must land below the curve.
@@ -160,7 +164,7 @@ def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs):
     data, coords = nonconvex_inputs
 
     program = lower_program(schema_of(CONVEX_MODEL))
-    assert all(v.variable_type == 'continuous' for v in program.variables), 'convex: true is a pure LP'
+    assert all(v.variable_type == 'continuous' for v in program.variables), 'method: convex is a pure LP'
 
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
     chord = sum(0.55 * v for v in data['load'])  # the (100, 55) chord from the origin
@@ -347,6 +351,95 @@ def test_expansion_emits_the_lambda_declarations():
     }
 
 
+def test_the_sos2_method_states_the_restriction_instead_of_building_it():
+    """The same weights, the same convexity row, and no binaries at all.
+
+    What changes is only *how λ is restricted*: the segment variable and the
+    two rows that pick and neighbour it are gone, replaced by a set over the
+    weights the block already emits — which is why this is a method rather
+    than a second formulation.
+    """
+    expanded = expand_piecewise(schema_of(SOS2_MODEL))
+
+    assert 'cost_curve_lam' in expanded.variables
+    assert 'cost_curve_seg' not in expanded.variables, 'the segment binaries survived a method that has none'
+    assert set(expanded.constraints) == {'cost_curve_convexity', 'cost_curve_link0', 'cost_curve_link1', 'balance'}
+    emitted = expanded.sos['cost_curve']
+    assert (emitted.variable, emitted.over, emitted.type, emitted.big_m) == ('cost_curve_lam', 'bp', 2, None)
+
+    program = lower_program(schema_of(SOS2_MODEL))
+    assert all(v.variable_type == 'continuous' for v in program.variables), 'sos2 emits no binary of its own'
+    assert [(s.variable, s.sos_type) for s in program.sos] == [('cost_curve_lam', 2)]
+
+
+def test_the_sos2_method_reaches_the_curve_the_binaries_reach(nonconvex_inputs):
+    """Two spellings of one restriction, so they must agree on the answer.
+
+    The concave fixture is what makes this a claim: the hull undercuts the
+    curve there, so a set that failed to restrict anything would show up as
+    the chord rather than as a near miss.
+    """
+    data, coords = nonconvex_inputs
+    on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
+
+    with differential(SOS2_MODEL, data, coords) as run:
+        assert run.result.objective == pytest.approx(on_curve, rel=1e-6), 'ON the curve, not on the hull'
+        cost = by_coord(run.result, 'op_cost', 'snapshot')
+        for s, load_v in data['load'].items():
+            assert cost[s] == pytest.approx(curve(load_v, data['bp_x'], data['bp_y']), abs=1e-6)
+
+
+def test_the_sos2_method_solves_natively_where_the_sink_has_the_concept(nonconvex_inputs):
+    """The whole point of saying it rather than building it."""
+    pytest.importorskip('gurobipy', reason='the native SOS path needs the [gurobi] extra')
+    data, coords = nonconvex_inputs
+    on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
+    assert lps.solve(SOS2_MODEL, data, 'gurobi', coords=coords).objective == pytest.approx(on_curve, rel=1e-6)
+
+
+def test_the_sos2_method_gates_off_like_the_binaries_do(nonconvex_inputs):
+    """``active`` is a property of the weights, so every method keeps it.
+
+    A gated-off block pins the convexity row to zero, which sets every weight
+    to zero — a state the set admits, since at most two nonzero is satisfied
+    by none. ``method: convex`` is the one that refuses ``active``, and does
+    so because a hull with nothing pinning it is not a gate.
+    """
+    data, coords = nonconvex_inputs
+    gated = override(raw_of(GATED_YAML), **{'piecewise.cost_curve.method': 'sos2'})
+    on_flag = pd.Series([1.0, 0.0] * 6, index=pd.RangeIndex(12, name='snapshot'))
+
+    with differential(gated, {**data, 'on_flag': on_flag}, coords) as run:
+        cost = by_coord(run.result, 'op_cost', 'snapshot')
+        for s in on_flag.index:
+            expected = curve(data['load'][s], data['bp_x'], data['bp_y']) if on_flag[s] else 0.0
+            assert cost[s] == pytest.approx(expected, abs=1e-6)
+
+
+def test_an_emitted_set_may_not_collide_with_a_declared_one():
+    """The emitted-name rule, for the one declaration kind that is new."""
+    raw = override(raw_of(SOS2_MODEL), **{'sos.cost_curve': {'variable': 'p', 'over': 'bp', 'type': 1}})
+    with pytest.raises(PiecewiseExpansionError, match="emitted sos 'cost_curve' collides"):
+        schema_of(raw)
+
+
+@pytest.mark.parametrize(
+    ('patch', 'match'),
+    [
+        pytest.param({'convex': True}, 'write `method: convex`', id='the-flag-that-was-true'),
+        pytest.param({'convex': False}, 'write `method: adjacency`', id='the-flag-that-was-false'),
+        pytest.param({'method': 'lp'}, 'unknown piecewise method', id='a-method-linopy-has-and-we-do-not'),
+    ],
+)
+def test_the_method_key_refuses_the_old_flag_and_names_the_rewrite(patch, match):
+    """`convex:` was one formulation wearing a flag, and a flag has no room
+    for a third answer. The rewrite is named rather than guessed at."""
+    raw = raw_of(NONCONVEX_YAML)
+    raw['piecewise']['cost_curve'].update(patch)
+    with pytest.raises(lps.SchemaError, match=match):
+        schema_of(raw)
+
+
 def test_a_validated_model_expands_once():
     """Validation already built the expansion, so asking again returns it.
 
@@ -425,7 +518,13 @@ def test_an_inline_expression_is_a_legal_link():
             id='at-most-one-link',
         ),
         pytest.param(
-            CHP_YAML, {'piecewise.chp.convex': True}, 'exactly two links', id='convex-needs-exactly-two-links'
+            CHP_YAML, {'piecewise.chp.method': 'convex'}, 'exactly two links', id='convex-needs-exactly-two-links'
+        ),
+        pytest.param(
+            GATED_YAML,
+            {'piecewise.cost_curve.method': 'convex'},
+            'active gating is not supported',
+            id='convex-cannot-be-gated',
         ),
         pytest.param(
             GATED_YAML,
@@ -497,7 +596,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# the data guard: `convex: true` is a promise about the breakpoints
+# the data guard: `method: convex` is a promise about the breakpoints
 # ---------------------------------------------------------------------------
 
 

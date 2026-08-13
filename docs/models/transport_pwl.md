@@ -170,7 +170,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         links:
           - [shipment, bp_x]
           - [scaled, bp_y]
-        # Deliberately *not* `convex: true`. sqrt is concave and this is a
+        # Deliberately *not* `method: convex`. sqrt is concave and this is a
         # minimisation, so the convex-hull relaxation would let the solver ride the
         # chord underneath the true curve and buy transport cheaper than the model
         # allows. Segment binaries are what make the answer right — and what make
@@ -232,7 +232,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         return m
     ```
 
-**`convex: true` would be wrong here, and quietly so.** `sqrt` is concave and
+**`method: convex` would be wrong here, and quietly so.** `sqrt` is concave and
 this is a minimisation, so the convex-hull relaxation lets the solver ride the
 chord *underneath* the true curve and buy transport cheaper than the model
 allows. Leaving it off emits segment binaries and an adjacency row, which is
