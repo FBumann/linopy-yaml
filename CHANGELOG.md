@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.113](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.112...v0.0.1-alpha.113) (2026-08-13)
+
+
+### Documentation
+
+* **agents:** AGENTS.md scans as rules rather than paragraphs ([#657](https://github.com/fluxopt/lpspec/issues/657)) ([f5bba8e](https://github.com/fluxopt/lpspec/commit/f5bba8eb5430452bf19400f1c3263cdc104a748d))
+
 ## [0.0.1-alpha.112](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.111...v0.0.1-alpha.112) (2026-08-13)
 
 
