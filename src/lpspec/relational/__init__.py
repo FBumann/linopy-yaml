@@ -14,16 +14,8 @@ plans) is the only contract with the rest of the package. Engine dependencies
 the contract: what a model *is*, what an engine answers to, what a sink reads.
 ``engines/`` holds implementations of that contract, one per directory.
 
-Only the execution surface is re-exported here. Plan node classes live in
-``lpspec.relational.plan`` and are imported from there, so adding a node does
-not silently widen something that reads like public API, and the import site
-says which layer the caller is reaching into.
+Nothing is re-exported here. Every consumer imports from the module that
+owns the name — ``engines/polars/engine`` for the engine, ``result`` for what
+a solve returns — so the import site says which layer the caller is reaching
+into, and no contract module has to name an implementation.
 """
-
-from lpspec.relational.engines.polars import PolarsEngine
-from lpspec.relational.result import Result
-
-__all__ = [
-    'PolarsEngine',
-    'Result',
-]

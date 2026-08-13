@@ -488,7 +488,6 @@ class PolarsEngine:
 
         Raises:
             ValueError: A suffix nothing writes.
-            NotImplementedError: A format that is planned and not here yet.
         """
         path = Path(path)
         sinks.writer(path.suffix.lower())(self._tables(), path)

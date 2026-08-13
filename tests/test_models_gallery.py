@@ -9,7 +9,7 @@ the page to become a lie:
 - a page shows a reference implementation that no longer matches the script;
 - the construct matrix says a model exercises something it does not.
 
-The same trade ``linopy/semantics.py`` already makes: copying is fine when a
+The same trade the linopy lane's v1-absence helpers already make: copying is fine when a
 test asserts it, and rots when nothing does.
 """
 

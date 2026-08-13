@@ -178,24 +178,21 @@ class _Binder:
             if d in self.dimensions:
                 continue
             carried = self.program.dimension(d).carried
-            if d in self.sources:
-                table = self._explicit_frame(d, self.sources[d], carried)
-            else:
-                if carried:
-                    raise DataError(
-                        f"dimension '{d}' declares coordinates {carried} but has "
-                        f"no index source. Pass one under key '{d}' (a parquet path or frame "
-                        f'carrying columns {[d, *carried]}) — a coordinate cannot '
-                        f'be inferred from the parameters that happen to use the dimension.'
-                    )
-                params = [p for p in self.program.parameters if d in p.dims]
-                if not params:
-                    raise DataError(
-                        f"dimension '{d}' has no source: no parameter carries it and "
-                        f"no explicit index was provided under key '{d}'"
-                    )
-                stacked = pl.concat([self.parameters[p.name].select(pl.col(d).alias('val')) for p in params])
-                table = stacked.unique().sort('val').with_row_index('ord').with_columns(pl.col('ord').cast(pl.Int64))
+            if carried:
+                raise DataError(
+                    f"dimension '{d}' declares coordinates {carried} but has "
+                    f"no index source. Pass one under key '{d}' (a parquet path or frame "
+                    f'carrying columns {[d, *carried]}) — a coordinate cannot '
+                    f'be inferred from the parameters that happen to use the dimension.'
+                )
+            params = [p for p in self.program.parameters if d in p.dims]
+            if not params:
+                raise DataError(
+                    f"dimension '{d}' has no source: no parameter carries it and "
+                    f"no explicit index was provided under key '{d}'"
+                )
+            stacked = pl.concat([self.parameters[p.name].select(pl.col(d).alias('val')) for p in params])
+            table = stacked.unique().sort('val').with_row_index('ord').with_columns(pl.col('ord').cast(pl.Int64))
             self._register(d, table)
 
         for d in sorted(dims):

@@ -192,22 +192,6 @@ class PolarsCompiler:
     data: BoundSources
     variables: Mapping[str, pl.LazyFrame]
 
-    @property
-    def dimensions(self) -> Mapping[str, pl.LazyFrame]:
-        return self.data.dimensions
-
-    @property
-    def parameters(self) -> Mapping[str, pl.LazyFrame]:
-        return self.data.parameters
-
-    @property
-    def dimension_cardinality(self) -> Mapping[str, int]:
-        return self.data.cardinality
-
-    @property
-    def boolean_parameters(self) -> frozenset[str]:
-        return self.data.boolean_parameters
-
     # ------------------------------------------------------------------
     # frames — the masked coordinate product a declaration is instantiated over
     # ------------------------------------------------------------------
@@ -277,7 +261,7 @@ class PolarsCompiler:
         """
         out: pl.LazyFrame | None = None
         for d in reversed(dims):
-            table = self.dimensions[d].select(pl.col('val').alias(d), pl.col('ord').alias(ordinal(d)))
+            table = self.data.dimensions[d].select(pl.col('val').alias(d), pl.col('ord').alias(ordinal(d)))
             out = table if out is None else out.join(table, how='cross')
         if out is None:
             return pl.LazyFrame({UNIT: [0]})
@@ -313,7 +297,7 @@ class PolarsCompiler:
         extra = set(declaration.dims) - set(frame_dims)
         if extra:
             raise LanguageError(f'{subject} has dims {sorted(extra)} outside the foreach dims {list(frame_dims)}')
-        table = self.parameters[param].rename({'value': alias})
+        table = self.data.parameters[param].rename({'value': alias})
         if not declaration.dims:
             return frame.join(table, how='cross', maintain_order=maintain_order)
         return frame.join(table, on=list(declaration.dims), how=how, maintain_order=maintain_order)
@@ -368,7 +352,7 @@ class PolarsCompiler:
                 return _compare(_dimension_column(p.dimension, p.value), p.op, p.value)
             if isinstance(p, plan.ParameterDefined):
                 col = pl.col(join_param(p.parameter))
-                if p.parameter in self.boolean_parameters:
+                if p.parameter in self.data.boolean_parameters:
                     return col.is_not_null() & col.cast(pl.Boolean)
                 return col.is_not_null() & col.is_finite()
             if isinstance(p, plan.VariableDefined):
@@ -471,9 +455,9 @@ class PolarsCompiler:
         if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
             return None
 
-        cards = [self.dimension_cardinality[d] for d in v.dims]
+        cards = [self.data.cardinality[d] for d in v.dims]
         expected = math.prod(cards)
-        table = self.parameters[param]
+        table = self.data.parameters[param]
         if table.select(pl.len()).collect().item() != expected:
             return None
 
@@ -501,7 +485,7 @@ class PolarsCompiler:
         column = pl.col(dim)
         if self.data.is_enum_encoded(dim):
             return column.to_physical().cast(pl.Int64)
-        labels = self.dimensions[dim].select('val').collect()['val']
+        labels = self.data.dimensions[dim].select('val').collect()['val']
         return column.replace_strict({value: at for at, value in enumerate(labels)}, return_dtype=pl.Int64)
 
     # ------------------------------------------------------------------
@@ -582,7 +566,7 @@ class PolarsCompiler:
         duplicated one.
         """
         dims = self.program.parameter(name).dims
-        frame = self.parameters[name].select(*dims, pl.col('value').cast(pl.Float64).alias('cval'))
+        frame = self.data.parameters[name].select(*dims, pl.col('value').cast(pl.Float64).alias('cval'))
         return TermFragment(dims, frame, False)
 
     def _variable_fragment(self, name: str) -> TermFragment:
@@ -636,7 +620,7 @@ class PolarsCompiler:
                 f'{missing} is ambiguous under masks — multiply explicitly instead'
             )
         keep = tuple(d for d in p.dims if d not in over)
-        scale = math.prod(self.dimension_cardinality[d] for d in missing)
+        scale = math.prod(self.data.cardinality[d] for d in missing)
         frame = p.frame.select(*keep, *p.carried)
         if scale != 1:
             frame = frame.with_columns(pl.col(p.value_column) * scale)
@@ -685,7 +669,7 @@ class PolarsCompiler:
         change to how the mapping joins is a change to both.
         """
         keep = tuple(x for x in p.dims if x != consumed)
-        mapping = self.dimensions[node.over].select(
+        mapping = self.data.dimensions[node.over].select(
             pl.col('val').alias(node.over), pl.col(node.coordinate).alias(node.into)
         )
         frame = p.frame.join(mapping, on=consumed, how='inner').select(*keep, produced, *p.carried)
@@ -712,9 +696,9 @@ class PolarsCompiler:
             raise LanguageError(
                 f"in {context}: translation along '{s.dimension}' but the expression has dims {list(p.dims)}"
             )
-        card = self.dimension_cardinality[s.dimension]
+        card = self.data.cardinality[s.dimension]
         others = [d for d in p.dims if d != s.dimension]
-        table = self.dimensions[s.dimension]
+        table = self.data.dimensions[s.dimension]
         incoming = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_IN))
         outgoing = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_OUT))
 
@@ -788,7 +772,7 @@ class PolarsCompiler:
         """
         for d in want:
             if d not in have:
-                presence = presence.join(self.dimensions[d].select(pl.col('val').alias(d)), how='cross')
+                presence = presence.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
         return presence.select(*want)
 
     def _filled_edge(self, s: plan.Translate, card: int, others: list[str], fill: float) -> pl.LazyFrame:
@@ -805,7 +789,7 @@ class PolarsCompiler:
         """
         edge = self._edge(s, card, vacated=True)
         for d in others:
-            edge = edge.join(self.dimensions[d].select(pl.col('val').alias(d)), how='cross')
+            edge = edge.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
         return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval')).select(*others, s.dimension, 'cval')
 
     def _edge(self, s: plan.Translate, card: int, *, vacated: bool) -> pl.LazyFrame:
@@ -819,7 +803,7 @@ class PolarsCompiler:
         source = pl.col('ord') - s.by
         outside = (source < 0) | (source >= card)
         return (
-            self.dimensions[s.dimension]
+            self.data.dimensions[s.dimension]
             .filter(outside if vacated else ~outside)
             .select(pl.col('val').alias(s.dimension))
         )

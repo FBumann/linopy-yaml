@@ -183,7 +183,6 @@ class BoundModel:
 
         Raises:
             ValueError: A suffix nothing writes.
-            NotImplementedError: A format that is planned and not here yet.
         """
         self._engine.write(path)
 
@@ -308,7 +307,6 @@ def write(
 
     Raises:
         ValueError: A suffix nothing writes — checked before the build.
-        NotImplementedError: A format that is planned and not here yet.
     """
     out = Path(out)
     writer(out.suffix.lower())

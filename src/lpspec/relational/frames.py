@@ -105,14 +105,14 @@ _DECLARED: dict[str, pl.DataType] = {
 }
 
 
-def labels_frame(dname: str, values: object, dtype: str = 'str') -> pl.LazyFrame:
+def labels_frame(dname: str, values: object, dtype: str) -> pl.LazyFrame:
     """A one-column index frame from a plain sequence of labels.
 
     **An empty index takes the dimension's declared dtype.** polars infers
     ``Null`` from no labels, and a ``Null`` key joins against nothing — so a
     parameter with the right dtype and no rows fails to bind against the
     dimension it belongs to. The declaration is the only thing that knows, and
-    it always answers: ``dtype`` defaults to ``str``.
+    it always answers.
 
     An empty index is not a corner case for a driver that grows one. A Benders
     cut set starts empty, and so does any dimension whose members a caller
