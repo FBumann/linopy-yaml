@@ -28,17 +28,23 @@ import pandas as pd
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'storage.json'
 
 
-def build(data: dict) -> linopy.Model:
-    """The instance's tables as a linopy model, row for row."""
-    generators = pd.Index(data['p_max']['generator'], name='generator')
-    snapshots = pd.Index(data['load']['snapshot'], name='snapshot')
+def load_tables() -> dict[str, pd.DataFrame]:
+    """The instance, one frame per parameter — what a caller of either library holds."""
+    return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
-    p_max = pd.Series(data['p_max']['value'], index=generators)
-    cost = pd.Series(data['cost']['value'], index=generators)
-    load = pd.Series(data['load']['value'], index=snapshots)
+
+def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
+    """The instance's tables as a linopy model, row for row.
+
+    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    """
+    p_max = tables['p_max'].set_index('generator')['value']
+    cost = tables['cost'].set_index('generator')['value']
+    load = tables['load'].set_index('snapshot')['value']
+    snapshots = load.index
 
     m = linopy.Model()
-    p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, generators], name='p')
+    p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, p_max.index], name='p')
     charge = m.add_variables(lower=0, upper=30, coords=[snapshots], name='charge')
     discharge = m.add_variables(lower=0, upper=30, coords=[snapshots], name='discharge')
     soc = m.add_variables(lower=0, upper=100, coords=[snapshots], name='soc')
@@ -60,7 +66,7 @@ def marginal_prices(m: linopy.Model) -> dict[str, list]:
 
 
 def main() -> float:
-    m = build(json.loads(DATA.read_text()))
+    m = build(load_tables())
     status, condition = m.solve(solver_name='highs')
     assert status == 'ok', f'{status}: {condition}'
     print(f'linopy {linopy.__version__}')

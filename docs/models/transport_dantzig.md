@@ -126,29 +126,29 @@ $$x_{i,j} \ge 0 \qquad \forall\thinspace i \in \mathcal{I},\enspace j \in \mathc
     The model-building half of `examples/ports/references/linopy/transport_dantzig.py`:
 
     ```python
-    def build(data: dict) -> linopy.Model:
-        """The port's tables as a linopy model, term for term."""
-        plants = pd.Index(data['plant']['plant'], name='plant')
-        markets = pd.Index(data['market']['market'], name='market')
+    def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
+        """The port's tables as a linopy model, term for term.
 
-        capacity = pd.Series(data['capacity']['value'], index=plants)
-        demand = pd.Series(data['demand']['value'], index=markets)
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        """
+        capacity = tables['capacity'].set_index('plant')['value']
+        demand = tables['demand'].set_index('market')['value']
         distance = (
-            pd.DataFrame(data['distance'])
+            tables['distance']
             .pivot(index='plant', columns='market', values='value')
-            .reindex(index=plants)[markets]
+            .reindex(index=capacity.index)[demand.index]
         )
-        cost = distance * data['freight'] / 1000
+        cost = distance * tables['freight'] / 1000
 
         m = linopy.Model()
-        shipment = m.add_variables(lower=0, coords=[plants, markets], name='shipment')
+        shipment = m.add_variables(lower=0, coords=[capacity.index, demand.index], name='shipment')
         m.add_constraints(shipment.sum('market') <= capacity, name='within_capacity')
         m.add_constraints(shipment.sum('plant') >= demand, name='meet_demand')
         m.add_objective((shipment * cost).sum())
         return m
     ```
 
-The YAML is 40 lines and names the maths; the linopy version is ~25 lines
+The YAML is 40 lines and names the maths; the linopy version is ~20 lines
 of Python and names the *data structures* the maths is carried in — a pivot, a
 reindex, two `.sum()` calls over named axes. Neither is obviously better and
 that is the honest read: what the declarative form buys here is not brevity but

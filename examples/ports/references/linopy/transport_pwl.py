@@ -44,31 +44,34 @@ import pandas as pd
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'transport_pwl.json'
 
 
-def build(data: dict) -> linopy.Model:
+def load_tables() -> dict[str, pd.DataFrame]:
+    """The instance, one frame per parameter — what a caller of either library holds."""
+    return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
+
+
+def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     """The port's tables as a linopy model, column for column.
 
+    ``tables`` is the same mapping the lpspec call binds as ``sources``.
     ``scaled`` is what the objective is actually charged on — ``sqrt(shipment)``
     read off the discretised curve rather than computed.
     """
-    plants = pd.Index(data['plant']['plant'], name='plant')
-    markets = pd.Index(data['market']['market'], name='market')
-
-    capacity = pd.Series(data['capacity']['value'], index=plants)
-    demand = pd.Series(data['demand']['value'], index=markets)
+    capacity = tables['capacity'].set_index('plant')['value']
+    demand = tables['demand'].set_index('market')['value']
     distance = (
-        pd.DataFrame(data['distance'])
+        tables['distance']
         .pivot(index='plant', columns='market', values='value')
-        .reindex(index=plants)[markets]
+        .reindex(index=capacity.index)[demand.index]
     )
-    cost = distance * data['freight'] / 1000
+    cost = distance * tables['freight'] / 1000
 
     m = linopy.Model()
-    shipment = m.add_variables(lower=0, coords=[plants, markets], name='shipment')
-    scaled = m.add_variables(lower=0, coords=[plants, markets], name='scaled')
+    shipment = m.add_variables(lower=0, coords=[capacity.index, demand.index], name='shipment')
+    scaled = m.add_variables(lower=0, coords=[capacity.index, demand.index], name='scaled')
 
     m.add_piecewise_formulation(
-        (shipment, data['bp_x']['value']),
-        (scaled, data['bp_y']['value']),
+        (shipment, list(tables['bp_x']['value'])),
+        (scaled, list(tables['bp_y']['value'])),
     )
 
     m.add_constraints(shipment.sum('market') <= capacity, name='within_capacity')
@@ -78,7 +81,7 @@ def build(data: dict) -> linopy.Model:
 
 
 def main() -> float:
-    m = build(json.loads(DATA.read_text()))
+    m = build(load_tables())
     status, condition = m.solve(solver_name='highs')
     assert status == 'ok', f'{status}: {condition}'
     print(f'linopy {linopy.__version__}')

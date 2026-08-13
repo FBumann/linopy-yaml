@@ -150,17 +150,18 @@ $$0 \le \mathrm{soc}_{s} \le 100 \qquad \forall\thinspace s \in \mathcal{S}$$
     The model-building half of `examples/ports/references/linopy/storage.py`:
 
     ```python
-    def build(data: dict) -> linopy.Model:
-        """The instance's tables as a linopy model, row for row."""
-        generators = pd.Index(data['p_max']['generator'], name='generator')
-        snapshots = pd.Index(data['load']['snapshot'], name='snapshot')
+    def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
+        """The instance's tables as a linopy model, row for row.
 
-        p_max = pd.Series(data['p_max']['value'], index=generators)
-        cost = pd.Series(data['cost']['value'], index=generators)
-        load = pd.Series(data['load']['value'], index=snapshots)
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        """
+        p_max = tables['p_max'].set_index('generator')['value']
+        cost = tables['cost'].set_index('generator')['value']
+        load = tables['load'].set_index('snapshot')['value']
+        snapshots = load.index
 
         m = linopy.Model()
-        p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, generators], name='p')
+        p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, p_max.index], name='p')
         charge = m.add_variables(lower=0, upper=30, coords=[snapshots], name='charge')
         discharge = m.add_variables(lower=0, upper=30, coords=[snapshots], name='discharge')
         soc = m.add_variables(lower=0, upper=100, coords=[snapshots], name='soc')

@@ -109,17 +109,17 @@ $$0 \le p_{s,g} \le \bar p_{g} \qquad \forall\thinspace s \in \mathcal{S},\enspa
     The model-building half of `examples/ports/references/linopy/dispatch.py`:
 
     ```python
-    def build(data: dict) -> linopy.Model:
-        """The instance's tables as a linopy model, row for row."""
-        generators = pd.Index(data['p_max']['generator'], name='generator')
-        snapshots = pd.Index(data['load']['snapshot'], name='snapshot')
+    def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
+        """The instance's tables as a linopy model, row for row.
 
-        p_max = pd.Series(data['p_max']['value'], index=generators)
-        cost = pd.Series(data['cost']['value'], index=generators)
-        load = pd.Series(data['load']['value'], index=snapshots)
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        """
+        p_max = tables['p_max'].set_index('generator')['value']
+        cost = tables['cost'].set_index('generator')['value']
+        load = tables['load'].set_index('snapshot')['value']
 
         m = linopy.Model()
-        p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, generators], name='p')
+        p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')
         m.add_constraints(p.sum('generator') == load, name='power_balance')
         m.add_objective((p * cost).sum())
         return m

@@ -30,32 +30,34 @@ import xarray as xr
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'transport.json'
 
 
-def build(data: dict) -> linopy.Model:
-    """The instance's tables as a linopy model, row for row."""
-    generators = pd.Index(data['generator']['generator'], name='generator')
-    lines = pd.Index(data['line']['line'], name='line')
-    buses = pd.Index(sorted(set(data['load']['bus'])), name='bus')
-    snapshots = pd.Index(sorted(set(data['load']['snapshot'])), name='snapshot')
+def load_tables() -> dict[str, pd.DataFrame]:
+    """The instance, one frame per parameter — what a caller of either library holds."""
+    return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
-    p_max = pd.Series(data['p_max']['value'], index=generators)
-    cost = pd.Series(data['cost']['value'], index=generators)
-    cap = pd.Series(data['cap']['value'], index=lines)
-    neg_cap = pd.Series(data['neg_cap']['value'], index=lines)
-    load = xr.DataArray(
-        pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value').reindex(columns=buses)
-    )
 
-    gen_at = pd.DataFrame(0.0, index=buses, columns=generators)
-    for gen, bus in zip(generators, data['generator']['bus'], strict=True):
+def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
+    """The instance's tables as a linopy model, row for row.
+
+    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    """
+    p_max = tables['p_max'].set_index('generator')['value']
+    cost = tables['cost'].set_index('generator')['value']
+    cap = tables['cap'].set_index('line')['value']
+    neg_cap = tables['neg_cap'].set_index('line')['value']
+    load = xr.DataArray(tables['load'].pivot(index='snapshot', columns='bus', values='value'))
+    snapshots, buses = load.indexes['snapshot'], load.indexes['bus']
+
+    gen_at = pd.DataFrame(0.0, index=buses, columns=p_max.index)
+    for gen, bus in zip(tables['generator']['generator'], tables['generator']['bus'], strict=True):
         gen_at.loc[bus, gen] = 1.0
-    flow_in = pd.DataFrame(0.0, index=buses, columns=lines)
-    for line, src, dst in zip(lines, data['line']['from'], data['line']['to'], strict=True):
+    flow_in = pd.DataFrame(0.0, index=buses, columns=cap.index)
+    for line, src, dst in zip(tables['line']['line'], tables['line']['from'], tables['line']['to'], strict=True):
         flow_in.loc[dst, line] += 1.0
         flow_in.loc[src, line] -= 1.0
 
     m = linopy.Model()
-    p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, generators], name='p')
-    f = m.add_variables(lower=neg_cap, upper=cap, coords=[snapshots, lines], name='f')
+    p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, p_max.index], name='p')
+    f = m.add_variables(lower=neg_cap, upper=cap, coords=[snapshots, cap.index], name='f')
     m.add_constraints(
         (p * xr.DataArray(gen_at)).sum('generator') + (f * xr.DataArray(flow_in)).sum('line') == load,
         name='balance',
@@ -75,7 +77,7 @@ def nodal_prices(m: linopy.Model) -> dict[str, list]:
 
 
 def main() -> float:
-    m = build(json.loads(DATA.read_text()))
+    m = build(load_tables())
     status, condition = m.solve(solver_name='highs')
     assert status == 'ok', f'{status}: {condition}'
     print(f'linopy {linopy.__version__}')
