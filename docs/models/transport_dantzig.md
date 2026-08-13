@@ -70,7 +70,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     ```yaml
     # Dantzig's transportation problem (GAMS model library #1). Optimum 153.675,
-    # published with the model. See docs/models/index.md.
+    # published with the model.
 
     dimensions:
       plant:
@@ -105,9 +105,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objectives:
       total_cost:
         sense: minimize
-      # c(i,j) = f * d(i,j) / 1000 in the source, kept as arithmetic here
-      # rather than precomputed, so the file states the model and not a
-      # derived table.
+      # f * d / 1000 in the source: arithmetic, not a precomputed cost table
         expression: shipment * distance * freight / 1000
     ```
 
@@ -150,7 +148,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         return m
     ```
 
-The YAML is 40 lines and names the maths; the linopy version is ~20 lines
+The YAML is 38 lines and names the maths; the linopy version is ~20 lines
 of Python and names the *data structures* the maths is carried in — a pivot, a
 reindex, two `.sum()` calls over named axes. Neither is obviously better and
 that is the honest read: what the declarative form buys here is not brevity but

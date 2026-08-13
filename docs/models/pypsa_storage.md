@@ -116,7 +116,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     ```yaml
     # PyPSA linear optimal power flow, rung 3: rung 2 plus a storage unit carrying
     # energy between snapshots. Non-cyclic — the horizon starts at soc_initial and
-    # ends free. Optimum 15253.178322993519, from PyPSA itself. See docs/models/index.md.
+    # ends free. Optimum 15253.178322993519, from PyPSA itself.
 
     dimensions:
       snapshot:

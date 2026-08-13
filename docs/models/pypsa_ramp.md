@@ -89,7 +89,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     ```yaml
     # PyPSA linear optimal power flow, rung 2: rung 1 plus generator ramp limits.
-    # Optimum 18200.0, from PyPSA itself. See docs/models/index.md.
+    # Optimum 18200.0, from PyPSA itself.
 
     dimensions:
       snapshot:
@@ -140,10 +140,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           - sum(f, over=link, group_by=from)
           == load
 
-      # PyPSA states a ramp limit as a fraction of p_nom, so the right-hand side is
-      # parameter arithmetic rather than a precomputed column. `shift` vacates the
-      # first snapshot, and a vacated position is absent, so both rows drop there —
-      # which is the boundary PyPSA wants, since nothing precedes it to ramp from.
       ramp_up:
         foreach: [snapshot, generator]
         expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom

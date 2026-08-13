@@ -129,7 +129,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     ```yaml
     # PyPSA linear optimal power flow, rung 4: rung 3's storage, closed into a
     # cycle — the first snapshot's state of charge carries over from the last.
-    # Optimum 17228.77962151063, from PyPSA itself. See docs/models/index.md.
+    # Optimum 17228.77962151063, from PyPSA itself.
 
     dimensions:
       snapshot:
@@ -218,12 +218,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, generator]
         expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
 
-      # Rung 3 needed two equations here: one seeding the first snapshot from
-      # soc_initial, one carrying over every other. Closing the cycle *removes* the
-      # first, and the whole change is asking for the wrap: where a bare `shift`
-      # vacates the first snapshot and drops that row, `edge='wrap'` puts it onto the
-      # last. The
-      # operator is the cycle, so nothing else moves.
       energy_balance:
         foreach: [snapshot, storage]
         expression: >-

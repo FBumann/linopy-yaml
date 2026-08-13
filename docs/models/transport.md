@@ -111,9 +111,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           lower: neg_cap
           upper: cap
 
-    # Naming the two halves of the nodal balance. Pure substitution before either
-    # backend sees the model, so this costs nothing at build and nothing at solve —
-    # what it buys is a constraint that reads as the sentence it is.
     expressions:
       gen_at_bus: sum(p, over=generator, group_by=bus)
       net_inflow: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
@@ -183,6 +180,10 @@ outflow.
 
 No adjacency matrix, and no join written by the modeller: the topology is
 data on the dimension.
+
+The two halves of the balance are **named expressions** — pure substitution
+before either backend sees the model, so naming them costs nothing at build or
+solve; what it buys is a constraint that reads as the sentence it is.
 
 ---
 

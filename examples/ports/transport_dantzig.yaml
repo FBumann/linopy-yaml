@@ -1,5 +1,5 @@
 # Dantzig's transportation problem (GAMS model library #1). Optimum 153.675,
-# published with the model. See docs/models/index.md.
+# published with the model.
 
 dimensions:
   plant:
@@ -34,7 +34,5 @@ constraints:
 objectives:
   total_cost:
     sense: minimize
-  # c(i,j) = f * d(i,j) / 1000 in the source, kept as arithmetic here
-  # rather than precomputed, so the file states the model and not a
-  # derived table.
+  # f * d / 1000 in the source: arithmetic, not a precomputed cost table
     expression: shipment * distance * freight / 1000
