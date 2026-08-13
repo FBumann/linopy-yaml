@@ -125,6 +125,14 @@ class PolarsExecutor:
         linear scan rather than sorting the model's largest frame at the peak
         of the build. :func:`_row_starts` reads the CSR index off that order,
         after which ``row`` is dropped: 8 bytes per entry no sink reads.
+
+        **``rows`` leaves in row order too**, which a solver reads as its own
+        index — so :meth:`~lpspec.relational.sinks.tables.ModelTables.dense_rows`
+        takes the frame's own vectors instead of scattering by label on every
+        solve. The order is *checked* first, by the same rule labelling uses:
+        a constant's left join is what usually loses it, and forcing that join
+        to hold it is a bet on the model's shape rather than a fix — free on
+        `fleet` and most of a build again on `dispatch`.
         """
         self._program = program
         self._bound = bind(program, sources)
@@ -135,7 +143,7 @@ class PolarsExecutor:
         objective = self._build_objective(program.objective)
 
         self._cols = _stack(cols, _COLS)
-        self._rows = _stack([r for r, _ in built], _ROWS)
+        self._rows = labels.in_position_order(_stack([r for r, _ in built], _ROWS), 'row')
         ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
         self._matrix_starts = _row_starts(ordered, self._n_rows)
         self._matrix = ordered.select('col', 'coeff').rechunk()

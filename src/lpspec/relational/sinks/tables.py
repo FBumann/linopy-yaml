@@ -63,6 +63,10 @@ class ModelTables:
     The objective constant lives outside the frames, having no column to
     attach to.
 
+    ``cols``, ``rows`` and ``matrix`` all arrive in the solver's own order —
+    ``cols`` by column, the other two by row — which is what lets every dense
+    vector be read positionally rather than keyed.
+
     ``col`` and ``row`` are dense ``0..n-1``, so they *are* the solver's own
     indices and no sink builds a mapping. **``cols`` carries no ``col`` and
     ``matrix`` no ``row``**: a ``cols`` row's position is its index and a
@@ -178,12 +182,22 @@ class ModelTables:
         is a :data:`SENSE` ``Enum`` built from :data:`SENSE_CODES`, so its
         physical value already *is* the code and the byte a solver wants costs
         a cast rather than a string hash for every row of the model.
+
+        **A frame that spans the model is already the answer.** ``rows`` leaves
+        the build in row order, so when it holds a row per label its ``row``
+        column is the identity and both vectors are the frame's own — where
+        scattering allocates a second vector each and permutes into it, on
+        every solve. The scatter stays for the frame that falls short of the
+        model, which is what the ``>=`` against ``-infinity`` above is for: it
+        answers for the labels no row spoke for.
         """
         sided = self.rows.select(
             'row',
             pl.col('sense').to_physical().cast(pl.UInt8).alias('op'),
             'rhs',
         )
+        if sided.height == self.row_count:
+            return sided['op'].to_numpy(), sided['rhs'].to_numpy()
         at = sided['row'].to_numpy()
         sense = _scattered(self.row_count, at, sided['op'].to_numpy(), SENSE_CODES['>='])
         rhs = _scattered(self.row_count, at, sided['rhs'].to_numpy(), -infinity)
