@@ -211,6 +211,12 @@ docs/models/<name>.md                       the gallery page — maths, model, s
 YAML, and `tests/test_models_gallery.py` holds the two in lockstep: a script
 with no tab fails, and so does a tab with no script behind it.
 
+A *teaching* model may carry the same three reference files — the instance, the
+script, the `references.json` entry — while its model file stays in
+`examples/`, where the guide points. Its check is weaker and the provenance
+says so: agreement with an independent hand-written formulation, not a
+published figure.
+
 - **A published optimum needs no script.** `transport_dantzig`'s number comes
   from the literature, and the citation *is* its provenance. It also ships a
   reference implementation, but as `corroborated_by` rather than as what

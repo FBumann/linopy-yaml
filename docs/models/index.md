@@ -41,12 +41,12 @@ drift from what the engine builds.
 <!-- constructs:begin -->
 | model | verified | `sum` | `sum(group_by)` | `shift` | `shift(edge='wrap')` | `where` | `bounds` | `piecewise` | MILP |
 |---|---|---|---|---|---|---|---|---|---|
-| [dispatch](dispatch.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · |
+| [dispatch](dispatch.md) | **✔** 10500 | **✓** | · | · | · | **✓** | **✓** | · | · |
 | [monthly_budget](monthly_budget.md) | · | **✓** | **✓** | · | · | · | **✓** | · | · |
 | [multi_period](multi_period.md) | · | **✓** | · | · | · | · | **✓** | · | · |
 | [piecewise](piecewise.md) | · | **✓** | · | · | · | · | **✓** | **✓** | · |
-| [storage](storage.md) | · | **✓** | · | · | **✓** | · | **✓** | · | · |
-| [transport](transport.md) | · | · | **✓** | · | · | · | **✓** | · | · |
+| [storage](storage.md) | **✔** 5650 | **✓** | · | · | **✓** | · | **✓** | · | · |
+| [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | **✓** | · | · |
 | [walkthrough](walkthrough.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · |
 | [facility_location](facility_location.md) | **✔** 932616 | **✓** | · | · | · | · | **✓** | · | **✓** |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | **✔** 17228.8 | · | **✓** | **✓** | **✓** | · | **✓** | · | · |
@@ -76,11 +76,13 @@ hand.
 
 ## Does it get the right answer?
 
-**✔ means the optimum did not come from us.** Every model on this page is run
-by the test suite, so "there is a test" distinguishes nothing. What the badge
-marks is narrower, and it is the only check that can catch a *shared
-misreading* — both lanes of the implementation agreeing on a meaning the
-modeller did not intend, which passes every lpspec-against-lpspec test green.
+**✔ means the optimum did not come from lpspec** — a figure published with the
+model, or a reference implementation hand-written on another stack, each row's
+provenance saying which. Every model on this page is run by the test suite, so
+"there is a test" distinguishes nothing. What the badge marks is narrower, and
+it is the only check that can catch a *shared misreading* — both lanes of the
+implementation agreeing on a meaning the modeller did not intend, which passes
+every lpspec-against-lpspec test green.
 
 Even the differential harness compares two lanes consuming the *same resolved
 AST* ([hard rule 1](../ARCHITECTURE.md#hard-rules)), which is what makes them
@@ -91,6 +93,7 @@ that class, and the evidence behind
 <!-- references:begin -->
 | port | optimum | `rtol` | duals | reference |
 |---|---|---|---|---|
+| [dispatch](dispatch.md) | 10500.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/dispatch.py — a teaching model, verified by agreement with an independent hand-written formulation rather than a published figure |
 | [facility_location](facility_location.md) | 932615.75 | 1e-09 | · | published by OR-Library (Beasley) for instance cap71 of the uncapacitated warehouse location set, in the file uncapopt: http://people.brunel.ac.uk/~mastjjb/jeb/orlib/uncapinfo.html |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | 17228.77962151063 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py |
 | [pypsa_kvl](pypsa_kvl.md) | 17000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py |
@@ -99,6 +102,8 @@ that class, and the evidence behind
 | [pypsa_transport](pypsa_transport.md) | 22000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_transport.py |
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | 24900.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py |
 | [stigler_diet](stigler_diet.md) | 0.10866227820675685 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year[^stigler_diet] |
+| [storage](storage.md) | 5650.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/storage.py — a teaching model, verified by agreement with an independent hand-written formulation rather than a published figure |
+| [transport](transport.md) | 4400.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/transport.py — a teaching model, verified by agreement with an independent hand-written formulation rather than a published figure |
 | [transport_dantzig](transport_dantzig.md) | 153.675 | 1e-09 | **✔** | published with GAMS model library #1 (trnsport), after Dantzig, Linear Programming and Extensions (1963) ch. 3.3[^transport_dantzig] |
 | [transport_pwl](transport_pwl.md) | 8.786852757777865 | 1e-09 | · | linopy 0.9.0's own add_piecewise_formulation, via examples/ports/references/linopy/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective |
 | [tsp_mtz](tsp_mtz.md) | 2085.0 | 1e-09 | · | published by TSPLIB for instance gr17 (Groetschel, 17 cities, EXPLICIT lower-diagonal distance matrix); optimum 2085 as listed in the TSPLIB solutions file |

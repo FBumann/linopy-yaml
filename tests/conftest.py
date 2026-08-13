@@ -42,11 +42,12 @@ if TYPE_CHECKING:
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
-#: The ported models, their data and the optimum somebody else published for
-#: each. Shared because two modules ask different questions of one corpus:
-#: ``test_ports.py`` whether we reach the outside answer, ``test_rebind.py``
-#: whether a rebind reaches the answer a fresh build does — eleven models
-#: nobody here wrote being a wider net than any pair written to be a net.
+#: The referenced models — the ports somebody else published an optimum for,
+#: plus the teaching models that carry a hand-written reference implementation
+#: — with their data and the number each should reach. Shared because two
+#: modules ask different questions of one corpus: ``test_ports.py`` whether we
+#: reach the outside answer, ``test_rebind.py`` whether a rebind reaches the
+#: answer a fresh build does.
 PORTS_DIR = EXAMPLES_DIR / 'ports'
 PORT_REFERENCES: dict[str, dict[str, Any]] = json.loads((PORTS_DIR / 'references.json').read_text())
 
@@ -59,8 +60,16 @@ def port_sources(name: str) -> dict[str, Any]:
 
 @pytest.fixture(params=sorted(PORT_REFERENCES), ids=str)
 def port(request: pytest.FixtureRequest) -> dict[str, Any]:
-    """Each ported model in turn: its name, its file, and what it should reach."""
-    return {'name': request.param, 'model': PORTS_DIR / f'{request.param}.yaml'} | PORT_REFERENCES[request.param]
+    """Each referenced model in turn: its name, its file, and what it should reach.
+
+    A port's model file lives in ``examples/ports/``; a teaching model with a
+    reference implementation keeps its file in ``examples/``, where the guide
+    and the gallery already point.
+    """
+    model = PORTS_DIR / f'{request.param}.yaml'
+    if not model.exists():
+        model = EXAMPLES_DIR / f'{request.param}.yaml'
+    return {'name': request.param, 'model': model} | PORT_REFERENCES[request.param]
 
 
 #: Every model in the repo, ports included — ``constructs.models()`` is the one

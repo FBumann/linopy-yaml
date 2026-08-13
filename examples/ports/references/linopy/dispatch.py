@@ -1,0 +1,70 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
+# ///
+"""Reference for ``dispatch``: the same LP, hand-written in linopy.
+
+    uv run --script examples/ports/references/linopy/dispatch.py
+
+Unlike the ports, nothing here was published: the model is this project's own
+smallest teaching example, so what verifies it is *agreement* — an independent
+hand-written formulation on a different modelling stack reaching the same
+objective and the same prices. ``references.json`` records what this script
+printed, and ``tests/test_ports.py`` holds lpspec to it.
+
+One deliberate difference: the YAML's ``where: p_max > 0`` gives the retired
+generator no columns at all, where this script keeps them bounded to zero.
+Same polytope, same objective, same duals — which is the point the page makes.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import linopy
+import pandas as pd
+
+DATA = Path(__file__).resolve().parents[2] / 'data' / 'dispatch.json'
+
+
+def build(data: dict) -> linopy.Model:
+    """The instance's tables as a linopy model, row for row."""
+    generators = pd.Index(data['p_max']['generator'], name='generator')
+    snapshots = pd.Index(data['load']['snapshot'], name='snapshot')
+
+    p_max = pd.Series(data['p_max']['value'], index=generators)
+    cost = pd.Series(data['cost']['value'], index=generators)
+    load = pd.Series(data['load']['value'], index=snapshots)
+
+    m = linopy.Model()
+    p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, generators], name='p')
+    m.add_constraints(p.sum('generator') == load, name='power_balance')
+    m.add_objective((p * cost).sum())
+    return m
+
+
+def marginal_prices(m: linopy.Model) -> dict[str, list]:
+    """The power-balance dual: the classic price signal.
+
+    One price per snapshot — the cost of the marginal generator, which is what
+    makes dispatch worth checking on duals: a snapshot where wind covers the
+    load prices at wind, the moment gas has to run the price jumps to gas.
+    """
+    dual = m.constraints['power_balance'].dual
+    return {'snapshot': [int(v) for v in dual.indexes['snapshot']], 'value': [float(v) for v in dual.values]}
+
+
+def main() -> float:
+    m = build(json.loads(DATA.read_text()))
+    status, condition = m.solve(solver_name='highs')
+    assert status == 'ok', f'{status}: {condition}'
+    print(f'linopy {linopy.__version__}')
+    print(f'objective {float(m.objective.value)!r}')
+    print(f'duals {json.dumps({"power_balance": marginal_prices(m)})}')
+    return float(m.objective.value)
+
+
+if __name__ == '__main__':
+    main()
