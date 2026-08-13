@@ -169,36 +169,41 @@ $$\mathit{neg\_s\_nom}_{l} \le f_{t,l} \le s^{\mathrm{nom}}_{l} \qquad \forall\t
     The model-building half of `examples/ports/references/pypsa/pypsa_kvl.py`:
 
     ```python
-    def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
+    def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
+
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
         ``r=0`` keeps a line purely reactive: the linearised power flow is a
         function of ``x`` alone, and a resistance would only add losses the DC
         approximation does not model anyway.
         """
         n = pypsa.Network()
-        n.set_snapshots(data['snapshot']['snapshot'])
-        n.add('Bus', data['bus']['bus'])
+        n.set_snapshots(tables['snapshot']['snapshot'])
+        n.add('Bus', tables['bus']['bus'])
+
+        generators = tables['generator'].set_index('generator')
+        lines = tables['line'].set_index('line')
 
         n.add(
             'Generator',
-            data['generator']['generator'],
-            bus=data['generator']['bus'],
-            p_nom=data['p_nom']['value'],
-            marginal_cost=data['marginal_cost']['value'],
+            generators.index,
+            bus=generators['bus'],
+            p_nom=tables['p_nom'].set_index('generator')['value'],
+            marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
         n.add(
             'Line',
-            data['line']['line'],
-            bus0=data['line']['from'],
-            bus1=data['line']['to'],
-            x=data['reactance']['value'],
+            lines.index,
+            bus0=lines['from'],
+            bus1=lines['to'],
+            x=tables['reactance'].set_index('line')['value'],
             r=0.0,
-            s_nom=data['s_nom']['value'],
+            s_nom=tables['s_nom'].set_index('line')['value'],
         )
 
-        load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
-        for bus in data['bus']['bus']:
+        load = tables['load'].pivot(index='snapshot', columns='bus', values='value')
+        for bus in tables['bus']['bus']:
             n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
         return n
     ```

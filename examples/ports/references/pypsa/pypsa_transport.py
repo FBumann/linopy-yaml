@@ -12,7 +12,8 @@ and run out of band — PyPSA is not a dependency of this project. linopy is
 pinned because PyPSA builds its model *through* it, so the formulation, and so
 the number, is theirs jointly; xarray because it is linopy's data model, where
 alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it reshapes the recorded duals and nothing else, and
+is only a floor: it holds the instance's tables and reshapes the recorded
+duals, and
 ``nodal_prices`` spells that reshape out rather than leaning on ``stack()``,
 whose NA handling changed in 3.0. The floor is checked rather than assumed —
 this script emits byte-identical output on either side of that change.
@@ -38,36 +39,46 @@ import pypsa
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_transport.json'
 
 
-def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
+def load_tables() -> dict[str, pd.DataFrame]:
+    """The instance, one frame per parameter — what a caller of either library holds."""
+    return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
+
+
+def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
+
+    ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
     ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
     a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
     it ships ``neg_rating`` as data instead. That is the ledger row.
     """
     n = pypsa.Network()
-    n.set_snapshots(data['snapshot']['snapshot'])
-    n.add('Bus', data['bus']['bus'])
+    n.set_snapshots(tables['snapshot']['snapshot'])
+    n.add('Bus', tables['bus']['bus'])
+
+    generators = tables['generator'].set_index('generator')
+    links = tables['link'].set_index('link')
 
     n.add(
         'Generator',
-        data['generator']['generator'],
-        bus=data['generator']['bus'],
-        p_nom=data['p_nom']['value'],
-        marginal_cost=data['marginal_cost']['value'],
+        generators.index,
+        bus=generators['bus'],
+        p_nom=tables['p_nom'].set_index('generator')['value'],
+        marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
     )
     n.add(
         'Link',
-        data['link']['link'],
-        bus0=data['link']['from'],
-        bus1=data['link']['to'],
-        p_nom=data['rating']['value'],
+        links.index,
+        bus0=links['from'],
+        bus1=links['to'],
+        p_nom=tables['rating'].set_index('link')['value'],
         p_min_pu=-1.0,
         efficiency=1.0,
     )
 
-    load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
-    for bus in data['bus']['bus']:
+    load = tables['load'].pivot(index='snapshot', columns='bus', values='value')
+    for bus in tables['bus']['bus']:
         n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
     return n
 
@@ -89,7 +100,7 @@ def nodal_prices(n: pypsa.Network) -> dict[str, list]:
 
 
 def main() -> float:
-    n = build(json.loads(DATA.read_text()))
+    n = build(load_tables())
     n.optimize(solver_name='highs')
     print(f'pypsa {pypsa.__version__}')
     print(f'objective {float(n.objective)!r}')

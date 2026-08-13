@@ -206,25 +206,30 @@ $$\mathit{shut\_down}_{t,g} \in \{0, 1\} \qquad \forall\thinspace t \in \mathcal
     The model-building half of `examples/ports/references/pypsa/pypsa_unit_commitment.py`:
 
     ```python
-    def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
-        """The port's tables as a PyPSA network, column for column."""
+    def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
+        """The port's tables as a PyPSA network, column for column.
+
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        """
         n = pypsa.Network()
-        n.set_snapshots(data['snapshot']['snapshot'])
+        n.set_snapshots(tables['snapshot']['snapshot'])
         n.add('Bus', 'bus')
+
+        generators = tables['generator'].set_index('generator')
 
         n.add(
             'Generator',
-            data['generator']['generator'],
+            generators.index,
             bus='bus',
             committable=True,
-            p_nom=data['p_nom']['value'],
-            marginal_cost=data['marginal_cost']['value'],
-            p_min_pu=data['p_min_pu']['value'],
-            start_up_cost=data['start_up_cost']['value'],
-            shut_down_cost=data['shut_down_cost']['value'],
+            p_nom=tables['p_nom'].set_index('generator')['value'],
+            marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
+            p_min_pu=tables['p_min_pu'].set_index('generator')['value'],
+            start_up_cost=tables['start_up_cost'].set_index('generator')['value'],
+            shut_down_cost=tables['shut_down_cost'].set_index('generator')['value'],
         )
 
-        load = pd.Series(data['load']['value'], index=data['load']['snapshot'])
+        load = tables['load'].set_index('snapshot')['value']
         n.add('Load', 'load', bus='bus', p_set=load)
         return n
     ```

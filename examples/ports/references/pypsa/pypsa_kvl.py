@@ -12,7 +12,8 @@ and run out of band — PyPSA is not a dependency of this project. linopy is
 pinned because PyPSA builds its model *through* it, so the formulation, and so
 the number, is theirs jointly; xarray because it is linopy's data model, where
 alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it reshapes the recorded duals and nothing else, and
+is only a floor: it holds the instance's tables and reshapes the recorded
+duals, and
 ``nodal_prices`` spells that reshape out rather than leaning on ``stack()``,
 whose NA handling changed in 3.0. The floor is checked rather than assumed —
 this script emits byte-identical output on either side of that change.
@@ -45,36 +46,46 @@ import pypsa
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_kvl.json'
 
 
-def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
+def load_tables() -> dict[str, pd.DataFrame]:
+    """The instance, one frame per parameter — what a caller of either library holds."""
+    return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
+
+
+def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
+
+    ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
     ``r=0`` keeps a line purely reactive: the linearised power flow is a
     function of ``x`` alone, and a resistance would only add losses the DC
     approximation does not model anyway.
     """
     n = pypsa.Network()
-    n.set_snapshots(data['snapshot']['snapshot'])
-    n.add('Bus', data['bus']['bus'])
+    n.set_snapshots(tables['snapshot']['snapshot'])
+    n.add('Bus', tables['bus']['bus'])
+
+    generators = tables['generator'].set_index('generator')
+    lines = tables['line'].set_index('line')
 
     n.add(
         'Generator',
-        data['generator']['generator'],
-        bus=data['generator']['bus'],
-        p_nom=data['p_nom']['value'],
-        marginal_cost=data['marginal_cost']['value'],
+        generators.index,
+        bus=generators['bus'],
+        p_nom=tables['p_nom'].set_index('generator')['value'],
+        marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
     )
     n.add(
         'Line',
-        data['line']['line'],
-        bus0=data['line']['from'],
-        bus1=data['line']['to'],
-        x=data['reactance']['value'],
+        lines.index,
+        bus0=lines['from'],
+        bus1=lines['to'],
+        x=tables['reactance'].set_index('line')['value'],
         r=0.0,
-        s_nom=data['s_nom']['value'],
+        s_nom=tables['s_nom'].set_index('line')['value'],
     )
 
-    load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
-    for bus in data['bus']['bus']:
+    load = tables['load'].pivot(index='snapshot', columns='bus', values='value')
+    for bus in tables['bus']['bus']:
         n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
     return n
 
@@ -100,7 +111,7 @@ def cycle_basis(n: pypsa.Network) -> str:
 
 
 def main() -> float:
-    n = build(json.loads(DATA.read_text()))
+    n = build(load_tables())
     n.optimize.create_model(include_objective_constant=False)
     print(cycle_basis(n))
     status, condition = n.optimize(solver_name='highs')

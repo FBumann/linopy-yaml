@@ -247,49 +247,55 @@ $$0 \le \mathit{soc}_{t,s} \le \mathit{soc}^{\mathrm{max}}_{s} \qquad \forall\th
     The model-building half of `examples/ports/references/pypsa/pypsa_cyclic_storage.py`:
 
     ```python
-    def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
+    def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
+
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
         ``max_hours`` is the ratio PyPSA stores; the port carries the product it
         implies (``soc_max``), because a bound there takes a name, not arithmetic.
         """
         n = pypsa.Network()
-        n.set_snapshots(data['snapshot']['snapshot'])
-        n.add('Bus', data['bus']['bus'])
+        n.set_snapshots(tables['snapshot']['snapshot'])
+        n.add('Bus', tables['bus']['bus'])
+
+        generators = tables['generator'].set_index('generator')
+        links = tables['link'].set_index('link')
+        storages = tables['storage'].set_index('storage')
 
         n.add(
             'Generator',
-            data['generator']['generator'],
-            bus=data['generator']['bus'],
-            p_nom=data['p_nom']['value'],
-            marginal_cost=data['marginal_cost']['value'],
-            ramp_limit_up=data['ramp_limit_up']['value'],
-            ramp_limit_down=data['ramp_limit_down']['value'],
+            generators.index,
+            bus=generators['bus'],
+            p_nom=tables['p_nom'].set_index('generator')['value'],
+            marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
+            ramp_limit_up=tables['ramp_limit_up'].set_index('generator')['value'],
+            ramp_limit_down=tables['ramp_limit_down'].set_index('generator')['value'],
         )
         n.add(
             'Link',
-            data['link']['link'],
-            bus0=data['link']['from'],
-            bus1=data['link']['to'],
-            p_nom=data['rating']['value'],
+            links.index,
+            bus0=links['from'],
+            bus1=links['to'],
+            p_nom=tables['rating'].set_index('link')['value'],
             p_min_pu=-1.0,
             efficiency=1.0,
         )
-        p_nom = data['storage_p_nom']['value']
+        p_nom = tables['storage_p_nom'].set_index('storage')['value']
         n.add(
             'StorageUnit',
-            data['storage']['storage'],
-            bus=data['storage']['bus'],
+            storages.index,
+            bus=storages['bus'],
             p_nom=p_nom,
-            max_hours=[m / p for m, p in zip(data['soc_max']['value'], p_nom, strict=True)],
-            efficiency_store=data['efficiency_store']['value'],
-            efficiency_dispatch=data['efficiency_dispatch']['value'],
-            standing_loss=data['standing_loss']['value'],
+            max_hours=tables['soc_max'].set_index('storage')['value'] / p_nom,
+            efficiency_store=tables['efficiency_store'].set_index('storage')['value'],
+            efficiency_dispatch=tables['efficiency_dispatch'].set_index('storage')['value'],
+            standing_loss=tables['standing_loss'].set_index('storage')['value'],
             cyclic_state_of_charge=True,
         )
 
-        load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
-        for bus in data['bus']['bus']:
+        load = tables['load'].pivot(index='snapshot', columns='bus', values='value')
+        for bus in tables['bus']['bus']:
             n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
         return n
     ```

@@ -12,7 +12,8 @@ and run out of band — PyPSA is not a dependency of this project. linopy is
 pinned because PyPSA builds its model *through* it, so the formulation, and so
 the number, is theirs jointly; xarray because it is linopy's data model, where
 alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: nothing recorded here is reshaped with it.
+is only a floor: it holds the instance's tables; nothing recorded here is
+reshaped with it.
 
 It reads the same instance the port binds and builds the network with PyPSA's
 own objects. Nothing here imports lpspec.
@@ -39,31 +40,41 @@ import pypsa
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_unit_commitment.json'
 
 
-def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
-    """The port's tables as a PyPSA network, column for column."""
+def load_tables() -> dict[str, pd.DataFrame]:
+    """The instance, one frame per parameter — what a caller of either library holds."""
+    return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
+
+
+def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
+    """The port's tables as a PyPSA network, column for column.
+
+    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    """
     n = pypsa.Network()
-    n.set_snapshots(data['snapshot']['snapshot'])
+    n.set_snapshots(tables['snapshot']['snapshot'])
     n.add('Bus', 'bus')
+
+    generators = tables['generator'].set_index('generator')
 
     n.add(
         'Generator',
-        data['generator']['generator'],
+        generators.index,
         bus='bus',
         committable=True,
-        p_nom=data['p_nom']['value'],
-        marginal_cost=data['marginal_cost']['value'],
-        p_min_pu=data['p_min_pu']['value'],
-        start_up_cost=data['start_up_cost']['value'],
-        shut_down_cost=data['shut_down_cost']['value'],
+        p_nom=tables['p_nom'].set_index('generator')['value'],
+        marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
+        p_min_pu=tables['p_min_pu'].set_index('generator')['value'],
+        start_up_cost=tables['start_up_cost'].set_index('generator')['value'],
+        shut_down_cost=tables['shut_down_cost'].set_index('generator')['value'],
     )
 
-    load = pd.Series(data['load']['value'], index=data['load']['snapshot'])
+    load = tables['load'].set_index('snapshot')['value']
     n.add('Load', 'load', bus='bus', p_set=load)
     return n
 
 
 def main() -> float:
-    n = build(json.loads(DATA.read_text()))
+    n = build(load_tables())
     status, condition = n.optimize(solver_name='highs')
     assert status == 'ok', f'{status}: {condition}'
     print(f'pypsa {pypsa.__version__}')

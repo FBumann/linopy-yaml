@@ -119,20 +119,19 @@ $$\mathit{spend}_{f} \ge 0 \qquad \forall\thinspace f \in \mathcal{F}$$
     The model-building half of `examples/ports/references/linopy/stigler_diet.py`:
 
     ```python
-    def build(data: dict) -> linopy.Model:
+    def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The port's tables as a linopy model, column for column.
 
-        ``supply`` is the sparse table filled back out: a missing (food, nutrient)
-        pair means that food supplies none of that nutrient.
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``per_dollar`` is the sparse table filled back out: a missing
+        (food, nutrient) pair means that food supplies none of that nutrient.
         """
-        foods = pd.Index(data['food']['food'], name='food')
-        nutrients = pd.Index(data['nutrient']['nutrient'], name='nutrient')
-
-        minimum = pd.Series(data['daily_minimum']['value'], index=nutrients)
+        foods = pd.Index(tables['food']['food'], name='food')
+        minimum = tables['daily_minimum'].set_index('nutrient')['value']
         per_dollar = (
-            pd.DataFrame(data['nutrient_per_dollar'])
+            tables['nutrient_per_dollar']
             .pivot(index='food', columns='nutrient', values='value')
-            .reindex(index=foods, columns=nutrients)
+            .reindex(index=foods, columns=minimum.index)
             .fillna(0.0)
         )
 

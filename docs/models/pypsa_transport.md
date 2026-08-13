@@ -132,36 +132,41 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
     The model-building half of `examples/ports/references/pypsa/pypsa_transport.py`:
 
     ```python
-    def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
+    def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
+
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
         ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
         a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
         it ships ``neg_rating`` as data instead. That is the ledger row.
         """
         n = pypsa.Network()
-        n.set_snapshots(data['snapshot']['snapshot'])
-        n.add('Bus', data['bus']['bus'])
+        n.set_snapshots(tables['snapshot']['snapshot'])
+        n.add('Bus', tables['bus']['bus'])
+
+        generators = tables['generator'].set_index('generator')
+        links = tables['link'].set_index('link')
 
         n.add(
             'Generator',
-            data['generator']['generator'],
-            bus=data['generator']['bus'],
-            p_nom=data['p_nom']['value'],
-            marginal_cost=data['marginal_cost']['value'],
+            generators.index,
+            bus=generators['bus'],
+            p_nom=tables['p_nom'].set_index('generator')['value'],
+            marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
         n.add(
             'Link',
-            data['link']['link'],
-            bus0=data['link']['from'],
-            bus1=data['link']['to'],
-            p_nom=data['rating']['value'],
+            links.index,
+            bus0=links['from'],
+            bus1=links['to'],
+            p_nom=tables['rating'].set_index('link')['value'],
             p_min_pu=-1.0,
             efficiency=1.0,
         )
 
-        load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
-        for bus in data['bus']['bus']:
+        load = tables['load'].pivot(index='snapshot', columns='bus', values='value')
+        for bus in tables['bus']['bus']:
             n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
         return n
     ```
