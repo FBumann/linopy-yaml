@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.118](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.117...v0.0.1-alpha.118) (2026-08-13)
+
+
+### Refactoring
+
+* a value crossing a module boundary names its fields ([#667](https://github.com/fluxopt/lpspec/issues/667)) ([51b5249](https://github.com/fluxopt/lpspec/commit/51b5249bbf289bf71507eb02412ef66a363071e8))
+
 ## [0.0.1-alpha.117](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.116...v0.0.1-alpha.117) (2026-08-13)
 
 
