@@ -336,12 +336,13 @@ class ConstraintDeclaration:
 
 @dataclass(frozen=True)
 class SosDeclaration:
-    """One special-ordered set per coordinate of ``dims``, running along ``over``.
+    """One special-ordered set per coordinate of the variable's ``foreach`` minus ``over``.
 
     The only declaration that adds neither a column nor a row: it names
-    columns a sink already has and says what may be nonzero among them. ``dims``
-    is the variable's ``foreach`` minus ``over``, spelled out here so the engine
-    places the sets without asking the schema which dim was dropped.
+    columns a sink already has and says what may be nonzero among them. Which
+    dims those are is the variable's own ``foreach`` and is read from it: a
+    copy here would be a second home for a fact
+    (:meth:`Program.variable`).
 
     ``big_m`` caps the linking coefficient a sink without the concept
     reformulates with, and is ``None`` where the variable's own upper bound is
@@ -350,7 +351,6 @@ class SosDeclaration:
 
     name: str
     variable: str
-    dims: tuple[str, ...]
     over: str
     sos_type: Literal[1, 2]
     big_m: float | None = None
