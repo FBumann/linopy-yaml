@@ -83,8 +83,8 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         _sink(objective, f)
 
         f.write(b'\ns.t.\n\n')
-        for lo, hi, entries in model.labeled_blocks(EMIT_BUDGET):
-            _sink(_constraint_lines(model, lo, hi, entries), f)
+        for block in model.row_blocks(EMIT_BUDGET):
+            _sink(_constraint_lines(model, block.lo, block.hi, model.matrix_block(block.lo, block.hi)), f)
 
         f.write(b'\nbounds\n')
         _sink(bounds, f)
@@ -105,7 +105,7 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
     One row per *output line*, interleaved by sorting, so nothing gathers a
     row's terms into a string list first — a ``group_by('row')`` into a list
     column and an explode measured a large multiple of this (#520). *entries* is the
-    chunk's slice of the matrix from :meth:`ModelTables.labeled_blocks`, and the
+    chunk's slice of the matrix from :meth:`ModelTables.matrix_block`, and the
     anti-join gives a termless row the line a solver still needs to parse.
 
     **The order is one integer, and the only other column.** A row's lines

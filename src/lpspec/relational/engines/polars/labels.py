@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from lpspec.relational import plan
-    from lpspec.relational.engines.polars.compiler import PolarsCompiler
+    from lpspec.relational.engines.polars.compiler import PolarsCompiler, Presence
 
 
 def frame(
@@ -39,8 +39,8 @@ def frame(
     where: plan.Predicate | None,
     label: str,
     start: int,
-    restrictions: Sequence[tuple[tuple[str, ...], pl.LazyFrame]] = (),
-) -> tuple[pl.DataFrame, int]:
+    restrictions: Sequence[Presence] = (),
+) -> pl.DataFrame:
     """The masked coord product of *dims* with a dense *label* from *start*.
 
     A label follows declaration order — row-major over the dims' declared
@@ -68,19 +68,19 @@ def frame(
     (#520).
 
     Returns:
-        ``(dims…, label)`` in that column order and in label order, and the
-        next free label.
+        ``(dims…, label)`` in that column order and in label order; the next
+        free label is ``start`` plus its height.
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, predicate_dims(where, compiler.name_dims))
         if free:
             factored = _factored(compiler, dims, free, where, label, start)
             if factored is not None:
-                return factored, start + factored.height
+                return factored
 
     surviving = compiler.frame(dims, where)
-    for on, presence in restrictions:
-        surviving = restrict_by_presence(surviving, presence, on)
+    for restriction in restrictions:
+        surviving = restrict_by_presence(surviving, restriction.frame, restriction.keyed_by or ())
 
     dropped = where is not None or bool(restrictions)
     numbering = _row_major(compiler, dims)
@@ -93,8 +93,7 @@ def frame(
     )
     if dropped:
         materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
-    materialised = materialised.select(*dims, pl.col(label).set_sorted())
-    return materialised, start + materialised.height
+    return materialised.select(*dims, pl.col(label).set_sorted())
 
 
 def _factored(

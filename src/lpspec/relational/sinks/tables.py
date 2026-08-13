@@ -23,18 +23,42 @@ if TYPE_CHECKING:
     import numpy as np
     import numpy.typing as npt
 
-    #: What a solver sink is handed: three float vectors and an integrality
-    #: mask, each as long as the model has columns.
-    DenseColumns = tuple[
-        npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.bool_]
-    ]
 
-    #: A sense code and a right-hand side, each as long as the model has rows.
-    DenseRows = tuple[npt.NDArray[np.uint8], npt.NDArray[np.float64]]
+@dataclass(frozen=True)
+class ColumnVectors:
+    """The per-column vectors a solver sink is handed.
 
-    #: One chunk of rows: the half-open label range, the matrix entries those
-    #: rows own, and the offset of each row's entries within them.
-    RowBlock = tuple[int, int, pl.DataFrame, npt.NDArray[np.int64]]
+    Three float vectors and an integrality mask, each as long as the model
+    has columns.
+    """
+
+    lb: npt.NDArray[np.float64]
+    ub: npt.NDArray[np.float64]
+    cost: npt.NDArray[np.float64]
+    integral: npt.NDArray[np.bool_]
+
+
+@dataclass(frozen=True)
+class RowVectors:
+    """A sense code and a right-hand side, each as long as the model has rows."""
+
+    sense: npt.NDArray[np.uint8]
+    rhs: npt.NDArray[np.float64]
+
+
+@dataclass(frozen=True)
+class MatrixBlock:
+    """One chunk of rows ``[lo, hi)`` and the matrix entries those rows own.
+
+    ``starts`` is the offset of each row's entries within the chunk — what
+    both solvers' matrix APIs ask for. A row with no entries takes the next
+    row's offset, and so occupies no span.
+    """
+
+    lo: int
+    hi: int
+    entries: pl.DataFrame
+    starts: npt.NDArray[np.int64]
 
 
 #: ``sense`` as a number, so a row's comparison crosses into numpy as one byte
@@ -124,8 +148,8 @@ class ModelTables:
         """
         return chunking.ranges(self.column_count, budget, 1.0)
 
-    def dense_columns(self, infinity: float) -> DenseColumns:
-        """``(lb, ub, cost, integral)`` as numpy vectors over the solver's index.
+    def dense_columns(self, infinity: float) -> ColumnVectors:
+        """The column vectors over the solver's index, ready to hand over.
 
         *infinity* is the solver's own spelling of an absent bound — the one
         thing the two disagree on — so it is asked for and the vectors come
@@ -159,15 +183,15 @@ class ModelTables:
             (pl.col('vtype') != 'continuous').alias('integral'),
         )
         cost = _scattered(self.column_count, self.obj['col'].to_numpy(), self.obj['coeff'].to_numpy(), 0.0)
-        return (
-            prepared['lb'].to_numpy(),
-            prepared['ub'].to_numpy(),
-            cost,
-            prepared['integral'].to_numpy(),
+        return ColumnVectors(
+            lb=prepared['lb'].to_numpy(),
+            ub=prepared['ub'].to_numpy(),
+            cost=cost,
+            integral=prepared['integral'].to_numpy(),
         )
 
-    def dense_rows(self, infinity: float) -> DenseRows:
-        """``(sense, rhs)`` as numpy vectors over the solver's row index.
+    def dense_rows(self, infinity: float) -> RowVectors:
+        """The row vectors over the solver's row index, ready to hand over.
 
         The row half of :meth:`dense_columns`: a chunk of rows is a slice
         rather than a search. Sorting and filtering the row frame once per
@@ -198,11 +222,12 @@ class ModelTables:
             'rhs',
         )
         if sided.height == self.row_count:
-            return sided['op'].to_numpy(), sided['rhs'].to_numpy()
+            return RowVectors(sense=sided['op'].to_numpy(), rhs=sided['rhs'].to_numpy())
         at = sided['row'].to_numpy()
-        sense = _scattered(self.row_count, at, sided['op'].to_numpy(), SENSE_CODES['>='])
-        rhs = _scattered(self.row_count, at, sided['rhs'].to_numpy(), -infinity)
-        return sense, rhs
+        return RowVectors(
+            sense=_scattered(self.row_count, at, sided['op'].to_numpy(), SENSE_CODES['>=']),
+            rhs=_scattered(self.row_count, at, sided['rhs'].to_numpy(), -infinity),
+        )
 
     @cached_property
     def structure(self) -> bytes:
@@ -247,20 +272,17 @@ class ModelTables:
             digest.update(np.ascontiguousarray(vector).data)
         return digest.digest()
 
-    def row_blocks(self, budget: int | None) -> Iterator[RowBlock]:
-        """Each chunk of rows with the matrix entries it owns — a solver's reader.
+    def row_blocks(self, budget: int | None) -> Iterator[MatrixBlock]:
+        """Each chunk of rows with the matrix entries it owns — every sink's reader.
 
         A chunk is a ``slice``: ``row_starts`` already says where every row's
-        entries sit, so nothing is sorted and nothing is searched.
-
-        Yields:
-            ``(lo, hi, entries, starts)`` for rows ``[lo, hi)``, where
-            ``starts`` is each row's offset within the block — what both
-            solvers' matrix APIs ask for. A row with no entries takes the
-            next row's offset, and so occupies no span.
+        entries sit, so nothing is sorted and nothing is searched. A consumer
+        that needs the ``row`` labels spelled back out asks
+        :meth:`matrix_block` with the chunk's own range, so its spans and
+        entries cannot disagree.
         """
         for lo, hi in self._spans(budget):
-            yield lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo]
+            yield MatrixBlock(lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo])
 
     def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
         """Rows ``[lo, hi)`` of the matrix with their ``row`` labels spelled out.
@@ -273,19 +295,6 @@ class ModelTables:
 
         labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
         return self._span(lo, hi).with_columns(pl.Series('row', labels))
-
-    def labeled_blocks(self, budget: int | None) -> Iterator[tuple[int, int, pl.DataFrame]]:
-        """Each chunk of rows with its entries labeled — the LP writer's reader.
-
-        One method per consumer shape — solvers take :meth:`row_blocks`, the
-        writer this — so no caller pairs spans and entries that disagree.
-
-        Yields:
-            ``(lo, hi, entries)`` for rows ``[lo, hi)``, the entries labelled
-            as :meth:`matrix_block` labels them.
-        """
-        for lo, hi in self._spans(budget):
-            yield lo, hi, self.matrix_block(lo, hi)
 
 
 def solver_vector(values: Any) -> pl.Series:

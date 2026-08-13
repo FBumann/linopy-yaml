@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib.util
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from lpspec.errors import LpspecError
@@ -30,10 +31,21 @@ if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
     from lpspec.relational.status import SolveStatus
 
-    #: What a solve concluded, and the two vectors it left: the status pair,
-    #: the objective, the primal and the dual. Either vector may be ``None``,
-    #: for different reasons — see :meth:`Solver.run`.
-    Answer = tuple[SolveStatus, float, pl.Series | None, pl.Series | None]
+
+@dataclass(frozen=True)
+class SolveAnswer:
+    """What a solve concluded, and the two vectors it left.
+
+    Either vector may be ``None``, for different reasons: no ``primal`` means
+    the solve left nothing worth reading, while no ``dual`` is narrower — a
+    mixed-integer model has none at all, and neither does a run stopped short
+    of a simplex basis.
+    """
+
+    status: SolveStatus
+    objective: float
+    primal: pl.Series | None
+    dual: pl.Series | None
 
 
 class Solver(ABC):
@@ -118,7 +130,7 @@ class Solver(ABC):
         this replaces.
         """
 
-    def run(self, model: ModelTables) -> Answer:
+    def run(self, model: ModelTables) -> SolveAnswer:
         """Solve what is loaded, read it back, and refuse a vector that lies.
 
         Reading a solution back is positional, so a vector that does not span
@@ -129,15 +141,11 @@ class Solver(ABC):
 
         A member writes :meth:`_run`; this is the contract around it, so no
         sink can be added that forgets to be checked.
-
-        Returns:
-            The status pair, the objective, and the primal and dual vectors —
-            either of which may be ``None``, as :meth:`_run` describes.
         """
-        status, objective, primal, dual = self._run(model)
-        self._spans('primal', primal, model.column_count)
-        self._spans('dual', dual, model.row_count)
-        return status, objective, primal, dual
+        answer = self._run(model)
+        self._spans('primal', answer.primal, model.column_count)
+        self._spans('dual', answer.dual, model.row_count)
+        return answer
 
     def _spans(self, quantity: str, values: pl.Series | None, expected: int) -> None:
         """Check that a solver vector spans the model.
@@ -158,14 +166,12 @@ class Solver(ABC):
             )
 
     @abstractmethod
-    def _run(self, model: ModelTables) -> Answer:
+    def _run(self, model: ModelTables) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
         *model* is asked only for what has no column and so was never loaded —
-        the objective's constant. Either vector may be ``None``, for different
-        reasons: no primal means the solve left nothing worth reading, while no
-        dual is narrower, a mixed-integer model having none at all and neither
-        does a run stopped short of a simplex basis.
+        the objective's constant. When either vector may be ``None`` is
+        :class:`SolveAnswer`'s docstring.
         """
 
     @abstractmethod

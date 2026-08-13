@@ -16,6 +16,7 @@ which is what :class:`~lpspec.relational.engines.polars.binding.BoundSources` sa
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
@@ -33,7 +34,7 @@ from lpspec.errors import (
 from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
-from lpspec.relational.engines.polars.compiler import PolarsCompiler, TermFragment
+from lpspec.relational.engines.polars.compiler import PolarsCompiler, Presence, TermFragment
 from lpspec.relational.result import Diagnostics, Result
 from lpspec.relational.sinks.tables import SENSE
 
@@ -77,6 +78,19 @@ _DTYPES = {
 }  # fmt: skip
 
 
+@dataclass(frozen=True)
+class _Block:
+    """One declaration's contiguous, dense run of labels: its start, and how many.
+
+    :func:`~lpspec.relational.engines.polars.labels.frame` numbers a
+    declaration's survivors contiguously, so its share of a solver vector is
+    a slice — which is what :meth:`PolarsEngine._laid_out` spends it on.
+    """
+
+    start: int
+    height: int
+
+
 class PolarsEngine:
     """Build a :class:`Program` into polars frames, then sink it."""
 
@@ -107,15 +121,12 @@ class PolarsEngine:
         #: ``name -> rows not built``, because every term they had vanished.
         #: Empty for a model whose every declared row reached the solver.
         self._omitted: dict[str, int] = {}
-        #: ``name -> (first label, how many)``, one map per label space.
-        #: :func:`~lpspec.relational.engines.polars.labels.frame` hands a
-        #: declaration a *contiguous, dense* run of labels, so a declaration's
-        #: share of a solver vector is a slice of it. Columns and rows are
-        #: numbered independently and a model may name a variable and a
-        #: constraint alike, so one map keyed by name would hand the primal
-        #: reader a row block.
-        self._variable_blocks: dict[str, tuple[int, int]] = {}
-        self._constraint_blocks: dict[str, tuple[int, int]] = {}
+        #: One :class:`_Block` per declaration, one map per label space.
+        #: Columns and rows are numbered independently and a model may name a
+        #: variable and a constraint alike, so one map keyed by name would
+        #: hand the primal reader a row block.
+        self._variable_blocks: dict[str, _Block] = {}
+        self._constraint_blocks: dict[str, _Block] = {}
         self._cols: pl.DataFrame | None = None
         self._obj: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
@@ -256,9 +267,10 @@ class PolarsEngine:
         been the order's witness and nothing else.
         """
         start = self._n_cols
-        labelled, self._n_cols = labels.frame(self._q, v.dims, v.where, 'var_label', start)
+        labelled = labels.frame(self._q, v.dims, v.where, 'var_label', start)
+        self._n_cols = start + labelled.height
         self._variables[v.name] = labelled.lazy()
-        self._variable_blocks[v.name] = (start, labelled.height)
+        self._variable_blocks[v.name] = _Block(start, labelled.height)
 
         bounded = labels.in_position_order(
             self._q.bounds(labelled.lazy(), v)
@@ -310,10 +322,11 @@ class PolarsEngine:
 
         restrictions = _absence_restrictions([p for p, _ in terms])
         start = self._n_rows
-        labelled, self._n_rows = labels.frame(self._q, c.dims, c.where, 'row', start, restrictions)
+        labelled = labels.frame(self._q, c.dims, c.where, 'row', start, restrictions)
+        self._n_rows = start + labelled.height
         frame = labelled.lazy()
         self._constraints[c.name] = frame
-        self._constraint_blocks[c.name] = (start, labelled.height)
+        self._constraint_blocks[c.name] = _Block(start, labelled.height)
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
         uncovered: pl.Expr | None = None
@@ -347,7 +360,7 @@ class PolarsEngine:
 
         if not terms:
             self._omitted[c.name] = rows.height
-            self._constraint_blocks[c.name] = (start, 0)
+            self._constraint_blocks[c.name] = _Block(start, 0)
             self._n_rows = start
             self._constraints[c.name] = self._constraints[c.name].clear()
             return rows.clear(), None
@@ -394,7 +407,7 @@ class PolarsEngine:
         surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
         renumber = surviving.select('row').with_row_index('__new__', offset=start)
         self._omitted[name] = rows.height - surviving.height
-        self._constraint_blocks[name] = (start, surviving.height)
+        self._constraint_blocks[name] = _Block(start, surviving.height)
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
         rows = surviving.with_columns(pl.col('row').replace_strict(remap))
         matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
@@ -512,15 +525,19 @@ class PolarsEngine:
         self._solves += 1
         if self._solver is not held:
             self._loads += 1
-        status, objective, primal, dual = self._solver.run(tables)
-        assert primal is not None or not status.is_readable, 'a readable status must come with a primal vector'
-        primals, duals = self._read_back(primal, dual)
+        answer = self._solver.run(tables)
+        assert answer.primal is not None or not answer.status.is_readable, (
+            'a readable status must come with a primal vector'
+        )
+        primals, duals = self._read_back(answer.primal, answer.dual)
         return Result(
-            _status=status,
-            _objective=objective,
+            _status=answer.status,
+            _objective=answer.objective,
             _primals=primals,
             _duals=duals,
-            _no_duals=None if dual is not None else no_duals_message(self._discrete(), status.termination_condition),
+            _no_duals=None
+            if answer.dual is not None
+            else no_duals_message(self._discrete(), answer.status.termination_condition),
         )
 
     def diagnostics(self) -> Diagnostics:
@@ -578,7 +595,7 @@ class PolarsEngine:
 
     def _laid_out(
         self,
-        block: tuple[int, int],
+        block: _Block,
         coordinates: pl.LazyFrame,
         dims: tuple[str, ...],
         values: pl.Series,
@@ -610,8 +627,7 @@ class PolarsEngine:
         order is the *row* order and survives, never having been the dtype's to
         carry.
         """
-        start, height = block
-        labelled = coordinates.select(*dims).with_columns(values.slice(start, height))
+        labelled = coordinates.select(*dims).with_columns(values.slice(block.start, block.height))
         return labelled.with_columns(pl.col(d).cast(pl.String) for d in self._string_dims(dims))
 
     def _string_dims(self, dims: tuple[str, ...]) -> list[str]:
@@ -703,7 +719,7 @@ def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame
     return pl.DataFrame(schema={name: _DTYPES[name] for name in columns})
 
 
-def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str, ...], pl.LazyFrame]]:
+def _absence_restrictions(terms: Sequence[TermFragment]) -> list[Presence]:
     """The presence frames a constraint's rows have to be contained in.
 
     Absence propagates into a comparison and drops the row (v1
@@ -718,12 +734,8 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[tuple[tuple[str
 
     *Having* no dims is not *having nothing to restrict*: a masked scalar
     variable restricts every row of every constraint naming it, all or nothing.
-    Each restriction is keyed by ``presence_dims`` where the fragment states
-    them — narrower than ``dims`` for an acyclic shift.
+    Each restriction leaves with its key spelled out — the fragment's dims
+    where the presence implied them — since labelling cannot know the
+    fragment it came from.
     """
-    out: list[tuple[tuple[str, ...], pl.LazyFrame]] = []
-    for p in terms:
-        if p.presence is None:
-            continue
-        out.append((p.presence_dims or p.dims, p.presence))
-    return out
+    return [Presence(p.presence.frame, p.presence.keys(p.dims)) for p in terms if p.presence is not None]

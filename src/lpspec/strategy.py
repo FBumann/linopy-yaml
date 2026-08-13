@@ -37,7 +37,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import polars as pl
 
@@ -60,8 +60,38 @@ if TYPE_CHECKING:
 #: alike (#459).
 _COMPRESSION = 'zstd'
 
-#: One cut: the slice key, its sources, and the coords the axis re-indexed.
-Cut = tuple[Any, dict[str, Any], dict[str, Any]]
+
+class Cut(NamedTuple):
+    """One slice of a sweep: the key, its sources, and the coords the axis re-indexed.
+
+    A tuple on purpose: a hand-built axis is documented as a plain list of
+    ``(key, sources, coords)``, and those unpack the same way.
+    """
+
+    key: Any
+    sources: dict[str, Any]
+    coords: dict[str, Any]
+
+
+class _SliceMeta(NamedTuple):
+    """One row of :attr:`Runs.objective`: how a slice terminated, and its objective."""
+
+    status: str
+    termination_condition: str
+    objective: float
+
+
+@dataclass(frozen=True)
+class _CarryRule:
+    """One resolved carry: which variable moves into a parameter, and how.
+
+    ``dropped`` is the one dimension the carry collapses — ``None`` when the
+    whole frame moves forward — and ``index`` names a coordinate of it.
+    """
+
+    variable: str
+    dropped: str | None
+    index: int | None
 
 
 @dataclass(frozen=True)
@@ -77,9 +107,7 @@ class _Answer:
     :func:`_decode` rewrite the two frame fields rather than the whole of it.
     """
 
-    #: ``(status, termination_condition, objective)`` — one row of
-    #: :attr:`Runs.objective`, which is one row per slice whatever it returned.
-    meta: dict[str, Any]
+    meta: _SliceMeta
     primals: dict[str, pl.DataFrame]
     duals: dict[str, pl.DataFrame]
     #: Why this slice has none, when it has none. Carried rather than raised:
@@ -137,7 +165,7 @@ class EachCoordinate:
         out: list[Cut] = []
         for key in coordinates:
             cut = {name: _lazy(sources[name]).filter(pl.col(self.dim) == key).drop(self.dim) for name in carrying}
-            out.append((key, {**sources, **cut}, {}))
+            out.append(Cut(key, {**sources, **cut}, {}))
         return out, None
 
 
@@ -203,7 +231,7 @@ class EachWindow:
                 )
                 for name in carrying
             }
-            out.append((window[0], {**sources, **cut}, {self.into: range(len(window))}))
+            out.append(Cut(window[0], {**sources, **cut}, {self.into: range(len(window))}))
             owned.extend(
                 {key_name: window[0], self.into: position, self.dim: coordinate}
                 for position, coordinate in enumerate(window[: self.step])
@@ -497,7 +525,7 @@ def solve_over(
             f'EachCoordinate(..., ordered=True) says the coordinates are a sequence.'
         )
     schema = check(model)
-    plan: dict[str, tuple[str, str | None, int | None]] = _carry_plan(schema, carry) if carry else {}
+    plan: dict[str, _CarryRule] = _carry_plan(schema, carry) if carry else {}
     key_name = _key_column(axis, key_name, schema)
 
     if isinstance(axis, (EachCoordinate, EachWindow)):
@@ -508,7 +536,7 @@ def solve_over(
         raise DataError('the axis produced no slices')
 
     under = dict(build_kwargs.pop('coords', None) or {})
-    cuts = [(key, sliced, {**under, **coords}) for key, sliced, coords in cut]
+    cuts = [Cut(key, sliced, {**under, **coords}) for key, sliced, coords in cut]
     solving = {'solver_name': solver_name, 'solver_options': dict(solver_options or {}) or None}
     rows: list[dict[str, Any]] = []
     primals: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
@@ -523,7 +551,7 @@ def solve_over(
     with closing(answered) as stream:
         for key, answer in stream:
             no_duals = no_duals or answer.no_duals
-            rows.append({key_name: key, **answer.meta})
+            rows.append({key_name: key, **answer.meta._asdict()})
             for into, produced in ((primals, answer.primals), (shadow, answer.duals)):
                 for name, frame in produced.items():
                     into[name].append(frame.select(pl.lit(key).alias(key_name), pl.all()))
@@ -543,7 +571,7 @@ def _serially(
     cuts: Sequence[Cut],
     building: Mapping[str, Any],
     solving: Mapping[str, Any],
-    plan: Mapping[str, tuple[str, str | None, int | None]],
+    plan: Mapping[str, _CarryRule],
 ) -> Generator[tuple[Any, _Answer], None, None]:
     """Each slice's answer, off one model rebound in place.
 
@@ -575,19 +603,19 @@ def _serially(
     named: tuple[frozenset[str], frozenset[str]] | None = None
     state: dict[str, Any] = {}
     try:
-        for position, (key, sliced, coords) in enumerate(cuts):
-            sources = {**sliced, **state}
-            names = (frozenset(sources), frozenset(coords))
+        for position, cut in enumerate(cuts):
+            sources = {**cut.sources, **state}
+            names = (frozenset(sources), frozenset(cut.coords))
             if names == named:
-                bound.rebind(sources, coords=coords)
+                bound.rebind(sources, coords=cut.coords)
             else:
                 if bound is not None:
                     bound.close()
-                bound, named = build(schema, sources, coords=coords or None, **building), names
+                bound, named = build(schema, sources, coords=cut.coords or None, **building), names
             answer = _answers(bound.solve(**solving), schema)
-            yield key, answer
+            yield cut.key, answer
             if plan and position < len(cuts) - 1:
-                state = _carried(plan, answer.primals, key)
+                state = _carried(plan, answer.primals, cut.key)
     finally:
         if bound is not None:
             bound.close()
@@ -619,16 +647,16 @@ def _pooled(
         executor.submit(
             _run_slice,
             schema,
-            _encode(sliced, memo, workers_share_fs=shared) if crosses else dict(sliced),
-            coords or None,
+            _encode(cut.sources, memo, workers_share_fs=shared) if crosses else dict(cut.sources),
+            cut.coords or None,
             crosses,
             call,
         )
-        for _key, sliced, coords in cuts
+        for cut in cuts
     ]
-    for (key, _sliced, _coords), future in zip(cuts, futures, strict=True):
+    for cut, future in zip(cuts, futures, strict=True):
         answer = future.result()
-        yield key, replace(answer, primals=_decode(answer.primals), duals=_decode(answer.duals))
+        yield cut.key, replace(answer, primals=_decode(answer.primals), duals=_decode(answer.duals))
 
 
 def _answers(result: Any, model: Any) -> _Answer:
@@ -645,11 +673,11 @@ def _answers(result: Any, model: Any) -> _Answer:
     rather than rewritten — a sweep of one model has one answer, so the first
     is the answer.
     """
-    meta = {
-        'status': result.status,
-        'termination_condition': result.termination_condition,
-        'objective': result.objective if result.has_primal else float('nan'),
-    }
+    meta = _SliceMeta(
+        status=result.status,
+        termination_condition=result.termination_condition,
+        objective=result.objective if result.has_primal else float('nan'),
+    )
     if not result.has_primal:
         return _Answer(meta, {}, {}, None)
     primals = {name: result.primal(name) for name in model.variables}
@@ -723,7 +751,7 @@ def _key_column(
 def _carry_plan(
     schema: Model,
     carry: Mapping[str, tuple[str, int | None]],
-) -> dict[str, tuple[str, str | None, int | None]]:
+) -> dict[str, _CarryRule]:
     """Resolve each carry against the schema: what is dropped, and what rides.
 
     The variable's dims minus the parameter's is the one dimension the carry
@@ -733,7 +761,7 @@ def _carry_plan(
 
     **Nothing here reads data**, which is why it runs before the axis cuts any.
     """
-    plan: dict[str, tuple[str, str | None, int | None]] = {}
+    plan: dict[str, _CarryRule] = {}
     for parameter, (variable, index) in carry.items():
         if parameter not in schema.parameters:
             raise LpspecError(f'carry writes parameter {parameter!r}, which the model does not declare')
@@ -765,12 +793,12 @@ def _carry_plan(
                 f'carry {parameter!r} <- ({variable!r}, {index}) has nothing to index: both are over {over}, '
                 f'so the whole frame is what moves forward. Pass ({variable!r}, None).'
             )
-        plan[parameter] = (variable, dropped[0] if dropped else None, index)
+        plan[parameter] = _CarryRule(variable, dropped[0] if dropped else None, index)
     return plan
 
 
 def _carried(
-    plan: Mapping[str, tuple[str, str | None, int | None]],
+    plan: Mapping[str, _CarryRule],
     frames: Mapping[str, pl.DataFrame],
     key: Any,
 ) -> dict[str, Any]:
@@ -782,17 +810,17 @@ def _carried(
     one of the two that still means something once a second dimension is there.
     """
     state: dict[str, Any] = {}
-    for parameter, (variable, dropped, index) in plan.items():
-        frame = frames[variable]
-        if dropped is None:
+    for parameter, rule in plan.items():
+        frame = frames[rule.variable]
+        if rule.dropped is None:
             state[parameter] = frame
             continue
-        picked = frame.filter(pl.col(dropped) == index).drop(dropped)
+        picked = frame.filter(pl.col(rule.dropped) == rule.index).drop(rule.dropped)
         if picked.is_empty():
-            coordinates = frame[dropped].unique().sort().to_list()
+            coordinates = frame[rule.dropped].unique().sort().to_list()
             raise LpspecError(
-                f'carry {parameter!r} <- ({variable!r}, {index}) is out of range: slice {key!r} has no '
-                f'{dropped} == {index}. Its coordinates run {coordinates[0]!r}..{coordinates[-1]!r}, and a '
+                f'carry {parameter!r} <- ({rule.variable!r}, {rule.index}) is out of range: slice {key!r} has no '
+                f'{rule.dropped} == {rule.index}. Its coordinates run {coordinates[0]!r}..{coordinates[-1]!r}, and a '
                 f'short tail window has fewer than a full one.'
             )
         state[parameter] = picked

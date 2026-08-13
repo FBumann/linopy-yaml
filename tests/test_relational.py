@@ -26,6 +26,7 @@ from lpspec.relational import (
 from lpspec.relational.plan import (
     Constant,
     ConstraintDeclaration,
+    CoordinateTarget,
     DimensionDeclaration,
     GroupSum,
     ObjectiveDeclaration,
@@ -195,8 +196,8 @@ def transport_program() -> Program:
         ),
         objective=ObjectiveDeclaration('min', Sum(Variable('p') * Parameter('cost'), over=('generator', 'snapshot'))),
         dimensions=(
-            DimensionDeclaration('generator', (('bus', 'bus'),)),
-            DimensionDeclaration('line', (('from', 'bus'), ('to', 'bus'))),
+            DimensionDeclaration('generator', (CoordinateTarget('bus', 'bus'),)),
+            DimensionDeclaration('line', (CoordinateTarget('from', 'bus'), CoordinateTarget('to', 'bus'))),
         ),
     )
 
@@ -665,7 +666,7 @@ def test_every_declaration_owns_a_contiguous_run_of_labels():
         ):
             at = 0
             for name in names:
-                start, height = blocks[name]
+                start, height = blocks[name].start, blocks[name].height
                 assert start == at, f'{name} does not start where the previous declaration ended'
                 labels = frames[name].select(label).collect().to_series()
                 assert sorted(labels) == list(range(start, start + height)), f'{name} is not a dense run'
@@ -922,9 +923,9 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
 
     class Crooked(Highs):
         def _run(self, tables):
-            status, objective, primal, dual = super()._run(tables)
-            stretched = pl.Series('value', list(primal) + [0.0] * length)
-            return status, objective, stretched.head(length), dual
+            answer = super()._run(tables)
+            stretched = pl.Series('value', [*answer.primal, *([0.0] * length)])
+            return replace(answer, primal=stretched.head(length))
 
     monkeypatch.setitem(SOLVERS, 'highs', Crooked)
     with (
@@ -952,8 +953,8 @@ def test_a_solver_hands_back_a_vector_and_not_an_index(solver_name):
         engine = bound._engine
         assert engine._solver is not None, 'a solve leaves the solver holding the model'
         tables = engine._tables()
-        _status, _objective, primal, dual = engine._solver.run(tables)
-        for values, count in ((primal, tables.column_count), (dual, tables.row_count)):
+        answer = engine._solver.run(tables)
+        for values, count in ((answer.primal, tables.column_count), (answer.dual, tables.row_count)):
             assert isinstance(values, pl.Series), 'a frame here is an index column nothing reads'
             assert values.name == 'value'
             assert len(values) == count, 'the read-back slices it positionally, so it spans the model'
@@ -1400,10 +1401,10 @@ BROADCAST_MASK_MODEL = {
 
 
 def test_a_mask_survives_a_broadcast_into_a_reduction():
-    """`presence_dims=None` means "keyed by dims", and a product may *widen*
-    dims — so carrying it through the widening re-read `p`'s (node, tech)
-    presence as keyed by (node, tech, carrier) and `_propagate_absence` selected
-    a column it never had (#345).
+    """`Presence.keyed_by=None` means "keyed by the fragment's dims", and a
+    product may *widen* dims — so carrying it through the widening re-read
+    `p`'s (node, tech) presence as keyed by (node, tech, carrier) and
+    `_propagate_absence` selected a column it never had (#345).
 
     Unmasked the same model was fine, which is what made it look like a problem
     with the coordinate dim rather than with the mask. The whole benchmark
@@ -1523,10 +1524,10 @@ def test_dense_columns_does_not_edit_the_model_it_projects():
     """
     with lps.build(RHS_MODEL, {'rhs': pl.DataFrame({'i': [0, 1], 'value': [1.0, 2.0]})}) as bound:
         tables = bound._engine._tables()
-        first, _, _, _ = tables.dense_columns(1e30)
+        first = tables.dense_columns(1e30).lb
         ub_after_first = tables.cols['ub'].to_list()
 
-        _, second_ub, _, _ = tables.dense_columns(1e100)
+        second_ub = tables.dense_columns(1e100).ub
 
         assert ub_after_first == tables.cols['ub'].to_list(), 'the projection edited the model'
         assert all(v == float('inf') for v in tables.cols['ub'].to_list()), 'the frame lost its infinities'
