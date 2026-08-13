@@ -34,6 +34,7 @@ from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler, TermFragment
 from lpspec.relational.result import Result
+from lpspec.relational.sinks.tables import SENSE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -71,7 +72,7 @@ _MATRIX = ('row', 'col', 'coeff')
 _DTYPES = {
     'col': pl.Int32, 'row': pl.Int64,
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
-    'sense': pl.String, 'vtype': pl.Enum(get_args(plan.VariableType)),
+    'sense': SENSE, 'vtype': pl.Enum(get_args(plan.VariableType)),
 }  # fmt: skip
 
 
@@ -290,7 +291,7 @@ class PolarsExecutor:
 
         rows = carrier.select(
             'row',
-            pl.lit(c.sense, dtype=pl.String).alias('sense'),
+            pl.lit(c.sense, dtype=SENSE).alias('sense'),
             accumulated.cast(pl.Float64).alias('rhs'),
         ).collect(engine='streaming')
 

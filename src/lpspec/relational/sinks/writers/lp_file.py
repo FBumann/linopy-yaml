@@ -19,9 +19,17 @@ from typing import IO, TYPE_CHECKING
 
 import polars as pl
 
+from lpspec.relational.sinks.tables import SENSE_CODES
+
 if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
 
+
+#: How the LP format spells each comparison. Derived from the engine's own
+#: vocabulary rather than written out, so a sense added there reaches the file
+#: or raises here, instead of being rendered as whatever the loop last saw.
+#: The format differs on one word: it writes an equality as ``=``.
+_LP_SENSE = {sense: '=' if sense == '==' else sense for sense in SENSE_CODES}
 
 #: Nonzeros per constraint chunk. A chunk's rendered lines live in memory until
 #: it is sunk, so this is the knob that bounds the writer's peak rather than its
@@ -136,7 +144,11 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
     )
     footer = rows.select(
         _key(pl.lit(slots - 1, dtype=pl.Int64)),
-        pl.concat_str(pl.col('sense').replace({'==': '='}), pl.lit(' '), _number(pl.col('rhs'))).alias('line'),
+        pl.concat_str(
+            pl.col('sense').replace_strict(_LP_SENSE, return_dtype=pl.String),
+            pl.lit(' '),
+            _number(pl.col('rhs')),
+        ).alias('line'),
     )
     return pl.concat([header, placeholder, terms, footer]).sort('key').select('line')
 
