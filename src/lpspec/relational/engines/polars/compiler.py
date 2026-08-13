@@ -4,7 +4,7 @@
 docs/ARCHITECTURE.md's admissibility test is a ``.explain()`` away. An identifier is
 a value here, never syntax.
 
-Column conventions, relied on by the executor:
+Column conventions, relied on by the engine:
 
 ===================  ==========================================
 frame                columns
@@ -155,7 +155,7 @@ class PolarsCompiler:
     """Turn plan nodes into polars queries over the model's tidy frames.
 
     ``data`` is everything binding produced, frozen. ``variables`` is
-    deliberately outside it — the executor's own dict, not a copy, because a
+    deliberately outside it — the engine's own dict, not a copy, because a
     variable frame appears while its declaration is built and a constraint
     compiled afterwards has to see it.
     """
@@ -488,7 +488,7 @@ class PolarsCompiler:
         some shapes and loses it on others differing only in data, so the tax
         lands unpredictably and `profiled/l`'s objective phase triples paying
         it for nothing. Every consumer re-derives or verifies order where it
-        reads (:meth:`PolarsExecutor._build_objective`'s docstring keeps the
+        reads (:meth:`PolarsEngine._build_objective`'s docstring keeps the
         numbers).
         """
 
@@ -550,7 +550,7 @@ class PolarsCompiler:
     def _parameter_fragment(self, name: str) -> TermFragment:
         """A parameter as a constant part, keyed by its declared dims.
 
-        One row per coordinate, which the executor enforces by refusing a
+        One row per coordinate, which the engine enforces by refusing a
         duplicated one.
         """
         dims = self.program.parameter(name).dims
@@ -817,7 +817,7 @@ class PolarsCompiler:
         return p.presence.select(*others).unique().join(edge, how='cross') if p.presence is not None else edge
 
     # ------------------------------------------------------------------
-    # assembly helpers used by the executor
+    # assembly helpers used by the engine
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -942,7 +942,7 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     """Restrict every fragment to where the *whole* expression exists.
 
     Addition is fragment concatenation, so ``x + size`` is two independent
-    streams — right at row level, where the executor intersects the presences,
+    streams — right at row level, where the engine intersects the presences,
     but a **reduction** consumes the expression before any row exists. That is
     the difference between ``sum(x + size, over=f)``, which sums where the
     summand exists, and ``sum(x, over=f) + sum(size, over=f)``, which sums each

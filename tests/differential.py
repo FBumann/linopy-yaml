@@ -18,7 +18,7 @@ Importing this module is the ``[linopy]`` guard: it reaches the oracle
 through ``tests.oracle``, so a bare install skips every module that uses the
 harness at collection time, with no filename list to maintain.
 
-Usage — the executor stays open for the length of the ``with`` block, so
+Usage — the engine stays open for the length of the ``with`` block, so
 per-variable primal checks live inside it::
 
     with differential(NONCONVEX_YAML, data, coords, lp=True) as run:
@@ -37,7 +37,7 @@ import numpy as np
 import pytest
 
 from lpspec.lowering import lower_program
-from lpspec.relational import PolarsExecutor
+from lpspec.relational import PolarsEngine
 from lpspec.sources import tidy_sources
 from tests.conftest import raw_of, schema_of, solve_lp_file
 from tests.oracle import linopy, lpspec_linopy
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
     from lpspec.language.model import Model
-    from lpspec.relational.engines.polars.executor import Result
+    from lpspec.relational.engines.polars.engine import Result
 
 #: Both lanes hand the same numbers to the same solver, so they must agree to
 #: solver precision, not to a fudge factor. One tolerance, one place.
@@ -67,7 +67,7 @@ class Agreement:
     """The relational solution; live until the ``with`` block exits."""
 
     schema: Model
-    executor: PolarsExecutor
+    engine: PolarsEngine
     lp: Path | None = None
     """The written LP file, when ``lp=True`` — already checked to agree."""
 
@@ -100,19 +100,19 @@ def differential(
         oracle = float(m.objective.value)
         assert np.isfinite(oracle), 'the eager oracle is infeasible or unbounded — fix the data, not the tolerance'
 
-        with PolarsExecutor() as ex:
-            ex.build(lower_program(schema), tidy_sources(schema, data, coords))
-            result = ex.solve()
+        with PolarsEngine() as engine:
+            engine.build(lower_program(schema), tidy_sources(schema, data, coords))
+            result = engine.solve()
             assert result.is_ok
             assert result.objective == pytest.approx(oracle, rel=rel)
 
             lp_path = None
             if lp:
                 lp_path = work / 'model.lp'
-                ex.write(lp_path)
+                engine.write(lp_path)
                 assert solve_lp_file(lp_path) == pytest.approx(oracle, rel=rel)
 
-            yield Agreement(oracle=oracle, model=m, result=result, schema=schema, executor=ex, lp=lp_path)
+            yield Agreement(oracle=oracle, model=m, result=result, schema=schema, engine=engine, lp=lp_path)
 
 
 def _write(path: Path, model: str | dict[str, Any]) -> Path:

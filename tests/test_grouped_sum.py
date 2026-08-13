@@ -2,7 +2,7 @@
 
 Three-way differential on examples/transport.yaml:
   1. eager lpspec_linopy.build + solve (sum via linopy groupby)
-  2. lowered Program -> PolarsExecutor -> the `highs` solver, plus the LP file
+  2. lowered Program -> PolarsEngine -> the `highs` solver, plus the LP file
   3. hand-built indicator-matrix linopy model (an independent oracle that
      involves no sum at all)
 
@@ -24,7 +24,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError
 from lpspec.lowering import _lower_expr, lower_program
-from lpspec.relational import PolarsExecutor
+from lpspec.relational import PolarsEngine
 from lpspec.relational.plan import (
     Add,
     GroupSum,
@@ -131,8 +131,8 @@ def test_grouping_an_expression_that_lacks_the_dim_is_refused():
 
 def _relationally(data, coords):
     schema = schema_of(TRANSPORT_YAML)
-    with PolarsExecutor() as ex:
-        ex.build(lower_program(schema), tidy_sources(schema, data, coords))
+    with PolarsEngine() as engine:
+        engine.build(lower_program(schema), tidy_sources(schema, data, coords))
 
 
 def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
@@ -301,13 +301,13 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
         BROADCAST_SOURCES,
         generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     )
-    with lps.build(BROADCAST_GROUP_SUM, sources) as ex:
-        tables = ex._tables()
+    with lps.build(BROADCAST_GROUP_SUM, sources) as bound:
+        tables = bound._engine._tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 4, 'a column appears twice on a row'
         assert matrix['coeff'].to_list() == [3.0, 5.0, 3.0, 5.0], 'the 1.0 and the 2.0 merged'
 
-        result = ex.solve()
+        result = bound.solve()
     assert result.termination_condition == 'optimal'
     assert result.objective == pytest.approx(6.0), '3x <= 9 at b1, over two snapshots'
 
@@ -326,11 +326,11 @@ def test_sum_over_a_foreach_dim_needs_no_such_collapse():
         BROADCAST_SOURCES,
         generator=pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     )
-    with lps.build(model, sources) as ex:
-        tables = ex._tables()
+    with lps.build(model, sources) as bound:
+        tables = bound._engine._tables()
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 6, 'one entry per (row, generator-on-that-bus), not one per bus'
-        assert ex.solve().termination_condition == 'optimal'
+        assert bound.solve().termination_condition == 'optimal'
 
 
 # ---------------------------------------------------------------------------
@@ -369,8 +369,8 @@ def test_an_objective_term_carrying_dims_is_still_summed_per_column():
     `dense[at] = values`, which keeps the last write rather than accumulating,
     so this reads as a plausible answer to a model nobody wrote.
     """
-    with lps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as ex:
-        obj = ex._tables().obj.sort('col')
+    with lps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as bound:
+        obj = bound._engine._tables().obj.sort('col')
         assert obj.height == 3, 'one row per column, not one per (bus, snapshot)'
         assert obj['coeff'].to_list() == [1111.0] * 3, 'sum(w), not w[-1]'
 
@@ -394,8 +394,8 @@ def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
     aggregate must not turn a coefficient into anything but itself.
     """
     model = override(BROADCAST_OBJECTIVE, **{'objectives.c.expression': 'y * floor'})
-    with lps.build(model, BROADCAST_OBJECTIVE_SOURCES) as ex:
-        obj = ex._tables().obj.sort('col')
+    with lps.build(model, BROADCAST_OBJECTIVE_SOURCES) as bound:
+        obj = bound._engine._tables().obj.sort('col')
         assert obj.height == 3
         assert obj['coeff'].to_list() == [1.0, 2.0, 3.0], 'floor itself, un-summed'
 

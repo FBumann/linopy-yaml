@@ -8,7 +8,7 @@ positions where law 8 grants no default (a divisor, a bound) stay with the
 assembly, needing the matrix.
 
 Every function is a pure question over frames and declarations, holding no
-executor state, so what counts as usable data can be read without following the
+engine state, so what counts as usable data can be read without following the
 build.
 
 **Scoped to this lane on purpose.** These take tidy polars frames; the eager

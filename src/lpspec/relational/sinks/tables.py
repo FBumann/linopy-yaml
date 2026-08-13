@@ -10,6 +10,7 @@ they loaded, which is the one thing neither may do.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -202,6 +203,49 @@ class ModelTables:
         sense = _scattered(self.row_count, at, sided['op'].to_numpy(), SENSE_CODES['>='])
         rhs = _scattered(self.row_count, at, sided['rhs'].to_numpy(), -infinity)
         return sense, rhs
+
+    @cached_property
+    def structure(self) -> bytes:
+        """A digest of everything a re-solve may **not** change.
+
+        The question a loaded solver asks of a rebuilt model: may I keep what
+        I hold and take the new numbers by value? Bounds, costs and right-hand
+        sides go in that way; the counts, the matrix, each row's comparison
+        and each column's type do not, so a model whose digest moved has to be
+        loaded again.
+
+        Read off the data rather than derived from the declarations, because
+        whether a rebind moved a label or a coefficient is a property of the
+        data (SPEC §8) and not of the model that declared it. Every vector it
+        reads is one with an order contract — the label-ordered columns, the
+        row-ordered matrix and rows — so that two builds of one model agree.
+
+        **A digest rather than the frames.** Keeping the previous matrix to
+        compare against would hold two models alive across a rebuild, which is
+        the memory the rebuild exists not to spend (the trade against a diff
+        is argued in `README.md`). The cost is one linear pass over the
+        matrix, cached on the instance — the frames are frozen — so the two
+        askers in one solve, the keep-or-reload comparison and the load that
+        records what it loaded, share one pass.
+
+        Each vector is hashed through its own **buffer**, so the matrix is read
+        where it lies rather than copied to bytes to be read once.
+        """
+        import hashlib
+
+        import numpy as np
+
+        digest = hashlib.blake2b(digest_size=16)
+        digest.update(f'{self.column_count} {self.row_count} {self.objective_sense}'.encode())
+        for vector in (
+            self.cols['vtype'].to_physical().to_numpy(),
+            self.rows['sense'].to_physical().to_numpy(),
+            self.matrix['col'].to_numpy(),
+            self.matrix['coeff'].to_numpy(),
+            self.row_starts,
+        ):
+            digest.update(np.ascontiguousarray(vector).data)
+        return digest.digest()
 
     def row_blocks(self, budget: int | None) -> Iterator[RowBlock]:
         """Each chunk of rows with the matrix entries it owns — a solver's reader.

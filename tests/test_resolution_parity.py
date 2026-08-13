@@ -100,9 +100,9 @@ def test_both_lanes_build_the_same_model(tmp_path, data, coords, where):
     eager_rows = int((m.variables['p'].labels != -1).sum())
     eager_status = m.solve(solver_name='highs')[1]
 
-    with lps.build(path, data, coords=coords) as ex:
-        relational_rows = ex._variables['p'].select(pl.len()).collect().item()
-        relational_status = ex.solve().termination_condition
+    with lps.build(path, data, coords=coords) as bound:
+        relational_rows = bound._engine._variables['p'].select(pl.len()).collect().item()
+        relational_status = bound.solve().termination_condition
 
     assert eager_rows == relational_rows, f'{where}: {eager_rows} vs {relational_rows} variables'
     assert eager_status == relational_status, f'{where}: {eager_status} vs {relational_status}'
@@ -167,9 +167,9 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, data, coords):
     m = lpspec_linopy.build(path, data=data, coords=coords)
     eager_status = m.solve(solver_name='highs')[1]
 
-    with lps.build(path, data, coords=coords) as ex:
-        relational_status = ex.solve().termination_condition
-        assert ex.omissions().to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}], (
+    with lps.build(path, data, coords=coords) as bound:
+        relational_status = bound.solve().termination_condition
+        assert bound.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}], (
             'a dropped row has to be reported, or a declared constraint goes quietly unenforced'
         )
 

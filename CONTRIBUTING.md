@@ -105,7 +105,7 @@ The PR title is parsed by release-please and becomes the changelog entry, so it
 has to be a conventional-commit subject:
 
 ```
-feat: streaming executor for indexed constraints
+feat: streaming engine for indexed constraints
 fix(parser): where clauses with a trailing comma
 refactor(api): closed helper set, no monkey-patch
 ```

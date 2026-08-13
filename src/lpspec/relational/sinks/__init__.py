@@ -8,7 +8,7 @@ suffix). They are directories rather than a convention, so
 ``tables.py`` is what both read, and neither family imports the other.
 """
 
-from lpspec.relational.sinks.solvers import SOLVERS, solver
+from lpspec.relational.sinks.solvers import SOLVERS, Solver, loaded, solver
 from lpspec.relational.sinks.tables import ModelTables
 from lpspec.relational.sinks.writers import PLANNED_WRITERS, WRITERS, writer
 
@@ -17,6 +17,8 @@ __all__ = [
     'SOLVERS',
     'WRITERS',
     'ModelTables',
+    'Solver',
+    'loaded',
     'solver',
     'writer',
 ]

@@ -250,7 +250,7 @@ def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
 
     ``g`` and the coordinate that reaches it exist only for the grouped cases:
     a dimension no declaration uses has no coordinate set to check against, and
-    the executor refuses it rather than carrying a dangling target.
+    the engine refuses it rather than carrying a dangling target.
     """
     grouped = 'g' in foreach
     dims = (

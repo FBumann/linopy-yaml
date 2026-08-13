@@ -146,7 +146,7 @@ jobs:
       # which silently dragged the bare install to polars 1.32 and left our own
       # `polars>=1.30` untested: claim 2 above, defeated by the thing it exists
       # to catch. `uv pip install` resolves the requested set and nothing else.
-      # Verified green at polars 1.30.0 / numpy 1.26.0 / highspy 1.10.0 /
+      # Verified green at polars 1.30.0 / numpy 1.26.0 / highspy 1.13.0 /
       # pydantic 2.0 / pyparsing 3.1.0 / pyyaml 6.0.
       #
       # pytest goes in as a second, unconstrained call: under `lowest-direct`

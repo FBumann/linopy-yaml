@@ -66,7 +66,7 @@ def test_outside_the_language_is_a_load_error(patch, match):
     """Each of these is refused at load, with no data bound.
 
     ``degree-two`` is the first clause of the ceiling and the reason this runs
-    here rather than in the executor: the affine guard used to need data bound,
+    here rather than in the engine: the affine guard used to need data bound,
     so ``lps.check()`` accepted the model and it only blew up at build time —
     useless as a CI verb for exactly the rule it should enforce first.
     """

@@ -39,8 +39,8 @@ def test_solve(dispatch_yaml, dispatch_frame_inputs):
 
 def test_build_context_manager_and_write(dispatch_yaml, dispatch_frame_inputs, tmp_path):
     sources, coords = dispatch_frame_inputs
-    with lps.build(dispatch_yaml, sources, coords=coords) as ex:
-        result = ex.solve()
+    with lps.build(dispatch_yaml, sources, coords=coords) as bound:
+        result = bound.solve()
         assert result.is_ok
         objective_direct = result.objective
 
@@ -175,6 +175,34 @@ def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispa
     assert set(SOLVERS) == {'highs', 'gurobi'}
 
 
+def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
+    dispatch_yaml, dispatch_frame_inputs, monkeypatch
+):
+    """A name in the closed set is not a promise the package is installed.
+
+    `gurobi` is a name lpspec knows on an install that never took the extra, so
+    the two mistakes are different and get different sentences. Both refuse
+    where the sink is resolved, which is before the build: resolving it there is
+    what makes naming a sink nothing can serve cost no model, and that was only
+    half true while a known name always resolved.
+
+    Faked by naming a package nothing has rather than by uninstalling gurobipy,
+    so the check runs wherever the suite does and still goes through the real
+    probe.
+    """
+    from lpspec import api
+    from lpspec.relational.sinks import SOLVERS
+
+    sources, coords = dispatch_frame_inputs
+    monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))
+    monkeypatch.setattr(
+        api.PolarsEngine, 'build', lambda *_a, **_k: pytest.fail('the model was built before the refusal')
+    )
+
+    with pytest.raises(ModuleNotFoundError, match=r'not installed here.*\[gurobi\] extra'):
+        lps.solve(dispatch_yaml, sources, solver_name='gurobi', coords=coords)
+
+
 def test_a_list_of_models_is_refused(dispatch_yaml):
     """Composition is merging declarations, not passing several models.
 
@@ -237,10 +265,10 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
 def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_frame_inputs):
     """No lifetime to manage: reading is valid until you say otherwise.
 
-    The built model is frames this process owns, so nothing expires on its own
-    and a caller who never closes loses nothing but memory. `close()` is there
-    to hand a large model back early, and it means what it says — after it,
-    there is nothing left to read.
+    A result owns its read-back, so nothing expires it from outside and a
+    caller who never closes loses nothing but memory. `close()` is there to
+    release the label frames it pins early, and it means what it says — after
+    it, there is nothing left to read.
     """
     sources, coords = dispatch_frame_inputs
     result = lps.solve(dispatch_yaml, sources, coords=coords)
@@ -254,9 +282,9 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
 
 
 def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatch_frame_inputs):
-    """A result reports its own solve, not the executor's latest.
+    """A result reports its own solve, not the engine's latest.
 
-    Was: the values lived on the executor and every reader went back to them,
+    Was: the values lived on the engine and every reader went back to them,
     so `objective` was a snapshot while `primal` was live — one result
     disagreeing with itself after a second solve, silently and with plausible
     numbers. Nothing supported re-binds data yet, so the bound has to be moved
@@ -265,14 +293,14 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
     """
     key = ['snapshot', 'generator']  # a read is a join, so compare on coordinates
     sources, coords = dispatch_frame_inputs
-    with lps.build(dispatch_yaml, sources, coords=coords) as ex:
-        first = ex.solve()
+    with lps.build(dispatch_yaml, sources, coords=coords) as bound:
+        first = bound.solve()
         before = first.primal('p').sort(key)
         assert first.is_ok
 
-        assert ex._obj is not None
-        ex._obj = ex._obj.with_columns(-pl.col('coeff'))
-        second = ex.solve()
+        assert bound._engine._obj is not None
+        bound._engine._obj = bound._engine._obj.with_columns(-pl.col('coeff'))
+        second = bound.solve()
 
         assert not second.primal('p').sort(key).equals(before), 'the second solve really moved'
         assert first.primal('p').sort(key).equals(before), 'and the first still reports its own'
@@ -431,12 +459,12 @@ def test_a_wrong_model_raises_one_tree(mistake: str, raw: dict[str, object], tmp
 
 
 def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs):
-    """`close` releases the model the readers join against, and they should say so.
+    """`close` releases the read-back the readers lay values over, and they say so.
 
-    The status gate cannot notice: closing frees the model, not the solve, so
-    `is_readable` stays true and the reader used to fall through to a bare
-    `AssertionError` from the executor. Frames read before the close are their
-    own data and stay valid, which is the half worth stating in the message.
+    The status gate cannot notice: closing releases the coordinates, not the
+    solve, so `is_readable` stays true and the reader used to fall through to
+    a bare `AssertionError`. Frames read before the close are their own data
+    and stay valid, which is the half worth stating in the message.
     """
     sources, coords = dispatch_frame_inputs
     sol = lps.solve(dispatch_yaml, sources, coords=coords)

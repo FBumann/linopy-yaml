@@ -133,7 +133,7 @@ class GroupSum(Expression):
 
     ``coordinate`` names a coordinate carried by dim ``over`` whose values are
     labels of dim ``into``; the result replaces ``over`` with ``into``. All
-    three are resolved before lowering, so the executor needs no schema lookup
+    three are resolved before lowering, so the engine needs no schema lookup
     to place the terms.
     """
 
@@ -328,7 +328,7 @@ class VariableDeclaration:
 class ConstraintDeclaration:
     """``lhs sense rhs`` for each coord combination of ``dims``.
 
-    Both sides are affine; the executor normalises constants to the RHS.
+    Both sides are affine; the engine normalises constants to the RHS.
     ``where`` masks out coord combinations (row absence, like variables).
     """
 

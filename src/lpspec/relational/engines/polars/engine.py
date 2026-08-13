@@ -1,4 +1,4 @@
-"""Polars executor: fill the model frames, then hand them to a sink.
+"""Polars engine: fill the model frames, then hand them to a sink.
 
 Owns the *assembly* — turning each declaration into rows of the four model
 frames, and holding them until a sink drains them. Owns none of the three
@@ -25,6 +25,7 @@ from lpspec.errors import (
     DataError,
     LanguageError,
     LpspecError,
+    no_duals_message,
     null_bounds_message,
     sparse_divisor_message,
     uncovered_constant_message,
@@ -33,7 +34,7 @@ from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler, TermFragment
-from lpspec.relational.result import Result
+from lpspec.relational.result import Diagnostics, Result
 from lpspec.relational.sinks.tables import SENSE
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from polars._typing import MaintainOrderJoin
 
 
-#: The four frames a sink reads, as schemas. Stated here because the executor
+#: The four frames a sink reads, as schemas. Stated here because the engine
 #: is what fills them and an empty model still has to have them.
 _COLS = ('lb', 'ub', 'vtype')
 _OBJ = ('col', 'coeff')
@@ -76,10 +77,28 @@ _DTYPES = {
 }  # fmt: skip
 
 
-class PolarsExecutor:
+class PolarsEngine:
     """Build a :class:`Program` into polars frames, then sink it."""
 
     def __init__(self) -> None:
+        #: The solver holding this model, kept between solves — the only thing
+        #: a rebuild does *not* throw away. ``None`` until one has been solved.
+        self._solver: sinks.Solver | None = None
+        #: How many solves this model has been through, and how many of them
+        #: had to load the solver from scratch instead of pushing values onto
+        #: one that already held it. Read together: one load in many solves is
+        #: a driver on the fast path, a load per solve is one that is not.
+        self._solves = 0
+        self._loads = 0
+        self._reset()
+
+    def _reset(self) -> None:
+        """The state one build owns, emptied.
+
+        What a second :meth:`build` over the same object clears, so that what
+        survives a rebuild is exactly what is *not* the built model: the
+        loaded solver and the counters.
+        """
         self._program: plan.Program | None = None
         self._compiler: PolarsCompiler | None = None
         self._bound: BoundSources | None = None
@@ -104,6 +123,10 @@ class PolarsExecutor:
         self._matrix_starts: Any = None
         self._n_cols = 0
         self._n_rows = 0
+        #: Entries in the matrix, kept as a count rather than read off the
+        #: frame: the frames go when the model is released and this is what a
+        #: caller asking how big it *was* is asking for.
+        self._n_entries = 0
         self._obj_const = 0.0
         self._obj_sense: str = 'min'
 
@@ -129,11 +152,20 @@ class PolarsExecutor:
         **``rows`` leaves in row order too**, which a solver reads as its own
         index — so :meth:`~lpspec.relational.sinks.tables.ModelTables.dense_rows`
         takes the frame's own vectors instead of scattering by label on every
-        solve. The order is *checked* first, by the same rule labelling uses:
-        a constant's left join is what usually loses it, and forcing that join
-        to hold it is a bet on the model's shape rather than a fix — free on
-        `fleet` and most of a build again on `dispatch`.
+        solve, and :attr:`~lpspec.relational.sinks.tables.ModelTables.structure`
+        hashes the column two builds now agree on. The order is *checked*
+        first, by the same rule labelling uses: a constant's left join is what
+        usually loses it, and forcing that join to hold it is a bet on the
+        model's shape rather than a fix — free on `fleet` and most of a build
+        again on `dispatch`.
+
+        **A second call rebuilds over the same object**, which is what
+        ``rebind`` is. The previous build is released *before* this one starts,
+        so a driver that re-solves in a loop stays at one model's peak; what
+        the loaded solver holds survives as the digest it recorded at its load.
         """
+        self._reset()
+
         self._program = program
         self._bound = bind(program, sources)
         self._compiler = PolarsCompiler(program, self._bound, self._variables)
@@ -147,6 +179,7 @@ class PolarsExecutor:
         ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
         self._matrix_starts = _row_starts(ordered, self._n_rows)
         self._matrix = ordered.select('col', 'coeff').rechunk()
+        self._n_entries = self._matrix.height
         self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
@@ -411,12 +444,16 @@ class PolarsExecutor:
         return stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
 
     # ------------------------------------------------------------------
-    # sinks — see relational/sinks/; the executor only supplies the frames
+    # sinks — see relational/sinks/; the engine only supplies the frames
     # ------------------------------------------------------------------
 
     def _tables(self) -> sinks.ModelTables:
-        assert self._cols is not None and self._obj is not None
-        assert self._rows is not None and self._matrix is not None
+        if self._cols is None or self._obj is None or self._rows is None or self._matrix is None:
+            raise LpspecError(
+                'there is no built model to hand over: it was closed, or a rebind raised and released '
+                'it rather than leaving half of one behind. Build it again — rebind() with data it can '
+                'bind, or build() from the start.'
+            )
         return sinks.ModelTables(
             cols=self._cols,
             obj=self._obj,
@@ -427,18 +464,6 @@ class PolarsExecutor:
             row_count=self._n_rows,
             objective_sense=self._obj_sense,
             objective_constant=self._obj_const,
-        )
-
-    def omissions(self) -> pl.DataFrame:
-        """``(constraint, rows_not_built)`` — every row that lost all its terms.
-
-        A row with no variable terms is not built (SPEC §6). Counts, not
-        coordinates; empty for a model whose every declared row reached the
-        solver.
-        """
-        return pl.DataFrame(
-            {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
-            schema={'constraint': pl.String, 'rows_not_built': pl.UInt32},
         )
 
     def write(self, path: str | Path) -> None:
@@ -453,52 +478,105 @@ class PolarsExecutor:
 
     def solve(
         self,
-        batch_rows: int | None = None,
-        solver_options: Mapping[str, Any] | None = None,
         solver_name: str = 'highs',
+        *,
+        solver_options: Mapping[str, Any] | None = None,
+        batch_rows: int | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
+        The solver stays loaded where it can, which is
+        :func:`~lpspec.relational.sinks.solvers.loaded`'s decision and not this
+        method's: a rebound model has its new numbers pushed onto what the
+        solver already holds, and one whose structure moved is loaded again.
+        All that is kept here is the solver itself and the two counters
+        :meth:`diagnostics` reports, the answer being the same either way.
+
         Args:
+            solver_name: ``highs``, which ships with the package, or
+                ``gurobi``, which needs the ``[gurobi]`` extra.
+            solver_options: Forwarded to the solver verbatim, in its own
+                vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
             batch_rows: The hand-off budget in elements, defaulting to the
                 sink's own
                 (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
-            solver_options: Forwarded to the solver verbatim, in its own
-                vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
-            solver_name: ``highs``, which ships with the package, or
-                ``gurobi``, which needs the ``[gurobi]`` extra.
+                This method's parameter alone, kept off the public handle:
+                nothing outside the chunking tests sets it.
 
         Returns:
-            The solution, holding this executor.
+            The solution, holding this engine and the build it answered.
         """
-        status, objective, primal, dual = sinks.solver(solver_name)(self._tables(), batch_rows, solver_options)
-        _spanning(solver_name, 'primal', primal, self._n_cols)
-        _spanning(solver_name, 'dual', dual, self._n_rows)
+        tables = self._tables()
+        held = self._solver
+        self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
+        self._solves += 1
+        if self._solver is not held:
+            self._loads += 1
+        status, objective, primal, dual = self._solver.run(tables)
+        assert primal is not None or not status.is_readable, 'a readable status must come with a primal vector'
+        primals, duals = self._read_back(primal, dual)
         return Result(
             _status=status,
             _objective=objective,
-            _executor=self,
-            _primal_values=primal,
-            _dual_values=dual,
+            _primals=primals,
+            _duals=duals,
+            _no_duals=None if dual is not None else no_duals_message(self._discrete(), status.termination_condition),
         )
 
-    def _solution_frame(self, name: str, values: pl.Series | None) -> pl.LazyFrame:
-        """The tidy solution of variable *name*: ``(dims…, value)``.
+    def diagnostics(self) -> Diagnostics:
+        """What this build and its solves did that the answer does not show.
 
-        A slice, never a dense array and never a join. *values* is the solver's
-        column vector, held by the :class:`Result` that asks — labels are the
-        build's and shared, values are one solve's and are not.
-
-        **In label order**: a label *is* row-major position in the coordinate
-        product, so the caller gets the model's own order rather than the order
-        a hash join happened to finish in.
+        Answerable after :meth:`close`: every field is a count or a small
+        frame this keeps, not a read of the model it releases.
         """
-        assert self._program is not None
-        assert values is not None, 'no solve has stored a primal'
-        block = self._variable_blocks[name]
-        return self._read_back(block, self._variables[name], self._program.variable(name).dims, values)
+        return Diagnostics(
+            columns=self._n_cols,
+            rows=self._n_rows,
+            nonzeros=self._n_entries,
+            omissions=pl.DataFrame(
+                {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
+                schema={'constraint': pl.String, 'rows_not_built': pl.UInt32},
+            ),
+            solves=self._solves,
+            loads=self._loads,
+        )
 
     def _read_back(
+        self, primal: pl.Series | None, dual: pl.Series | None
+    ) -> tuple[dict[str, pl.LazyFrame], dict[str, pl.LazyFrame]]:
+        """One solve's answer as one frame per declaration — a :class:`Result`'s own.
+
+        References rather than copies: the frames point at this build's label
+        frames, and :meth:`build` replacing the registries takes nothing from
+        what an earlier result still holds. What a retained result costs is
+        exactly those label frames staying alive — never the four model frames,
+        never the solver.
+
+        Lazy, so composing every declaration's plan here costs nothing for the
+        ones nobody reads: the slices are views on the solver's own vector and
+        the collect happens where a caller asks.
+
+        A vector that is ``None`` yields no frames at all rather than empty
+        ones, which is the state :class:`Result` reports through the status and
+        through ``_no_duals``.
+        """
+        assert self._program is not None
+        return (
+            {
+                v.name: self._laid_out(self._variable_blocks[v.name], self._variables[v.name], v.dims, primal)
+                for v in self._program.variables
+            }
+            if primal is not None
+            else {},
+            {
+                c.name: self._laid_out(self._constraint_blocks[c.name], self._constraints[c.name], c.dims, dual)
+                for c in self._program.constraints
+            }
+            if dual is not None
+            else {},
+        )
+
+    def _laid_out(
         self,
         block: tuple[int, int],
         coordinates: pl.LazyFrame,
@@ -509,14 +587,14 @@ class PolarsExecutor:
 
         **The order is not re-established here, because it was never lost**:
         :func:`labels.frame` numbers a sorted frame and hands back a
-        label-ascending one.
+        label-ascending one, and the solver's vector is positional in the same
+        index, so coordinates and values line up by construction.
 
         The declaration owns a contiguous, dense run of labels — *block*, out
-        of the map for the label space *coordinates* is numbered in — and the
-        solver's vector is positional in the same index, so coordinates and
-        values line up by construction. The slice is attached as a column
-        rather than concatenated as a frame, so a mismatched length raises
-        instead of padding with nulls.
+        of the map for the label space *coordinates* is numbered in, which is
+        what makes its share of the vector a slice rather than a join. The
+        slice is attached as a column rather than concatenated as a frame, so
+        a mismatched length raises instead of padding with nulls.
 
         **Dim columns leave in ``String``**, where the build holds them as
         ``pl.Enum`` (#541). That encoding is internal and every gram of its win
@@ -541,60 +619,24 @@ class PolarsExecutor:
         assert self._bound is not None, 'build() has not run'
         return [d for d in dims if self._bound.is_enum_encoded(d)]
 
-    def _primal(self, name: str, values: pl.Series | None) -> pl.DataFrame:
-        return self._solution_frame(name, values).collect(engine='streaming')
-
-    def _dual(self, name: str, values: pl.Series) -> pl.DataFrame:
-        """:meth:`_solution_frame` against row labels instead of column ones.
-
-        Ordered and sliced the same way, for the same reason — a constraint
-        row's label is its position in that constraint's coordinate product.
-        """
+    def _discrete(self) -> list[str]:
+        """The variables this model declared as anything but continuous."""
         assert self._program is not None
-        dims = self._program.constraint(name).dims
-        block = self._constraint_blocks[name]
-        return self._read_back(block, self._constraints[name], dims, values).collect(engine='streaming')
-
-    def _no_duals_reason(self, termination_condition: str) -> str:
-        """Why a solve that *did* leave values still has no duals.
-
-        Integrality is decidable from the program, and naming the variable is
-        actionable where "the solver reported none" is not.
-        """
-        assert self._program is not None
-        discrete = sorted(v.name for v in self._program.variables if v.variable_type != 'continuous')
-        if discrete:
-            names = ', '.join(f"'{n}'" for n in discrete)
-            return (
-                f'duals are undefined for a mixed-integer model: {names} '
-                f'{"is" if len(discrete) == 1 else "are"} not continuous. '
-                f'Drop the integrality to price the LP relaxation instead.'
-            )
-        return (
-            f'the solver returned no dual solution, though the solve terminated '
-            f'{termination_condition!r}. Duals come from a simplex basis, which a '
-            f'run stopped short of one does not have.'
-        )
-
-    def _solution_to_parquet(self, directory: Path, values: pl.Series | None) -> dict[str, Path]:
-        assert self._program is not None
-        directory.mkdir(parents=True, exist_ok=True)
-        written: dict[str, Path] = {}
-        for v in self._program.variables:
-            out = directory / f'{v.name}.parquet'
-            self._solution_frame(v.name, values).sink_parquet(out)
-            written[v.name] = out
-        return written
+        return sorted(v.name for v in self._program.variables if v.variable_type != 'continuous')
 
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Drop the built model. Optional — see :class:`Result`.
+        """Drop the built model. A :class:`Result` keeps its own frames.
 
         ``BoundSources`` is frozen, so it cannot be emptied in place the way
         the registries can: what frees the bound frames is dropping every
-        reference to them, and the compiler holds one.
+        reference to them, and the compiler holds one. A loaded solver goes
+        too, being the one thing here that is not this process's memory.
         """
+        if self._solver is not None:
+            self._solver.close()
+            self._solver = None
         self._cols = self._obj = self._rows = self._matrix = self._matrix_starts = None
         self._variables.clear()
         self._constraints.clear()
@@ -603,33 +645,12 @@ class PolarsExecutor:
         self._bound = None
         self._compiler = None
 
-    def __enter__(self) -> PolarsExecutor:
+    def __enter__(self) -> PolarsEngine:
         return self
 
     def __exit__(self, *exc: object) -> Literal[False]:
         self.close()
         return False
-
-
-def _spanning(solver: str, quantity: str, values: pl.Series | None, expected: int) -> None:
-    """Refuse a solver vector that does not span the model.
-
-    Reading a solution back is positional, so a wrong length is an answer about
-    a *different* model. Checked where the solver hands it over rather than
-    where it is read: the objective comes back directly, so a ``Result`` built
-    on a broken vector would report a plausible number and only fail if someone
-    asked for a coordinate.
-
-    ``None`` is not a wrong length — a mixed-integer model has no duals, and
-    neither does a run stopped short of a simplex basis.
-    """
-    if values is not None and len(values) != expected:
-        raise LpspecError(
-            f'{solver} returned {len(values)} {quantity} values for a model with {expected}. '
-            f'Reading a solution back is positional, so a vector that does not span the model '
-            f'describes a different one. This is an engine bug rather than a problem with the '
-            f'model — please report it.'
-        )
 
 
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:

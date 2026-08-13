@@ -31,7 +31,7 @@ import lpspec as lps
 from lpspec.language.expansion import parse_and_expand
 from lpspec.language.expression_parser import parse_expression
 from lpspec.lowering import lower_program
-from lpspec.relational.engines.polars.executor import PolarsExecutor
+from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 
 HERE = Path(__file__).parent
@@ -77,10 +77,10 @@ def main() -> None:
     schema = validated_model()
     expanded_ast(schema)
     program = relational_ir(schema)
-    with PolarsExecutor() as ex:
-        model_frames(ex, schema, program)
-        lp_file(ex)
-        solution(ex)
+    with PolarsEngine() as engine:
+        model_frames(engine, schema, program)
+        lp_file(engine)
+        solution(engine)
     refusals()
 
     print(f'\n{_dim("docs/ARCHITECTURE.md has the rules these stages enforce.")}')
@@ -139,10 +139,10 @@ def relational_ir(schema: lps.Model) -> Any:
     return program
 
 
-def model_frames(ex: PolarsExecutor, schema: lps.Model, program: Any) -> None:
+def model_frames(engine: PolarsEngine, schema: lps.Model, program: Any) -> None:
     """Stage 4 — plan plus data to the model frames, the first stage to see a number.
 
-    Sources are adapted to tidy frames (dims..., value) and the executor
+    Sources are adapted to tidy frames (dims..., value) and the engine
     assembles the model from them.
 
     The private attributes read here are the one place this script reaches past
@@ -150,9 +150,9 @@ def model_frames(ex: PolarsExecutor, schema: lps.Model, program: Any) -> None:
     plan is internal and the query is backend-private), and looking at them is
     the whole point.
     """
-    banner(4, 'plan + data -> the model frames', 'relational/engines/polars/executor.py')
-    ex.build(program, tidy_sources(schema, SOURCES, COORDS))
-    model = ex._tables()
+    banner(4, 'plan + data -> the model frames', 'relational/engines/polars/engine.py')
+    engine.build(program, tidy_sources(schema, SOURCES, COORDS))
+    model = engine._tables()
     for name, frame in (
         ('cols', model.cols),
         ('obj', model.obj),
@@ -164,14 +164,14 @@ def model_frames(ex: PolarsExecutor, schema: lps.Model, program: Any) -> None:
     print('    a column is a bound and a cost, a row a sense and a rhs,')
     print('    and A is every nonzero coefficient as (row, col, coeff).')
 
-    variables = ex._variables['p'].collect()
+    variables = engine._variables['p'].collect()
     n_full = 6 * 4
     print('\n    where "p_max > 0" is not a mask array — it is row absence:')
     print(f'    p has {variables.height} rows, not {n_full}: retired oil never becomes a column.')
     print(_indent(variables.sort('var_label').head(4)))
 
 
-def lp_file(ex: PolarsExecutor) -> None:
+def lp_file(engine: PolarsEngine) -> None:
     """Stage 5 — the same frames, second sink.
 
     The other one (the ``highs`` solver, stage 6) hands COO batches to highspy
@@ -180,13 +180,13 @@ def lp_file(ex: PolarsExecutor) -> None:
     banner(5, 'sink: stream the frames to an LP file', 'relational/sinks/lp_file.py')
     with tempfile.TemporaryDirectory() as tmp:
         lp = Path(tmp) / 'model.lp'
-        ex.write(lp)
+        engine.write(lp)
         text = lp.read_text().splitlines()
         print(_indent('\n'.join(text[:12])))
         print(f'    ... ({len(text)} lines total)')
 
 
-def solution(ex: PolarsExecutor) -> None:
+def solution(engine: PolarsEngine) -> None:
     """Stage 6 — batches to highspy, and the solution read back by label join.
 
     Never densified. ``primal()`` hands back a frame: the engine's own shape,
@@ -195,7 +195,7 @@ def solution(ex: PolarsExecutor) -> None:
     business, not a fact about the architecture this file is narrating.
     """
     banner(6, 'sink: batches -> highspy -> solution frames', 'relational/sinks/highs.py')
-    result = ex.solve()
+    result = engine.solve()
     print(f'    status     {result.status} ({result.termination_condition})')
     print(f'    objective  {result.objective:,.1f}')
     print(_indent(result.primal('p').sort('snapshot', 'generator').head(6)))
