@@ -407,7 +407,7 @@ def check_divisors_cover(name: str, node: ExpressionNode, schema: Model, dataset
     reached by the shape each lane has to hand.
 
     Reached before ``_eval_ast``, the last moment the gap is visible:
-    ``semantics.coefficient`` fills an uncovered slot with 0.0 at the parameter
+    ``builder._coefficient`` fills an uncovered slot with 0.0 at the parameter
     leaf, and from there the division yields an infinity and the row is masked
     out — silently, and identically on both lanes until #312.
     """

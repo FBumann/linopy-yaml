@@ -24,7 +24,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError
 from lpspec.lowering import _lower_expr, lower_program
-from lpspec.relational import PolarsEngine
+from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.plan import (
     Add,
     GroupSum,

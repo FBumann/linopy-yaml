@@ -466,7 +466,6 @@ must stay off the import path of a caller who does not use it.
 | `linopy/__init__.py` | opt-in shim: `build` / `extend` on a `linopy.Model` |
 | `linopy/loader.py` | data coercion to `xr.Dataset`, master coords |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
-| `linopy/semantics.py` | where this lane answers linopy's v1 arithmetic convention — one home, as linopy's own `semantics.py` is |
 
 **Four subpackages, and the directory *is* the rule in every case.** Everything
 under `language/` produces the AST and may not reach a consumer of it;

@@ -44,7 +44,7 @@ from lpspec.language.expression_parser import (
     UnaryOperatorNode,
     VariableNode,
 )
-from lpspec.language.helpers import BUILTIN_NAMES, call_shape_error, edge_error
+from lpspec.language.helpers import call_shape_error, edge_error
 from lpspec.language.piecewise import expand_piecewise
 from lpspec.language.resolution import Namespace, expression_of, where_of
 from lpspec.language.where_parser import (
@@ -212,13 +212,6 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
                 raise AssertionError(f'{context}: operator {node.op!r} passed the degree check')
 
     if isinstance(node, FunctionCallNode):
-        if node.name not in BUILTIN_NAMES:
-            raise LanguageError(
-                f"{context}: helper '{node.name}' has no lowering. The language's "
-                f'helpers are {sorted(BUILTIN_NAMES)}; compositions of them '
-                f"belong in 'macros:'. Math outside the language belongs in a "
-                f"declared 'escape:' island, not in a helper."
-            )
         shape_error = call_shape_error(node.name, len(node.args), node.kwargs)
         if shape_error is not None:
             raise LanguageError(f'{context}: {shape_error}')

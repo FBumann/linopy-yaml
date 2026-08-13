@@ -19,30 +19,20 @@ if TYPE_CHECKING:
 
     Write = Callable[[ModelTables, Path], None]
 
-__all__ = ['PLANNED_WRITERS', 'WRITERS', 'write_lp_file', 'writer']
+__all__ = ['WRITERS', 'writer']
 
 #: What can be written today, by suffix. Closed, for
 #: :data:`~lpspec.relational.sinks.solvers.SOLVERS`' reason.
 WRITERS: Mapping[str, Write] = {'.lp': write_lp_file}
-
-#: Formats with a module coming. Separate from :data:`WRITERS` because "not
-#: yet" and "no" are different answers and a caller acts differently on each.
-PLANNED_WRITERS: Mapping[str, str] = {
-    '.mps': 'the mps writer is planned but not implemented yet (docs/ARCHITECTURE.md, sinks)',
-}
 
 
 def writer(suffix: str) -> Write:
     """The writer for *suffix*.
 
     Raises:
-        NotImplementedError: A format that is coming.
-        ValueError: One nothing writes; the message lists what can be.
+        ValueError: A format nothing writes; the message lists what can be.
     """
     if suffix in WRITERS:
         return WRITERS[suffix]
-    if suffix in PLANNED_WRITERS:
-        raise NotImplementedError(PLANNED_WRITERS[suffix])
     supported = ', '.join(sorted(WRITERS))
-    planned = ', '.join(sorted(PLANNED_WRITERS))
-    raise ValueError(f'unsupported output format {suffix!r} — supported: {supported} (planned: {planned})')
+    raise ValueError(f'unsupported output format {suffix!r} — supported: {supported}')

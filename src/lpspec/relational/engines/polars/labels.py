@@ -182,7 +182,7 @@ def _row_major(compiler: PolarsCompiler, dims: tuple[str, ...]) -> pl.Expr:
     """
     position: pl.Expr = pl.lit(0, dtype=pl.Int64)
     for d in dims:
-        position = position * compiler.dimension_cardinality[d] + pl.col(ordinal(d))
+        position = position * compiler.data.cardinality[d] + pl.col(ordinal(d))
     return position.cast(pl.Int64)
 
 

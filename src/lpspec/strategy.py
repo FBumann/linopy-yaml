@@ -486,7 +486,7 @@ class Runs:
             raise LpspecError(_nothing_to_read('variable', 'anything', self._primals, self.meta))
         return tidy_to_dataset(wanted, self.to_dataarray)
 
-    def to_parquet(self, directory: str | Path = '.') -> dict[str, Path]:
+    def to_parquet(self, directory: str | Path) -> dict[str, Path]:
         """One parquet file per variable the sweep holds, ``(key, dims…, value)``.
 
         Written in :meth:`primal`'s order, so the same sweep writes the same
@@ -817,9 +817,7 @@ def _key_column(
                 "coordinates of, and 'slice' would be this library naming your axis for you. Pass "
                 "key_name='draw', key_name='period', or whatever the keys actually are."
             )
-    clashing = sorted(
-        name for name in schema.variables if key_name in getattr(schema.variables.get(name), 'foreach', ())
-    )
+    clashing = sorted(name for name, block in schema.variables.items() if key_name in block.foreach)
     if clashing:
         raise LpspecError(
             f'key_name={key_name!r} is already a dimension of {clashing}, so the slice key would collide '
