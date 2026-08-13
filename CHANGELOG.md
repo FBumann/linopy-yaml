@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.116](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.115...v0.0.1-alpha.116) (2026-08-13)
+
+
+### Documentation
+
+* **models:** each verified reference reads as a tab beside the model ([#665](https://github.com/fluxopt/lpspec/issues/665)) ([9497594](https://github.com/fluxopt/lpspec/commit/94975949822b0c9e0532de1c4ceb8839766023ec))
+
 ## [0.0.1-alpha.115](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.114...v0.0.1-alpha.115) (2026-08-13)
 
 
