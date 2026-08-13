@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.1-alpha.111](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.110...v0.0.1-alpha.111) (2026-08-13)
+
+
+### Performance
+
+* **engine:** constants stop doubling the cost of a constraint's rows ([#650](https://github.com/fluxopt/lpspec/issues/650)) ([a89a2c9](https://github.com/fluxopt/lpspec/commit/a89a2c9f358b3ff34e85678c7c163430423f34af))
+* **sinks:** a row's comparison crosses to the solver as a code, not a string ([#648](https://github.com/fluxopt/lpspec/issues/648)) ([b0bb8c3](https://github.com/fluxopt/lpspec/commit/b0bb8c310d1f35a8bc157f00461efdbe2be2c65c))
+* **sinks:** the solver's column vectors stop being walked five times ([#649](https://github.com/fluxopt/lpspec/issues/649)) ([98d604d](https://github.com/fluxopt/lpspec/commit/98d604d0fe8de0573c993ab57dda84c977988b9b))
+
 ## [0.0.1-alpha.110](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.109...v0.0.1-alpha.110) (2026-08-12)
 
 
