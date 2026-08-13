@@ -142,6 +142,11 @@ moved where.
   `pytest.raises` blocks in one test hide four failures behind the first and
   keep their labels in the source; five `pytest.param(..., id='…')` print the
   case that failed and select with `-k`.
+- **A correctness guard lands with its mutation table.** Delete each guard in
+  turn, run the suite, and put the table — guard → caught, or still green — in
+  the PR (#658 is the template). A deletion the suite survives gets a
+  purpose-built probe before merge; a green suite proves nothing about a guard
+  no test can reach.
 - **Two comments are not explanation, and stay where the eye lands**: a **case
   label** where parametrizing would distort the test, and a **one-line
   justification of a line that reads as a mistake** — a bare
