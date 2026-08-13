@@ -56,8 +56,8 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     (food, nutrient) pair means that food supplies none of that nutrient.
     """
     foods = pd.Index(tables['food']['food'], name='food')
-    minimum = tables['daily_minimum'].set_index('nutrient')['value']
-    per_dollar = (
+    minimum: pd.Series = tables['daily_minimum'].set_index('nutrient')['value']
+    per_dollar: pd.DataFrame = (
         tables['nutrient_per_dollar']
         .pivot(index='food', columns='nutrient', values='value')
         .reindex(index=foods, columns=minimum.index)

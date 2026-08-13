@@ -12,9 +12,10 @@ formulation, not a published figure — see ``dispatch.py`` next door.
 
 The line worth comparing is ``within_cap``. The YAML reads a per-period
 variable at per-snapshot rows — ``at(p_nom, onto=snapshot, by=period)`` —
-where this script builds the snapshot x period membership matrix and sums
-through it, so each snapshot sees its period's capacity. The ragged calendar
-(four snapshots in 2030, two in 2050) is just rows of that matrix.
+and linopy says the same with a vectorised selection,
+``p_nom.sel(period=period)``, each snapshot picking its period's capacity.
+The ragged calendar (four snapshots in 2030, two in 2050) is just the values
+of that selector.
 """
 
 from __future__ import annotations
@@ -39,20 +40,16 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
 
     ``tables`` is the same mapping the lpspec call binds as ``sources``.
     """
-    load = tables['load'].set_index('snapshot')['value']
-    weight = tables['weight'].set_index('snapshot')['value']
-    opex = tables['opex'].set_index('generator')['value']
+    load: pd.Series = tables['load'].set_index('snapshot')['value']
+    weight: pd.Series = tables['weight'].set_index('snapshot')['value']
+    opex: pd.Series = tables['opex'].set_index('generator')['value']
     capex = xr.DataArray(tables['capex'].pivot(index='period', columns='generator', values='value'))
-
-    calendar = tables['snapshot'].set_index('snapshot')['period']
-    in_period = pd.DataFrame(0.0, index=calendar.index, columns=capex.indexes['period'])
-    for snapshot, period in calendar.items():
-        in_period.loc[snapshot, period] = 1.0
+    period = xr.DataArray(tables['snapshot'].set_index('snapshot')['period'])
 
     m = linopy.Model()
     p = m.add_variables(lower=0, coords=[load.index, opex.index], name='p')
     p_nom = m.add_variables(lower=0, upper=100, coords=[capex.indexes['period'], opex.index], name='p_nom')
-    m.add_constraints(p <= (p_nom * xr.DataArray(in_period)).sum('period'), name='within_cap')
+    m.add_constraints(p <= p_nom.sel(period=period), name='within_cap')
     m.add_constraints(p.sum('generator') == load, name='balance')
     m.add_objective((p * opex * weight).sum() + (p_nom * capex).sum())
     return m

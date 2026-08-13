@@ -217,7 +217,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         n.set_snapshots(tables['snapshot']['snapshot'])
         n.add('Bus', 'bus')
 
-        generators = tables['generator'].set_index('generator')
+        generators: pd.DataFrame = tables['generator'].set_index('generator')
 
         n.add(
             'Generator',
@@ -231,7 +231,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
             shut_down_cost=tables['shut_down_cost'].set_index('generator')['value'],
         )
 
-        load = tables['load'].set_index('snapshot')['value']
+        load: pd.Series = tables['load'].set_index('snapshot')['value']
         n.add('Load', 'load', bus='bus', p_set=load)
         return n
     ```

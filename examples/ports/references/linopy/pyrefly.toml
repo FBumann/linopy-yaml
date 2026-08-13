@@ -1,0 +1,16 @@
+# The reference scripts, checked so their annotations cannot lie: the
+# binding-line annotations in each build() are what this config gates — a
+# Series annotated as a DataFrame fails the check. Run as
+#
+#   uv run pyrefly check -c examples/ports/references/linopy/pyrefly.toml examples/ports/references/linopy
+#
+# (wired into ci.yml next to the src/ check). Two strict rules are off; both
+# fire only on linopy's optional-typed harness API (`m.objective.value`, the
+# helpers' tidy lists) — the same Any-at-the-boundary the root pyproject
+# leaves unpromoted for src/. The pypsa/ scripts are not checked: pypsa is
+# deliberately installed nowhere in this repository's environments.
+python-version = "3.12"
+
+[errors]
+bad-argument-type = false
+implicit-any-type-argument = false

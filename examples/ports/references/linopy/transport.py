@@ -16,6 +16,11 @@ group_by=bus)`` — where this script has to build the bus x generator and
 bus x line incidence matrices itself and multiply through them. Both say
 Kirchhoff's current law; one says it as a relation, the other as linear
 algebra.
+
+linopy's ``groupby`` (which ``monthly_budget.py`` uses) could carry the
+generator half, but not the flows: a bus no line enters vanishes from the
+grouped sum, and restoring it is the incidence matrix again — so the script
+keeps one idiom for both halves.
 """
 
 from __future__ import annotations
@@ -40,10 +45,10 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
 
     ``tables`` is the same mapping the lpspec call binds as ``sources``.
     """
-    p_max = tables['p_max'].set_index('generator')['value']
-    cost = tables['cost'].set_index('generator')['value']
-    cap = tables['cap'].set_index('line')['value']
-    neg_cap = tables['neg_cap'].set_index('line')['value']
+    p_max: pd.Series = tables['p_max'].set_index('generator')['value']
+    cost: pd.Series = tables['cost'].set_index('generator')['value']
+    cap: pd.Series = tables['cap'].set_index('line')['value']
+    neg_cap: pd.Series = tables['neg_cap'].set_index('line')['value']
     load = xr.DataArray(tables['load'].pivot(index='snapshot', columns='bus', values='value'))
     snapshots, buses = load.indexes['snapshot'], load.indexes['bus']
 
