@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.120](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.119...v0.0.1-alpha.120) (2026-08-13)
+
+
+### Documentation
+
+* **models:** the gallery shows the modelling, not the harness ([#673](https://github.com/fluxopt/lpspec/issues/673)) ([6adba43](https://github.com/fluxopt/lpspec/commit/6adba43b3aa25d04b269ca461827876b7804617e))
+
 ## [0.0.1-alpha.119](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.118...v0.0.1-alpha.119) (2026-08-13)
 
 
