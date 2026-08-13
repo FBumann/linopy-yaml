@@ -45,7 +45,7 @@ REF_BEGIN, REF_END = '<!-- references:begin -->', '<!-- references:end -->'
 
 #: Column order is the order a reader meets these in docs/SPEC.md, not alphabetical
 #: and not by how many models happen to use them.
-COLUMNS = ('sum', 'sum(group_by)', 'shift', "shift(edge='wrap')", 'where', 'bounds', 'piecewise', 'MILP')
+COLUMNS = ('sum', 'sum(group_by)', 'shift', "shift(edge='wrap')", 'where', 'bounds', 'piecewise', 'sos', 'MILP')
 
 
 def walk(node: Any) -> Iterator[Any]:
@@ -78,7 +78,8 @@ def constructs(model: Path) -> set[str]:
 
     ``piecewise:`` is the one construct read off the surface schema: it lowers
     away into a lambda formulation, so by the time the plan exists there is
-    nothing left to recognise.
+    nothing left to recognise. ``sos:`` does not — a set survives lowering as a
+    declaration of its own, so it is read off the plan like the rest.
     """
     schema = load_model(model)
     program = lower_program(schema)
@@ -101,6 +102,8 @@ def constructs(model: Path) -> set[str]:
         used.add('bounds')
     if getattr(schema, 'piecewise', None):
         used.add('piecewise')
+    if program.sos:
+        used.add('sos')
     return used
 
 

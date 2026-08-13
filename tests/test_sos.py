@@ -438,3 +438,70 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
         assert sets['weight'].to_list() == [1, 2, 3, 4] * 2, 'a set is not in weight order'
         assert sets['col'].to_list() == [0, 2, 4, 6, 1, 3, 5, 7], 'a member is not the column its coordinate got'
         assert bound.solve().objective == pytest.approx(best(1))
+
+
+# examples/sos.yaml — SOS2 as the native spelling of a piecewise curve
+# ---------------------------------------------------------------------------
+
+#: A *concave* curve per generator — economies of scale. The hull's lower
+#: envelope is the chord, which undercuts a concave curve, so the set is
+#: load-bearing on this instance rather than decoration.
+CURVE_X = {'cheap': [0.0, 40.0, 100.0], 'mid': [0.0, 60.0, 120.0]}
+CURVE_Y = {'cheap': [0.0, 30.0, 55.0], 'mid': [0.0, 50.0, 85.0]}
+LOADS = [30.0, 95.0, 140.0, 190.0]
+
+
+def _curve_sources() -> dict[str, pl.DataFrame]:
+    breakpoints = [{'generator': g, 'bp': k, 'value': v} for g, values in CURVE_X.items() for k, v in enumerate(values)]
+    costs = [{'generator': g, 'bp': k, 'value': v} for g, values in CURVE_Y.items() for k, v in enumerate(values)]
+    return {
+        'p_max': pl.DataFrame({'generator': list(CURVE_X), 'value': [xs[-1] for xs in CURVE_X.values()]}),
+        'load': pl.DataFrame({'snapshot': range(len(LOADS)), 'value': LOADS}),
+        'bp_x': pl.DataFrame(breakpoints),
+        'bp_y': pl.DataFrame(costs),
+    }
+
+
+def _interpolated(generator: str, dispatched: float) -> float:
+    """The curve's own cost at *dispatched* — one linear piece, read by hand."""
+    xs, ys = CURVE_X[generator], CURVE_Y[generator]
+    for left in range(len(xs) - 1):
+        if xs[left] - 1e-9 <= dispatched <= xs[left + 1] + 1e-9:
+            share = (dispatched - xs[left]) / (xs[left + 1] - xs[left])
+            return ys[left] + share * (ys[left + 1] - ys[left])
+    raise AssertionError(f'{generator} dispatched {dispatched}, which is off its curve')
+
+
+def test_the_example_prices_on_the_curve_and_not_on_its_hull():
+    """``examples/sos.yaml``: the claim the whole model exists to make.
+
+    Every generator's cost has to sit on its *own* curve at the level it was
+    dispatched to — which is what "at most two, and neighbours" buys. Without
+    the set the same LP prices the chord, so the objective is asserted to be
+    strictly worse than that relaxation as well: a formulation that quietly
+    stopped restricting anything would match the curve nowhere.
+    """
+    sources = _curve_sources()
+    result = lps.solve('examples/sos.yaml', sources)
+    assert result.is_ok
+
+    dispatched = result.primal('p')
+    cost = result.primal('op_cost')
+    on_curve = 0.0
+    for row, priced in zip(dispatched.iter_rows(named=True), cost.iter_rows(named=True), strict=True):
+        expected = _interpolated(row['generator'], row['value'])
+        assert priced['value'] == pytest.approx(expected, abs=1e-6), (
+            f'{row["generator"]} at t={row["snapshot"]} is priced off its curve'
+        )
+        on_curve += expected
+
+    assert result.objective == pytest.approx(on_curve, abs=1e-6)
+    relaxed = lps.solve(_without_the_set(), sources)
+    assert relaxed.objective < result.objective - 1e-6, 'the hull costs the same, so the set restricts nothing here'
+
+
+def _without_the_set() -> dict[str, Any]:
+    """``examples/sos.yaml`` with the ``sos:`` block dropped — the relaxation."""
+    raw = lps.load_model('examples/sos.yaml').to_dict()
+    raw.pop('sos')
+    return raw
