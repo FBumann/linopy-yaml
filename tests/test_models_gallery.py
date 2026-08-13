@@ -116,6 +116,28 @@ def test_the_generated_evidence_tables_are_current() -> None:
     assert constructs.rendered(page) == page, 'the gallery tables are stale — run `uv run python -m tools.constructs`'
 
 
+@pytest.fixture(scope='module')
+def exercised() -> set[str]:
+    """The union of every construct some model in the corpus exercises."""
+    return set().union(*(constructs.constructs(path) for _, path in constructs.models()))
+
+
+@pytest.mark.parametrize('column', constructs.COLUMNS)
+def test_every_construct_is_exercised_by_some_model(column: str, exercised: set[str]) -> None:
+    """No column of the construct matrix is all dots.
+
+    The checks above keep the matrix *true*; this one keeps it *full*. A
+    construct the language ships that no model exercises renders as a column
+    of `·`, visible only to a reader scanning for the hole — the same claim
+    `test_resolution_parity.test_every_resolved_predicate_is_parity_tested`
+    makes one level down.
+    """
+    assert column in exercised, (
+        f'`{column}` ships, but no model in examples/ or examples/ports/ exercises it — '
+        f'the gallery matrix renders it as an empty column'
+    )
+
+
 PORTS = Path(__file__).resolve().parent.parent / 'examples' / 'ports' / 'references'
 
 
