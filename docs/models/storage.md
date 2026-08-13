@@ -138,6 +138,23 @@ $$0 \le \mathrm{soc}_{s} \le 100 \qquad \forall\thinspace s \in \mathcal{S}$$
         expression: p * cost
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/storage.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/storage.yaml', sources) as solution:
+        print(solution.objective)  # 5650.0
+        print(solution.dual('power_balance'))
+    ```
+
 === "linopy"
 
     `examples/ports/references/linopy/storage.py`:

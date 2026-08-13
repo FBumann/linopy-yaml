@@ -109,6 +109,23 @@ $$x_{i,j} \ge 0 \qquad \forall\thinspace i \in \mathcal{I},\enspace j \in \mathc
         expression: shipment * distance * freight / 1000
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/transport_dantzig.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/ports/transport_dantzig.yaml', sources) as solution:
+        print(solution.objective)  # 153.675
+        print(solution.dual('within_capacity'))
+    ```
+
 === "linopy"
 
     The same problem written by hand in linopy — a fair comparison, because linopy
