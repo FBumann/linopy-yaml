@@ -76,17 +76,18 @@ def test_the_pypsa_shapes_block_produces_tidy_sources() -> None:
     under test is the pandas transformation, and it ends in a full solve of
     the transport instance.
     """
-    import pandas as pd
     from types import SimpleNamespace
+
+    import pandas as pd
 
     generators = pd.DataFrame(
         {'bus': ['north', 'south'], 'p_nom': [60.0, 150.0], 'marginal_cost': [10.0, 40.0]},
         index=pd.Index(['wind_n', 'gas_s'], name='name'),
     )
     loads = pd.DataFrame({'bus': ['north', 'south']}, index=pd.Index(['ln', 'ls'], name='name'))
-    p_set = pd.DataFrame(
-        {'ln': [20.0, 30.0], 'ls': [70.0, 80.0]}, index=pd.Index([0, 1], name='snapshot')
-    ).rename_axis(columns='name')
+    p_set = pd.DataFrame({'ln': [20.0, 30.0], 'ls': [70.0, 80.0]}, index=pd.Index([0, 1], name='snapshot')).rename_axis(
+        columns='name'
+    )
     n = SimpleNamespace(generators=generators, loads=loads, loads_t=SimpleNamespace(p_set=p_set))
 
     scope: dict = {'n': n}
