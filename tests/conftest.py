@@ -20,10 +20,12 @@ engine is frame-native, and the module constants are the single source of both.
 from __future__ import annotations
 
 import copy
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import polars as pl
 import pytest
 import yaml as pyyaml
 
@@ -33,6 +35,27 @@ if TYPE_CHECKING:
     from lpspec.language.model import Model
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
+
+#: The ported models, their data and the optimum somebody else published for
+#: each. Shared because two modules ask different questions of one corpus:
+#: ``test_ports.py`` whether we reach the outside answer, ``test_rebind.py``
+#: whether a rebind reaches the answer a fresh build does — eleven models
+#: nobody here wrote being a wider net than any pair written to be a net.
+PORTS_DIR = EXAMPLES_DIR / 'ports'
+PORT_REFERENCES: dict[str, dict[str, Any]] = json.loads((PORTS_DIR / 'references.json').read_text())
+
+
+def port_sources(name: str) -> dict[str, Any]:
+    """One JSON per port: a column-oriented table per name, scalars inline."""
+    data = json.loads((PORTS_DIR / 'data' / f'{name}.json').read_text())
+    return {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
+
+
+@pytest.fixture(params=sorted(PORT_REFERENCES), ids=str)
+def port(request: pytest.FixtureRequest) -> dict[str, Any]:
+    """Each ported model in turn: its name, its file, and what it should reach."""
+    return {'name': request.param, 'model': PORTS_DIR / f'{request.param}.yaml'} | PORT_REFERENCES[request.param]
+
 
 #: The dispatch model as a dict, for tests that need to mutate a declaration
 #: rather than read a file. Deliberately the same math as

@@ -15,28 +15,13 @@ asserted against its model file by ``test_models_gallery.py``.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
 import polars as pl
 import pytest
 
 import lpspec as lps
-
-PORTS = Path(__file__).resolve().parent.parent / 'examples' / 'ports'
-REFERENCES: dict[str, dict[str, Any]] = json.loads((PORTS / 'references.json').read_text())
-
-
-def sources(name: str) -> dict[str, Any]:
-    """One JSON per port: a column-oriented table per name, scalars inline."""
-    data = json.loads((PORTS / 'data' / f'{name}.json').read_text())
-    return {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
-
-
-@pytest.fixture(params=sorted(REFERENCES), ids=str)
-def port(request: pytest.FixtureRequest) -> dict[str, Any]:
-    return {'name': request.param, 'model': PORTS / f'{request.param}.yaml'} | REFERENCES[request.param]
+from tests.conftest import port_sources
 
 
 def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
@@ -44,7 +29,7 @@ def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
     at a different vertex than the source prints, so a corpus pinned to a
     solution would fail on a solver upgrade that broke nothing. ``rtol`` is per
     port because a published optimum is rounded and a solved one is not."""
-    with lps.solve(port['model'], sources(port['name'])) as solution:
+    with lps.solve(port['model'], port_sources(port['name'])) as solution:
         assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol']), (
             f'{port["name"]} disagrees with {port["provenance"]}'
@@ -76,7 +61,7 @@ def test_port_reaches_the_reference_duals(port: dict[str, Any]) -> None:
     if not expected:
         pytest.skip(f'{port["name"]} records no duals (a MILP has none)')
 
-    with lps.solve(port['model'], sources(port['name'])) as solution:
+    with lps.solve(port['model'], port_sources(port['name'])) as solution:
         for constraint, table in expected.items():
             dims = [c for c in table if c != 'value']
             got = solution.dual(constraint).sort(dims)
