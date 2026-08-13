@@ -1732,3 +1732,66 @@ def test_two_solutions_over_different_members_concatenate():
             frames.append(bound.solve().primal('x'))
 
     assert pl.concat(frames).height == 4
+
+
+#: `a` spells its sparsity out as zeros rather than as absent rows, which is
+#: what a caller handing over a dense table does. `i=1` is zero throughout, so
+#: that row asserts `0 >= 10` and is infeasible.
+SPELLED_ZEROS_MODEL = {
+    'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
+    'parameters': {'a': {'dims': ['i', 'j']}},
+    'variables': {'x': {'foreach': ['j'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'c': {'foreach': ['i'], 'expression': 'sum(a * x, over=j) >= 10'}},
+    'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=j)'}},
+}
+
+
+def _spelled_zeros(rows: list[list[float]]) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            'i': [i for i, r in enumerate(rows) for _ in r],
+            'j': [j for r in rows for j, _ in enumerate(r)],
+            'value': [v for r in rows for v in r],
+        }
+    )
+
+
+def test_a_coefficient_of_zero_is_not_handed_to_the_solver():
+    """Absence and a spelled-out zero say the same thing, so they cost the same.
+
+    A sparse parameter never builds a term; one that spells its zeros out used
+    to build one per zero, and a solver loads and presolves away every one.
+    """
+    a = _spelled_zeros([[1.0, 0.0, 0.0, 2.0], [0.0, 3.0, 0.0, 0.0]])
+    with lps.build(SPELLED_ZEROS_MODEL, {'a': a}) as bound:
+        tables = bound._engine._tables()
+        assert tables.matrix.height == 3, 'the five zero coefficients reached the matrix'
+        assert list(tables.matrix['coeff']) == [1.0, 2.0, 3.0], 'the surviving coefficients are the nonzero ones'
+
+
+def test_a_row_of_only_zeros_stays_the_infeasibility_it_is():
+    """Pruning may not turn `0 >= 10` into no constraint at all.
+
+    A row whose every coefficient is zero owns no matrix entries once they are
+    pruned, which is exactly the shape `_drop_termless_rows` removes — so the
+    prune has to run after that rule rather than before it. Removing the row
+    would report `optimal` for a model with no feasible point.
+    """
+    a = _spelled_zeros([[1.0, 1.0], [0.0, 0.0]])
+    with lps.build(SPELLED_ZEROS_MODEL, {'a': a}) as bound:
+        tables = bound._engine._tables()
+        assert tables.row_count == 2, 'the all-zero row was dropped instead of kept'
+        assert list(np.diff(tables.row_starts)) == [2, 0], 'the all-zero row should own no entries'
+        assert bound.solve().termination_condition == 'infeasible', 'a row asserting 0 >= 10 came back feasible'
+
+
+def test_a_zero_objective_coefficient_is_not_handed_to_the_solver():
+    """A cost of zero and no cost at all are the same instruction."""
+    a = _spelled_zeros([[1.0, 1.0]])
+    model = override(SPELLED_ZEROS_MODEL, **{'objectives.o': {'sense': 'minimize', 'expression': 'x * cost'}})
+    model['parameters'] = {**model['parameters'], 'cost': {'dims': ['j']}}
+    cost = pl.DataFrame({'j': [0, 1], 'value': [0.0, 5.0]})
+    with lps.build(model, {'a': a, 'cost': cost}) as bound:
+        tables = bound._engine._tables()
+        assert tables.obj.height == 1, 'the zero-cost column reached the objective frame'
+        assert list(tables.obj['coeff']) == [5.0]
