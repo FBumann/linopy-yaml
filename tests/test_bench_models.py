@@ -46,24 +46,26 @@ def test_the_corpus_is_not_empty():
     assert len(_models()) >= 6, f'expected the bench corpus to be found; got {CASE_NAMES}'
 
 
+@pytest.fixture(scope='module')
+def bench_cases():
+    return pytest.importorskip('bench.cases', reason='needs pandas; the bare install has none')
+
+
 @pytest.mark.parametrize('case', CASE_NAMES)
-def test_a_bench_case_builds_on_the_smallest_rung(case: str, tmp_path: Path):
+def test_a_bench_case_builds_on_the_smallest_rung(case: str, tmp_path: Path, bench_cases):
     """Loading is not building, which is why both gates exist: `sector` passed
     `check()` and then died in the engine on a presence key a broadcast had
     widened (#345). The smallest rung costs milliseconds, so that difference is
     worth holding here rather than on a labelled runner.
     """
-    bench_cases = pytest.importorskip('bench.cases', reason='needs pandas; the bare install has none')
-
     spec = bench_cases.CASES[case]
     sources = spec.write(spec.shape('xs'), tmp_path)
     with lps.build(spec.model, sources) as bound:
         assert bound is not None
 
 
-def test_every_model_backs_a_case():
+def test_every_model_backs_a_case(bench_cases):
     """A model nothing runs, or a case whose model was renamed away. The two
     lists are matched by stem, which is what the parametrisation above assumes.
     """
-    bench_cases = pytest.importorskip('bench.cases', reason='needs pandas; the bare install has none')
     assert sorted(bench_cases.CASES) == CASE_NAMES

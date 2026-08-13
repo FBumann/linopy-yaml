@@ -18,26 +18,26 @@ this set).
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import yaml as pyyaml
 
 import lpspec as lps
+from tests.conftest import MODEL_PATHS
 
-EXAMPLES = sorted(Path('examples').glob('*.yaml'))
-PORTS = sorted(Path('examples/ports').glob('*.yaml'))
-CORPUS = EXAMPLES + PORTS
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_the_corpus_is_not_empty():
-    """A guard on the guard: the parametrised tests below pass vacuously if the
-    globs stop matching, which a directory rename would do silently."""
-    assert len(EXAMPLES) >= 5, f'examples/ looks wrong: {EXAMPLES}'
-    assert len(PORTS) >= 5, f'examples/ports/ looks wrong: {PORTS}'
+    """A guard on the guard: the parametrised tests below pass vacuously if
+    ``constructs.models()`` stops finding anything, which a directory rename
+    would do silently."""
+    assert len(MODEL_PATHS) >= 10, f'the model corpus looks wrong: {MODEL_PATHS}'
 
 
-@pytest.mark.parametrize('path', CORPUS, ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
 def test_a_model_survives_a_round_trip(path: Path):
     """`load -> to_yaml -> load` is the same model, field for field."""
     original = lps.load_model(path)
@@ -47,7 +47,7 @@ def test_a_model_survives_a_round_trip(path: Path):
     assert reloaded.model_dump() == original.model_dump(), f'{path} does not survive a round trip'
 
 
-@pytest.mark.parametrize('path', CORPUS, ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
 def test_the_two_out_forms_agree(path: Path):
     """`to_dict` is what `to_yaml` writes, so a caller cannot get two answers.
 
@@ -62,7 +62,7 @@ def test_the_two_out_forms_agree(path: Path):
     assert lps.load_model(model.to_dict()).model_dump() == model.model_dump()
 
 
-@pytest.mark.parametrize('path', CORPUS, ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
 def test_the_dump_is_stable(path: Path):
     """Dumping twice gives the same bytes.
 
@@ -104,7 +104,7 @@ def test_a_declared_version_survives():
     assert 'version: 0' in text
 
 
-@pytest.mark.parametrize('path', CORPUS, ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
 def test_the_review_copy_states_the_objective_sense(path: Path):
     """`sense` is emitted even at its default — the one word a reviewer must
     not have to infer.

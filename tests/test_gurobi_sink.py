@@ -63,20 +63,26 @@ INFEASIBLE = {
     'objectives': {'c': {'sense': 'minimize', 'expression': 'p'}},
 }
 
-DATA: dict[str, dict[str, Any]] = {
-    'LP': {
-        'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]}),
-        'price': pl.DataFrame({'t': [0, 1, 2], 'value': [10.0, 20.0, 30.0]}),
-    },
-    'MAX': {'cap': pl.DataFrame({'t': [0, 1], 'value': [3.0, 4.0]})},
-    'MIP': {
-        'w': pl.DataFrame({'i': [0, 1, 2], 'value': [2.0, 3.0, 4.0]}),
-        'cap': pl.DataFrame({'one': [0], 'value': [5.0]}),
-    },
-    'INFEASIBLE': {'load': pl.DataFrame({'t': [0], 'value': [99.0]})},
+#: Each case is the ``(model, data)`` pair a call site unpacks:
+#: ``lps.solve(*CASES['MIP'])``.
+CASES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
+    'LP': (
+        LP,
+        {
+            'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]}),
+            'price': pl.DataFrame({'t': [0, 1, 2], 'value': [10.0, 20.0, 30.0]}),
+        },
+    ),
+    'MAX': (MAX, {'cap': pl.DataFrame({'t': [0, 1], 'value': [3.0, 4.0]})}),
+    'MIP': (
+        MIP,
+        {
+            'w': pl.DataFrame({'i': [0, 1, 2], 'value': [2.0, 3.0, 4.0]}),
+            'cap': pl.DataFrame({'one': [0], 'value': [5.0]}),
+        },
+    ),
+    'INFEASIBLE': (INFEASIBLE, {'load': pl.DataFrame({'t': [0], 'value': [99.0]})}),
 }
-
-MODELS = {'LP': LP, 'MAX': MAX, 'MIP': MIP}
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +101,7 @@ def test_gurobi_and_highs_agree(name: str, variable: str, constraint: str | None
     duals under ``maximize``, where a sign convention could differ and nothing
     else in the suite would notice.
     """
-    with lps.solve(MODELS[name], DATA[name]) as highs, lps.solve(MODELS[name], DATA[name], solver_name='gurobi') as gb:
+    with lps.solve(*CASES[name]) as highs, lps.solve(*CASES[name], solver_name='gurobi') as gb:
         assert gb.termination_condition == highs.termination_condition
         assert gb.objective == pytest.approx(highs.objective)
 
@@ -124,7 +130,7 @@ def test_block_boundaries_do_not_move_the_answer() -> None:
     """``batch_rows=1`` forces one block per row, so every CSR view is built at
     a boundary — where an off-by-one in ``indptr`` shifts coefficients into the
     neighbouring row rather than dropping them."""
-    with lps.build(LP, DATA['LP']) as bound:
+    with lps.build(*CASES['LP']) as bound:
         whole = bound.solve(solver_name='gurobi')
         ragged = bound._engine.solve('gurobi', batch_rows=1)
         assert ragged.objective == pytest.approx(whole.objective)
@@ -137,7 +143,7 @@ def test_block_boundaries_do_not_move_the_answer() -> None:
 
 
 def test_an_infeasible_solve_reports_both_axes_in_gurobis_wording() -> None:
-    with lps.solve(INFEASIBLE, DATA['INFEASIBLE'], solver_name='gurobi') as solution:
+    with lps.solve(*CASES['INFEASIBLE'], solver_name='gurobi') as solution:
         assert solution.status == 'warning'
         assert solution.termination_condition == 'infeasible'
         assert not solution.has_primal
@@ -149,7 +155,7 @@ def test_an_infeasible_solve_reports_both_axes_in_gurobis_wording() -> None:
 def test_a_mixed_integer_model_has_no_duals() -> None:
     """Gurobi refuses ``Pi`` rather than returning zeros; the sink passes the
     refusal on as the ``None`` that makes ``dual`` explain itself."""
-    with lps.solve(MIP, DATA['MIP'], solver_name='gurobi') as solution:
+    with lps.solve(*CASES['MIP'], solver_name='gurobi') as solution:
         assert solution.has_primal
         with pytest.raises(LpspecError, match='mixed-integer'):
             solution.dual('budget')
@@ -160,10 +166,10 @@ def test_solver_options_reach_gurobi() -> None:
     ``time_limit``. Forwarding is the contract; translating names is not, and
     an option the solver does not know reaches the caller as the solver's own
     complaint rather than as a guess at what was meant."""
-    with lps.solve(MIP, DATA['MIP'], solver_options={'TimeLimit': 0.0}, solver_name='gurobi') as solution:
+    with lps.solve(*CASES['MIP'], solver_options={'TimeLimit': 0.0}, solver_name='gurobi') as solution:
         assert solution.termination_condition == 'time_limit'
     with pytest.raises(gurobipy.GurobiError, match='no_such_parameter'):
-        lps.solve(MIP, DATA['MIP'], solver_options={'no_such_parameter': 1}, solver_name='gurobi')
+        lps.solve(*CASES['MIP'], solver_options={'no_such_parameter': 1}, solver_name='gurobi')
 
 
 # ---------------------------------------------------------------------------
@@ -180,14 +186,14 @@ def test_solver_options_land_on_the_environment() -> None:
     through an ordinary parameter, since a licence one would need a licence:
     the model sees it as its default, which is what environment-level means.
     """
-    with lps.build(MIP, DATA['MIP']) as bound:
+    with lps.build(*CASES['MIP']) as bound:
         assert build_gurobi(bound._engine._tables(), solver_options={'TimeLimit': 5.0}).Params.TimeLimit == 5.0
 
 
 def test_build_gurobi_loads_the_model_and_stops() -> None:
     """`bench/`'s seam: the hand-off with no search behind it, so what it
     reports is what was loaded rather than what was solved."""
-    with lps.build(MIP, DATA['MIP']) as bound:
+    with lps.build(*CASES['MIP']) as bound:
         tables = bound._engine._tables()
         m = build_gurobi(tables)
         assert (m.NumVars, m.NumConstrs) == (tables.column_count, tables.row_count)
@@ -205,7 +211,7 @@ def test_nothing_keeps_a_built_model_alive() -> None:
     the process. A held :class:`Gurobi` does not depend on this — its
     ``close()`` disposes both explicitly.
     """
-    with lps.build(MIP, DATA['MIP']) as bound:
+    with lps.build(*CASES['MIP']) as bound:
         reference = weakref.ref(build_gurobi(bound._engine._tables()))
     gc.collect()
     assert reference() is None, 'a built gurobi model outlived its caller — its environment cannot be released'
@@ -215,7 +221,7 @@ def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     """Gurobi has ``ObjCon``, so the constant is part of the model it holds —
     which makes the build seam a complete hand-off rather than a model plus a
     number to remember."""
-    with lps.build(MAX, DATA['MAX']) as bound:
+    with lps.build(*CASES['MAX']) as bound:
         assert build_gurobi(bound._engine._tables()).ObjCon == pytest.approx(5.0)
 
 
@@ -229,7 +235,7 @@ def test_the_missing_extra_is_named() -> None:
             raise ModuleNotFoundError(f'No module named {name!r}')
         return real_import(name, *args, **kwargs)
 
-    with lps.build(LP, DATA['LP']) as bound, pytest.MonkeyPatch.context() as patch:
+    with lps.build(*CASES['LP']) as bound, pytest.MonkeyPatch.context() as patch:
         patch.setattr(builtins, '__import__', refuse)
         with pytest.raises(ModuleNotFoundError, match=r'\[gurobi\] extra \(gurobipy, scipy\)'):
             bound.solve(solver_name='gurobi')

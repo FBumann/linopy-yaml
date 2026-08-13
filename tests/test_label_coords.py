@@ -150,17 +150,18 @@ def test_the_legend_names_a_label():
     assert 'period' in text
 
 
-def test_the_eager_lane_reads_the_same_index(tmp_path):
-    pytest.importorskip('linopy')
-    pd = pytest.importorskip('pandas')
-    import yaml as pyyaml
+def test_both_lanes_read_the_same_index():
+    """The inline `period` column arrives with the index on the eager lane too —
+    both lanes reach the 6.0 the relational test above asserts.
 
-    from lpspec import linopy as lpspec_linopy
+    The oracle is imported in the body rather than at module scope: every other
+    test here is linopy-free and has to keep running on the bare install, so
+    this one test skips there instead of failing on a missing pandas.
+    """
+    from tests.differential import differential
+    from tests.oracle import pd
 
-    path = tmp_path / 'm.yaml'
-    path.write_text(pyyaml.safe_dump(_model()))
     data = {'load': pd.Series({0: 1.0, 1: 2.0, 2: 3.0}).rename_axis('snapshot')}
     coords = {'snapshot': pd.DataFrame({'snapshot': [0, 1, 2], 'period': [1, 1, 2]})}
-    m = lpspec_linopy.build(path, data=data, coords=coords)
-    m.solve(solver_name='highs', output_flag=False)
-    assert float(m.objective.value) == pytest.approx(6.0)
+    with differential(_model(), data, coords) as run:
+        assert run.oracle == pytest.approx(6.0)

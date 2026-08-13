@@ -39,6 +39,7 @@ from __future__ import annotations
 import pytest
 
 from lpspec.errors import DataError
+from tests.conftest import override
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
@@ -388,6 +389,20 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
         )
 
 
+#: The divisor fixture: every test below is this model but for one thing, and
+#: :func:`override` states the one thing.
+DIVISOR_MODEL = {
+    'dimensions': {'f': {'values': ['a', 'b']}},
+    'parameters': {'d': {'dims': ['f']}},
+    'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {'c': {'foreach': ['f'], 'expression': 'x / d <= 10'}},
+    'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(x, over=f)'}},
+}
+
+#: ``d`` covers ``a`` and not ``b`` — the gap every case below turns on.
+SPARSE_D = {'d': pd.Series([2.0], index=pd.Index(['a'], name='f'))}
+
+
 def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
     """The one position with no defensible fill (#312).
 
@@ -403,20 +418,11 @@ def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
     shape of defect that needs a test saying what the answer *should* be, not
     that the lanes concur.
     """
-    model = {
-        'dimensions': {'f': {'values': ['a', 'b']}},
-        'parameters': {'d': {'dims': ['f']}},
-        'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
-        'constraints': {'c': {'foreach': ['f'], 'expression': 'x / d <= 10'}},
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(x, over=f)'}},
-    }
-    sparse = {'d': pd.Series([2.0], index=pd.Index(['a'], name='f'))}
-
-    with pytest.raises(DataError, match='used as a divisor'), differential(model, sparse) as run:
+    with pytest.raises(DataError, match='used as a divisor'), differential(DIVISOR_MODEL, SPARSE_D) as run:
         _ = run.result.objective
 
     dense = {'d': pd.Series([2.0, 5.0], index=pd.Index(['a', 'b'], name='f'))}
-    with differential(model, dense, lp=True) as run:
+    with differential(DIVISOR_MODEL, dense, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(70.0, rel=RTOL), (
             'covered, the same model builds and the row binds on both lanes'
         )
@@ -430,16 +436,16 @@ def test_a_sparse_divisor_in_the_objective_is_refused_too():
     check only on constraints would let the same quotient through here, and
     the optimum would simply be missing terms.
     """
-    model = {
-        'dimensions': {'f': {'values': ['a', 'b']}},
-        'parameters': {'d': {'dims': ['f']}},
-        'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 1, 'upper': 100}}},
-        'constraints': {'c': {'foreach': ['f'], 'expression': 'x <= 10'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x / d, over=f)'}},
-    }
-    sparse = {'d': pd.Series([2.0], index=pd.Index(['a'], name='f'))}
-
-    with pytest.raises(DataError, match='used as a divisor'), differential(model, sparse) as run:
+    model = override(
+        DIVISOR_MODEL,
+        **{
+            'variables.x.bounds.lower': 1,
+            'constraints.c.expression': 'x <= 10',
+            'objectives.o.sense': 'minimize',
+            'objectives.o.expression': 'sum(x / d, over=f)',
+        },
+    )
+    with pytest.raises(DataError, match='used as a divisor'), differential(model, SPARSE_D) as run:
         _ = run.result.objective
 
 
@@ -452,17 +458,14 @@ def test_a_divisor_may_be_sparse_where_the_row_is_masked_out():
     that ignores the mask still passes every test above: it only ever refuses
     *more*, and nothing else here asks it to accept something.
     """
-    model = {
-        'dimensions': {'f': {'values': ['a', 'b']}},
-        'parameters': {'d': {'dims': ['f']}, 'active': {'dims': ['f'], 'dtype': 'bool'}},
-        'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
-        'constraints': {'c': {'foreach': ['f'], 'where': 'active', 'expression': 'x / d <= 10'}},
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(x, over=f)'}},
-    }
-    data = {
-        'd': pd.Series([2.0], index=pd.Index(['a'], name='f')),
-        'active': pd.Series([True], index=pd.Index(['a'], name='f')),
-    }
+    model = override(
+        DIVISOR_MODEL,
+        **{
+            'parameters.active': {'dims': ['f'], 'dtype': 'bool'},
+            'constraints.c.where': 'active',
+        },
+    )
+    data = SPARSE_D | {'active': pd.Series([True], index=pd.Index(['a'], name='f'))}
     with differential(model, data, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(120.0, rel=RTOL), (
             'f=a: the row binds at x <= 20. f=b: masked out, so x runs to its bound'
@@ -470,27 +473,13 @@ def test_a_divisor_may_be_sparse_where_the_row_is_masked_out():
 
 
 @pytest.mark.parametrize(
-    ('label', 'variables', 'constraint', 'objective', 'expected'),
+    ('patch', 'expected'),
     [
-        pytest.param(
-            'where on the row',
-            {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
-            {'foreach': ['f'], 'where': 'd', 'expression': 'x / d <= 10'},
-            'sum(x, over=f)',
-            120.0,
-            id='mask-the-row',
-        ),
-        pytest.param(
-            'mask the variable',
-            {'x': {'foreach': ['f'], 'where': 'd', 'bounds': {'lower': 0, 'upper': 100}}},
-            {'foreach': ['f'], 'expression': 'x / d <= 10'},
-            'sum(x, over=f)',
-            20.0,
-            id='mask-the-variable',
-        ),
+        pytest.param({'constraints.c.where': 'd'}, 120.0, id='mask-the-row'),
+        pytest.param({'variables.x.where': 'd'}, 20.0, id='mask-the-variable'),
     ],
 )
-def test_a_sparse_divisor_has_an_escape(label, variables, constraint, objective, expected):
+def test_a_sparse_divisor_has_an_escape(patch, expected):
     """Sparse data is the ordinary case, so the refusal must be escapable.
 
     Both spellings say the same thing in different places — *this coordinate has
@@ -498,13 +487,7 @@ def test_a_sparse_divisor_has_an_escape(label, variables, constraint, objective,
     actually divides rather than whether the divisor is dense. A refusal with no
     way out would be worse than the silent answer it replaced.
     """
-    model = {
-        'dimensions': {'f': {'values': ['a', 'b']}},
-        'parameters': {'d': {'dims': ['f']}},
-        'variables': variables,
-        'constraints': {'c': constraint},
-        'objectives': {'o': {'sense': 'maximize', 'expression': objective}},
-    }
-    data = {'d': pd.Series([2.0], index=pd.Index(['a'], name='f'))}
-    with differential(model, data, lp=True) as run:
-        assert float(run.result.objective) == pytest.approx(expected, rel=RTOL), label
+    with differential(override(DIVISOR_MODEL, **patch), SPARSE_D, lp=True) as run:
+        assert float(run.result.objective) == pytest.approx(expected, rel=RTOL), (
+            'either spelling of "this coordinate has no row" lifts the refusal'
+        )

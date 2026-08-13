@@ -8,8 +8,6 @@ than only through the answer it produces.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 
@@ -30,10 +28,10 @@ from lpspec.relational.plan import (
     divisor_parameters,
 )
 from lpspec.sources import tidy_sources
-from tests.conftest import resolved, schema_of
+from tests.conftest import EXAMPLES_DIR, resolved, schema_of
 from tests.differential import differential
 
-DISPATCH_YAML = Path('examples/dispatch.yaml')
+DISPATCH_YAML = EXAMPLES_DIR / 'dispatch.yaml'
 
 
 @pytest.fixture
@@ -41,7 +39,7 @@ def dispatch_schema() -> Model:
     return schema_of(DISPATCH_YAML)
 
 
-def test_dispatch_yaml_agrees_variable_by_variable(dispatch_yaml, dispatch_inputs):
+def test_dispatch_yaml_agrees_variable_by_variable(dispatch_inputs):
     """The two lanes agree variable by variable, not only in total.
 
     An objective can agree while the dispatch behind it differs, which is what

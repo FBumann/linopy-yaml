@@ -27,8 +27,9 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from tests.conftest import EXAMPLES_DIR
 
-MULTI_PERIOD = Path('examples/multi_period.yaml')
+MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
 PAGE = Path('docs/models/multi_period.md')
 
 #: 2030 is modelled at four snapshots and 2050 at two — the whole reason the
@@ -39,7 +40,7 @@ PERIOD_OF = [2030, 2030, 2030, 2030, 2050, 2050]
 GENERATORS = ['wind', 'gas']
 
 
-def _sources():
+def _sources(capex_2050_wind: float = 8.0):
     return {
         'snapshot': pl.DataFrame({'snapshot': SNAPSHOTS, 'period': PERIOD_OF}),
         'period': pl.DataFrame({'period': [2030, 2050]}),
@@ -51,7 +52,7 @@ def _sources():
             {
                 'generator': GENERATORS * 2,
                 'period': [2030, 2030, 2050, 2050],
-                'value': [10.0, 2.0, 8.0, 2.0],
+                'value': [10.0, 2.0, capex_2050_wind, 2.0],
             }
         ),
     }
@@ -86,18 +87,10 @@ def test_a_period_bound_actually_binds():
     and the objective unchanged, which is the failure this rules out. The cap
     is applied by making 2050 capacity ruinously expensive.
     """
-    sources = _sources()
-    with lps.solve(MULTI_PERIOD, sources) as unbounded:
+    with lps.solve(MULTI_PERIOD, _sources()) as unbounded:
         base = unbounded.objective
 
-    sources['capex'] = pl.DataFrame(
-        {
-            'generator': GENERATORS * 2,
-            'period': [2030, 2030, 2050, 2050],
-            'value': [10.0, 2.0, 80.0, 2.0],
-        }
-    )
-    with lps.solve(MULTI_PERIOD, sources) as dearer:
+    with lps.solve(MULTI_PERIOD, _sources(capex_2050_wind=80.0)) as dearer:
         assert dearer.objective > base, 'the per-period capacity bound is not reaching the snapshots'
 
 

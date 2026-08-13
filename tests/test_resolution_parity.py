@@ -9,36 +9,15 @@ pass, each of these built a model on one lane and raised on the other.
 from __future__ import annotations
 
 import datetime
-from copy import deepcopy
 
 import polars as pl
 import pytest
 import yaml as pyyaml
 
 import lpspec as lps
-from tests.conftest import DISPATCH_MODEL, override
+from tests.conftest import dispatch_model_path, override
+from tests.differential import differential
 from tests.oracle import lpspec_linopy, pd  # skips the module without the [linopy] extra
-
-
-@pytest.fixture
-def data():
-    return {
-        'p_max': pd.Series({'wind': 100.0, 'gas': 200.0}),
-        'cost': pd.Series({'wind': 0.0, 'gas': 50.0}),
-        'load': pd.Series([80.0] * 4, index=pd.RangeIndex(4, name='snapshot')),
-    }
-
-
-@pytest.fixture
-def coords():
-    return {'snapshot': pd.RangeIndex(4, name='snapshot')}
-
-
-def _write(tmp_path, **patch):
-    """The eager lane only takes a path, so a varied model has to hit disk."""
-    path = tmp_path / 'm.yaml'
-    path.write_text(pyyaml.safe_dump(override(DISPATCH_MODEL, **patch)))
-    return path
 
 
 @pytest.mark.parametrize(
@@ -51,8 +30,9 @@ def _write(tmp_path, **patch):
         pytest.param('snapshot', 'bare dimension name is true at every coordinate', id='a-bare-dimension-name'),
     ],
 )
-def test_both_lanes_refuse_the_same_where(tmp_path, data, coords, where, match):
-    path = _write(tmp_path, **{'variables.p.where': where})
+def test_both_lanes_refuse_the_same_where(tmp_path, dispatch_model_inputs, where, match):
+    data, coords = dispatch_model_inputs
+    path = dispatch_model_path(tmp_path, **{'variables.p.where': where})
 
     with pytest.raises(ValueError, match=match):
         lpspec_linopy.build(path, data=data, coords=coords)
@@ -87,14 +67,15 @@ COVERED_ELSEWHERE = {
 
 
 @pytest.mark.parametrize('where', ACCEPTED)
-def test_both_lanes_build_the_same_model(tmp_path, data, coords, where):
+def test_both_lanes_build_the_same_model(tmp_path, dispatch_model_inputs, where):
     """Both lanes agree on *which* model they built, feasible or not.
 
     A mask that excludes snapshot 0 leaves the balance row unsatisfiable; that
     is not the claim here, and neither lane is asked to make every mask
     feasible.
     """
-    path = _write(tmp_path, **{'variables.p.where': where})
+    data, coords = dispatch_model_inputs
+    path = dispatch_model_path(tmp_path, **{'variables.p.where': where})
 
     m = lpspec_linopy.build(path, data=data, coords=coords)
     eager_rows = int((m.variables['p'].labels != -1).sum())
@@ -145,7 +126,7 @@ def test_every_resolved_predicate_is_parity_tested():
     )
 
 
-def test_a_constraint_row_left_with_no_variables(tmp_path, data, coords):
+def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_model_inputs):
     """A masked *variable* can orphan an unmasked *constraint* row — and both
     lanes now agree that such a row is not built.
 
@@ -162,7 +143,8 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, data, coords):
     The omission is asserted too. Dropping a declared row is only defensible
     because the build says it happened.
     """
-    path = _write(tmp_path, **{'variables.p.where': 'snapshot > 0'})
+    data, coords = dispatch_model_inputs
+    path = dispatch_model_path(tmp_path, **{'variables.p.where': 'snapshot > 0'})
 
     m = lpspec_linopy.build(path, data=data, coords=coords)
     eager_status = m.solve(solver_name='highs')[1]
@@ -185,28 +167,18 @@ BOOL_MASK_MODEL = {
 }
 
 
-def test_a_bool_parameter_is_a_mask_on_both_lanes(tmp_path):
+def test_a_bool_parameter_is_a_mask_on_both_lanes():
     """A bool parameter reads as its own value: true masks in, false masks out,
     and an absent row masks out. Was: the relational lane raised
     `isfinite(BOOLEAN)` at build, and the eager lane read false as true.
     """
-    import pandas as pd
-
-    path = tmp_path / 'm.yaml'
-    path.write_text(pyyaml.safe_dump(BOOL_MASK_MODEL))
     data = {
         'active': pd.Series({0: True, 1: False}),
         'cap': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}),
     }
 
-    m = lpspec_linopy.build(path, data=data)
-    m.solve(solver_name='highs')
-    eager = float(m.objective.value)
-
-    with lps.solve(path, data) as result:
-        relational = result.objective
-
-    assert eager == relational == 1.0
+    with differential(BOOL_MASK_MODEL, data) as run:
+        assert run.oracle == 1.0, 'true masks the floor in at t=0 only, so exactly one x sits at its cap'
 
 
 #: A budget row over no dims, because `sum` reduces the only one away — and a
@@ -224,7 +196,7 @@ SCALAR_ROW_MODEL = {
 }
 
 
-def test_the_empty_coordinate_builds_on_both_lanes(tmp_path):
+def test_the_empty_coordinate_builds_on_both_lanes():
     """A scalar row, a scalar column and a scalar value, in one model (#320).
 
     Was: the eager lane built all three and solved; the relational lane raised
@@ -236,32 +208,23 @@ def test_the_empty_coordinate_builds_on_both_lanes(tmp_path):
     Underneath both guards `_coordinate_product` asserted that no declaration
     arrives dimensionless. A product over nothing has one coordinate, not none.
     """
-    path = tmp_path / 'm.yaml'
-    path.write_text(pyyaml.safe_dump(SCALAR_ROW_MODEL))
     data = {'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
 
-    m = lpspec_linopy.build(path, data=data)
-    m.solve(solver_name='highs')
-    eager = float(m.objective.value)
-
-    with lps.solve(path, data) as result:
-        relational = result.objective
-        assert result.dual('budget_row').height == 1, 'each claim is one — not zero, and not one per f'
-        assert result.primal('slack').to_dicts() == [{'value': 10.0}]
-        assert result.primal('x').sort('f')['value'].to_list() == [0.0, 30.0, 100.0]
-
-    assert eager == relational == 360.0
+    with differential(SCALAR_ROW_MODEL, data) as run:
+        assert run.oracle == 360.0
+        assert run.result.dual('budget_row').height == 1, 'each claim is one — not zero, and not one per f'
+        assert run.result.primal('slack').to_dicts() == [{'value': 10.0}]
+        assert run.result.primal('x').sort('f')['value'].to_list() == [0.0, 30.0, 100.0]
 
 
 @pytest.mark.parametrize(
     ('threshold', 'rows', 'objective'),
     [
-        (999.0, 0, 600.0),
-        (10.0, 1, 360.0),
+        pytest.param(999.0, 0, 600.0, id='masked-out'),
+        pytest.param(10.0, 1, 360.0, id='masked-in'),
     ],
-    ids=['masked out', 'masked in'],
 )
-def test_a_masked_scalar_variable_takes_its_row_with_it(tmp_path, threshold, rows, objective):
+def test_a_masked_scalar_variable_takes_its_row_with_it(threshold, rows, objective):
     """Absence spreads through arithmetic at no dimension either (#340).
 
     Was: the relational lane kept `budget_row` and enforced `sum(x) <= budget`
@@ -276,21 +239,12 @@ def test_a_masked_scalar_variable_takes_its_row_with_it(tmp_path, threshold, row
     must drop the row or keep it depending only on what `budget` turns out to
     be.
     """
-    model = deepcopy(SCALAR_ROW_MODEL)
-    model['variables']['slack']['where'] = f'budget > {threshold}'
-    path = tmp_path / 'm.yaml'
-    path.write_text(pyyaml.safe_dump(model))
+    model = override(SCALAR_ROW_MODEL, **{'variables.slack.where': f'budget > {threshold}'})
     data = {'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
 
-    m = lpspec_linopy.build(path, data=data)
-    m.solve(solver_name='highs')
-    eager = float(m.objective.value)
-
-    with lps.solve(path, data) as result:
-        relational = result.objective
-        assert result.dual('budget_row').height == rows, 'the row is gone, not slackened: a dropped row has no dual'
-
-    assert eager == relational == objective
+    with differential(model, data) as run:
+        assert run.oracle == objective
+        assert run.result.dual('budget_row').height == rows, 'the row is gone, not slackened: a dropped row has no dual'
 
 
 DATETIME_MODEL = {

@@ -19,6 +19,7 @@ import pytest
 
 import lpspec as lps
 from lpspec import strategy
+from tests.conftest import DISPATCH_MODEL, override
 
 # ---------------------------------------------------------------------------
 # models
@@ -26,17 +27,8 @@ from lpspec import strategy
 
 #: Dispatch, with a scenario-free declaration — the slice column never appears
 #: in the model, which is what lets `EachCoordinate` need no language support.
-DISPATCH = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
-    'parameters': {
-        'p_max': {'dims': ['generator']},
-        'cost': {'dims': ['generator']},
-        'load': {'dims': ['snapshot']},
-    },
-    'variables': {'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'balance': {'foreach': ['snapshot'], 'expression': 'sum(p, over=generator) == load'}},
-    'objectives': {'total': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'}},
-}
+#: The conftest model with the generators coming from data rather than declared.
+DISPATCH = override(DISPATCH_MODEL, **{'dimensions.generator': {'dtype': 'str'}})
 
 #: Storage over a *local* index, with the seam split out by a `where` on a dim
 #: literal. `soc_step` carries no `edge=`, so its vacated row drops and the
@@ -152,6 +144,11 @@ def scenario_sources() -> dict[str, object]:
     return {**STATIC, 'load': pl.DataFrame(rows)}
 
 
+def _draw(base: dict, scenario: str, snapshots: int = 4) -> pl.DataFrame:
+    """One scenario's load, cut to its first *snapshots* coordinates."""
+    return base['load'].filter(pl.col('scenario') == scenario).drop('scenario').head(snapshots)
+
+
 def multi_store_sources(periods: int = 12) -> dict[str, object]:
     """Two stores, each with a real starting level worth handing across a seam."""
     return {
@@ -180,6 +177,15 @@ def horizon_sources(periods: int = 12) -> dict[str, object]:
     }
 
 
+def coordinate_sources(coordinates: list, load: float = 5.0) -> dict[str, object]:
+    """Six coordinates of flat load, whatever the coordinates are."""
+    return {
+        **STATIC,
+        'load': pl.DataFrame({'snapshot': coordinates, 'value': [load] * 6}),
+        'soc_initial': pl.DataFrame({'value': [0.0]}),
+    }
+
+
 #: Window geometries whose *tail* differs — the only place a windowing rule
 #: goes wrong. Between them these cover a final window of one, a final window
 #: of ``step``, a horizon shorter than a single window, and a tail that divides
@@ -191,19 +197,52 @@ GEOMETRIES = [
     for step in range(1, length + 1)
 ]
 
+#: The one contiguous geometry most window tests share — frozen, so sharing is safe.
+WINDOW_AXIS = lps.EachWindow('snapshot', length=4, step=4, into='t')
+
+
+@pytest.fixture(scope='module')
+def sweep() -> strategy.Runs:
+    """The scenario sweep, solved once for every test that only reads it."""
+    return lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+
+
+@pytest.fixture(scope='module')
+def overlapping() -> strategy.Runs:
+    """The overlapping-window sweep, solved once for every test that only reads it."""
+    return lps.solve_over(
+        WINDOW,
+        horizon_sources(12),
+        lps.EachWindow('snapshot', length=6, step=3, into='t'),
+        carry={'soc_initial': ('soc', 2)},  # the last *kept* row, not the last row
+    )
+
+
+@pytest.fixture
+def builds(monkeypatch):
+    """`spy(module)` — the models `module.build` produces from here on, live."""
+
+    def spy(module) -> list:
+        built: list = []
+        original = module.build
+        monkeypatch.setattr(module, 'build', lambda *a, **k: built.append(original(*a, **k)) or built[-1])
+        return built
+
+    return spy
+
 
 # ---------------------------------------------------------------------------
 # EachCoordinate — the independent case
 # ---------------------------------------------------------------------------
 
 
-def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers():
+def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
     """The model never mentions `scenario`; the driver filters and drops it.
 
     That is the whole reason this needs no language change — a slice is the
     same declaration bound to a narrower source.
     """
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+    runs = sweep
 
     assert len(runs) == 3
     assert runs.keys == ['high', 'low', 'mid'], 'keys come back sorted, not in data order'
@@ -215,7 +254,7 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers():
     assert by_key['low'] < by_key['mid'] < by_key['high'], 'a bigger load is a costlier dispatch'
 
 
-def test_a_serial_fold_builds_once_and_rebinds(monkeypatch):
+def test_a_serial_fold_builds_once_and_rebinds(builds):
     """The fold is a rebind loop, and it has to stay one.
 
     Every slice is the same math over different numbers, so nothing after the
@@ -223,9 +262,7 @@ def test_a_serial_fold_builds_once_and_rebinds(monkeypatch):
     because the difference is invisible in the answer, which is the whole point
     of `rebind` being total — a regression here is silent.
     """
-    built = []
-    original = strategy.build
-    monkeypatch.setattr(strategy, 'build', lambda *a, **k: built.append(original(*a, **k)) or built[-1])
+    built = builds(strategy)
 
     runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
 
@@ -235,7 +272,7 @@ def test_a_serial_fold_builds_once_and_rebinds(monkeypatch):
     assert (seen.loads, seen.solves) == (1, 3), 'one solver load, the slices differing only in numbers'
 
 
-def test_a_carried_fold_still_builds_once(monkeypatch):
+def test_a_carried_fold_still_builds_once(builds):
     """A carry writes a parameter, and a parameter the first slice already bound.
 
     So the sources a carried slice names are the ones before it named, and the
@@ -244,22 +281,15 @@ def test_a_carried_fold_still_builds_once(monkeypatch):
     fire, not a second instance of it — and because a rolling horizon is the
     driver with the most slices to lose the fast path on.
     """
-    built = []
-    original = strategy.build
-    monkeypatch.setattr(strategy, 'build', lambda *a, **k: built.append(original(*a, **k)) or built[-1])
+    built = builds(strategy)
 
-    runs = lps.solve_over(
-        WINDOW,
-        horizon_sources(),
-        lps.EachWindow('snapshot', length=4, step=4, into='t'),
-        carry={'soc_initial': ('soc', 3)},
-    )
+    runs = lps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, carry={'soc_initial': ('soc', 3)})
 
     assert runs.keys == [0, 4, 8]
     assert len(built) == 1, f'{len(built)} builds for three windows — the carry cost the fold its fast path'
 
 
-def test_a_pooled_fold_builds_per_slice(monkeypatch):
+def test_a_pooled_fold_builds_per_slice(builds):
     """The exception, and the reason for it: a built model cannot be pickled.
 
     Stated as a test because the two branches now differ in more than where
@@ -270,9 +300,7 @@ def test_a_pooled_fold_builds_per_slice(monkeypatch):
     """
     from lpspec import api
 
-    built = []
-    original = api.build
-    monkeypatch.setattr(api, 'build', lambda *a, **k: built.append(original(*a, **k)) or built[-1])
+    built = builds(api)
 
     with ThreadPoolExecutor(2) as pool:
         runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), executor=pool)
@@ -281,14 +309,13 @@ def test_a_pooled_fold_builds_per_slice(monkeypatch):
     assert len(built) == 3, 'a slice that may run in another process builds its own model'
 
 
-def test_each_slice_matches_solving_that_slice_alone():
+def test_each_slice_matches_solving_that_slice_alone(sweep):
     """The fold must not change the answer — the oracle is `solve` itself."""
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
-    folded = dict(zip(runs.objective['scenario'], runs.objective['objective'], strict=True))
+    folded = dict(zip(sweep.objective['scenario'], sweep.objective['objective'], strict=True))
 
     for scenario, expected in folded.items():
         one = scenario_sources()
-        one['load'] = one['load'].filter(pl.col('scenario') == scenario).drop('scenario')
+        one['load'] = _draw(one, scenario)
         with lps.solve(DISPATCH, one) as result:
             assert result.objective == pytest.approx(expected)
 
@@ -298,13 +325,12 @@ def test_an_axis_naming_a_column_no_source_carries_says_so():
         lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('draw'))
 
 
-def test_a_name_the_sweep_does_not_hold_says_what_it_does_hold():
+def test_a_name_the_sweep_does_not_hold_says_what_it_does_hold(sweep):
     """Everything a slice produced is kept, so a miss is a name, not a flag."""
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
     with pytest.raises(lps.LpspecError, match="no variable 'q' in this sweep"):
-        runs.primal('q')
+        sweep.primal('q')
     with pytest.raises(lps.LpspecError, match="no constraint 'nope' in this sweep"):
-        runs.dual('nope')
+        sweep.dual('nope')
 
 
 def test_a_sweep_that_solved_nothing_blames_the_solve():
@@ -334,12 +360,7 @@ def test_a_rolling_horizon_carries_state_across_the_seam():
     `soc_initial` is rebound per window from the previous window's last `soc`,
     which is the carry doing its one job — a copy, at a named index.
     """
-    runs = lps.solve_over(
-        WINDOW,
-        horizon_sources(),
-        lps.EachWindow('snapshot', length=4, step=4, into='t'),
-        carry={'soc_initial': ('soc', 3)},
-    )
+    runs = lps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, carry={'soc_initial': ('soc', 3)})
 
     assert runs.keys == [0, 4, 8]
     assert runs.primal('p').height == 3 * 4 * 2
@@ -349,27 +370,17 @@ def test_a_rolling_horizon_carries_state_across_the_seam():
     assert runs.objective['objective'].to_list() == pytest.approx([2270.0, 2770.0, 2655.0])
 
 
-def test_overlapping_windows_advance_by_step_and_look_ahead_by_length():
-    runs = lps.solve_over(
-        WINDOW,
-        horizon_sources(),
-        lps.EachWindow('snapshot', length=6, step=3, into='t'),
-        carry={'soc_initial': ('soc', 2)},  # the last *kept* row, not the last row
-    )
+def test_overlapping_windows_advance_by_step_and_look_ahead_by_length(overlapping):
+    runs = overlapping
     assert runs.keys == [0, 3, 6, 9]
     assert runs.primal('soc').filter(pl.col('snapshot_start') == 9).height == 3, (
         'the tail window is short rather than padded: 9..11 is three rows, not six'
     )
 
 
-def test_stitch_drops_the_overlap_and_restores_the_global_coordinate():
+def test_stitch_drops_the_overlap_and_restores_the_global_coordinate(overlapping):
     """The answer a rolling horizon is for, without the caller doing arithmetic."""
-    runs = lps.solve_over(
-        WINDOW,
-        horizon_sources(12),
-        lps.EachWindow('snapshot', length=6, step=3, into='t'),
-        carry={'soc_initial': ('soc', 2)},
-    )
+    runs = overlapping
     stitched = runs.primal('soc', original_index=True)
     assert stitched.columns == ['snapshot', 'value'], 'the slice bookkeeping is gone'
     assert stitched['snapshot'].to_list() == list(range(12)), 'and every coordinate is present once'
@@ -429,18 +440,17 @@ def test_stitch_keeps_the_whole_of_the_final_short_window():
     )
 
 
-def test_stitching_an_axis_that_re_indexed_nothing_changes_nothing():
+def test_stitching_an_axis_that_re_indexed_nothing_changes_nothing(sweep):
     """A caller handed an axis should not have to ask which kind it is."""
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
-    assert runs.primal('p', original_index=True).equals(runs.primal('p')), (
+    assert sweep.primal('p', original_index=True).equals(sweep.primal('p')), (
         'an axis that re-indexed nothing has nothing to restore'
     )
-    assert runs.dual('balance', original_index=True).equals(runs.dual('balance')), (
+    assert sweep.dual('balance', original_index=True).equals(sweep.dual('balance')), (
         'and that holds for duals too, since it is a property of the axis'
     )
 
 
-def test_duals_stitch_the_same_way_primals_do():
+def test_duals_stitch_the_same_way_primals_do(overlapping):
     """A window's price at a coordinate is the owning window's, not a blend.
 
     The reason `stitch` is a flag on the readers rather than a reader of its
@@ -448,12 +458,7 @@ def test_duals_stitch_the_same_way_primals_do():
     second implementation — and a name that is both a variable and a
     constraint, which the language permits, is never dispatched on.
     """
-    runs = lps.solve_over(
-        WINDOW,
-        horizon_sources(12),
-        lps.EachWindow('snapshot', length=6, step=3, into='t'),
-        carry={'soc_initial': ('soc', 2)},
-    )
+    runs = overlapping
     keyed, stitched = runs.dual('balance'), runs.dual('balance', original_index=True)
     assert keyed.columns == ['snapshot_start', 't', 'value']
     assert stitched.columns == ['snapshot', 'value']
@@ -461,14 +466,9 @@ def test_duals_stitch_the_same_way_primals_do():
     assert keyed.height > stitched.height, 'the overlap is priced twice before the index collapses it'
 
 
-def test_keyed_is_the_default_because_stitching_drops_rows():
+def test_keyed_is_the_default_because_stitching_drops_rows(overlapping):
     """The default may not silently discard answers the sweep computed."""
-    runs = lps.solve_over(
-        WINDOW,
-        horizon_sources(12),
-        lps.EachWindow('snapshot', length=6, step=3, into='t'),
-        carry={'soc_initial': ('soc', 2)},
-    )
+    runs = overlapping
     assert runs.primal('soc').height == 21, 'keyed keeps every row every window solved'
     assert runs.primal('soc', original_index=True).height == 12, 'only the rows each window owns'
     assert runs.objective.join(runs.primal('soc'), on=runs.key_name).height == 21, (
@@ -501,12 +501,9 @@ def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     construction, which is also what keeps the seam's `where: "t == 0"`
     matching on a dimension with gaps in it.
     """
-    sources = {
-        **STATIC,
-        'load': pl.DataFrame({'snapshot': coordinates, 'value': [5.0] * 6}),
-        'soc_initial': pl.DataFrame({'value': [0.0]}),
-    }
-    runs = lps.solve_over(WINDOW, sources, lps.EachWindow('snapshot', length=2, step=2, into='t'))
+    runs = lps.solve_over(
+        WINDOW, coordinate_sources(coordinates), lps.EachWindow('snapshot', length=2, step=2, into='t')
+    )
 
     assert len(runs) == 3
     assert runs.keys == coordinates[::2], 'a window is keyed by its first coordinate'
@@ -523,18 +520,12 @@ def test_stitch_recovers_coordinates_no_arithmetic_could(coordinates):
     only way back to it: nothing the caller holds could reconstruct these.
     """
     runs = lps.solve_over(
-        WINDOW,
-        {
-            **STATIC,
-            'load': pl.DataFrame({'snapshot': coordinates, 'value': [10.0] * 6}),
-            'soc_initial': pl.DataFrame({'value': [0.0]}),
-        },
-        lps.EachWindow('snapshot', length=2, step=2, into='t'),
+        WINDOW, coordinate_sources(coordinates, load=10.0), lps.EachWindow('snapshot', length=2, step=2, into='t')
     )
     assert runs.primal('soc', original_index=True)['snapshot'].to_list() == coordinates
 
 
-def test_a_window_key_column_never_shadows_the_dimension_it_replaced():
+def test_a_window_key_column_never_shadows_the_dimension_it_replaced(sweep):
     """`snapshot_start` holds window starts, and there are no snapshots left.
 
     `EachWindow` drops the global dimension and re-indexes to `into`, so a key
@@ -542,43 +533,31 @@ def test_a_window_key_column_never_shadows_the_dimension_it_replaced():
     the coordinate they are *not* — one that joins cleanly against real
     snapshot-indexed data and silently keeps a twelfth of it.
     """
-    runs = lps.solve_over(
-        WINDOW,
-        horizon_sources(),
-        lps.EachWindow('snapshot', length=4, step=4, into='t'),
-    )
+    runs = lps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
     soc = runs.primal('soc')
     assert 'snapshot' not in soc.columns
     assert soc.columns[0] == 'snapshot_start'
     assert runs.objective.columns[0] == 'snapshot_start', 'both frames key the same way'
     assert sorted(soc['snapshot_start'].unique().to_list()) == [0, 4, 8]
 
-    sweep = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
     assert sweep.objective.columns[0] == 'scenario', (
         'EachCoordinate keeps the plain name: there the key really is a coordinate of it'
     )
 
 
-def test_the_window_geometry_is_checked_at_construction():
+@pytest.mark.parametrize(
+    ('geometry', 'expected'),
+    [
+        pytest.param({'length': 4, 'step': 8, 'into': 't'}, 'exceeds length', id='step-past-length'),
+        pytest.param({'length': 0, 'step': 1, 'into': 't'}, 'must be positive', id='zero-length'),
+        pytest.param({'length': 4, 'step': 4, 'into': 'snapshot'}, 'must differ from dim', id='into-is-the-dim'),
+        pytest.param({'length': 4, 'step': 4, 'into': ''}, 'no default', id='into-is-empty'),
+    ],
+)
+def test_the_window_geometry_is_checked_at_construction(geometry, expected):
     """`__post_init__` is what earns these two a name on the public surface."""
-    with pytest.raises(ValueError, match='exceeds length'):
-        lps.EachWindow('snapshot', length=4, step=8, into='t')
-    with pytest.raises(ValueError, match='must be positive'):
-        lps.EachWindow('snapshot', length=0, step=1, into='t')
-    with pytest.raises(ValueError, match='must differ from dim'):
-        lps.EachWindow('snapshot', length=4, step=4, into='snapshot')
-    with pytest.raises(ValueError, match='no default'):
-        lps.EachWindow('snapshot', length=4, step=4, into='')
-
-
-def test_a_carry_index_outside_the_slice_is_refused_by_name():
-    with pytest.raises(lps.LpspecError, match='out of range'):
-        lps.solve_over(
-            WINDOW,
-            horizon_sources(),
-            lps.EachWindow('snapshot', length=4, step=4, into='t'),
-            carry={'soc_initial': ('soc', 99)},
-        )
+    with pytest.raises(ValueError, match=expected):
+        lps.EachWindow('snapshot', **geometry)
 
 
 def test_a_short_tail_window_does_not_have_to_hold_the_carry_index():
@@ -607,13 +586,7 @@ def test_a_carry_collapses_one_dimension_and_every_other_rides_along():
     are handed forward, each its own level. That is the general case; a scalar
     `soc_initial` is only the one where nothing is left to ride.
     """
-    window = lps.EachWindow('snapshot', length=4, step=4, into='t')
-    runs = lps.solve_over(
-        MULTI_STORE,
-        multi_store_sources(),
-        window,
-        carry={'soc_initial': ('soc', 3)},
-    )
+    runs = lps.solve_over(MULTI_STORE, multi_store_sources(), WINDOW_AXIS, carry={'soc_initial': ('soc', 3)})
 
     assert runs.keys == [0, 4, 8]
     assert set(runs.primal('soc').columns) == {'snapshot_start', 't', 'storage', 'value'}
@@ -637,7 +610,7 @@ def test_a_carry_collapses_one_dimension_and_every_other_rides_along():
                 'the opening row is the previous window at t == 3, for this same store'
             )
 
-    fresh = lps.solve_over(MULTI_STORE, multi_store_sources(), window)
+    fresh = lps.solve_over(MULTI_STORE, multi_store_sources(), WINDOW_AXIS)
     assert not fresh.primal('soc').equals(runs.primal('soc')), 'the carry changed nothing'
 
 
@@ -665,18 +638,17 @@ def test_a_myopic_pathway_carries_a_whole_vector_with_no_index():
     assert total == pytest.approx([10.0, 25.0, 40.0]), 'demand 10 -> 25 -> 40 is met exactly'
 
 
-#: The five ways a carry cannot line up. Each `id` is the case, so a failure
+#: The seven ways a carry cannot line up. Each `id` is the case, so a failure
 #: names it rather than a line number: `-k collapses-two-dimensions`.
-_WINDOW_AXIS = lps.EachWindow('snapshot', length=4, step=4, into='t')
 _PERIOD_AXIS = lps.EachCoordinate('period', ordered=True)
 UNSOUND_CARRIES = [
     pytest.param(
-        WINDOW, horizon_sources, _WINDOW_AXIS, {'soc_initial': ('p', 3)},
+        WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': ('p', 3)},
         r'would collapse .*at once', "['t', 'generator']",
         id='collapses-two-dimensions-where-an-index-names-one',
     ),
     pytest.param(
-        WINDOW, horizon_sources, _WINDOW_AXIS, {'soc_initial': ('soc', None)},
+        WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': ('soc', None)},
         r"drops 't' and so needs an index", None,
         id='drops-a-dimension-without-naming-a-coordinate',
     ),
@@ -686,21 +658,35 @@ UNSOUND_CARRIES = [
         id='indexes-two-sides-that-already-line-up',
     ),
     pytest.param(
-        WINDOW, horizon_sources, _WINDOW_AXIS, {'p_max': ('soc', 3)},
+        WINDOW, horizon_sources, WINDOW_AXIS, {'p_max': ('soc', 3)},
         'cannot line up', None,
         id='parameter-over-more-than-the-variable',
     ),
     pytest.param(
-        WINDOW, horizon_sources, _WINDOW_AXIS, {'soc_initial': ('nope', 3)},
+        WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': ('nope', 3)},
         'does not declare', None,
         id='a-name-neither-side-declares',
+    ),
+    pytest.param(
+        WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': ('soc', 99)},
+        'out of range', None,
+        id='an-index-outside-the-window',
+    ),
+    pytest.param(
+        DISPATCH, scenario_sources, lps.EachCoordinate('scenario'), {'p_max': ('p', 0)},
+        'needs an ordered axis', None,
+        id='an-unordered-axis',
     ),
 ]  # fmt: skip
 
 
 @pytest.mark.parametrize(('model', 'sources', 'axis', 'carry', 'expected', 'names'), UNSOUND_CARRIES)
 def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(model, sources, axis, carry, expected, names):
-    """Every one of these is answerable from the two declarations alone."""
+    """Every one of these is answerable from the two declarations and the axis alone.
+
+    The axis matters twice: a window's length bounds the index a carry may
+    name, and scenarios have no "next" slice for a value to move into.
+    """
     with pytest.raises(lps.LpspecError, match=expected) as raised:
         lps.solve_over(model, sources(), axis, carry=carry)
     if names is not None:
@@ -719,20 +705,10 @@ def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
     sources = {**horizon_sources(), 'load': str(missing)}
 
     with pytest.raises(lps.LpspecError, match='does not declare'):
-        lps.solve_over(
-            WINDOW,
-            sources,
-            lps.EachWindow('snapshot', length=4, step=4, into='t'),
-            carry={'soc_initial': ('nope', 3)},
-        )
+        lps.solve_over(WINDOW, sources, WINDOW_AXIS, carry={'soc_initial': ('nope', 3)})
 
     with pytest.raises(Exception, match='not-written-yet') as raised:
-        lps.solve_over(
-            WINDOW,
-            sources,
-            lps.EachWindow('snapshot', length=4, step=4, into='t'),
-            carry={'soc_initial': ('soc', 3)},
-        )
+        lps.solve_over(WINDOW, sources, WINDOW_AXIS, carry={'soc_initial': ('soc', 3)})
     assert not isinstance(raised.value, lps.LpspecError), 'the file, not the carry, is what failed'
 
 
@@ -748,20 +724,9 @@ def test_carry_and_executor_are_refused_together():
         lps.solve_over(
             WINDOW,
             horizon_sources(),
-            lps.EachWindow('snapshot', length=4, step=4, into='t'),
+            WINDOW_AXIS,
             carry={'soc_initial': ('soc', 3)},
             executor=object(),
-        )
-
-
-def test_carry_needs_an_ordered_axis():
-    """Scenarios have no "next" slice for a value to move into."""
-    with pytest.raises(lps.LpspecError, match='needs an ordered axis'):
-        lps.solve_over(
-            DISPATCH,
-            scenario_sources(),
-            lps.EachCoordinate('scenario'),
-            carry={'p_max': ('p', 0)},
         )
 
 
@@ -832,7 +797,7 @@ def test_every_executor_gives_the_same_answers_in_the_same_order(make_executor):
     assert parallel.primal('p').equals(sequential.primal('p'))
 
 
-def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses():
+def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses(monkeypatch):
     """In-process, so a parquet round trip would be paid for nothing.
 
     31% of a thread-pool sweep, measured, which is what earns the one type
@@ -848,17 +813,14 @@ def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses():
         seen.append('encoded')
         return original(sources, memo, **kwargs)
 
-    strategy._encode = spy
-    try:
-        with ThreadPoolExecutor(2) as pool:
-            lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), executor=pool)
-        assert seen == [], 'a thread pool encoded its sources'
+    monkeypatch.setattr(strategy, '_encode', spy)
+    with ThreadPoolExecutor(2) as pool:
+        lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), executor=pool)
+    assert seen == [], 'a thread pool encoded its sources'
 
-        with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
-            lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), executor=pool)
-        assert seen, 'a process pool did not encode its sources'
-    finally:
-        strategy._encode = original
+    with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
+        lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), executor=pool)
+    assert seen, 'a process pool did not encode its sources'
 
 
 def test_a_failing_slice_reports_the_real_error_across_a_process_boundary():
@@ -891,7 +853,7 @@ def test_a_parquet_path_slices_without_being_read_whole(tmp_path):
     assert runs.primal('p').height == 3 * 4 * 2
 
 
-def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_one(tmp_path):
+def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_one(tmp_path, monkeypatch):
     """`workers_share_fs` is inferred from the pool, and only paths are affected.
 
     A `ProcessPoolExecutor`'s workers are this machine's, so slurping the file
@@ -918,29 +880,22 @@ def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_
             crossed.append(encoded['p_max'])
         return encoded
 
-    strategy._encode = spy
-    try:
-        with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
-            local = lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), executor=pool)
-            assert all(v == str(path) for v in crossed), 'a local pool shipped a file it could have opened'
+    monkeypatch.setattr(strategy, '_encode', spy)
+    with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
+        local = lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), executor=pool)
+        assert all(v == str(path) for v in crossed), 'a local pool shipped a file it could have opened'
 
-            crossed.clear()
-            remote = lps.solve_over(
-                DISPATCH, sources, lps.EachCoordinate('scenario'), executor=pool, workers_share_fs=False
-            )
-            assert all(v == path.read_bytes() for v in crossed), 'the file did not travel as its own bytes'
-    finally:
-        strategy._encode = original
+        crossed.clear()
+        remote = lps.solve_over(
+            DISPATCH, sources, lps.EachCoordinate('scenario'), executor=pool, workers_share_fs=False
+        )
+        assert all(v == path.read_bytes() for v in crossed), 'the file did not travel as its own bytes'
 
     assert remote.objective.equals(local.objective), 'the path and the bytes are the same numbers'
     assert remote.primal('p').equals(local.primal('p'))
 
     crossed.clear()
-    strategy._encode = spy
-    try:
-        lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), executor=Inline())
-    finally:
-        strategy._encode = original
+    lps.solve_over(DISPATCH, sources, lps.EachCoordinate('scenario'), executor=Inline())
     assert all(v == path.read_bytes() for v in crossed), 'an executor we did not ship was assumed local'
 
 
@@ -949,7 +904,7 @@ def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_
 # ---------------------------------------------------------------------------
 
 
-def test_the_readers_mirror_result_with_the_slice_key_as_one_more_dimension():
+def test_the_readers_mirror_result_with_the_slice_key_as_one_more_dimension(sweep):
     """A sweep is where a labelled array earns its keep.
 
     `(scenario, snapshot, generator)` is the shape the caller wants — `.sel` a
@@ -959,7 +914,7 @@ def test_the_readers_mirror_result_with_the_slice_key_as_one_more_dimension():
     both.
     """
     pytest.importorskip('xarray')
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+    runs = sweep
 
     pandas_frame = runs.to_pandas('p')
     assert list(pandas_frame.columns) == ['scenario', 'snapshot', 'generator', 'value']
@@ -978,19 +933,16 @@ def test_the_readers_mirror_result_with_the_slice_key_as_one_more_dimension():
     assert dataset['p'].dims == ('scenario', 'snapshot', 'generator')
 
 
-def test_to_parquet_writes_one_file_per_kept_variable(tmp_path):
+def test_to_parquet_writes_one_file_per_kept_variable(sweep, tmp_path):
     """The bridge out for a sweep too wide to want in one array."""
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
-
-    written = runs.to_parquet(tmp_path / 'sweep')
+    written = sweep.to_parquet(tmp_path / 'sweep')
     assert set(written) == {'p'}
-    assert pl.read_parquet(written['p']).equals(runs.primal('p'))
+    assert pl.read_parquet(written['p']).equals(sweep.primal('p'))
 
 
-def test_a_reader_for_a_name_the_sweep_lacks_fails_the_way_primal_does():
+def test_a_reader_for_a_name_the_sweep_lacks_fails_the_way_primal_does(sweep):
     """One explanation, reached through every reader."""
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
-    for read in (runs.to_pandas, runs.to_dataarray):
+    for read in (sweep.to_pandas, sweep.to_dataarray):
         with pytest.raises(lps.LpspecError, match="no variable 'q' in this sweep"):
             read('q')
 
@@ -1005,10 +957,7 @@ def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
     else's draw.
     """
     base = scenario_sources()
-    cuts = [
-        (name, {**base, 'load': base['load'].filter(pl.col('scenario') == name).drop('scenario')}, {})
-        for name in ('low', 'high')
-    ]
+    cuts = [(name, {**base, 'load': _draw(base, name)}, {}) for name in ('low', 'high')]
 
     with pytest.raises(lps.LpspecError, match='hand-built axis needs key_name='):
         lps.solve_over(DISPATCH, base, cuts)
@@ -1017,11 +966,6 @@ def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
     assert runs.keys == ['low', 'high']
     assert runs.meta.columns[0] == 'draw'
     assert runs.primal('p').columns[0] == 'draw', 'both frames key the same way, or they stop joining'
-
-
-def _draw(base: dict, scenario: str, snapshots: int = 4) -> pl.DataFrame:
-    """One scenario's load, cut to its first *snapshots* coordinates."""
-    return base['load'].filter(pl.col('scenario') == scenario).drop('scenario').head(snapshots)
 
 
 #: The second cut of a two-slice hand-built axis, each naming *less* than the
@@ -1075,7 +1019,7 @@ def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
         lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), key_name='generator')
 
 
-def test_duals_come_back_keyed_by_slice_and_are_never_combined():
+def test_duals_come_back_keyed_by_slice_and_are_never_combined(sweep):
     """A shadow price belongs to the slice that priced it.
 
     The refusal `Runs` used to carry was against *aggregating* duals, which is
@@ -1084,7 +1028,7 @@ def test_duals_come_back_keyed_by_slice_and_are_never_combined():
     across scenarios, and `primal` has never been asked to guess either. Keyed
     rows say whose each price is and leave the reduction to the caller.
     """
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+    runs = sweep
 
     prices = runs.dual('balance')
     assert prices.columns[0] == runs.key_name, 'the key comes first, as it does for a primal'
@@ -1101,10 +1045,7 @@ def test_a_slice_without_duals_does_not_fail_the_sweep():
     do about it. A sweep of one model has one answer, so the first is carried
     rather than rewritten.
     """
-    integral = {
-        **DISPATCH,
-        'variables': {**DISPATCH['variables'], 'p': {**DISPATCH['variables']['p'], 'integer': True}},
-    }
+    integral = override(DISPATCH, **{'variables.p.integer': True})
     runs = lps.solve_over(integral, scenario_sources(), lps.EachCoordinate('scenario'))
 
     assert len(runs) == 3, 'every slice is still a row of the record'
@@ -1114,7 +1055,7 @@ def test_a_slice_without_duals_does_not_fail_the_sweep():
     assert "'p' is not continuous" in str(raised.value), 'the sweep names the variable, as one solve does'
 
 
-def test_a_bad_name_is_reported_without_the_optional_dependency():
+def test_a_bad_name_is_reported_without_the_optional_dependency(sweep):
     """`to_pandas` answers about the model before it asks about the environment.
 
     The bare-install job carries no pandas, and importing it first turned "this
@@ -1123,9 +1064,8 @@ def test_a_bad_name_is_reported_without_the_optional_dependency():
     makes the reader's message the same on every install — while a name the
     sweep does hold still needs the dependency.
     """
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
     with mock.patch.dict(sys.modules, {'pandas': None}):
         with pytest.raises(lps.LpspecError, match="no variable 'q' in this sweep"):
-            runs.to_pandas('q')
+            sweep.to_pandas('q')
         with pytest.raises(ImportError):
-            runs.to_pandas('p')
+            sweep.to_pandas('p')

@@ -51,6 +51,14 @@ objectives:
 """
 
 
+@pytest.fixture
+def commitment_run(commitment_inputs):
+    """The commitment model solved through both lanes, engine still open."""
+    data, coords = commitment_inputs
+    with differential(COMMITMENT_YAML, data, coords) as run:
+        yield run
+
+
 def test_commitment_milp_agrees_and_stays_integral(commitment_inputs):
     """Both lanes agree, the binaries are integral, and the LP file says so."""
     data, coords = commitment_inputs
@@ -68,7 +76,7 @@ def test_commitment_milp_agrees_and_stays_integral(commitment_inputs):
 
 
 @pytest.mark.parametrize('batch_rows', [7, 13, 100_000], ids=['tiny-chunks', 'odd-chunks', 'one-chunk'])
-def test_the_highs_solver_ingests_columns_in_order_whatever_the_chunking(commitment_inputs, batch_rows):
+def test_the_highs_solver_ingests_columns_in_order_whatever_the_chunking(commitment_run, batch_rows):
     """Columns reach HiGHS in label order however the range loop splits them.
 
     ``addCols`` appends, so column *k* must be the *k*-th row handed over. The
@@ -83,19 +91,15 @@ def test_the_highs_solver_ingests_columns_in_order_whatever_the_chunking(commitm
     moves. Prime batch sizes make the last chunk short and stop a bug that
     only shows on ragged splits from hiding behind a round number.
     """
-    data, coords = commitment_inputs
+    chunked = commitment_run.engine.solve(batch_rows=batch_rows)
+    assert chunked.is_ok
+    assert chunked.objective == pytest.approx(commitment_run.oracle, rel=1e-9)
 
-    with differential(COMMITMENT_YAML, data, coords) as run:
-        oracle = run.oracle
-        chunked = run.engine.solve(batch_rows=batch_rows)
-        assert chunked.is_ok
-        assert chunked.objective == pytest.approx(oracle, rel=1e-9)
-
-        u = chunked.primal('u')['value'].to_numpy()
-        assert set(np.round(u)) <= {0.0, 1.0}, 'integrality landed on the wrong columns'
+    u = chunked.primal('u')['value'].to_numpy()
+    assert set(np.round(u)) <= {0.0, 1.0}, 'integrality landed on the wrong columns'
 
 
-def test_cols_vtype_is_an_enum_over_every_declared_variable_type(commitment_inputs):
+def test_cols_vtype_is_an_enum_over_every_declared_variable_type(commitment_run):
     """``cols.vtype`` is an Enum, and its members are ``plan.VariableType``.
 
     The storage choice is a performance one — one word per column, the same
@@ -105,11 +109,8 @@ def test_cols_vtype_is_an_enum_over_every_declared_variable_type(commitment_inpu
     fails where the column is built rather than in whichever sink first
     compares against a name it does not know.
     """
-    data, coords = commitment_inputs
-
-    with differential(COMMITMENT_YAML, data, coords) as run:
-        vtype = run.engine._tables().cols.schema['vtype']
-        held = set(run.engine._tables().cols['vtype'].unique().to_list())
+    vtype = commitment_run.engine._tables().cols.schema['vtype']
+    held = set(commitment_run.engine._tables().cols['vtype'].unique().to_list())
 
     assert isinstance(vtype, pl.Enum), f'vtype is {vtype}, so it stores a word per column'
     assert set(vtype.categories.to_list()) == set(get_args(plan.VariableType))

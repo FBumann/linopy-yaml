@@ -24,7 +24,8 @@ from lpspec.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst
 from lpspec.typeset.format import OPERATOR_NAMES
 from lpspec.typeset.symbols import _derive_name_symbol
 from tests import golden
-from tools import constructs, gallery_math
+from tests.conftest import MODEL_PATHS, override
+from tools import gallery_math
 
 if TYPE_CHECKING:
     from lpspec.typeset.format import Format
@@ -50,17 +51,6 @@ DISPATCH = {
 }
 
 
-def _examples() -> list[Path]:
-    """Every model the repo ships — the same list the gallery is built from.
-
-    Not ``Path('examples').glob('*.yaml')``: that is not recursive, so it
-    covers the five examples and none of the eleven ports. #282 fixed exactly
-    that bug in two other test globs, and a port is precisely where an unusual
-    construct — and so an unusual rendering — shows up.
-    """
-    return [path for _, path in constructs.models()]
-
-
 # ---------------------------------------------------------------------------
 # shared: properties of the walk, asserted for every format
 # ---------------------------------------------------------------------------
@@ -78,7 +68,7 @@ def test_a_format_spells_every_operator_the_walk_can_emit(fmt: Format):
 def test_every_example_renders(fmt: Format):
     """The walk consumes the same AST as lowering, so anything ``check``
     accepts it must print — a node it forgot is an exception, not a blank."""
-    for path in _examples():
+    for path in MODEL_PATHS:
         assert typeset(path, fmt).strip()
 
 
@@ -100,16 +90,7 @@ def test_a_dimension_index_never_steals_a_letter_a_variable_owns(fmt: Format):
 @EVERY_FORMAT
 def test_a_where_lands_on_the_quantifier_not_in_the_equation(fmt: Format):
     """A mask is row absence, so it belongs to the ∀ that names the rows."""
-    model = {
-        **DISPATCH,
-        'variables': {
-            'p': {
-                'foreach': ['snapshot', 'generator'],
-                'where': 'p_max > 0',
-                'bounds': {'lower': 0, 'upper': 'p_max'},
-            }
-        },
-    }
+    model = override(DISPATCH, **{'variables.p.where': 'p_max > 0'})
     text = typeset(model, fmt, legend=False)
     assert fmt.operators['forall'] in text
     assert fmt.operators['such_that'] in text
@@ -154,17 +135,16 @@ def test_the_legend_explains_wraparound_only_when_it_is_used(fmt: Format):
 @EVERY_FORMAT
 def test_macros_and_named_expressions_are_expanded_away(fmt: Format):
     """What prints is the math a backend builds, not the sugar it was spelled with."""
-    model = {
-        **DISPATCH,
-        'expressions': {'supply': 'sum(p, over=generator)'},
-        'constraints': {'power_balance': {'foreach': ['snapshot'], 'expression': 'supply == load'}},
-    }
+    model = override(
+        DISPATCH,
+        **{'expressions.supply': 'sum(p, over=generator)', 'constraints.power_balance.expression': 'supply == load'},
+    )
     assert 'supply' not in typeset(model, fmt, legend=False)
 
 
 @EVERY_FORMAT
 def test_an_invalid_model_fails_the_same_way_check_does(fmt: Format):
-    broken = {**DISPATCH, 'objectives': {'total_cost': {'expression': 'p * nonexistent'}}}
+    broken = override(DISPATCH, **{'objectives.total_cost.expression': 'p * nonexistent'})
     with pytest.raises(lps.LpspecError):
         typeset(broken, fmt)
 
@@ -190,7 +170,7 @@ def test_no_format_leaks_another_formats_syntax(name: str, foreign: str):
     earlier version of this test looked for the literal ``\\mathcal{X}``, which
     no model declares, so it passed without ever reading the output.
     """
-    text = '\n'.join(typeset(p, FORMATS[name], standalone=True) for p in _examples())
+    text = '\n'.join(typeset(p, FORMATS[name], standalone=True) for p in MODEL_PATHS)
     assert any(mark in text for mark in _FINGERPRINTS[name if name != 'markdown' else 'latex']), (
         f'{name} output contains none of its own syntax — is this test still reading anything?'
     )
@@ -209,7 +189,7 @@ def test_no_format_leaks_another_formats_syntax(name: str, foreign: str):
         pytest.param('p_max', r'p^{\mathrm{max}}', id='single-letter-head-so-the-tail-is-a-qualifier'),
         pytest.param('soc_max', r'\mathit{soc}^{\mathrm{max}}', id='declared-head-so-the-tail-is-a-qualifier'),
         pytest.param('marginal_cost', r'\mathit{marginal\_cost}', id='neither-so-it-stays-one-word'),
-        ('shut_down', r'\mathit{shut\_down}'),
+        pytest.param('shut_down', r'\mathit{shut\_down}', id='neither-even-when-the-tail-reads-like-a-qualifier'),
     ],
 )
 def test_an_underscore_is_only_a_qualifier_when_its_head_is_a_symbol(name: str, expected: str):
@@ -223,24 +203,26 @@ def test_an_underscore_is_only_a_qualifier_when_its_head_is_a_symbol(name: str, 
 # ---------------------------------------------------------------------------
 
 
-def test_latex_symbols_follow_the_names():
-    tex = to_latex(DISPATCH)
-    assert 'p_{t,g}' in tex
-    assert r'\mathit{load}_{t}' in tex
-    assert r'p^{\mathrm{max}}_{g}' in tex
-
-
-def test_latex_sum_binds_the_dimension_it_reduces():
-    assert r'\sum_{g \in \mathcal{G}} p_{t,g} & = \mathit{load}_{t}' in to_latex(DISPATCH, legend=False)
-
-
-def test_latex_objective_sums_over_every_dim_its_term_carries():
-    tex = to_latex(DISPATCH, legend=False)
-    assert r'\sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g}' in tex
-
-
-def test_latex_bounds_become_a_domain_line():
-    assert r'0 \le p_{t,g} & \le p^{\mathrm{max}}_{g}' in to_latex(DISPATCH)
+@pytest.mark.parametrize(
+    'fragment',
+    [
+        pytest.param('p_{t,g}', id='symbols-follow-the-names-variable'),
+        pytest.param(r'\mathit{load}_{t}', id='symbols-follow-the-names-parameter'),
+        pytest.param(r'p^{\mathrm{max}}_{g}', id='symbols-follow-the-names-qualifier'),
+        pytest.param(
+            r'\sum_{g \in \mathcal{G}} p_{t,g} & = \mathit{load}_{t}',
+            id='sum-binds-the-dimension-it-reduces',
+        ),
+        pytest.param(
+            r'\sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g}',
+            id='objective-sums-over-every-dim-its-term-carries',
+        ),
+        pytest.param(r'0 \le p_{t,g} & \le p^{\mathrm{max}}_{g}', id='bounds-become-a-domain-line'),
+        pytest.param(r'\text{power\_balance}', id='names-are-escaped-in-text-mode'),
+    ],
+)
+def test_latex_spells_the_dispatch_model(fragment: str):
+    assert fragment in to_latex(DISPATCH)
 
 
 @pytest.mark.parametrize(
@@ -252,19 +234,18 @@ def test_latex_bounds_become_a_domain_line():
     ],
 )
 def test_latex_a_missing_bound_is_not_silently_zero(bounds: dict[str, object], expected: str):
-    model = {**DISPATCH, 'variables': {'p': {'foreach': ['snapshot', 'generator'], 'bounds': bounds}}}
+    model = override(DISPATCH, **{'variables.p.bounds': bounds})
     assert expected in to_latex(model)
 
 
 def test_latex_binary_and_integer_variables_state_their_domain():
-    model = {
-        **DISPATCH,
-        'variables': {
-            'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}},
-            'on': {'foreach': ['snapshot', 'generator'], 'binary': True},
-            'n': {'foreach': ['generator'], 'integer': True, 'bounds': {'lower': 0, 'upper': 5}},
+    model = override(
+        DISPATCH,
+        **{
+            'variables.on': {'foreach': ['snapshot', 'generator'], 'binary': True},
+            'variables.n': {'foreach': ['generator'], 'integer': True, 'bounds': {'lower': 0, 'upper': 5}},
         },
-    }
+    )
     tex = to_latex(model)
     assert r'\{0, 1\}' in tex
     assert r'\in \mathbb{Z}' in tex
@@ -278,20 +259,8 @@ def test_latex_sum_renders_the_coordinate_map_as_a_set_condition():
 
 def test_latex_a_sum_used_as_a_factor_is_bracketed():
     """Unbracketed, `\\sum_g x_g \\cdot 2` reads as the sum capturing the 2."""
-    model = {
-        **DISPATCH,
-        'constraints': {
-            'power_balance': {
-                'foreach': ['snapshot'],
-                'expression': 'sum(p, over=generator) * 2 == load',
-            }
-        },
-    }
+    model = override(DISPATCH, **{'constraints.power_balance.expression': 'sum(p, over=generator) * 2 == load'})
     assert r'\left( \sum_{g \in \mathcal{G}} p_{t,g} \right) \cdot 2' in to_latex(model, legend=False)
-
-
-def test_latex_names_are_escaped_in_text_mode():
-    assert r'\text{power\_balance}' in to_latex(DISPATCH)
 
 
 def test_latex_standalone_is_a_whole_document():
@@ -328,6 +297,11 @@ def test_typst_sum_renders_the_coordinate_map():
 # ---------------------------------------------------------------------------
 
 
+def _generated(stem: str, legend: bool = False) -> str:
+    """A shipped example rendered to Markdown with its committed symbol table."""
+    return to_markdown(f'examples/{stem}.yaml', symbols=f'examples/symbols/{stem}.yaml', legend=legend)
+
+
 def test_markdown_is_latex_math_in_a_markdown_wrapper():
     """The math is byte-identical to the LaTeX lane's; only the wrapper differs.
     That is the claim the module makes, so it is the one asserted."""
@@ -357,7 +331,7 @@ def test_markdown_avoids_escapes_github_eats_inside_math():
     untouched and MathJax treats them identically, so the Markdown format uses
     those. LaTeX and Typst are unaffected — no Markdown processor sees them.
     """
-    md = to_markdown('examples/dispatch.yaml', symbols='examples/symbols/dispatch.yaml')
+    md = _generated('dispatch', legend=True)
     for block in md.split('$$')[1::2]:
         for eaten in (r'\,', r'\;', r'\!', r'\:'):
             assert eaten not in block, f'{eaten!r} does not survive GitHub inside math: {block!r}'
@@ -492,8 +466,7 @@ def test_a_reproducible_summary_uses_only_symbols_the_generator_emits(stem: str)
     fixed in the same change. A summary is prose, so nothing else would notice
     it drifting again.
     """
-    symbols = f'examples/symbols/{stem}.yaml'
-    generated = to_markdown(f'examples/{stem}.yaml', symbols=symbols, legend=False)
+    generated = _generated(stem)
     missing = sorted(_symbols(_summary(stem)) - _symbols(generated))
     assert not missing, (
         f'docs/models/{stem}.md writes {missing}, which the generated math does not — '
@@ -507,8 +480,7 @@ def test_the_dispatch_summary_still_carries_the_mask():
     `> 0` is a condition, not a subscripted quantity, so the check below would
     not see it disappear."""
     assert r'\bar p_g > 0' in _summary('dispatch')
-    generated = to_markdown('examples/dispatch.yaml', symbols='examples/symbols/dispatch.yaml', legend=False)
-    assert r'\bar p_{g} > 0' in generated
+    assert r'\bar p_{g} > 0' in _generated('dispatch')
 
 
 def test_typst_standalone_adds_page_setup():
@@ -516,20 +488,23 @@ def test_typst_standalone_adds_page_setup():
     assert not to_typst(DISPATCH).startswith('#set page')
 
 
-def test_typst_output_compiles(tmp_path: Path):
+@pytest.fixture(scope='module')
+def typst():
+    return pytest.importorskip('typst', reason='typst is a dev dependency; the bare install skips it')
+
+
+def test_typst_output_compiles(typst, tmp_path: Path):
     """The only check that the Typst is real, and it has already earned its
     place: the first run rejected `minus.circle`, which is not a Typst symbol."""
-    typst = pytest.importorskip('typst', reason='typst is a dev dependency; the bare install skips it')
-    for path in _examples():
+    for path in MODEL_PATHS:
         source = tmp_path / f'{path.stem}.typ'
         source.write_text(to_typst(path, standalone=True))
         typst.compile(str(source), output=str(tmp_path / f'{path.stem}.pdf'))
 
 
-def test_every_typst_operator_compiles(tmp_path: Path):
+def test_every_typst_operator_compiles(typst, tmp_path: Path):
     """Only a handful of operators appear in `examples/`; the rest would
     otherwise first fail on somebody's own model."""
-    typst = pytest.importorskip('typst', reason='typst is a dev dependency; the bare install skips it')
     probe = tmp_path / 'operators.typ'
     probe.write_text('\n'.join(f'$ a {TYPST.operators[name]} b $' for name in sorted(OPERATOR_NAMES)))
     typst.compile(str(probe), output=str(tmp_path / 'operators.pdf'))
@@ -606,7 +581,7 @@ def _structural_errors(tex: str) -> list[str]:
     return errors
 
 
-@pytest.mark.parametrize('path', _examples(), ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
 def test_the_latex_is_structurally_well_formed(path: Path):
     assert _structural_errors(to_latex(path, standalone=True)) == []
 
@@ -622,16 +597,14 @@ SYMBOLS = {
 }
 
 
-def _with_marginal_cost() -> dict[str, object]:
-    return {
-        **DISPATCH,
-        'parameters': {**DISPATCH['parameters'], 'marginal_cost': {'dims': ['generator']}},
-        'objectives': {'total_cost': {'expression': 'p * marginal_cost'}},
-    }
+WITH_MARGINAL_COST = override(
+    DISPATCH,
+    **{'parameters.marginal_cost': {'dims': ['generator']}, 'objectives.total_cost.expression': 'p * marginal_cost'},
+)
 
 
 def test_the_table_overrides_and_the_rest_is_still_derived():
-    tex = to_latex(_with_marginal_cost(), symbols=SYMBOLS, legend=False)
+    tex = to_latex(WITH_MARGINAL_COST, symbols=SYMBOLS, legend=False)
     assert r'\pi_{t,u}' in tex, 'both the symbol and its subscripts were overridden'
     assert r'c^{\mathrm{marg}}_{u}' in tex
     assert r'\mathit{load}_{t}' in tex, 'untouched, so still derived'
@@ -639,7 +612,7 @@ def test_the_table_overrides_and_the_rest_is_still_derived():
 
 
 def test_a_description_reaches_the_legend_without_hiding_the_name():
-    tex = to_latex(_with_marginal_cost(), symbols=SYMBOLS)
+    tex = to_latex(WITH_MARGINAL_COST, symbols=SYMBOLS)
     assert r'\texttt{generator}' in tex
     assert 'dispatchable units' in tex
 
@@ -653,23 +626,13 @@ def test_a_description_reaches_the_legend_without_hiding_the_name():
             "Did you mean 'generator'",
             id='a-misspelled-dimension',
         ),
+        pytest.param({'symbols': {'p': 'x'}}, 'unknown section', id='an-unknown-section'),
+        pytest.param({'dimensions': {'generator': {'letter': 'g'}}}, 'unknown key', id='an-unknown-key'),
     ],
 )
 def test_an_entry_naming_nothing_is_an_error_with_the_near_miss(symbols, match):
     """A silent typo means a symbol that never applies and a reader who never
     finds out — so it fails, and says what it probably meant."""
-    with pytest.raises(lps.SchemaError, match=match):
-        to_latex(DISPATCH, symbols=symbols)
-
-
-@pytest.mark.parametrize(
-    ('symbols', 'match'),
-    [
-        pytest.param({'symbols': {'p': 'x'}}, 'unknown section', id='an-unknown-section'),
-        pytest.param({'dimensions': {'generator': {'letter': 'g'}}}, 'unknown key', id='an-unknown-key'),
-    ],
-)
-def test_unknown_sections_and_keys_are_rejected(symbols, match):
     with pytest.raises(lps.SchemaError, match=match):
         to_latex(DISPATCH, symbols=symbols)
 

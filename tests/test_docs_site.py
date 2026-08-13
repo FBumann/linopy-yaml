@@ -18,6 +18,7 @@ GitHub renders, and its relative links out of the tree are correct there.
 
 from __future__ import annotations
 
+import functools
 import re
 from pathlib import Path
 
@@ -33,9 +34,15 @@ _TARGETS = re.compile(r'\]\(\s*([^)\s]+)|^\[[^\]]+\]:\s+(\S+)', re.MULTILINE)
 _ABSOLUTE = re.compile(r'^([a-z][a-z0-9+.-]*:|//|#|/)', re.IGNORECASE)
 
 
-def _pages() -> list[Path]:
+@functools.cache
+def _pages() -> tuple[Path, ...]:
     """Every page mkdocs builds — so, not `docs/README.md`."""
-    return [p for p in sorted(DOCS.rglob('*.md')) if p.relative_to(DOCS).as_posix() != 'README.md']
+    return tuple(p for p in sorted(DOCS.rglob('*.md')) if p.relative_to(DOCS).as_posix() != 'README.md')
+
+
+def _all_pages() -> tuple[Path, ...]:
+    """The site's pages plus `docs/README.md`, the folder view GitHub renders."""
+    return (*_pages(), DOCS / 'README.md')
 
 
 def _targets(page: Path) -> list[str]:
@@ -75,7 +82,7 @@ def test_every_blob_url_names_a_file_that_exists():
     GitHub's 404.
     """
     broken = []
-    for page in [*_pages(), DOCS / 'README.md']:
+    for page in _all_pages():
         for target in _targets(page):
             if not target.startswith(BLOB):
                 continue
@@ -96,7 +103,7 @@ def test_links_to_our_own_files_are_all_spelled_the_same_way():
     file_shaped = re.compile(rf'^{re.escape(REPO_URL)}/(blob|tree|raw|blame)/')
     stray = [
         f'{page.relative_to(REPO)} -> {target}'
-        for page in [*_pages(), DOCS / 'README.md']
+        for page in _all_pages()
         for target in _targets(page)
         if file_shaped.match(target) and not target.startswith(f'{BLOB}/')
     ]

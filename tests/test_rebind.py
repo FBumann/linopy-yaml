@@ -15,14 +15,14 @@ rebuilds and solves cold; nothing about the answer changes, and
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any
+from typing import Any, NamedTuple
 
 import polars as pl
 import pytest
 
 import lpspec as lps
 from lpspec.relational.sinks import SOLVERS
-from tests.conftest import port_sources
+from tests.conftest import override, port_sources
 
 GENERATORS = ['wind', 'solar', 'gas']
 SNAPSHOTS = [0, 1, 2, 3]
@@ -101,19 +101,21 @@ def knapsack_sources() -> dict[str, pl.DataFrame]:
     }
 
 
-def _dispatch(yaml: Any) -> tuple[Any, dict[str, pl.DataFrame], dict[str, Any]]:
-    """The example, its data and its coordinates — what the table's own rungs move."""
-    return yaml, sources(), COORDS
+class Rung(NamedTuple):
+    """One row of the rebind table: which model, what changes, what may be kept."""
+
+    model: str
+    change: dict[str, pl.DataFrame]
+    keeps_the_solver: bool
 
 
-def _reach(yaml: Any) -> tuple[Any, dict[str, pl.DataFrame], dict[str, Any]]:
-    del yaml
-    return REACH, reach_sources(), {}
-
-
-def _knapsack(yaml: Any) -> tuple[Any, dict[str, pl.DataFrame], dict[str, Any]]:
-    del yaml
-    return KNAPSACK, knapsack_sources(), {}
+def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, pl.DataFrame], dict[str, Any]]:
+    """The rung's model, its data and its coordinates."""
+    return {
+        'dispatch': lambda: (dispatch_yaml, sources(), COORDS),
+        'reach': lambda: (REACH, reach_sources(), {}),
+        'knapsack': lambda: (KNAPSACK, knapsack_sources(), {}),
+    }[rung.model]()
 
 
 #: Each rung of the rebind table (docs/api.md): the model it moves, what
@@ -128,37 +130,47 @@ def _knapsack(yaml: Any) -> tuple[Any, dict[str, pl.DataFrame], dict[str, Any]]:
 #: reports a wrong number rather than a lucky one.
 RUNGS = [
     pytest.param(
-        _dispatch, {'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})}, True, id='rhs'
+        Rung('dispatch', {'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})}, True),
+        id='rhs',
     ),
     pytest.param(
-        _dispatch, {'cost': pl.DataFrame({'generator': GENERATORS, 'value': [9.0, 2.0, 1.0]})}, True, id='objective'
+        Rung('dispatch', {'cost': pl.DataFrame({'generator': GENERATORS, 'value': [9.0, 2.0, 1.0]})}, True),
+        id='objective',
     ),
     pytest.param(
-        _dispatch, {'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [80.0, 70.0, 90.0]})}, True, id='bounds'
+        Rung('dispatch', {'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [80.0, 70.0, 90.0]})}, True),
+        id='bounds',
     ),
     pytest.param(
-        _dispatch, {'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}, False, id='mask'
+        Rung('dispatch', {'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}, False),
+        id='mask',
     ),
-    pytest.param(_reach, {'levy': pl.DataFrame({'value': [500.0]})}, True, id='objective constant'),
+    pytest.param(Rung('reach', {'levy': pl.DataFrame({'value': [500.0]})}, True), id='objective constant'),
     pytest.param(
-        _reach,
-        {'reach': reaching(('north', 'a', 0.5), ('north', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
-        False,
+        Rung(
+            'reach',
+            {'reach': reaching(('north', 'a', 0.5), ('north', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
+            False,
+        ),
         id='a coefficient moved',
     ),
     pytest.param(
-        _reach,
-        {'reach': reaching(('north', 'c', 1.0), ('north', 'd', 1.0), ('south', 'a', 1.0), ('south', 'b', 1.0))},
-        False,
+        Rung(
+            'reach',
+            {'reach': reaching(('north', 'c', 1.0), ('north', 'd', 1.0), ('south', 'a', 1.0), ('south', 'b', 1.0))},
+            False,
+        ),
         id='an entry changed column',
     ),
     pytest.param(
-        _reach,
-        {'reach': reaching(('north', 'a', 1.0), ('south', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
-        False,
+        Rung(
+            'reach',
+            {'reach': reaching(('north', 'a', 1.0), ('south', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
+            False,
+        ),
         id='an entry changed row',
     ),
-    pytest.param(_knapsack, {'capacity': pl.DataFrame({'value': [9.0]})}, True, id='integer'),
+    pytest.param(Rung('knapsack', {'capacity': pl.DataFrame({'value': [9.0]})}, True), id='integer'),
 ]
 
 
@@ -175,6 +187,13 @@ def solver_name(request: pytest.FixtureRequest) -> str:
     return str(request.param)
 
 
+@pytest.fixture
+def bound(dispatch_yaml):
+    """The example dispatch on its own data, built and open for the test's duration."""
+    with lps.build(dispatch_yaml, sources(), coords=COORDS) as model:
+        yield model
+
+
 def _priced(schema: Any) -> list[str]:
     """The constraints an answer carries prices for — none, where a variable is discrete."""
     if any(v.binary or v.integer for v in schema.variables.values()):
@@ -182,8 +201,8 @@ def _priced(schema: Any) -> list[str]:
     return list(schema.constraints)
 
 
-@pytest.mark.parametrize(('case', 'change', 'keeps_the_solver'), RUNGS)
-def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, case, change, keeps_the_solver, solver_name):
+@pytest.mark.parametrize('rung', RUNGS)
+def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver_name):
     """The oracle. Every rung, one assertion: the reference build is the truth.
 
     Read-back is keyed by coordinate, so this holds even where the rung moved
@@ -194,20 +213,20 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, case, change
     that can stay loaded: each writes its own push, and a field one of them
     forgets is a confident answer to the model before the rebind.
     """
-    del keeps_the_solver
-    model, given, coords = case(dispatch_yaml)
+    model, given, coords = _case(rung, dispatch_yaml)
     schema = lps.load_model(model)
-    reference = lps.solve(model, {**given, **change}, solver_name=solver_name, coords=coords)
-    with lps.build(model, given, coords=coords) as bound:
+    with (
+        lps.solve(model, {**given, **rung.change}, solver_name=solver_name, coords=coords) as reference,
+        lps.build(model, given, coords=coords) as bound,
+    ):
         bound.solve(solver_name=solver_name)
-        rebound = bound.rebind(change).solve(solver_name=solver_name)
+        rebound = bound.rebind(rung.change).solve(solver_name=solver_name)
 
         assert rebound.objective == pytest.approx(reference.objective), 'the rebind reached a different optimum'
         for name in schema.variables:
             assert rebound.primal(name).equals(reference.primal(name)), f"'{name}' came back laid out differently"
         for name in _priced(schema):
             assert rebound.dual(name).equals(reference.dual(name)), f"'{name}' came back priced differently"
-    reference.close()
 
 
 # ---------------------------------------------------------------------------
@@ -339,10 +358,8 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
                 )
 
 
-@pytest.mark.parametrize(('case', 'change', 'keeps_the_solver'), RUNGS)
-def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(
-    dispatch_yaml, case, change, keeps_the_solver, solver_name
-):
+@pytest.mark.parametrize('rung', RUNGS)
+def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, rung, solver_name):
     """The fast path is taken exactly when the structure held.
 
     The first solve always loads — there was nothing to keep — so a driver on
@@ -350,14 +367,14 @@ def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(
     The rule is the digest's, so it is the same rule for every sink that can
     stay loaded.
     """
-    model, given, coords = case(dispatch_yaml)
+    model, given, coords = _case(rung, dispatch_yaml)
     with lps.build(model, given, coords=coords) as bound:
         bound.solve(solver_name=solver_name)
         assert bound.diagnostics().loads == 1, 'the first solve has nothing loaded to keep'
 
-        bound.rebind(change).solve(solver_name=solver_name)
+        bound.rebind(rung.change).solve(solver_name=solver_name)
         seen = bound.diagnostics()
-        expected = 1 if keeps_the_solver else 2
+        expected = 1 if rung.keeps_the_solver else 2
         assert seen.solves == 2, 'both solves are counted whichever path each took'
         assert seen.loads == expected, (
             'a rebind that keeps every label pushes values onto the loaded solver; '
@@ -365,10 +382,10 @@ def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(
         )
 
 
-def _structure(model: Any) -> bytes:
-    """*model*'s digest, read off it built on the same data."""
-    with lps.build(model, reach_sources()) as bound:
-        return bound._engine._tables().structure
+def _tables(model: Any) -> Any:
+    """*model*'s solver tables, read off it built on the reach data."""
+    with lps.build(model, reach_sources()) as built:
+        return built._engine._tables()
 
 
 #: The three fields of the digest **no rung above can reach**: a variable's
@@ -376,17 +393,11 @@ def _structure(model: Any) -> bytes:
 #: YAML, so no change to data moves one. They are hashed anyway — the digest's
 #: soundness must not rest on reasoning about which of a model's facts the
 #: language lets data touch — so they are pinned where they *are* reachable,
-#: one edit of the declaration apart. Each replaces its whole block.
+#: one edit of the declaration apart.
 DECLARED = [
-    pytest.param(
-        {'variables': {'p': {'foreach': ['plant'], 'bounds': {'lower': 0, 'upper': 100}, 'integer': True}}},
-        id='a variable type',
-    ),
-    pytest.param(
-        {'constraints': {'meet': {'foreach': ['zone'], 'expression': 'sum(reach * p, over=plant) == demand'}}},
-        id="a row's comparison",
-    ),
-    pytest.param({'objectives': {'total': {'sense': 'maximize', 'expression': 'p * cost + levy'}}}, id='the sense'),
+    pytest.param({'variables.p.integer': True}, id='a variable type'),
+    pytest.param({'constraints.meet.expression': 'sum(reach * p, over=plant) == demand'}, id="a row's comparison"),
+    pytest.param({'objectives.total.sense': 'maximize'}, id='the sense'),
 ]
 
 
@@ -399,7 +410,7 @@ def test_the_digest_moves_where_a_declaration_moved(edited):
     about — and every such answer is confident. Two builds one declaration
     apart is the only way to ask about a field the data cannot move.
     """
-    assert _structure(REACH) != _structure({**REACH, **edited}), (
+    assert _tables(REACH).structure != _tables(override(REACH, **edited)).structure, (
         'a model a re-solve may not be pushed onto has to hash differently'
     )
 
@@ -423,20 +434,18 @@ def test_the_digest_reads_the_counts_that_frame_its_vectors(count):
     Asked of the tables rather than of two builds, since a build produces the
     counts and the vectors together and so cannot pose the question.
     """
-    with lps.build(REACH, reach_sources()) as bound:
-        tables = bound._engine._tables()
-
+    tables = _tables(REACH)
     moved = replace(tables, **{count: getattr(tables, count) + 1})
     assert moved.structure != tables.structure, f'{count} is framing, not decoration: the same bytes split elsewhere'
 
 
-#: One option each sink understands, at two values. The vocabulary is the
-#: solver's own — `solver_options` is forwarded verbatim — so there is one word
-#: per member rather than one shared word.
-LIMITS = {'highs': ('time_limit', 60.0, 120.0), 'gurobi': ('TimeLimit', 60.0, 120.0)}
+#: The option name each sink gives a time limit — `solver_options` is forwarded
+#: verbatim, so the vocabulary is the solver's own and there is one word per
+#: member rather than one shared word.
+LIMITS = {'highs': 'time_limit', 'gurobi': 'TimeLimit'}
 
 
-def test_a_solve_asking_for_other_options_loads_the_model_again(dispatch_yaml, solver_name):
+def test_a_solve_asking_for_other_options_loads_the_model_again(bound, solver_name):
     """Options are recorded at the load, so they are part of what may be kept.
 
     A solver holds what it was told when it took the model. Keeping it for a
@@ -444,39 +453,35 @@ def test_a_solve_asking_for_other_options_loads_the_model_again(dispatch_yaml, s
     limits and report the answer as the one asked for — a gap left loose, or a
     time limit that was never the caller's.
     """
-    option, first, second = LIMITS[solver_name]
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        bound.solve(solver_name=solver_name, solver_options={option: first})
-        bound.solve(solver_name=solver_name, solver_options={option: second})
-        assert bound.diagnostics().loads == 2, 'a solver told the first options cannot be told others'
+    option = LIMITS[solver_name]
+    bound.solve(solver_name=solver_name, solver_options={option: 60.0})
+    bound.solve(solver_name=solver_name, solver_options={option: 120.0})
+    assert bound.diagnostics().loads == 2, 'a solver told the first options cannot be told others'
 
-        bound.solve(solver_name=solver_name, solver_options={option: second})
-        assert bound.diagnostics().loads == 2, 'the same options ask for the model the solver already holds'
+    bound.solve(solver_name=solver_name, solver_options={option: 120.0})
+    assert bound.diagnostics().loads == 2, 'the same options ask for the model the solver already holds'
 
 
-def test_a_rebind_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml):
+def test_a_rebind_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml, bound):
     """Partial by construction: what is not named keeps what `build` bound."""
     every = {**sources(), 'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [1.0, 2.0, 3.0, 4.0]})}
-    reference = lps.solve(dispatch_yaml, every, coords=COORDS)
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
+    with lps.solve(dispatch_yaml, every, coords=COORDS) as reference:
         rebound = bound.rebind({'load': every['load']}).solve()
         assert rebound.objective == pytest.approx(reference.objective)
-    reference.close()
 
 
-def test_a_rebind_may_be_repeated_and_each_answer_is_its_own(dispatch_yaml):
+def test_a_rebind_may_be_repeated_and_each_answer_is_its_own(bound):
     """The loop `rebind` exists for: bind, solve, read, bind again."""
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        served = []
-        for scale in (0.5, 1.0, 1.5):
-            load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [40.0 * scale] * len(SNAPSHOTS)})
-            served.append(bound.rebind({'load': load}).solve().primal('p')['value'].sum())
+    served = []
+    for scale in (0.5, 1.0, 1.5):
+        load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [40.0 * scale] * len(SNAPSHOTS)})
+        served.append(bound.rebind({'load': load}).solve().primal('p')['value'].sum())
 
-        assert served == sorted(served), f'{served} — more load must dispatch more power'
-        assert bound.diagnostics().loads == 1, 'a scaled right-hand side moves no label'
+    assert served == sorted(served), f'{served} — more load must dispatch more power'
+    assert bound.diagnostics().loads == 1, 'a scaled right-hand side moves no label'
 
 
-def test_a_result_from_before_a_rebind_keeps_reading(dispatch_yaml):
+def test_a_result_from_before_a_rebind_keeps_reading(bound):
     """A result owns its read-back, so nothing done to the model expires it.
 
     The label frames are immutable and shared: a rebind builds new ones
@@ -484,32 +489,30 @@ def test_a_result_from_before_a_rebind_keeps_reading(dispatch_yaml):
     answer over its own coordinates — a driver keeps any result it still
     wants, at the price of keeping that build's label frames alive.
     """
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        before = bound.solve()
-        kept = before.primal('p')
-        prices = before.dual('power_balance')
+    before = bound.solve()
+    kept = before.primal('p')
+    prices = before.dual('power_balance')
 
-        after = bound.rebind({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [3.0, 1.0, 2.0]})}).solve()
+    after = bound.rebind({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [3.0, 1.0, 2.0]})}).solve()
 
-        assert after.objective != before.objective, 'reordered costs move the optimum, so the two answers differ'
-        assert before.primal('p').equals(kept), 'the old result still reads, and reads its own build'
-        assert before.dual('power_balance').equals(prices), 'its duals too'
+    assert after.objective != before.objective, 'reordered costs move the optimum, so the two answers differ'
+    assert before.primal('p').equals(kept), 'the old result still reads, and reads its own build'
+    assert before.dual('power_balance').equals(prices), 'its duals too'
 
 
-def test_closing_a_result_never_touches_the_model(dispatch_yaml):
+def test_closing_a_result_never_touches_the_model(bound):
     """`close` releases what the result holds — its values and its hold on the
     label frames — never the model or the solver, which are the handle's to
     close. So a result closed on the way out of a `with` block cannot take
     down the model a loop is still solving, and a sibling result, holding its
     own read-back, keeps reading.
     """
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        first = bound.solve()
-        sibling = bound.solve()
-        first.close()
+    first = bound.solve()
+    sibling = bound.solve()
+    first.close()
 
-        assert sibling.primal('p').height > 0, 'a sibling holds its own read-back'
-        assert bound.solve().primal('p').height > 0, 'the model is still there to solve'
+    assert sibling.primal('p').height > 0, 'a sibling holds its own read-back'
+    assert bound.solve().primal('p').height > 0, 'the model is still there to solve'
 
 
 @pytest.mark.parametrize(
@@ -519,22 +522,21 @@ def test_closing_a_result_never_touches_the_model(dispatch_yaml):
         pytest.param(lambda bound: bound.rebind({}, coords={'snapshots': [0]}), 'snapshots', id='coords'),
     ],
 )
-def test_a_rebind_refuses_a_name_the_model_does_not_declare(dispatch_yaml, call, unknown):
+def test_a_rebind_refuses_a_name_the_model_does_not_declare(bound, call, unknown):
     """A rebind names what changed, so a name nothing reads is the one failure
     a driver cannot see: it re-solves the numbers already bound and reports the
     answer. `build` needs no such check — it binds every declared name or
     fails."""
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound, pytest.raises(lps.DataError, match=unknown):
+    with pytest.raises(lps.DataError, match=unknown):
         call(bound)
 
 
-def test_a_dimension_index_rebinds_as_a_source(dispatch_yaml):
+def test_a_dimension_index_rebinds_as_a_source(bound):
     """A dimension index is a source (SPEC §8), so `rebind` takes it where it
     takes any other — the refusal above is for names the model never declared,
     not for names that happen not to be parameters."""
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        change = {'snapshot': [0, 1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 6.0]})}
-        assert bound.rebind(change).solve().primal('p').height > 0, 'a dimension index is a source, and rebinds as one'
+    change = {'snapshot': [0, 1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 6.0]})}
+    assert bound.rebind(change).solve().primal('p').height > 0, 'a dimension index is a source, and rebinds as one'
 
 
 def test_a_rebind_can_grow_a_dimension():
@@ -578,42 +580,41 @@ def test_a_rebind_can_grow_a_dimension():
             ),
         }
 
-    reference = lps.solve(master, {'invest': invest, **cuts(3)}, coords={'cut': [0, 1, 2]})
-    with lps.build(master, {'invest': invest, **cuts(1)}, coords={'cut': [0]}) as bound:
+    with (
+        lps.solve(master, {'invest': invest, **cuts(3)}, coords={'cut': [0, 1, 2]}) as reference,
+        lps.build(master, {'invest': invest, **cuts(1)}, coords={'cut': [0]}) as bound,
+    ):
         bound.solve()
         grown = bound.rebind(cuts(3), coords={'cut': [0, 1, 2]}).solve()
 
         assert grown.objective == pytest.approx(reference.objective)
         assert grown.primal('cap').equals(reference.primal('cap'))
         assert bound.diagnostics().loads == 2, 'more rows than the solver holds is a load, not a push'
-    reference.close()
 
 
-def test_a_written_file_follows_the_rebind(dispatch_yaml, tmp_path):
+def test_a_written_file_follows_the_rebind(bound, tmp_path):
     """`write` reads the built model, so it reads the rebound one."""
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        bound.write(tmp_path / 'before.lp')
-        bound.rebind({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [7.0, 7.0, 7.0, 7.0]})})
-        bound.write(tmp_path / 'after.lp')
+    bound.write(tmp_path / 'before.lp')
+    bound.rebind({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [7.0, 7.0, 7.0, 7.0]})})
+    bound.write(tmp_path / 'after.lp')
 
     after = (tmp_path / 'after.lp').read_text()
     assert (tmp_path / 'before.lp').read_text() != after
     assert '7' in after
 
 
-def test_a_rebind_that_cannot_build_leaves_nothing_half_built(dispatch_yaml):
+def test_a_rebind_that_cannot_build_leaves_nothing_half_built(bound):
     """The build's own rule, one call later: a failure releases the model.
 
     A handle holding half a model would answer the next `solve` with a mixture
     of two, which is worse than having nothing to answer with.
     """
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
-        bound.solve()
-        with pytest.raises(lps.DataError):
-            bound.rebind({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
+    bound.solve()
+    with pytest.raises(lps.DataError):
+        bound.rebind({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
 
-        with pytest.raises(lps.LpspecError, match='no built model to hand over'):
-            bound.solve()
+    with pytest.raises(lps.LpspecError, match='no built model to hand over'):
+        bound.solve()
 
 
 def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):

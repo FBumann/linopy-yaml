@@ -41,6 +41,7 @@ which would stop prose from naming the API it documents.
 from __future__ import annotations
 
 import ast
+import functools
 import re
 import textwrap
 from dataclasses import fields, is_dataclass
@@ -143,6 +144,7 @@ class Block(NamedTuple):
         return f'{self.doc}:{self.line} ({self.lang} block #{self.index})'
 
 
+@functools.cache
 def _blocks(lang: str | None = None) -> list[Block]:
     """Every tracked fenced block, optionally narrowed to one language.
 
@@ -181,6 +183,20 @@ def _public(obj: Any) -> set[str]:
     return names
 
 
+def _undefined_attributes(tree: ast.AST) -> list[str]:
+    """``root.attr`` uses whose root is ours and whose attr does not exist."""
+    return sorted(
+        {
+            f'{n.value.id}.{n.attr}'
+            for n in ast.walk(tree)
+            if isinstance(n, ast.Attribute)
+            and isinstance(n.value, ast.Name)
+            and n.value.id in ROOTS
+            and n.attr not in _public(ROOTS[n.value.id])
+        }
+    )
+
+
 # --------------------------------------------------------------------------
 # python blocks
 # --------------------------------------------------------------------------
@@ -207,19 +223,8 @@ def test_python_block_uses_real_api(block: Block) -> None:
         pytest.skip('explicitly skipped')
     if missing := _unresolvable(block.code):
         pytest.skip(_EXTRA.format(sorted(missing)))
-    tree = ast.parse(block.code)
-    bad: list[str] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Attribute) or not isinstance(node.value, ast.Name):
-            continue
-        root = node.value.id
-        if root not in ROOTS:
-            continue
-        if node.attr not in _public(ROOTS[root]):
-            bad.append(f'{root}.{node.attr}')
-    assert not bad, (
-        f'{block.where} uses names that do not exist: {sorted(set(bad))}. Fix the example, or the API it documents.'
-    )
+    bad = _undefined_attributes(ast.parse(block.code))
+    assert not bad, f'{block.where} uses names that do not exist: {bad}. Fix the example, or the API it documents.'
 
 
 def test_readme_example_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -454,15 +459,8 @@ def test_docstring_example_uses_real_api(example: Example) -> None:
         pytest.fail(f'{example.where} is not valid Python: {exc}\n{example.code}')
     if missing := _unresolvable(example.code):
         pytest.skip(_EXTRA.format(sorted(missing)))
-    bad = [
-        f'{n.value.id}.{n.attr}'
-        for n in ast.walk(tree)
-        if isinstance(n, ast.Attribute)
-        and isinstance(n.value, ast.Name)
-        and n.value.id in ROOTS
-        and n.attr not in _public(ROOTS[n.value.id])
-    ]
-    assert not bad, f'{example.where} uses names that do not exist: {sorted(set(bad))}'
+    bad = _undefined_attributes(tree)
+    assert not bad, f'{example.where} uses names that do not exist: {bad}'
 
 
 def test_tracked_docs_exist() -> None:

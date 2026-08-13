@@ -69,35 +69,28 @@ def test_dimension_is_not_a_value_in_an_expression():
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_where_name_is_an_error():
-    """Was: scalar-False mask in the eager lane (a model that builds, solves
-    and is silently empty).
-
-    The model does not survive construction, so lowering never sees it — the
-    earliest place that can tell is the one that tells.
-    """
-    with pytest.raises(LanguageError, match="'typo_name' not found"):
-        _schema(**{'variables.p.where': 'typo_name > 0'})
-
-
-def test_parameter_vs_parameter_where_comparison_is_an_error():
-    """Was: a parameter comparison in the eager lane, a comparison against the
-    string 'cost' in the relational one."""
-    with pytest.raises(ValueError, match='compares two parameters'):
-        _schema(**{'variables.p.where': 'p_max > cost'})
-
-
-def test_dimension_vs_dimension_where_comparison_is_an_error():
-    """Was: silently empty. The RHS read as the string 'snapshot', so the mask
-    compared generator coordinates against another dimension's *name*, matched
-    nothing, and the block built with zero rows on both lanes."""
-    with pytest.raises(ValueError, match='compares against dimension'):
-        _schema(**{'variables.p.where': 'generator == snapshot'})
-
-
-def test_where_cannot_reference_a_variable():
-    with pytest.raises(ValueError, match='built before variables exist'):
-        _schema(**{'variables.p.where': 'p > 0'})
+@pytest.mark.parametrize(
+    ('where', 'error', 'match'),
+    [
+        # Was: scalar-False mask in the eager lane (a model that builds, solves
+        # and is silently empty). The model does not survive construction, so
+        # lowering never sees it — the earliest place that can tell is the one
+        # that tells.
+        pytest.param('typo_name > 0', LanguageError, "'typo_name' not found", id='unknown-name'),
+        # Was: a parameter comparison in the eager lane, a comparison against
+        # the string 'cost' in the relational one.
+        pytest.param('p_max > cost', ValueError, 'compares two parameters', id='parameter-vs-parameter'),
+        # Was: silently empty. The RHS read as the string 'snapshot', so the
+        # mask compared generator coordinates against another dimension's
+        # *name*, matched nothing, and the block built with zero rows on both
+        # lanes.
+        pytest.param('generator == snapshot', ValueError, 'compares against dimension', id='dimension-vs-dimension'),
+        pytest.param('p > 0', ValueError, 'built before variables exist', id='a-variable-in-a-where'),
+    ],
+)
+def test_an_ill_formed_where_is_a_load_error(where, error, match):
+    with pytest.raises(error, match=match):
+        _schema(**{'variables.p.where': where})
 
 
 def test_string_literal_rhs_still_works():
@@ -159,11 +152,21 @@ def test_macro_formal_may_not_shadow_a_dimension():
 # ---------------------------------------------------------------------------
 
 
-def test_bounds_reject_expressions_with_a_message_that_says_so():
-    with pytest.raises(ValueError, match='bounds accept a parameter name or a number, not an expression'):
-        _schema(**{'variables.p.bounds': {'lower': 0, 'upper': '2 * p_max'}})
-
-
-def test_bounds_typo_names_the_parameter():
-    with pytest.raises(ValueError, match="'p_maxx' is not a declared parameter"):
-        _schema(**{'variables.p.bounds': {'lower': 0, 'upper': 'p_maxx'}})
+@pytest.mark.parametrize(
+    ('bounds', 'match'),
+    [
+        pytest.param(
+            {'lower': 0, 'upper': '2 * p_max'},
+            'bounds accept a parameter name or a number, not an expression',
+            id='an-expression-is-rejected-with-a-message-that-says-so',
+        ),
+        pytest.param(
+            {'lower': 0, 'upper': 'p_maxx'},
+            "'p_maxx' is not a declared parameter",
+            id='a-typo-names-the-parameter',
+        ),
+    ],
+)
+def test_bounds_reject_what_expressions_allow(bounds, match):
+    with pytest.raises(ValueError, match=match):
+        _schema(**{'variables.p.bounds': bounds})

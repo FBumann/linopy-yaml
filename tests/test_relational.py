@@ -8,6 +8,7 @@ Each model is built three ways and must agree on the objective:
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import replace
 
 import numpy as np
@@ -246,17 +247,37 @@ def test_transport_roundtrip(transport_data, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_nonlinear_product_rejected(dispatch_data):
+@pytest.mark.parametrize(
+    ('patch', 'match'),
+    [
+        pytest.param(
+            {
+                'objective': ObjectiveDeclaration(
+                    'min', Sum(Variable('p') * Variable('p'), over=('generator', 'snapshot'))
+                )
+            },
+            'nonlinear',
+            id='a-product-of-two-variables',
+        ),
+        # generator dim deliberately not summed
+        pytest.param(
+            {
+                'constraints': (
+                    ConstraintDeclaration(
+                        'power_balance', ('snapshot',), lhs=Variable('p'), sense='==', rhs=Parameter('load')
+                    ),
+                )
+            },
+            'missing a Sum',
+            id='a-term-carrying-a-dim-the-foreach-does-not',
+        ),
+    ],
+)
+def test_a_program_outside_the_language_is_rejected(dispatch_data, patch, match):
+    """A nonlinear product, or a term carrying a dim the constraint does not `foreach`, is refused."""
     gens, load = dispatch_data
-    prog = dispatch_program()
-    bad = Program(
-        parameters=prog.parameters,
-        variables=prog.variables,
-        constraints=prog.constraints,
-        objective=ObjectiveDeclaration('min', Sum(Variable('p') * Variable('p'), over=('generator', 'snapshot'))),
-    )
-    with PolarsEngine() as engine, pytest.raises(LanguageError, match='nonlinear'):
-        engine.build(bad, dispatch_sources(gens, load))
+    with PolarsEngine() as engine, pytest.raises(LanguageError, match=match):
+        engine.build(replace(dispatch_program(), **patch), dispatch_sources(gens, load))
 
 
 def test_missing_source_rejected(dispatch_data):
@@ -325,28 +346,6 @@ def test_a_dimension_named_n_is_still_a_legal_dimension():
         lps.build(model, doubled)
 
 
-def test_out_of_foreach_dims_rejected(dispatch_data):
-    """A term carrying a dim the constraint does not `foreach` is refused."""
-    gens, load = dispatch_data
-    prog = dispatch_program()
-    bad = Program(
-        parameters=prog.parameters,
-        variables=prog.variables,
-        constraints=(
-            ConstraintDeclaration(
-                'power_balance',
-                ('snapshot',),
-                lhs=Variable('p'),  # generator dim deliberately not summed
-                sense='==',
-                rhs=Parameter('load'),
-            ),
-        ),
-        objective=prog.objective,
-    )
-    with PolarsEngine() as engine, pytest.raises(LanguageError, match='missing a Sum'):
-        engine.build(bad, dispatch_sources(gens, load))
-
-
 def test_an_awkward_path_is_a_value_not_syntax(tmp_path):
     """Paths come from the calling program, so no language rule constrains them.
 
@@ -375,6 +374,17 @@ def test_an_awkward_path_is_a_value_not_syntax(tmp_path):
     assert set(result.to_parquet(odd / 'solution')) == {'p'}
 
 
+#: The smallest model with a parameter on the constant side: `x >= rhs` over
+#: two coordinates, `x` minimized and unbounded above.
+RHS_MODEL = {
+    'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
+    'parameters': {'rhs': {'dims': ['i']}},
+    'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},  # no upper: +inf
+    'constraints': {'c': {'foreach': ['i'], 'expression': 'x >= rhs'}},
+    'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
+}
+
+
 def test_a_variable_appearing_twice_in_a_row_is_summed_not_duplicated():
     """The case the skipped aggregate must not break.
 
@@ -383,13 +393,7 @@ def test_a_variable_appearing_twice_in_a_row_is_summed_not_duplicated():
     one entry for that column rather than two — a solver handed the same
     column twice in one row is entitled to reject the model.
     """
-    model = {
-        'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
-        'parameters': {'rhs': {'dims': ['i']}},
-        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},  # no upper: +inf
-        'constraints': {'c': {'foreach': ['i'], 'expression': 'x + 2 * x >= rhs'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
-    }
+    model = override(RHS_MODEL, **{'constraints.c.expression': 'x + 2 * x >= rhs'})
     sources = {'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
     with lps.build(model, sources) as bound:
         matrix = bound._engine._tables().matrix
@@ -456,6 +460,18 @@ def test_a_masked_variable_is_labelled_in_declaration_order():
     assert list(labelled.select('snapshot', 'node', 'tech').iter_rows()) == expected
 
 
+#: The smallest string-dim model: `x` bounded by `cap` over `node`, forced to
+#: it by `k`, minimized. The string-dimension tests below each override one
+#: declaration of it.
+NODE_CAP_MODEL = {
+    'dimensions': {'node': {'dtype': 'str', 'values': ['a', 'b']}},
+    'parameters': {'cap': {'dims': ['node']}},
+    'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'k': {'foreach': ['node'], 'expression': 'x >= cap'}},
+    'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
+}
+
+
 def test_a_dictionary_encoded_source_column_binds_like_a_plain_one():
     """A `Categorical` dim column is a source encoding, not a different model.
 
@@ -467,19 +483,12 @@ def test_a_dictionary_encoded_source_column_binds_like_a_plain_one():
     dimension declares. Without that, the failure is a schema error from
     inside a join rather than anything a caller can act on.
     """
-    model = {
-        'dimensions': {'node': {'dtype': 'str', 'values': ['a', 'b']}},
-        'parameters': {'cap': {'dims': ['node']}},
-        'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'constraints': {'c': {'foreach': ['node'], 'expression': 'x >= cap'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
-    }
     encoded = pl.DataFrame({'node': ['a', 'b'], 'value': [3.0, 4.0]}).with_columns(pl.col('node').cast(pl.Categorical))
     plain = pl.DataFrame({'node': ['a', 'b'], 'value': [3.0, 4.0]})
 
-    with lps.build(model, {'cap': encoded}) as bound:
+    with lps.build(NODE_CAP_MODEL, {'cap': encoded}) as bound:
         from_encoded = bound.solve().objective
-    with lps.build(model, {'cap': plain}) as bound:
+    with lps.build(NODE_CAP_MODEL, {'cap': plain}) as bound:
         from_plain = bound.solve().objective
 
     assert from_encoded == pytest.approx(7.0)
@@ -496,13 +505,7 @@ def test_a_string_dimension_is_enum_encoded_up_to_the_read_back():
     was never the dtype carrying it: it is the row order, and `to_pandas` puts
     the ordered categories back for the bridge out.
     """
-    model = {
-        'dimensions': {'node': {'dtype': 'str', 'values': ['c', 'a', 'b']}},
-        'parameters': {'cap': {'dims': ['node']}},
-        'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'constraints': {'k': {'foreach': ['node'], 'expression': 'x >= cap'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
-    }
+    model = override(NODE_CAP_MODEL, **{'dimensions.node.values': ['c', 'a', 'b']})
     cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
     declared = pl.Enum(['c', 'a', 'b'])
 
@@ -518,13 +521,14 @@ def test_a_string_dimension_is_enum_encoded_up_to_the_read_back():
 def test_a_where_orders_string_labels_bytewise_not_by_declaration():
     """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
     (§6.1). Declared c, a, b so the Enum's declaration order would keep {b} alone."""
-    model = {
-        'dimensions': {'node': {'dtype': 'str', 'values': ['c', 'a', 'b']}},
-        'parameters': {'cap': {'dims': ['node']}},
-        'variables': {'x': {'foreach': ['node'], 'where': "node >= 'b'", 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'constraints': {'k': {'foreach': ['node'], 'where': "node >= 'b'", 'expression': 'x >= cap'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
-    }
+    model = override(
+        NODE_CAP_MODEL,
+        **{
+            'dimensions.node.values': ['c', 'a', 'b'],
+            'variables.x.where': "node >= 'b'",
+            'constraints.k.where': "node >= 'b'",
+        },
+    )
     cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
 
     with lps.build(model, {'cap': cap}) as bound:
@@ -535,13 +539,7 @@ def test_a_where_orders_string_labels_bytewise_not_by_declaration():
 def test_a_where_naming_an_undeclared_label_masks_nothing_in():
     """A quoted label the dimension does not carry masks everything out (§6.1)
     — the Enum would refuse the stranger, so the comparison is in String space."""
-    model = {
-        'dimensions': {'node': {'dtype': 'str', 'values': ['a', 'b']}},
-        'parameters': {'cap': {'dims': ['node']}},
-        'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'constraints': {'k': {'foreach': ['node'], 'where': "node == 'zzz'", 'expression': 'x >= cap'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
-    }
+    model = override(NODE_CAP_MODEL, **{'constraints.k.where': "node == 'zzz'"})
     cap = pl.DataFrame({'node': ['a', 'b'], 'value': [1.0, 2.0]})
 
     with lps.build(model, {'cap': cap}) as bound:
@@ -584,7 +582,7 @@ def test_a_mask_that_removes_nothing_labels_exactly_like_no_mask(dispatch_data):
     assert labels[0].equals(labels[1])
 
 
-def _objective_of(program, sources):
+def _objective_table(program, sources):
     """`obj` as `{col: coeff}`, plus whether the aggregate was skipped."""
     with PolarsEngine() as engine:
         engine.build(program, sources)
@@ -705,7 +703,14 @@ def test_a_variable_and_a_constraint_may_share_a_name():
         )
 
 
-def test_the_matrix_collapses_a_repeated_cell_and_leaves_the_rest_alone():
+@pytest.mark.parametrize(
+    ('expression', 'height', 'coeff'),
+    [
+        pytest.param('x + y >= rhs', 4, 1.0, id='disjoint-variables-nothing-to-collapse'),
+        pytest.param('x + 3 * x >= rhs', 2, 4.0, id='one-variable-twice-summed-onto-one-cell'),
+    ],
+)
+def test_the_matrix_collapses_a_repeated_cell_and_leaves_the_rest_alone(expression, height, coeff):
     """Both outcomes of the terminal aggregate, on models differing only in overlap.
 
     Two fragments over disjoint variables repeat nothing and must come out
@@ -713,32 +718,24 @@ def test_the_matrix_collapses_a_repeated_cell_and_leaves_the_rest_alone():
     A matrix holding the same `(row, col)` twice is not a slower model, it is
     one the sinks disagree about.
     """
-    base = {
-        'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
-        'parameters': {'rhs': {'dims': ['i']}},
-        'variables': {
-            'x': {'foreach': ['i'], 'bounds': {'lower': 0}},
-            'y': {'foreach': ['i'], 'bounds': {'lower': 0}},
+    model = override(
+        RHS_MODEL,
+        **{
+            'variables.y': {'foreach': ['i'], 'bounds': {'lower': 0}},
+            'objectives.o.expression': 'sum(x, over=i) + sum(y, over=i)',
+            'constraints.c.expression': expression,
         },
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i) + sum(y, over=i)'}},
-    }
+    )
     sources = {'rhs': pl.DataFrame({'i': [0, 1], 'value': [4.0, 6.0]})}
 
-    disjoint = dict(base, constraints={'c': {'foreach': ['i'], 'expression': 'x + y >= rhs'}})
-    with lps.build(disjoint, sources) as bound:
+    with lps.build(model, sources) as bound:
         matrix = bound._engine._tables().matrix
-        assert matrix.height == 4, 'two variables per row, nothing to collapse'
-        assert matrix['coeff'].to_list() == [1.0, 1.0, 1.0, 1.0]
-
-    overlapping = dict(base, constraints={'c': {'foreach': ['i'], 'expression': 'x + 3 * x >= rhs'}})
-    with lps.build(overlapping, sources) as bound:
-        matrix = bound._engine._tables().matrix
-        assert matrix.height == 2, 'one cell per row after the collapse'
-        assert matrix['coeff'].to_list() == [4.0, 4.0]
+        assert matrix.height == height, 'one entry per (row, col) cell the expression reaches'
+        assert set(matrix['coeff'].to_list()) == {coeff}
 
 
-def _network(self_loop: bool) -> tuple[dict, dict]:
-    """A balance of flows in minus flows out, with or without a line to itself."""
+def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
+    """A balance of flows in minus flows out; `ends` is the second line's endpoints."""
     model = {
         'dimensions': {
             'snapshot': {'dtype': 'int', 'values': [0, 1]},
@@ -755,7 +752,6 @@ def _network(self_loop: bool) -> tuple[dict, dict]:
         },
         'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(sum(f, over=line), over=snapshot)'}},
     }
-    ends = ('b0', 'b1') if not self_loop else ('b0', 'b0')
     sources = {
         'line': pl.DataFrame({'line': ['l0', 'l1'], 'from': ['b0', ends[0]], 'to': ['b1', ends[1]]}),
         'cap': pl.DataFrame({'line': ['l0', 'l1'], 'value': [10.0, 10.0]}),
@@ -766,7 +762,14 @@ def _network(self_loop: bool) -> tuple[dict, dict]:
     return model, sources
 
 
-def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet():
+@pytest.mark.parametrize(
+    'ends',
+    [
+        pytest.param(('b0', 'b1'), id='two-lines-with-distinct-endpoints'),
+        pytest.param(('b0', 'b0'), id='a-line-that-leaves-and-arrives-at-one-bus'),
+    ],
+)
+def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(ends):
     """`group_by=to` and `group_by=from` reach one cell exactly on a line to itself.
 
     Both fragments carry `f`, so counting variables says the aggregate is
@@ -780,37 +783,38 @@ def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet():
     about — an LP reader sums the pair and a solver handed duplicate entries is
     entitled to do either.
     """
-    for self_loop in (False, True):
-        model, sources = _network(self_loop)
-        with lps.build(model, sources) as bound:
-            program = lower_program(Model(**model))
-            terms = bound._engine._q.expression(program.constraints[0].lhs, 'test').terms
-            assert len(terms) == 2
+    model, sources = _network(ends)
+    with lps.build(model, sources) as bound:
+        program = lower_program(Model(**model))
+        terms = bound._engine._q.expression(program.constraints[0].lhs, 'test').terms
+        assert len(terms) == 2
 
-            tables = bound._engine._tables()
-            cells = tables.matrix_block(0, tables.row_count).select('row', 'col')
-            assert cells.height == cells.unique().height, f'a cell reached the sinks twice (self_loop={self_loop})'
+        tables = bound._engine._tables()
+        cells = tables.matrix_block(0, tables.row_count).select('row', 'col')
+        assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
 
 
-def test_the_objective_sums_the_coefficients_that_land_on_one_column():
+@pytest.mark.parametrize(
+    ('expression', 'expected'),
+    [
+        pytest.param('p * cost', {0: 2.0, 1: 3.0}, id='one-fragment-one-row-per-column'),
+        pytest.param('p * cost + p * cost', {0: 4.0, 1: 6.0}, id='two-fragments-summed-onto-one-column'),
+    ],
+)
+def test_the_objective_sums_the_coefficients_that_land_on_one_column(expression, expected):
     """`p * cost` is one row per column; `p * cost + p * cost` is two, summed."""
     base = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
         'parameters': {'cost': {'dims': ['i']}, 'lb': {'dims': ['i']}},
         'variables': {'p': {'foreach': ['i'], 'bounds': {'lower': 'lb'}}},
         'constraints': {'c': {'foreach': ['i'], 'expression': 'p >= lb'}},
+        'objectives': {'o': {'sense': 'minimize', 'expression': expression}},
     }
     sources = {
         'cost': pl.DataFrame({'i': [0, 1], 'value': [2.0, 3.0]}),
         'lb': pl.DataFrame({'i': [0, 1], 'value': [1.0, 1.0]}),
     }
-    once = lower_program(Model(**dict(base, objectives={'o': {'sense': 'minimize', 'expression': 'p * cost'}})))
-    twice = lower_program(
-        Model(**dict(base, objectives={'o': {'sense': 'minimize', 'expression': 'p * cost + p * cost'}}))
-    )
-
-    assert _objective_of(once, sources) == ({0: 2.0, 1: 3.0}, 2)
-    assert _objective_of(twice, sources) == ({0: 4.0, 1: 6.0}, 2)
+    assert _objective_table(lower_program(Model(**base)), sources) == (expected, 2)
 
 
 def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows():
@@ -837,7 +841,7 @@ def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows():
         ),
         'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 5.0]}),
     }
-    assert _objective_of(lower_program(Model(**model)), sources) == ({0: 6.0, 1: 6.0}, 2), (
+    assert _objective_table(lower_program(Model(**model)), sources) == ({0: 6.0, 1: 6.0}, 2), (
         'one row per column, each carrying the summed price — not three rows of one'
     )
 
@@ -886,7 +890,8 @@ def test_a_solution_is_read_back_in_label_order_without_sorting_for_it():
 
 
 #: Three columns and three rows, the smallest model whose solution vector has a
-#: length worth disagreeing about.
+#: length worth disagreeing about — and, every declared row being built, the
+#: control for the omissions report.
 SOLVER_VECTOR_MODEL = {
     'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
     'parameters': {'load': {'dims': ['t']}},
@@ -994,14 +999,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
 
 def test_omissions_is_empty_when_every_declared_row_is_built():
     """The common case says nothing, so the report is a signal rather than noise."""
-    model = {
-        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
-        'parameters': {'load': {'dims': ['t']}},
-        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
-        'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
-    }
-    with lps.build(model, {'load': pl.DataFrame({'t': [0, 1], 'value': [1.0, 2.0]})}) as bound:
+    with lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as bound:
         assert bound.diagnostics().omissions.is_empty()
 
 
@@ -1078,6 +1076,10 @@ SPARSE_COEFFICIENT_MODEL = {
     'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(x, over=t)'}},
 }
 
+#: `w` everywhere, `c` with no row at t=0 — the sparse constant side that is
+#: refused unmasked and legal behind a `where`.
+SPARSE_CONSTANT_DATA = {'w': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}), 'c': pd.Series({1: 4.0, 2: 5.0})}
+
 
 def test_a_sparse_coefficient_is_still_a_zero_coefficient():
     """A tidy parameter table is a compressed dense array — where it can be.
@@ -1107,8 +1109,10 @@ def test_a_sparse_constant_side_is_refused_on_both_lanes():
     Refused on both lanes, in the same words, because a rule the eager lane did
     not share would be a parity break rather than a language rule (hard rule 3).
     """
-    data = {'w': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}), 'c': pd.Series({1: 4.0, 2: 5.0})}
-    with pytest.raises(DataError, match="parameter 'c' covers 1 fewer"), differential(SPARSE_COEFFICIENT_MODEL, data):
+    with (
+        pytest.raises(DataError, match="parameter 'c' covers 1 fewer"),
+        differential(SPARSE_COEFFICIENT_MODEL, SPARSE_CONSTANT_DATA),
+    ):
         pass
 
 
@@ -1120,10 +1124,8 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
     wall. Without it the remedy the error names would not work.
 
     """
-    masked = {**SPARSE_COEFFICIENT_MODEL}
-    masked['constraints'] = {'cap': {**SPARSE_COEFFICIENT_MODEL['constraints']['cap'], 'where': 'c'}}
-    data = {'w': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}), 'c': pd.Series({1: 4.0, 2: 5.0})}
-    with differential(masked, data) as run:
+    masked = override(SPARSE_COEFFICIENT_MODEL, **{'constraints.cap.where': 'c'})
+    with differential(masked, SPARSE_CONSTANT_DATA) as run:
         assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
             't=0 has no row at all, so x runs to its bound there'
         )
@@ -1408,9 +1410,6 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
     `sector` case sat on this.
 
     """
-    import pandas as pd
-    import xarray as xr
-
     data = {
         # a tech produces exactly one carrier, which is what makes `produces` sparse
         'produces': xr.DataArray(
@@ -1476,7 +1475,7 @@ def test_a_derived_dimension_cannot_have_a_stranger():
     union of what arrived is the definition and the check has nothing to ask.
     Running it anyway would refuse every such model.
     """
-    derived = {**LABEL_MODEL, 'dimensions': {'f': {'values': None}}}
+    derived = override(LABEL_MODEL, **{'dimensions.f.values': None})
     data = {'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'cap': _CAP}
     assert lps.solve(derived, data).objective == pytest.approx(15.0)
 
@@ -1522,14 +1521,7 @@ def test_dense_columns_does_not_edit_the_model_it_projects():
     ask would read bounds the first had already edited.
 
     """
-    model = {
-        'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
-        'parameters': {'rhs': {'dims': ['i']}},
-        'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 0}}},
-        'constraints': {'c': {'foreach': ['i'], 'expression': 'x >= rhs'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=i)'}},
-    }
-    with lps.build(model, {'rhs': pl.DataFrame({'i': [0, 1], 'value': [1.0, 2.0]})}) as bound:
+    with lps.build(RHS_MODEL, {'rhs': pl.DataFrame({'i': [0, 1], 'value': [1.0, 2.0]})}) as bound:
         tables = bound._engine._tables()
         first, _, _, _ = tables.dense_columns(1e30)
         ub_after_first = tables.cols['ub'].to_list()
@@ -1540,6 +1532,17 @@ def test_dense_columns_does_not_edit_the_model_it_projects():
         assert all(v == float('inf') for v in tables.cols['ub'].to_list()), 'the frame lost its infinities'
         assert list(second_ub) == [1e100, 1e100], "the second solver got the first solver's infinity"
         assert list(first) == [0.0, 0.0]
+
+
+#: Two dims on purpose (see the test below): a single-dim label frame is a scan
+#: and cannot come out of order.
+POSITIONAL_COLS_MODEL = {
+    'dimensions': {'i': {'dtype': 'int', 'values': list(range(4))}, 'j': {'values': ['a', 'b', 'c']}},
+    'parameters': {'cap': {'dims': ['i', 'j']}},
+    'variables': {'x': {'foreach': ['i', 'j'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'c': {'foreach': ['i', 'j'], 'expression': 'x <= cap'}},
+    'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(sum(x, over=j), over=i)'}},
+}
 
 
 @pytest.mark.parametrize('where', [None, 'cap > 0'])
@@ -1563,15 +1566,7 @@ def test_cols_is_positional_so_a_row_index_is_its_solver_column(where):
         for i in range(4)
         for j in ('a', 'b', 'c')
     ]
-    model = {
-        'dimensions': {'i': {'dtype': 'int', 'values': list(range(4))}, 'j': {'values': ['a', 'b', 'c']}},
-        'parameters': {'cap': {'dims': ['i', 'j']}},
-        'variables': {'x': {'foreach': ['i', 'j'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'constraints': {'c': {'foreach': ['i', 'j'], 'expression': 'x <= cap'}},
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(sum(x, over=j), over=i)'}},
-    }
-    if where:
-        model['variables']['x']['where'] = where
+    model = override(POSITIONAL_COLS_MODEL, **{'variables.x.where': where}) if where else POSITIONAL_COLS_MODEL
 
     with lps.build(model, {'cap': pl.DataFrame(caps)}) as bound:
         tables = bound._engine._tables()
@@ -1608,7 +1603,7 @@ SHUFFLED_BOUND = pl.DataFrame(
 FLAT_COST = pl.DataFrame({'n': ['a', 'b'], 'value': [1.0, 1.0]})
 
 
-def _aligned_for(model, data):
+def _aligned_for(model, data, monkeypatch):
     """Which bound parameters took the positional path building *model*."""
     from lpspec.relational.engines.polars import compiler as compiler_module
 
@@ -1620,13 +1615,10 @@ def _aligned_for(model, data):
         seen[param] = out is not None
         return out
 
-    compiler_module.PolarsCompiler._aligned_bound = spy
-    try:
+    monkeypatch.setattr(compiler_module.PolarsCompiler, '_aligned_bound', spy)
+    # the decision is recorded while the plan is built, before it runs
+    with contextlib.suppress(LpspecError):
         lps.build(model, data).close()
-    except LpspecError:
-        pass  # the decision is recorded while the plan is built, before it runs
-    finally:
-        compiler_module.PolarsCompiler._aligned_bound = real
     return seen
 
 
@@ -1641,7 +1633,7 @@ FLAT_MODEL = {
 }
 
 
-def test_a_bound_dense_over_the_product_is_attached_by_position_not_joined():
+def test_a_bound_dense_over_the_product_is_attached_by_position_not_joined(monkeypatch):
     """The shape xarray gets for free: position *is* the coordinate.
 
     `avail` spans exactly `p`'s foreach and has a row per coordinate, so the
@@ -1656,14 +1648,14 @@ def test_a_bound_dense_over_the_product_is_attached_by_position_not_joined():
     """
     data = {'avail': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'cost': pd.Series({'a': 1.0, 'b': 1.0, 'c': 1.0})}
 
-    assert _aligned_for(FLAT_MODEL, data) == {'avail': True}
+    assert _aligned_for(FLAT_MODEL, data, monkeypatch) == {'avail': True}
     with differential(FLAT_MODEL, data, lp=True) as run:
         assert run.result.objective == pytest.approx(1 + 2 + 3, rel=RTOL), (
             'every p at its own upper bound; the cap of 100 never binds'
         )
 
 
-def test_the_positional_attach_sorts_rather_than_trusting_the_source_order():
+def test_the_positional_attach_sorts_rather_than_trusting_the_source_order(monkeypatch):
     """The same numbers arriving shuffled must give the same model.
 
     A parameter's rows come in whatever order its source had. Attaching without
@@ -1672,7 +1664,7 @@ def test_the_positional_attach_sorts_rather_than_trusting_the_source_order():
     whole path has to be gated against.
     """
     shuffled = {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}
-    assert _aligned_for(DENSE_BOUND_MODEL, shuffled) == {'avail': True}
+    assert _aligned_for(DENSE_BOUND_MODEL, shuffled, monkeypatch) == {'avail': True}
 
     with lps.solve(DENSE_BOUND_MODEL, shuffled) as result:
         assert result.objective == pytest.approx(1 + 2 + 3 + 4 + 5 + 6, rel=RTOL)
@@ -1680,7 +1672,7 @@ def test_the_positional_attach_sorts_rather_than_trusting_the_source_order():
         assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
 
 
-def test_a_mask_or_a_sparse_bound_keeps_the_join():
+def test_a_mask_or_a_sparse_bound_keeps_the_join(monkeypatch):
     """Both ways position stops meaning the coordinate, refused by the gate.
 
     A `where` makes the label frame a subset of the product, and a parameter
@@ -1690,46 +1682,40 @@ def test_a_mask_or_a_sparse_bound_keeps_the_join():
     the gate declines and nothing else changes.
     """
     masked = override(DENSE_BOUND_MODEL, **{'variables.p.where': 't > 0'})
-    assert _aligned_for(masked, {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}) == {'avail': False}
+    assert _aligned_for(masked, {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}, monkeypatch) == {'avail': False}
 
     holey = {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
-    assert _aligned_for(DENSE_BOUND_MODEL, holey) == {'avail': False}
+    assert _aligned_for(DENSE_BOUND_MODEL, holey, monkeypatch) == {'avail': False}
 
 
-def test_an_empty_index_keeps_the_dimension_s_declared_dtype():
+@pytest.mark.parametrize(
+    ('declared', 'dtype', 'grown'),
+    [
+        pytest.param({'dtype': 'int'}, pl.Int64, [0, 1], id='a-declared-dtype'),
+        pytest.param({}, pl.String, ['a', 'b'], id='the-default-dtype-str'),
+    ],
+)
+def test_an_empty_index_keeps_the_dimension_s_declared_dtype(declared, dtype, grown):
     """polars infers `Null` from no labels, and a `Null` key joins nothing.
 
     A dimension whose members a caller appends to between solves starts empty —
     a Benders cut set is the motivating case — and the parameter bound to it
     carries the right dtype from the first call. Only the declaration knows
-    what the column should be, and it always answers: `dtype` defaults to `str`.
+    what the column should be, and it always answers: the default `dtype`
+    (`str`) carries the same weight as a declared one.
     """
     model = {
-        'dimensions': {'cut': {'dtype': 'int'}},
+        'dimensions': {'cut': declared},
         'parameters': {'c': {'dims': ['cut']}},
         'variables': {'x': {'foreach': ['cut'], 'bounds': {'lower': 0}}},
         'objectives': {'o': {'sense': 'minimize', 'expression': 'x * c'}},
     }
-    empty = pl.DataFrame(schema={'cut': pl.Int64, 'value': pl.Float64})
+    empty = pl.DataFrame(schema={'cut': dtype, 'value': pl.Float64})
     with lps.build(model, {'c': empty}, coords={'cut': []}) as bound:
         assert bound._engine._tables().column_count == 0
 
-    grown = pl.DataFrame({'cut': [0, 1], 'value': [1.0, 2.0]})
-    with lps.build(model, {'c': grown}, coords={'cut': [0, 1]}) as bound:
+    with lps.build(model, {'c': pl.DataFrame({'cut': grown, 'value': [1.0, 2.0]})}, coords={'cut': grown}) as bound:
         assert bound._engine._tables().column_count == 2
-
-
-def test_an_empty_index_of_a_string_dimension_is_a_string_column():
-    """The default `dtype` carries the same weight as a declared one."""
-    model = {
-        'dimensions': {'cut': {}},
-        'parameters': {'c': {'dims': ['cut']}},
-        'variables': {'x': {'foreach': ['cut'], 'bounds': {'lower': 0}}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'x * c'}},
-    }
-    empty = pl.DataFrame(schema={'cut': pl.String, 'value': pl.Float64})
-    with lps.build(model, {'c': empty}, coords={'cut': []}) as bound:
-        assert bound._engine._tables().column_count == 0
 
 
 def test_two_solutions_over_different_members_concatenate():
@@ -1739,13 +1725,7 @@ def test_two_solutions_over_different_members_concatenate():
     bound different members of a dimension used to meet `SchemaError: Enum
     mismatch` — for two answers to the same question.
     """
-    model = {
-        'dimensions': {'node': {'dtype': 'str'}},
-        'parameters': {'cap': {'dims': ['node']}},
-        'variables': {'x': {'foreach': ['node'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'constraints': {'k': {'foreach': ['node'], 'expression': 'x >= cap'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': 'sum(x, over=node)'}},
-    }
+    model = override(NODE_CAP_MODEL, **{'dimensions.node': {'dtype': 'str'}})
     frames = []
     for members in (['a', 'b'], ['a', 'c']):
         cap = pl.DataFrame({'node': members, 'value': [1.0, 2.0]})

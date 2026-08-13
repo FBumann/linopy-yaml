@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 REPO = Path(__file__).parent.parent
 PKG = REPO / 'src' / 'lpspec'
@@ -58,24 +58,58 @@ def _all_modules() -> list[Path]:
     return [p for p in PKG.rglob('*.py') if '__pycache__' not in p.parts]
 
 
-def _reaches_past(package: str, allowed: tuple[str, ...], allowlist: set[str]) -> dict[str, list[str]]:
-    """Modules under *package* importing an ``lpspec`` name its fence forbids.
+def _imported(
+    tree: ast.AST,
+    *,
+    nodes: Callable[[ast.AST], Iterator[ast.AST]] = ast.walk,
+    relative: bool = False,
+) -> list[str]:
+    """Every imported name in *tree*, as written.
 
-    Lazy imports are included: a fence a function body could step over is not
-    one. Membership is read off the path, so a new module cannot land outside
-    the fence by being spelled differently.
+    ``import a.b`` yields ``a.b``; ``from a.b import c`` yields ``a.b``. With
+    ``relative=True`` a relative import keeps its dots (``from ..x import y``
+    yields ``..x``); otherwise a module-less relative import is dropped.
+    *nodes* picks the walk — ``ast.walk`` sees everything,
+    :func:`_runtime_nodes` prunes ``TYPE_CHECKING`` bodies.
+    """
+    names: list[str] = []
+    for node in nodes(tree):
+        if isinstance(node, ast.Import):
+            names += [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            if relative:
+                names.append('.' * node.level + (node.module or ''))
+            elif node.module:
+                names.append(node.module)
+    return names
+
+
+def _reaches_past(
+    package: str,
+    allowed: tuple[str, ...],
+    allowlist: set[str],
+    *,
+    third_party: frozenset[str] = frozenset(),
+    nodes: Callable[[ast.AST], Iterator[ast.AST]] = ast.walk,
+) -> dict[str, list[str]]:
+    """Modules under *package* importing a name its fence forbids.
+
+    Forbidden is an ``lpspec`` name outside *allowed* and *allowlist*, or a
+    name whose root package is in *third_party*. Lazy imports are included by
+    default: a fence a function body could step over is not one — *nodes* can
+    prune instead (:func:`_runtime_nodes`). Membership is read off the path,
+    so a new module cannot land outside the fence by being spelled differently.
     """
     offenders = {}
     for path in (PKG / package).rglob('*.py'):
         if '__pycache__' in path.parts:
             continue
-        names = []
-        for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, ast.Import):
-                names += [a.name for a in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                names.append(node.module)
-        bad = [n for n in names if n.startswith('lpspec') and not n.startswith(allowed) and n not in allowlist]
+        bad = [
+            n
+            for n in _imported(ast.parse(path.read_text()), nodes=nodes)
+            if n.split('.')[0] in third_party
+            or (n.startswith('lpspec') and not n.startswith(allowed) and n not in allowlist)
+        ]
         if bad:
             offenders[str(path.relative_to(PKG))] = sorted(set(bad))
     return offenders
@@ -209,32 +243,13 @@ def test_engine_is_isolated():
     the subpackage extractable. Widening it is a decision — add the module to
     ENGINE_MAY_IMPORT with a reason, the way ``errors.py`` is there.
     """
-    offenders = {}
-    for path in (PKG / 'relational').rglob('*.py'):
-        if '__pycache__' in path.parts:
-            continue
-        tree = ast.parse(path.read_text())
-        bad = []
-        for node in _runtime_nodes(tree):
-            if isinstance(node, ast.Import):
-                bad += [
-                    a.name
-                    for a in node.names
-                    if a.name.split('.')[0] in FORBIDDEN_RUNTIME | {'yaml'}
-                    or (
-                        a.name.startswith('lpspec')
-                        and not a.name.startswith('lpspec.relational')
-                        and a.name not in ENGINE_MAY_IMPORT
-                    )
-                ]
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                m = node.module
-                if m.split('.')[0] in FORBIDDEN_RUNTIME | {'yaml'} or (
-                    m.startswith('lpspec') and not m.startswith('lpspec.relational') and m not in ENGINE_MAY_IMPORT
-                ):
-                    bad.append(m)
-        if bad:
-            offenders[str(path.relative_to(PKG))] = sorted(set(bad))
+    offenders = _reaches_past(
+        'relational',
+        ('lpspec.relational',),
+        ENGINE_MAY_IMPORT,
+        third_party=FORBIDDEN_RUNTIME | {'yaml'},
+        nodes=_runtime_nodes,
+    )
     assert not offenders, f'engine reaches outside its subpackage: {offenders}'
 
 
@@ -263,12 +278,7 @@ def test_no_contract_module_names_an_engine():
         rel = path.relative_to(PKG / 'relational').as_posix()
         if '__pycache__' in path.parts or rel.startswith('engines/') or rel in CONTRACT_MAY_NAME_AN_ENGINE:
             continue
-        named = []
-        for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, ast.Import):
-                named += [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom):
-                named.append('.' * node.level + (node.module or ''))
+        named = _imported(ast.parse(path.read_text()), relative=True)
         engines = sorted({m for m in named if 'engines' in m.split('.')})
         if engines:
             offenders[rel] = engines
@@ -535,12 +545,9 @@ def test_no_sink_reaches_a_sibling():
     for family in ('solvers', 'writers'):
         for path in sorted((SINKS / family).glob('*.py')):
             reached = {
-                node.module
-                for node in ast.walk(ast.parse(path.read_text()))
-                if isinstance(node, ast.ImportFrom)
-                and node.module
-                and node.module.startswith('lpspec.relational.sinks.')
-                and not node.module.endswith(shareable)
+                name
+                for name in _imported(ast.parse(path.read_text()))
+                if name.startswith('lpspec.relational.sinks.') and not name.endswith(shareable)
             }
             if reached and path.stem != '__init__':
                 offenders[f'{family}/{path.name}'] = sorted(reached)

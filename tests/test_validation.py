@@ -8,7 +8,6 @@ import pytest
 
 from lpspec.language.model import Model
 from lpspec.language.validation import load_model, validate_expressions
-from tests.oracle import linopy, lpspec_linopy, pd
 
 
 def _schema(**overrides) -> Model:
@@ -29,27 +28,62 @@ class TestValidateExpressions:
         )
         validate_expressions(schema)
 
-    def test_unknown_name_in_constraint(self):
-        with pytest.raises(ValueError, match="'q' not found") as exc_info:
-            _schema(
-                constraints={'cap': {'foreach': ['g'], 'expression': 'q <= p_max'}},
-            )
-        assert "Constraint 'cap'" in str(exc_info.value)
-        assert 'p_max' in str(exc_info.value)
+    @pytest.mark.parametrize(
+        ('overrides', 'fragments'),
+        [
+            pytest.param(
+                {'constraints': {'cap': {'foreach': ['g'], 'expression': 'q <= p_max'}}},
+                ("'q' not found", "Constraint 'cap'", 'p_max'),
+                id='an-unknown-name-in-a-constraint',
+            ),
+            pytest.param(
+                {'constraints': {'cap': {'foreach': ['g'], 'expression': 'p + p_max'}}},
+                ('exactly one comparison',),
+                id='a-constraint-without-a-comparison',
+            ),
+            pytest.param(
+                {'objectives': {'cost': {'expression': 'sum(p, over=g) <= 5'}}},
+                ('must not contain a comparison',),
+                id='an-objective-with-a-comparison',
+            ),
+            pytest.param(
+                {'objectives': {'cost': {'expression': 'frobnicate(p, over=g)'}}},
+                ("Unknown helper function 'frobnicate'",),
+                id='an-unknown-helper',
+            ),
+            pytest.param(
+                {'constraints': {'cap': {'foreach': ['g'], 'where': 'p_max >', 'expression': 'p <= p_max'}}},
+                ('Failed to parse where string',),
+                id='a-malformed-where-string',
+            ),
+            # Used to evaluate to False, which built an empty model in the eager
+            # lane and raised in the relational one — one language, two answers.
+            # Resolution makes it a load error for both.
+            pytest.param(
+                {'constraints': {'cap': {'foreach': ['g'], 'where': 'not_a_param > 0', 'expression': 'p <= p_max'}}},
+                ("'not_a_param' not found",),
+                id='an-unknown-name-in-a-where',
+            ),
+        ],
+    )
+    def test_a_bad_declaration_is_refused_at_load(self, overrides, fragments):
+        with pytest.raises(ValueError) as exc:
+            _schema(**overrides)
+        for fragment in fragments:
+            assert fragment in str(exc.value), f'the refusal has to carry {fragment!r}'
 
-    def test_constraint_without_comparison(self):
-        with pytest.raises(ValueError, match='exactly one comparison'):
-            _schema(
-                constraints={'cap': {'foreach': ['g'], 'expression': 'p + p_max'}},
-            )
-
-    def test_objective_with_comparison(self):
-        with pytest.raises(ValueError, match='must not contain a comparison'):
-            _schema(
-                objectives={'cost': {'expression': 'sum(p, over=g) <= 5'}},
-            )
-
-    def test_a_file_written_against_the_old_equations_surface_is_told_the_rewrite(self):
+    @pytest.mark.parametrize(
+        ('equations', 'match'),
+        [
+            pytest.param(
+                [{'expression': 'sum(p, over=g)'}, {'expression': 'sum(p_max, over=g)'}],
+                'Split it into 2 objectives, one per rule',
+                id='two-entries',
+            ),
+            pytest.param([{'expression': 'sum(p, over=g)'}], 'Move the single entry up', id='one-entry'),
+        ],
+    )
+    def test_a_file_written_against_the_old_equations_surface_is_told_the_rewrite(self, equations, match):
         """``equations:`` is gone, and the refusal names what to write instead.
 
         It held a *list*, and a list needs names for its entries — which it did
@@ -58,48 +92,8 @@ class TestValidateExpressions:
         "unknown key 'equations'" and a near miss against `expression`, which is
         true and useless for a file with two entries in it.
         """
-        with pytest.raises(ValueError, match='Split it into 2 objectives, one per rule'):
-            _schema(
-                objectives={
-                    'cost': {'equations': [{'expression': 'sum(p, over=g)'}, {'expression': 'sum(p_max, over=g)'}]}
-                },
-            )
-
-        with pytest.raises(ValueError, match='Move the single entry up'):
-            _schema(objectives={'cost': {'equations': [{'expression': 'sum(p, over=g)'}]}})
-
-    def test_unknown_helper(self):
-        with pytest.raises(ValueError, match="Unknown helper function 'frobnicate'"):
-            _schema(
-                objectives={'cost': {'expression': 'frobnicate(p, over=g)'}},
-            )
-
-    def test_malformed_where_string(self):
-        with pytest.raises(ValueError, match='Failed to parse where string'):
-            _schema(
-                constraints={
-                    'cap': {
-                        'foreach': ['g'],
-                        'where': 'p_max >',
-                        'expression': 'p <= p_max',
-                    }
-                },
-            )
-
-    def test_unknown_name_in_where_is_an_error(self):
-        """It used to evaluate to False, which built an empty model in the
-        eager lane and raised in the relational one — one language, two
-        answers. Resolution makes it a load error for both."""
-        with pytest.raises(ValueError, match="'not_a_param' not found"):
-            _schema(
-                constraints={
-                    'cap': {
-                        'foreach': ['g'],
-                        'where': 'not_a_param > 0',
-                        'expression': 'p <= p_max',
-                    }
-                },
-            )
+        with pytest.raises(ValueError, match=match):
+            _schema(objectives={'cost': {'equations': equations}})
 
     def test_dim_name_kwarg_not_flagged(self):
         """Keyword-arg names are dimension names, not data references."""
@@ -173,8 +167,16 @@ CAP_EXTENSION = (
 
 
 class TestLoadTimeIntegration:
+    """The eager lane's entry points, so only this class needs the [linopy] extra.
+
+    ``tests.oracle`` is imported per test rather than at module scope: the rest
+    of the module is pure load-time validation and runs on a bare install.
+    """
+
     def test_from_yaml_fails_before_data_validation(self, tmp_path):
         """A typo in an expression errors even when data= is absent."""
+        from tests.oracle import lpspec_linopy
+
         f = tmp_path / 'm.yaml'
         f.write_text(
             'dimensions:\n'
@@ -193,6 +195,8 @@ class TestLoadTimeIntegration:
 
     def test_extend_sees_existing_model_variables(self, tmp_path):
         """An extension may reference variables already on the model."""
+        from tests.oracle import linopy, lpspec_linopy, pd
+
         model = linopy.Model()
         model.add_variables(coords={'g': pd.Index(['wind', 'solar'], name='g')}, name='p')
 
@@ -202,6 +206,8 @@ class TestLoadTimeIntegration:
         assert 'cap' in model.constraints
 
     def test_extend_flags_unknown_variable(self, tmp_path):
+        from tests.oracle import linopy, lpspec_linopy
+
         model = linopy.Model()
         f = tmp_path / 'ext.yaml'
         f.write_text(CAP_EXTENSION)
@@ -237,31 +243,46 @@ class TestDimensionKwargs:
             }
         )
 
-    def test_sum_over_typo_is_rejected(self):
-        with pytest.raises(ValueError, match='silent no-op') as ei:
-            validate_expressions(self._schema('sum(p, over=snapshto) == load'))
-        assert 'sum(over=snapshto)' in str(ei.value)
+    @pytest.mark.parametrize(
+        ('expression', 'fragments'),
+        [
+            pytest.param('sum(p, over=snapshto) == load', ('silent no-op', 'sum(over=snapshto)'), id='sum-over-typo'),
+            pytest.param(
+                'sum(p, over=generatr, group_by=zone) == load',
+                ('does not name a declared dimension',),
+                id='group-by-dim-typo',
+            ),
+            pytest.param(
+                'sum(p, over=generator, group_by=zne) == load',
+                ("does not name a coordinate of 'generator'",),
+                id='group-by-coordinate-typo',
+            ),
+            pytest.param(
+                'shift(p, over=snapshto, by=1) == load',
+                ('does not name a declared dimension',),
+                id='shift-over-typo',
+            ),
+        ],
+    )
+    def test_a_dim_kwarg_typo_is_rejected(self, expression, fragments):
+        with pytest.raises(ValueError) as exc:
+            validate_expressions(self._schema(expression))
+        for fragment in fragments:
+            assert fragment in str(exc.value), f'the refusal has to carry {fragment!r}'
 
-    def test_grouped_sum_over_typo_is_rejected(self):
-        with pytest.raises(ValueError, match='does not name a declared dimension'):
-            validate_expressions(self._schema('sum(p, over=generatr, group_by=zone) == load'))
-
-    def test_sum_coordinate_typo_is_rejected(self):
-        with pytest.raises(ValueError, match="does not name a coordinate of 'generator'"):
-            validate_expressions(self._schema('sum(p, over=generator, group_by=zne) == load'))
-
-    def test_shift_over_dim_is_checked(self):
-        with pytest.raises(ValueError, match='does not name a declared dimension'):
-            validate_expressions(self._schema('shift(p, over=snapshto, by=1) == load'))
-
-    def test_declared_dimensions_still_pass(self):
-        for expression, foreach in (
-            ('sum(p, over=generator) == load', ['snapshot']),
-            ('sum(p, over=generator, group_by=zone) == load', ['snapshot', 'bus']),
-            ("shift(p, over=snapshot, by=1, edge='wrap') == load", ['snapshot', 'generator']),
-            ('shift(p, over=snapshot, by=1) == load', ['snapshot', 'generator']),
-        ):
-            validate_expressions(self._schema(expression, foreach))
+    @pytest.mark.parametrize(
+        ('expression', 'foreach'),
+        [
+            pytest.param('sum(p, over=generator) == load', ['snapshot'], id='a-sum'),
+            pytest.param('sum(p, over=generator, group_by=zone) == load', ['snapshot', 'bus'], id='a-grouped-sum'),
+            pytest.param(
+                "shift(p, over=snapshot, by=1, edge='wrap') == load", ['snapshot', 'generator'], id='a-wrapping-shift'
+            ),
+            pytest.param('shift(p, over=snapshot, by=1) == load', ['snapshot', 'generator'], id='a-bare-shift'),
+        ],
+    )
+    def test_declared_dimensions_still_pass(self, expression, foreach):
+        validate_expressions(self._schema(expression, foreach))
 
     def test_macro_formals_are_not_mistaken_for_dimensions(self):
         """A formal in a dim position is legal inside the template body."""

@@ -22,39 +22,16 @@ would add.
 
 from __future__ import annotations
 
-import contextlib
-import difflib
-import importlib.util
-import io
-import sys
-from pathlib import Path
-
 import pytest
 
-EXAMPLES = Path(__file__).parent.parent / 'examples'
+from tests.conftest import EXAMPLES_DIR, assert_golden, run_example
+
 STRATEGIES = ['rolling', 'myopic']
-
-
-def _run(name: str) -> str:
-    """Import ``examples/<name>/run.py`` and capture what ``main()`` prints."""
-    path = EXAMPLES / name / 'run.py'
-    spec = importlib.util.spec_from_file_location(f'{name}_example', path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-        buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer):
-            module.main()
-    finally:
-        del sys.modules[spec.name]
-    return buffer.getvalue()
 
 
 @pytest.fixture(scope='module')
 def outputs() -> dict[str, str]:
-    return {name: _run(name) for name in STRATEGIES}
+    return {name: run_example(EXAMPLES_DIR / name / 'run.py', f'{name}_example') for name in STRATEGIES}
 
 
 def test_lookahead_closes_the_myopia_gap(outputs: dict[str, str]) -> None:
@@ -86,12 +63,9 @@ def test_the_pathway_inherits_each_fleet(outputs: dict[str, str]) -> None:
 def test_the_example_matches_its_committed_output(
     name: str, outputs: dict[str, str], pytestconfig: pytest.Config
 ) -> None:
-    golden = EXAMPLES / name / 'run.out'
-    output = outputs[name]
-    if pytestconfig.getoption('--update-golden'):
-        golden.write_text(output)
-        pytest.skip(f'rewrote {name}/run.out from this run')
-    expected = golden.read_text()
-    if output != expected:
-        diff = '\n'.join(difflib.unified_diff(expected.splitlines(), output.splitlines(), 'committed', 'this run'))
-        pytest.fail(f'the {name} example no longer prints what the docs show:\n{diff}')
+    assert_golden(
+        outputs[name],
+        EXAMPLES_DIR / name / 'run.out',
+        pytestconfig,
+        drifted=f'the {name} example no longer prints what the docs show:',
+    )

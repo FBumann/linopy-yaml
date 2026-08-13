@@ -8,8 +8,6 @@ relational backend lowers it to plan.Translate — a pointwise ord-join remap.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import polars as pl
 import pytest
@@ -21,11 +19,12 @@ from lpspec.relational.plan import (
     Translate,
     Variable,
 )
-from tests.conftest import by_coord, resolved, schema_of
+from tests.conftest import DISPATCH_MODEL, EXAMPLES_DIR, by_coord, override, resolved, schema_of
 from tests.differential import differential
 from tests.oracle import pd
 
-STORAGE_YAML = Path('examples/storage.yaml')
+STORAGE_YAML = EXAMPLES_DIR / 'storage.yaml'
+STORAGE_SCHEMA = schema_of(STORAGE_YAML)
 
 
 @pytest.fixture
@@ -129,32 +128,17 @@ def test_shift_semantics_are_positional_not_lexicographic():
         pass  # agreement on the objective is the whole assertion
 
 
-RAMP_YAML = """
-dimensions:
-  snapshot: {dtype: int}
-  generator: {values: [wind, gas]}
-parameters:
-  p_max: {dims: [generator]}
-  cost: {dims: [generator]}
-  load: {dims: [snapshot]}
-  ramp_max: {dims: [generator]}
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds: {lower: 0, upper: p_max}
-constraints:
-  balance:
-    foreach: [snapshot]
-    expression: sum(p, over=generator) == load
-  ramp_up:
-    foreach: [snapshot, generator]
-    where: "snapshot > 0"
-    expression: p - shift(p, over=snapshot, by=1) <= ramp_max
-objectives:
-  total_cost:
-    sense: minimize
-    expression: sum(p * cost, over=generator)
-"""
+RAMP_MODEL = override(
+    DISPATCH_MODEL,
+    **{
+        'parameters.ramp_max': {'dims': ['generator']},
+        'constraints.ramp_up': {
+            'foreach': ['snapshot', 'generator'],
+            'where': 'snapshot > 0',
+            'expression': 'p - shift(p, over=snapshot, by=1) <= ramp_max',
+        },
+    },
+)
 
 
 def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
@@ -177,7 +161,7 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
     }
     coords = {'snapshot': pd.RangeIndex(n_s, name='snapshot')}
 
-    with differential(RAMP_YAML, data, coords) as run:
+    with differential(RAMP_MODEL, data, coords) as run:
         active = int((run.model.constraints['ramp_up'].labels != -1).sum())
         assert active == (n_s - 1) * 2, (
             'the mask must bite: the first snapshot is dropped per generator, and a masked row on '
@@ -193,67 +177,65 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
 @pytest.mark.parametrize(
     ('expression', 'expected'),
     [
-        ("shift(soc, over=snapshot, by=1, edge='wrap')", Translate(Variable('soc'), 'snapshot', 1)),
-        ("shift(soc, over=snapshot, by=-2, edge='wrap')", Translate(Variable('soc'), 'snapshot', -2)),
-        ('shift(soc, over=snapshot, by=1)', Translate(Variable('soc'), 'snapshot', 1, wrap=False)),
+        pytest.param(
+            "shift(soc, over=snapshot, by=1, edge='wrap')",
+            Translate(Variable('soc'), 'snapshot', 1),
+            id='wrap',
+        ),
+        pytest.param(
+            "shift(soc, over=snapshot, by=-2, edge='wrap')",
+            Translate(Variable('soc'), 'snapshot', -2),
+            id='wrap-backwards',
+        ),
+        pytest.param(
+            'shift(soc, over=snapshot, by=1)',
+            Translate(Variable('soc'), 'snapshot', 1, wrap=False),
+            id='bare',
+        ),
+        # fill is the field both lanes branch on: None is absence, 0.0 the zero.
+        pytest.param(
+            'shift(soc, over=snapshot, by=1, edge=0)',
+            Translate(Variable('soc'), 'snapshot', 1, wrap=False, fill=0.0),
+            id='zero-fill',
+        ),
     ],
 )
 def test_translation_lowers_to_a_bounded_halo(expression, expected):
-    schema = schema_of(STORAGE_YAML)
-    assert _lower_expr(resolved(expression, schema), schema, 't') == expected
+    assert _lower_expr(resolved(expression, STORAGE_SCHEMA), STORAGE_SCHEMA, 't') == expected
 
 
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
-        ("shift(soc, over=nope, by=1, edge='wrap')", r'shift\(over=nope\) does not name a declared dimension'),
-        ("shift(load, over=generator, by=1, edge='wrap')", 'but the expression has dims'),
-    ],
-)
-def test_translation_along_a_dim_the_expression_lacks_is_refused(expression, match):
-    schema = schema_of(STORAGE_YAML)
-    with pytest.raises(LanguageError, match=match):
-        _lower_expr(resolved(expression, schema), schema, 't')
-
-
-def test_fill_lowers_to_the_escape_hatch_and_a_bare_shift_does_not():
-    """``fill=`` is the only difference between the two readings of ``shift``.
-
-    Kept as a lowering assertion rather than a solve, because ``fill`` is the
-    field both lanes branch on: ``None`` is absence, ``0.0`` is the zero.
-    """
-    schema = schema_of(STORAGE_YAML)
-    bare = _lower_expr(resolved('shift(soc, over=snapshot, by=1)', schema), schema, 't')
-    filled = _lower_expr(resolved('shift(soc, over=snapshot, by=1, edge=0)', schema), schema, 't')
-    assert bare == Translate(Variable('soc'), 'snapshot', 1, wrap=False, fill=None)
-    assert filled == Translate(Variable('soc'), 'snapshot', 1, wrap=False, fill=0.0)
-
-
-@pytest.mark.parametrize(
-    ('expression', 'match'),
-    [
+        pytest.param(
+            "shift(soc, over=nope, by=1, edge='wrap')",
+            r'shift\(over=nope\) does not name a declared dimension',
+            id='over-names-no-dimension',
+        ),
+        pytest.param(
+            "shift(load, over=generator, by=1, edge='wrap')",
+            'but the expression has dims',
+            id='a-dim-the-expression-lacks',
+        ),
+        # `edge=` is a closed keyword: one keyword carries all three policies, so
+        # "cyclic, and also fill" has no spelling left to be refused.
         pytest.param(
             'shift(soc, over=snapshot, by=1, edge=nonsense)',
             'is not an edge policy',
             id='the-edge-keyword-is-closed',
         ),
+        # Over a variable only `edge=0` is sayable — a nonzero fill would put a
+        # constant where a term was.
         pytest.param(
             'shift(soc, over=snapshot, by=1, edge=1)',
             'only fill=0 is representable there',
-            id='a-nonzero-fill-over-a-variable-is-a-constant-where-a-term-was',
+            id='a-nonzero-fill-over-a-variable',
         ),
     ],
 )
-def test_fill_is_refused_where_neither_lane_can_honour_it(expression, match):
-    """`edge=` is a closed keyword, and over a variable only `edge=0` is sayable.
-
-    "Cyclic, and also fill the vacated slots" has no spelling any more: one
-    ``edge=`` carries all three policies, so the pair that used to contradict
-    each other cannot be written down to be refused.
-    """
-    schema = schema_of(STORAGE_YAML)
+def test_a_shift_neither_lane_can_honour_is_refused_at_lowering(expression, match):
     with pytest.raises(LanguageError, match=match):
-        _lower_expr(resolved(expression, schema), schema, 't')
+        _lower_expr(resolved(expression, STORAGE_SCHEMA), STORAGE_SCHEMA, 't')
 
 
 FILL_IDENTITY_MODEL = """

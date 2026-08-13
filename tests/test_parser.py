@@ -130,8 +130,9 @@ def test_and_binds_tighter_than_or():
 )
 def test_a_quoted_right_hand_side_is_a_label(text, value, quoted):
     """Quoting marks a label. A bare word still parses, and still means
-    "resolve me" rather than "label"."""
-    """Without quoting, any label carrying a hyphen, space or colon was
+    "resolve me" rather than "label".
+
+    Without quoting, any label carrying a hyphen, space or colon was
     unsayable — `combined-cycle`, `IT-north`, `CCGT 400MW` (#460).
 
     The flag is the whole point: a bare word may name a declaration and is

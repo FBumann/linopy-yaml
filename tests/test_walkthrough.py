@@ -19,67 +19,28 @@ architecture's story changed, in the same PR that changed it.
 
 from __future__ import annotations
 
-import contextlib
-import difflib
-import importlib.util
-import io
-import sys
-from pathlib import Path
-
 import pytest
 
-EXAMPLES = Path(__file__).parent.parent / 'examples'
-WALKTHROUGH = EXAMPLES / 'walkthrough.py'
-GOLDEN = EXAMPLES / 'walkthrough.out'
+from tests.conftest import EXAMPLES_DIR, assert_golden, run_example
+
+WALKTHROUGH = EXAMPLES_DIR / 'walkthrough.py'
+GOLDEN = EXAMPLES_DIR / 'walkthrough.out'
 
 
 @pytest.fixture(scope='module')
-def walkthrough():
-    spec = importlib.util.spec_from_file_location('walkthrough', WALKTHROUGH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules['walkthrough'] = module
-    spec.loader.exec_module(module)
-    yield module
-    del sys.modules['walkthrough']
-
-
-@pytest.fixture(scope='module')
-def output(walkthrough) -> str:
-    """One run of the whole pipeline, shared by both tests.
-
-    ``StringIO`` is not a tty, so the banners come out unstyled — the same
-    plain text a shell redirect into the golden file would produce.
-    """
-    buffer = io.StringIO()
-    with contextlib.redirect_stdout(buffer):
-        walkthrough.main()
-    return buffer.getvalue()
+def output() -> str:
+    """One run of the whole pipeline, shared by both tests."""
+    return run_example(WALKTHROUGH, 'walkthrough')
 
 
 def test_walkthrough_matches_golden(output: str, pytestconfig: pytest.Config) -> None:
-    if pytestconfig.getoption('--update-golden'):
-        GOLDEN.write_text(output)
-        pytest.skip(f'rewrote {GOLDEN.name} from this run')
-
-    expected = GOLDEN.read_text()
-    if output == expected:
-        return
-
-    diff = '\n'.join(
-        difflib.unified_diff(
-            expected.splitlines(),
-            output.splitlines(),
-            'walkthrough.out (committed)',
-            'walkthrough.py (this run)',
-            lineterm='',
-        )
-    )
-    pytest.fail(
-        'the walkthrough narrates something the pipeline no longer does.\n'
+    assert_golden(
+        output,
+        GOLDEN,
+        pytestconfig,
+        drifted='the walkthrough narrates something the pipeline no longer does.\n'
         'If this run is the correct story, regenerate the golden file:\n'
-        '    uv run pytest tests/test_walkthrough.py --update-golden\n\n' + diff,
-        pytrace=False,
+        '    uv run pytest tests/test_walkthrough.py --update-golden\n',
     )
 
 

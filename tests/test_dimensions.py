@@ -12,8 +12,7 @@ import pytest
 
 from lpspec.language.dimensions import DimensionError, check_schema, dims_of
 from lpspec.language.resolution import Namespace, expression_of
-from tests.conftest import override, schema_of
-from tools import constructs
+from tests.conftest import MODEL_PATHS, override, schema_of
 
 if TYPE_CHECKING:
     from lpspec.language.model import Model
@@ -80,38 +79,47 @@ def test_dim_inference(expr, expected):
     assert _dims(expr) == expected
 
 
-def test_sum_over_an_absent_dim_is_an_error_not_a_noop():
-    """SPEC §7.1 used to return the array unchanged. `sum(p, over=bus)` then
-    built and solved a model that silently never summed anything."""
-    with pytest.raises(DimensionError, match='sum\\(over=bus\\) but the expression has dims'):
-        _dims('sum(p, over=bus)')
-
-
-def test_sum_requires_the_grouped_dim():
-    with pytest.raises(DimensionError, match=r'sum\(over=generator, group_by=\.\.\.\) but the expression has dims'):
-        _dims('sum(load, over=generator, group_by=bus)')
-
-
-def test_sum_into_a_dim_the_operand_already_carries():
-    """`(inner - {over}) | {into}` is a union, and a union absorbs a collision.
-
-    `sum(load, over=generator, group_by=bus)` -- with `load` already carrying
-    `bus` -- asks for `bus` twice: once as the operand's own dim, once as the
-    group its terms are placed into. The union returns one, so the rule reports
-    a shape neither lane can build. The eager lane makes an xarray object with
-    a repeated dim, which xarray warns will fail silently; the relational lane
-    raised polars' DuplicateError from outside the package's exception tree.
-
-    Refusing it at load time is the only answer both lanes can give, which is
-    why the rule lives here rather than in either engine.
-    """
-    with pytest.raises(DimensionError, match='already carries'):
-        _dims('sum(load * p, over=generator, group_by=bus)')
-
-
-def test_roll_requires_the_dim():
-    with pytest.raises(DimensionError, match='shift\\(over=snapshot\\) but the expression has dims'):
-        _dims("shift(cost, over=snapshot, by=1, edge='wrap')")
+@pytest.mark.parametrize(
+    ('expr', 'match'),
+    [
+        # SPEC §7.1 used to return the array unchanged. `sum(p, over=bus)` then
+        # built and solved a model that silently never summed anything.
+        pytest.param(
+            'sum(p, over=bus)',
+            r'sum\(over=bus\) but the expression has dims',
+            id='sum-over-an-absent-dim-is-an-error-not-a-noop',
+        ),
+        pytest.param(
+            'sum(load, over=generator, group_by=bus)',
+            r'sum\(over=generator, group_by=\.\.\.\) but the expression has dims',
+            id='sum-requires-the-grouped-dim',
+        ),
+        # `(inner - {over}) | {into}` is a union, and a union absorbs a collision.
+        #
+        # `sum(load, over=generator, group_by=bus)` -- with `load` already carrying
+        # `bus` -- asks for `bus` twice: once as the operand's own dim, once as the
+        # group its terms are placed into. The union returns one, so the rule reports
+        # a shape neither lane can build. The eager lane makes an xarray object with
+        # a repeated dim, which xarray warns will fail silently; the relational lane
+        # raised polars' DuplicateError from outside the package's exception tree.
+        #
+        # Refusing it at load time is the only answer both lanes can give, which is
+        # why the rule lives here rather than in either engine.
+        pytest.param(
+            'sum(load * p, over=generator, group_by=bus)',
+            'already carries',
+            id='sum-into-a-dim-the-operand-already-carries',
+        ),
+        pytest.param(
+            "shift(cost, over=snapshot, by=1, edge='wrap')",
+            r'shift\(over=snapshot\) but the expression has dims',
+            id='shift-requires-the-dim',
+        ),
+    ],
+)
+def test_an_ill_dimensioned_expression_is_rejected(expr, match):
+    with pytest.raises(DimensionError, match=match):
+        _dims(expr)
 
 
 def test_an_outer_product_is_legal_and_carries_both_dim_sets():
@@ -132,40 +140,43 @@ def test_broadcast_is_legal_when_one_side_contains_the_other():
 # ---------------------------------------------------------------------------
 
 
-def test_stray_dim_in_a_constraint_is_rejected():
-    """The rule that matters most: a dim the foreach does not declare
-    multiplies the rows this constraint builds."""
-    with pytest.raises(DimensionError, match=r"carries dims \['generator'\] that are not in foreach"):
-        _schema(**{'constraints.stray': {'foreach': ['snapshot'], 'expression': 'p <= p_max'}})
-
-
-def test_foreach_dim_the_equation_never_uses_is_rejected():
-    with pytest.raises(DimensionError, match=r"does not carry \['bus'\]"):
-        _schema(
-            **{
-                'constraints.unused': {
-                    'foreach': ['snapshot', 'generator', 'bus'],
-                    'expression': 'p <= p_max',
-                }
-            }
-        )
-
-
-def test_where_dim_outside_the_frame_is_rejected():
-    """SPEC §6.3 documented an `any()` reduction here — a mask that fails
-    *open*, silently including everything."""
-    with pytest.raises(DimensionError, match=r"where-parameter 'load' has dims \['bus', 'snapshot'\]"):
-        _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'load > 0'}})
-
-
-def test_where_comparison_on_a_dim_outside_the_frame_is_rejected():
-    with pytest.raises(DimensionError, match="where-comparison on dimension 'snapshot'"):
-        _schema(**{'variables.cap': {'foreach': ['generator'], 'where': 'snapshot > 0'}})
-
-
-def test_bound_parameter_dim_outside_foreach_is_rejected():
-    with pytest.raises(DimensionError, match=r"bounds.upper parameter 'load' has dims \['bus', 'snapshot'\]"):
-        _schema(**{'variables.cap': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 'load'}}})
+@pytest.mark.parametrize(
+    ('patch', 'match'),
+    [
+        # The rule that matters most: a dim the foreach does not declare
+        # multiplies the rows this constraint builds.
+        pytest.param(
+            {'constraints.stray': {'foreach': ['snapshot'], 'expression': 'p <= p_max'}},
+            r"carries dims \['generator'\] that are not in foreach",
+            id='stray-dim-in-a-constraint',
+        ),
+        pytest.param(
+            {'constraints.unused': {'foreach': ['snapshot', 'generator', 'bus'], 'expression': 'p <= p_max'}},
+            r"does not carry \['bus'\]",
+            id='foreach-dim-the-equation-never-uses',
+        ),
+        # SPEC §6.3 documented an `any()` reduction here — a mask that fails
+        # *open*, silently including everything.
+        pytest.param(
+            {'variables.cap': {'foreach': ['generator'], 'where': 'load > 0'}},
+            r"where-parameter 'load' has dims \['bus', 'snapshot'\]",
+            id='where-dim-outside-the-frame',
+        ),
+        pytest.param(
+            {'variables.cap': {'foreach': ['generator'], 'where': 'snapshot > 0'}},
+            "where-comparison on dimension 'snapshot'",
+            id='where-comparison-on-a-dim-outside-the-frame',
+        ),
+        pytest.param(
+            {'variables.cap': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 'load'}}},
+            r"bounds.upper parameter 'load' has dims \['bus', 'snapshot'\]",
+            id='bound-parameter-dim-outside-foreach',
+        ),
+    ],
+)
+def test_an_ill_dimensioned_declaration_is_rejected(patch, match):
+    with pytest.raises(DimensionError, match=match):
+        _schema(**patch)
 
 
 def test_checking_needs_no_data():
@@ -178,9 +189,6 @@ def test_checking_needs_no_data():
         lps.check(raw)
 
 
-@pytest.mark.parametrize('path', [p for _, p in constructs.models()], ids=lambda p: p.name)
+@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)
 def test_shipped_examples_typecheck(path):
-    """Every model in the repo, ports included — ``constructs.models()`` is the
-    one list the gallery is built from, and a glob of ``examples/*.yaml`` is not
-    recursive."""
     check_schema(schema_of(path))
