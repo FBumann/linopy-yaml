@@ -55,7 +55,7 @@ PORT_REFERENCES: dict[str, dict[str, Any]] = json.loads((PORTS_DIR / 'references
 def bindable_on_this_install(name: str) -> None:
     """Skip the referenced models the bare install cannot bind.
 
-    ``piecewise`` declares ``convex: true``, whose curvature guard needs
+    ``piecewise`` declares ``method: convex``, whose curvature guard needs
     xarray until issue #27 makes it numpy-only. The guard runs at bind, so
     ``lps.check`` stays exercised on every install and only the data-touching
     tests skip.

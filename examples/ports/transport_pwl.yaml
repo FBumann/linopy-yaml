@@ -45,7 +45,7 @@ piecewise:
     links:
       - [shipment, bp_x]
       - [scaled, bp_y]
-    # Deliberately *not* `convex: true`. sqrt is concave and this is a
+    # Deliberately *not* `method: convex`. sqrt is concave and this is a
     # minimisation, so the convex-hull relaxation would let the solver ride the
     # chord underneath the true curve and buy transport cheaper than the model
     # allows. Segment binaries are what make the answer right — and what make

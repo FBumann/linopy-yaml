@@ -33,7 +33,7 @@ piecewise:
     links:
       - [p, bp_x]
       - [op_cost, bp_y]
-    convex: true
+    method: convex
 
 constraints:
   balance:
