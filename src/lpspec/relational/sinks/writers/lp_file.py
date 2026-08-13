@@ -96,7 +96,50 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
             f.write(f'\n{keyword}\n'.encode())
             _sink(chosen.select(pl.concat_str(pl.lit('x'), _digits(pl.col('col')))), f)
 
+        if model.sos.height:
+            f.write(b'\nsos\n')
+            _sink(_set_lines(model), f)
+
         f.write(b'\nend\n')
+
+
+def _set_lines(model: ModelTables) -> pl.LazyFrame:
+    """Each special-ordered set as one ``s0: S2 :: x3:1 x4:2`` line.
+
+    linopy's spelling of the section, so a file this writes and a file the
+    eager lane writes are read by the same parsers.
+
+    **The one section gathered rather than interleaved.** A set's members have
+    to reach one line, where the constraint section sorts one row per output
+    line instead; what makes that affordable is that a set is a handful of
+    members and a model declares far fewer sets than rows. Order is the
+    stream's own, and ``maintain_order`` is what keeps a group's line the same
+    bytes twice.
+
+    Written even where the reader may refuse it: HiGHS has no SOS concept and
+    its parser says so, which is the honest outcome for a solver that cannot
+    answer the question.
+    """
+    return (
+        model.sos.lazy()
+        .group_by('set', maintain_order=True)
+        .agg(
+            pl.col('type').first(),
+            pl.concat_str(pl.lit('x'), _digits(pl.col('col')), pl.lit(':'), _digits(pl.col('weight')))
+            .str.join(' ')
+            .alias('members'),
+        )
+        .select(
+            pl.concat_str(
+                pl.lit('s'),
+                _digits(pl.col('set')),
+                pl.lit(': S'),
+                _digits(pl.col('type')),
+                pl.lit(' :: '),
+                pl.col('members'),
+            )
+        )
+    )
 
 
 def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:

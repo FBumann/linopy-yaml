@@ -157,6 +157,10 @@ class Highs(Solver):
     requires = ('highspy',)
     unavailable_message = 'highspy ships with lpspec, so a build without it is broken rather than missing an extra'
 
+    #: HiGHS has no SOS concept at all — its own LP reader refuses the section
+    #: — so a set arrives here already written as binaries and linking rows.
+    sos = 'reformulated'
+
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._handle = build_highs(model, batch_rows, self._options)
 

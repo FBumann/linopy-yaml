@@ -79,7 +79,7 @@ flowchart TB
             COMP["compiler.py<br/>plan → lazy frames · reads nothing"] --> ENGINE
             BIND["binding.py<br/>→ BoundSources, frozen"] --> ENGINE["engine.py + labels.py<br/>assemble the model frames"]
         end
-        ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A"]
+        ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file (mps planned)"]
         TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi (extra)"]
         DIRECT --> SOL["result.py<br/>label join, never dense"]
@@ -391,8 +391,13 @@ in the lane is order-free, which is what lets the query planner rearrange it.
 a side effect of an expression; formulations are model *transformations*.
 Variable *types* are not formulations — binary/integer are a `vtype` column, LP
 `binary`/`general` sections and HiGHS integrality, which keeps basic MILP inside
-the streaming lane. Reimplementing linopy's reformulation passes inside the plan
-is explicitly rejected: that duplicates the library this package consumes.
+the streaming lane. **`sos:` is the same shape**: a `SosDeclaration` naming
+columns the variable already made, one more stream out of the engine, and no
+expression node — which is why a set can be carried whole to a sink that has
+the concept. Reimplementing linopy's reformulation passes inside the plan is
+explicitly rejected: that duplicates the library this package consumes. Where
+one is unavoidable — a sink with no SOS at all — it happens at the *sink*
+boundary, on the built tables, and never in the plan.
 
 **A frame is the boundary in both directions.** `relational/frames.py`
 recognises a caller's table through the Arrow PyCapsule protocol without
@@ -402,14 +407,24 @@ keeps pandas and pyarrow off the dependency list: they are bridges *out*
 (`to_pandas`, `to_dataarray`), shipped with the `[linopy]` extra, not shapes
 the engine holds. The bare-install CI job runs the suite with neither present.
 
-**Sinks are capped, explicitly.** Today every sink expresses the same three
-streams and no more: `cols` (bounds, objective coefficients, integrality),
-`rows`, and `A` in CSR. The upgrade path is two further streams — `sos_sets`
-and `genconstr` — plus a semi-continuous threshold on `cols`. Unlike the three
-that exist, those two would land *unevenly*, because the destinations differ
-per sink (see "Capability is not the ceiling"); that unevenness is what
-[Track 3](https://github.com/fluxopt/lpspec/issues/472) exists to make declared rather
-than discovered at solve time.
+**Sinks are capped, explicitly.** Four streams and no more: `cols` (bounds,
+objective coefficients, integrality), `rows`, `A` in CSR, and `sos` — the
+special-ordered sets, `(set, type, col, weight, big_m)`. The upgrade path from
+here is `genconstr`, plus a semi-continuous threshold on `cols`.
+
+**The fourth is the one that lands unevenly**, because its destination differs
+per sink (see "Capability is not the ceiling"). So a solver **declares** how it
+satisfies one — `native` or `reformulated` — and the *family* acts on the
+answer (`solvers.ingestible`), handing a sink that cannot take a set the same
+feasible region as binaries and linking rows (`sinks/sos.py`, whose README
+carries the per-sink table). Declared rather than discovered at the hand-off is
+what [Track 3](https://github.com/fluxopt/lpspec/issues/472) asked for, and this
+is its first two entries.
+
+What the rewrite adds goes **after** the model, which is the label contract
+spent rather than bent: an appended column moves none of the model's own and an
+appended row renumbers none of its rows, so a solve reads its answer back by
+the same slice either way.
 
 **A sink is one of two things, and the directory says which.** A **solver**
 runs the tables and returns an answer, chosen by **name** at the call
@@ -461,7 +476,8 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/polars/engine.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
 | `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued coords |
-| `relational/sinks/tables.py` | what every sink reads and no more — the four frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
+| `relational/sinks/tables.py` | what every sink reads and no more — the five frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
+| `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
 | `linopy/__init__.py` | opt-in shim: `build` / `extend` on a `linopy.Model` |
 | `linopy/loader.py` | data coercion to `xr.Dataset`, master coords |

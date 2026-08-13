@@ -88,6 +88,11 @@ def differential(
     temporary file here rather than in every caller.
 
     Set ``lp=True`` to also write and re-solve the LP file, the third opinion.
+    HiGHS reads that file, so a model carrying ``sos:`` must not ask for it:
+    HiGHS has no SOS concept and its parser refuses the section outright, which
+    is the same fact ``reformulate_sos='auto'`` handles on the eager side — a
+    no-op for every model that declares no set, and what lets the oracle solve
+    one that does.
     """
     schema = schema_of(model)
 
@@ -96,7 +101,7 @@ def differential(
         path = model if isinstance(model, Path) else _write(work / 'model.yaml', model)
 
         m = lpspec_linopy.build(path, data=dict(data), coords=dict(coords) if coords else None)
-        m.solve(solver_name='highs', output_flag=False)
+        m.solve(solver_name='highs', output_flag=False, reformulate_sos='auto')
         oracle = float(m.objective.value)
         assert np.isfinite(oracle), 'the eager oracle is infeasible or unbounded — fix the data, not the tolerance'
 

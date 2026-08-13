@@ -155,12 +155,25 @@ def null_bounds_message(name: str, rows: int) -> str:
     )
 
 
-def no_duals_message(discrete: Sequence[str], termination_condition: str) -> str:
+def no_duals_message(discrete: Sequence[str], termination_condition: str, sets: Sequence[str] = ()) -> str:
     """Why a solve that *did* leave values still has no duals.
 
     Integrality is decidable from the model, and naming the variable is
     actionable where "the solver reported none" is not.
+
+    *sets* are the special-ordered sets a sink without the concept turned into
+    binaries. They come first because a model that declared none of its own
+    integrality would otherwise be told it is mixed-integer with nothing named
+    — and because the fix is a different one: another sink, not a different
+    model.
     """
+    if sets:
+        names = ', '.join(f"'{n}'" for n in sets)
+        return (
+            f'duals are undefined for a mixed-integer model, and this sink has no SOS concept, so '
+            f'{names} reached it as binaries. Solve with a sink that takes a set natively (gurobi) '
+            f'to keep the LP, or drop the set to price the relaxation.'
+        )
     if discrete:
         names = ', '.join(f"'{n}'" for n in discrete)
         return (

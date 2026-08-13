@@ -93,6 +93,13 @@ class ModelTables:
     The objective constant lives outside the frames, having no column to
     attach to.
 
+    ``sos`` is the fifth stream and the one that lands unevenly: ``(set, type,
+    col, weight)`` in ``(set, weight)`` order, one row per member, empty for
+    the models that declare none. It is the only frame a sink may be unable to
+    ingest — SOS is a *sink capability*, not a property of the model — so a
+    solver without the concept states so and is handed
+    :func:`~lpspec.relational.sinks.sos.reformulated` tables instead.
+
     ``cols``, ``rows`` and ``matrix`` all arrive in the solver's own order —
     ``cols`` by column, the other two by row — which is what lets every dense
     vector be read positionally rather than keyed.
@@ -111,6 +118,7 @@ class ModelTables:
     obj: pl.DataFrame
     rows: pl.DataFrame
     matrix: pl.DataFrame
+    sos: pl.DataFrame
     row_starts: npt.NDArray[np.int64]
     column_count: int
     row_count: int
@@ -240,9 +248,16 @@ class ModelTables:
 
         The question a loaded solver asks of a rebuilt model: may I keep what
         I hold and take the new numbers by value? Bounds, costs and right-hand
-        sides go in that way; the counts, the matrix, each row's comparison
-        and each column's type do not, so a model whose digest moved has to be
-        loaded again.
+        sides go in that way; the counts, the matrix, each row's comparison,
+        each column's type and every SOS member do not, so a model whose
+        digest moved has to be loaded again.
+
+        **A set is structure even though nothing about it is a coefficient.**
+        No solver takes new members by value, and a mask that moved one while
+        leaving the matrix alone would otherwise re-solve the old sets under
+        the new numbers. A reformulating sink is covered twice over: its
+        big-M *is* a matrix coefficient by the time this is asked, so a bound
+        that moved one reloads.
 
         Read off the data rather than derived from the declarations, because
         whether a rebind moved a label or a coefficient is a property of the
@@ -273,6 +288,7 @@ class ModelTables:
             self.matrix['col'].to_numpy(),
             self.matrix['coeff'].to_numpy(),
             self.row_starts,
+            *(self.sos[column].to_numpy() for column in self.sos.columns),
         ):
             digest.update(np.ascontiguousarray(vector).data)
         return digest.digest()

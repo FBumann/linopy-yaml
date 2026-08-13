@@ -16,7 +16,7 @@ applied in a different position.
 
 | # | Law | § |
 |---|---|---|
-| 1 | Eight top-level keys, and the schema is **closed at every level** — an unknown key is an error naming the near miss. Booleans are YAML 1.2, so `no` / `on` / `off` stay labels. | [§1](#1-file-shape) |
+| 1 | Nine top-level keys, and the schema is **closed at every level** — an unknown key is an error naming the near miss. Booleans are YAML 1.2, so `no` / `on` / `off` stay labels. | [§1](#1-file-shape) |
 | 2 | Everything decidable without data is **decided without data**. | [§9](#9-errors) |
 | 3 | **One flat namespace, no shadowing** — a collision is a load error naming both declarations. | [§5.1](#51-name-resolution) |
 | 4 | **Position decides which kinds of name are legal**, and a name's kind is fixed at load time. A dimension is never legal in a value position: it is a coordinate space, not data. | [§5.1](#51-name-resolution) |
@@ -29,9 +29,9 @@ applied in a different position.
 
 ## 1. File shape
 
-Eight top-level keys: `dimensions`, `parameters`, `variables`, `constraints`,
-`objectives` (§2), `expressions`, `macros` (§3), `piecewise` (§4), plus
-`version` (below). The schema accepts any subset, but `check`, `solve` and
+Nine top-level keys: `dimensions`, `parameters`, `variables`, `constraints`,
+`objectives` (§2), `expressions`, `macros` (§3), `piecewise` (§4), `sos` (§4.1),
+plus `version` (below). The schema accepts any subset, but `check`, `solve` and
 `write` require an objective — there is nothing to optimise without one.
 
 **`version` declares which surface the file is written against.** It is
@@ -284,6 +284,51 @@ building** into plain variables and constraints via λ convex-combination —
 weights in `[0,1]` with a convexity row, one link row per tuple, and unless
 `convex: true` segment binaries with an adjacency row
 `lam <= seg + shift(seg, over=bp, by=1, edge=0)`.
+
+### 4.1 `sos`
+
+A **special-ordered set**: one dimension of one variable, and how many of that
+family may be nonzero at once.
+
+<!-- doctest: wrap=sos -->
+```yaml
+pick_one_size:
+  variable: build  # the variable the set is over
+  over: size  # the dim it runs along — one set per coordinate of the rest
+  type: 1  # 1: at most one nonzero; 2: at most two, and consecutive
+  big_m: 500  # optional, and only a reformulating sink reads it
+```
+
+`type: 1` is a choice — at most one member of the family is nonzero. `type: 2`
+is an interpolation — at most two, and those two **consecutive**, which is what
+makes it the native spelling of a piecewise-linear curve (§4 emits the same
+restriction as binaries and an adjacency row).
+
+**A set is over one variable, and a variable holds one set.** A second block
+naming the same variable is a load error: what an SOS *is* is a property of the
+variable, which is the shape every sink and the eager lane take it in.
+
+**Membership is the variable's own.** Its `where` decides which coordinates
+exist, so a masked-out member is not in the set — and for `type: 2`,
+consecutive means consecutive *among the members present*, leaving no hole
+where a coordinate was masked away. **Order is the `over` dimension's declared
+order** — what `shift` walks (§8) — so reordering the set means reordering that
+index, and there is no per-set weight to supply.
+
+**A set is a *sink capability*, not a language question**, and it is the one
+construct whose sink shows: where a sink has no SOS concept it is handed
+binaries and big-M rows instead (which sink does what, and why the sink family
+decides it, is [the sink README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md)).
+Two consequences reach the model, so neither is silent:
+
+- that rewrite is **mixed-integer**, so a set on an otherwise continuous model
+  gives up its duals there;
+- `M` has to be finite, so every member needs `bounds.upper` or a `big_m:`, and
+  a negative `bounds.lower` is refused. `big_m` caps a loose bound — the
+  *tighter* of the two is used, and tighter is a better relaxation.
+
+Both are conditions of the *rewrite*, so a model that fails them still solves
+on a sink that takes the set, and the message says so.
 
 ## 5. Expressions
 
@@ -640,7 +685,7 @@ language: nothing there changes what a file means.
 |---|---|
 | time-series processing (resample, cluster, interpolate, align), file IO, units | data prep; pass a parameter |
 | solver breadth | two solver sinks — HiGHS, which ships, and Gurobi via the `[gurobi]` extra — chosen with `solver_name` at the call, never in the file; LP files for everything else ([#106](https://github.com/fluxopt/lpspec/issues/106)) |
-| SOS and indicator constraints | planned, as a *sink capability* rather than a language question — the default solver has no such concept, `lp_file` and Gurobi do ([#23](https://github.com/fluxopt/lpspec/issues/23), [Track 3](https://github.com/fluxopt/lpspec/issues/472)). `piecewise:` (§4) covers SOS2's usual purpose today |
+| indicator constraints | planned, as a *sink capability* rather than a language question — the same axis `sos:` (§4.1) landed on, and the same split: `lp_file` and Gurobi have the concept, the default solver does not ([#23](https://github.com/fluxopt/lpspec/issues/23), [Track 3](https://github.com/fluxopt/lpspec/issues/472)) |
 | multi-objective | one objective — declaring a second is a load error (§2); weight them into one expression |
 | schema migrations | — |
 | arbitrary array ops (`merge`, `reindex`, `apply_ufunc`) | data prep, or a declared `escape:` island — the closed AST is what makes streaming possible |

@@ -467,14 +467,14 @@ class PolarsCompiler:
             strides.insert(0, stride)
             stride *= card
         position = sum(
-            (self._ordinal_of(d) * step for d, step in zip(v.dims, strides, strict=True)),
+            (self.ordinal_of(d) * step for d, step in zip(v.dims, strides, strict=True)),
             start=pl.lit(0, dtype=pl.Int64),
         )
         pairs = table.select(position.alias('__at__'), pl.col('value')).collect(engine='streaming')
         return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs['value'], expected)))
 
-    def _ordinal_of(self, dim: str) -> pl.Expr:
-        """A parameter's *dim* column as that dimension's ordinal.
+    def ordinal_of(self, dim: str) -> pl.Expr:
+        """A *dim* value column as that dimension's ordinal.
 
         **Free for a string dimension**, which is most of them: binding encodes
         those as an ``Enum`` over the labels in ordinal order
