@@ -89,6 +89,21 @@ def engine_internals(pytestconfig: pytest.Config) -> None:
         pytest.skip(f'reaches polars-engine internals; this run is on {name!r}')
 
 
+@pytest.fixture
+def duck_internals(pytestconfig: pytest.Config) -> None:
+    """Skip unless this run is on the duckdb engine.
+
+    The mirror of :func:`engine_internals`, for the few tests that reach inside
+    *that* engine. Same reasoning: an engine does not owe another engine its
+    internals, only the same model.
+    """
+    from lpspec.relational import engines
+
+    name = pytestconfig.getoption('--engine') or engines.DEFAULT_ENGINE
+    if name != 'duckdb':
+        pytest.skip(f'reaches duckdb-engine internals; this run is on {name!r}')
+
+
 @pytest.fixture(autouse=True, scope='session')
 def _engine_under_test(pytestconfig: pytest.Config) -> Iterator[None]:
     """Point `lps.build`'s default at `--engine`, for the whole session.
