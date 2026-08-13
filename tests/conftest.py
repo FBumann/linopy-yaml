@@ -52,6 +52,18 @@ PORTS_DIR = EXAMPLES_DIR / 'ports'
 PORT_REFERENCES: dict[str, dict[str, Any]] = json.loads((PORTS_DIR / 'references.json').read_text())
 
 
+def bindable_on_this_install(name: str) -> None:
+    """Skip the referenced models the bare install cannot bind.
+
+    ``piecewise`` declares ``convex: true``, whose curvature guard needs
+    xarray until issue #27 makes it numpy-only. The guard runs at bind, so
+    ``lps.check`` stays exercised on every install and only the data-touching
+    tests skip.
+    """
+    if name == 'piecewise':
+        pytest.importorskip('xarray', reason="piecewise's convex curvature guard needs xarray until #27")
+
+
 def port_sources(name: str) -> dict[str, Any]:
     """One JSON per port: a column-oriented table per name, scalars inline."""
     data = json.loads((PORTS_DIR / 'data' / f'{name}.json').read_text())

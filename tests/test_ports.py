@@ -23,6 +23,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from tests.conftest import bindable_on_this_install
 from tests.conftest import port_sources as sources
 
 
@@ -31,6 +32,7 @@ def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
     at a different vertex than the source prints, so a corpus pinned to a
     solution would fail on a solver upgrade that broke nothing. ``rtol`` is per
     port because a published optimum is rounded and a solved one is not."""
+    bindable_on_this_install(port['name'])
     with lps.solve(port['model'], sources(port['name'])) as solution:
         assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol']), (
@@ -59,6 +61,7 @@ def test_port_reaches_the_reference_duals(port: dict[str, Any]) -> None:
     ``pypsa_unit_commitment`` is a MILP, where a dual solution is undefined and
     lpspec refuses to invent one.
     """
+    bindable_on_this_install(port['name'])
     expected = port.get('duals')
     if not expected:
         pytest.skip(f'{port["name"]} records no duals (a MILP has none)')

@@ -22,7 +22,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.relational.sinks import SOLVERS
-from tests.conftest import override, port_sources
+from tests.conftest import bindable_on_this_install, override, port_sources
 
 GENERATORS = ['wind', 'solar', 'gas']
 SNAPSHOTS = [0, 1, 2, 3]
@@ -335,6 +335,7 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
     On `highs` alone, the default. What a second sink pushes differently is the
     rungs' question; this one is about the models.
     """
+    bindable_on_this_install(port['name'])
     if port['name'] in TOO_SLOW_TO_WALK:
         pytest.skip(f'{port["name"]} is too slow to walk — see TOO_SLOW_TO_WALK')
 
