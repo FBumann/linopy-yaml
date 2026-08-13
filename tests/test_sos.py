@@ -308,12 +308,39 @@ def test_a_reformulated_model_says_why_it_has_no_duals():
         result.dual('total')
 
 
-def test_diagnostics_report_the_built_model_not_what_the_sink_added():
-    """What a set costs a sink is the sink's; the build is what was declared."""
+def test_diagnostics_separate_the_built_model_from_what_the_sink_added():
+    """Two shapes, because a reformulating sink makes them differ.
+
+    The build is what the file declared; ``sink_*`` is the growth no
+    declaration accounts for — a binary per member, a linking row each, and
+    one cardinality row per set. Nothing else in a build reports it, so a
+    solve larger than the model would otherwise be invisible.
+    """
     with lps.build(model(1), DATA) as bound:
+        assert (bound.diagnostics().sink_columns, bound.diagnostics().sink_rows) == (0, 0), (
+            'nothing has been handed to a sink yet'
+        )
         bound.solve()
-        assert bound.diagnostics().columns == len(SITES) * len(SIZES)
-        assert bound.diagnostics().rows == 0, 'the model declares no constraints of its own'
+        report = bound.diagnostics()
+        assert (report.columns, report.rows) == (len(SITES) * len(SIZES), 0), 'the model declares no rows of its own'
+        assert report.sink_columns == len(SITES) * len(SIZES), 'a binary per member'
+        assert report.sink_rows == len(SITES) * len(SIZES) + len(SITES), 'a linking row each, and one row per set'
+
+
+def test_a_sink_that_takes_the_set_reports_adding_nothing():
+    """The counterpart, and the reason the two numbers are separate at all."""
+    pytest.importorskip('gurobipy', reason='the native SOS path needs the [gurobi] extra')
+    with lps.build(model(1), DATA) as bound:
+        bound.solve('gurobi')
+        assert (bound.diagnostics().sink_columns, bound.diagnostics().sink_rows) == (0, 0)
+
+
+def test_a_model_with_no_set_is_handed_over_as_built(tmp_path):
+    """And a writer never grows a model, whatever it carries."""
+    with lps.build(BASE, DATA) as bound:
+        bound.solve()
+        bound.write(tmp_path / 'plain.lp')
+        assert (bound.diagnostics().sink_columns, bound.diagnostics().sink_rows) == (0, 0)
 
 
 def test_a_sos2_set_of_one_member_restricts_nothing():

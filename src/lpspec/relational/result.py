@@ -74,13 +74,24 @@ class Diagnostics:
     Read them when a loop is slower or smaller than it should be.
     """
 
-    #: The shape the solver was handed: columns, rows, and matrix entries.
-    #: What ``check`` cannot answer, needing no data where this needs all of
-    #: it, and the thing to report when a model is bigger than its author
+    #: The shape the build produced: columns, rows, and matrix entries. What
+    #: ``check`` cannot answer, needing no data where this needs all of it,
+    #: and the thing to report when a model is bigger than its author
     #: expected — a broadcast that multiplied rows shows up here first.
     columns: int
     rows: int
     nonzeros: int
+
+    #: What the **last solve's sink** had to add on top of those to take the
+    #: model, and zero for every sink that took it as built. A sink with no
+    #: SOS concept is handed the sets as binaries and linking rows
+    #: (:mod:`lpspec.relational.sinks.sos`), which is the one thing that grows
+    #: a model after the build and the one growth no declaration accounts
+    #: for — so a solve that is larger than the model reads it here rather
+    #: than nowhere. Zero until something has been solved: a *writer* is
+    #: handed the model as built, and reports nothing.
+    sink_columns: int
+    sink_rows: int
 
     #: ``(constraint, rows_not_built)`` — every row that lost all its terms and
     #: so was not built (SPEC §6): without this record a declared constraint
