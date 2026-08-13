@@ -5,7 +5,7 @@
 # ///
 """Reference for ``pypsa_unit_commitment``: PyPSA's own UC. See docs/models/index.md.
 
-    uv run --script examples/ports/references/pypsa_unit_commitment.py
+    uv run --script examples/ports/references/pypsa/pypsa_unit_commitment.py
 
 Pinned above to the versions that produced the number in ``references.json``,
 and run out of band — PyPSA is not a dependency of this project. linopy is
@@ -36,7 +36,7 @@ from pathlib import Path
 import pandas as pd
 import pypsa
 
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_unit_commitment.json'
+DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_unit_commitment.json'
 
 
 def build(data: dict[str, dict[str, list]]) -> pypsa.Network:

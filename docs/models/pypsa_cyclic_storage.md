@@ -122,214 +122,213 @@ $$0 \le \mathit{soc}_{t,s} \le \mathit{soc}^{\mathrm{max}}_{s} \qquad \forall\th
 </details>
 <!-- math:end -->
 
-```yaml
-# PyPSA linear optimal power flow, rung 4: rung 3's storage, closed into a
-# cycle — the first snapshot's state of charge carries over from the last.
-# Optimum 17228.77962151063, from PyPSA itself. See docs/models/index.md.
+=== "lpspec"
 
-dimensions:
-  snapshot:
-    dtype: int
-  bus:
-    dtype: str
-  generator:
-    dtype: str
-    coords: [bus]  # every generator sits on a bus
-  link:
-    dtype: str
-    coords: {from: bus, to: bus}  # both endpoints are buses
-  storage:
-    dtype: str
-    coords: [bus]  # a storage unit sits on a bus too
+    ```yaml
+    # PyPSA linear optimal power flow, rung 4: rung 3's storage, closed into a
+    # cycle — the first snapshot's state of charge carries over from the last.
+    # Optimum 17228.77962151063, from PyPSA itself. See docs/models/index.md.
 
-parameters:
-  p_nom:
-    dims: [generator]
-  marginal_cost:
-    dims: [generator]
-  ramp_limit_up:
-    dims: [generator]
-  ramp_limit_down:
-    dims: [generator]
-  rating:
-    dims: [link]
-  neg_rating:
-    dims: [link]
-  storage_p_nom:
-    dims: [storage]
-  soc_max:
-    dims: [storage]
-  efficiency_store:
-    dims: [storage]
-  efficiency_dispatch:
-    dims: [storage]
-  standing_loss:
-    dims: [storage]
-  load:
-    dims: [snapshot, bus]
+    dimensions:
+      snapshot:
+        dtype: int
+      bus:
+        dtype: str
+      generator:
+        dtype: str
+        coords: [bus]  # every generator sits on a bus
+      link:
+        dtype: str
+        coords: {from: bus, to: bus}  # both endpoints are buses
+      storage:
+        dtype: str
+        coords: [bus]  # a storage unit sits on a bus too
 
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds:
-      lower: 0
-      upper: p_nom
-  f:
-    foreach: [snapshot, link]
-    bounds:
-      lower: neg_rating
-      upper: rating
-  p_dispatch:
-    foreach: [snapshot, storage]
-    bounds:
-      lower: 0
-      upper: storage_p_nom
-  p_store:
-    foreach: [snapshot, storage]
-    bounds:
-      lower: 0
-      upper: storage_p_nom
-  soc:
-    foreach: [snapshot, storage]
-    bounds:
-      lower: 0
-      upper: soc_max
+    parameters:
+      p_nom:
+        dims: [generator]
+      marginal_cost:
+        dims: [generator]
+      ramp_limit_up:
+        dims: [generator]
+      ramp_limit_down:
+        dims: [generator]
+      rating:
+        dims: [link]
+      neg_rating:
+        dims: [link]
+      storage_p_nom:
+        dims: [storage]
+      soc_max:
+        dims: [storage]
+      efficiency_store:
+        dims: [storage]
+      efficiency_dispatch:
+        dims: [storage]
+      standing_loss:
+        dims: [storage]
+      load:
+        dims: [snapshot, bus]
 
-constraints:
-  nodal_balance:
-    foreach: [snapshot, bus]
-    expression: >-
-      sum(p, over=generator, group_by=bus)
-      + sum(f, over=link, group_by=to)
-      - sum(f, over=link, group_by=from)
-      + sum(p_dispatch, over=storage, group_by=bus)
-      - sum(p_store, over=storage, group_by=bus)
-      == load
+    variables:
+      p:
+        foreach: [snapshot, generator]
+        bounds:
+          lower: 0
+          upper: p_nom
+      f:
+        foreach: [snapshot, link]
+        bounds:
+          lower: neg_rating
+          upper: rating
+      p_dispatch:
+        foreach: [snapshot, storage]
+        bounds:
+          lower: 0
+          upper: storage_p_nom
+      p_store:
+        foreach: [snapshot, storage]
+        bounds:
+          lower: 0
+          upper: storage_p_nom
+      soc:
+        foreach: [snapshot, storage]
+        bounds:
+          lower: 0
+          upper: soc_max
 
-  ramp_up:
-    foreach: [snapshot, generator]
-    expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
+    constraints:
+      nodal_balance:
+        foreach: [snapshot, bus]
+        expression: >-
+          sum(p, over=generator, group_by=bus)
+          + sum(f, over=link, group_by=to)
+          - sum(f, over=link, group_by=from)
+          + sum(p_dispatch, over=storage, group_by=bus)
+          - sum(p_store, over=storage, group_by=bus)
+          == load
 
-  ramp_down:
-    foreach: [snapshot, generator]
-    expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
+      ramp_up:
+        foreach: [snapshot, generator]
+        expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
 
-  # Rung 3 needed two equations here: one seeding the first snapshot from
-  # soc_initial, one carrying over every other. Closing the cycle *removes* the
-  # first, and the whole change is asking for the wrap: where a bare `shift`
-  # vacates the first snapshot and drops that row, `edge='wrap'` puts it onto the
-  # last. The
-  # operator is the cycle, so nothing else moves.
-  energy_balance:
-    foreach: [snapshot, storage]
-    expression: >-
-      soc == shift(soc, over=snapshot, by=1, edge='wrap') * (1 - standing_loss)
-      + p_store * efficiency_store
-      - p_dispatch / efficiency_dispatch
+      ramp_down:
+        foreach: [snapshot, generator]
+        expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * marginal_cost
-```
+      # Rung 3 needed two equations here: one seeding the first snapshot from
+      # soc_initial, one carrying over every other. Closing the cycle *removes* the
+      # first, and the whole change is asking for the wrap: where a bare `shift`
+      # vacates the first snapshot and drops that row, `edge='wrap'` puts it onto the
+      # last. The
+      # operator is the cycle, so nothing else moves.
+      energy_balance:
+        foreach: [snapshot, storage]
+        expression: >-
+          soc == shift(soc, over=snapshot, by=1, edge='wrap') * (1 - standing_loss)
+          + p_store * efficiency_store
+          - p_dispatch / efficiency_dispatch
 
-## Side by side
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: p * marginal_cost
+    ```
 
-<details>
-<summary><b>PyPSA</b> — <code>examples/ports/references/pypsa_cyclic_storage.py</code></summary>
+=== "PyPSA"
 
-```python
-from __future__ import annotations
+    `examples/ports/references/pypsa/pypsa_cyclic_storage.py`:
 
-import json
-from pathlib import Path
+    ```python
+    from __future__ import annotations
 
-import pandas as pd
-import pypsa
+    import json
+    from pathlib import Path
 
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_cyclic_storage.json'
+    import pandas as pd
+    import pypsa
 
-
-def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
-    """The port's tables as a PyPSA network, column for column.
-
-    ``max_hours`` is the ratio PyPSA stores; the port carries the product it
-    implies (``soc_max``), because a bound there takes a name, not arithmetic.
-    """
-    n = pypsa.Network()
-    n.set_snapshots(data['snapshot']['snapshot'])
-    n.add('Bus', data['bus']['bus'])
-
-    n.add(
-        'Generator',
-        data['generator']['generator'],
-        bus=data['generator']['bus'],
-        p_nom=data['p_nom']['value'],
-        marginal_cost=data['marginal_cost']['value'],
-        ramp_limit_up=data['ramp_limit_up']['value'],
-        ramp_limit_down=data['ramp_limit_down']['value'],
-    )
-    n.add(
-        'Link',
-        data['link']['link'],
-        bus0=data['link']['from'],
-        bus1=data['link']['to'],
-        p_nom=data['rating']['value'],
-        p_min_pu=-1.0,
-        efficiency=1.0,
-    )
-    p_nom = data['storage_p_nom']['value']
-    n.add(
-        'StorageUnit',
-        data['storage']['storage'],
-        bus=data['storage']['bus'],
-        p_nom=p_nom,
-        max_hours=[m / p for m, p in zip(data['soc_max']['value'], p_nom, strict=True)],
-        efficiency_store=data['efficiency_store']['value'],
-        efficiency_dispatch=data['efficiency_dispatch']['value'],
-        standing_loss=data['standing_loss']['value'],
-        cyclic_state_of_charge=True,
-    )
-
-    load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
-    for bus in data['bus']['bus']:
-        n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
-    return n
+    DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_cyclic_storage.json'
 
 
-def nodal_prices(n: pypsa.Network) -> dict[str, list]:
-    """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
-    balance, and the output this community reads most often after the cost.
+    def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
+        """The port's tables as a PyPSA network, column for column.
 
-    Recorded in references.json so the port is checked on a whole *vector*, not
-    just the objective. A sign convention that disagreed would be invisible to
-    a scalar comparison and wrong in every reported price.
-    """
-    mp = n.buses_t.marginal_price
-    return {
-        'snapshot': [s for s in mp.index for _ in mp.columns],
-        'bus': [b for _ in mp.index for b in mp.columns],
-        'value': [float(v) for row in mp.to_numpy() for v in row],
-    }
+        ``max_hours`` is the ratio PyPSA stores; the port carries the product it
+        implies (``soc_max``), because a bound there takes a name, not arithmetic.
+        """
+        n = pypsa.Network()
+        n.set_snapshots(data['snapshot']['snapshot'])
+        n.add('Bus', data['bus']['bus'])
+
+        n.add(
+            'Generator',
+            data['generator']['generator'],
+            bus=data['generator']['bus'],
+            p_nom=data['p_nom']['value'],
+            marginal_cost=data['marginal_cost']['value'],
+            ramp_limit_up=data['ramp_limit_up']['value'],
+            ramp_limit_down=data['ramp_limit_down']['value'],
+        )
+        n.add(
+            'Link',
+            data['link']['link'],
+            bus0=data['link']['from'],
+            bus1=data['link']['to'],
+            p_nom=data['rating']['value'],
+            p_min_pu=-1.0,
+            efficiency=1.0,
+        )
+        p_nom = data['storage_p_nom']['value']
+        n.add(
+            'StorageUnit',
+            data['storage']['storage'],
+            bus=data['storage']['bus'],
+            p_nom=p_nom,
+            max_hours=[m / p for m, p in zip(data['soc_max']['value'], p_nom, strict=True)],
+            efficiency_store=data['efficiency_store']['value'],
+            efficiency_dispatch=data['efficiency_dispatch']['value'],
+            standing_loss=data['standing_loss']['value'],
+            cyclic_state_of_charge=True,
+        )
+
+        load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
+        for bus in data['bus']['bus']:
+            n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
+        return n
 
 
-def main() -> float:
-    n = build(json.loads(DATA.read_text()))
-    status, condition = n.optimize(solver_name='highs')
-    assert status == 'ok', f'{status}: {condition}'
-    print(f'pypsa {pypsa.__version__}')
-    print(f'objective {float(n.objective)!r}')
-    print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
-    print(n.generators_t.p)
-    print(n.storage_units_t.state_of_charge)
-    return float(n.objective)
+    def nodal_prices(n: pypsa.Network) -> dict[str, list]:
+        """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
+        balance, and the output this community reads most often after the cost.
+
+        Recorded in references.json so the port is checked on a whole *vector*, not
+        just the objective. A sign convention that disagreed would be invisible to
+        a scalar comparison and wrong in every reported price.
+        """
+        mp = n.buses_t.marginal_price
+        return {
+            'snapshot': [s for s in mp.index for _ in mp.columns],
+            'bus': [b for _ in mp.index for b in mp.columns],
+            'value': [float(v) for row in mp.to_numpy() for v in row],
+        }
 
 
-if __name__ == '__main__':
-    main()
-```
+    def main() -> float:
+        n = build(json.loads(DATA.read_text()))
+        status, condition = n.optimize(solver_name='highs')
+        assert status == 'ok', f'{status}: {condition}'
+        print(f'pypsa {pypsa.__version__}')
+        print(f'objective {float(n.objective)!r}')
+        print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
+        print(n.generators_t.p)
+        print(n.storage_units_t.state_of_charge)
+        return float(n.objective)
 
-</details>
+
+    if __name__ == '__main__':
+        main()
+    ```
 
 ## What it exercises
 

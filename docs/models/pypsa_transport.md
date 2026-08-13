@@ -61,144 +61,143 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
 </details>
 <!-- math:end -->
 
-```yaml
-# PyPSA linear optimal power flow, rung 1: transport model, linear marginal
-# cost, no KVL. Optimum 22000.0, from PyPSA itself. See docs/models/index.md.
+=== "lpspec"
 
-dimensions:
-  snapshot:
-    dtype: int
-  bus:
-    dtype: str
-  generator:
-    dtype: str
-    coords: [bus]  # every generator sits on a bus
-  link:
-    dtype: str
-    coords: {from: bus, to: bus}  # both endpoints are buses
+    ```yaml
+    # PyPSA linear optimal power flow, rung 1: transport model, linear marginal
+    # cost, no KVL. Optimum 22000.0, from PyPSA itself. See docs/models/index.md.
 
-parameters:
-  p_nom:
-    dims: [generator]
-  marginal_cost:
-    dims: [generator]
-  rating:
-    dims: [link]
-  neg_rating:
-    dims: [link]
-  load:
-    dims: [snapshot, bus]
+    dimensions:
+      snapshot:
+        dtype: int
+      bus:
+        dtype: str
+      generator:
+        dtype: str
+        coords: [bus]  # every generator sits on a bus
+      link:
+        dtype: str
+        coords: {from: bus, to: bus}  # both endpoints are buses
 
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds:
-      lower: 0
-      upper: p_nom
-  # PyPSA's `p0`: flow measured at the link's `from` end, so a positive value
-  # withdraws there and injects at `to`. `p_min_pu = -1` makes it bidirectional.
-  f:
-    foreach: [snapshot, link]
-    bounds:
-      lower: neg_rating
-      upper: rating
+    parameters:
+      p_nom:
+        dims: [generator]
+      marginal_cost:
+        dims: [generator]
+      rating:
+        dims: [link]
+      neg_rating:
+        dims: [link]
+      load:
+        dims: [snapshot, bus]
 
-constraints:
-  nodal_balance:
-    foreach: [snapshot, bus]
-    expression: >-
-      sum(p, over=generator, group_by=bus)
-      + sum(f, over=link, group_by=to)
-      - sum(f, over=link, group_by=from)
-      == load
+    variables:
+      p:
+        foreach: [snapshot, generator]
+        bounds:
+          lower: 0
+          upper: p_nom
+      # PyPSA's `p0`: flow measured at the link's `from` end, so a positive value
+      # withdraws there and injects at `to`. `p_min_pu = -1` makes it bidirectional.
+      f:
+        foreach: [snapshot, link]
+        bounds:
+          lower: neg_rating
+          upper: rating
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * marginal_cost
-```
+    constraints:
+      nodal_balance:
+        foreach: [snapshot, bus]
+        expression: >-
+          sum(p, over=generator, group_by=bus)
+          + sum(f, over=link, group_by=to)
+          - sum(f, over=link, group_by=from)
+          == load
 
-## Side by side
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: p * marginal_cost
+    ```
 
-<details>
-<summary><b>PyPSA</b> — <code>examples/ports/references/pypsa_transport.py</code></summary>
+=== "PyPSA"
 
-```python
-from __future__ import annotations
+    `examples/ports/references/pypsa/pypsa_transport.py`:
 
-import json
-from pathlib import Path
+    ```python
+    from __future__ import annotations
 
-import pandas as pd
-import pypsa
+    import json
+    from pathlib import Path
 
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_transport.json'
+    import pandas as pd
+    import pypsa
 
-
-def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
-    """The port's tables as a PyPSA network, column for column.
-
-    ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
-    a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
-    it ships ``neg_rating`` as data instead. That is the ledger row.
-    """
-    n = pypsa.Network()
-    n.set_snapshots(data['snapshot']['snapshot'])
-    n.add('Bus', data['bus']['bus'])
-
-    n.add(
-        'Generator',
-        data['generator']['generator'],
-        bus=data['generator']['bus'],
-        p_nom=data['p_nom']['value'],
-        marginal_cost=data['marginal_cost']['value'],
-    )
-    n.add(
-        'Link',
-        data['link']['link'],
-        bus0=data['link']['from'],
-        bus1=data['link']['to'],
-        p_nom=data['rating']['value'],
-        p_min_pu=-1.0,
-        efficiency=1.0,
-    )
-
-    load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
-    for bus in data['bus']['bus']:
-        n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
-    return n
+    DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_transport.json'
 
 
-def nodal_prices(n: pypsa.Network) -> dict[str, list]:
-    """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
-    balance, and the output this community reads most often after the cost.
+    def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
+        """The port's tables as a PyPSA network, column for column.
 
-    Recorded in references.json so the port is checked on a whole *vector*, not
-    just the objective. A sign convention that disagreed would be invisible to
-    a scalar comparison and wrong in every reported price.
-    """
-    mp = n.buses_t.marginal_price
-    return {
-        'snapshot': [s for s in mp.index for _ in mp.columns],
-        'bus': [b for _ in mp.index for b in mp.columns],
-        'value': [float(v) for row in mp.to_numpy() for v in row],
-    }
+        ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
+        a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
+        it ships ``neg_rating`` as data instead. That is the ledger row.
+        """
+        n = pypsa.Network()
+        n.set_snapshots(data['snapshot']['snapshot'])
+        n.add('Bus', data['bus']['bus'])
+
+        n.add(
+            'Generator',
+            data['generator']['generator'],
+            bus=data['generator']['bus'],
+            p_nom=data['p_nom']['value'],
+            marginal_cost=data['marginal_cost']['value'],
+        )
+        n.add(
+            'Link',
+            data['link']['link'],
+            bus0=data['link']['from'],
+            bus1=data['link']['to'],
+            p_nom=data['rating']['value'],
+            p_min_pu=-1.0,
+            efficiency=1.0,
+        )
+
+        load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
+        for bus in data['bus']['bus']:
+            n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
+        return n
 
 
-def main() -> float:
-    n = build(json.loads(DATA.read_text()))
-    n.optimize(solver_name='highs')
-    print(f'pypsa {pypsa.__version__}')
-    print(f'objective {float(n.objective)!r}')
-    print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
-    return float(n.objective)
+    def nodal_prices(n: pypsa.Network) -> dict[str, list]:
+        """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
+        balance, and the output this community reads most often after the cost.
+
+        Recorded in references.json so the port is checked on a whole *vector*, not
+        just the objective. A sign convention that disagreed would be invisible to
+        a scalar comparison and wrong in every reported price.
+        """
+        mp = n.buses_t.marginal_price
+        return {
+            'snapshot': [s for s in mp.index for _ in mp.columns],
+            'bus': [b for _ in mp.index for b in mp.columns],
+            'value': [float(v) for row in mp.to_numpy() for v in row],
+        }
 
 
-if __name__ == '__main__':
-    main()
-```
+    def main() -> float:
+        n = build(json.loads(DATA.read_text()))
+        n.optimize(solver_name='highs')
+        print(f'pypsa {pypsa.__version__}')
+        print(f'objective {float(n.objective)!r}')
+        print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
+        return float(n.objective)
 
-</details>
+
+    if __name__ == '__main__':
+        main()
+    ```
 
 **Read this comparison carefully — it flatters neither side fairly.** PyPSA is
 a *domain package*: `n.add('Generator', ...)` and `n.add('Link', ...)` carry a

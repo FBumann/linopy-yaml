@@ -5,7 +5,7 @@
 # ///
 """Reference for ``stigler_diet``: the same LP, hand-written in linopy.
 
-    uv run --script examples/ports/references/stigler_diet.py
+    uv run --script examples/ports/references/linopy/stigler_diet.py
 
 **Two things verify this port, and they answer different questions.**
 
@@ -36,7 +36,7 @@ from pathlib import Path
 import linopy
 import pandas as pd
 
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'stigler_diet.json'
+DATA = Path(__file__).resolve().parents[2] / 'data' / 'stigler_diet.json'
 
 #: Laderman (1947), in 1939 dollars. What the port is checked against loosely;
 #: `references.json` records this run's exact value for the tight check.

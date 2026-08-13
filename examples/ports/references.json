@@ -7,7 +7,7 @@
   "pypsa_cyclic_storage": {
     "objective": 17228.77962151063,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa_cyclic_storage.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -58,7 +58,7 @@
   "pypsa_kvl": {
     "objective": 17000.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa_kvl.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -109,7 +109,7 @@
   "pypsa_ramp": {
     "objective": 18200.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa_ramp.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -160,7 +160,7 @@
   "pypsa_storage": {
     "objective": 15253.178322993519,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa_storage.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_storage.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -211,7 +211,7 @@
   "pypsa_transport": {
     "objective": 22000.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa_transport.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_transport.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -262,12 +262,12 @@
   "pypsa_unit_commitment": {
     "objective": 24900.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa_unit_commitment.py"
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py"
   },
   "stigler_diet": {
     "objective": 0.10866227820675685,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/stigler_diet.py — dollars per day; x365 = $39.6617/year",
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year",
     "corroborated_by": "Laderman (1947) at the National Bureau of Standards published $39.69/year for this data, the first serious test of the simplex method. This LP's exact optimum is 0.08% under it — his rounding, not a different model — and both select the same five foods: wheat flour, liver, cabbage, spinach, navy beans.",
     "duals": {
       "meet_requirement": {
@@ -300,7 +300,7 @@
     "objective": 153.675,
     "rtol": 1e-09,
     "provenance": "published with GAMS model library #1 (trnsport), after Dantzig, Linear Programming and Extensions (1963) ch. 3.3",
-    "corroborated_by": "examples/ports/references/transport_dantzig.py — the same LP hand-written in linopy 0.9.0, which reaches 153.675 independently. Secondary: the published figure is what verifies the port.",
+    "corroborated_by": "examples/ports/references/linopy/transport_dantzig.py — the same LP hand-written in linopy 0.9.0, which reaches 153.675 independently. Secondary: the published figure is what verifies the port.",
     "duals": {
       "within_capacity": {
         "plant": [
@@ -329,7 +329,7 @@
   "transport_pwl": {
     "objective": 8.786852757777865,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0's own add_piecewise_formulation, via examples/ports/references/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective"
+    "provenance": "linopy 0.9.0's own add_piecewise_formulation, via examples/ports/references/linopy/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective"
   },
   "tsp_mtz": {
     "objective": 2085.0,

@@ -83,76 +83,165 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
 </details>
 <!-- math:end -->
 
-```yaml
-# PyPSA linear optimal power flow, rung 2: rung 1 plus generator ramp limits.
-# Optimum 18200.0, from PyPSA itself. See docs/models/index.md.
+=== "lpspec"
 
-dimensions:
-  snapshot:
-    dtype: int
-  bus:
-    dtype: str
-  generator:
-    dtype: str
-    coords: [bus]  # every generator sits on a bus
-  link:
-    dtype: str
-    coords: {from: bus, to: bus}  # both endpoints are buses
+    ```yaml
+    # PyPSA linear optimal power flow, rung 2: rung 1 plus generator ramp limits.
+    # Optimum 18200.0, from PyPSA itself. See docs/models/index.md.
 
-parameters:
-  p_nom:
-    dims: [generator]
-  marginal_cost:
-    dims: [generator]
-  ramp_limit_up:
-    dims: [generator]
-  ramp_limit_down:
-    dims: [generator]
-  rating:
-    dims: [link]
-  neg_rating:
-    dims: [link]
-  load:
-    dims: [snapshot, bus]
+    dimensions:
+      snapshot:
+        dtype: int
+      bus:
+        dtype: str
+      generator:
+        dtype: str
+        coords: [bus]  # every generator sits on a bus
+      link:
+        dtype: str
+        coords: {from: bus, to: bus}  # both endpoints are buses
 
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds:
-      lower: 0
-      upper: p_nom
-  f:
-    foreach: [snapshot, link]
-    bounds:
-      lower: neg_rating
-      upper: rating
+    parameters:
+      p_nom:
+        dims: [generator]
+      marginal_cost:
+        dims: [generator]
+      ramp_limit_up:
+        dims: [generator]
+      ramp_limit_down:
+        dims: [generator]
+      rating:
+        dims: [link]
+      neg_rating:
+        dims: [link]
+      load:
+        dims: [snapshot, bus]
 
-constraints:
-  nodal_balance:
-    foreach: [snapshot, bus]
-    expression: >-
-      sum(p, over=generator, group_by=bus)
-      + sum(f, over=link, group_by=to)
-      - sum(f, over=link, group_by=from)
-      == load
+    variables:
+      p:
+        foreach: [snapshot, generator]
+        bounds:
+          lower: 0
+          upper: p_nom
+      f:
+        foreach: [snapshot, link]
+        bounds:
+          lower: neg_rating
+          upper: rating
 
-  # PyPSA states a ramp limit as a fraction of p_nom, so the right-hand side is
-  # parameter arithmetic rather than a precomputed column. `shift` vacates the
-  # first snapshot, and a vacated position is absent, so both rows drop there —
-  # which is the boundary PyPSA wants, since nothing precedes it to ramp from.
-  ramp_up:
-    foreach: [snapshot, generator]
-    expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
+    constraints:
+      nodal_balance:
+        foreach: [snapshot, bus]
+        expression: >-
+          sum(p, over=generator, group_by=bus)
+          + sum(f, over=link, group_by=to)
+          - sum(f, over=link, group_by=from)
+          == load
 
-  ramp_down:
-    foreach: [snapshot, generator]
-    expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
+      # PyPSA states a ramp limit as a fraction of p_nom, so the right-hand side is
+      # parameter arithmetic rather than a precomputed column. `shift` vacates the
+      # first snapshot, and a vacated position is absent, so both rows drop there —
+      # which is the boundary PyPSA wants, since nothing precedes it to ramp from.
+      ramp_up:
+        foreach: [snapshot, generator]
+        expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * marginal_cost
-```
+      ramp_down:
+        foreach: [snapshot, generator]
+        expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
+
+    objectives:
+      total_cost:
+        sense: minimize
+        expression: p * marginal_cost
+    ```
+
+=== "PyPSA"
+
+    The reference builds the same network with PyPSA's own objects. The delta from
+    rung 1 is two keyword arguments:
+
+    `examples/ports/references/pypsa/pypsa_ramp.py`:
+
+    ```python
+    from __future__ import annotations
+
+    import json
+    from pathlib import Path
+
+    import pandas as pd
+    import pypsa
+
+    DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_ramp.json'
+
+
+    def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
+        """The port's tables as a PyPSA network, column for column."""
+        n = pypsa.Network()
+        n.set_snapshots(data['snapshot']['snapshot'])
+        n.add('Bus', data['bus']['bus'])
+
+        n.add(
+            'Generator',
+            data['generator']['generator'],
+            bus=data['generator']['bus'],
+            p_nom=data['p_nom']['value'],
+            marginal_cost=data['marginal_cost']['value'],
+            ramp_limit_up=data['ramp_limit_up']['value'],
+            ramp_limit_down=data['ramp_limit_down']['value'],
+        )
+        n.add(
+            'Link',
+            data['link']['link'],
+            bus0=data['link']['from'],
+            bus1=data['link']['to'],
+            p_nom=data['rating']['value'],
+            p_min_pu=-1.0,
+            efficiency=1.0,
+        )
+
+        load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
+        for bus in data['bus']['bus']:
+            n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
+        return n
+
+
+    def nodal_prices(n: pypsa.Network) -> dict[str, list]:
+        """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
+        balance, and the output this community reads most often after the cost.
+
+        Recorded in references.json so the port is checked on a whole *vector*, not
+        just the objective. A sign convention that disagreed would be invisible to
+        a scalar comparison and wrong in every reported price.
+        """
+        mp = n.buses_t.marginal_price
+        return {
+            'snapshot': [s for s in mp.index for _ in mp.columns],
+            'bus': [b for _ in mp.index for b in mp.columns],
+            'value': [float(v) for row in mp.to_numpy() for v in row],
+        }
+
+
+    def main() -> float:
+        """Solve, and print what ``references.json`` records.
+
+        A ramp limit is the one rung that can make the instance infeasible rather
+        than merely different, and PyPSA reports that by leaving ``n.objective``
+        None — which would otherwise surface as a TypeError three lines down.
+        """
+        n = build(json.loads(DATA.read_text()))
+        status, condition = n.optimize(solver_name='highs')
+        assert status == 'ok', f'{status}: {condition} — the ramp limits are tighter than the load swing'
+        print(f'pypsa {pypsa.__version__}')
+        print(f'objective {float(n.objective)!r}')
+        print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
+        print(n.generators_t.p)
+        return float(n.objective)
+
+
+    if __name__ == '__main__':
+        main()
+    ```
 
 `shift` vacates the first snapshot, and a vacated position is *absent*, so the
 row there drops on its own — which is the boundary PyPSA wants, since nothing
@@ -161,96 +250,6 @@ precedes it to ramp from. No `where` states it. Asking for the wrap,
 model; it needs a gate, and a gate written as `snapshot > 0` hardcodes the
 index origin, so it stops being the boundary on a horizon that starts anywhere
 else. [Rung 4](pypsa_cyclic_storage.md) wants the wrap and asks for it by name.
-
-## Side by side
-
-The reference builds the same network with PyPSA's own objects. The delta from
-rung 1 is two keyword arguments:
-
-<details>
-<summary><b>PyPSA</b> — <code>examples/ports/references/pypsa_ramp.py</code></summary>
-
-```python
-from __future__ import annotations
-
-import json
-from pathlib import Path
-
-import pandas as pd
-import pypsa
-
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_ramp.json'
-
-
-def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
-    """The port's tables as a PyPSA network, column for column."""
-    n = pypsa.Network()
-    n.set_snapshots(data['snapshot']['snapshot'])
-    n.add('Bus', data['bus']['bus'])
-
-    n.add(
-        'Generator',
-        data['generator']['generator'],
-        bus=data['generator']['bus'],
-        p_nom=data['p_nom']['value'],
-        marginal_cost=data['marginal_cost']['value'],
-        ramp_limit_up=data['ramp_limit_up']['value'],
-        ramp_limit_down=data['ramp_limit_down']['value'],
-    )
-    n.add(
-        'Link',
-        data['link']['link'],
-        bus0=data['link']['from'],
-        bus1=data['link']['to'],
-        p_nom=data['rating']['value'],
-        p_min_pu=-1.0,
-        efficiency=1.0,
-    )
-
-    load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
-    for bus in data['bus']['bus']:
-        n.add('Load', f'load_{bus}', bus=bus, p_set=load[bus])
-    return n
-
-
-def nodal_prices(n: pypsa.Network) -> dict[str, list]:
-    """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
-    balance, and the output this community reads most often after the cost.
-
-    Recorded in references.json so the port is checked on a whole *vector*, not
-    just the objective. A sign convention that disagreed would be invisible to
-    a scalar comparison and wrong in every reported price.
-    """
-    mp = n.buses_t.marginal_price
-    return {
-        'snapshot': [s for s in mp.index for _ in mp.columns],
-        'bus': [b for _ in mp.index for b in mp.columns],
-        'value': [float(v) for row in mp.to_numpy() for v in row],
-    }
-
-
-def main() -> float:
-    """Solve, and print what ``references.json`` records.
-
-    A ramp limit is the one rung that can make the instance infeasible rather
-    than merely different, and PyPSA reports that by leaving ``n.objective``
-    None — which would otherwise surface as a TypeError three lines down.
-    """
-    n = build(json.loads(DATA.read_text()))
-    status, condition = n.optimize(solver_name='highs')
-    assert status == 'ok', f'{status}: {condition} — the ramp limits are tighter than the load swing'
-    print(f'pypsa {pypsa.__version__}')
-    print(f'objective {float(n.objective)!r}')
-    print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
-    print(n.generators_t.p)
-    return float(n.objective)
-
-
-if __name__ == '__main__':
-    main()
-```
-
-</details>
 
 ## What it exercises
 

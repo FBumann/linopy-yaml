@@ -3,9 +3,9 @@
 # requires-python = ">=3.12"
 # dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
-"""Reference for ``pypsa_cyclic_storage``: PyPSA's own LOPF. See docs/models/index.md.
+"""Reference for ``pypsa_kvl``: PyPSA's own LOPF with lines. See docs/models/index.md.
 
-    uv run --script examples/ports/references/pypsa_cyclic_storage.py
+    uv run --script examples/ports/references/pypsa/pypsa_kvl.py
 
 Pinned above to the versions that produced the number in ``references.json``,
 and run out of band — PyPSA is not a dependency of this project. linopy is
@@ -20,10 +20,18 @@ this script emits byte-identical output on either side of that change.
 It reads the same instance the port binds and builds the network with PyPSA's
 own objects. Nothing here imports lpspec.
 
-Rung 4: rung 3's storage with ``cyclic_state_of_charge``. The first
-snapshot's state of charge carries over from the *last* rather than from a
-seed, so the horizon closes on itself and there is no
-``state_of_charge_initial``. That is the whole delta from rung 3.
+**Rung 5, the last one: Kirchhoff's voltage law.** Every earlier rung moved
+power over ``Link`` objects, whose flow is a decision variable — a transport
+model. A ``Line`` is passive: flow is decided by physics, and around every
+independent cycle the reactance-weighted flows must sum to zero. That is what
+makes this the network-physics rung rather than another time-coupling one, and
+why it builds on rung 1 rather than on rung 4: the two axes are independent,
+and mixing them would leave a mismatch ambiguous.
+
+It also prints the cycle basis PyPSA derived, because the port carries that
+basis as data (``cycle_incidence``) and the two must describe the same cycle
+space. Computing a cycle basis is a graph algorithm, which is data preparation
+and deliberately outside the language.
 """
 
 from __future__ import annotations
@@ -34,14 +42,15 @@ from pathlib import Path
 import pandas as pd
 import pypsa
 
-DATA = Path(__file__).resolve().parent.parent / 'data' / 'pypsa_cyclic_storage.json'
+DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_kvl.json'
 
 
 def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``max_hours`` is the ratio PyPSA stores; the port carries the product it
-    implies (``soc_max``), because a bound there takes a name, not arithmetic.
+    ``r=0`` keeps a line purely reactive: the linearised power flow is a
+    function of ``x`` alone, and a resistance would only add losses the DC
+    approximation does not model anyway.
     """
     n = pypsa.Network()
     n.set_snapshots(data['snapshot']['snapshot'])
@@ -53,29 +62,15 @@ def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
         bus=data['generator']['bus'],
         p_nom=data['p_nom']['value'],
         marginal_cost=data['marginal_cost']['value'],
-        ramp_limit_up=data['ramp_limit_up']['value'],
-        ramp_limit_down=data['ramp_limit_down']['value'],
     )
     n.add(
-        'Link',
-        data['link']['link'],
-        bus0=data['link']['from'],
-        bus1=data['link']['to'],
-        p_nom=data['rating']['value'],
-        p_min_pu=-1.0,
-        efficiency=1.0,
-    )
-    p_nom = data['storage_p_nom']['value']
-    n.add(
-        'StorageUnit',
-        data['storage']['storage'],
-        bus=data['storage']['bus'],
-        p_nom=p_nom,
-        max_hours=[m / p for m, p in zip(data['soc_max']['value'], p_nom, strict=True)],
-        efficiency_store=data['efficiency_store']['value'],
-        efficiency_dispatch=data['efficiency_dispatch']['value'],
-        standing_loss=data['standing_loss']['value'],
-        cyclic_state_of_charge=True,
+        'Line',
+        data['line']['line'],
+        bus0=data['line']['from'],
+        bus1=data['line']['to'],
+        x=data['reactance']['value'],
+        r=0.0,
+        s_nom=data['s_nom']['value'],
     )
 
     load = pd.DataFrame(data['load']).pivot(index='snapshot', columns='bus', values='value')
@@ -85,13 +80,7 @@ def build(data: dict[str, dict[str, list]]) -> pypsa.Network:
 
 
 def nodal_prices(n: pypsa.Network) -> dict[str, list]:
-    """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
-    balance, and the output this community reads most often after the cost.
-
-    Recorded in references.json so the port is checked on a whole *vector*, not
-    just the objective. A sign convention that disagreed would be invisible to
-    a scalar comparison and wrong in every reported price.
-    """
+    """PyPSA's marginal price per (snapshot, bus), tidy."""
     mp = n.buses_t.marginal_price
     return {
         'snapshot': [s for s in mp.index for _ in mp.columns],
@@ -100,15 +89,26 @@ def nodal_prices(n: pypsa.Network) -> dict[str, list]:
     }
 
 
+def cycle_basis(n: pypsa.Network) -> str:
+    """The KVL rows PyPSA built, so the port's incidence can be checked by eye.
+
+    PyPSA scales the coefficients for conditioning; the constraint is ``= 0``,
+    so any nonzero multiple of a cycle describes the same cycle space. What has
+    to match is which lines share a row and with what relative signs.
+    """
+    return str(n.model.constraints['Kirchhoff-Voltage-Law'])
+
+
 def main() -> float:
     n = build(json.loads(DATA.read_text()))
+    n.optimize.create_model(include_objective_constant=False)
+    print(cycle_basis(n))
     status, condition = n.optimize(solver_name='highs')
     assert status == 'ok', f'{status}: {condition}'
     print(f'pypsa {pypsa.__version__}')
     print(f'objective {float(n.objective)!r}')
     print(f'duals {json.dumps({"nodal_balance": nodal_prices(n)})}')
-    print(n.generators_t.p)
-    print(n.storage_units_t.state_of_charge)
+    print(n.lines_t.p0)
     return float(n.objective)
 
 
