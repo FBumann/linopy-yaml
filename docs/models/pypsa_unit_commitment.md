@@ -195,6 +195,22 @@ $$\mathit{shut\_down}_{t,g} \in \{0, 1\} \qquad \forall\thinspace t \in \mathcal
         expression: p * marginal_cost + start_up * start_up_cost + shut_down * shut_down_cost
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/pypsa_unit_commitment.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/ports/pypsa_unit_commitment.yaml', sources) as solution:
+        print(solution.objective)  # 24900.0
+    ```
+
 === "PyPSA"
 
     `examples/ports/references/pypsa/pypsa_unit_commitment.py`:

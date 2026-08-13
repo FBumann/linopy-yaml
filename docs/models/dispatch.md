@@ -97,6 +97,23 @@ $$0 \le p_{s,g} \le \bar p_{g} \qquad \forall\thinspace s \in \mathcal{S},\enspa
         expression: p * cost
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/dispatch.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/dispatch.yaml', sources) as solution:
+        print(solution.objective)  # 10500.0
+        print(solution.dual('power_balance'))
+    ```
+
 === "linopy"
 
     `examples/ports/references/linopy/dispatch.py`:

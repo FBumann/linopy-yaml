@@ -107,6 +107,23 @@ $$\mathit{spend}_{f} \ge 0 \qquad \forall\thinspace f \in \mathcal{F}$$
         expression: spend
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/stigler_diet.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/ports/stigler_diet.yaml', sources) as solution:
+        print(solution.objective)  # 0.10866227820675685
+        print(solution.dual('meet_requirement'))
+    ```
+
 === "linopy"
 
     `examples/ports/references/linopy/stigler_diet.py`:

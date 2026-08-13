@@ -127,6 +127,23 @@ $$\underline{f}_{\ell} \le f_{s,\ell} \le \bar f_{\ell} \qquad \forall\thinspace
         expression: p * cost
     ```
 
+    Run against the committed instance:
+
+    ```python
+    import json
+    from pathlib import Path
+
+    import lpspec as lps
+    import polars as pl
+
+    tables = json.loads(Path('examples/ports/data/transport.json').read_text())
+    sources = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in tables.items()}
+
+    with lps.solve('examples/transport.yaml', sources) as solution:
+        print(solution.objective)  # 4400.0
+        print(solution.dual('balance'))
+    ```
+
 === "linopy"
 
     `examples/ports/references/linopy/transport.py`:
