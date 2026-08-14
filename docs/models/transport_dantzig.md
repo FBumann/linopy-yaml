@@ -41,8 +41,6 @@ $$\min \sum_{i,j} c_{ij} x_{ij}
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{i \in \mathcal{I},\enspace j \in \mathcal{J}} \frac{x_{i,j} \cdot d_{i,j} \cdot f}{1000}$$
 
 #### Subject to
@@ -102,11 +100,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [market]
         expression: sum(shipment, over=plant) >= demand
 
-    objectives:
-      total_cost:
-        sense: minimize
+    objective:
+      sense: minimize
       # f * d / 1000 in the source: arithmetic, not a precomputed cost table
-        expression: shipment * distance * freight / 1000
+      expression: shipment * distance * freight / 1000
     ```
 
     ```python

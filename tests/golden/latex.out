@@ -35,7 +35,7 @@
 
 \paragraph{Objective}
 \begin{align}
-\text{total\_cost} && \max & \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g}
+ && \max & \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g}
 \end{align}
 
 \paragraph{Subject to}

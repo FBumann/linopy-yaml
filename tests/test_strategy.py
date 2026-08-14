@@ -63,7 +63,7 @@ WINDOW = {
             'expression': 'soc == shift(soc, over=t, by=1) + charge * 0.9 - discharge',
         },
     },
-    'objectives': {'total': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
 }
 
 #: The same storage, but two of them — so `soc` is over `(t, storage)` and the
@@ -104,7 +104,7 @@ MULTI_STORE = {
             'expression': 'soc == shift(soc, over=t, by=1) + charge * efficiency - discharge',
         },
     },
-    'objectives': {'total': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
 }
 
 #: A myopic pathway: what a period builds is what the next period already has.
@@ -125,7 +125,7 @@ MYOPIC = {
         'accumulate': {'foreach': ['generator'], 'expression': 'total == existing + build'},
         'meet': {'foreach': [], 'expression': 'sum(total, over=generator) >= demand'},
     },
-    'objectives': {'total_cost': {'sense': 'minimize', 'expression': 'sum(build * cost, over=generator)'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(build * cost, over=generator)'},
 }
 
 GENERATORS = ['wind', 'gas']

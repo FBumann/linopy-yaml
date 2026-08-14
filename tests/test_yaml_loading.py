@@ -22,9 +22,8 @@ constraints:
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) == 5
-objectives:
-  total:
-    expression: sum(p * cost, over=generator)
+objective:
+  expression: sum(p * cost, over=generator)
 """
 
 

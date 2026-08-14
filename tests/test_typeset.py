@@ -47,7 +47,7 @@ DISPATCH = {
             'expression': 'sum(p, over=generator) == load',
         }
     },
-    'objectives': {'total_cost': {'sense': 'minimize', 'expression': 'p * cost'}},
+    'objective': {'sense': 'minimize', 'expression': 'p * cost'},
 }
 
 
@@ -80,7 +80,7 @@ def test_a_dimension_index_never_steals_a_letter_a_variable_owns(fmt: Format):
         'dimensions': {'plant': {'dtype': 'str'}, 'snapshot': {'dtype': 'int'}},
         'parameters': {'cost': {'dims': ['plant']}},
         'variables': {'p': {'foreach': ['snapshot', 'plant'], 'bounds': {'lower': 0}}},
-        'objectives': {'o': {'expression': 'p * cost'}},
+        'objective': {'expression': 'p * cost'},
     }
     text = typeset(model, fmt)
     assert fmt.subscript('p', ['t', 'p']) not in text
@@ -144,7 +144,7 @@ def test_macros_and_named_expressions_are_expanded_away(fmt: Format):
 
 @EVERY_FORMAT
 def test_an_invalid_model_fails_the_same_way_check_does(fmt: Format):
-    broken = override(DISPATCH, **{'objectives.total_cost.expression': 'p * nonexistent'})
+    broken = override(DISPATCH, **{'objective.expression': 'p * nonexistent'})
     with pytest.raises(lps.LpspecError):
         typeset(broken, fmt)
 
@@ -317,7 +317,6 @@ def test_markdown_keeps_names_out_of_the_math():
     browser: MathJax renders the `\\_` escape literally, backslash and all. A
     name is not math, so it goes outside the `$$` as a code span."""
     md = to_markdown(DISPATCH, legend=False)
-    assert '**`total_cost`**' in md
     assert '**`power_balance`**' in md
     for block in md.split('$$')[1::2]:
         assert '\\_' not in block, f'escaped underscore reached the math: {block!r}'
@@ -605,7 +604,7 @@ SYMBOLS = {
 
 WITH_MARGINAL_COST = override(
     DISPATCH,
-    **{'parameters.marginal_cost': {'dims': ['generator']}, 'objectives.total_cost.expression': 'p * marginal_cost'},
+    **{'parameters.marginal_cost': {'dims': ['generator']}, 'objective.expression': 'p * marginal_cost'},
 )
 
 

@@ -64,7 +64,6 @@ constraints:
     foreach: [snapshot, cycle]
     expression: sum(f * cycle_incidence, over=line) == 0
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * marginal_cost
+objective:
+  sense: minimize
+  expression: p * marginal_cost

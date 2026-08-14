@@ -59,10 +59,9 @@ constraints:
     foreach: [snapshot]
     expression: p == load
 
-objectives:
-  total:
-    sense: minimize
-    expression: sum(op_cost, over=snapshot)
+objective:
+  sense: minimize
+  expression: sum(op_cost, over=snapshot)
 """
 
 #: The same model with the hull instead of the curve — `method: convex` and
@@ -109,10 +108,9 @@ constraints:
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
 
-objectives:
-  total:
-    sense: minimize
-    expression: sum(sum(op_cost, over=generator), over=snapshot)
+objective:
+  sense: minimize
+  expression: sum(sum(op_cost, over=generator), over=snapshot)
 """
 
 
@@ -208,10 +206,9 @@ constraints:
     foreach: [snapshot]
     expression: power == load
 
-objectives:
-  total:
-    sense: minimize
-    expression: sum(fuel, over=snapshot)
+objective:
+  sense: minimize
+  expression: sum(fuel, over=snapshot)
 """
 
 
@@ -271,10 +268,9 @@ constraints:
     foreach: [snapshot]
     expression: p == load * on_flag
 
-objectives:
-  total:
-    sense: minimize
-    expression: sum(op_cost, over=snapshot)
+objective:
+  sense: minimize
+  expression: sum(op_cost, over=snapshot)
 """
 
 
@@ -673,10 +669,9 @@ constraints:
     foreach: [snapshot, generator, segment]
     expression: gen_cost >= p * seg_slope + seg_intercept
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: sum(gen_cost, over=generator)
+objective:
+  sense: minimize
+  expression: sum(gen_cost, over=generator)
 """
 
 

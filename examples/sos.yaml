@@ -52,7 +52,6 @@ constraints:
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: op_cost
+objective:
+  sense: minimize
+  expression: op_cost

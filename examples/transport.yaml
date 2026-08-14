@@ -43,7 +43,6 @@ constraints:
     foreach: [snapshot, bus]
     expression: gen_at_bus + net_inflow == load
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * cost
+objective:
+  sense: minimize
+  expression: p * cost

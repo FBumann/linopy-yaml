@@ -123,8 +123,6 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     #### Objective
 
-    **`total_cost`**
-
     $$\min \sum_{s \in \mathcal{S},\enspace g \in \mathcal{G}} p_{s,g} \cdot c_{g}$$
 
     #### Subject to
@@ -162,7 +160,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     \paragraph{Objective}
     \begin{align}
-    \text{total\_cost} && \min & \sum_{s \in \mathcal{S},\ g \in \mathcal{G}} p_{s,g} \cdot c_{g}
+     && \min & \sum_{s \in \mathcal{S},\ g \in \mathcal{G}} p_{s,g} \cdot c_{g}
     \end{align}
 
     \paragraph{Subject to}

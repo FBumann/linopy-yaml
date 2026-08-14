@@ -30,7 +30,7 @@ applied in a different position.
 ## 1. File shape
 
 Nine top-level keys: `dimensions`, `parameters`, `variables`, `constraints`,
-`objectives` (§2), `expressions`, `macros` (§3), `piecewise` (§4), `sos` (§4.1),
+`objective` (§2), `expressions`, `macros` (§3), `piecewise` (§4), `sos` (§4.1),
 plus `version` (below). The schema accepts any subset, but `check`, `solve` and
 `write` require an objective — there is nothing to optimise without one.
 
@@ -215,13 +215,16 @@ row drops without a `where` saying so. Spelling it `edge='wrap'` gated on
 horizon not starting at 0 — the gate hardcodes the origin, the operator does
 not.
 
-**`objectives`** — one `expression`, like a constraint; `sense` ∈ {`minimize`,
-`maximize`}, default `minimize`; no `foreach`, since an objective is scalar by
-definition. **Every dim the expression carries is summed**, each *term* over the
-dims **that term** carries and not repeated because another term carries a dim it
-does not: in `x * a + y * b` with `x, a` on `i` and `y, b` on `j` there are
-`|i| + |j|` summands, never `|i| · |j|`. Declaring a second objective is a load
-error.
+**`objective`** — a single block, not a mapping, and it carries no name: there
+is nothing a name would read back, the value being scalar. One `expression`,
+like a constraint; `sense` ∈ {`minimize`, `maximize`}, default `minimize`; no
+`foreach`, since an objective is scalar by definition. **Every dim the
+expression carries is summed**, each *term* over the dims **that term** carries
+and not repeated because another term carries a dim it does not: in
+`x * a + y * b` with `x, a` on `i` and `y, b` on `j` there are `|i| + |j|`
+summands, never `|i| · |j|`. A second objective is unsayable rather than
+checked — the schema holds one block, which is law 2 applied to the schema's
+own shape.
 
 ## 3. `expressions` and `macros`
 
@@ -381,10 +384,10 @@ both declarations. Ordered resolution with shadowing is wrong for a fail-loud
 language: under it, declaring a parameter named `snapshot` would silently change
 what an existing `where: "snapshot > 0"` means.
 
-**Constraints and objectives are outside it**, no position resolving to one, so
-a model may name a constraint after a variable — `pypsa_unit_commitment` names
-both `start_up`. What reads a solve back keys on the label space as well as the
-name for that reason.
+**Constraints are outside it**, no position resolving to one, so a model may
+name a constraint after a variable — `pypsa_unit_commitment` names both
+`start_up`. What reads a solve back keys on the label space as well as the name
+for that reason. The objective carries no name at all (§2).
 
 | Position | Legal kinds |
 |---|---|
@@ -701,7 +704,7 @@ language: nothing there changes what a file means.
 | time-series processing (resample, cluster, interpolate, align), file IO, units | data prep; pass a parameter |
 | solver breadth | two solver sinks — HiGHS, which ships, and Gurobi via the `[gurobi]` extra — chosen with `solver_name` at the call, never in the file; LP files for everything else ([#106](https://github.com/fluxopt/lpspec/issues/106)) |
 | indicator constraints | planned, as a *sink capability* rather than a language question — the same axis `sos:` (§4.1) landed on, and the same split: `lp_file` and Gurobi have the concept, the default solver does not ([#220](https://github.com/fluxopt/lpspec/issues/220), [Track 3](https://github.com/fluxopt/lpspec/issues/472)) |
-| multi-objective | one objective — declaring a second is a load error (§2); weight them into one expression |
+| multi-objective | one `objective:` block — a second is unsayable (§2); weight them into one expression |
 | schema migrations | — |
 | arbitrary array ops (`merge`, `reindex`, `apply_ufunc`) | data prep, or a declared `escape:` island — the closed AST is what makes streaming possible |
 | filling a missing value (`.fillna`) | data prep, or a `where` if you meant the coordinate not to exist. In the language only where the data cannot reach — `shift(..., edge=)`, §6 |

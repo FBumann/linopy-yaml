@@ -89,6 +89,6 @@ model: examples/walkthrough.yaml
 
     variable x variable — above the degree-1 ceiling:
     caught by check() as LanguageError
-      objective 'total_cost': both factors of a product contain variables, which is degree 2. Multiply the variable by a parameter instead, or model the curve with a piecewise: block — see docs/design/ceiling.md.
+      the objective: both factors of a product contain variables, which is degree 2. Multiply the variable by a parameter instead, or model the curve with a piecewise: block — see docs/design/ceiling.md.
 
 docs/ARCHITECTURE.md has the rules these stages enforce.

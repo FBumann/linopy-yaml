@@ -58,7 +58,7 @@ REACH = {
     'constraints': {'meet': {'foreach': ['zone'], 'expression': 'sum(reach * p, over=plant) >= demand'}},
     #: `levy` is the objective's **constant** — the one term with no column, so
     #: it reaches a solver by neither of the two routes the others take.
-    'objectives': {'total': {'sense': 'minimize', 'expression': 'p * cost + levy'}},
+    'objective': {'sense': 'minimize', 'expression': 'p * cost + levy'},
 }
 
 
@@ -89,7 +89,7 @@ KNAPSACK = {
     'parameters': {'worth': {'dims': ['item']}, 'weight': {'dims': ['item']}, 'capacity': {'dims': []}},
     'variables': {'take': {'foreach': ['item'], 'binary': True}},
     'constraints': {'fits': {'foreach': [], 'expression': 'sum(weight * take, over=item) <= capacity'}},
-    'objectives': {'total': {'sense': 'maximize', 'expression': 'take * worth'}},
+    'objective': {'sense': 'maximize', 'expression': 'take * worth'},
 }
 
 
@@ -409,7 +409,7 @@ def _tables(model: Any) -> Any:
 DECLARED = [
     pytest.param({'variables.p.integer': True}, id='a variable type'),
     pytest.param({'constraints.meet.expression': 'sum(reach * p, over=plant) == demand'}, id="a row's comparison"),
-    pytest.param({'objectives.total.sense': 'maximize'}, id='the sense'),
+    pytest.param({'objective.sense': 'maximize'}, id='the sense'),
 ]
 
 
@@ -576,7 +576,7 @@ def test_a_rebind_can_grow_a_dimension():
                 'expression': 'theta >= cut_const + sum(cut_slope * cap, over=generator)',
             }
         },
-        'objectives': {'total': {'sense': 'minimize', 'expression': 'cap * invest + theta'}},
+        'objective': {'sense': 'minimize', 'expression': 'cap * invest + theta'},
     }
     invest = pl.DataFrame({'generator': ['wind', 'gas'], 'value': [90.0, 30.0]})
 

@@ -87,7 +87,7 @@ def test_a_dict_built_model_gets_a_file():
         'parameters': {'cost': {'dims': ['t']}},
         'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'cap': {'foreach': ['t'], 'expression': 'x <= 4'}},
-        'objectives': {'total': {'sense': 'maximize', 'expression': 'x * cost'}},
+        'objective': {'sense': 'maximize', 'expression': 'x * cost'},
     }
     text = lps.load_model(built).to_yaml()
 
@@ -116,11 +116,10 @@ def test_the_review_copy_states_the_objective_sense(path: Path):
     from the file in the place that matters most.
     """
     model = lps.load_model(path)
-    if not model.objectives:
+    if model.objective is None:
         pytest.skip('no objective to state')
     text = model.to_yaml()
-    for name, objective in model.objectives.items():
-        assert f'sense: {objective.sense}' in text, f"{path}: '{name}' lost its direction"
+    assert f'sense: {model.objective.sense}' in text, f'{path}: the objective lost its direction'
 
 
 def test_absence_is_dropped_and_values_are_kept():
@@ -134,7 +133,7 @@ def test_absence_is_dropped_and_values_are_kept():
         {
             'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
             'variables': {'x': {'foreach': ['t']}},
-            'objectives': {'o': {'sense': 'minimize', 'expression': 'x'}},
+            'objective': {'sense': 'minimize', 'expression': 'x'},
         }
     ).to_yaml()
 
@@ -157,7 +156,7 @@ def test_json_carries_a_model_too():
         {
             'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
             'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0}}, 'y': {'foreach': ['t']}},
-            'objectives': {'o': {'sense': 'minimize', 'expression': 'x + y'}},
+            'objective': {'sense': 'minimize', 'expression': 'x + y'},
         }
     )
     assert json.loads(model.model_dump_json()) == model.to_dict()

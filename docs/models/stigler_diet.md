@@ -44,8 +44,6 @@ the same engine.
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{f \in \mathcal{F}} \mathit{spend}_{f}$$
 
 #### Subject to
@@ -101,10 +99,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [nutrient]
         expression: sum(spend * nutrient_per_dollar, over=food) >= daily_minimum
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: spend
+    objective:
+      sense: minimize
+      expression: spend
     ```
 
     ```python

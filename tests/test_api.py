@@ -141,7 +141,7 @@ def test_check_reports_language_errors_before_any_data_is_bound(
     ``build`` is asserted to say the same thing rather than defer it to the
     solver.
     """
-    raw = schema_of(dispatch_yaml, **{'objectives.total_cost.expression': expression}).model_dump()
+    raw = schema_of(dispatch_yaml, **{'objective.expression': expression}).model_dump()
 
     with pytest.raises(lps.LanguageError, match=match):
         lps.check(raw)
@@ -376,7 +376,7 @@ TWO_VARIABLE_MODEL = {
             'expression': 'sum(p, over=generator) + shed == load',
         }
     },
-    'objectives': {'total': {'sense': 'minimize', 'expression': 'shed'}},
+    'objective': {'sense': 'minimize', 'expression': 'shed'},
 }
 
 

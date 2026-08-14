@@ -73,8 +73,6 @@ Inside the language, and it always was.
 
 #### Objective
 
-**`tour_length`**
-
 $$\min \sum_{f \in \mathcal{F},\enspace t \in \mathcal{T}} \mathit{travel}_{f,t} \cdot \mathit{distance}_{f,t}$$
 
 #### Subject to
@@ -160,10 +158,9 @@ constraints:
       + n * travel
       <= n - 1
 
-objectives:
-  tour_length:
-    sense: minimize
-    expression: travel * distance
+objective:
+  sense: minimize
+  expression: travel * distance
 ```
 
 **One shape here is worth the whole page.** MTZ needs `u` — the tour position —

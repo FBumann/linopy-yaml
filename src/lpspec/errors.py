@@ -48,7 +48,7 @@ class LanguageError(LpspecError):
 class SchemaError(LanguageError):
     """**The declarations themselves are wrong**, before any expression is read.
 
-    An unknown key, a bad ``dtype``, a duplicate YAML key, two objectives, a
+    An unknown key, a bad ``dtype``, a duplicate YAML key, a
     version this reader does not know — as against a bare
     :class:`LanguageError`, which is sound declarations saying something the
     language rejects (an undeclared name, a dim rule, degree 2).

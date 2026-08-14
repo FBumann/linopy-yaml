@@ -34,7 +34,7 @@ INFEASIBLE = {
     'parameters': {'load': {'dims': ['snapshot']}},
     'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'meet': {'foreach': ['snapshot'], 'expression': 'p == load'}},
-    'objectives': {'c': {'sense': 'minimize', 'expression': 'p'}},
+    'objective': {'sense': 'minimize', 'expression': 'p'},
 }
 
 
@@ -172,7 +172,7 @@ def knapsack():
         'parameters': {'w': {'dims': ['i']}, 'cap': {'dims': ['one']}},
         'variables': {'x': {'foreach': ['i'], 'binary': True}},
         'constraints': {'budget': {'foreach': ['one'], 'expression': 'sum(x * w, over=i) <= cap'}},
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(x * w, over=i)'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x * w, over=i)'},
     }
     sources = {
         'w': pl.DataFrame({'i': list(range(n)), 'value': [float(v) for v in weights]}),

@@ -42,7 +42,6 @@ constraints:
     foreach: [warehouse, customer]
     expression: serve - is_open <= 0
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: is_open * fixed_cost + serve * serve_cost
+objective:
+  sense: minimize
+  expression: is_open * fixed_cost + serve * serve_cost

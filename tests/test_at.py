@@ -109,7 +109,7 @@ COMPONENT_GATE = {
         'gate': {'foreach': ['flow', 't'], 'expression': 'rate <= at(on, onto=flow, by=component) * 10'},
         'need': {'foreach': ['t'], 'expression': 'sum(rate, over=flow) >= 12'},
     },
-    'objectives': {'total': {'sense': 'minimize', 'expression': 'rate * cost + on * oncost'}},
+    'objective': {'sense': 'minimize', 'expression': 'rate * cost + on * oncost'},
 }
 
 
@@ -175,7 +175,7 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
             'draw': {'foreach': [], 'expression': 'sum(at(level, onto=flow, by=component) * share, over=flow) >= 9'},
             'link': {'foreach': ['flow'], 'expression': 'take <= at(level, onto=flow, by=component)'},
         },
-        'objectives': {'total': {'sense': 'minimize', 'expression': 'level * 1.0 + take * cost'}},
+        'objective': {'sense': 'minimize', 'expression': 'level * 1.0 + take * cost'},
     }
     flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
     data = {

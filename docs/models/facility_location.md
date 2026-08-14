@@ -45,8 +45,6 @@ opening a warehouse costs money whether or not it ends up busy.
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{w \in \mathcal{W},\enspace c \in \mathcal{C}} \left( \mathit{is\_open}_{w} \cdot \mathit{fixed\_cost}_{w} + \mathit{serve}_{w,c} \cdot \mathit{serve}^{\mathrm{cost}}_{w,c} \right)$$
 
 #### Subject to
@@ -117,10 +115,9 @@ constraints:
     foreach: [warehouse, customer]
     expression: serve - is_open <= 0
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: is_open * fixed_cost + serve * serve_cost
+objective:
+  sense: minimize
+  expression: is_open * fixed_cost + serve * serve_cost
 ```
 
 **`serve` is not declared binary, and that is the interesting part.** Only

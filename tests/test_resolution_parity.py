@@ -163,7 +163,7 @@ BOOL_MASK_MODEL = {
     'parameters': {'active': {'dims': ['t'], 'dtype': 'bool'}, 'cap': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'floor': {'foreach': ['t'], 'expression': 'x >= cap', 'where': 'active'}},
-    'objectives': {'total': {'sense': 'minimize', 'expression': 'sum(x, over=t)'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
 }
 
 
@@ -192,7 +192,7 @@ SCALAR_ROW_MODEL = {
         'slack': {'foreach': [], 'bounds': {'lower': 0, 'upper': 10}},
     },
     'constraints': {'budget_row': {'foreach': [], 'expression': 'sum(x, over=f) - slack <= budget'}},
-    'objectives': {'total': {'sense': 'maximize', 'expression': 'x * cost'}},
+    'objective': {'sense': 'maximize', 'expression': 'x * cost'},
 }
 
 
@@ -260,7 +260,7 @@ DATETIME_MODEL = {
             'expression': 'sum(p, over=generator) == load',
         }
     },
-    'objectives': {'total': {'sense': 'minimize', 'expression': 'p * cost'}},
+    'objective': {'sense': 'minimize', 'expression': 'p * cost'},
 }
 
 

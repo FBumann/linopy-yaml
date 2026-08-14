@@ -34,7 +34,7 @@ LP = {
     'parameters': {'load': {'dims': ['t']}, 'price': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'meet': {'foreach': ['t'], 'expression': 'p >= load'}},
-    'objectives': {'cost': {'sense': 'minimize', 'expression': 'sum(p * price, over=t)'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * price, over=t)'},
 }
 
 #: Maximisation *and* an objective constant, which are the two things the
@@ -44,7 +44,7 @@ MAX = {
     'parameters': {'cap': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'lim': {'foreach': ['t'], 'expression': 'p <= cap'}},
-    'objectives': {'profit': {'sense': 'maximize', 'expression': 'sum(p, over=t) + 5'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(p, over=t) + 5'},
 }
 
 MIP = {
@@ -52,7 +52,7 @@ MIP = {
     'parameters': {'w': {'dims': ['i']}, 'cap': {'dims': ['one']}},
     'variables': {'x': {'foreach': ['i'], 'binary': True}},
     'constraints': {'budget': {'foreach': ['one'], 'expression': 'sum(x * w, over=i) <= cap'}},
-    'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(x * w, over=i)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * w, over=i)'},
 }
 
 INFEASIBLE = {
@@ -60,7 +60,7 @@ INFEASIBLE = {
     'parameters': {'load': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'meet': {'foreach': ['t'], 'expression': 'p == load'}},
-    'objectives': {'c': {'sense': 'minimize', 'expression': 'p'}},
+    'objective': {'sense': 'minimize', 'expression': 'p'},
 }
 
 #: Each case is the ``(model, data)`` pair a call site unpacks:

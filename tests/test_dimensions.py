@@ -39,7 +39,7 @@ BASE = {
             'expression': 'sum(p, over=generator, group_by=bus) == load',
         }
     },
-    'objectives': {'total': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
 }
 
 

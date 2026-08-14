@@ -42,7 +42,6 @@ constraints:
     foreach: [snapshot, bus]
     expression: sum(p, over=generator, group_by=bus) + sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from) == load
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * cost
+objective:
+  sense: minimize
+  expression: p * cost

@@ -55,8 +55,6 @@ the whole difference between a line and a link.
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g}$$
 
 #### Subject to
@@ -153,10 +151,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, cycle]
         expression: sum(f * cycle_incidence, over=line) == 0
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: p * marginal_cost
+    objective:
+      sense: minimize
+      expression: p * marginal_cost
     ```
 
     ```python

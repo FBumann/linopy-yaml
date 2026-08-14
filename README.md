@@ -75,10 +75,9 @@ constraints:
   power_balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * cost
+objective:
+  sense: minimize
+  expression: p * cost
 ```
 <!--model-end-->
 

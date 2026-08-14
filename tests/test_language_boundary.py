@@ -18,7 +18,7 @@ DISPATCH = EXAMPLES_DIR / 'dispatch.yaml'
 
 
 def _objective(expression: str) -> dict:
-    return {'objectives.total_cost.expression': expression}
+    return {'objective.expression': expression}
 
 
 @pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)

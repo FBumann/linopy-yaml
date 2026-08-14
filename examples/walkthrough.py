@@ -61,7 +61,7 @@ _REFUSED = [
     ),
     (
         'variable x variable — above the degree-1 ceiling',
-        {'objectives': {'total_cost': {'sense': 'minimize', 'expression': 'sum(p * p, over=generator)'}}},
+        {'objective': {'sense': 'minimize', 'expression': 'sum(p * p, over=generator)'}},
     ),
 ]
 
@@ -113,7 +113,7 @@ def expanded_ast(schema: lps.Model) -> None:
     two lanes disagree — neither lane ever sees one.
     """
     banner(2, 'expand macros / named expressions -> core AST', 'expansion.py')
-    objective_text = schema.objectives['total_cost'].expression
+    objective_text = schema.objective.expression
     print(f'    written      {objective_text!r}')
     print(f'    parsed       {parse_expression(objective_text)}')
     print(f'    expanded     {parse_and_expand(objective_text, schema)}')

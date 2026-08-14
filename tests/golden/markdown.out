@@ -33,8 +33,6 @@ $t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of t
 
 #### Objective
 
-**`total_cost`**
-
 $$\max \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g}$$
 
 #### Subject to

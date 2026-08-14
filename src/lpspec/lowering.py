@@ -123,15 +123,15 @@ def lower_program(schema: Model) -> plan.Program:
             )
         )
 
-    if not schema.objectives:
+    odef = schema.objective
+    if odef is None:
         raise LanguageError('the relational backend requires an objective')
-    oname, odef = next(iter(schema.objectives.items()))
-    ast = expression_of(odef.expression, schema, ns, f"objective '{oname}'")
+    ast = expression_of(odef.expression, schema, ns, 'the objective')
     if isinstance(ast, ComparisonNode):
-        raise LanguageError(f"objective '{oname}': expression must not contain a comparison operator")
+        raise LanguageError('the objective: expression must not contain a comparison operator')
     objective = plan.ObjectiveDeclaration(
         'min' if odef.sense == 'minimize' else 'max',
-        _lower_expr(ast, schema, f"objective '{oname}'"),
+        _lower_expr(ast, schema, 'the objective'),
     )
 
     dimensions = tuple(

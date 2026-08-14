@@ -125,7 +125,7 @@ def extend(
     data: dict[str, Any] | None = None,
     coords: dict[str, Any] | None = None,
 ) -> None:
-    """Add variables, constraints, and/or objectives from YAML to *model*.
+    """Add variables, constraints, and/or an objective from YAML to *model*.
 
     Expressions may reference variables *model* already carries; every
     parameter they use is declared in this file and supplied in this call. A

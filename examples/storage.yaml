@@ -43,7 +43,6 @@ constraints:
   # cyclic storage: soc wraps around the snapshot horizon
     expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * cost
+objective:
+  sense: minimize
+  expression: p * cost

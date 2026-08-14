@@ -46,7 +46,6 @@ constraints:
     foreach: [snapshot, node]
     expression: sum(p, over=tech) == demand
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * cost
+objective:
+  sense: minimize
+  expression: p * cost

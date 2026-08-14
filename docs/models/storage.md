@@ -49,8 +49,6 @@ $t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of t
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{s \in \mathcal{S},\enspace g \in \mathcal{G}} p_{s,g} \cdot c_{g}$$
 
 #### Subject to
@@ -134,10 +132,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       # cyclic storage: soc wraps around the snapshot horizon
         expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: p * cost
+    objective:
+      sense: minimize
+      expression: p * cost
     ```
 
     ```python

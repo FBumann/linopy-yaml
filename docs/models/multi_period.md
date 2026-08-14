@@ -74,8 +74,6 @@ the pullback is a construct in the language rather than a step before it.
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E},\enspace g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{opex}_{g} \cdot \mathit{weight}_{t} + p^{\mathrm{nom}}_{e,g} \cdot \mathit{capex}_{g,e} \right)$$
 
 #### Subject to
@@ -146,10 +144,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: p * opex * weight + p_nom * capex
+    objective:
+      sense: minimize
+      expression: p * opex * weight + p_nom * capex
     ```
 
     ```python

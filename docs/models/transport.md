@@ -47,8 +47,6 @@ $\ell$ is already the line index.
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{s \in \mathcal{S},\enspace g \in \mathcal{G}} p_{s,g} \cdot c_{g}$$
 
 #### Subject to
@@ -120,10 +118,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, bus]
         expression: gen_at_bus + net_inflow == load
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: p * cost
+    objective:
+      sense: minimize
+      expression: p * cost
     ```
 
     ```python

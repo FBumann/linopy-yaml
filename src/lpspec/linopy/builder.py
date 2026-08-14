@@ -105,8 +105,8 @@ def build_model(
 ) -> None:
     """Populate a linopy Model from a parsed schema and loaded parameters.
 
-    This mutates *model* in-place, adding variables, constraints, and
-    objectives as declared in *schema*.
+    This mutates *model* in-place, adding variables, constraints and
+    the objective as declared in *schema*.
     """
     ctx = EvaluationContext(
         model,
@@ -119,7 +119,7 @@ def build_model(
     _build_variables(ctx)
     _build_sos(ctx)
     _build_constraints(ctx)
-    _build_objectives(ctx)
+    _build_objective(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -256,26 +256,28 @@ def _build_constraints(ctx: EvaluationContext) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _build_objectives(ctx: EvaluationContext) -> None:
-    """Build every declared objective onto the model.
+def _build_objective(ctx: EvaluationContext) -> None:
+    """Build the declared objective, if any, onto the model.
 
     An objective has no ``where``, so its divisor check runs with no row mask
     — the numerator's own presence is the only thing that can excuse a gap.
     """
-    for oname, odef in ctx.schema.objectives.items():
-        with note(f"while building objective '{oname}'"):
-            ast = expression_of(odef.expression, ctx.schema, ctx.ns, f"objective '{oname}'")
+    odef = ctx.schema.objective
+    if odef is None:
+        return
+    with note('while building the objective'):
+        ast = expression_of(odef.expression, ctx.schema, ctx.ns, 'the objective')
 
-            if isinstance(ast, ComparisonNode):
-                msg = f'Expression must not contain a comparison operator. Got: {odef.expression!r}'
-                raise LanguageError(msg)
+        if isinstance(ast, ComparisonNode):
+            msg = f'Expression must not contain a comparison operator. Got: {odef.expression!r}'
+            raise LanguageError(msg)
 
-            check_divisors_cover(f"objective '{oname}'", ast, ctx.schema, ctx.dataset, None, ctx.model)
+        check_divisors_cover('the objective', ast, ctx.schema, ctx.dataset, None, ctx.model)
 
-            expr = _objective_expression(ast, ctx)
+        expr = _objective_expression(ast, ctx)
 
-            sense = 'min' if odef.sense == 'minimize' else 'max'
-            ctx.model.add_objective(expr, overwrite=True, sense=sense)
+        sense = 'min' if odef.sense == 'minimize' else 'max'
+        ctx.model.add_objective(expr, overwrite=True, sense=sense)
 
 
 def _objective_expression(node: ArithmeticNode, ctx: EvaluationContext) -> Any:

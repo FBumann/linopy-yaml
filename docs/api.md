@@ -112,7 +112,7 @@ the solver.
 framework that emits declarations never writes a temporary file to run them:
 
 ```python
-model = {'dimensions': ..., 'variables': ..., 'constraints': ..., 'objectives': ...}
+model = {'dimensions': ..., 'variables': ..., 'constraints': ..., 'objective': ...}
 
 lps.solve(model, sources)  # a dict runs like a file
 checked = lps.load_model(model)  # ...or validate once and keep it

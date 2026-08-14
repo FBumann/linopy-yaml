@@ -59,7 +59,6 @@ constraints:
     foreach: [market]
     expression: sum(shipment, over=plant) >= demand
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: scaled * distance * freight / 1000
+objective:
+  sense: minimize
+  expression: scaled * distance * freight / 1000

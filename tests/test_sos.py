@@ -58,9 +58,7 @@ BASE: dict[str, Any] = {
     'dimensions': {'site': {'values': SITES}, 'size': {'dtype': 'int', 'values': SIZES}},
     'parameters': {'value': {'dims': ['site', 'size']}, 'cap': {'dims': ['site', 'size']}},
     'variables': {'take': {'foreach': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-    'objectives': {
-        'total': {'sense': 'maximize', 'expression': 'sum(sum(take * value, over=site), over=size)'},
-    },
+    'objective': {'sense': 'maximize', 'expression': 'sum(sum(take * value, over=site), over=size)'},
 }
 
 
@@ -388,7 +386,7 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
         'parameters': {'worth': {'dims': ['site', 'size']}, 'live': {'dims': ['site', 'size'], 'dtype': 'bool'}},
         'variables': {'take': {'foreach': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 1}, 'where': 'live'}},
         'sos': {'pick': {'variable': 'take', 'over': 'size', 'type': 1}},
-        'objectives': {'total': {'sense': 'maximize', 'expression': 'sum(sum(take * worth, over=site), over=size)'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(sum(take * worth, over=site), over=size)'},
     }
     worth = _table({('north', 0): 3.0, ('north', 1): 5.0, ('south', 0): 5.0, ('south', 1): 0.0})
     together = {'north': [True, True], 'south': [False, False]}

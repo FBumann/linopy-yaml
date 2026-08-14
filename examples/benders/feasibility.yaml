@@ -26,7 +26,6 @@ constraints:
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) + short >= load
-objectives:
-  total_violation:
-    sense: minimize
-    expression: short
+objective:
+  sense: minimize
+  expression: short

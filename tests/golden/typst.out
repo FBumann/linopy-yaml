@@ -25,7 +25,7 @@ $t minus.o k$ denotes cyclic translation: index $t-k$ taken modulo the size of t
 
 == Objective
 #set math.equation(numbering: "(1)")
-$ upright("total_cost") & max & sum_(t in cal(T), g in cal(G)) p_(t,g) dot italic("cost")_(g) $
+$  & max & sum_(t in cal(T), g in cal(G)) p_(t,g) dot italic("cost")_(g) $
 
 == Subject to
 #set math.equation(numbering: "(1)")

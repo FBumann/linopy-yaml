@@ -78,7 +78,7 @@ def _model(
             'c': {'foreach': foreach if foreach is not None else ['t'], 'expression': expression},
             **(also or {}),
         },
-        'objectives': {'o': {'sense': 'maximize', 'expression': objective}},
+        'objective': {'sense': 'maximize', 'expression': objective},
     }
 
 
@@ -270,7 +270,7 @@ def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
             'v': {'foreach': ['f', 't'], 'where': 'gate2', 'bounds': {'lower': 0, 'upper': 50}},
         },
         'constraints': {'c': {'foreach': foreach, 'expression': expression}},
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'x'}},
+        'objective': {'sense': 'maximize', 'expression': 'x'},
     }
     with differential(model, WIDE_DATA, WIDE_COORDS if grouped else PLAIN_COORDS, lp=True) as run:
         return float(run.result.objective)
@@ -340,7 +340,7 @@ def test_a_mask_on_a_dim_the_reduction_does_not_touch_still_propagates():
             'y': {'foreach': ['f', 't'], 'where': 'tgate', 'bounds': {'lower': 0, 'upper': 50}},
         },
         'constraints': {'c': {'foreach': ['t'], 'expression': 'sum(x + y, over=f) <= 120'}},
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'x'}},
+        'objective': {'sense': 'maximize', 'expression': 'x'},
     }
     data = {'tgate': pd.Series([True], index=pd.Index([0], name='t'))}
     coords = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
@@ -379,7 +379,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
             'v': {'foreach': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
         },
         'constraints': {'c': {'foreach': ['t'], 'expression': 'sum(x + shift(v, over=t, by=1), over=f) <= 120'}},
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'x'}},
+        'objective': {'sense': 'maximize', 'expression': 'x'},
     }
     coords = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
@@ -396,7 +396,7 @@ DIVISOR_MODEL = {
     'parameters': {'d': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'foreach': ['f'], 'expression': 'x / d <= 10'}},
-    'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(x, over=f)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x, over=f)'},
 }
 
 #: ``d`` covers ``a`` and not ``b`` — the gap every case below turns on.
@@ -441,8 +441,8 @@ def test_a_sparse_divisor_in_the_objective_is_refused_too():
         **{
             'variables.x.bounds.lower': 1,
             'constraints.c.expression': 'x <= 10',
-            'objectives.o.sense': 'minimize',
-            'objectives.o.expression': 'sum(x / d, over=f)',
+            'objective.sense': 'minimize',
+            'objective.expression': 'sum(x / d, over=f)',
         },
     )
     with pytest.raises(DataError, match='used as a divisor'), differential(model, SPARSE_D) as run:
