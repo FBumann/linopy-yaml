@@ -146,7 +146,6 @@ def lower_program(schema: Model) -> plan.Program:
         plan.SosDeclaration(
             sname,
             sdef.variable,
-            tuple(d for d in schema.variables[sdef.variable].foreach if d != sdef.over),
             sdef.over,
             sos_type=cast('Literal[1, 2]', sdef.type),
             big_m=sdef.big_m,

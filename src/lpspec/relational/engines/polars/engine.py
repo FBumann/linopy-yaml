@@ -16,6 +16,7 @@ which is what :class:`~lpspec.relational.engines.polars.binding.BoundSources` sa
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, get_args
@@ -72,11 +73,18 @@ _SOS = ('set', 'type', 'col', 'weight', 'big_m')
 #: `dispatch/l`'s peak RSS. A *label* stays ``Int64``: the arithmetic path
 #: computes it as a position in the full pre-mask coordinate product, which
 #: can pass 2^31 while every survivor fits.
+#:
+#: ``set`` and ``weight`` are ``Int32`` for the same reason ``col`` is, one
+#: step removed: a set holds at least one column and a weight counts along one
+#: dim of one variable, so both are bounded by a count that already has to fit
+#: a 32-bit index. The stream is one row per *member*, which on a model whose
+#: sets cover it is the largest frame after the matrix, and every pass over it
+#: — the digest included — is paid in its width (#687).
 _DTYPES = {
     'col': pl.Int32, 'row': pl.Int64,
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
     'sense': SENSE, 'vtype': pl.Enum(get_args(plan.VariableType)),
-    'set': pl.Int64, 'type': pl.UInt8, 'weight': pl.Int64, 'big_m': pl.Float64,
+    'set': pl.Int32, 'type': pl.UInt8, 'weight': pl.Int32, 'big_m': pl.Float64,
 }  # fmt: skip
 
 
@@ -199,7 +207,7 @@ class PolarsEngine:
         self._compiler = PolarsCompiler(program, self._bound, self._variables)
 
         cols = [self._build_variable(v) for v in program.variables]
-        sets = [self._build_sos(s) for s in program.sos]
+        sets = [self._build_sos(s, program.variable(s.variable)) for s in program.sos]
         built = [self._build_constraint(c) for c in program.constraints]
         objective = self._build_objective(program.objective)
 
@@ -304,22 +312,36 @@ class PolarsEngine:
             raise DataError(null_bounds_message(v.name, bad))
         return cols
 
-    def _build_sos(self, s: plan.SosDeclaration) -> pl.DataFrame:
-        """One declaration's sets as ``(set, type, col, weight, big_m)``.
+    def _build_sos(self, s: plan.SosDeclaration, v: plan.VariableDeclaration) -> pl.DataFrame:
+        """One declaration's sets as ``(set, type, col, weight, big_m)``, over *v*.
 
         Builds no column and no row: a set names columns the variable already
-        made, so this reads that variable's label frame and nothing else. It
-        runs after every variable and before any constraint, which is when
-        that frame exists and before rows a constraint may drop.
+        made. It runs after every variable and before any constraint, which is
+        when what it reads exists and before rows a constraint may drop.
+
+        **A set and a weight are the two halves of a coordinate's position in
+        the declared product**, split at the ``over`` dim. With :math:`c` that
+        dim's cardinality and :math:`s` the product of the dims after it, a
+        position reads :math:`hcs + ws + l`, and the split drops the middle
+        term: the weight is :math:`w`, and the set is :math:`hs + l` — the
+        position the same coordinate would have in the product *without*
+        ``over``. That is the row-major rule
+        (:func:`~lpspec.relational.engines.polars.labels.row_major`) numbering
+        every other index in the lane, by two divisions rather than by reading
+        a dim's ordinal per member.
+
+        **A position is the label where the variable dropped nothing.** Labels
+        are dense and follow declaration order, so an unmasked variable's
+        positions are ``0 … height-1`` and neither its frame nor its dims are
+        touched at all; a masked one has to say which coordinate survived, so
+        there the ordinals are read and the sets are renumbered densely — the
+        same split :func:`~lpspec.relational.engines.polars.labels.frame`
+        makes, for the same reason (#520, measured at #687).
 
         **A member's weight is its coordinate's position in the declared
         order** — what ``shift`` walks, and the only order the language has.
         Only the order matters to a solver, so a masked-out coordinate leaves
-        its neighbours adjacent rather than leaving a hole. **A set is numbered
-        by its position**, through
-        :func:`~lpspec.relational.engines.polars.labels.row_major` and a
-        run-length over it, which is the same first-occurrence rule a
-        variable's own labels follow.
+        its neighbours adjacent rather than leaving a hole.
 
         **The stream leaves grouped by set and ascending in weight**, which is
         what lets a sink read a set's edges off the neighbouring row rather
@@ -337,21 +359,28 @@ class PolarsEngine:
         ``big_m`` rides along per member, at ``inf`` where the block declared
         none — the one thing here no sink taking a set natively reads.
         """
-        placed = (
-            self._variables[s.variable]
-            .select(
-                labels.row_major(self._q, s.dims, self._q.ordinal_of).alias('#set position'),
-                (self._q.ordinal_of(s.over) + 1).cast(_DTYPES['weight']).alias('weight'),
-                pl.col('var_label').cast(_DTYPES['col']).alias('col'),
-            )
-            .collect(engine='streaming')
-        )
+        block = self._variable_blocks[s.variable]
+        cardinality = self._q.data.cardinality
+        stride = math.prod(cardinality[d] for d in v.dims[v.dims.index(s.over) + 1 :])
+        span = cardinality[s.over] * stride
+
+        if v.where is None:
+            frame = pl.select(pl.int_range(block.height, dtype=pl.Int64).alias('#position')).lazy()
+            place, col = pl.col('#position'), (pl.col('#position') + block.start)
+        else:
+            frame = self._variables[s.variable]
+            place, col = labels.row_major(self._q, v.dims, self._q.ordinal_of), pl.col('var_label')
+        placed = frame.select(
+            ((place // span) * stride + place % stride).alias('#set position'),
+            ((place // stride) % cardinality[s.over] + 1).cast(_DTYPES['weight']).alias('weight'),
+            col.cast(_DTYPES['col']).alias('col'),
+        ).collect(engine='streaming')
+
         position = pl.col('#set position')
         grouped = placed if placed.get_column('#set position').is_sorted() else placed.sort('#set position', 'weight')
+        dense = position if v.where is None else (position != position.shift(1)).fill_null(True).cum_sum() - 1
         built = grouped.select(
-            ((position != position.shift(1)).fill_null(True).cum_sum().cast(_DTYPES['set']) + (self._n_sets - 1)).alias(
-                'set'
-            ),
+            (dense + self._n_sets).cast(_DTYPES['set']).alias('set'),
             pl.lit(s.sos_type, dtype=_DTYPES['type']).alias('type'),
             'col',
             'weight',

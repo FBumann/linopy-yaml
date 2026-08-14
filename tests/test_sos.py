@@ -440,6 +440,59 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
         assert bound.solve().objective == pytest.approx(best(1))
 
 
+@pytest.mark.parametrize('foreach', [['site', 'size'], ['size', 'site']], ids=['over-last', 'over-first'])
+def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(foreach: list[str]):
+    """A label is a position where nothing was dropped, and both paths say so.
+
+    An unmasked variable's sets and weights are arithmetic on the label, which
+    *is* the coordinate's position in the declared product. A masked one has
+    to read the coordinates, a dropped row being a label that no longer
+    decomposes. A mask that drops nothing sends the same model down both
+    paths, so either the two frames are one frame or one of them is wrong —
+    and a member in the wrong set is linked to another set's binaries.
+
+    Both orders of the ``foreach``, because the split is where ``over`` sits
+    in it: last leaves the sets contiguous, first interleaves them.
+    """
+    take = {'foreach': foreach, 'bounds': {'lower': 0, 'upper': 'cap'}}
+    raw = model(2) | {'variables': {'take': take}}
+    masked = raw | {
+        'parameters': raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool'}},
+        'variables': {'take': take | {'where': 'live'}},
+    }
+    live = _table(dict.fromkeys(((site, size) for site in SITES for size in SIZES), 1.0)).with_columns(
+        pl.col('value').cast(pl.Boolean)
+    )
+    with lps.build(raw, DATA) as placed, lps.build(masked, DATA | {'live': live}) as counted:
+        assert placed._engine._tables().sos.equals(counted._engine._tables().sos), (
+            'the two placements disagree about which coordinate is in which set, or at which weight'
+        )
+
+
+def test_a_mask_that_empties_a_set_leaves_the_numbering_dense():
+    """A set number is a dense index, the way a column's and a row's are.
+
+    A coordinate's *position* is not: it counts the product the mask never
+    materialised, which is what may pass 2^31 while every survivor fits
+    (``engine._DTYPES``). So a set is renumbered wherever a row was dropped,
+    and what reaches a sink counts the sets that exist rather than the ones
+    the declaration would have had.
+
+    The mask empties the *first* set here, which is the one arrangement where
+    a hole and no hole are different numbers.
+    """
+    take = {'foreach': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}
+    raw = model(1) | {'variables': {'take': take}}
+    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool'}}
+    live = _table({(site, size): float(site == 'south') for site in SITES for size in SIZES}).with_columns(
+        pl.col('value').cast(pl.Boolean)
+    )
+    with lps.build(raw, DATA | {'live': live}) as bound:
+        assert bound._engine._tables().sos['set'].to_list() == [0, 0, 0, 0], (
+            'the emptied set left a hole, so a set number is a position rather than an index'
+        )
+
+
 # examples/sos.yaml — SOS2 as the native spelling of a piecewise curve
 # ---------------------------------------------------------------------------
 
