@@ -77,13 +77,16 @@ a rolling horizon or a myopic pathway is a *fold*, and it is written for you.
 depends on the last answer, which is what a fold cannot express.
 
 `diagnostics()` is what a build and its solves did that the answer does not
-show: the shape handed to the solver (`columns`, `rows`, `nonzeros` — what
+show: the shape the build produced (`columns`, `rows`, `nonzeros` — what
 `check` cannot answer, needing no data where this needs all of it, and where a
-broadcast that multiplied rows shows up first), `omissions` (rows a constraint
-declared but did not build, and why that matters), and `solves` with `loads`
-(above; `solves` is the denominator to read `loads` against). It answers after
-`close()` too, every field being a count or a small frame it keeps rather than a
-read of the model it releases.
+broadcast that multiplied rows shows up first), what the last solve's sink had
+to *add* to that shape (`sink_columns`, `sink_rows` — zero unless it had no
+concept of a set the model declares, in which case this is the binaries and
+linking rows it was handed instead), `omissions` (rows a constraint declared but
+did not build, and why that matters), and `solves` with `loads` (above; `solves`
+is the denominator to read `loads` against). It answers after `close()` too,
+every field being a count or a small frame it keeps rather than a read of the
+model it releases.
 
 Advisory, all of it: nothing about an answer depends on any of them, and a
 caller who branches on one has made this engine's bookkeeping part of their

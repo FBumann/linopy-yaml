@@ -110,6 +110,12 @@ class PolarsEngine:
         #: a driver on the fast path, a load per solve is one that is not.
         self._solves = 0
         self._loads = 0
+        #: What the last solve's sink had to add to take the model — nothing,
+        #: unless it had no concept of a set the model declares. Kept beside
+        #: the counters rather than in :meth:`_reset` for their reason: it is
+        #: a fact about a *solve*, so a rebuild does not clear it.
+        self._sink_columns = 0
+        self._sink_rows = 0
         self._reset()
 
     def _reset(self) -> None:
@@ -598,6 +604,8 @@ class PolarsEngine:
         """
         built = self._tables()
         tables = sinks.ingestible(solver_name, built)
+        self._sink_columns = tables.column_count - built.column_count
+        self._sink_rows = tables.row_count - built.row_count
         held = self._solver
         self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
         self._solves += 1
@@ -632,6 +640,8 @@ class PolarsEngine:
             columns=self._n_cols,
             rows=self._n_rows,
             nonzeros=self._n_entries,
+            sink_columns=self._sink_columns,
+            sink_rows=self._sink_rows,
             omissions=pl.DataFrame(
                 {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
                 schema={'constraint': pl.String, 'rows_not_built': pl.UInt32},
