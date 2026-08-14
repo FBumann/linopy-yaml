@@ -189,8 +189,8 @@ class BoundModel:
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show.
 
-        Answerable after :meth:`close`: every field is a count or a small frame
-        the engine keeps, not a read of the model it releases.
+        Answerable after :meth:`close`: every field is a count, a clock or a
+        small frame the engine keeps, not a read of the model it releases.
         """
         return self._engine.diagnostics()
 

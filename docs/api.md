@@ -84,10 +84,12 @@ broadcast that multiplied rows shows up first), what the last solve's sink had
 to *add* to that shape (`sink_columns`, `sink_rows` — zero unless it had no
 concept of a set the model declares, in which case this is the binaries and
 linking rows it was handed instead), `omissions` (rows a constraint declared but
-did not build, and why that matters), and `solves` with `loads` (above; `solves`
-is the denominator to read `loads` against). It answers after `close()` too,
-every field being a count or a small frame it keeps rather than a read of the
-model it releases.
+did not build, and why that matters), `solves` with `loads` (above; `solves`
+is the denominator to read `loads` against), and `timings` (cumulative wall
+seconds per phase — `bind`, `build`, `handoff`, `solve`, `write` — so a run
+that is slower than it should be can say which phase the time went to). It
+answers after `close()` too, every field being a count, a clock or a small
+frame it keeps rather than a read of the model it releases.
 
 Advisory, all of it: nothing about an answer depends on any of them, and a
 caller who branches on one has made this engine's bookkeeping part of their

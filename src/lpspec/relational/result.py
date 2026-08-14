@@ -111,6 +111,16 @@ class Diagnostics:
     solves: int
     loads: int
 
+    #: Cumulative wall-clock seconds per phase, keyed by the phase's name:
+    #: ``bind`` (the caller's sources onto the plan), ``build`` (declarations
+    #: into the model frames), ``handoff`` (the built model into a solver),
+    #: ``solve`` (the solver's own run), ``write`` (the built model to a
+    #: file). A phase that never ran has no key; one that ran again holds the
+    #: sum — a rebind's bind and build land on top of the first's, the way
+    #: ``solves`` keeps counting. Clocks rather than a profile: enough to say
+    #: which phase a slow loop spends its time in, not why.
+    timings: Mapping[str, float]
+
 
 def _named(frames: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyFrame:
     try:

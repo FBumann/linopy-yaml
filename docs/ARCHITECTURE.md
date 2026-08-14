@@ -212,7 +212,7 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | | *will that solver take it* | | |
 | **run it** | stream it straight into a solver | `solve`, or `build` → `BoundModel` to drive several sinks off one build | **yes** |
 | | re-solve one built model with new numbers | `bound.rebind(...)` — the label contract, spent | **yes** |
-| | how big is it, and what did the build and its solves do | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `solves` · `loads`, all advisory | **yes** |
+| | how big is it, what did the build and its solves do, and where did the time go | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `solves` · `loads` · `timings`, all advisory | **yes** |
 | | write an LP file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | put the same math on a `linopy.Model` | `lpspec.linopy.build` · `.extend` (`data=`, its own coercion) | **yes** |
