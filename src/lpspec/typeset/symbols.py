@@ -79,7 +79,7 @@ class Symbols:
         declared = frozenset({*schema.dimensions, *schema.parameters, *schema.variables})
 
         self.name: dict[str, str] = {
-            name: table.names.get(name) or _derive_name_symbol(name, declared, fmt)
+            name: table.names[name] if name in table.names else _derive_name_symbol(name, declared, fmt)
             for name in (*schema.parameters, *schema.variables)
         }
         spoken_for = {s for s in self.name.values() if len(s) == 1}
@@ -88,14 +88,13 @@ class Symbols:
         self.set: dict[str, str] = {}
         taken_index, taken_set = set(spoken_for), set()
         for dim in schema.dimensions:
-            override = table.indices.get(dim)
-            letter = override or _first_free(_index_candidates(dim), taken_index)
+            overridden = dim in table.indices
+            letter = table.indices[dim] if overridden else _first_free(_index_candidates(dim), taken_index)
             taken_index.add(letter)
-            self.index[dim] = letter if len(letter) <= 1 or override else fmt.upright(letter)
-            given = table.sets.get(dim)
+            self.index[dim] = letter if len(letter) <= 1 or overridden else fmt.upright(letter)
             upper = _first_free(_set_candidates(dim, letter), taken_set)
             taken_set.add(upper)
-            self.set[dim] = given or fmt.script(upper)
+            self.set[dim] = table.sets[dim] if dim in table.sets else fmt.script(upper)
 
         self.description: dict[str, str] = dict(table.descriptions)
 
@@ -119,6 +118,10 @@ def _first_free(candidates: list[str], taken: set[str]) -> str:
 # ---------------------------------------------------------------------------
 # the symbol table (a sidecar file, not the model)
 # ---------------------------------------------------------------------------
+
+#: The valid ``notation:`` values — the ``Format.notation`` values, restated
+#: here so a table loads (and errors) without any format in hand.
+NOTATIONS = ('latex', 'typst')
 
 
 @dataclass(frozen=True)
@@ -147,8 +150,10 @@ class SymbolTable:
     and a reader who never finds out.
 
     Attributes:
-        notation: Which notation the entries are written in, matched against
+        notation: Which notation the entries are written in — one of
+            :data:`NOTATIONS`, matched against
             :attr:`~lpspec.typeset.format.Format.notation` at render.
+            :meth:`load` accepts any casing and lower-cases it.
     """
 
     notation: str
@@ -162,8 +167,8 @@ class SymbolTable:
         """A table from a YAML path or the mapping it parses to.
 
         Raises:
-            SchemaError: An unknown section, a malformed dimension, or a table
-                that does not declare its ``notation:``.
+            SchemaError: An unknown section, a malformed dimension, or a
+                ``notation:`` that is missing or outside :data:`NOTATIONS`.
         """
         raw = dict(source) if isinstance(source, Mapping) else read_yaml(Path(source))
         unknown = set(raw) - {'notation', 'dimensions', 'names', 'descriptions'}
@@ -178,6 +183,10 @@ class SymbolTable:
                 "symbol table: 'notation:' is required — `latex` or `typst`, saying which one the entries are "
                 'written in. Nothing translates between them, so a table that does not say cannot be rendered.'
             )
+            raise SchemaError(msg)
+        notation = str(raw['notation']).lower()
+        if notation not in NOTATIONS:
+            msg = f'symbol table: unknown notation {raw["notation"]!r}. Valid notations: latex, typst.'
             raise SchemaError(msg)
 
         indices: dict[str, str] = {}
@@ -196,7 +205,7 @@ class SymbolTable:
                 sets[dim] = str(spec['set'])
 
         return cls(
-            notation=str(raw['notation']),
+            notation=notation,
             indices=indices,
             sets=sets,
             names={k: str(v) for k, v in (raw.get('names') or {}).items()},

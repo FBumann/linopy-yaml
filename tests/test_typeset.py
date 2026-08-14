@@ -681,6 +681,12 @@ def test_a_table_prints_its_own_notation_verbatim():
             to_markdown, TYPST_SYMBOLS, 'written in typst, but this is a latex render', id='typst-table-markdown'
         ),
         pytest.param(to_latex, {'names': {'p': 'x'}}, "'notation:' is required", id='a-table-that-does-not-say'),
+        pytest.param(
+            to_latex,
+            {'notation': 'latx', 'names': {'p': 'x'}},
+            "unknown notation 'latx'. Valid notations",
+            id='a-notation-outside-the-vocabulary',
+        ),
     ],
 )
 def test_a_table_in_the_wrong_notation_refuses(render, symbols, match):
@@ -689,6 +695,17 @@ def test_a_table_in_the_wrong_notation_refuses(render, symbols, match):
     that with a refusal at the call, naming both notations."""
     with pytest.raises(lps.SchemaError, match=match):
         render(DISPATCH, symbols=symbols)
+
+
+def test_notation_is_case_insensitive():
+    assert to_latex(DISPATCH, symbols={'notation': 'LaTeX', 'names': {'p': r'\pi'}}) == to_latex(
+        DISPATCH, symbols={'notation': 'latex', 'names': {'p': r'\pi'}}
+    ), 'load lower-cases the notation, so casing never changes the render'
+
+
+def test_an_empty_override_is_used_not_fallen_through():
+    tex = to_latex(DISPATCH, symbols={'notation': 'latex', 'names': {'p_max': ''}})
+    assert r'p^{\mathrm{max}}' not in tex, 'an entry in the table is used verbatim, even empty — never re-derived'
 
 
 def test_the_table_loads_from_a_file_and_the_committed_one_applies():
