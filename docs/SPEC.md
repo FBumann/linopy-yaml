@@ -136,13 +136,18 @@ fields it carries says which of two kinds it is:
 - **`dtype:` declares an inline label space — the selection-only kind.** It
   owns its values, targets nothing, and puts no entry under `dimensions:`,
   because a label space nothing aggregates into is not part of the model's
-  dimensionality:
+  dimensionality. *Selection* is a `where` (§6.1), which is the only thing
+  this kind is for:
 
   ```yaml
   dimensions:
     snapshot: {dtype: int}
   lookups:
     period: {over: snapshot, dtype: int}  # a label on snapshot — nothing else
+  variables:
+    build:
+      foreach: [snapshot]
+      where: "period == 1"                # …and this is what selects on it
   ```
 
   A lookup declares exactly one of `into:` and `dtype:`. Grouping into a
@@ -397,7 +402,7 @@ for that reason. The objective carries no name at all (§2).
 | expression (`p * cost`) | variable, parameter |
 | dimension argument (`over=`, `into=`) | dimension |
 | lookup argument (`by=` on `sum` / `at`) | lookup — never a dimension, and never a lookup a different helper kwarg has to agree with |
-| where string | parameter, dimension |
+| where string | parameter, dimension, lookup |
 | `bounds.lower` / `.upper` | parameter name, or a number |
 | `shift(x, over=d, by=n, edge=0)` — the `edge` key | `'wrap'` **quoted**, or a bare number; never a dimension. A bare word in a kwarg value is a *name to resolve*, and `wrap` is a literal — the same rule §6.1 uses for a `where`, so `over=wrap, edge='wrap'` reads unambiguously even where a dimension is called `wrap` |
 
@@ -553,11 +558,16 @@ QUOTED     ::= "'" chars "'" | '"' chars '"'
 | `name` (bare) | dimension | load error — true everywhere, so it reads as a condition and is not one; compare it instead |
 | `name OP value` | parameter | element-wise, NaN → False. RHS is a literal number, or a bare name read as a string coordinate — a name that is *declared* is a load error instead (below) |
 | `name OP value` | dimension | filter on the frame's own coordinate column |
+| `name` (bare) | lookup | defined: the label maps somewhere. A lookup may be **partial** (§2), and this is how a declaration asks for the labels that do map |
+| `name OP value` | lookup | filter on the lookup's column of the `over` dim's index, read on the dim it maps out of — which therefore has to be in the frame. A null value is **false**, whatever the comparator |
+| `name OP name` | two lookups | the one comparison whose both sides are structure, legal only where both are over the **same** dimension — `from != to` excludes a self-loop. Over different dims there is no row carrying both, and that is a load error |
 | `AND` `OR` `NOT` | — | case-insensitive; `NOT` > `AND` > `OR` |
 | `True` / `False` | — | literals; `True` ≡ no `where` |
 
 Comparing two parameters is not in the language — precompute a boolean parameter
-in data prep — and neither is comparing two dimensions. The string reading of an
+in data prep — and neither is comparing two dimensions. Two *lookups* are the
+exception, and only over one dimension: they are two columns of one index, so
+the comparison is a filter on that table rather than a join between two. The string reading of an
 RHS name is for names the model does *not* declare, which is how a string
 coordinate is compared; a **declared** name on the RHS (parameter, variable or
 dimension) is a load error naming the near miss, because reading it as text

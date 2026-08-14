@@ -227,3 +227,186 @@ def test_both_lanes_read_the_same_index():
     coords = {'snapshot': pd.DataFrame({'snapshot': [0, 1, 2], 'period': [1, 1, 2]})}
     with differential(_model(), data, coords) as run:
         assert run.oracle == pytest.approx(6.0)
+
+
+# ---------------------------------------------------------------------------
+# where on a lookup (#553): the consumer the label-space kind was missing
+# ---------------------------------------------------------------------------
+
+
+#: A three-line network whose structure is entirely lookups: each line has two
+#: endpoints, and `spur` deliberately has an open end so the partial case is
+#: reachable. Both kinds appear — `voltage` owns its values, `send`/`recv`
+#: target `bus` — so one model covers every lookup predicate.
+NETWORK = {
+    'dimensions': {'bus': {'dtype': 'str'}, 'line': {'dtype': 'str'}},
+    'lookups': {
+        'send': {'over': 'line', 'into': 'bus'},
+        'recv': {'over': 'line', 'into': 'bus'},
+        'voltage': {'over': 'line', 'dtype': 'int'},
+    },
+    'parameters': {'cap': {'dims': ['line']}, 'price': {'dims': ['line']}},
+    'variables': {'f': {'foreach': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'ceiling': {'foreach': ['line'], 'expression': 'f <= cap'}},
+    'objective': {'sense': 'maximize', 'expression': 'f * price'},
+}
+
+LINES = ['ring_a', 'ring_b', 'loop', 'spur']
+
+#: `loop` starts and ends on the same bus; `spur` has no receiving end at all.
+NETWORK_SOURCES = {
+    'bus': pl.DataFrame({'bus': ['north', 'south']}),
+    'line': pl.DataFrame(
+        {
+            'line': LINES,
+            'send': ['north', 'south', 'north', 'north'],
+            'recv': ['south', 'north', 'north', None],
+            'voltage': [220, 380, 220, 380],
+        }
+    ),
+    'cap': pl.DataFrame({'line': LINES, 'value': [10.0, 20.0, 30.0, 40.0]}),
+    'price': pl.DataFrame({'line': LINES, 'value': [1.0, 1.0, 1.0, 1.0]}),
+}
+
+
+@pytest.mark.parametrize(
+    ('where', 'kept'),
+    [
+        pytest.param('voltage == 220', ['loop', 'ring_a'], id='a-label-space-lookup-against-a-literal'),
+        pytest.param("send == 'north'", ['loop', 'ring_a', 'spur'], id='a-targeted-lookup-against-a-label'),
+        pytest.param('send != recv', ['ring_a', 'ring_b'], id='two-lookups-over-one-dimension'),
+        pytest.param('recv', ['loop', 'ring_a', 'ring_b'], id='a-bare-lookup-is-the-partial-case'),
+        pytest.param('NOT voltage == 220', ['ring_b', 'spur'], id='negated'),
+        pytest.param('voltage == 380 AND send != recv', ['ring_b'], id='conjoined-with-a-pair-comparison'),
+    ],
+)
+def test_a_where_reads_a_lookup(where, kept):
+    """The atom #553 asked for, on both kinds and in both shapes.
+
+    `kept` is asserted rather than just a count: a predicate that inverted its
+    sense would keep the complement, which is the same size on a symmetric
+    case and a different model everywhere.
+
+    `spur`'s null `recv` is the reading law 8 fixes — a comparison over it is
+    false, so the bare name keeps exactly the lines that map.
+    """
+    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': where}}}
+    with lps.solve(model, NETWORK_SOURCES) as result:
+        built = sorted(row['line'] for row in result.primal('f').to_dicts())
+    assert built == sorted(kept), f'where: {where!r} built the wrong set of variables'
+
+
+@pytest.mark.parametrize(
+    ('where', 'objective'),
+    [
+        pytest.param('send != recv', 30.0, id='the-two-ring-lines-survive'),
+        pytest.param('NOT send != recv', 70.0, id='negated-over-a-partial-lookup'),
+        # The two probes for the eager lane's explicit null exclusion. Only a
+        # `!=` reaches it: numpy answers `None != 'north'` with True, so
+        # without it the eager lane keeps exactly `spur` — the line that maps
+        # nowhere — where the relational lane drops it.
+        pytest.param("recv != 'north'", 10.0, id='not-equal-over-a-null-value'),
+        pytest.param('recv != send', 30.0, id='not-equal-between-two-lookups'),
+    ],
+)
+def test_a_lookup_where_agrees_with_the_oracle(where, objective):
+    """Both lanes, one answer — the differential half of #553.
+
+    A mask reading a lookup is a join on the dim table in the relational lane
+    and an array read in the eager one; nothing but this shows they agree on
+    which rows survive, since a wrong mask still solves.
+    """
+    from tests.differential import differential
+    from tests.oracle import pd
+
+    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': where}}}
+    data = {
+        'cap': pd.Series([10.0, 20.0, 30.0, 40.0], index=LINES),
+        'price': pd.Series([1.0, 1.0, 1.0, 1.0], index=LINES),
+    }
+    coords = {
+        'bus': pd.Index(['north', 'south'], name='bus'),
+        'line': pd.DataFrame(
+            {
+                'line': LINES,
+                'send': ['north', 'south', 'north', 'north'],
+                'recv': ['south', 'north', 'north', None],
+                'voltage': [220, 380, 220, 380],
+            }
+        ),
+    }
+    with differential(model, data, coords) as run:
+        assert run.result.objective == pytest.approx(objective), (
+            f'where: {where!r} — the two lanes agree on the objective but not on this one'
+        )
+
+
+def test_a_where_on_a_lookup_outside_the_frame_is_refused():
+    """A lookup is read on the dim it maps out of, so that dim has to be in the
+    frame — otherwise the mask would silently reduce over an unlisted dim."""
+    model = {
+        **NETWORK,
+        'variables': {'f': {'foreach': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {
+            'ceiling': {'foreach': ['bus'], 'where': 'voltage == 220', 'expression': 'sum(f, by=send) <= 100'}
+        },
+    }
+    with pytest.raises(LpspecError, match=r"lookup 'voltage', which is over dimension 'line'"):
+        load_model(model)
+
+
+def test_two_lookups_over_different_dims_cannot_be_compared():
+    """There is no row carrying both, so the comparison has nothing to test.
+
+    The pair comparison is legal exactly because two lookups over one dim are
+    two columns of one index. Drop that condition and this reads as a join
+    nobody wrote.
+    """
+    model = {
+        **NETWORK,
+        'lookups': {**NETWORK['lookups'], 'zone': {'over': 'bus', 'dtype': 'str'}},
+        'variables': {'f': {**NETWORK['variables']['f'], 'where': 'send != zone'}},
+    }
+    with pytest.raises(LpspecError, match='over different dimensions'):
+        load_model(model)
+
+
+def test_a_lookup_comparison_is_checked_against_its_dtype():
+    """The same dtype check every other where-comparison gets (#460).
+
+    A lookup's literal is as silent to get wrong as a dimension's: `voltage`
+    is an int, so a quoted right-hand side matches nothing rather than
+    erroring at run time.
+    """
+    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "voltage == 'high'"}}}
+    with pytest.raises(LpspecError, match=r"has dtype 'int'"):
+        load_model(model)
+
+
+def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():
+    """A stranger label masks everything out; it does not raise.
+
+    §6.1's reading for every other comparison, and the reason the lookup
+    column is compared as a string: binding casts it to the target's `Enum`,
+    which orders by declaration and *refuses* a label outside it — so without
+    the cast back this is a polars error rather than an empty mask.
+    """
+    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send == 'atlantis'"}}}
+    with lps.build(model, NETWORK_SOURCES) as bound:
+        surviving = bound._engine._variables['f'].select(pl.len()).collect().item()
+    assert surviving == 0, "a label no bus carries matches nothing, so no 'f' is built"
+
+
+def test_a_targeted_lookup_orders_bytewise_not_by_declaration():
+    """§6.1: labels order bytewise, whatever order the dimension declared them.
+
+    Binding casts a lookup column to the target's `Enum`, which orders by
+    *declaration*, so an ordering comparison read off it would answer a
+    different question — and silently, since both readings return a mask.
+    `south` is declared first here precisely so the two disagree.
+    """
+    sources = {**NETWORK_SOURCES, 'bus': pl.DataFrame({'bus': ['south', 'north']})}
+    model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send >= 'south'"}}}
+    with lps.solve(model, sources) as result:
+        built = sorted(row['line'] for row in result.primal('f').to_dicts())
+    assert built == ['ring_b'], "only ring_b sends from 'south'; declaration order would keep the 'north' lines too"

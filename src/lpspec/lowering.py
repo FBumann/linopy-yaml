@@ -51,6 +51,9 @@ from lpspec.language.where_parser import (
     AndNode,
     BooleanLiteralNode,
     DimensionComparisonNode,
+    LookupComparisonNode,
+    LookupDefinedNode,
+    LookupPairComparisonNode,
     NotNode,
     OrNode,
     ParameterComparisonNode,
@@ -396,6 +399,15 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
 
     if isinstance(node, DimensionComparisonNode):
         return plan.DimensionComparison(node.name, node.op, node.value)
+
+    if isinstance(node, LookupComparisonNode):
+        return plan.LookupComparison(node.name, node.over, node.op, node.value)
+
+    if isinstance(node, LookupPairComparisonNode):
+        return plan.LookupPairComparison(node.name, node.other, node.over, node.op)
+
+    if isinstance(node, LookupDefinedNode):
+        return plan.LookupDefined(node.name, node.over)
 
     if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode)):
         msg = (
