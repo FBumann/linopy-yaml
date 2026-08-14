@@ -1,0 +1,62 @@
+# PyPSA multi-link: one Link, one input bus, several output buses, each output
+# derated by its own efficiency. PyPSA spells the relation wide — bus0, bus1,
+# bus2, efficiency, efficiency2, an empty bus2 where a link has no third
+# terminal — and grows a column pair per arity. Here the relation is one
+# incidence parameter over (link, bus): -1 at the input, +efficiency at each
+# output, rows absent elsewhere, so arity is the number of rows that name the
+# link. Optimum 1100.0, from PyPSA itself.
+
+dimensions:
+  bus:
+    dtype: str
+  generator:
+    dtype: str
+  link:
+    dtype: str
+
+lookups:
+  gen_bus: {over: generator, into: bus}  # every generator sits on a bus
+
+parameters:
+  gen_p_nom:
+    dims: [generator]
+  marginal_cost:
+    dims: [generator]
+  # The Link's own p_nom: a cap on what it draws at its input, p0 in PyPSA.
+  p_nom:
+    dims: [link]
+  # Each bus's share of the link's draw — PyPSA's efficiency, efficiency2, …
+  # columns and the input's fixed -1, tidied into rows.
+  incidence:
+    dims: [link, bus]
+  load:
+    dims: [bus]
+
+variables:
+  gen:
+    foreach: [generator]
+    bounds:
+      lower: 0
+      upper: gen_p_nom
+  # The one decision per link, PyPSA's p: what it draws at its input. Every
+  # other end's flow is that draw scaled by its incidence entry, so it needs
+  # no variable of its own.
+  p:
+    foreach: [link]
+    bounds:
+      lower: 0
+      upper: p_nom
+
+constraints:
+  # The contraction lands p on every bus its link's incidence rows name —
+  # three ends or two, the expression never says.
+  nodal_balance:
+    foreach: [bus]
+    expression: >-
+      sum(gen, over=generator, group_by=gen_bus)
+      + sum(incidence * p, over=link)
+      == load
+
+objective:
+  sense: minimize
+  expression: gen * marginal_cost
