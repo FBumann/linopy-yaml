@@ -33,6 +33,10 @@ from lpspec.language.helpers import BUILTIN_NAMES
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
+    from pydantic import GetJsonSchemaHandler
+    from pydantic.json_schema import JsonSchemaValue
+    from pydantic_core import CoreSchema
+
 
 class _StrictBlock(BaseModel):
     """Base for every schema model: unknown keys are an error, not a shrug.
@@ -75,6 +79,26 @@ class _StrictBlock(BaseModel):
 #: same set — a test rather than an import, because the fence keeps the engine
 #: from reaching the language.
 DIMENSION_DTYPES = frozenset({'float', 'int', 'str', 'datetime'})
+PARAMETER_DTYPES = frozenset({'float', 'int', 'bool', 'str'})
+OBJECTIVE_SENSES = frozenset({'minimize', 'maximize'})
+
+
+def _coords_admits_a_list(schema: dict[str, Any]) -> None:
+    """Widen a field's published schema to the list shorthand the loader takes.
+
+    ``coords: [bus]`` is loader-legal (``_normalise_coords`` rewrites it to
+    ``{bus: bus}`` before validation), but pydantic generates the schema from
+    the post-rewrite annotation, so without this an editor red-squiggles a
+    valid file. Mutates the field's JSON schema in place, as pydantic's
+    ``json_schema_extra`` callables do.
+    """
+    mapping_form = {key: schema.pop(key) for key in ('type', 'additionalProperties') if key in schema}
+    schema['anyOf'] = [mapping_form, {'type': 'array', 'items': {'type': 'string'}}]
+
+
+def _enum(values: Iterable[Any]) -> dict[str, Any]:
+    """A ``Field(json_schema_extra=...)`` publishing a closed vocabulary, sorted so the artefact is byte-stable."""
+    return {'enum': sorted(values)}
 
 
 def _one_of(value: str, allowed: frozenset[str] | set[str], field: str) -> str:
@@ -100,7 +124,7 @@ class CoordinateSpec(_StrictBlock):
 
     _label: ClassVar[str] = 'a coordinate declaration'
 
-    dtype: str = 'str'
+    dtype: str = Field(default='str', json_schema_extra=_enum(DIMENSION_DTYPES))
 
     @field_validator('dtype')
     @classmethod
@@ -131,9 +155,9 @@ class DimensionBlock(_StrictBlock):
 
     _label: ClassVar[str] = 'a dimension declaration'
 
-    dtype: str = 'str'
+    dtype: str = Field(default='str', json_schema_extra=_enum(DIMENSION_DTYPES))
     values: list[Any] | None = None
-    coords: dict[str, str | CoordinateSpec] = Field(default_factory=dict)
+    coords: dict[str, str | CoordinateSpec] = Field(default_factory=dict, json_schema_extra=_coords_admits_a_list)
 
     @field_validator('coords', mode='before')
     @classmethod
@@ -169,7 +193,7 @@ class ParameterBlock(_StrictBlock):
     _label: ClassVar[str] = 'a parameter declaration'
 
     dims: list[str]
-    dtype: str = 'float'
+    dtype: str = Field(default='float', json_schema_extra=_enum(PARAMETER_DTYPES))
 
     @property
     def referenced_dims(self) -> list[str]:
@@ -179,7 +203,7 @@ class ParameterBlock(_StrictBlock):
     @field_validator('dtype')
     @classmethod
     def _check_dtype(cls, v: str) -> str:
-        return _one_of(v, {'float', 'int', 'bool', 'str'}, 'dtype')
+        return _one_of(v, PARAMETER_DTYPES, 'dtype')
 
 
 class BoundsBlock(_StrictBlock):
@@ -243,13 +267,13 @@ class ObjectiveBlock(_StrictBlock):
 
     _label: ClassVar[str] = 'an objective declaration'
 
-    sense: str = 'minimize'
+    sense: str = Field(default='minimize', json_schema_extra=_enum(OBJECTIVE_SENSES))
     expression: str
 
     @field_validator('sense')
     @classmethod
     def _check_sense(cls, v: str) -> str:
-        return _one_of(v, {'minimize', 'maximize'}, 'sense')
+        return _one_of(v, OBJECTIVE_SENSES, 'sense')
 
     @model_validator(mode='before')
     @classmethod
@@ -302,6 +326,9 @@ class MacroBlock(_StrictBlock):
         return self
 
 
+LINK_SIGNS = ('==', '<=', '>=')
+
+
 class PiecewiseLink(_StrictBlock):
     """One link of a piecewise block: an expression pinned to a values curve.
 
@@ -314,7 +341,7 @@ class PiecewiseLink(_StrictBlock):
 
     expression: str
     values: str
-    sign: str = '=='
+    sign: str = Field(default='==', json_schema_extra=_enum(LINK_SIGNS))
 
     @model_validator(mode='before')
     @classmethod
@@ -326,10 +353,22 @@ class PiecewiseLink(_StrictBlock):
             return dict(zip(('expression', 'values', 'sign'), data, strict=False))
         return data
 
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler) -> JsonSchemaValue:
+        """The published schema admits the list form the YAML is written in.
+
+        ``_from_list`` rewrites ``[expression, values, sign?]`` to a mapping
+        before validation, but pydantic generates the schema from the fields
+        alone, so without this an editor red-squiggles every link a file
+        actually contains.
+        """
+        list_form = {'type': 'array', 'items': {'type': 'string'}, 'minItems': 2, 'maxItems': 3}
+        return {'anyOf': [handler(core_schema), list_form]}
+
     @field_validator('sign')
     @classmethod
     def _check_sign(cls, v: str) -> str:
-        if v not in ('==', '<=', '>='):
+        if v not in LINK_SIGNS:
             msg = f"link sign must be '==', '<=' or '>=', got {v!r}"
             raise ValueError(msg)
         return v
@@ -373,7 +412,7 @@ class PiecewiseBlock(_StrictBlock):
 
     over: str
     links: list[PiecewiseLink]
-    method: str = 'adjacency'
+    method: str = Field(default='adjacency', json_schema_extra=_enum(PIECEWISE_METHODS))
     active: str | None = None
 
     @property
@@ -464,7 +503,7 @@ class SosBlock(_StrictBlock):
 
     variable: str
     over: str
-    type: int
+    type: int = Field(json_schema_extra=_enum([1, 2]))
     big_m: float | None = None
 
     @field_validator('type')
@@ -554,7 +593,8 @@ class Model(_StrictBlock):
 
     Everything else on this class is pydantic's, not a contract this package
     keeps — ``model_json_schema()`` describes the shape pydantic validates
-    rather than the language, and ``model_construct()`` skips validation
+    rather than the language (checked in for editors as
+    ``schema/lpspec.schema.json``), and ``model_construct()`` skips validation
     entirely, so a ``Model`` is valid when it was built the normal way.
     """
 

@@ -121,6 +121,30 @@ the Arrow PyCapsule protocol, and the recogniser imports none of them.
 Results come back as frames; `to_pandas`, `to_dataarray` and `to_parquet` are
 the bridges out. → [SPEC §8](SPEC.md#8-data-binding), [Python API](api.md)
 
+## Editor completion
+
+The YAML surface ships as a JSON Schema —
+[`schema/lpspec.schema.json`](https://github.com/fluxopt/lpspec/blob/main/schema/lpspec.schema.json),
+generated from the same models `lps.check` runs, held current by a test. With
+the [Red Hat YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml)
+it gives key completion, hover docs, enum values for `dtype:` and `sense:`,
+and a squiggle on a misspelled key — before Python runs. Map it per workspace:
+
+```jsonc
+// .vscode/settings.json
+"yaml.schemas": { "./schema/lpspec.schema.json": ["*.model.yaml"] }
+```
+
+or per file, with a modeline on the first line:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fluxopt/lpspec/main/schema/lpspec.schema.json
+```
+
+It validates structure only. `expression:` and `where:` are strings to the
+schema, so everything inside them — the actual math — is checked by
+`lps.check`, not the editor.
+
 ## What it will not do
 
 Worth knowing before you start, rather than after:

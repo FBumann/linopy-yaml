@@ -7,10 +7,13 @@ stated as tables: a new rule is a row, and a rule that silently stops firing
 is a row that stops failing.
 """
 
+import json
+
 import pytest
 
 from lpspec.errors import SchemaError
 from lpspec.language.model import Model
+from tools import schema
 
 
 def test_empty_schema():
@@ -243,3 +246,31 @@ def test_coords_mapping_allows_two_coordinates_onto_one_dimension():
 def test_a_coordinate_that_does_not_name_a_target_is_rejected(dimensions, match):
     with pytest.raises(SchemaError, match=match):
         Model.model_validate({'dimensions': dimensions})
+
+
+# ---------------------------------------------------------------------------
+# the published JSON Schema is these models, verbatim
+# ---------------------------------------------------------------------------
+
+
+def test_the_checked_in_json_schema_has_not_drifted():
+    assert schema.PATH.read_text() == schema.rendered(), (
+        'schema/lpspec.schema.json no longer matches the models — run `uv run python -m tools.schema`'
+    )
+
+
+def test_the_json_schema_admits_what_the_loader_admits():
+    """The two list shorthands live in before-validators, which pydantic's
+    generated schema cannot see — each needs its own schema hook in model.py,
+    and losing a hook loses the shorthand from every editor silently."""
+    doc = json.loads(schema.PATH.read_text())
+    coords = doc['$defs']['DimensionBlock']['properties']['coords']
+    assert {'type': 'array', 'items': {'type': 'string'}} in coords.get('anyOf', []), (
+        'the schema lost the `coords: [bus]` list shorthand the loader accepts'
+    )
+    link = doc['$defs']['PiecewiseLink']
+    assert any(form.get('type') == 'array' for form in link.get('anyOf', [])), (
+        'the schema lost the `[expression, values, sign?]` link shorthand the loader accepts'
+    )
+    sense = doc['$defs']['ObjectiveBlock']['properties']['sense']
+    assert sense.get('enum') == ['maximize', 'minimize'], 'sense stopped publishing its closed vocabulary'
