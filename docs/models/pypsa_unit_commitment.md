@@ -140,13 +140,13 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       # to the status variables, and the port matches that.
       status:
         foreach: [snapshot, generator]
-        binary: true
+        domain: binary
       start_up:
         foreach: [snapshot, generator]
-        binary: true
+        domain: binary
       shut_down:
         foreach: [snapshot, generator]
-        binary: true
+        domain: binary
 
     constraints:
       power_balance:

@@ -127,7 +127,7 @@ variables:
   travel:
     foreach: [from_city, to_city]
     where: distance
-    binary: true
+    domain: binary
   # Position of each city in the tour. Continuous — MTZ needs only that the
   # positions be orderable, not that they be whole numbers.
   u:

@@ -50,7 +50,7 @@ MAX = {
 MIP = {
     'dimensions': {'i': {'dtype': 'int', 'values': [0, 1, 2]}, 'one': {'dtype': 'int', 'values': [0]}},
     'parameters': {'w': {'dims': ['i']}, 'cap': {'dims': ['one']}},
-    'variables': {'x': {'foreach': ['i'], 'binary': True}},
+    'variables': {'x': {'foreach': ['i'], 'domain': 'binary'}},
     'constraints': {'budget': {'foreach': ['one'], 'expression': 'sum(x * w, over=i) <= cap'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * w, over=i)'},
 }

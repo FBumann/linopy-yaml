@@ -146,8 +146,8 @@ def _build_variables(ctx: EvaluationContext) -> None:
                 coords=coords,
                 name=vname,
                 mask=_as_linopy_mask(mask),
-                binary=vdef.binary,
-                integer=vdef.integer,
+                binary=vdef.domain == 'binary',
+                integer=vdef.domain == 'integer',
             )
 
 

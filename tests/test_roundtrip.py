@@ -139,7 +139,7 @@ def test_absence_is_dropped_and_values_are_kept():
 
     for absent in ('where: null', 'coords: {}', 'macros:', 'piecewise:'):
         assert absent not in text, f'{absent!r} is absence and should not be written'
-    for stated in ('dtype: int', 'sense: minimize', 'binary: false', 'version: 0'):
+    for stated in ('dtype: int', 'sense: minimize', 'domain: continuous', 'version: 0'):
         assert stated in text, f'{stated!r} is a value and should be written'
 
 

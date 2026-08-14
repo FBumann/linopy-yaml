@@ -47,13 +47,10 @@ def test_only_true_and_false_are_booleans(tmp_path):
 
 
 def test_real_booleans_still_parse(tmp_path):
-    """The narrowed resolver must not break `binary:` / `integer:` / `convex:`."""
-    path = _write(tmp_path, MODEL.replace('    bounds: {lower: 0, upper: 100}', '    binary: true\n    integer: false'))
+    """The narrowed resolver keeps 1.2's `true`/`false` as booleans, not labels."""
+    path = _write(tmp_path, 'flags:\n  a: true\n  b: false\n')
 
-    schema = load_model(read_yaml(path))
-
-    assert schema.variables['p'].binary is True
-    assert schema.variables['p'].integer is False
+    assert read_yaml(path)['flags'] == {'a': True, 'b': False}
 
 
 def test_the_loader_yields_plain_types(tmp_path):

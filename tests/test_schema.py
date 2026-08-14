@@ -93,9 +93,16 @@ def test_a_declared_bound_parameter_is_accepted():
     assert s.variables['v'].bounds.upper == 'p_max'
 
 
-def test_a_variable_cannot_be_both_binary_and_integer():
-    body = {'foreach': ['x'], 'binary': True, 'integer': True}
-    with pytest.raises(SchemaError, match='both binary and integer'):
+@pytest.mark.parametrize('flag', ['binary', 'integer'])
+def test_a_removed_flag_names_its_domain_rewrite(flag):
+    body = {'foreach': ['x'], flag: True}
+    with pytest.raises(SchemaError, match=f'domain: {flag}'):
+        Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': body}})
+
+
+def test_invalid_domain():
+    body = {'foreach': ['x'], 'domain': 'boolean'}
+    with pytest.raises(SchemaError, match=r'continuous|integer|binary'):
         Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': body}})
 
 
@@ -178,7 +185,7 @@ def test_an_unknown_key_is_rejected(raw, match):
         ),
         pytest.param(
             {'foreach': ['x'], 'zzzz': 1},
-            'Valid keys: binary, bounds, foreach, integer, where',
+            'Valid keys: bounds, domain, foreach, where',
             id='anything-else-lists-the-valid-keys',
         ),
     ],

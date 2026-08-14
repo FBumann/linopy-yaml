@@ -31,7 +31,7 @@ parameters:
 variables:
   u:
     foreach: [snapshot, generator]
-    binary: true
+    domain: binary
   p:
     foreach: [snapshot, generator]
     bounds: {lower: 0, upper: p_max}

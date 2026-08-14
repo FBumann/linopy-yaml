@@ -244,7 +244,7 @@ parameters:
 variables:
   u:
     foreach: [snapshot]
-    binary: true
+    domain: binary
   p:
     foreach: [snapshot]
     bounds: {lower: 0, upper: 100}
@@ -336,7 +336,7 @@ def test_expansion_emits_the_lambda_declarations():
 
     assert not expanded.piecewise
     assert 'cost_curve_lam' in expanded.variables
-    assert expanded.variables['cost_curve_seg'].binary
+    assert expanded.variables['cost_curve_seg'].domain == 'binary'
     assert set(expanded.constraints) >= {
         'cost_curve_convexity',
         'cost_curve_pick',

@@ -539,6 +539,24 @@ def test_the_engine_dtype_table_matches_the_declared_vocabulary():
     assert set(_DECLARED) == set(DIMENSION_DTYPES), 'the two homes of the dimension dtype vocabulary disagree'
 
 
+def test_the_plan_variable_type_matches_the_declared_domains():
+    """``plan.VariableType`` spells the domain set the language validates.
+
+    Same fence, same remedy as the dtype table above: the engine may not
+    import the language, so a test keeps the copy honest — the lowering casts
+    ``vdef.domain`` straight into ``plan.VariableType``, and a domain added to
+    one home without the other would send an unknown type into every sink.
+    """
+    from typing import get_args
+
+    from lpspec.language.model import VARIABLE_DOMAINS
+    from lpspec.relational.plan import VariableType
+
+    assert set(get_args(VariableType)) == set(VARIABLE_DOMAINS), (
+        'the two homes of the variable domain vocabulary disagree'
+    )
+
+
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 

@@ -71,8 +71,8 @@ _SENSES = {'==', '<=', '>='}
 def lower_program(schema: Model) -> plan.Program:
     """Compile a validated :class:`Model` into a :class:`Program`.
 
-    A ``binary:`` variable lowers with fixed 0/1 bounds, matching linopy's
-    ``binary=True``.
+    A ``domain: binary`` variable lowers with fixed 0/1 bounds, matching
+    linopy's ``binary=True``.
 
     Raises:
         LanguageError: A construct outside the streaming language, named with
@@ -84,11 +84,10 @@ def lower_program(schema: Model) -> plan.Program:
 
     variables = []
     for vname, vdef in schema.variables.items():
-        variable_type: plan.VariableType
-        if vdef.binary:
-            variable_type, lower, upper = 'binary', plan.Constant(0.0), plan.Constant(1.0)
+        variable_type = cast('plan.VariableType', vdef.domain)
+        if variable_type == 'binary':
+            lower, upper = plan.Constant(0.0), plan.Constant(1.0)
         else:
-            variable_type = 'integer' if vdef.integer else 'continuous'
             lower, upper = _bound_expression(vdef.bounds.lower), _bound_expression(vdef.bounds.upper)
         variables.append(
             plan.VariableDeclaration(
