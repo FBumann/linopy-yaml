@@ -59,7 +59,7 @@ import sys
 from pathlib import Path
 
 from lpspec.language._yaml import read_yaml
-from lpspec.typeset import to_latex, to_markdown, to_typst
+from lpspec.typeset import to_latex, to_markdown
 from tools.constructs import models
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -99,6 +99,9 @@ def _literal(table: Path) -> str:
     raw = read_yaml(table)
     lines = ['symbols = {']
     for section, entries in raw.items():
+        if not isinstance(entries, dict):
+            lines.append(f'    {section!r}: {entries!r},')
+            continue
         lines.append(f'    {section!r}: {{')
         lines += [f'        {key!r}: {value!r},' for key, value in entries.items()]
         lines.append('    },')
@@ -114,9 +117,10 @@ def _home_block() -> str:
     A reader who sees ``load`` in the YAML and $\\ell$ in the math, with
     neither in front of them, has to take the page on faith.
 
-    The Typst tab renders through the same table — its entries carry a
-    ``typst:`` spelling beside the ``latex:`` one, which is what lets both
-    tabs exist at once.
+    Typst is absent because the committed table declares ``notation: latex``
+    and ``to_typst`` refuses it. A tab would need the same model's notation
+    written a second time, which is the one thing a page generated to prevent
+    drift should not carry.
     """
     table = SYMBOLS / 'dispatch.yaml'
     options = {'symbols': table, 'legend': True}
@@ -125,7 +129,6 @@ def _home_block() -> str:
         for title, body in {
             'The math': to_markdown(HOME_MODEL, **options),
             'LaTeX': f'```latex\n{to_latex(HOME_MODEL, **options).rstrip()}\n```',
-            'Typst': f'```typst\n{to_typst(HOME_MODEL, **options).rstrip()}\n```',
             'How': _HOW.format(symbols=_literal(table)),
         }.items()
     )
@@ -137,16 +140,17 @@ import lpspec as lps
 {symbols}
 
 lps.to_latex('dispatch.yaml', symbols=symbols)  # amsmath align
-lps.to_typst('dispatch.yaml', symbols=symbols)  # compiles without a TeX toolchain
+lps.to_typst('dispatch.yaml')  # compiles without a TeX toolchain
 lps.to_markdown('dispatch.yaml')  # renders as-is on GitHub
 ```
 
 `symbols` is optional — drop it and the same model prints as
 $\\mathit{{load}}_t$, $p^{{\\mathrm{{max}}}}_g$. A dict, a YAML path or a
 `SymbolTable`; a key naming nothing in the model is an error, not a symbol that
-silently never applies. An entry is one spelling every format uses verbatim, or
-one per format (`{{'latex': …, 'typst': …}}`) — a format asked to render an
-entry without its spelling refuses, naming it.
+silently never applies. Every spelling is printed verbatim, so anything LaTeX
+can say is sayable — `notation` says which language they are, and `to_typst`
+refuses a table it cannot read rather than emitting `\\mathcal{{S}}` into a
+Typst document.
 
 Or from a shell, where the table is that same YAML on disk and `--standalone`
 emits a document that compiles rather than a fragment to `\\input`:

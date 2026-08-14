@@ -5,16 +5,18 @@
 # generators onto buses, and notation that treated it as special would undercut
 # that before the reader reached the equation.
 
+notation: latex
+
 dimensions:
-  snapshot: {index: t, set: {latex: "\\mathcal{T}", typst: cal(T)}}
-  month: {index: m, set: {latex: "\\mathcal{M}", typst: cal(M)}}
-  generator: {index: g, set: {latex: "\\mathcal{G}", typst: cal(G)}}
+  snapshot: {index: t, set: "\\mathcal{T}"}
+  month: {index: m, set: "\\mathcal{M}"}
+  generator: {index: g, set: "\\mathcal{G}"}
 
 names:
   cost: "c"
-  load: {latex: "\\ell", typst: ell}
-  p_max: {latex: "\\bar p", typst: bar(p)}
-  monthly_cap: {latex: "\\bar E", typst: bar(E)}  # E for energy: a cap on a sum over time, not on a rate
+  load: "\\ell"
+  p_max: "\\bar p"
+  monthly_cap: "\\bar E"  # E for energy: a cap on a sum over time, not on a rate
 
 descriptions:
   snapshot: dispatch periods, each falling in one month

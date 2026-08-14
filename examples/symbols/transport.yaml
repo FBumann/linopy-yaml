@@ -11,18 +11,20 @@
 # silently, and this table will not either: lines keep $\ell$, load becomes
 # $d$ (demand). Everything else matches the page.
 
+notation: latex
+
 dimensions:
-  snapshot: {index: s, set: {latex: "\\mathcal{S}", typst: cal(S)}}
-  generator: {index: g, set: {latex: "\\mathcal{G}", typst: cal(G)}}
-  bus: {index: b, set: {latex: "\\mathcal{B}", typst: cal(B)}}
-  line: {index: {latex: "\\ell", typst: ell}, set: {latex: "\\mathcal{L}", typst: cal(L)}}
+  snapshot: {index: s, set: "\\mathcal{S}"}
+  generator: {index: g, set: "\\mathcal{G}"}
+  bus: {index: b, set: "\\mathcal{B}"}
+  line: {index: "\\ell", set: "\\mathcal{L}"}
 
 names:
   cost: "c"
   load: "d"
-  p_max: {latex: "\\bar p", typst: bar(p)}
-  cap: {latex: "\\bar f", typst: bar(f)}
-  neg_cap: {latex: "\\underline{f}", typst: underline(f)}
+  p_max: "\\bar p"
+  cap: "\\bar f"
+  neg_cap: "\\underline{f}"
 
 descriptions:
   snapshot: dispatch periods
@@ -30,7 +32,7 @@ descriptions:
   bus: network nodes
   line: transmission lines, each joining two buses
   p: output of generator $g$ in snapshot $s$
-  f: {latex: 'flow on line $\ell$, signed towards its `to` bus', typst: 'flow on line $ell$, signed towards its `to` bus'}
+  f: flow on line $\ell$, signed towards its `to` bus
   cost: marginal cost
   load: demand at each bus
   p_max: installed capacity

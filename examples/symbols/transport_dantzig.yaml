@@ -8,9 +8,11 @@
 # symbol table exists for: the model's names are the good ones for a data
 # engineer and the wrong ones for a reader who knows this problem.
 
+notation: latex
+
 dimensions:
-  plant: {index: i, set: {latex: "\\mathcal{I}", typst: cal(I)}}
-  market: {index: j, set: {latex: "\\mathcal{J}", typst: cal(J)}}
+  plant: {index: i, set: "\\mathcal{I}"}
+  market: {index: j, set: "\\mathcal{J}"}
 
 names:
   shipment: "x"
