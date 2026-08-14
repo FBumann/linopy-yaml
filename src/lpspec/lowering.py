@@ -44,7 +44,7 @@ from lpspec.language.expression_parser import (
     UnaryOperatorNode,
     VariableNode,
 )
-from lpspec.language.helpers import call_shape_error, edge_error
+from lpspec.language.operators import call_shape_error, edge_error
 from lpspec.language.piecewise import expand_piecewise
 from lpspec.language.resolution import Namespace, expression_of, where_of
 from lpspec.language.where_parser import (
@@ -163,7 +163,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
     """Rewrite one resolved core-AST expression as a plan expression.
 
     Three language rules are *asked* here and answered elsewhere: the call
-    shape (``helpers.call_shape_error``, re-asked so an AST that skipped
+    shape (``operators.call_shape_error``, re-asked so an AST that skipped
     resolution gets the language's wording rather than an ``IndexError``), the
     dim rules (``dimensions.dims_of``) and degree (``language/degree.py``).
 
@@ -235,7 +235,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             if by_node is None:
                 return plan.Sum(operand, (over_node.name,))
             if not isinstance(by_node, CoordinateNode):
-                raise LanguageError(f'{context}: sum(group_by=...) must name a coordinate')
+                raise LanguageError(f'{context}: sum(group_by=...) must name a lookup')
             return plan.GroupSum(
                 operand,
                 over=over_node.name,
@@ -249,7 +249,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             if not isinstance(over_node, DimensionNode):
                 raise LanguageError(f'{context}: at(onto=...) must name a dimension')
             if not isinstance(by_node, CoordinateNode):
-                raise LanguageError(f'{context}: at(by=...) must name a coordinate')
+                raise LanguageError(f'{context}: at(by=...) must name a lookup')
             _check_dim_rules(node, schema, context)
             return plan.At(
                 _lower_expr(node.args[0], schema, context),
@@ -290,7 +290,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
 
 
 def _check_dim_rules(node: FunctionCallNode, schema: Model, context: str) -> None:
-    """Apply the language's dim rules to a helper call, discarding the dim set.
+    """Apply the language's dim rules to an operator call, discarding the dim set.
 
     Lowering wants the *raise*, not the answer. Called after the plan-shape
     checks so those speak first, and only for one call's dims — the enclosing

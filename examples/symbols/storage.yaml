@@ -9,6 +9,8 @@
 # explain "with $s-1$ wrapping at the horizon" in prose underneath, because
 # $s-1$ cannot say it; $s \ominus 1$ can, and the legend defines it.
 
+notation: latex
+
 dimensions:
   snapshot: {index: s, set: "\\mathcal{S}"}
   generator: {index: g, set: "\\mathcal{G}"}

@@ -1,7 +1,7 @@
 """Model builder: schema + data → linopy Model.
 
-Also the eager evaluation of every built-in helper. The helper *names* are the
-language (``helpers.py``, imported by the linopy-free lane); these
+Also the eager evaluation of every built-in operator. The operator *names* are the
+language (``operators.py``, imported by the linopy-free lane); these
 xarray/linopy evaluations are this backend's private business, mirrored on the
 relational side by lowering cases rather than shared code.
 """
@@ -33,7 +33,7 @@ from lpspec.language.expression_parser import (
     UnaryOperatorNode,
     VariableNode,
 )
-from lpspec.language.helpers import EDGE_WRAP, unknown_helper_message
+from lpspec.language.operators import EDGE_WRAP, unknown_operator_message
 from lpspec.language.resolution import Namespace, expression_of, where_of
 from lpspec.language.where_parser import (
     AndNode,
@@ -84,7 +84,7 @@ class EvaluationContext:
     """Everything expression evaluation needs to resolve names.
 
     Extend this rather than adding parameters to ``_eval_ast`` and every
-    helper-facing seam.
+    operator-facing seam.
     """
 
     model: linopy.Model
@@ -306,7 +306,7 @@ def _additive_terms(node: ArithmeticNode, ctx: EvaluationContext) -> list[Any]:
     """*node* as a list of terms to be summed, multiplication distributed.
 
     Only the operators that distribute are walked; everything else is one
-    opaque term, a helper call having already reduced whatever it reduces.
+    opaque term, an operator call having already reduced whatever it reduces.
     Distribution is what keeps ``(x[i] * a[i] + y[j] * b[j]) * c[k]`` two terms
     rather than one broadcast to ``(i, j, k)``.
 
@@ -350,8 +350,8 @@ def _eval_ast(
     product and a variable divisor are all refused by ``language/degree.py``,
     the same verdict the relational lane asks for and in the same sentence.
 
-    Unknown helper names were rejected by ``validation.py`` at load time; the
-    guard on ``_HELPERS`` covers hand-built calls that skipped it.
+    Unknown operator names were rejected by ``validation.py`` at load time; the
+    guard on ``_OPERATORS`` covers hand-built calls that skipped it.
     """
     if isinstance(node, NumberNode):
         return node.value
@@ -394,17 +394,17 @@ def _eval_ast(
         return _ARITHMETIC_OPS[node.op](left, right)
 
     if isinstance(node, FunctionCallNode):
-        if node.name not in _HELPERS:
-            raise NameError(unknown_helper_message(node.name))
-        helper = _HELPERS[node.name]
+        if node.name not in _OPERATORS:
+            raise NameError(unknown_operator_message(node.name))
+        operator = _OPERATORS[node.name]
         args = [_eval_ast(a, ctx) for a in node.args]
         if node.name == 'at':
             by = node.kwargs['by']
             assert isinstance(by, CoordinateNode)
-            return _helper_at(args[0], _coordinate_array(by, ctx), into=by.into)
+            return _operator_at(args[0], _coordinate_array(by, ctx), into=by.into)
         if (by := node.kwargs.get('group_by')) is not None:
             assert isinstance(by, CoordinateNode)
-            return _helper_grouped_sum(args[0], _coordinate_array(by, ctx), into=by.into)
+            return _operator_grouped_sum(args[0], _coordinate_array(by, ctx), into=by.into)
         kwargs: dict[str, Any] = {}
         for k, v in node.kwargs.items():
             if isinstance(v, DimensionNode):
@@ -413,7 +413,7 @@ def _eval_ast(
                 kwargs[k] = v.policy
             else:
                 kwargs[k] = _eval_ast(v, ctx)
-        return helper(*args, **kwargs)
+        return operator(*args, **kwargs)
 
     assert_never(node)
 
@@ -428,7 +428,7 @@ def _coordinate_array(by: CoordinateNode, ctx: EvaluationContext) -> Any:
         return ctx.dim_coords[by.dimension][by.name]
     except KeyError:
         msg = (
-            f"coordinate '{by.name}' on dimension '{by.dimension}' has no bound values. "
+            f"lookup '{by.name}' over dimension '{by.dimension}' has no bound values. "
             f"Pass coords={{'{by.dimension}': <DataFrame with '{by.dimension}' and "
             f"'{by.name}' columns>}}."
         )
@@ -436,12 +436,12 @@ def _coordinate_array(by: CoordinateNode, ctx: EvaluationContext) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Built-in helpers, eager evaluation — each operand is an xr.DataArray (a
+# Built-in operators, eager evaluation — each operand is an xr.DataArray (a
 # parameter) or a linopy Variable / LinearExpression
 # ---------------------------------------------------------------------------
 
 
-def _helper_sum(array: Any, *, over: str) -> Any:
+def _operator_sum(array: Any, *, over: str) -> Any:
     """Sum *array* over dimension *over*.
 
     A DataArray and a linopy expression both carry ``dims`` and both take the
@@ -453,7 +453,7 @@ def _helper_sum(array: Any, *, over: str) -> Any:
     return array
 
 
-def _helper_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
+def _operator_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
     """Sum *array* through a declared coordinate, producing dimension *into*.
 
     YAML: ``sum(p, over=generator, group_by=bus)``. *mapping* is the
@@ -486,7 +486,7 @@ def _helper_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
     raise _unsupported('sum(group_by=)', array)
 
 
-def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
+def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:
     """Read *array* through a declared coordinate — the adjoint of a group.
 
     YAML: ``at(on, onto=flow, by=component)``. *mapping* is the same
@@ -518,9 +518,9 @@ def _helper_at(array: Any, mapping: Any, *, into: str) -> Any:
 
 
 def _unsupported(call: str, array: Any) -> TypeError:
-    """One wording for an operand shape a helper cannot take.
+    """One wording for an operand shape an operator cannot take.
 
-    Reached only from a hand-built call: every helper's operands come from
+    Reached only from a hand-built call: every operator's operands come from
     ``_eval_ast``, so a lane running the language proper never sees this.
     """
     return TypeError(f"{call} does not support type '{type(array).__name__}'.")
@@ -534,7 +534,7 @@ def _translation(over: str, by: float) -> Mapping[Hashable, int]:
     return {over: int(by)}
 
 
-def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None = None) -> Any:
+def _operator_shift(array: Any, *, over: str, by: float, edge: str | float | None = None) -> Any:
     """Translate *array* along one dimension — the value at *t - by*.
 
     YAML: ``shift(soc, over=snapshot, by=1)``. ``edge`` carries all three
@@ -567,14 +567,14 @@ def _helper_shift(array: Any, *, over: str, by: float, edge: str | float | None 
     raise _unsupported('shift()', array)
 
 
-#: Eager evaluation of every name in ``helpers.BUILTIN_NAMES``. The two must
+#: Eager evaluation of every name in ``operators.BUILTIN_NAMES``. The two must
 #: agree exactly — enforced by ``tests/test_architecture.py``, because a name
 #: one lane implements and the other does not is precisely the divergence
 #: that would make the differential tests a comparison of dialects.
-_HELPERS: dict[str, Callable[..., Any]] = {
-    'sum': _helper_sum,
-    'at': _helper_at,
-    'shift': _helper_shift,
+_OPERATORS: dict[str, Callable[..., Any]] = {
+    'sum': _operator_sum,
+    'at': _operator_at,
+    'shift': _operator_shift,
 }
 
 

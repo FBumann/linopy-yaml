@@ -158,13 +158,13 @@ def test_macro_cycle_raises():
         ),
         pytest.param(
             lambda: make_schema(macros={'sum': {'args': ['a'], 'template': 'a'}}),
-            "collides with the built-in helper 'sum'",
-            id='a-built-in-helper',
+            "collides with the built-in operator 'sum'",
+            id='a-built-in-operator',
         ),
         pytest.param(
             lambda: Model(dimensions={'sum': {'values': [1]}}),
-            "collides with the built-in helper 'sum'",
-            id='a-built-in-helper-taken-by-a-dimension',
+            "collides with the built-in operator 'sum'",
+            id='a-built-in-operator-taken-by-a-dimension',
         ),
     ],
 )
@@ -265,8 +265,8 @@ def test_a_macro_and_a_named_expression_mean_the_same_on_both_lanes():
         pass  # agreement on the objective is the whole assertion
 
 
-def test_unknown_helper_rejected_at_load_time_with_the_rewrite():
-    """An unknown helper fails validation, before either backend is chosen."""
+def test_unknown_operator_rejected_at_load_time_with_the_rewrite():
+    """An unknown operator fails validation, before either backend is chosen."""
     with pytest.raises(ValueError) as exc:
         make_schema(
             constraints={
