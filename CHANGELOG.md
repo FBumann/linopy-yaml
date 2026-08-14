@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.1-alpha.123](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.122...v0.0.1-alpha.123) (2026-08-14)
+
+
+### Performance
+
+* **engine:** a coefficient of zero stops reaching the solver ([#685](https://github.com/fluxopt/lpspec/issues/685)) ([6a6c026](https://github.com/fluxopt/lpspec/commit/6a6c02691f47bd63fc3d08d44c46b2adf4b2e3fc))
+* **engine:** a share stops carrying its zeros through the sort ([#686](https://github.com/fluxopt/lpspec/issues/686)) ([ca7b54e](https://github.com/fluxopt/lpspec/commit/ca7b54e7ebb30e66d557ab29c468a8b9290fd85e))
+
+
+### Documentation
+
+* **spec:** the indicator and lp rows cite the issues that hold them ([#696](https://github.com/fluxopt/lpspec/issues/696)) ([2aa70c9](https://github.com/fluxopt/lpspec/commit/2aa70c93c16819673d9a555d244dfb778a79237f))
+
 ## [0.0.1-alpha.122](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.121...v0.0.1-alpha.122) (2026-08-14)
 
 
