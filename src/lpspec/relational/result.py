@@ -156,7 +156,7 @@ class Result:
     #: empty mapping is a solve that left nothing, which the status reports.
     _primals: Mapping[str, pl.LazyFrame] | None
     _duals: Mapping[str, pl.LazyFrame] | None
-#: The constraints' left-hand sides at the solution, laid out exactly as
+    #: The constraints' left-hand sides at the solution, laid out exactly as
     #: :attr:`_duals` — same frames, same row order — and present whenever the
     #: primals are: unlike a dual, an activity exists at any incumbent.
     _activities: Mapping[str, pl.LazyFrame] | None

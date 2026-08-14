@@ -191,7 +191,7 @@ def expression(
     *,
     data: dict[str, Any] | None = None,
     coords: dict[str, Any] | None = None,
-) -> Any:
+) -> xarray.DataArray:
     """Evaluate named expression *name* of *path* at *model*'s solution.
 
     The eager lane's half of readable expressions — the streaming lane spells

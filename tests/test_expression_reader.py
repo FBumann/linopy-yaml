@@ -41,9 +41,7 @@ MODEL = {
     'constraints': {
         'balance': {'foreach': ['snapshot'], 'expression': 'total_gen == load'},
     },
-    'objectives': {
-        'total': {'sense': 'minimize', 'expression': 'sum(sum(p * cost, over=generator), over=snapshot)'},
-    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(sum(p * cost, over=generator), over=snapshot)'},
 }
 
 
