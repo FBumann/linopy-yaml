@@ -45,7 +45,7 @@ drift from what the engine builds.
 | [monthly_budget](monthly_budget.md) | **✔** 9500 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [multi_period](multi_period.md) | **✔** 10020 | **✓** | · | · | · | · | **✓** | · | · | · |
 | [piecewise](piecewise.md) | **✔** 3850 | **✓** | · | · | · | · | **✓** | **✓** | · | · |
-| [sos](sos.md) | · | **✓** | · | · | · | · | **✓** | · | **✓** | · |
+| [sos](sos.md) | · | **✓** | · | · | · | · | **✓** | **✓** | **✓** | · |
 | [storage](storage.md) | **✔** 5650 | **✓** | · | · | **✓** | · | **✓** | · | · | · |
 | [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | **✓** | · | · | · |
 | [walkthrough](walkthrough.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
@@ -184,9 +184,10 @@ macro, primitive, or escape.
 `min_up_time` is the more interesting row, because the answer depends on
 something the language cares about. The constraint is
 `sum(start_up over the last T snapshots) <= status`. For a *single T fixed in
-the file* that is `start_up + shift(start_up, 1, fill=0) + …` — a **macro**,
-free, and `fill=0` because a window reaching before the horizon is short a term
-rather than undefined ([law 8](../SPEC.md#0-the-laws)). For PyPSA's actual
+the file* that is `start_up + shift(start_up, over=snapshot, by=1, edge=0) + …`
+— a **macro**, free, and `edge=0` because a window reaching before the horizon
+is short a term rather than undefined ([law 8](../SPEC.md#0-the-laws)). For
+PyPSA's actual
 signature, where `T` is a column and each generator may have its own, the
 number of terms is read from data, and
 [data-dependent structure inside an expression](../design/ceiling.md#two-tiers-and-the-ceiling)

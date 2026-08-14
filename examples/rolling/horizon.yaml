@@ -45,9 +45,9 @@ constraints:
     expression: soc == soc_initial + charge * 0.9 - discharge
 
   # everywhere else it comes from the row before; no edge=, so t == 0 drops out
+  # on its own, with no gate restating the origin
   soc_step:
     foreach: [t]
-    where: 't > 0'
     expression: soc == shift(soc, over=t, by=1) + charge * 0.9 - discharge
 
 objective:

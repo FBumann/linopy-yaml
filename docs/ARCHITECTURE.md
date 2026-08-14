@@ -39,7 +39,7 @@ while both of these read the schema.
 **Data enters below the seam, and each lane coerces its own** — `sources.py` for
 a native build, `linopy/loader.py` for the shim, separate on purpose since one
 produces tidy polars frames and the other an `xr.Dataset`. Their one shared
-piece is the `convex:` curvature guard, which needs values rather than a schema
+piece is the `method: convex` curvature guard, which needs values rather than a schema
 and so lives with the data. What matters for the waist is the direction: data
 goes no further **up** than these two, so nothing above the seam has ever seen a
 value — which is what makes `show it` and `check it` free.
@@ -461,7 +461,7 @@ must stay off the import path of a caller who does not use it.
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_model` |
 | `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/typeset/README.md)) |
 | `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
-| `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `convex:` curvature guard, which is the one check that needs values |
+| `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `method: convex` curvature guard, which is the one check that needs values |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the exception hierarchy; the one module either fenced side may import |
 | `_notes.py` | attach context to an exception on the way out; no package imports, no opinions |

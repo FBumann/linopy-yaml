@@ -26,28 +26,16 @@ variables:
     foreach: [snapshot, generator]
     bounds:
       lower: 0
-  lam:  # convex-combination weight on each breakpoint
-    foreach: [snapshot, generator, bp]
-    bounds:
-      lower: 0
-      upper: 1
 
-sos:
-  on_one_segment:  # at most two neighbouring weights — the curve, not its hull
-    variable: lam
+piecewise:
+  cost_curve:
     over: bp
-    type: 2
+    links:
+      - [p, bp_x]
+      - [op_cost, bp_y]
+    method: sos2  # the restriction the default builds from binaries, declared as a set
 
 constraints:
-  convexity:
-    foreach: [snapshot, generator]
-    expression: sum(lam, over=bp) == 1
-  dispatch:
-    foreach: [snapshot, generator]
-    expression: p == sum(lam * bp_x, over=bp)
-  cost:
-    foreach: [snapshot, generator]
-    expression: op_cost == sum(lam * bp_y, over=bp)
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) == load

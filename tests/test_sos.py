@@ -491,7 +491,7 @@ def test_a_mask_that_empties_a_set_leaves_the_numbering_dense():
         )
 
 
-# examples/sos.yaml — SOS2 as the native spelling of a piecewise curve
+# examples/sos.yaml — `method: sos2`, the curve said as a set
 # ---------------------------------------------------------------------------
 
 #: A *concave* curve per generator — economies of scale. The hull's lower
@@ -552,7 +552,18 @@ def test_the_example_prices_on_the_curve_and_not_on_its_hull():
 
 
 def _without_the_set() -> dict[str, Any]:
-    """``examples/sos.yaml`` with the ``sos:`` block dropped — the relaxation."""
+    """``examples/sos.yaml`` with the restriction dropped — the λ hull.
+
+    Written out as the weights, convexity and link rows the ``piecewise:``
+    block expands into, minus the set. ``method: convex`` cannot spell this
+    relaxation: the curvature guard refuses it on a concave curve.
+    """
     raw = lps.load_model('examples/sos.yaml').to_dict()
-    raw.pop('sos')
+    raw.pop('piecewise')
+    raw['variables']['lam'] = {'foreach': ['snapshot', 'generator', 'bp'], 'bounds': {'lower': 0, 'upper': 1}}
+    raw['constraints'] |= {
+        'convexity': {'foreach': ['snapshot', 'generator'], 'expression': 'sum(lam, over=bp) == 1'},
+        'dispatch': {'foreach': ['snapshot', 'generator'], 'expression': 'p == sum(lam * bp_x, over=bp)'},
+        'cost': {'foreach': ['snapshot', 'generator'], 'expression': 'op_cost == sum(lam * bp_y, over=bp)'},
+    }
     return raw
