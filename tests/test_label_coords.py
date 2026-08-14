@@ -159,7 +159,7 @@ def _unused_target_model(month: dict) -> dict:
         'constraints': {
             'budget': {'foreach': ['period'], 'expression': 'sum(p, over=snapshot, group_by=period) <= cap'}
         },
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(p, over=snapshot)'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(p, over=snapshot)'},
     }
 
 
