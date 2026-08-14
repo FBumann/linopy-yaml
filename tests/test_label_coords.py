@@ -91,6 +91,25 @@ def test_grouping_into_a_label_space_is_refused_with_the_promotion_rewrite():
     )
 
 
+def test_a_by_typo_is_offered_only_the_lookups_it_could_have_meant():
+    """The suggestion lists groupable lookups, never a label space.
+
+    One store holds both kinds, so which ones ``by=`` accepts is a filter
+    rather than a separate dict — and a filter that slipped would offer
+    ``period`` as the fix for a typo, the very thing the test above proves
+    unsayable.
+    """
+    model = _model()
+    model['dimensions']['bus'] = {'dtype': 'str'}
+    model['lookups']['bus_of'] = {'over': 'snapshot', 'into': 'bus'}
+    model['constraints']['c'] = {'foreach': ['bus'], 'expression': 'sum(x, by=bus_ov) >= load'}
+    with pytest.raises(LpspecError, match=r'by=bus_ov\) does not name a lookup') as caught:
+        lps.check(model)
+    assert "Lookups: ['bus_of']" in str(caught.value), (
+        "the listing offers only what by= accepts — 'period' is a label space and cannot be grouped into"
+    )
+
+
 def test_check_advises_a_label_space_wearing_a_dimensions_clothes():
     """A dim that only serves as a lookup target is advice, not an error."""
     model = _model()

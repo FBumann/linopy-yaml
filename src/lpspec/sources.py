@@ -20,6 +20,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
+
 from lpspec.errors import DataError, PiecewiseExpansionError
 from lpspec.relational.frames import as_frame, labels_frame
 
@@ -78,7 +80,8 @@ def tidy_sources(
         elif coords and dname in coords:
             src = coords[dname]
         elif declared is not None:
-            src = declared
+            sources[dname] = pl.LazyFrame(declared)
+            continue
         elif ddef.values is not None:
             src = ddef.values
         else:
