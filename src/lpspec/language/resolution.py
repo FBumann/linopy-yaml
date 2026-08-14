@@ -373,12 +373,12 @@ def _resolve_coordinate_ref(
     if isinstance(value, CoordinateNode):
         return value
     if not isinstance(value, (NameNode, DimensionNode)):
-        errors.append(f'{context}: {helper}({key}=...) must name a coordinate.')
+        errors.append(f'{context}: {helper}({key}=...) must name a lookup.')
         return value
     if not isinstance(over, (NameNode, DimensionNode)):
         errors.append(
             f'{context}: {helper}({key}={value.name}) needs a sibling over=<dim> '
-            f'naming the dimension that carries the coordinate.'
+            f'naming the dimension the lookup is over.'
         )
         return value
     declared = ns.coordinates.get(over.name, {})

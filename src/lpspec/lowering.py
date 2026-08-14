@@ -235,7 +235,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             if by_node is None:
                 return plan.Sum(operand, (over_node.name,))
             if not isinstance(by_node, CoordinateNode):
-                raise LanguageError(f'{context}: sum(group_by=...) must name a coordinate')
+                raise LanguageError(f'{context}: sum(group_by=...) must name a lookup')
             return plan.GroupSum(
                 operand,
                 over=over_node.name,
@@ -249,7 +249,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             if not isinstance(over_node, DimensionNode):
                 raise LanguageError(f'{context}: at(onto=...) must name a dimension')
             if not isinstance(by_node, CoordinateNode):
-                raise LanguageError(f'{context}: at(by=...) must name a coordinate')
+                raise LanguageError(f'{context}: at(by=...) must name a lookup')
             _check_dim_rules(node, schema, context)
             return plan.At(
                 _lower_expr(node.args[0], schema, context),

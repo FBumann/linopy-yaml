@@ -428,7 +428,7 @@ def _coordinate_array(by: CoordinateNode, ctx: EvaluationContext) -> Any:
         return ctx.dim_coords[by.dimension][by.name]
     except KeyError:
         msg = (
-            f"coordinate '{by.name}' on dimension '{by.dimension}' has no bound values. "
+            f"lookup '{by.name}' over dimension '{by.dimension}' has no bound values. "
             f"Pass coords={{'{by.dimension}': <DataFrame with '{by.dimension}' and "
             f"'{by.name}' columns>}}."
         )
