@@ -86,10 +86,10 @@ def test_emit(
 
     case_paths = paths(case_name, size)
     if arm == 'linopy':
-        counts = benchmark(linopy_build_and_emit, case_name, sink, case_paths, io_api)
+        counts = benchmark(linopy_build_and_emit, case_name, size, sink, case_paths, io_api)
     else:
-        sources, coords = split_sources(CASES[case_name], case_paths)
-        counts = benchmark(lpspec_build_and_emit, case_name, sink, sources, coords, ENGINE[arm])
+        sources, coords = split_sources(CASES[case_name], size, case_paths)
+        counts = benchmark(lpspec_build_and_emit, case_name, size, sink, sources, coords, ENGINE[arm])
     _record(benchmark, counts, case_name, size)
 
 
@@ -120,7 +120,7 @@ def test_rebuild(benchmark: Any, gate: Any, paths: Any, builds: int, case_name: 
     case_paths = paths(case_name, size)
     counts = benchmark.pedantic(
         build_only,
-        args=(arm, case_name, case_paths, ENGINE.get(arm)),
+        args=(arm, case_name, size, case_paths, ENGINE.get(arm)),
         rounds=builds,
         iterations=1,
         warmup_rounds=0,

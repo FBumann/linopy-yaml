@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.0.1-alpha.133](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.132...v0.0.1-alpha.133) (2026-08-14)
+
+
+### Bug Fixes
+
+* **bench:** a second benchmark refuses to share the machine ([#723](https://github.com/fluxopt/lpspec/issues/723)) ([f92d676](https://github.com/fluxopt/lpspec/commit/f92d676856ab3ce2bdb864001be8be5ef70ddd8a))
+
+## [0.0.1-alpha.132](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.131...v0.0.1-alpha.132) (2026-08-14)
+
+
+### Refactoring
+
+* **language:** the code spells the builtins the way the docs do ([#754](https://github.com/fluxopt/lpspec/issues/754)) ([799c98b](https://github.com/fluxopt/lpspec/commit/799c98b10cd38380859bcc35436a94e9fbd99277))
+
+## [0.0.1-alpha.131](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.130...v0.0.1-alpha.131) (2026-08-14)
+
+
+### Bug Fixes
+
+* **typeset:** a symbol table says which notation it is written in ([#740](https://github.com/fluxopt/lpspec/issues/740)) ([9e392ab](https://github.com/fluxopt/lpspec/commit/9e392ab9cf9dc40bb9f3b58206c2be6e7d250513))
+
 ## [0.0.1-alpha.130](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.129...v0.0.1-alpha.130) (2026-08-14)
 
 

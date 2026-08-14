@@ -11,6 +11,8 @@
 # The point is not that the derived symbols were wrong. It is that a hand-
 # written equation drifts silently and a generated one cannot.
 
+notation: latex
+
 dimensions:
   snapshot: {index: s, set: "\\mathcal{S}"}
   generator: {index: g, set: "\\mathcal{G}"}

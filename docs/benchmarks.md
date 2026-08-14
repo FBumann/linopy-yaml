@@ -26,17 +26,20 @@ you actually use.
 
 Read straight off [`latest.json`](https://github.com/fluxopt/lpspec/blob/main/bench/results/latest.json) and
 [`density.jsonl`](https://github.com/fluxopt/lpspec/blob/main/bench/results/density.jsonl), each carrying the machine
-fingerprint, the library versions and the commit that produced it. Two files
-because a run *replaces* its output: one narrower than the tables it publishes
-would leave them unprovenanced while still looking complete.
+fingerprint, the library versions and the commit that produced it. Separate
+files because a run *replaces* its output: one narrower than the tables it
+publishes would leave them unprovenanced while still looking complete.
 
 ```bash
 uv run pytest bench --benchmark-memory --sizes xs s m l \
     --benchmark-json=bench/results/latest.json
 uv run pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --skip-gate \
     --benchmark-json=bench/results/density.json
+uv run pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --skip-gate \
+    --benchmark-json=bench/results/declarations.json
 
-uv run python -m bench.report bench/results/latest.json bench/results/density.json
+uv run python -m bench.report bench/results/latest.json bench/results/density.json \
+    bench/results/declarations.json
 uv run python -m bench.plot  # the figures above, and the chart page's numbers
 ```
 
@@ -563,9 +566,17 @@ In rough order of what would change a decision:
   — `bench/models/storage.yaml`, held at `dispatch`'s width on `dispatch`'s
   ladder so the two read against each other — but every number on this page
   predates it, so it is unmeasured here rather than unwritten.
-- **A MILP**, where solve time dwarfs build and the build ratio stops mattering.
-- **A hand-written highspy/CSR arm** as the speed-of-light floor. Without one,
-  every ratio here has linopy as its only denominator.
+- **A MILP**, where solve time dwarfs build and the hand-off is the whole
+  comparison. The case now exists — `commitment` in `bench/cases.py`, a binary
+  commitment gating every generator, the only case whose `vtype` stream is not
+  all-continuous — but every number on this page predates it, so it is
+  unmeasured here rather than unwritten.
+- **The speed-of-light floor.** Without it, every ratio here has linopy as its
+  only denominator. The mechanism now exists — `bench/floor.py` hand-writes
+  `transport` from the case's cached parquet into numpy arrays and a CSR
+  matrix, ending at the same populated-`Highs` seam with `run()` never called —
+  but no number from it is published yet. When one is, the sentence becomes
+  *"we are at Nx the floor and linopy is at Mx"*.
 
 Two entries that used to be here are now measured and have moved into the file:
 `solver_direct` end to end (the `highs` sink, which now runs by default) and the

@@ -1,0 +1,40 @@
+# The scaling twin of tests/test_milp.py's COMMITMENT_YAML: a binary
+# commitment u gates a continuous dispatch p, so `vtype` streams through every
+# sink. The only case whose variables are not all continuous.
+dimensions:
+  snapshot:
+    dtype: int
+  generator:
+    dtype: str
+
+parameters:
+  p_max:
+    dims: [generator]
+  cost:
+    dims: [generator]
+  fix_cost:
+    dims: [generator]
+  load:
+    dims: [snapshot]
+
+variables:
+  u:
+    foreach: [snapshot, generator]
+    domain: binary
+  p:
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_max
+
+constraints:
+  commitment:
+    foreach: [snapshot, generator]
+    expression: p <= p_max * u
+  balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+
+objective:
+  sense: minimize
+  expression: sum(p * cost, over=generator) + sum(u * fix_cost, over=generator)

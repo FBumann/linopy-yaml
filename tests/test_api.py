@@ -320,19 +320,19 @@ def test_primal_is_a_frame_and_to_pandas_is_the_bridge(dispatch_solution):
     assert frame['value'].sum() == pytest.approx(converted['value'].sum())
 
 
-def test_no_helper_registry_anywhere():
-    """The helper set is closed — there is no way to register more, on any
+def test_no_operator_registry_anywhere():
+    """The operator set is closed — there is no way to register more, on any
     surface (#38's ``escape:`` island replaces the idea).
 
     This is what makes the two lanes accept the same language, and hence what
     makes the differential tests an oracle rather than a comparison of
     dialects (docs/ARCHITECTURE.md, "The expressive ceiling").
     """
-    import lpspec.language.helpers as helpers
+    import lpspec.language.operators as operators
 
     assert not hasattr(lps, 'register')
-    assert not hasattr(helpers, 'register')
-    assert not hasattr(helpers, '_REGISTRY')
+    assert not hasattr(operators, 'register')
+    assert not hasattr(operators, '_REGISTRY')
 
 
 def test_solution_to_dataarray(dispatch_solution):

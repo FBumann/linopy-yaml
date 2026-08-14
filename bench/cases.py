@@ -8,6 +8,11 @@ Cases are chosen so each stresses a *different* SQL shape (docs/ARCHITECTURE.md,
                where a dense eager broadcast is at its best, so our worst ratio.
                Its ``where`` is declared but *vacuous*, which is a measurement
                in itself: the engine pays for a mask that removes nothing.
+``commitment`` dispatch with a binary commitment gating every generator — the
+               MILP, and the only case whose ``vtype`` stream is not
+               all-continuous. Its bottom rung is deliberately tiny: the parity
+               gate solves it as a MIP, and the objectives only compare at
+               ``GATE_RTOL`` if branch and bound closes the gap exactly.
 ``nodal``      dispatch over (snapshot, node, tech) where a technology only
                exists at the nodes it is installed at — the sparsity every real
                multi-node model has, and the one axis where the two lanes do
@@ -28,6 +33,10 @@ Cases are chosen so each stresses a *different* SQL shape (docs/ARCHITECTURE.md,
                (node, carrier), and the objective spans both.
 ``fleet``      the same variable total spread over many declarations rather than
                one large one — the only axis it varies.
+``declarations`` ``fleet``'s question as a sweep: one model size, a unit pool
+               split into N declarations for several N, so the per-declaration
+               cost every other ladder holds fixed is varied on its own axis.
+               Its model YAML is generated per rung (``_declarations_model``).
 ``profiled``   ``nodal``'s ladder with no mask, held at the same cardinalities so
                the two differ in exactly one thing: whether the parameters span
                the variable product or a subset of it. Its availability table has
@@ -88,10 +97,28 @@ class Shape:
 @dataclass(frozen=True)
 class Case:
     name: str
-    model: Path
     ladder: tuple[Shape, ...]
     write: Callable[[Shape, Path], dict[str, str]]
     eager_inputs: Callable[[dict[str, str]], tuple[dict[str, Any], dict[str, Any]]]
+    model: Path | None = None
+    generate_model: Callable[[Shape], str] | None = None
+
+    def model_path(self, shape: Shape, cache: Path = DEFAULT_CACHE) -> Path:
+        """The YAML *shape* builds — ``model``, unless the case generates one per rung.
+
+        A generated model is cached beside the rung's data, under ``shape.key``,
+        so the two arms — separate processes — read the same file and a rung
+        never sees another rung's declarations.
+        """
+        if self.generate_model is None:
+            if self.model is None:
+                raise ValueError(f'{self.name}: neither a model file nor a generator — nothing to build')
+            return self.model
+        dest = cache / self.name / shape.key / 'model.yaml'
+        if not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(self.generate_model(shape))
+        return dest
 
     def shape(self, label: str) -> Shape:
         for s in self.ladder:
@@ -200,6 +227,56 @@ def _dispatch_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, An
     cost = pd.read_parquet(paths['cost']).set_index('generator')['value']
     load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
     data = {'p_max': p_max, 'cost': cost, 'load': load}
+    coords = {
+        'generator': pd.Index(p_max.index, name='generator'),
+        'snapshot': pd.Index(load.index, name='snapshot'),
+    }
+    return data, coords
+
+
+# --------------------------------------------------------------------------
+# commitment — dispatch's MILP twin, the case whose vtype is not all-continuous
+
+
+def _commitment_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``commitment`` ladder.
+
+    Load is ``dispatch``'s draw, so every snapshot is feasible with the whole
+    fleet on. Fix costs are drawn wide and every cost is a distinct float, so
+    the optimal commitment is a real choice — an all-on optimum would stream
+    the binaries and never branch on them.
+    """
+    rng = _seed(shape)
+    n_snap, n_gen = shape.sizes['snapshot'], shape.sizes['generator']
+    gens = [f'g{i:05d}' for i in range(n_gen)]
+
+    p_max = rng.uniform(50.0, 150.0, n_gen)
+    cost = rng.uniform(10.0, 100.0, n_gen)
+    fix_cost = rng.uniform(100.0, 2000.0, n_gen)
+    load = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
+
+    return _dump(
+        {
+            'p_max': pd.DataFrame({'generator': gens, 'value': p_max}),
+            'cost': pd.DataFrame({'generator': gens, 'value': cost}),
+            'fix_cost': pd.DataFrame({'generator': gens, 'value': fix_cost}),
+            'load': pd.DataFrame({'snapshot': np.arange(n_snap), 'value': load}),
+            'generator': pd.DataFrame({'generator': gens}),
+            'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
+        },
+        dest,
+    )
+
+
+def _commitment_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+    p_max = pd.read_parquet(paths['p_max']).set_index('generator')['value']
+    load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
+    data = {
+        'p_max': p_max,
+        'cost': pd.read_parquet(paths['cost']).set_index('generator')['value'],
+        'fix_cost': pd.read_parquet(paths['fix_cost']).set_index('generator')['value'],
+        'load': load,
+    }
     coords = {
         'generator': pd.Index(p_max.index, name='generator'),
         'snapshot': pd.Index(load.index, name='snapshot'),
@@ -481,7 +558,8 @@ FLEET_VARIABLES = (
 
 
 def _fleet_data(shape: Shape, dest: Path) -> dict[str, str]:
-    """Parquet for one rung of the ``fleet`` ladder.
+    """Parquet for one rung of the ``fleet`` ladder — and of ``declarations``,
+    whose generated models read the same three tables.
 
     Demand sits where the balance can be met three ways and all three are
     priced, so the optimum is a choice rather than "take the free one".
@@ -515,6 +593,56 @@ def _fleet_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]
         'snapshot': pd.Index(demand.index, name='snapshot'),
     }
     return data, coords
+
+
+# --------------------------------------------------------------------------
+# declarations — fleet's question as a sweep
+
+
+def _declarations_model(shape: Shape) -> str:
+    """The ``declarations`` model at this rung's declaration count.
+
+    ``fleet``'s mechanism with N as the swept axis: each declaration gets its
+    own variable, its own capacity constraint and its own objective term, and
+    one balance ties all of them to the load. Every declaration reads the same
+    three parameters over the same (snapshot, unit) product, so the rungs of
+    the sweep hold total variables and rows flat and differ *only* in how many
+    declarations carry them.
+    """
+    names = [f'v{i:03d}' for i in range(shape.sizes['declaration'])]
+    variables = '\n'.join(f'  {v}: {{foreach: [snapshot, unit], bounds: {{lower: 0, upper: p_max}}}}' for v in names)
+    caps = '\n'.join(f'  cap_{v}: {{foreach: [snapshot, unit], expression: "{v} <= p_max"}}' for v in names)
+    balance = ' + '.join(f'sum({v}, over=unit)' for v in names)
+    objective = ' + '.join(f'sum(sum({v} * cost, over=unit), over=snapshot)' for v in names)
+    return f"""# Generated by bench.cases._declarations_model — one file per rung of the
+# declaration sweep. fleet's mechanism with the declaration count as the axis.
+dimensions:
+  snapshot:
+    dtype: int
+  unit:
+    dtype: str
+
+parameters:
+  p_max:
+    dims: [unit]
+  cost:
+    dims: [unit]
+  demand:
+    dims: [snapshot]
+
+variables:
+{variables}
+
+constraints:
+{caps}
+  balance:
+    foreach: [snapshot]
+    expression: "{balance} == demand"
+
+objective:
+  sense: minimize
+  expression: "{objective}"
+"""
 
 
 # --------------------------------------------------------------------------
@@ -706,6 +834,24 @@ def _ladder(
     )
 
 
+def _declaration_sweep(pool: int, snapshots: int, counts: Sequence[int]) -> tuple[Shape, ...]:
+    """One model size, several declaration counts — rungs named ``n002``/``n008``/…
+
+    The pool of units splits into N declarations of pool/N units each, so total
+    variables, rows and snapshots are flat across the sweep and a rung differs
+    from its neighbour only in how many declarations carry them. Held at one
+    size for ``_density_sweep``'s reason: sweeping both axes at once would
+    leave no way to tell a declaration effect from a size effect.
+    """
+    for n in counts:
+        if pool % n:
+            raise ValueError(f'a pool of {pool} units does not split into {n} equal declarations')
+    return tuple(
+        Shape(f'n{n:03d}', {'declaration': n, 'unit': pool // n, 'snapshot': snapshots}, snapshots * pool)
+        for n in counts
+    )
+
+
 def _density_sweep(
     sizes: dict[str, int], snapshots: int, per_snapshot: int, densities: Sequence[float]
 ) -> tuple[Shape, ...]:
@@ -728,12 +874,26 @@ CASES: dict[str, Case] = {
         write=_dispatch_data,
         eager_inputs=_dispatch_eager,
     ),
+    'commitment': Case(
+        name='commitment',
+        model=MODELS / 'commitment.yaml',
+        ladder=_ladder({'generator': 50}, (10, 100, 1_000, 10_000, 40_000, 120_000), per_snapshot=100),
+        write=_commitment_data,
+        eager_inputs=_commitment_eager,
+    ),
     'fleet': Case(
         name='fleet',
         model=MODELS / 'fleet.yaml',
         ladder=_ladder({'unit': 50}, (20, 200, 2_000, 20_000, 80_000, 240_000), per_snapshot=600),
         write=_fleet_data,
         eager_inputs=_fleet_eager,
+    ),
+    'declarations': Case(
+        name='declarations',
+        ladder=_declaration_sweep(pool=512, snapshots=2_000, counts=(2, 8, 32, 128)),
+        write=_fleet_data,
+        eager_inputs=_fleet_eager,
+        generate_model=_declarations_model,
     ),
     'nodal': Case(
         name='nodal',

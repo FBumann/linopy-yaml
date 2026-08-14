@@ -180,6 +180,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
     import lpspec as lps
 
     symbols = {
+        'notation': 'latex',
         'dimensions': {
             'snapshot': {'index': 's', 'set': '\\mathcal{S}'},
             'generator': {'index': 'g', 'set': '\\mathcal{G}'},
@@ -207,7 +208,8 @@ Only the notation is a choice, and **How** shows the one that was made here.
     `symbols` is optional — drop it and the same model prints as
     $\mathit{load}_t$, $p^{\mathrm{max}}_g$. A dict, a YAML path or a
     `SymbolTable`; a key naming nothing in the model is an error, not a symbol that
-    silently never applies.
+    silently never applies. Every spelling is printed verbatim — `notation` says
+    which language they are, and a render in the other one refuses.
 
     Or from a shell, where the table is that same YAML on disk and `--standalone`
     emits a document that compiles rather than a fragment to `\input`:
