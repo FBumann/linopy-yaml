@@ -81,7 +81,7 @@ request can ever be met:
 
 | Tier | Bounded by | Members | Can it move? |
 |---|---|---|---|
-| **Capability-bounded** | what a given sink can ingest | indicator (#23); quadratic. `sos:` **shipped** on this tier, and is what the row predicted: native where a sink has the concept, reformulated where it does not | per sink — see below |
+| **Capability-bounded** | what a given sink can ingest | indicator (#220); quadratic. `sos:` **shipped** on this tier, and is what the row predicted: native where a sink has the concept, reformulated where it does not | per sink — see below |
 | **Budget-bounded** | the escape *label* budget — a cap on the rows and columns an island may emit | global operators, arbitrary Python, non-relational manipulation | already movable — that is what an island is |
 | **Design-bounded** | our choice of where work belongs | data prep, domain helpers, Python declaring structure | movable any time; we don't want to |
 
