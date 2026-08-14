@@ -12,6 +12,8 @@
 # entry must name something the model declares, so a typo is an error rather
 # than a symbol that silently never applies.
 
+notation: latex
+
 dimensions:
   snapshot: {index: t, set: "\\mathcal{T}"}
   generator: {index: g, set: "\\mathcal{G}"}
