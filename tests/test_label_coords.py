@@ -144,6 +144,60 @@ def test_an_inline_coordinate_is_single_valued_per_label():
         lps.build(_model(), {'load': _load(), 'snapshot': doubled})
 
 
+def _unused_target_model(month: dict) -> dict:
+    """#488's incremental multi-period shape.
+
+    The flat ``snapshot`` index declares every coordinate it will need, but no
+    constraint groups into ``month`` yet — only ``period`` is used.
+    """
+    return {
+        'dimensions': {
+            'snapshot': {'dtype': 'int', 'coords': ['period', 'month']},
+            'period': {'dtype': 'int'},
+            'month': month,
+        },
+        'parameters': {'cap': {'dims': ['period']}},
+        'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {
+            'budget': {'foreach': ['period'], 'expression': 'sum(p, over=snapshot, group_by=period) <= cap'}
+        },
+        'objectives': {'o': {'sense': 'maximize', 'expression': 'sum(p, over=snapshot)'}},
+    }
+
+
+def _unused_target_sources() -> dict:
+    return {
+        'snapshot': pl.DataFrame({'snapshot': [0, 1, 2], 'period': [2030, 2030, 2050], 'month': ['jan', 'feb', 'jan']}),
+        'cap': pl.DataFrame({'period': [2030, 2050], 'value': [5.0, 5.0]}),
+    }
+
+
+@pytest.mark.parametrize(
+    ('month', 'extra'),
+    [
+        pytest.param({'dtype': 'str'}, {'month': pl.DataFrame({'month': ['jan', 'feb']})}, id='index-in-sources'),
+        pytest.param({'values': ['jan', 'feb']}, {}, id='values-on-the-declaration'),
+    ],
+)
+def test_a_coordinate_may_target_a_dimension_nothing_spans_yet(month, extra):
+    """#488: the first build after declaring a coordinate, before its constraint exists."""
+    with lps.solve(_unused_target_model(month), _unused_target_sources() | extra) as solution:
+        assert solution.objective == pytest.approx(10.0), 'each period caps its snapshots at 5, so the model builds'
+
+
+def test_an_unused_target_still_checks_containment():
+    short = {'month': pl.DataFrame({'month': ['jan']})}
+    with pytest.raises(DataError, match="not 'month' coordinates"):
+        lps.build(_unused_target_model({'dtype': 'str'}), _unused_target_sources() | short)
+
+
+def test_an_unused_target_without_an_index_is_refused_with_the_true_reason():
+    """The old message blamed missing data the caller may well have supplied (#488)."""
+    with pytest.raises(DataError, match='no index of its own') as caught:
+        lps.build(_unused_target_model({'dtype': 'str'}), _unused_target_sources())
+    assert "Pass an index for 'month'" in str(caught.value), 'the refusal has to say what would satisfy it'
+
+
 def test_the_legend_names_a_label():
     text = typeset(_model(), FORMATS['markdown'])
     assert 'carrying label' in text
