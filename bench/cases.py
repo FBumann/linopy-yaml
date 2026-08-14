@@ -8,6 +8,11 @@ Cases are chosen so each stresses a *different* SQL shape (docs/ARCHITECTURE.md,
                where a dense eager broadcast is at its best, so our worst ratio.
                Its ``where`` is declared but *vacuous*, which is a measurement
                in itself: the engine pays for a mask that removes nothing.
+``commitment`` dispatch with a binary commitment gating every generator — the
+               MILP, and the only case whose ``vtype`` stream is not
+               all-continuous. Its bottom rung is deliberately tiny: the parity
+               gate solves it as a MIP, and the objectives only compare at
+               ``GATE_RTOL`` if branch and bound closes the gap exactly.
 ``nodal``      dispatch over (snapshot, node, tech) where a technology only
                exists at the nodes it is installed at — the sparsity every real
                multi-node model has, and the one axis where the two lanes do
@@ -222,6 +227,56 @@ def _dispatch_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, An
     cost = pd.read_parquet(paths['cost']).set_index('generator')['value']
     load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
     data = {'p_max': p_max, 'cost': cost, 'load': load}
+    coords = {
+        'generator': pd.Index(p_max.index, name='generator'),
+        'snapshot': pd.Index(load.index, name='snapshot'),
+    }
+    return data, coords
+
+
+# --------------------------------------------------------------------------
+# commitment — dispatch's MILP twin, the case whose vtype is not all-continuous
+
+
+def _commitment_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``commitment`` ladder.
+
+    Load is ``dispatch``'s draw, so every snapshot is feasible with the whole
+    fleet on. Fix costs are drawn wide and every cost is a distinct float, so
+    the optimal commitment is a real choice — an all-on optimum would stream
+    the binaries and never branch on them.
+    """
+    rng = _seed(shape)
+    n_snap, n_gen = shape.sizes['snapshot'], shape.sizes['generator']
+    gens = [f'g{i:05d}' for i in range(n_gen)]
+
+    p_max = rng.uniform(50.0, 150.0, n_gen)
+    cost = rng.uniform(10.0, 100.0, n_gen)
+    fix_cost = rng.uniform(100.0, 2000.0, n_gen)
+    load = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
+
+    return _dump(
+        {
+            'p_max': pd.DataFrame({'generator': gens, 'value': p_max}),
+            'cost': pd.DataFrame({'generator': gens, 'value': cost}),
+            'fix_cost': pd.DataFrame({'generator': gens, 'value': fix_cost}),
+            'load': pd.DataFrame({'snapshot': np.arange(n_snap), 'value': load}),
+            'generator': pd.DataFrame({'generator': gens}),
+            'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
+        },
+        dest,
+    )
+
+
+def _commitment_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+    p_max = pd.read_parquet(paths['p_max']).set_index('generator')['value']
+    load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
+    data = {
+        'p_max': p_max,
+        'cost': pd.read_parquet(paths['cost']).set_index('generator')['value'],
+        'fix_cost': pd.read_parquet(paths['fix_cost']).set_index('generator')['value'],
+        'load': load,
+    }
     coords = {
         'generator': pd.Index(p_max.index, name='generator'),
         'snapshot': pd.Index(load.index, name='snapshot'),
@@ -818,6 +873,13 @@ CASES: dict[str, Case] = {
         ladder=_ladder({'generator': 100}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100),
         write=_dispatch_data,
         eager_inputs=_dispatch_eager,
+    ),
+    'commitment': Case(
+        name='commitment',
+        model=MODELS / 'commitment.yaml',
+        ladder=_ladder({'generator': 50}, (10, 100, 1_000, 10_000, 40_000, 120_000), per_snapshot=100),
+        write=_commitment_data,
+        eager_inputs=_commitment_eager,
     ),
     'fleet': Case(
         name='fleet',

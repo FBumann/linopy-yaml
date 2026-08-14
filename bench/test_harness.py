@@ -1,8 +1,9 @@
 """The harness measures what it says it measures.
 
 `test_ladder.py` is the measurement; this is the part of it that has to be true
-for a number to mean anything. It is fast, needs no data and no rung, so it
-runs on a bare `pytest bench` before anything is timed.
+for a number to mean anything. It is fast — nothing here solves above a tiny
+rung or builds above `xs` — so it runs on a bare `pytest bench` before anything
+is timed.
 """
 
 from __future__ import annotations
@@ -14,9 +15,10 @@ from pathlib import Path
 
 import pytest
 
+from bench import floor
 from bench.cases import CASES, Shape
 from bench.conftest import _holder_if_alive, pytest_benchmark_update_machine_info, refuse_unless_idle, take_lock
-from bench.workloads import _engine
+from bench.workloads import _engine, _tables, split_sources
 
 
 def test_the_default_arm_clears_the_engine_rather_than_leaving_it() -> None:
@@ -175,3 +177,42 @@ def test_a_static_case_still_reads_its_committed_model(name: str) -> None:
     assert case.model_path(case.ladder[0]) == case.model, (
         'model_path must stay the committed file for every case that does not generate one'
     )
+
+
+def test_the_milp_case_lowers_with_both_variable_types() -> None:
+    """`commitment` only measures the vtype stream if the plan actually carries it.
+
+    The ladder's other cases are all-continuous, so a YAML edit that dropped
+    `domain: binary` would leave the case measuring dispatch under a MILP's name
+    and nothing downstream would notice — every sink handles an all-continuous
+    model happily.
+    """
+    from lpspec.language.validation import load_model
+    from lpspec.lowering import lower_program
+
+    program = lower_program(load_model(str(CASES['commitment'].model)))
+    types = {v.name: v.variable_type for v in program.variables}
+    assert types == {'u': 'binary', 'p': 'continuous'}, (
+        'the MILP case must declare one binary and one continuous variable, or vtype streaming goes unmeasured'
+    )
+
+
+def test_the_floor_builds_the_model_lpspec_builds() -> None:
+    """The floor's counts match lpspec's on `transport/xs`, so its headroom claim is about one model.
+
+    Columns, rows and nonzeros are the cheap fingerprint; `--check` compares
+    objectives on top and is run by hand. A floor that quietly dropped a term
+    would post an unbeatable time for a model nobody built.
+    """
+    import lpspec as lps
+
+    case = CASES[floor.CASE]
+    paths = case.data(case.ladder[0])
+    model = floor.arrays(floor.read(paths))
+
+    sources, coords = split_sources(case, paths)
+    with lps.build(case.model, sources, coords=coords) as bound:
+        tables = _tables(bound)
+        assert model.column_count == tables.column_count, 'the floor holds a different number of variables'
+        assert model.row_count == tables.row_count, 'the floor holds a different number of constraints'
+        assert model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
