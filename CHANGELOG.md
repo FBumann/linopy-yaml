@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.133](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.132...v0.0.1-alpha.133) (2026-08-14)
+
+
+### Bug Fixes
+
+* **bench:** a second benchmark refuses to share the machine ([#723](https://github.com/fluxopt/lpspec/issues/723)) ([f92d676](https://github.com/fluxopt/lpspec/commit/f92d676856ab3ce2bdb864001be8be5ef70ddd8a))
+
 ## [0.0.1-alpha.132](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.131...v0.0.1-alpha.132) (2026-08-14)
 
 
