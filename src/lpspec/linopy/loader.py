@@ -45,8 +45,9 @@ def build_master_coords(
     master: dict[str, pd.Index] = {}
 
     for dim_name, dim_def in schema.dimensions.items():
-        if dim_name in coords:
-            master[dim_name] = dim_index_of(coords[dim_name], dim_name)
+        supplied = supplied_index(schema, coords, dim_name)
+        if supplied is not None:
+            master[dim_name] = dim_index_of(supplied, dim_name)
         elif dim_def.values is not None:
             master[dim_name] = pd.Index(dim_def.values, name=dim_name)
         else:
@@ -58,6 +59,23 @@ def build_master_coords(
             raise DataError(msg)
 
     return master
+
+
+def supplied_index(schema: Model, coords: dict[str, Any], dim_name: str) -> Any:
+    """The index for *dim_name* the caller passed, or the one the file declares.
+
+    A lookup carrying ``values:`` puts its map in the file, so the dimension it
+    is over has an index without ``coords=`` — assembled into the same frame a
+    caller would have passed, which is why nothing downstream distinguishes the
+    two. ``coords=`` wins where both exist, as it does over ``values:``.
+
+    Returns:
+        A frame or label sequence, or ``None`` where neither supplies one.
+    """
+    if dim_name in coords:
+        return coords[dim_name]
+    declared = schema.declared_index(dim_name)
+    return None if declared is None else pd.DataFrame(declared)
 
 
 def dim_index_of(source: Any, dim_name: str) -> pd.Index:
@@ -100,7 +118,7 @@ def build_dim_coords(
         declared = {**schema.targeted_of(dim_name), **schema.labels_of(dim_name)}
         if not declared:
             continue
-        source = coords.get(dim_name)
+        source = supplied_index(schema, coords, dim_name)
         if not isinstance(source, pd.DataFrame):
             got = type(source).__name__ if source is not None else 'nothing'
             msg = (

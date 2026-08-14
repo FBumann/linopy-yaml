@@ -42,6 +42,8 @@ def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
         return obj
     if isinstance(obj, pl.DataFrame):
         return obj.lazy()
+    if isinstance(obj, dict) and obj and all(isinstance(v, list) for v in obj.values()):
+        return pl.LazyFrame(obj)
 
     xr = sys.modules.get('xarray')
     if xr is not None and isinstance(obj, xr.DataArray):
