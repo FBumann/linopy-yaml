@@ -145,6 +145,10 @@ class Result:
     #: empty mapping is a solve that left nothing, which the status reports.
     _primals: Mapping[str, pl.LazyFrame] | None
     _duals: Mapping[str, pl.LazyFrame] | None
+    #: The constraints' left-hand sides at the solution, laid out exactly as
+    #: :attr:`_duals` — same frames, same row order — and present whenever the
+    #: primals are: unlike a dual, an activity exists at any incumbent.
+    _activities: Mapping[str, pl.LazyFrame] | None
     #: Why there are no duals, when a solve that left values still has none.
     #: ``None`` whenever :attr:`_duals` holds them.
     _no_duals: str | None = None
@@ -200,7 +204,7 @@ class Result:
                 f'hands back a full-length vector of zeros either way and it is '
                 f'indistinguishable from an answer.'
             )
-        assert frames is not None, 'close() releases the primal and the dual frames together'
+        assert frames is not None, 'close() releases the primal, dual and activity frames together'
         return frames
 
     def primal(self, name: str) -> pl.DataFrame:
@@ -231,6 +235,24 @@ class Result:
         frames = self._readable(self._duals, f"the dual of '{name}'")
         if self._no_duals is not None:
             raise LpspecError(self._no_duals)
+        return _named(frames, name, 'constraint').collect(engine='streaming')
+
+    def activity(self, name: str) -> pl.DataFrame:
+        """The left-hand side of constraint *name* at the solution — ``(dims…, value)``.
+
+        :meth:`dual`'s shape and order, and the other half of a row's story:
+        how far each row's ``Σ aᵢxᵢ`` sits from its bound. The solver's own
+        number, not a recomputation. Readable whenever there is a solution —
+        unlike :meth:`dual` it is well-defined on a mixed-integer model. On an
+        ``==`` row it equals the right-hand side up to solver tolerance by
+        construction.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            LpspecError: This result was closed.
+            KeyError: No constraint is called *name*.
+        """
+        frames = self._readable(self._activities, f"the activity of '{name}'")
         return _named(frames, name, 'constraint').collect(engine='streaming')
 
     def to_pandas(self, name: str) -> pd.DataFrame:
@@ -280,7 +302,7 @@ class Result:
         out of a ``with`` block must not take down the model a loop is still
         solving, and a sibling result keeps its own.
         """
-        self._primals = self._duals = None
+        self._primals = self._duals = self._activities = None
 
     def __enter__(self) -> Result:
         return self

@@ -34,10 +34,11 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class SolveAnswer:
-    """What a solve concluded, and the two vectors it left.
+    """What a solve concluded, and the vectors it left.
 
-    Either vector may be ``None``, for different reasons: no ``primal`` means
-    the solve left nothing worth reading, while no ``dual`` is narrower — a
+    Any vector may be ``None``, for different reasons: no ``primal`` means the
+    solve left nothing worth reading — and ``activity``, each row's left-hand
+    side at that point, travels with it — while no ``dual`` is narrower: a
     mixed-integer model has none at all, and neither does a run stopped short
     of a simplex basis.
     """
@@ -46,15 +47,16 @@ class SolveAnswer:
     objective: float
     primal: pl.Series | None
     dual: pl.Series | None
+    activity: pl.Series | None
 
     @classmethod
     def unreadable(cls, status: SolveStatus) -> SolveAnswer:
         """The answer for a solve that left nothing worth reading.
 
         One home for the fact that an unreadable status carries a NaN
-        objective and neither vector, so two sinks cannot spell it apart.
+        objective and no vector at all, so two sinks cannot spell it apart.
         """
-        return cls(status, float('nan'), None, None)
+        return cls(status, float('nan'), None, None, None)
 
 
 class Solver(ABC):
@@ -167,6 +169,7 @@ class Solver(ABC):
         answer = self._run(model)
         self._spans('primal', answer.primal, model.column_count)
         self._spans('dual', answer.dual, model.row_count)
+        self._spans('activity', answer.activity, model.row_count)
         return answer
 
     def _spans(self, quantity: str, values: pl.Series | None, expected: int) -> None:

@@ -198,7 +198,8 @@ class Highs(Solver):
         solution = self._handle.getSolution()
         primal = solver_vector(solution.col_value)
         dual = solver_vector(solution.row_dual) if solution.dual_valid else None
-        return SolveAnswer(status, objective, primal, dual)
+        activity = solver_vector(solution.row_value)
+        return SolveAnswer(status, objective, primal, dual, activity)
 
     def close(self) -> None:
         """Release the loaded model. Idempotent."""

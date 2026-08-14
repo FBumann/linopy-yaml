@@ -26,6 +26,7 @@ result.is_ok  # rolled-up verdict: not an error, abort or refusal
 result.has_primal  # narrower: are there values to read
 result.primal('p')  # tidy frame (dims…, value) — the native shape
 result.dual('power_balance')  # shadow prices, the same shape and the same join
+result.activity('power_balance')  # each row's left-hand side at the solution — defined for a MILP, unlike dual
 result.to_pandas('p')  # the same, as a DataFrame
 result.to_dataarray('p')  # the same, labelled: .sel / resample / plot
 result.to_dataset()  # every variable by default; names for a subset
