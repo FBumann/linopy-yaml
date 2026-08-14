@@ -60,9 +60,16 @@ ACCEPTED = [
 #: name fits neither slot: in a variable's own where it is a self-reference
 #: (rejected at load), and on ``balance`` it spans a dim the constraint does not
 #: (a DimensionError, correctly — reducing it needs an `all`-reduction, #469).
+#: The three lookup predicates fit the slot but not the *model*: dispatch
+#: declares no lookup, and giving it one changes a fixture the rest of this
+#: file shares. They sweep a network carrying both lookup kinds and a partial
+#: one, differentially against the same oracle.
 #: Mapped rather than skipped so the coverage guard below still names a test.
 COVERED_ELSEWHERE = {
     'VariableDefinedNode': ('tests/test_relational.py::test_a_bare_variable_name_in_a_where_asks_whether_it_exists'),
+    'LookupComparisonNode': 'tests/test_label_coords.py::test_a_where_reads_a_lookup',
+    'LookupPairComparisonNode': 'tests/test_label_coords.py::test_a_lookup_where_agrees_with_the_oracle',
+    'LookupDefinedNode': 'tests/test_label_coords.py::test_a_where_reads_a_lookup',
 }
 
 

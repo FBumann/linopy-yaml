@@ -340,6 +340,22 @@ class PolarsCompiler:
                 lambda f, alias: self.parameter_join(f, param, dims, alias, f"where-parameter '{param}'", how),
             )
 
+        def join_lookup(lookup: str, over: str) -> str:
+            if over not in dims:
+                raise LanguageError(
+                    f"where-comparison on lookup '{lookup}' reads dimension '{over}', which is "
+                    f'outside the foreach dims {list(dims)} — reducing a mask over an unlisted '
+                    f'dim is not supported'
+                )
+            return carrier.once(
+                f'__where lookup {lookup}__',
+                lambda f, alias: f.join(
+                    self.data.dimensions[over].select(pl.col('val').alias(over), pl.col(lookup).alias(alias)),
+                    on=over,
+                    how='left',
+                ),
+            )
+
         def walk(p: plan.Predicate) -> pl.Expr:
             if isinstance(p, plan.ParameterComparison):
                 return _compare(pl.col(join_param(p.parameter)), p.op, p.value)
@@ -350,6 +366,17 @@ class PolarsCompiler:
                         f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
                     )
                 return _compare(_dimension_column(p.dimension, p.value), p.op, p.value)
+            if isinstance(p, plan.LookupComparison):
+                column = pl.col(join_lookup(p.lookup, p.over))
+                if isinstance(p.value, str):
+                    column = column.cast(pl.String)
+                return _compare(column, p.op, p.value)
+            if isinstance(p, plan.LookupPairComparison):
+                left = pl.col(join_lookup(p.lookup, p.over))
+                right = pl.col(join_lookup(p.other, p.over))
+                return _COLUMN_COMPARISONS[p.op](left, right)
+            if isinstance(p, plan.LookupDefined):
+                return pl.col(join_lookup(p.lookup, p.over)).is_not_null()
             if isinstance(p, plan.ParameterDefined):
                 col = pl.col(join_param(p.parameter))
                 if p.parameter in self.data.boolean_parameters:
@@ -860,6 +887,8 @@ def predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...
         return frozenset()
     if isinstance(where, plan.DimensionComparison):
         return frozenset({where.dimension})
+    if isinstance(where, (plan.LookupComparison, plan.LookupPairComparison, plan.LookupDefined)):
+        return frozenset({where.over})
     if isinstance(where, (plan.ParameterComparison, plan.ParameterDefined)):
         dims = frozenset(name_dims.get(where.parameter, ()))
         value = getattr(where, 'value', None)
@@ -914,6 +943,19 @@ def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.
     """
     column = pl.col(dimension)
     return column.cast(pl.String) if isinstance(value, str) else column
+
+
+#: Column-against-column comparison, for the one predicate whose both sides are
+#: structure. Kept apart from :func:`_compare`, which takes a literal: polars
+#: needs no ``pl.lit`` here and a shared helper would have to branch on which.
+_COLUMN_COMPARISONS: dict[plan.ComparisonOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
+    '==': lambda left, right: left == right,
+    '!=': lambda left, right: left != right,
+    '<': lambda left, right: left < right,
+    '<=': lambda left, right: left <= right,
+    '>': lambda left, right: left > right,
+    '>=': lambda left, right: left >= right,
+}
 
 
 def _compare(column: pl.Expr, op: plan.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
