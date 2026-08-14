@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.126](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.125...v0.0.1-alpha.126) (2026-08-14)
+
+
+### Bug Fixes
+
+* **engine:** a coordinate may target a dimension nothing spans yet ([#714](https://github.com/fluxopt/lpspec/issues/714)) ([f93969e](https://github.com/fluxopt/lpspec/commit/f93969e504fb543c4a1fd419f9628ff577bacd50))
+* **tests:** the coordinate-target fixture speaks the current objective surface ([#734](https://github.com/fluxopt/lpspec/issues/734)) ([5d18833](https://github.com/fluxopt/lpspec/commit/5d18833b704626ca3522fd4ef24663a93eb0c6a2))
+
 ## [0.0.1-alpha.125](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.124...v0.0.1-alpha.125) (2026-08-14)
 
 
