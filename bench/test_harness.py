@@ -210,7 +210,7 @@ def test_the_floor_builds_the_model_lpspec_builds() -> None:
     paths = case.data(case.ladder[0])
     model = floor.arrays(floor.read(paths))
 
-    sources, coords = split_sources(case, paths)
+    sources, coords = split_sources(case, case.ladder[0].label, paths)
     with lps.build(case.model, sources, coords=coords) as bound:
         tables = _tables(bound)
         assert model.column_count == tables.column_count, 'the floor holds a different number of variables'
