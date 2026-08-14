@@ -38,7 +38,7 @@ from lpspec.language.expression_parser import (
     UnaryOperatorNode,
     VariableNode,
 )
-from lpspec.language.helpers import BUILTINS, EDGE_WRAP, call_shape_error, edge_error, unknown_helper_message
+from lpspec.language.operators import BUILTINS, EDGE_WRAP, call_shape_error, edge_error, unknown_operator_message
 from lpspec.language.where_parser import (
     AndNode,
     BooleanLiteralNode,
@@ -190,7 +190,7 @@ def resolve_expression(
 ) -> ExpressionNode | None:
     """Rewrite every ``NameNode`` under *node* to a typed node.
 
-    Helper *call shapes* are checked here too (``helpers.call_shape_error``).
+    Operator *call shapes* are checked here too (``operators.call_shape_error``).
     Arity is a language rule, and this is the pass every consumer goes through,
     so neither backend has to state a signature a second time.
 
@@ -236,7 +236,7 @@ def _resolve_arith(node: ArithmeticNode, ns: Namespace, context: str, errors: li
                 errors.append(
                     f"{context}: '{node.name}' is a dimension, and a dimension is "
                     f'not a value in an expression. Dimensions appear in '
-                    f"'foreach:', in helper arguments (sum(x, over={node.name})), "
+                    f"'foreach:', in operator arguments (sum(x, over={node.name})), "
                     f'and in where-comparisons — to use its coordinates as data, '
                     f'declare a parameter over it.'
                 )
@@ -257,7 +257,7 @@ def _resolve_arith(node: ArithmeticNode, ns: Namespace, context: str, errors: li
 
     if isinstance(node, FunctionCallNode):
         if node.name not in BUILTINS:
-            errors.append(f'{context}: {unknown_helper_message(node.name)}')
+            errors.append(f'{context}: {unknown_operator_message(node.name)}')
             return node
         builtin = BUILTINS[node.name]
         shape_error = call_shape_error(node.name, len(node.args), node.kwargs)
@@ -279,7 +279,7 @@ def _resolve_arith(node: ArithmeticNode, ns: Namespace, context: str, errors: li
     if isinstance(node, KeywordNode):
         errors.append(
             f'{context}: {node.value!r} is a quoted keyword, which is only legal as a '
-            f"helper kwarg value such as shift(..., edge='wrap'). In an expression, quote "
+            f"operator kwarg value such as shift(..., edge='wrap'). In an expression, quote "
             f'nothing — names resolve and numbers are written bare.'
         )
         return node
@@ -287,19 +287,19 @@ def _resolve_arith(node: ArithmeticNode, ns: Namespace, context: str, errors: li
     assert_never(node)
 
 
-def _undeclared_dim(context: str, helper: str, shown: str, name: str, ns: Namespace) -> str:
+def _undeclared_dim(context: str, operator: str, shown: str, name: str, ns: Namespace) -> str:
     return (
-        f'{context}: {helper}({shown}) does not name a declared dimension.\n'
+        f'{context}: {operator}({shown}) does not name a declared dimension.\n'
         f'  Dimensions: {sorted(ns.dimensions)}\n'
         f"Declare '{name}' under 'dimensions:', or fix the typo — an unknown "
-        f'dimension makes {helper}() a silent no-op rather than an error.'
+        f'dimension makes {operator}() a silent no-op rather than an error.'
     )
 
 
 def _resolve_edge(
     value: ArithmeticNode,
     context: str,
-    helper: str,
+    operator: str,
     errors: list[str],
 ) -> ArithmeticNode:
     """Resolve ``edge=``: the closed keyword ``wrap``, or a number to contribute.
@@ -315,17 +315,17 @@ def _resolve_edge(
     if isinstance(value, KeywordNode):
         if value.value == EDGE_WRAP:
             return EdgeNode(EDGE_WRAP)
-        errors.append(f'{context}: {edge_error(helper, repr(value.value))}')
+        errors.append(f'{context}: {edge_error(operator, repr(value.value))}')
         return value
     if isinstance(value, NameNode):
         if value.name == EDGE_WRAP:
             errors.append(
-                f'{context}: {helper}(edge={EDGE_WRAP}) is a bare name where a keyword belongs. '
+                f'{context}: {operator}(edge={EDGE_WRAP}) is a bare name where a keyword belongs. '
                 f"Write edge='{EDGE_WRAP}' — quoted, because a bare word in a kwarg value is a "
                 f'name to resolve and this one is a literal.'
             )
             return value
-        errors.append(f'{context}: {edge_error(helper, value.name)}')
+        errors.append(f'{context}: {edge_error(operator, value.name)}')
         return value
     return value
 
@@ -334,18 +334,18 @@ def _resolve_dim_ref(
     value: ArithmeticNode,
     ns: Namespace,
     context: str,
-    helper: str,
+    operator: str,
     key: str,
     errors: list[str],
 ) -> ArithmeticNode:
-    """Resolve a helper kwarg whose *value* must name a declared dimension."""
+    """Resolve an operator kwarg whose *value* must name a declared dimension."""
     if isinstance(value, DimensionNode):
         return value
     if not isinstance(value, NameNode):
-        errors.append(f'{context}: {helper}({key}=...) must name a dimension.')
+        errors.append(f'{context}: {operator}({key}=...) must name a dimension.')
         return value
     if value.name not in ns.dimensions:
-        errors.append(_undeclared_dim(context, helper, f'{key}={value.name}', value.name, ns))
+        errors.append(_undeclared_dim(context, operator, f'{key}={value.name}', value.name, ns))
         return value
     return DimensionNode(value.name)
 
@@ -354,26 +354,26 @@ def _resolve_lookup_ref(
     value: ArithmeticNode,
     ns: Namespace,
     context: str,
-    helper: str,
+    operator: str,
     key: str,
     errors: list[str],
 ) -> ArithmeticNode:
-    """Resolve a helper kwarg whose *value* must name a groupable lookup.
+    """Resolve an operator kwarg whose *value* must name a groupable lookup.
 
     The lookup carries its own dimensions, so nothing else in the call is
-    consulted: the name alone decides both the dim the helper consumes and
+    consulted: the name alone decides both the dim the operator consumes and
     the one it produces.
     """
     if isinstance(value, LookupNode):
         return value
     if not isinstance(value, (NameNode, DimensionNode)):
-        errors.append(f'{context}: {helper}({key}=...) must name a lookup.')
+        errors.append(f'{context}: {operator}({key}=...) must name a lookup.')
         return value
     name = value.name
     if name in ns.labels:
         over = ns.labels[name]
         errors.append(
-            f'{context}: {helper}({key}={name}): '
+            f'{context}: {operator}({key}={name}): '
             f"'{name}' is a label space over '{over}', not a groupable lookup — "
             f'it targets no dimension for the terms to land on. To group into it, '
             f'declare the axis and target it under a name of its own:\n'
@@ -388,13 +388,13 @@ def _resolve_lookup_ref(
             into_here = sorted(n for n, (_, into) in ns.lookups.items() if into == name)
             hint = f"  Lookups into '{name}': {into_here}" if into_here else f"  No lookup maps into '{name}'."
             errors.append(
-                f"{context}: {helper}({key}={name}): '{name}' is a dimension, and "
+                f"{context}: {operator}({key}={name}): '{name}' is a dimension, and "
                 f'{key}= takes a lookup — the named map out of a dimension.\n{hint}'
             )
         else:
             listing = f'  Lookups: {sorted(ns.lookups)}' if ns.lookups else '  No lookups are declared.'
             errors.append(
-                f'{context}: {helper}({key}={name}) does not name a lookup.\n{listing}\n'
+                f'{context}: {operator}({key}={name}) does not name a lookup.\n{listing}\n'
                 f"Declare it under 'lookups:' — {name}: {{over: <the dimension it maps "
                 f'out of>, into: <the dimension its values are labels of>}}.'
             )

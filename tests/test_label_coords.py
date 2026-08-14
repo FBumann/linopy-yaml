@@ -195,7 +195,7 @@ def test_a_lookup_may_target_a_dimension_nothing_spans_yet(month, extra):
 
 def test_an_unused_target_still_checks_containment():
     short = {'month': pl.DataFrame({'month': ['jan']})}
-    with pytest.raises(DataError, match="not 'month' coordinates"):
+    with pytest.raises(DataError, match="not 'month' labels"):
         lps.build(_unused_target_model({'dtype': 'str'}), _unused_target_sources() | short)
 
 

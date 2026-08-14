@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Builtin:
-    """The call shape of one built-in helper.
+    """The call shape of one built-in operator.
 
     Keyword arguments come in four kinds, and the kind decides what resolution
     turns the value into: ``dimension_kwargs`` name a dimension
@@ -34,7 +34,7 @@ class Builtin:
     ``required_value_kwargs`` are ordinary values that must be present — a
     number, never a name to resolve (``shift(..., by=1)``).
 
-    Every dimension or lookup a helper names arrives in a kwarg *value*,
+    Every dimension or lookup an operator names arrives in a kwarg *value*,
     which is what lets a macro pass one as a formal. ``usage`` is the wording
     every lane quotes back.
     """
@@ -64,12 +64,12 @@ class Builtin:
         return frozenset(self.edge_kwargs) | frozenset(self.exactly_one_of)
 
 
-#: The closed helper set. ``by=`` is the one keyword that addresses a lookup,
+#: The closed operator set. ``by=`` is the one keyword that addresses a lookup,
 #: and a lookup carries its own dimensions, so the sibling kwargs that used to
 #: restate them (``sum``'s ``over=`` beside ``group_by=``, ``at``'s ``onto=``)
 #: are gone — what the two-keyword spelling once said, the name's *kind* now
 #: says, checked at load. ``shift``'s ``by=`` is a number; kinds are
-#: per-helper, which is law 4 doing the disambiguation.
+#: per-operator, which is law 4 doing the disambiguation.
 BUILTINS: dict[str, Builtin] = {
     'sum': Builtin(
         1,
@@ -133,7 +133,7 @@ def call_shape_error(name: str, positional: int, kwargs: Iterable[str]) -> str |
     return None if fits else f'{name}() expects {builtin.usage}'
 
 
-#: Spellings that were once helpers, and what replaced them. A retired name
+#: Spellings that were once operators, and what replaced them. A retired name
 #: fails at load naming its rewrite — there is no alias and no deprecation
 #: cycle, so the error *is* the migration story (CONTRIBUTING, "breaking
 #: changes are free").
@@ -141,7 +141,7 @@ RETIRED: dict[str, str] = {
     'group_sum': 'sum(<expr>, by=<lookup>)',
 }
 
-#: Kwargs that were once part of a helper's signature, and the rewrite. Same
+#: Kwargs that were once part of an operator's signature, and the rewrite. Same
 #: contract as :data:`RETIRED`: the error is the migration story.
 RETIRED_KWARGS: dict[tuple[str, str], str] = {
     ('sum', 'group_by'): (
@@ -157,16 +157,16 @@ RETIRED_KWARGS: dict[tuple[str, str], str] = {
 }
 
 
-def unknown_helper_message(name: str) -> str:
-    """The one wording for "that is not a helper", shared by both lanes."""
+def unknown_operator_message(name: str) -> str:
+    """The one wording for "that is not an operator", shared by both lanes."""
     if name in RETIRED:
         return (
-            f"'{name}' is no longer a helper — the grouping moved into `sum`, "
+            f"'{name}' is no longer an operator — the grouping moved into `sum`, "
             f'so one verb covers reducing a dim away and reducing it into '
             f'another.\nWrite: {RETIRED[name]}'
         )
     return (
-        f"Unknown helper function '{name}'.\n"
+        f"Unknown operator '{name}'.\n"
         f'Available: {sorted(BUILTIN_NAMES)}\n'
         f"Define '{name}' as a macro under 'macros:' if it composes built-ins; "
         f'if the math is not sayable in the language, use a declared escape.'

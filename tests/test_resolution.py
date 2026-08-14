@@ -112,8 +112,8 @@ def test_string_literal_rhs_still_works():
     [
         ({'parameters.snapshot': {'dims': []}}, 'collides with the dimension'),
         ({'variables.load': {'foreach': ['snapshot']}}, 'collides with the parameter'),
-        ({'parameters.sum': {'dims': []}}, "collides with the built-in helper 'sum'"),
-        ({'dimensions.sum': {'values': [1]}}, "collides with the built-in helper 'sum'"),
+        ({'parameters.sum': {'dims': []}}, "collides with the built-in operator 'sum'"),
+        ({'dimensions.sum': {'values': [1]}}, "collides with the built-in operator 'sum'"),
         ({'variables.generator': {'foreach': ['snapshot']}}, 'collides with the dimension'),
     ],
 )

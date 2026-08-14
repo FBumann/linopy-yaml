@@ -107,7 +107,7 @@ def check_coordinates_single_valued(d: str, names: list[str], frame: pl.LazyFram
     listed = '; '.join(f"'{c}' ({n} label(s))" for c, n in sorted(bad.items()))
     raise DataError(
         f"dimension '{d}' carries more than one value per label for lookup(s): "
-        f'{listed}. A coordinate is single-valued per label — reduce the source to '
+        f'{listed}. A lookup is single-valued per label — reduce the source to '
         f'one row per {d}, or model the relation as a parameter instead.'
     )
 
@@ -134,7 +134,7 @@ def check_coordinate_containment(d: str, cname: str, target: str, dimensions: Di
     shown = ', '.join(repr(v) for v in bad[cname].to_list())
     raise DataError(
         f"dimension '{d}' lookup '{cname}' has value(s) that are not "
-        f"'{target}' coordinates: {shown}. Every value must be a declared "
+        f"'{target}' labels: {shown}. Every value must be a declared "
         f"'{target}' label — otherwise sum(by={cname}) drops "
         f'those terms in the join that places them, and the model builds and '
         f'solves without them.'

@@ -11,6 +11,8 @@
 # silently, and this table will not either: lines keep $\ell$, load becomes
 # $d$ (demand). Everything else matches the page.
 
+notation: latex
+
 dimensions:
   snapshot: {index: s, set: "\\mathcal{S}"}
   generator: {index: g, set: "\\mathcal{G}"}
