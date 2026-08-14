@@ -593,7 +593,7 @@ arguments are name-checked at load time:
 |---|---|---|
 | `sum(array, over=dim)` | `dim` collapses | `array` must carry `dim` |
 | `sum(array, over=dim, group_by=coord)` | `over` → the dimension `coord` targets | `coord` is declared on `over` (§2); its values are the group labels, checked against the target dimension at bind time. The membership sum that makes topology data rather than structure; groups with no members contribute nothing |
-| `at(array, onto=dim, by=coord)` | the dimension `coord` targets → `over` | **The adjoint of `sum(group_by=)`, and deliberately the same two arguments**: `(over, by)` names one mapping table and the helper says which way it is walked. `sum(group_by=)` consumes `over` and produces the target; `at` consumes the target and produces `over`, reading one coarse value once per fine label pointing at it. Reads a *variable* as readily as a parameter, which is what a per-component decision gating its flows needs. A fine label whose coordinate is null reads nothing and its row is absent, matching `sum(group_by=)`'s null group |
+| `at(array, onto=dim, by=coord)` | the dimension `coord` targets → `over` | **The adjoint of `sum(group_by=)`, and deliberately the same two arguments**: `(over, by)` names one mapping table and the operator says which way it is walked. `sum(group_by=)` consumes `over` and produces the target; `at` consumes the target and produces `over`, reading one coarse value once per fine label pointing at it. Reads a *variable* as readily as a parameter, which is what a per-component decision gating its flows needs. A fine label whose coordinate is null reads nothing and its row is absent, matching `sum(group_by=)`'s null group |
 | `shift(array, over=dim, by=n)` | value at *t−n* | vacated positions are **absent**: they propagate and drop the row (§6) |
 | `shift(array, over=dim, by=n, edge='wrap')` | value at *t−n*, cyclic | coordinates fixed, values wrap; nothing is vacated |
 | `shift(array, over=dim, by=n, edge=v)` | value at *t−n* | vacated positions contribute the number **`v`** instead, and the row survives (`0` for a sum, `1` for a product) |
@@ -649,7 +649,10 @@ Step 4 is unavailable to a dimension declaring `coords`: it reads index columns
 only, so it cannot supply a coordinate. Otherwise it exists because a dim some
 parameter already spans needs no second declaration — but it costs the *declared
 order*, which `shift` reads positionally, so pass an explicit index whenever
-order matters. A dim that no source names and no parameter carries raises.
+order matters. It also costs a full pass — a scan plus a dedup — over *every*
+parameter carrying the dim before building starts, where an explicit index is
+read as one dim-sized table. A dim that no source names and no parameter
+carries raises.
 
 **Accepted per parameter** (declared `dims: [d1, d2]`): a parquet path; any
 table exposing the Arrow PyCapsule protocol with columns `d1, d2, value`;

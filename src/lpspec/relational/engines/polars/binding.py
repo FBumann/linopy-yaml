@@ -175,8 +175,10 @@ class _Binder:
         """Build every dimension's frame, then check its coordinates.
 
         A dimension with no explicit index has no declared order, so its labels
-        are sorted. Dimensions already registered by :meth:`sourced_dimensions`
-        are skipped. Containment runs once every frame exists: it stops a
+        are sorted — and deriving them costs a full pass, a scan plus a dedup,
+        over every parameter carrying the dimension, where an explicit index is
+        read as one dim-sized table. Dimensions already registered by
+        :meth:`sourced_dimensions` are skipped. Containment runs once every frame exists: it stops a
         mistyped coordinate from vanishing in the join that places its terms,
         leaving a model that builds and solves without them.
         """

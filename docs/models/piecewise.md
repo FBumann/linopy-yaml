@@ -170,7 +170,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
 ## What it exercises
 
-`piecewise:` is a **declaration, not a helper** — it expands before lowering
+`piecewise:` is a **declaration, not an operator** — it expands before lowering
 into the λ-formulation above. With `method: convex` the expansion emits no
 binaries at all: the convex hull is exact for a convex curve under
 minimisation, so the model stays a pure LP. `method: adjacency`, the default,

@@ -306,7 +306,7 @@ choice load-bearing in the language's rulebook.
 3. **One language, two lanes — not fast-vs-slow versions of each other.** The
    streaming engine builds models declared in YAML; the linopy lane attaches YAML
    math to a `linopy.Model` already in memory. **Both accept exactly the same
-   language**, and no helper registry exists that could create a divergence —
+   language**, and no operator registry exists that could create a divergence —
    that equality is what makes the differential tests an oracle rather than a
    comparison of dialects. A construct outside the language is a load error
    naming the construct and its rewrite, never a redirection to the other lane.
@@ -510,8 +510,8 @@ A fence says what may not happen; it does not say what belongs. The test is:
 
 Not "is it about syntax", not "does it run early" — *would a second opinion be
 wrong?* Every "one implementation each" rule in this file is that test applied:
-names resolve once (`resolution.py`), the helper set is closed (`helpers.py`)
-and a test proves both lanes implement exactly it, a primitive's dim rule lives
+names resolve once (`resolution.py`), the operator set is closed (`helpers.py`)
+and a test proves both lanes implement exactly it, an operator's dim rule lives
 only in `dimensions.py` with lowering **asking** for the verdict rather than
 deciding again, and degree lives only in `degree.py` — nothing about `x * y` is
 relational, and the ceiling doc says outright that **degree is not a property of
@@ -586,15 +586,15 @@ beside `typeset/`, a fence test naming what it may import, and a walk. It reads
 `language.load_model` and stops there — if it needs the plan it is a lane, not
 a consumer, and the ceiling doc is the conversation to have first.
 
-**Add a primitive:** grammar (usually free — `f(x, k=v)` already parses) →
+**Add an operator:** grammar (usually free — `f(x, k=v)` already parses) →
 signature in `helpers.BUILTINS` (arity and which arguments name dimensions —
 resolution, validation and lowering all read it from there, so the shape is
-declared once) → eager helper → plan node + locality class → engine →
+declared once) → eager implementation → plan node + locality class → engine →
 lowering case → differential test through a solver *and* the LP writer → SPEC
 §5/§7, and this file if structural.
 
-Three things are deliberately *not* per-primitive work, because they are one
-implementation each: a primitive's dim rule lives only in `language/dimensions.py` —
+Three things are deliberately *not* per-operator work, because they are one
+implementation each: an operator's dim rule lives only in `language/dimensions.py` —
 both its dim *set* and its verdict on an operand that lacks the dim being
 reduced along, which lowering asks for rather than deciding again — its degree
 verdict lives only in `language/degree.py`, which both lanes ask; and the
