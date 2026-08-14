@@ -1,8 +1,8 @@
 # sos
 
-A piecewise-linear cost curve stated as a **special-ordered set** — the same
-restriction [piecewise](piecewise.md) writes with binaries, handed to the
-solver as a set it branches on itself.
+A piecewise-linear cost curve stated as a **special-ordered set** —
+[piecewise](piecewise.md) with one line changed, handed to the solver as a set
+it branches on itself.
 
 ## The problem
 
@@ -16,12 +16,15 @@ $$p = \sum_k \lambda_k x_k, \quad
 \sum_k \lambda_k = 1, \quad
 \lambda \in \mathrm{SOS2}$$
 
-There are two ways to say the last line and the language now has both.
-`piecewise:` (§4) *builds* it: a binary per segment, an adjacency row per
-breakpoint, and one more row picking a segment. `sos:` (§4.1) *declares* it and
-leaves the formulation to the sink — which is the point, because a solver that
-knows what SOS2 means branches on the set directly rather than searching the
-binaries someone wrote for it.
+There are two ways to say the last line, and `method:` names them.
+`adjacency`, the default, *builds* it: a binary per segment, an adjacency row
+per breakpoint, and one more row picking a segment. `sos2` *declares* it: the
+expansion emits an `sos:` block (§4.1) over the same weights and leaves the
+formulation to the sink — which is the point, because a solver that knows what
+SOS2 means branches on the set directly rather than searching the binaries
+someone wrote for it. The raw `sos:` block stays in the language for a set
+that is not a curve — pick at most one of these build sizes, say — where there
+is no `piecewise:` declaration to emit it.
 
 ## The model
 
@@ -52,7 +55,7 @@ binaries someone wrote for it.
 |---|---|
 | $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ |
 | $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ |
-| $\mathit{lam}$ | `lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{B}$ |
+| $\mathit{cost\_curve\_lam}$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{B}$ |
 
 #### Objective
 
@@ -60,21 +63,21 @@ $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{op\_cost}_{t,
 
 #### Subject to
 
-**`convexity`**
-
-$$\sum_{b \in \mathcal{B}} \mathit{lam}_{t,g,b} = 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
-
-**`dispatch`**
-
-$$p_{t,g} = \sum_{b \in \mathcal{B}} \mathit{lam}_{t,g,b} \cdot \mathit{bp}^{\mathrm{x}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
-
-**`cost`**
-
-$$\mathit{op\_cost}_{t,g} = \sum_{b \in \mathcal{B}} \mathit{lam}_{t,g,b} \cdot \mathit{bp}^{\mathrm{y}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
-
 **`balance`**
 
 $$\sum_{g \in \mathcal{G}} p_{t,g} = \mathit{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+
+**`cost_curve_convexity`**
+
+$$\sum_{b \in \mathcal{B}} \mathit{cost\_curve\_lam}_{t,g,b} = 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`cost_curve_link0`**
+
+$$p_{t,g} = \sum_{b \in \mathcal{B}} \mathit{cost\_curve\_lam}_{t,g,b} \cdot \mathit{bp}^{\mathrm{x}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`cost_curve_link1`**
+
+$$\mathit{op\_cost}_{t,g} = \sum_{b \in \mathcal{B}} \mathit{cost\_curve\_lam}_{t,g,b} \cdot \mathit{bp}^{\mathrm{y}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 #### Variable domains
 
@@ -86,13 +89,13 @@ $$0 \le p_{t,g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal
 
 $$\mathit{op\_cost}_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
-**`lam`**
+**`cost_curve_lam`**
 
-$$0 \le \mathit{lam}_{t,g,b} \le 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B}$$
+$$0 \le \mathit{cost\_curve\_lam}_{t,g,b} \le 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B}$$
 
-**`lam sos`**
+**`cost_curve_lam sos`**
 
-$$\left( \mathit{lam}_{t,g,b} \right)_{b \in \mathcal{B}} \in \mathrm{SOS}2 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$\left( \mathit{cost\_curve\_lam}_{t,g,b} \right)_{b \in \mathcal{B}} \in \mathrm{SOS}2 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 </details>
 <!-- math:end -->
@@ -126,28 +129,16 @@ variables:
     foreach: [snapshot, generator]
     bounds:
       lower: 0
-  lam:  # convex-combination weight on each breakpoint
-    foreach: [snapshot, generator, bp]
-    bounds:
-      lower: 0
-      upper: 1
 
-sos:
-  on_one_segment:  # at most two neighbouring weights — the curve, not its hull
-    variable: lam
+piecewise:
+  cost_curve:
     over: bp
-    type: 2
+    links:
+      - [p, bp_x]
+      - [op_cost, bp_y]
+    method: sos2  # the restriction the default builds from binaries, declared as a set
 
 constraints:
-  convexity:
-    foreach: [snapshot, generator]
-    expression: sum(lam, over=bp) == 1
-  dispatch:
-    foreach: [snapshot, generator]
-    expression: p == sum(lam * bp_x, over=bp)
-  cost:
-    foreach: [snapshot, generator]
-    expression: op_cost == sum(lam * bp_y, over=bp)
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
@@ -159,10 +150,12 @@ objective:
 
 ## What it exercises
 
-`sos:` is the one declaration that adds neither a column nor a row. It names
-columns the variable already made and says which of them may be nonzero
-together, so it leaves the engine as a **fifth stream** beside `cols`, `obj`,
-`rows` and the matrix.
+`method: sos2` expands into the same weights, convexity row and link rows as
+the default — plus a set instead of the segment binaries. That set is the one
+declaration that adds neither a column nor a row: it names columns the
+expansion already made and says which of them may be nonzero together, so it
+leaves the engine as a **fifth stream** beside `cols`, `obj`, `rows` and the
+matrix.
 
 That stream is also the one a sink may not be able to take, which is what makes
 this model worth reading beside `piecewise`:
@@ -174,16 +167,17 @@ this model worth reading beside `piecewise`:
 | `highs` | **no SOS concept** — the set arrives reformulated, as a binary per segment and a linking row per member |
 
 So the same file runs everywhere, and what differs is the *search*, not the
-answer. On HiGHS the reformulation is very nearly what `piecewise:` would have
-emitted, which is the honest summary of what a capability gap costs here: a
-worse relaxation, never a refusal. Two conditions come with it — every member
-needs a finite upper bound (`lam` has one), and the result is mixed-integer, so
-an otherwise-continuous model gives up its duals.
+answer. On HiGHS the reformulation is very nearly what `method: adjacency`
+would have emitted, which is the honest summary of what a capability gap costs
+here: a worse relaxation, never a refusal. Two conditions come with it — every
+member needs a finite upper bound (the emitted weights carry one), and the
+result is mixed-integer, so an otherwise-continuous model gives up its duals.
 
-Compare [piecewise](piecewise.md), which reaches the same feasible set through
-a declaration that expands *before* the plan exists: by the time the model is
-built there is nothing left called piecewise, where a set is still a set right
-up to the sink that takes it.
+Compare [piecewise](piecewise.md) — the same file to the word, except
+`method: convex`. Both expand before the plan exists, and nothing called
+*piecewise* survives into it; what differs is what the expansion leaves
+behind: a pure LP there, and here a set that is still a set right up to the
+sink that takes it.
 
 ---
 
