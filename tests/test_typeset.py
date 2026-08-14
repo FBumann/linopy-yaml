@@ -363,6 +363,12 @@ REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 #: Declared rather than assumed: `test_every_summary_declares_itself` fails on a
 #: page in neither list, so a new summary cannot quietly opt out of the check.
 DIVERGENT = {
+    'reserves': (
+        'compresses two constraints into reader notation: phi, sigma and the barred '
+        'p_max stand in for the spelled-out parameter names the generator '
+        'writes, and the zone contraction names the grouped reserve as one '
+        'inner sum where the model reaches it through a named expression.'
+    ),
     'multi_period': (
         "renders the objective as one sum over the union of both terms' dims. The "
         'capex term carries (period, generator) and the operating term carries '

@@ -50,6 +50,7 @@ nav:
           - special-ordered sets: models/sos.md
           - monthly budget: models/monthly_budget.md
           - multi-period: models/multi_period.md
+          - reserves: models/reserves.md
           - walkthrough: models/walkthrough.md
       - The PyPSA ladder:
           - rung 1 — transport: models/pypsa_transport.md

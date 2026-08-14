@@ -1,0 +1,101 @@
+dimensions:
+  bus:
+    dtype: str
+    values: [b1, b2]
+  generator:
+    dtype: str
+  market:
+    dtype: str
+    values: [m1, m2]
+  tranche:
+    dtype: str
+    values: [fast, slow]
+  zone:
+    dtype: str
+    values: [z1, z2]
+  line:
+    dtype: str
+  offer:
+    dtype: str
+
+lookups:
+  gen_bus: {over: generator, into: bus}  # every generator sits on a bus
+  from: {over: line, into: bus}  # both endpoints are buses; an open end is null
+  to: {over: line, into: bus}
+  gen_of: {over: offer, into: generator}  # an offer is one (generator, market, tranche) edge
+  market_of: {over: offer, into: market}
+  tranche_of: {over: offer, into: tranche}
+
+parameters:
+  p_max:
+    dims: [generator]
+  energy_cost:
+    dims: [generator]
+  load:
+    dims: [bus]
+  cap:
+    dims: [line]
+  neg_cap:
+    dims: [line]
+  bus_cap:
+    dims: [bus]
+  offer_cost:
+    dims: [offer]
+  req:
+    dims: [market]
+  tranche_frac:
+    dims: [tranche]
+  # Overlapping reserve zones: a generator may back several zones, at a
+  # per-zone weight, so this cannot be a lookup over `generator` — a lookup is
+  # single-valued per label. It is a parameter over both dims, and rows are
+  # absent where a generator backs no part of a zone.
+  zone_share:
+    dims: [generator, zone]
+  zone_req:
+    dims: [zone]
+
+variables:
+  p:
+    foreach: [generator]
+    bounds:
+      lower: 0
+  f:
+    foreach: [line]
+    bounds:
+      lower: neg_cap
+      upper: cap
+  r:
+    foreach: [offer]
+    bounds:
+      lower: 0
+
+expressions:
+  reserve_of: sum(r, over=offer, group_by=gen_of)
+
+constraints:
+  balance:
+    foreach: [bus]
+    expression: >-
+      sum(p, over=generator, group_by=gen_bus)
+      + sum(f, over=line, group_by=to)
+      - sum(f, over=line, group_by=from)
+      == load
+  export_cap:
+    foreach: [line]
+    expression: f <= at(bus_cap, onto=line, by=from)
+  requirement:
+    foreach: [market]
+    expression: sum(r, over=offer, group_by=market_of) >= req
+  headroom:
+    foreach: [generator]
+    expression: p + reserve_of <= p_max
+  offer_cap:
+    foreach: [offer]
+    expression: r <= at(tranche_frac, onto=offer, by=tranche_of) * at(p_max, onto=offer, by=gen_of)
+  zone_cover:
+    foreach: [zone]
+    expression: sum(zone_share * reserve_of, over=generator) >= zone_req
+
+objective:
+  sense: minimize
+  expression: p * energy_cost + r * offer_cost

@@ -45,6 +45,7 @@ drift from what the engine builds.
 | [monthly_budget](monthly_budget.md) | **✔** 9500 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [multi_period](multi_period.md) | **✔** 10020 | **✓** | · | · | · | · | **✓** | · | · | · |
 | [piecewise](piecewise.md) | **✔** 3850 | **✓** | · | · | · | · | **✓** | **✓** | · | · |
+| [reserves](reserves.md) | **✔** 915 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [sos](sos.md) | · | **✓** | · | · | · | · | **✓** | **✓** | **✓** | · |
 | [storage](storage.md) | **✔** 5650 | **✓** | · | · | **✓** | · | **✓** | · | · | · |
 | [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | **✓** | · | · | · |
@@ -105,6 +106,7 @@ that class, and the evidence behind
 | [pypsa_storage](pypsa_storage.md) | 15253.178322993519 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_storage.py |
 | [pypsa_transport](pypsa_transport.md) | 22000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_transport.py |
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | 24900.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py |
+| [reserves](reserves.md) | 915.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/reserves.py — agreement, not a published figure |
 | [stigler_diet](stigler_diet.md) | 0.10866227820675685 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year[^stigler_diet] |
 | [storage](storage.md) | 5650.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure |
 | [transport](transport.md) | 4400.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/transport.py — agreement, not a published figure |
