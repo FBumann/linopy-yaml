@@ -18,6 +18,7 @@ reference implementation. This directory is the source; that is the guided tour.
 | `sos.yaml` | the same curve stated as a set the solver branches on, rather than built from binaries (`method: sos2`) |
 | `monthly_budget.yaml` | a cap per calendar month: time grouped through a coordinate, exactly as a generator sits on a bus (`sum(group_by=)`) |
 | `multi_period.yaml` | capacity decided once per investment period and binding at every snapshot in it (`at()`) |
+| `reserves.yaml` | energy and reserves co-optimized on a two-bus grid: every many-to-many shape at once — a pair set reified as a dimension whose legs are lookups, and weighted membership left as data (`lookups:`, `at()`) |
 | `walkthrough.yaml` | the model `walkthrough.py` prints every pipeline stage for |
 | `rolling/` | a storage schedule solved a window at a time, and what the lookahead buys (`solve_over`, `EachWindow`) |
 | `myopic/` | an investment pathway over periods of typical days, each inheriting the last one's fleet (`solve_over`, `carry`) |
