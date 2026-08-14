@@ -49,8 +49,6 @@ commitment at all — see [the ledger](index.md#ledger--what-a-port-could-not-sa
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \mathit{start\_up}_{t,g} \cdot \mathit{start\_up\_cost}_{g} + \mathit{shut\_down}_{t,g} \cdot \mathit{shut\_down\_cost}_{g} \right)$$
 
 #### Subject to
@@ -190,10 +188,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, generator]
         expression: shut_down + status - shift(status, over=snapshot, by=1) >= 0
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: p * marginal_cost + start_up * start_up_cost + shut_down * shut_down_cost
+    objective:
+      sense: minimize
+      expression: p * marginal_cost + start_up * start_up_cost + shut_down * shut_down_cost
     ```
 
     ```python

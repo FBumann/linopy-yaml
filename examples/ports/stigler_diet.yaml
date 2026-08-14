@@ -31,7 +31,6 @@ constraints:
     foreach: [nutrient]
     expression: sum(spend * nutrient_per_dollar, over=food) >= daily_minimum
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: spend
+objective:
+  sense: minimize
+  expression: spend

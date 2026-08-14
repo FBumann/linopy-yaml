@@ -48,7 +48,7 @@ MODEL = {
     'parameters': {'cost': {'dims': ['f']}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'foreach': ['f'], 'expression': 'x <= cap'}},
-    'objectives': {'o': {'sense': 'maximize', 'expression': 'x * cost'}},
+    'objective': {'sense': 'maximize', 'expression': 'x * cost'},
 }
 
 ACCEPTED = 'accepted'

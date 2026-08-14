@@ -20,7 +20,6 @@ constraints:
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) >= load
-objectives:
-  operating_cost:
-    sense: minimize
-    expression: p * cost
+objective:
+  sense: minimize
+  expression: p * cost

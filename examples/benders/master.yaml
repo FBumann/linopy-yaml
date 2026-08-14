@@ -27,7 +27,6 @@ constraints:
   feasibility_cut:
     foreach: [fcut]
     expression: sum(fcut_slope * cap, over=generator) <= fcut_const
-objectives:
-  investment_plus_operating:
-    sense: minimize
-    expression: cap * invest + theta
+objective:
+  sense: minimize
+  expression: cap * invest + theta

@@ -53,7 +53,6 @@ constraints:
       + n * travel
       <= n - 1
 
-objectives:
-  tour_length:
-    sense: minimize
-    expression: travel * distance
+objective:
+  sense: minimize
+  expression: travel * distance

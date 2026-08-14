@@ -33,7 +33,6 @@ constraints:
     foreach: [month, generator]
     expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: sum(p * cost, over=generator)
+objective:
+  sense: minimize
+  expression: sum(p * cost, over=generator)

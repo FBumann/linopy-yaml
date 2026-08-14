@@ -33,7 +33,7 @@ DISJOINT_MODEL = {
         'y': {'foreach': ['j'], 'bounds': {'lower': 1, 'upper': 1}},
     },
     'constraints': {'floor': {'foreach': ['i'], 'expression': 'x >= 0'}},
-    'objectives': {'o': {'sense': 'minimize', 'expression': 'x * a + y * b'}},
+    'objective': {'sense': 'minimize', 'expression': 'x * a + y * b'},
 }
 
 
@@ -76,7 +76,7 @@ def test_a_term_is_summed_over_its_own_dims(data, expression, expected, broadcas
     something applied to the group rather than holding only at the top of the
     expression.
     """
-    model = {**DISJOINT_MODEL, 'objectives': {'o': {'sense': 'minimize', 'expression': expression}}}
+    model = {**DISJOINT_MODEL, 'objective': {'sense': 'minimize', 'expression': expression}}
     with differential(model, data) as run:
         assert run.oracle == pytest.approx(expected)
         assert run.oracle != pytest.approx(broadcast_would_give) or expected == broadcast_would_give

@@ -248,8 +248,7 @@ constraints:
   c:
     foreach: [t]
     expression: "x * shift(eff, over=t, by=1, edge=1) <= 10"
-objectives:
-  o: {sense: maximize, expression: "sum(x, over=t)"}
+objective: {sense: maximize, expression: "sum(x, over=t)"}
 """
 
 
@@ -277,7 +276,7 @@ EDGE_MODEL = {
     'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}, 'wrap': {'dtype': 'str', 'values': ['a', 'b']}},
     'parameters': {'c': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t', 'wrap'], 'bounds': {'lower': 0, 'upper': 5}}},
-    'objectives': {'o': {'sense': 'maximize', 'expression': 'x * c'}},
+    'objective': {'sense': 'maximize', 'expression': 'x * c'},
 }
 
 
@@ -338,7 +337,7 @@ def _shift_over_data(where: str | None = None, edge: str | None = None) -> dict[
         'parameters': {'dt': {'dims': ['t']}},
         'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'c': constraint},
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'x'}},
+        'objective': {'sense': 'maximize', 'expression': 'x'},
     }
 
 
@@ -411,7 +410,7 @@ def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
         'parameters': {'c': {'dims': ['g']}},
         'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'k': {'foreach': ['t', 'g'], 'expression': f'p <= 0.5 * {rhs} + 1'}},
-        'objectives': {'o': {'sense': 'maximize', 'expression': 'p * c'}},
+        'objective': {'sense': 'maximize', 'expression': 'p * c'},
     }
     data = {'c': pd.Series([1.0, 2.0], index=pd.Index(['a', 'b'], name='g'))}
     with differential(model, data) as run:

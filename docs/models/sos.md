@@ -56,8 +56,6 @@ binaries someone wrote for it.
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{op\_cost}_{t,g}$$
 
 #### Subject to
@@ -154,10 +152,9 @@ constraints:
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: op_cost
+objective:
+  sense: minimize
+  expression: op_cost
 ```
 
 ## What it exercises

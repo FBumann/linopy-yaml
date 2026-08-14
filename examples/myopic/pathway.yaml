@@ -48,7 +48,6 @@ constraints:
     foreach: [day, hour]
     expression: sum(p, over=generator) == load
 
-objectives:
-  cost:
-    sense: minimize
-    expression: sum(invest * build, over=generator) + sum(weight * cost * p, over=generator)
+objective:
+  sense: minimize
+  expression: sum(invest * build, over=generator) + sum(weight * cost * p, over=generator)

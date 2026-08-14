@@ -52,8 +52,6 @@ them, 18200.
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g}$$
 
 #### Subject to
@@ -148,10 +146,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, generator]
         expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: p * marginal_cost
+    objective:
+      sense: minimize
+      expression: p * marginal_cost
     ```
 
     ```python

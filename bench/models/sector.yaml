@@ -49,8 +49,7 @@ constraints:
     where: "demand"
     expression: sum(p * produces, over=tech) == demand
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * cost
+objective:
+  sense: minimize
+  expression: p * cost
 

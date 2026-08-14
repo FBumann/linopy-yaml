@@ -63,8 +63,6 @@ The [instance](https://github.com/fluxopt/lpspec/blob/main/examples/ports/data/t
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{p \in \mathcal{P},\enspace m \in \mathcal{M}} \frac{\mathit{scaled}_{p,m} \cdot \mathit{distance}_{p,m} \cdot \mathit{freight}}{1000}$$
 
 #### Subject to
@@ -184,10 +182,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [market]
         expression: sum(shipment, over=plant) >= demand
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: scaled * distance * freight / 1000
+    objective:
+      sense: minimize
+      expression: scaled * distance * freight / 1000
     ```
 
     ```python

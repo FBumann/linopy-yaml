@@ -31,7 +31,7 @@ def _model(objective: str = 'sum(x, over=snapshot)') -> dict:
         'parameters': {'load': {'dims': ['snapshot']}},
         'variables': {'x': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'c': {'foreach': ['snapshot'], 'expression': 'x >= load'}},
-        'objectives': {'o': {'sense': 'minimize', 'expression': objective}},
+        'objective': {'sense': 'minimize', 'expression': objective},
     }
 
 
@@ -114,9 +114,7 @@ def test_a_dimension_grouped_into_draws_no_advice():
         'parameters': {'cost': {'dims': ['generator']}},
         'variables': {'p': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'c': {'foreach': ['generator'], 'expression': 'p <= 1'}},
-        'objectives': {
-            'o': {'sense': 'minimize', 'expression': 'sum(sum(p * cost, over=generator, group_by=bus), over=bus)'}
-        },
+        'objective': {'sense': 'minimize', 'expression': 'sum(sum(p * cost, over=generator, group_by=bus), over=bus)'},
     }
     with warnings.catch_warnings():
         warnings.simplefilter('error')

@@ -58,7 +58,6 @@ constraints:
     foreach: [snapshot, generator]
     expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * marginal_cost
+objective:
+  sense: minimize
+  expression: p * marginal_cost

@@ -31,8 +31,6 @@ The dispatch model plus a macro and a named expression — the one used to print
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{s \in \mathcal{S}} \sum_{g \in \mathcal{G}} p_{s,g} \cdot c_{g}$$
 
 #### Subject to
@@ -92,10 +90,9 @@ constraints:
     foreach: [snapshot]
     expression: total_supply == load
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: weighted_sum(p, cost, over=generator)
+objective:
+  sense: minimize
+  expression: weighted_sum(p, cost, over=generator)
 ```
 
 ## What it exercises

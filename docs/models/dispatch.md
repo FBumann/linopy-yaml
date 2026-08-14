@@ -42,8 +42,6 @@ $$\min \sum_{s,g} c_g \thinspace p_{s,g}
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{s \in \mathcal{S},\enspace g \in \mathcal{G}} p_{s,g} \cdot c_{g}$$
 
 #### Subject to
@@ -93,10 +91,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: p * cost
+    objective:
+      sense: minimize
+      expression: p * cost
     ```
 
     ```python

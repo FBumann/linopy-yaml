@@ -115,7 +115,6 @@ constraints:
       + p_store * efficiency_store
       - p_dispatch / efficiency_dispatch
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * marginal_cost
+objective:
+  sense: minimize
+  expression: p * marginal_cost

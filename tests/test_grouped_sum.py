@@ -210,10 +210,9 @@ constraints:
   meet:
     foreach: [g]
     expression: sum(x, over=item, group_by=grp) >= target
-objectives:
-  obj:
-    sense: minimize
-    expression: sum(x, over=item)
+objective:
+  sense: minimize
+  expression: sum(x, over=item)
 """
 
 
@@ -274,7 +273,7 @@ BROADCAST_GROUP_SUM = {
             'expression': 'sum(x * w, over=generator, group_by=bus) <= limit',
         }
     },
-    'objectives': {'o': {'sense': 'maximize', 'expression': 'x'}},
+    'objective': {'sense': 'maximize', 'expression': 'x'},
 }
 
 #: g1 and g2 share a bus, so grouping merges two rows carrying the *same*
@@ -337,7 +336,7 @@ BROADCAST_OBJECTIVE = {
     'parameters': {'w': {'dims': ['snapshot']}, 'floor': {'dims': ['bus']}},
     'variables': {'y': {'foreach': ['bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'atleast': {'foreach': ['bus'], 'expression': 'y >= floor'}},
-    'objectives': {'c': {'sense': 'minimize', 'expression': 'y * w'}},
+    'objective': {'sense': 'minimize', 'expression': 'y * w'},
 }
 
 #: ``w`` is deliberately unequal across snapshots, so last-write-wins is not
@@ -385,7 +384,7 @@ def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
     each column holds exactly one row and the sum over it is that row. The
     aggregate must not turn a coefficient into anything but itself.
     """
-    model = override(BROADCAST_OBJECTIVE, **{'objectives.c.expression': 'y * floor'})
+    model = override(BROADCAST_OBJECTIVE, **{'objective.expression': 'y * floor'})
     with lps.build(model, BROADCAST_OBJECTIVE_SOURCES) as bound:
         obj = bound._engine._tables().obj.sort('col')
         assert obj.height == 3

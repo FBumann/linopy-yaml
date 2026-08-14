@@ -48,7 +48,6 @@ constraints:
       - sum(f, over=link, group_by=from)
       == load
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * marginal_cost
+objective:
+  sense: minimize
+  expression: p * marginal_cost

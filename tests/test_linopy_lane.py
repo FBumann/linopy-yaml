@@ -418,10 +418,10 @@ def _has_note(exc: BaseException, substring: str) -> bool:
             id='constraint-without-comparison',
         ),
         pytest.param(
-            "objectives:\n  obj:\n    expression: 'p == 1'\n",
+            "objective:\n  expression: 'p == 1'\n",
             ValueError,
             'must not contain a comparison',
-            "Objective 'obj'",
+            'The objective',
             id='objective-with-comparison',
         ),
         pytest.param(
@@ -498,10 +498,9 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
               env:
                 foreach: [f]
                 expression: "x - relmax * size <= 0"
-            objectives:
-              o:
-                sense: maximize
-                expression: "sum(x, over=f)"
+            objective:
+              sense: maximize
+              expression: "sum(x, over=f)"
         """).lstrip()
     )
     probe = textwrap.dedent(f"""
@@ -551,10 +550,9 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
           c:
             foreach: [f]
             expression: x <= 100
-        objectives:
-          o:
-            sense: maximize
-            expression: sum(x, over=f)
+        objective:
+          sense: maximize
+          expression: sum(x, over=f)
         """)
     data = {
         'ub': pd.Series([10.0], index=pd.Index(['a'], name='f')),

@@ -52,8 +52,6 @@ same construct** — `sum(group_by=)` — and time is not a special axis.
 
 #### Objective
 
-**`total_cost`**
-
 $$\min \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{t,g} \cdot c_{g}$$
 
 #### Subject to
@@ -115,10 +113,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [month, generator]
         expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
 
-    objectives:
-      total_cost:
-        sense: minimize
-        expression: sum(p * cost, over=generator)
+    objective:
+      sense: minimize
+      expression: sum(p * cost, over=generator)
     ```
 
     ```python

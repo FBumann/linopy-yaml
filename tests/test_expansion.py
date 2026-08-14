@@ -233,10 +233,9 @@ constraints:
   balance:
     foreach: [snapshot]
     expression: total_generation == load
-objectives:
-  total_cost:
-    sense: minimize
-    expression: weighted_sum(p, cost, over=generator)
+objective:
+  sense: minimize
+  expression: weighted_sum(p, cost, over=generator)
 """
 
 

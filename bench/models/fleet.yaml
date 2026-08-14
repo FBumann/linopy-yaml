@@ -68,10 +68,9 @@ constraints:
     foreach: [snapshot, unit]
     expression: "import_ + export_ <= p_max"
 
-objectives:
-  total:
-    sense: minimize
-    # every variable the balance can substitute into carries a price, so the
-    # optimum is not "use the free one" — a gate comparing 0 == 0 would pass
-    # whatever the engines did
-    expression: "sum(sum(p * cost, over=unit), over=snapshot) + sum(sum(discharge * cost, over=unit), over=snapshot) + sum(sum(import_ * cost, over=unit), over=snapshot)"
+objective:
+  sense: minimize
+  # every variable the balance can substitute into carries a price, so the
+  # optimum is not "use the free one" — a gate comparing 0 == 0 would pass
+  # whatever the engines did
+  expression: "sum(sum(p * cost, over=unit), over=snapshot) + sum(sum(discharge * cost, over=unit), over=snapshot) + sum(sum(import_ * cost, over=unit), over=snapshot)"

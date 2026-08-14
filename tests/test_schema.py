@@ -101,7 +101,7 @@ def test_a_variable_cannot_be_both_binary_and_integer():
 
 def test_invalid_sense():
     with pytest.raises(SchemaError, match=r'minimize|maximize'):
-        Model.model_validate({'objectives': {'obj': {'sense': 'unknown', 'expression': 'v'}}})
+        Model.model_validate({'objective': {'sense': 'unknown', 'expression': 'v'}})
 
 
 # ---------------------------------------------------------------------------

@@ -50,7 +50,6 @@ constraints:
     where: 't > 0'
     expression: soc == shift(soc, over=t, by=1) + charge * 0.9 - discharge
 
-objectives:
-  total:
-    sense: minimize
-    expression: sum(p * cost, over=generator)
+objective:
+  sense: minimize
+  expression: sum(p * cost, over=generator)

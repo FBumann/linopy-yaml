@@ -57,7 +57,6 @@ constraints:
     foreach: [snapshot, store]
     expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * eta - discharge
 
-objectives:
-  total_cost:
-    sense: minimize
-    expression: p * cost
+objective:
+  sense: minimize
+  expression: p * cost

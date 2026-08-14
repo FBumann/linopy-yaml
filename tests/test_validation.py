@@ -24,7 +24,7 @@ class TestValidateExpressions:
     def test_valid_schema_passes(self):
         schema = _schema(
             constraints={'cap': {'foreach': ['g'], 'expression': 'p <= p_max'}},
-            objectives={'cost': {'expression': 'sum(p, over=g)'}},
+            objective={'expression': 'sum(p, over=g)'},
         )
         validate_expressions(schema)
 
@@ -42,12 +42,12 @@ class TestValidateExpressions:
                 id='a-constraint-without-a-comparison',
             ),
             pytest.param(
-                {'objectives': {'cost': {'expression': 'sum(p, over=g) <= 5'}}},
+                {'objective': {'expression': 'sum(p, over=g) <= 5'}},
                 ('must not contain a comparison',),
                 id='an-objective-with-a-comparison',
             ),
             pytest.param(
-                {'objectives': {'cost': {'expression': 'frobnicate(p, over=g)'}}},
+                {'objective': {'expression': 'frobnicate(p, over=g)'}},
                 ("Unknown helper function 'frobnicate'",),
                 id='an-unknown-helper',
             ),
@@ -77,7 +77,7 @@ class TestValidateExpressions:
         [
             pytest.param(
                 [{'expression': 'sum(p, over=g)'}, {'expression': 'sum(p_max, over=g)'}],
-                'Split it into 2 objectives, one per rule',
+                'combine the entries into a single expression',
                 id='two-entries',
             ),
             pytest.param([{'expression': 'sum(p, over=g)'}], 'Move the single entry up', id='one-entry'),
@@ -93,12 +93,12 @@ class TestValidateExpressions:
         true and useless for a file with two entries in it.
         """
         with pytest.raises(ValueError, match=match):
-            _schema(objectives={'cost': {'equations': equations}})
+            _schema(objective={'equations': equations})
 
     def test_dim_name_kwarg_not_flagged(self):
         """Keyword-arg names are dimension names, not data references."""
         schema = _schema(
-            objectives={'cost': {'expression': 'sum(p, over=g)'}},
+            objective={'expression': 'sum(p, over=g)'},
         )
         validate_expressions(schema)
 
@@ -148,12 +148,12 @@ class TestValidateExpressions:
 
     def test_known_variable_dims_reach_the_objective(self):
         """The dim checker needs an external variable's dims wherever it needs
-        the name — objectives included, not just constraints."""
+        the name — the objective included, not just constraints."""
         Model.model_validate(
             {
                 'dimensions': {'g': {'values': ['wind', 'solar']}},
                 'parameters': {'cost': {'dims': ['g']}},
-                'objectives': {'total': {'expression': 'sum(p * cost, over=g)'}},
+                'objective': {'expression': 'sum(p * cost, over=g)'},
             },
             context={'known_variables': {'p': ['g']}},
         )
@@ -298,7 +298,7 @@ class TestDimensionKwargs:
                         'template': 'sum(array * weights, over=over)',
                     }
                 },
-                'objectives': {'obj': {'sense': 'minimize', 'expression': 'ws(p, cost, over=generator)'}},
+                'objective': {'sense': 'minimize', 'expression': 'ws(p, cost, over=generator)'},
             }
         )
         validate_expressions(schema)
@@ -371,17 +371,32 @@ class TestDimensionKwargs:
             _schema(dimensions={'g': {'dtype': dtype}}, variables={'p': {'foreach': ['g'], 'where': where}})
         )
 
-    def test_a_second_objective_is_a_load_error(self):
-        """Was: `lowering` took the last declaration and dropped the rest, so a
-        file declaring cost and emissions solved for emissions without a word.
-        """
-        with pytest.raises(ValueError, match='2 objectives declared'):
-            _schema(
-                objectives={
+    @pytest.mark.parametrize(
+        ('entries', 'match'),
+        [
+            pytest.param(
+                {
                     'cost': {'sense': 'minimize', 'expression': 'sum(p, over=g)'},
                     'emissions': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
                 },
-            )
+                'A model optimises one',
+                id='two-entries',
+            ),
+            pytest.param(
+                {'cost': {'sense': 'minimize', 'expression': 'sum(p, over=g)'}},
+                'Move the single block up',
+                id='one-entry',
+            ),
+        ],
+    )
+    def test_a_file_written_against_the_objectives_mapping_is_told_the_rewrite(self, entries, match):
+        """`objectives:` is gone — the schema holds one `objective:` block, so a
+        second declaration is unsayable rather than checked. Was: `lowering`
+        took the last declaration and dropped the rest, so a file declaring
+        cost and emissions solved for emissions without a word.
+        """
+        with pytest.raises(ValueError, match=match):
+            _schema(objectives=entries)
 
 
 def test_the_retired_group_sum_names_its_rewrite():
@@ -397,7 +412,7 @@ def test_the_retired_group_sum_names_its_rewrite():
             parameters={'c': {'dims': ['g']}, 'cap': {'dims': ['bus']}},
             variables={'p': {'foreach': ['g']}},
             constraints={'x': {'foreach': ['bus'], 'expression': 'group_sum(p, over=g, by=bus) <= cap'}},
-            objectives={'o': {'sense': 'minimize', 'expression': 'p * c'}},
+            objective={'sense': 'minimize', 'expression': 'p * c'},
         )
 
     assert 'no longer a helper' in str(exc.value)
@@ -421,7 +436,7 @@ class TestVersion:
             'parameters': {'c': {'dims': ['t']}},
             'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
             'constraints': {'r': {'foreach': ['t'], 'expression': 'x <= 1'}},
-            'objectives': {'o': {'sense': 'maximize', 'expression': 'x * c'}},
+            'objective': {'sense': 'maximize', 'expression': 'x * c'},
         }
 
     def test_absent_means_zero(self):

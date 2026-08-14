@@ -49,10 +49,9 @@ constraints:
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) >= load
-objectives:
-  total_cost:
-    sense: minimize
-    expression: cap * invest + p * cost
+objective:
+  sense: minimize
+  expression: cap * invest + p * cost
 ```
 
 ## The split is one substitution
@@ -81,10 +80,9 @@ constraints:
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) >= load
-objectives:
-  operating_cost:
-    sense: minimize
-    expression: p * cost
+objective:
+  sense: minimize
+  expression: p * cost
 ```
 
 Note what is *not* here: no `invest`, no `cap` bounds, no investment term. The
@@ -121,10 +119,9 @@ constraints:
   feasibility_cut:
     foreach: [fcut]
     expression: sum(fcut_slope * cap, over=generator) <= fcut_const
-objectives:
-  investment_plus_operating:
-    sense: minimize
-    expression: cap * invest + theta
+objective:
+  sense: minimize
+  expression: cap * invest + theta
 ```
 
 **`cut` and `fcut` take their members from data** ([§8](../SPEC.md)), so an
@@ -191,10 +188,9 @@ constraints:
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) + short >= load
-objectives:
-  total_violation:
-    sense: minimize
-    expression: short
+objective:
+  sense: minimize
+  expression: short
 ```
 
 Its optimum is zero exactly when the subproblem is feasible, and its capacity
