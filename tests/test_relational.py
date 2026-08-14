@@ -1002,6 +1002,36 @@ def test_omissions_is_empty_when_every_declared_row_is_built():
         assert bound.diagnostics().omissions.is_empty()
 
 
+def test_diagnostics_say_where_the_time_went(tmp_path):
+    """A run that is slower than it should be can say which phase the time went to.
+
+    `timings` is advisory wall time, so nothing here asserts a magnitude —
+    only that each phase that ran left a clock, that none ran backwards, and
+    that they accumulate across calls the way `solves` counts.
+    """
+    with lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as bound:
+        built = bound.diagnostics().timings
+        assert set(built) == {'bind', 'build'}, (
+            'a model only built has spent time binding sources and building frames, nowhere else'
+        )
+        assert all(seconds >= 0 for seconds in built.values()), 'a wall clock cannot run backwards'
+
+        bound.solve()
+        bound.write(tmp_path / 'model.lp')
+        ran = bound.diagnostics().timings
+        assert set(ran) == {'bind', 'build', 'handoff', 'solve', 'write'}, (
+            'a solve adds the hand-off and the solver run, a write adds the file stream'
+        )
+        assert all(seconds >= 0 for seconds in ran.values()), 'a wall clock cannot run backwards'
+
+        snapshot = dict(ran)
+        bound.solve()
+        assert bound.diagnostics().timings['solve'] >= ran['solve'], (
+            'the clocks accumulate across solves, the way `solves` counts'
+        )
+        assert ran == snapshot, 'a diagnostics snapshot is its own dict, not a view of the running clocks'
+
+
 def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
     """A chunk of rows is a chunk of *entries*, and only entries are residency.
 

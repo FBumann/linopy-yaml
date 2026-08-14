@@ -17,8 +17,10 @@ which is what :class:`~lpspec.relational.engines.polars.binding.BoundSources` sa
 from __future__ import annotations
 
 import math
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
 import polars as pl
@@ -40,7 +42,7 @@ from lpspec.relational.result import Diagnostics, Result
 from lpspec.relational.sinks.tables import SENSE
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
 
     from polars._typing import MaintainOrderJoin
 
@@ -124,6 +126,11 @@ class PolarsEngine:
         #: a fact about a *solve*, so a rebuild does not clear it.
         self._sink_columns = 0
         self._sink_rows = 0
+        #: Wall seconds each phase has spent, cumulatively — what
+        #: :meth:`diagnostics` reports as ``timings``. Kept beside the
+        #: counters for their reason: time spent is a fact about what ran,
+        #: so a rebuild adds to it rather than clearing it.
+        self._timings: dict[str, float] = {}
         self._reset()
 
     def _reset(self) -> None:
@@ -209,22 +216,24 @@ class PolarsEngine:
         self._reset()
 
         self._program = program
-        self._bound = bind(program, sources)
+        with _clocked(self._timings, 'bind'):
+            self._bound = bind(program, sources)
         self._compiler = PolarsCompiler(program, self._bound, self._variables)
 
-        cols = [self._build_variable(v) for v in program.variables]
-        sets = [self._build_sos(s, program.variable(s.variable)) for s in program.sos]
-        built = [self._build_constraint(c) for c in program.constraints]
-        objective = self._build_objective(program.objective)
+        with _clocked(self._timings, 'build'):
+            cols = [self._build_variable(v) for v in program.variables]
+            sets = [self._build_sos(s, program.variable(s.variable)) for s in program.sos]
+            built = [self._build_constraint(c) for c in program.constraints]
+            objective = self._build_objective(program.objective)
 
-        self._sos = _stack(sets, _SOS)
-        self._cols = _stack(cols, _COLS)
-        self._rows = labels.in_position_order(_stack([r for r, _ in built], _ROWS), 'row')
-        ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
-        self._matrix_starts = _row_starts(ordered, self._n_rows)
-        self._matrix = ordered.select('col', 'coeff').rechunk()
-        self._n_entries = self._matrix.height
-        self._obj = _stack([objective] if objective is not None else [], _OBJ)
+            self._sos = _stack(sets, _SOS)
+            self._cols = _stack(cols, _COLS)
+            self._rows = labels.in_position_order(_stack([r for r, _ in built], _ROWS), 'row')
+            ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
+            self._matrix_starts = _row_starts(ordered, self._n_rows)
+            self._matrix = ordered.select('col', 'coeff').rechunk()
+            self._n_entries = self._matrix.height
+            self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
     def _q(self) -> PolarsCompiler:
@@ -631,7 +640,10 @@ class PolarsEngine:
             ValueError: A suffix nothing writes.
         """
         path = Path(path)
-        sinks.writer(path.suffix.lower())(self._tables(), path)
+        write = sinks.writer(path.suffix.lower())
+        tables = self._tables()
+        with _clocked(self._timings, 'write'):
+            write(tables, path)
 
     def solve(
         self,
@@ -671,15 +683,17 @@ class PolarsEngine:
             The solution, holding this engine and the build it answered.
         """
         built = self._tables()
-        tables = sinks.ingestible(solver_name, built)
-        self._sink_columns = tables.column_count - built.column_count
-        self._sink_rows = tables.row_count - built.row_count
-        held = self._solver
-        self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
+        with _clocked(self._timings, 'handoff'):
+            tables = sinks.ingestible(solver_name, built)
+            self._sink_columns = tables.column_count - built.column_count
+            self._sink_rows = tables.row_count - built.row_count
+            held = self._solver
+            self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
         self._solves += 1
         if self._solver is not held:
             self._loads += 1
-        answer = self._solver.run(tables)
+        with _clocked(self._timings, 'solve'):
+            answer = self._solver.run(tables)
         assert answer.primal is not None or not answer.status.is_readable, (
             'a readable status must come with a primal vector'
         )
@@ -701,8 +715,8 @@ class PolarsEngine:
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show.
 
-        Answerable after :meth:`close`: every field is a count or a small
-        frame this keeps, not a read of the model it releases.
+        Answerable after :meth:`close`: every field is a count, a clock or a
+        small frame this keeps, not a read of the model it releases.
         """
         return Diagnostics(
             columns=self._n_cols,
@@ -716,6 +730,7 @@ class PolarsEngine:
             ),
             solves=self._solves,
             loads=self._loads,
+            timings=dict(self._timings),
         )
 
     def _read_back(
@@ -837,6 +852,22 @@ class PolarsEngine:
     def __exit__(self, *exc: object) -> Literal[False]:
         self.close()
         return False
+
+
+@contextmanager
+def _clocked(timings: dict[str, float], phase: str) -> Iterator[None]:
+    """Add the block's wall time onto ``timings[phase]`` — the diagnostics clocks.
+
+    Cumulative, so a phase that runs again — a rebind's bind and build, every
+    solve after the first — adds to its total the way the counters count.
+    Recorded on failure too (the ``finally``): a build that died mid-phase
+    spent its time there, and the clocks are advisory either way.
+    """
+    started = perf_counter()
+    try:
+        yield
+    finally:
+        timings[phase] = timings.get(phase, 0.0) + perf_counter() - started
 
 
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
