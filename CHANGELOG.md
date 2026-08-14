@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.132](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.131...v0.0.1-alpha.132) (2026-08-14)
+
+
+### Refactoring
+
+* **language:** the code spells the builtins the way the docs do ([#754](https://github.com/fluxopt/lpspec/issues/754)) ([799c98b](https://github.com/fluxopt/lpspec/commit/799c98b10cd38380859bcc35436a94e9fbd99277))
+
 ## [0.0.1-alpha.131](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.130...v0.0.1-alpha.131) (2026-08-14)
 
 
