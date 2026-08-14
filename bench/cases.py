@@ -584,10 +584,9 @@ constraints:
     foreach: [snapshot]
     expression: "{balance} == demand"
 
-objectives:
-  total:
-    sense: minimize
-    expression: "{objective}"
+objective:
+  sense: minimize
+  expression: "{objective}"
 """
 
 
