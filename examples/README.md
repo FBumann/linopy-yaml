@@ -15,6 +15,9 @@ reference implementation. This directory is the source; that is the guided tour.
 | `storage.yaml` | dispatch plus a cyclic battery (`shift(edge='wrap')`) |
 | `transport.yaml` | a network: coordinates on a dimension *are* the topology (`sum(group_by=)`) |
 | `piecewise.yaml` | per-generator convex cost curves (`piecewise:`) |
+| `sos.yaml` | the same curve stated as a set the solver branches on, rather than built from binaries (`sos:`) |
+| `monthly_budget.yaml` | a cap per calendar month: time grouped through a coordinate, exactly as a generator sits on a bus (`sum(group_by=)`) |
+| `multi_period.yaml` | capacity decided once per investment period and binding at every snapshot in it (`at()`) |
 | `walkthrough.yaml` | the model `walkthrough.py` prints every pipeline stage for |
 | `rolling/` | a storage schedule solved a window at a time, and what the lookahead buys (`solve_over`, `EachWindow`) |
 | `myopic/` | an investment pathway over periods of typical days, each inheriting the last one's fleet (`solve_over`, `carry`) |
