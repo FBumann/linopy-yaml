@@ -24,6 +24,10 @@ does not parse.
 
 from __future__ import annotations
 
+import os
+import tempfile
+import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -62,6 +66,107 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     g.addoption('--builds', type=int, default=5, help='rebuilds per process in the first-vs-steady pass; 0 skips it')
     g.addoption('--io-api', default='lp-polars')
     g.addoption('--skip-gate', action='store_true', help='measure without checking the arms agree')
+    g.addoption(
+        '--i-know-another-is-running',
+        action='store_true',
+        help='start despite the machine lock or a high load average (#705); the numbers are on you',
+    )
+
+
+#: Machine-global on purpose — `tempfile.gettempdir()`, not the repo: the run
+#: this lock exists to refuse comes from *another worktree* (#705), which shares
+#: nothing with this one but the machine.
+BENCH_LOCK = Path(tempfile.gettempdir()) / 'lpspec-bench.lock'
+
+_TOOK_LOCK = pytest.StashKey[bool]()
+
+
+def _holder_if_alive(path: Path) -> str | None:
+    """The lock's own description of its holder, or None when that process is gone.
+
+    A lock that cannot be read as `pid N, ...` — or whose pid this user may not
+    signal — counts as held: the safe reading of a lock we cannot interpret is
+    that someone owns it, and the override flag is the way past a wrong guess.
+    """
+    try:
+        content = path.read_text().strip()
+    except FileNotFoundError:
+        return None
+    try:
+        os.kill(int(content.removeprefix('pid ').split(',')[0]), 0)
+    except ProcessLookupError:
+        return None
+    except (ValueError, PermissionError):
+        pass  # unreadable, or another user's live process: treat the lock as held
+    return content
+
+
+def take_lock(path: Path) -> None:
+    """Claim the machine for one benchmark session, or refuse to start.
+
+    ``O_EXCL`` makes the claim atomic, so two sessions racing for a free lock
+    resolve to one refusal rather than two holders. A lock whose holder is no
+    longer alive is evicted, so a crashed session cannot wedge the next one.
+
+    Raises:
+        pytest.UsageError: If another live session holds the lock.
+    """
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        holder = _holder_if_alive(path)
+        if holder is not None:
+            raise pytest.UsageError(
+                f'another benchmark is running ({holder}). Benchmarks do not share a machine: '
+                f'the numbers would be wrong and would look fine. Wait, or pass '
+                f'--i-know-another-is-running. Lock: {path}'
+            ) from None
+        path.unlink(missing_ok=True)
+        take_lock(path)
+        return
+    os.write(fd, f'pid {os.getpid()}, started {time.strftime("%H:%M")}'.encode())
+    os.close(fd)
+
+
+def refuse_unless_idle(load1: float, cores: int) -> None:
+    """Refuse to benchmark a machine that is already working.
+
+    The lock above only catches this harness; the load average catches
+    everything else that owns the box.
+
+    Raises:
+        pytest.UsageError: If the 1-minute load average exceeds the core count.
+    """
+    if load1 > cores:
+        raise pytest.UsageError(
+            f'1-minute load average is {load1:.2f} on {cores} cores — this machine is already '
+            f'working, and a benchmark taken now would be wrong and look fine (#419 measured '
+            f'noise floors of 176% and 344% at load 25.78 on 8 cores). Wait for idle, or pass '
+            f'--i-know-another-is-running.'
+        )
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """One benchmark per machine, refused up front rather than found in the numbers (#705).
+
+    CI exempts itself: the runners in bench.yml and codspeed.yml are
+    single-purpose, and CodSpeed counts instructions rather than wall time, so
+    the machine-sharing hazard this refuses is a developer-box one — while a
+    runner whose background load trips the threshold would fail the job for
+    nothing. The load stamp in ``machine_info`` still records what the box was
+    doing.
+    """
+    if session.config.getoption('--i-know-another-is-running') or os.environ.get('CI'):
+        return
+    take_lock(BENCH_LOCK)
+    session.config.stash[_TOOK_LOCK] = True
+    refuse_unless_idle(os.getloadavg()[0], os.cpu_count() or 1)
+
+
+def pytest_sessionfinish(session: pytest.Session) -> None:
+    """Release the machine — only a lock this session took, never another holder's."""
+    if session.config.stash.get(_TOOK_LOCK, False):
+        BENCH_LOCK.unlink(missing_ok=True)
 
 
 #: Fingerprinted into every result file. The published tables name these, and a
@@ -98,6 +203,11 @@ def pytest_benchmark_update_machine_info(config: pytest.Config, machine_info: di
     runner shelled out to git for. It does not record dependency versions, and
     those are what a published ratio is actually a ratio of.
 
+    The load-average triple goes in beside them (#705): the session refuses to
+    start on a busy machine, but a run forced past that — or one the load crept
+    up on — leaves a file that looks complete, and the stamp is what lets it be
+    recognised as contaminated after the fact.
+
     ``optionalhook`` because the spec is pytest-benchmark's and that plugin is
     not always installed: the CodSpeed job runs this same suite with only
     pytest-codspeed, and pluggy rejects an implementation whose spec no plugin
@@ -112,6 +222,7 @@ def pytest_benchmark_update_machine_info(config: pytest.Config, machine_info: di
         except PackageNotFoundError:
             versions[pkg] = None
     machine_info['versions'] = versions
+    machine_info['load_avg'] = os.getloadavg()
 
 
 def _rungs(config: pytest.Config) -> list[tuple[str, str]]:
