@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.124](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.123...v0.0.1-alpha.124) (2026-08-14)
+
+
+### Documentation
+
+* **design:** the ceiling's indicator row names its live issue ([#712](https://github.com/fluxopt/lpspec/issues/712)) ([81facb4](https://github.com/fluxopt/lpspec/commit/81facb476923ad3d856eb81ce2e59e80eb106708))
+
 ## [0.0.1-alpha.123](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.122...v0.0.1-alpha.123) (2026-08-14)
 
 
