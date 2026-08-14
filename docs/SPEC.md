@@ -623,14 +623,17 @@ QUOTED     ::= "'" chars "'" | '"' chars '"'
 | `name OP value` | dimension | filter on the frame's own coordinate column |
 | `name` (bare) | lookup | defined: the label maps somewhere. A lookup may be **partial** (§2), and this is how a declaration asks for the labels that do map |
 | `name OP value` | lookup | filter on the lookup's column of the `over` dim's index, read on the dim it maps out of — which therefore has to be in the frame. A null value is **false**, whatever the comparator |
-| `name OP name` | two lookups | the one comparison whose both sides are structure, legal only where both are over the **same** dimension — `from != to` excludes a self-loop. Over different dims there is no row carrying both, and that is a load error |
+| `name OP name` | two lookups | the one comparison whose both sides are structure, legal only where both map out of the **same** dimension *and* into the **same** one — `from != to` excludes a self-loop. Over different dims there is no row carrying both; into different label sets no value can ever match. Either is a load error |
 | `AND` `OR` `NOT` | — | case-insensitive; `NOT` > `AND` > `OR` |
 | `True` / `False` | — | literals; `True` ≡ no `where` |
 
 Comparing two parameters is not in the language — precompute a boolean parameter
 in data prep — and neither is comparing two dimensions. Two *lookups* are the
-exception, and only over one dimension: they are two columns of one index, so
-the comparison is a filter on that table rather than a join between two. The string reading of an
+exception, and only two that share both ends: over one dimension they are two
+columns of one index, so the comparison is a filter on that table rather than a
+join between two, and into one dimension they draw from one label set, so a
+match is possible at all. A label space owns its values and is therefore never
+the other side of one. The string reading of an
 RHS name is for names the model does *not* declare, which is how a string
 coordinate is compared; a **declared** name on the RHS (parameter, variable or
 dimension) is a load error naming the near miss, because reading it as text
