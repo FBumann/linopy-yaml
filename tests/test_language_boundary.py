@@ -66,7 +66,7 @@ def test_outside_the_language_is_a_load_error(patch, match):
         lower_program(schema_of(DISPATCH, **patch))
 
 
-def test_an_unknown_helper_names_its_context_and_teaches_the_rewrite():
+def test_an_unknown_operator_names_its_context_and_teaches_the_rewrite():
     """The message is the whole test: an error that pointed at another lane
     would be telling the user to leave the language rather than restate it."""
     patch = {'constraints.power_balance.expression': 'my_helper(p, over=generator) == load'}

@@ -48,8 +48,8 @@ class TestValidateExpressions:
             ),
             pytest.param(
                 {'objective': {'expression': 'frobnicate(p, over=g)'}},
-                ("Unknown helper function 'frobnicate'",),
-                id='an-unknown-helper',
+                ("Unknown operator 'frobnicate'",),
+                id='an-unknown-operator',
             ),
             pytest.param(
                 {'constraints': {'cap': {'foreach': ['g'], 'where': 'p_max >', 'expression': 'p <= p_max'}}},
@@ -415,7 +415,7 @@ def test_the_retired_group_sum_names_its_rewrite():
             objective={'sense': 'minimize', 'expression': 'p * c'},
         )
 
-    assert 'no longer a helper' in str(exc.value)
+    assert 'no longer an operator' in str(exc.value)
     assert 'sum(<expr>, over=<dim>, group_by=<coord>)' in str(exc.value), (
         'a retired spelling has to name its rewrite, not just fail'
     )
