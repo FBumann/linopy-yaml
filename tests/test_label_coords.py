@@ -575,6 +575,55 @@ def test_a_declared_map_is_checked_without_data(values, match):
         load_model(model)
 
 
+@pytest.mark.parametrize(
+    ('dimensions', 'lookup', 'match'),
+    [
+        pytest.param(
+            {'generator': {'dtype': 'str'}, 'bus': {'values': ['north']}},
+            {'over': 'generator', 'into': 'bus', 'values': {12: 'north'}},
+            r"key 12 has type int, but dtype is 'str'",
+            id='a-key-that-is-not-the-dimensions-dtype',
+        ),
+        pytest.param(
+            {'generator': {'values': ['g1']}, 'bus': {'dtype': 'str'}},
+            {'over': 'generator', 'into': 'bus', 'values': {'g1': 12}},
+            r"value 12 has type int, but dtype is 'str'",
+            id='a-value-that-is-not-the-targets-dtype',
+        ),
+        pytest.param(
+            {'generator': {'values': ['g1']}, 'bus': {'values': ['north']}},
+            {'over': 'generator', 'dtype': 'int', 'values': {'g1': 'north'}},
+            r"value 'north' has type str, but dtype is 'int'",
+            id='a-label-space-value-that-is-not-its-own-dtype',
+        ),
+    ],
+)
+def test_a_declared_map_is_checked_against_its_dtypes(dimensions, lookup, match):
+    """The guard a dimension's own `values:` has always had, both sides of the map.
+
+    Containment covers the mistyped label only where the *other* side declares
+    its labels too, so each case here is one whose other side comes from data
+    — and the label space, which targets nothing and so has no containment
+    check at all. Left unchecked the last one is a lane disagreement rather
+    than a wrong answer: numpy compares the object array and answers, polars
+    refuses the dtype outright, on a model both accepted.
+    """
+    model = {
+        **DECLARED,
+        'dimensions': dimensions,
+        'lookups': {'gen_bus' if lookup.get('into') else 'tech': lookup},
+        'constraints': {'balance': {'foreach': ['generator'], 'expression': 'p >= 1'}},
+    }
+    with pytest.raises(LpspecError, match=match):
+        load_model(model)
+
+
+def test_a_declared_map_may_leave_a_label_unmapped():
+    """A null is the partial case, not a mistyped label — the dtype check skips it."""
+    model = {**DECLARED, 'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus', 'values': {'g1': None}}}}
+    assert load_model(model).lookups['gen_bus'].values == {'g1': None}, 'an explicit null maps nowhere and is legal'
+
+
 def test_a_label_space_lookup_may_declare_its_values_too():
     """Both kinds take the map, and a `where` reads what it declares."""
     model = {

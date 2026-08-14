@@ -195,11 +195,14 @@ lookups:
   gen_bus: {over: generator, into: bus, values: {g1: north, g2: south}}
 ```
 
-A label it omits maps to null, which is the partial case above. Where both the
-lookup and its target declare their values the containment check is decided at
-**load** (law 2) rather than at bind, which is the reason to prefer declaring a
-small map over supplying it. `coords=` still outranks it, as it outranks a
-dimension's `values:` (§8), so a declared map is a default and not a lock.
+A label it omits maps to null, which is the partial case above. Both sides are
+labels, so both carry the dtype rule a dimension's own `values:` carries — a
+key is of `over`'s dtype and a value of the target's, or of the lookup's own
+where it is a label space. Where the target declares its values too, the
+containment check joins them at **load** (law 2) rather than at bind, which is
+the reason to prefer declaring a small map over supplying it. `coords=` still
+outranks it, as it outranks a dimension's `values:` (§8), so a declared map is
+a default and not a lock.
 
 Every lookup name joins the flat namespace (law 3) — a lookup shadowing a
 dimension, its own target included, is a load error, so `generator`'s map onto
