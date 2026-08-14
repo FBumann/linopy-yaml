@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.130](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.129...v0.0.1-alpha.130) (2026-08-14)
+
+
+### Documentation
+
+* **examples:** the corpus still spells what the language replaced ([#739](https://github.com/fluxopt/lpspec/issues/739)) ([98ba17c](https://github.com/fluxopt/lpspec/commit/98ba17cf45b768e21cabc9b05a343fd897811f71))
+
 ## [0.0.1-alpha.129](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.128...v0.0.1-alpha.129) (2026-08-14)
 
 
