@@ -62,12 +62,19 @@ from lpspec import linopy as lpspec_linopy
 
 m = lpspec_linopy.build('model.yaml', data={...}, coords={...})  # -> linopy.Model
 lpspec_linopy.extend(m, 'ramp.yaml', data={...})  # mutates m in place
+m.solve(...)
+lpspec_linopy.expression(m, 'model.yaml', 'co2', data={...})  # a named quantity, read back
 ```
 
-Both are *pure producers*: YAML in, model out, nothing retained. `build` returns
-a plain `linopy.Model` — no accessor, no attached schema, no patched attributes
-— so nothing is lost across `pickle`, `deepcopy` or `to_netcdf`. To inspect the
-math, re-read the file with `lps.load_model`.
+All three are *pure*: YAML in, a model or a value out, nothing retained.
+`build` returns a plain `linopy.Model` — no accessor, no attached schema, no
+patched attributes — so nothing is lost across `pickle`, `deepcopy` or
+`to_netcdf`. To inspect the math, re-read the file with `lps.load_model`.
+`expression` is the reader the same purity forces to take `data=` again: it
+evaluates a declared named expression ([SPEC §3](../SPEC.md#3-expressions-and-macros))
+on the solved model and hands back linopy's native `.solution` — the eager
+half of `result.expression(name)`, so the differential suite can hold the two
+lanes to one answer.
 
 `extend` may reference variables already on the model (they come from the model
 argument, not from Python-side history), while the YAML must still declare every

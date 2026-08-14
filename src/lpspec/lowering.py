@@ -24,6 +24,7 @@ Semantics mirror the eager builder exactly:
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 from lpspec.errors import LanguageError
@@ -63,6 +64,8 @@ from lpspec.language.where_parser import (
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from lpspec.language.model import Model
 
 _SENSES = {'==', '<=', '>='}
@@ -152,6 +155,38 @@ def lower_program(schema: Model) -> plan.Program:
         for sname, sdef in schema.sos.items()
     )
     return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos)
+
+
+def lower_expression(schema: Model, name: str) -> plan.Expression:
+    """Compile the named expression *name* into a plan expression, on demand.
+
+    The read-time half of ``expressions:``. :func:`lower_program` lowers none
+    of them — a build pays nothing for a declared expression (SPEC §3) — so a
+    reader asks here for the one it is reading, when it is read.
+
+    Args:
+        schema: The validated model declaring *name* under ``expressions:``.
+        name: A declared expression name.
+
+    Raises:
+        KeyError: No named expression called *name*.
+        LanguageError: A construct outside the streaming language.
+    """
+    schema = expand_piecewise(schema)
+    context = f"named expression '{name}'"
+    ns = Namespace.of(schema)
+    ast = expression_of(schema.expressions[name], schema, ns, context)
+    assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
+    return _lower_expr(ast, schema, context)
+
+
+def expression_thunks(schema: Model) -> dict[str, Callable[[], plan.Expression]]:
+    """One deferred :func:`lower_expression` per declared named expression.
+
+    What a build hands the engine so a solve's result can read them: thunks,
+    never plans, because building the dict is all a build may pay (SPEC §3).
+    """
+    return {name: partial(lower_expression, schema, name) for name in schema.expressions}
 
 
 # ---------------------------------------------------------------------------

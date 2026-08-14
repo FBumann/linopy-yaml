@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from lpspec.errors import DataError, LpspecWarning
 from lpspec.language.validation import load_model
-from lpspec.lowering import advice, lower_program
+from lpspec.lowering import advice, expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
 from lpspec.sources import tidy_sources
@@ -105,7 +105,11 @@ class BoundModel:
         model is released and the exception is the caller's.
         """
         try:
-            self._engine.build(self._program, tidy_sources(self._schema, dict(self._sources), self._coords))
+            self._engine.build(
+                self._program,
+                tidy_sources(self._schema, dict(self._sources), self._coords),
+                expressions=expression_thunks(self._schema),
+            )
         except BaseException:
             self._engine.close()
             raise

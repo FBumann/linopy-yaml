@@ -156,13 +156,19 @@ class Result:
     #: empty mapping is a solve that left nothing, which the status reports.
     _primals: Mapping[str, pl.LazyFrame] | None
     _duals: Mapping[str, pl.LazyFrame] | None
-    #: The constraints' left-hand sides at the solution, laid out exactly as
+#: The constraints' left-hand sides at the solution, laid out exactly as
     #: :attr:`_duals` — same frames, same row order — and present whenever the
     #: primals are: unlike a dual, an activity exists at any incumbent.
     _activities: Mapping[str, pl.LazyFrame] | None
     #: Where this solve started, read off what actually ran — never off what
     #: was asked for.
     _started: Literal['cold', 'session']
+    #: One deferred reader per declared named expression. A callable rather
+    #: than a frame because deferral is the contract (SPEC §3): nothing about
+    #: an expression is lowered or compiled until its reader is called, so a
+    #: model that reads none pays for none. Released with the primals by
+    #: :meth:`close`, since each holds this build's frames and values.
+    _expressions: Mapping[str, Callable[[], pl.DataFrame]] | None = None
     #: Why there are no duals, when a solve that left values still has none.
     #: ``None`` whenever :attr:`_duals` holds them.
     _no_duals: str | None = None
@@ -284,6 +290,36 @@ class Result:
         frames = self._readable(self._activities, f"the activity of '{name}'")
         return _named(frames, name, 'constraint').collect(engine='streaming')
 
+    def expression(self, name: str) -> pl.DataFrame:
+        """The value of named expression *name* at this solution — ``(dims…, value)``.
+
+        The quantity the model declares under ``expressions:``, evaluated at
+        the solve's primal values and aggregated to the expression's own dims —
+        :meth:`primal`'s shape and order, over those dims in declaration order.
+        Lowered and compiled on this call, not at build, so a model that reads
+        no expression pays for none.
+
+        Takes a **declared name only**, never an expression string: what is
+        readable is exactly what the file names, so the quantity a constraint
+        bounds and the quantity a report reads are one definition.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            LpspecError: This result was closed.
+            DataError: A divisor with no value where the expression divides.
+            KeyError: No named expression is called *name*.
+        """
+        self._readable(self._primals, f"expression '{name}'")
+        readers = self._expressions or {}
+        try:
+            reader = readers[name]
+        except KeyError:
+            raise KeyError(
+                unknown_name_message('named expression', name, readers)
+                + ' expression() takes a name declared under expressions:, never an expression string.'
+            ) from None
+        return reader()
+
     def to_pandas(self, name: str) -> pd.DataFrame:
         """:meth:`primal` as a tidy :class:`pandas.DataFrame`."""
         return tidy_to_pandas(self.primal(name))
@@ -331,7 +367,7 @@ class Result:
         out of a ``with`` block must not take down the model a loop is still
         solving, and a sibling result keeps its own.
         """
-        self._primals = self._duals = self._activities = None
+        self._primals = self._duals = self._activities = self._expressions = None
 
     def __enter__(self) -> Result:
         return self

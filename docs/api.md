@@ -27,6 +27,7 @@ result.has_primal  # narrower: are there values to read
 result.primal('p')  # tidy frame (dims…, value) in label order — the native shape
 result.dual('power_balance')  # shadow prices, the same shape and the same join
 result.activity('power_balance')  # each row's left-hand side at the solution — defined for a MILP, unlike dual
+result.expression('co2')  # a named expression at the solution — same shape, its own dims
 result.to_pandas('p')  # the same, as a DataFrame
 result.to_dataarray('p')  # the same, labelled: .sel / resample / plot
 result.to_dataset()  # every variable by default; names for a subset
@@ -221,6 +222,7 @@ Reading a result:
 |---|---|
 | **`is_ok` is not `has_primal`** | `is_ok` rolls up the termination condition; `has_primal` adds the solver's verdict on whether an incumbent exists, and is what every reader gates on. A MIP that hits `time_limit` before finding a feasible point is `ok` with nothing to read |
 | reading anyway | `NoSolutionError`; `objective` is `nan` |
+| **`expression` reads what the model named** | the value of a declared named expression ([SPEC §3](SPEC.md#3-expressions-and-macros)) at the solution, aggregated to the expression's own dims (declaration order — an expression has no `foreach`). Takes a declared name only, never an expression string; an unknown one is a `KeyError` listing what is declared. Lowered and compiled **at the read**, through the same compiler the constraints use, so a build with fifty declared expressions that reads none pays for none. Semantics are a constraint's: an uncovered parameter coordinate contributes zero (SPEC §8), a coordinate where a term's variable is absent has no row (SPEC §7), an undefined divisor is a `DataError`. On the linopy lane the same read is `lpspec.linopy.expression(m, path, name, data=…)` |
 | `dual` **raises rather than zero-filling** | no values at all is `NoSolutionError`; values but no duals — any integer or binary variable makes them undefined — is `LpspecError`, because only this quantity is missing |
 | **the sink can make a model mixed-integer** | a `sos:` set ([SPEC §4.1](SPEC.md#41-sos)) reaches a solver with no SOS concept as binaries, so an otherwise continuous model solved on `highs` has no duals and says so. Solving it on `gurobi`, which branches on the set itself, keeps them |
 | duals exist only where a solver ran | either solver sink hands them back through the same join; a model written to LP and solved elsewhere never passes back through here. Reduced costs and slacks ride that join too and are not exposed yet |
@@ -367,7 +369,8 @@ have** — there is nothing to tune. (`df.lazy()` is not an optimisation: an eag
 frame is embedded in the plan, so it pickles *larger* than the frame. Only
 `scan_parquet` is a reference.)
 
-**The linopy shim** (`lpspec.linopy.build` / `.extend`, `[linopy]` extra) puts
-the same YAML math on a `linopy.Model` that already exists in memory. It is
+**The linopy shim** (`lpspec.linopy.build` / `.extend` / `.expression`,
+`[linopy]` extra) puts the same YAML math on a `linopy.Model` that already
+exists in memory, and reads a named expression back off a solved one. It is
 documented with everything else about that relationship in
 [docs/design/linopy.md](design/linopy.md#3-the-shim).
