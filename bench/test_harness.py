@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from bench.cases import CASES, Shape
 from bench.conftest import _holder_if_alive, pytest_benchmark_update_machine_info, refuse_unless_idle, take_lock
 from bench.workloads import _engine
 
@@ -113,4 +114,64 @@ def test_the_fingerprint_carries_the_load_triple(request: pytest.FixtureRequest)
     load = machine_info['load_avg']
     assert isinstance(load, tuple) and len(load) == 3, (
         'the 1/5/15-minute triple is what lets a contaminated file be recognised after the fact'
+    )
+
+
+@pytest.mark.parametrize('label', [pytest.param(s.label, id=s.label) for s in CASES['declarations'].ladder])
+def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: Path) -> None:
+    """A model file nobody committed still has to pass the front door.
+
+    Both arms parse the same YAML — the linopy arm through
+    `lpspec.linopy.build`, the lpspec arm through `lps.build` — so a generated
+    file the validator refuses would kill every rung of the sweep at once, and
+    only at run time.
+    """
+    from lpspec.language.validation import load_model
+    from lpspec.lowering import lower_program
+
+    case = CASES['declarations']
+    shape = case.shape(label)
+    schema = load_model(str(case.model_path(shape, cache=tmp_path)))
+    n = shape.sizes['declaration']
+    assert len(schema.variables) == n, 'one variable declaration per unit of the swept count'
+    assert len(schema.constraints) == n + 1, 'a capacity constraint per declaration, plus one balance'
+    lower_program(schema)
+
+
+def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
+    """Loading is not building — `sector` once passed `check()` and died in the
+    engine (#345). The sweep's own smallest rung is a million variables, so the
+    build gate runs on a tiny shape of the same generated model instead.
+    """
+    import lpspec as lps
+
+    case = CASES['declarations']
+    shape = Shape('tiny', {'declaration': 2, 'unit': 8, 'snapshot': 20}, 20 * 16)
+    paths = case.write(shape, tmp_path)
+    sources = {k: v for k, v in paths.items() if k in ('p_max', 'cost', 'demand')}
+    coords = {k: v for k, v in paths.items() if k in ('unit', 'snapshot')}
+    with lps.build(case.model_path(shape, cache=tmp_path), sources, coords=coords) as bound:
+        assert bound is not None
+
+
+def test_the_declaration_rungs_do_not_share_a_cache_key() -> None:
+    keys = [s.key for s in CASES['declarations'].ladder]
+    assert len(set(keys)) == len(keys), "rungs sharing a cache key would read each other's data and generated model"
+
+
+def test_the_declaration_sweep_holds_the_model_size_flat() -> None:
+    ladder = CASES['declarations'].ladder
+    totals = {s.sizes['declaration'] * s.sizes['unit'] * s.sizes['snapshot'] for s in ladder}
+    assert len(totals) == 1, 'a rung that moves total variables confounds the declaration axis with model size'
+    assert {s.nominal_variables for s in ladder} == totals, (
+        'nominal_variables must count every declaration, or live_fraction misreports the sweep'
+    )
+
+
+@pytest.mark.parametrize('name', [pytest.param(n, id=n) for n in sorted(CASES) if CASES[n].generate_model is None])
+def test_a_static_case_still_reads_its_committed_model(name: str) -> None:
+    case = CASES[name]
+    assert case.model is not None and case.model.exists(), 'a static case names a committed YAML file'
+    assert case.model_path(case.ladder[0]) == case.model, (
+        'model_path must stay the committed file for every case that does not generate one'
     )
