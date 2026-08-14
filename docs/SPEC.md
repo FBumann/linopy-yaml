@@ -88,6 +88,12 @@ One gap: a scalar **variable** may not carry a `where`
 ([#340](https://github.com/fluxopt/lpspec/issues/340)) — put the condition on
 the constraints that use it.
 
+**Every declaration block takes an optional `description:`** — free text, never
+parsed, no length limit, default `null`. Unlike a `#` comment it is part of the
+loaded model, so it reaches AST consumers. That is every block in this section
+plus `macros` (§3), `piecewise` (§4) and `sos` (§4.1); a named *expression* is a
+bare string, so a described one is written as a macro with no formals.
+
 **`dimensions`** — the master coordinate index. Every dimension named anywhere
 must be declared. `dtype` ∈ {`float`, `int`, `str`, `datetime`}, default `str`.
 `values` is a list or null; if null, coordinates must arrive from data (§8),
@@ -168,6 +174,7 @@ default `float`.
 | `where` | str or null | `null` — §6; variables exist only where true |
 | `bounds.lower` / `.upper` | number or parameter name | `-inf` / `inf` |
 | `binary`, `integer` | bool | `false`; not both |
+| `description` | str or null | `null` — free text, never parsed |
 
 Omitting a bound means unbounded on that side — non-negativity is written, not
 assumed. Bounds are

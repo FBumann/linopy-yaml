@@ -34,6 +34,18 @@
       "additionalProperties": false,
       "description": "A declared constraint: one rule, over one frame.",
       "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "expression": {
           "title": "Expression",
           "type": "string"
@@ -112,6 +124,18 @@
           ],
           "title": "Coords"
         },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "dtype": {
           "default": "str",
           "enum": [
@@ -152,6 +176,18 @@
           "title": "Args",
           "type": "array"
         },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "kwargs": {
           "default": [],
           "items": {
@@ -175,6 +211,18 @@
       "additionalProperties": false,
       "description": "A declared objective function.",
       "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "expression": {
           "title": "Expression",
           "type": "string"
@@ -199,6 +247,18 @@
       "additionalProperties": false,
       "description": "A declared parameter with dims and dtype.",
       "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "dims": {
           "items": {
             "type": "string"
@@ -239,6 +299,18 @@
           ],
           "default": null,
           "title": "Active"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
         },
         "links": {
           "items": {
@@ -327,6 +399,18 @@
           "default": null,
           "title": "Big M"
         },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "over": {
           "title": "Over",
           "type": "string"
@@ -364,6 +448,18 @@
         "bounds": {
           "$ref": "#/$defs/BoundsBlock",
           "default": {}
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
         },
         "foreach": {
           "items": {

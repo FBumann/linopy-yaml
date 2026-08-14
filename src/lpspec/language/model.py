@@ -158,6 +158,7 @@ class DimensionBlock(_StrictBlock):
     dtype: str = Field(default='str', json_schema_extra=_enum(DIMENSION_DTYPES))
     values: list[Any] | None = None
     coords: dict[str, str | CoordinateSpec] = Field(default_factory=dict, json_schema_extra=_coords_admits_a_list)
+    description: str | None = None
 
     @field_validator('coords', mode='before')
     @classmethod
@@ -194,6 +195,7 @@ class ParameterBlock(_StrictBlock):
 
     dims: list[str]
     dtype: str = Field(default='float', json_schema_extra=_enum(PARAMETER_DTYPES))
+    description: str | None = None
 
     @property
     def referenced_dims(self) -> list[str]:
@@ -230,6 +232,7 @@ class VariableBlock(_StrictBlock):
     bounds: BoundsBlock = BoundsBlock()
     binary: bool = False
     integer: bool = False
+    description: str | None = None
 
     @property
     def referenced_dims(self) -> list[str]:
@@ -251,6 +254,7 @@ class ConstraintBlock(_StrictBlock):
     foreach: list[str]
     where: str | None = None
     expression: str
+    description: str | None = None
 
     @property
     def referenced_dims(self) -> list[str]:
@@ -269,6 +273,7 @@ class ObjectiveBlock(_StrictBlock):
 
     sense: str = Field(default='minimize', json_schema_extra=_enum(OBJECTIVE_SENSES))
     expression: str
+    description: str | None = None
 
     @field_validator('sense')
     @classmethod
@@ -316,6 +321,7 @@ class MacroBlock(_StrictBlock):
     args: list[str] = []
     kwargs: list[str] = []
     template: str
+    description: str | None = None
 
     @model_validator(mode='after')
     def _check_formals(self) -> MacroBlock:
@@ -414,6 +420,7 @@ class PiecewiseBlock(_StrictBlock):
     links: list[PiecewiseLink]
     method: str = Field(default='adjacency', json_schema_extra=_enum(PIECEWISE_METHODS))
     active: str | None = None
+    description: str | None = None
 
     @property
     def convex(self) -> bool:
@@ -505,6 +512,7 @@ class SosBlock(_StrictBlock):
     over: str
     type: int = Field(json_schema_extra=_enum([1, 2]))
     big_m: float | None = None
+    description: str | None = None
 
     @field_validator('type')
     @classmethod

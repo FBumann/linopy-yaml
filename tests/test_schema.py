@@ -181,7 +181,7 @@ def test_an_unknown_key_is_rejected(raw, match):
         ),
         pytest.param(
             {'foreach': ['x'], 'zzzz': 1},
-            'Valid keys: binary, bounds, foreach, integer, where',
+            'Valid keys: binary, bounds, description, foreach, integer, where',
             id='anything-else-lists-the-valid-keys',
         ),
     ],
@@ -249,6 +249,97 @@ def test_a_coordinate_that_does_not_name_a_target_is_rejected(dimensions, match)
 
 
 # ---------------------------------------------------------------------------
+# `description:` — free text on every declaration kind, never parsed (#222)
+# ---------------------------------------------------------------------------
+
+
+DESCRIBED = {
+    'dimensions': {
+        'snapshot': {'dtype': 'int', 'values': [0, 1], 'description': 'the operational hours'},
+        'bp': {'dtype': 'int', 'values': [0, 1]},
+    },
+    'parameters': {
+        'load': {'dims': ['snapshot'], 'description': 'demand per hour'},
+        'bp_x': {'dims': ['bp']},
+        'bp_y': {'dims': ['bp']},
+    },
+    'variables': {
+        'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 100}, 'description': 'dispatch'},
+        'op_cost': {'foreach': ['snapshot'], 'bounds': {'lower': 0}},
+    },
+    'constraints': {
+        'balance': {'foreach': ['snapshot'], 'expression': 'p == load', 'description': 'supply meets demand'},
+    },
+    'objectives': {
+        'total': {'expression': 'sum(op_cost, over=snapshot)', 'description': 'operating cost'},
+    },
+    'macros': {
+        'weighted': {'args': ['a', 'w'], 'template': 'sum(a * w, over=snapshot)', 'description': 'a weighted sum'},
+    },
+    'piecewise': {
+        'cost_curve': {'over': 'bp', 'links': [['p', 'bp_x'], ['op_cost', 'bp_y']], 'description': 'the cost curve'},
+    },
+    'sos': {
+        'pick': {'variable': 'p', 'over': 'snapshot', 'type': 1, 'description': 'at most one hour dispatches'},
+    },
+}
+
+DECLARATION_KINDS = [
+    pytest.param('dimensions', 'snapshot', id='dimension'),
+    pytest.param('parameters', 'load', id='parameter'),
+    pytest.param('variables', 'p', id='variable'),
+    pytest.param('constraints', 'balance', id='constraint'),
+    pytest.param('objectives', 'total', id='objective'),
+    pytest.param('macros', 'weighted', id='macro'),
+    pytest.param('piecewise', 'cost_curve', id='piecewise'),
+    pytest.param('sos', 'pick', id='sos'),
+]
+
+
+@pytest.mark.parametrize(('section', 'name'), DECLARATION_KINDS)
+def test_a_description_survives_loading(section, name):
+    s = Model.model_validate(DESCRIBED)
+    block = getattr(s, section)[name]
+    assert block.description == DESCRIBED[section][name]['description'], (
+        'the description is part of the Model, so it must reach AST consumers verbatim'
+    )
+
+
+def test_an_undescribed_declaration_carries_none():
+    s = Model.model_validate(DESCRIBED)
+    assert s.variables['op_cost'].description is None, 'absent means None, never an empty string'
+
+
+@pytest.mark.parametrize(
+    ('raw', 'match'),
+    [
+        pytest.param(
+            {'description': 'a whole model'},
+            "unknown key 'description' in the top level",
+            id='top-level',
+        ),
+        pytest.param(
+            {
+                'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
+                'variables': {'v': {'foreach': ['x'], 'bounds': {'lower': 0, 'description': 'floor'}}},
+            },
+            "unknown key 'description' in a bounds block",
+            id='bounds',
+        ),
+        pytest.param(
+            {'dimensions': {'x': {'values': [1], 'coords': {'period': {'dtype': 'int', 'description': 'era'}}}}},
+            "unknown key 'description' in a coordinate declaration",
+            id='coordinate-spec',
+        ),
+    ],
+)
+def test_a_description_on_a_non_declaration_block_is_rejected(raw, match):
+    """The key belongs to declarations; the sub-blocks inside one stay closed."""
+    with pytest.raises(SchemaError, match=match):
+        Model.model_validate(raw)
+
+
+# ---------------------------------------------------------------------------
 # the published JSON Schema is these models, verbatim
 # ---------------------------------------------------------------------------
 
@@ -274,3 +365,23 @@ def test_the_json_schema_admits_what_the_loader_admits():
     )
     sense = doc['$defs']['ObjectiveBlock']['properties']['sense']
     assert sense.get('enum') == ['maximize', 'minimize'], 'sense stopped publishing its closed vocabulary'
+
+
+@pytest.mark.parametrize(
+    'block',
+    [
+        pytest.param('DimensionBlock', id='dimension'),
+        pytest.param('ParameterBlock', id='parameter'),
+        pytest.param('VariableBlock', id='variable'),
+        pytest.param('ConstraintBlock', id='constraint'),
+        pytest.param('ObjectiveBlock', id='objective'),
+        pytest.param('MacroBlock', id='macro'),
+        pytest.param('PiecewiseBlock', id='piecewise'),
+        pytest.param('SosBlock', id='sos'),
+    ],
+)
+def test_the_json_schema_publishes_description_on_every_declaration_block(block):
+    doc = json.loads(schema.PATH.read_text())
+    assert 'description' in doc['$defs'][block]['properties'], (
+        f'{block} lost its description: key from the published schema, so editors stop offering it'
+    )
