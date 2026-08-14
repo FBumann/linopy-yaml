@@ -20,6 +20,7 @@ from lpspec.errors import DataError, LanguageError, LpspecError
 from lpspec.language.model import Model
 from lpspec.lowering import lower_program
 from lpspec.relational import chunking
+from lpspec.relational.engines.polars import engine as engine_module
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.plan import (
     Constant,
@@ -1065,6 +1066,78 @@ def test_chunk_ranges_are_contiguous_gapless_and_cover_everything(total, budget,
     if total:
         widest = max(hi - lo for lo, hi in got)
         assert widest * max(1.0, width) <= max(budget, max(1.0, width)), 'a chunk exceeded the budget'
+
+
+def _forced_assembly_seams(monkeypatch: pytest.MonkeyPatch, pilot: int, budget: int) -> None:
+    """Every suite model fits inside one pilot, so no test crosses an assembly seam unforced."""
+    monkeypatch.setattr(engine_module, 'PILOT_ROWS', pilot)
+    monkeypatch.setattr(engine_module, 'ASSEMBLY_BUDGET', budget)
+
+
+def _assert_same_tables(whole, ranged) -> None:
+    assert ranged.matrix.equals(whole.matrix), 'a seam dropped, doubled or reordered a matrix entry'
+    assert ranged.rows.equals(whole.rows), 'the rows frame must not see the seams'
+    assert ranged.cols.equals(whole.cols), 'variables are outside the chunked pass entirely'
+    assert np.array_equal(ranged.row_starts, whole.row_starts), 'CSR spans must survive the seams'
+    assert (ranged.row_count, ranged.column_count) == (whole.row_count, whole.column_count)
+
+
+def test_assembling_in_row_ranges_leaves_the_groupsum_stack_alone(transport_data, monkeypatch):
+    """The seams are invisible on the stack that motivated them.
+
+    Transport's balance lands three group-sum fragments on every row — the
+    shape whose whole-declaration stack the ranged assembly replaces. A pilot
+    of a few rows and a budget of a few elements puts a seam every handful of
+    rows, where a range that dropped a fragment, re-sorted across a boundary
+    or mis-sized its successor would change the matrix.
+    """
+    gens, lines, load = transport_data
+
+    def tables():
+        with PolarsEngine() as engine:
+            engine.build(transport_program(), transport_sources(gens, lines, load))
+            return engine._tables()
+
+    whole = tables()
+    _forced_assembly_seams(monkeypatch, pilot=5, budget=13)
+    ranged = tables()
+    _assert_same_tables(whole, ranged)
+
+
+@pytest.mark.parametrize(
+    'shape',
+    [
+        pytest.param('repeated-cell', id='a-cell-summed-from-two-fragments-collapses-inside-its-range'),
+        pytest.param('absent-variable', id='a-termless-row-drops-and-renumbers-across-ranges'),
+    ],
+)
+def test_assembling_in_row_ranges_leaves_the_awkward_shapes_alone(shape, monkeypatch):
+    """The aggregate and the termless-row drop both work per range.
+
+    A repeated cell must collapse inside its own range (both fragments land in
+    it, the ranges being row slices); a row whose variable is absent must drop
+    and renumber off the *union* of the ranges' kept rows — the two answers
+    the ranged pass reassembles from parts.
+    """
+    if shape == 'repeated-cell':
+        schema = override(RHS_MODEL, **{'constraints.c.expression': 'x + 3 * x >= rhs'})
+        sources: dict = {'rhs': pl.DataFrame({'i': [0, 1], 'value': [4.0, 6.0]})}
+    else:
+        schema = ABSENT_VARIABLE_MODEL
+        sources = {
+            'gate': pd.Series({'a': True}),
+            'relmax': pd.Series({'a': 0.5, 'b': 0.5}),
+            'cost': pd.Series({'a': 1.0, 'b': 1.0}),
+        }
+
+    def tables():
+        with lps.build(schema, sources) as bound:
+            return bound._engine._tables()
+
+    whole = tables()
+    _forced_assembly_seams(monkeypatch, pilot=1, budget=1)
+    ranged = tables()
+    _assert_same_tables(whole, ranged)
 
 
 SPARSE_COEFFICIENT_MODEL = {

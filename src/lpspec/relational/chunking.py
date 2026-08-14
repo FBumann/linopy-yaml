@@ -26,17 +26,27 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
+def take(budget: int, width: float) -> int:
+    """How many units a pass takes at once: ``budget // width``, at least one.
+
+    A ``width`` below 1 is read as 1 — a unit cannot cost less than itself,
+    and a fractional average (0.4 nonzeros per row, in a model that is mostly
+    bounds) would otherwise ask for chunks wider than the budget. Split out of
+    :func:`ranges` for the pass whose width is *measured as it goes* rather
+    than known up front, so the one rule stays in one place.
+    """
+    return max(1, int(budget // max(1.0, width)))
+
+
 def ranges(total: int, budget: int, width: float) -> Iterator[tuple[int, int]]:
     """Half-open ``[lo, hi)`` ranges covering ``[0, total)``.
 
     Each holds about ``budget`` elements, given that one unit costs ``width``
-    of them. A ``width`` below 1 is read as 1 — a unit cannot cost less than
-    itself, and a fractional average (0.4 nonzeros per row, in a model that is
-    mostly bounds) would otherwise ask for chunks wider than the budget.
+    of them, per :func:`take`.
 
     Empty input yields nothing rather than one empty range: a caller looping
     over ``ranges`` should do no work, not one pass over nothing.
     """
-    per_chunk = max(1, int(budget // max(1.0, width)))
+    per_chunk = take(budget, width)
     for lo in range(0, total, per_chunk):
         yield lo, min(lo + per_chunk, total)

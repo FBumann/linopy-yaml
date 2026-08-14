@@ -32,7 +32,7 @@ from lpspec.errors import (
     sparse_divisor_message,
     uncovered_constant_message,
 )
-from lpspec.relational import plan, sinks
+from lpspec.relational import chunking, plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler, Presence, TermFragment
@@ -86,6 +86,20 @@ _DTYPES = {
     'sense': SENSE, 'vtype': pl.Enum(get_args(plan.VariableType)),
     'set': pl.Int32, 'type': pl.UInt8, 'weight': pl.Int32, 'big_m': pl.Float64,
 }  # fmt: skip
+
+
+#: Stacked matrix entries one assembly pass holds, and the pilot rows that
+#: measure how many a constraint row carries. A declaration's terms are joined,
+#: stacked and ordered a row range at a time, so what peaks is one range's
+#: working set rather than the declaration's — the same knob
+#: :data:`~lpspec.relational.sinks.writers.lp_file.EMIT_BUDGET` is for the
+#: writer, bounding the assembly's peak rather than its speed. A row's cost is
+#: the model's fan-in, not knowable before a join runs, so the first range is
+#: a fixed pilot and every later one is sized off the widest range seen.
+#: Narrower is not free: each range re-probes every term's frame, which is
+#: what made very small ranges pathological when this was prototyped (#523).
+ASSEMBLY_BUDGET = 2_000_000
+PILOT_ROWS = 25_000
 
 
 @dataclass(frozen=True)
@@ -247,7 +261,7 @@ class PolarsEngine:
 
     def _matrix_share(
         self, pieces: list[pl.LazyFrame], name: str, *expressions: plan.Expression
-    ) -> tuple[pl.DataFrame, pl.Series]:
+    ) -> tuple[pl.DataFrame, pl.Series, int]:
         """One constraint's share: in ``(row, col)`` order, repeated cells summed.
 
         Nothing runs unconditionally except three linear probes — the null
@@ -275,13 +289,16 @@ class PolarsEngine:
         only on it.
 
         Returns:
-            The share, and the rows that had *any* term. Those are read off a
-            frame before a prune takes the answer away, because that is the one
-            question a pruned share can no longer answer: a row whose every
-            coefficient is zero owns no entries and is not thereby a row with
-            no terms.
+            The share; the rows that had *any* term; and the stack's height
+            before pruning. The rows are read off a frame before a prune takes
+            the answer away, because that is the one question a pruned share
+            can no longer answer: a row whose every coefficient is zero owns
+            no entries and is not thereby a row with no terms. The height is
+            what the pieces *cost* to hold, which the pruned share understates
+            — :meth:`_assembled` sizes its next row range by it.
         """
         stacked = pl.concat(pieces).collect(engine='streaming').rechunk()
+        held = stacked.height
         self._refuse_undefined_divisors(stacked, name, *expressions)
         pruned = _pruned(stacked)
         term_rows = stacked.get_column('row').unique() if pruned.height != stacked.height else None
@@ -298,7 +315,7 @@ class PolarsEngine:
             stacked = stacked.sort('row', 'col')
             repeated = stacked.select(repeat.any()).item()
         if not repeated:
-            return stacked, _rows_of(stacked, term_rows)
+            return stacked, _rows_of(stacked, term_rows), held
         aggregated = (
             stacked.lazy()
             .group_by('row', 'col')
@@ -306,7 +323,7 @@ class PolarsEngine:
             .sort('row', 'col')
             .collect(engine='streaming')
         )
-        return _pruned(aggregated), _rows_of(aggregated, term_rows)
+        return _pruned(aggregated), _rows_of(aggregated, term_rows), held
 
     # ------------------------------------------------------------------
     # declarations
@@ -503,8 +520,14 @@ class PolarsEngine:
             self._constraints[c.name] = self._constraints[c.name].clear()
             return rows.clear(), None
 
-        pieces = []
+        matrix, term_rows = self._assembled(labelled, terms, f"constraint '{c.name}'", c.lhs, c.rhs)
+        rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, term_rows, start)
+        return rows, matrix
+
+    def _pieces(self, frame: pl.LazyFrame, terms: list[tuple[TermFragment, float]]) -> list[pl.LazyFrame]:
+        """Each term joined onto *frame*'s rows, as lazy ``(row, col, coeff)``."""
         carried_order: MaintainOrderJoin | None = 'left_right' if len(terms) == 1 else None
+        pieces = []
         for p, sign in terms:
             placed = (
                 frame.join(p.frame, on=list(p.dims), how='inner', maintain_order=carried_order)
@@ -518,9 +541,48 @@ class PolarsEngine:
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
-        matrix, term_rows = self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
-        rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, term_rows, start)
-        return rows, matrix
+        return pieces
+
+    def _assembled(
+        self,
+        labelled: pl.DataFrame,
+        terms: list[tuple[TermFragment, float]],
+        name: str,
+        *expressions: plan.Expression,
+    ) -> tuple[pl.DataFrame, pl.Series]:
+        """One constraint's matrix share, assembled a row range at a time.
+
+        The whole-declaration path stacked every term's join and sorted the
+        lot in one pass, so the transient tracked the declaration's size — on
+        a model whose nonzeros sit in one constraint, most of the build's peak
+        (#523). A row range at a time holds one range's joins instead, within
+        :data:`ASSEMBLY_BUDGET` of the widest range yet seen; the pilot range
+        exists because a row's fan-in is the model's to decide.
+
+        The invariant a change here could break silently: each range's share
+        leaves :meth:`_matrix_share` in ``(row, col)`` order and the ranges
+        are disjoint ascending slices of *labelled*, so their concatenation is
+        in order **without a model-side sort** — `_row_starts` scatters by row
+        value and would silently mis-span a share whose ranges interleaved.
+        A declaration at or under the pilot takes the single pass it always
+        took.
+        """
+        if labelled.height <= PILOT_ROWS:
+            share, kept, _ = self._matrix_share(self._pieces(labelled.lazy(), terms), name, *expressions)
+            return share, kept
+
+        shares: list[pl.DataFrame] = []
+        kepts: list[pl.Series] = []
+        lo, width = 0, 1.0
+        while lo < labelled.height:
+            rows = PILOT_ROWS if not shares else chunking.take(ASSEMBLY_BUDGET, width)
+            block = labelled.slice(lo, rows)
+            share, kept, held = self._matrix_share(self._pieces(block.lazy(), terms), name, *expressions)
+            width = max(width, held / block.height)
+            shares.append(share)
+            kepts.append(kept)
+            lo += block.height
+        return pl.concat(shares), pl.concat(kepts)
 
     def _drop_termless_rows(
         self, name: str, rows: pl.DataFrame, matrix: pl.DataFrame, kept: pl.Series, start: int
