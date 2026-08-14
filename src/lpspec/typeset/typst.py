@@ -95,6 +95,15 @@ class TypstFormat:
     def math(self, expression: str) -> str:
         return f'${expression}$'
 
+    def symbol(self, name: str) -> str:
+        return name
+
+    def bar(self, inner: str) -> str:
+        return f'macron({inner})'
+
+    def underline(self, inner: str) -> str:
+        return f'underline({inner})'
+
     # -- structure ---------------------------------------------------------
 
     def subscript(self, base: str, indices: list[str]) -> str:

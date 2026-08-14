@@ -11,6 +11,7 @@ This module decides *which* symbol a name gets; a
 
 from __future__ import annotations
 
+import re
 import string
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -19,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import SchemaError, did_you_mean
 from lpspec.language._yaml import read_yaml
+from lpspec.typeset.format import SYMBOL_NAMES
 
 if TYPE_CHECKING:
     from lpspec.language.model import Model
@@ -35,6 +37,103 @@ _INDEX_ALIASES = {'snapshot': 't', 'snapshots': 't', 'time': 't', 'timestep': 't
 def _word(name: str, fmt: Format) -> str:
     """One name as one symbol: a letter stays a letter, a word is set italic."""
     return name if len(name) == 1 else fmt.italic(name)
+
+
+# ---------------------------------------------------------------------------
+# the table's notation: neutral, spelled by each format (#321)
+# ---------------------------------------------------------------------------
+
+#: What each entry may say. A format-neutral vocabulary rather than LaTeX,
+#: because a symbol has to be spelled per format and a table written in one
+#: format's syntax silently breaks every other — exactly as ``operators``
+#: already works, where the walk names the intent and each format spells it.
+_NOTATION = (
+    'the notation is a single letter, a letter name (ell, alpha, …, Omega), '
+    'cal(X), bar(x), under(x), up(word), it(word) or sup(base, qualifier)'
+)
+
+#: Arity per function; the speller below is the one place each is interpreted.
+_FUNCTIONS = {'cal': 1, 'bar': 1, 'under': 1, 'up': 1, 'it': 1, 'sup': 2}
+
+_TOKEN = re.compile(r'\s*([A-Za-z][A-Za-z0-9_]*)\s*')
+
+_MATH_SPAN = re.compile(r'\$([^$]+)\$')
+
+#: A parsed entry: a word, or a function applied to parsed arguments.
+_Node = str | tuple[str, list['_Node']]
+
+
+def _parse(entry: str) -> _Node:
+    """*entry* as a word or a ``(function, arguments)`` tree.
+
+    Raises:
+        SchemaError: The entry does not fit the notation.
+    """
+    node, i = _parse_expr(entry, 0)
+    if entry[i:].strip():
+        raise SchemaError(f"symbol notation: trailing '{entry[i:].strip()}' after the expression; {_NOTATION}")
+    return node
+
+
+def _parse_expr(entry: str, i: int) -> tuple[_Node, int]:
+    m = _TOKEN.match(entry, i)
+    if not m:
+        raise SchemaError(f"symbol notation: expected a name at '{entry[i:]}' in '{entry}'; {_NOTATION}")
+    word, i = m.group(1), m.end()
+    if not entry.startswith('(', i):
+        return word, i
+    args: list[_Node] = []
+    while True:
+        node, i = _parse_expr(entry, i + 1)
+        args.append(node)
+        if not entry.startswith((',', ')'), i):
+            raise SchemaError(f"symbol notation: expected ',' or ')' at '{entry[i:]}' in '{entry}'")
+        if entry.startswith(')', i):
+            return (word, args), i + 1
+
+
+def _spell_node(node: _Node, fmt: Format) -> str:
+    if isinstance(node, str):
+        if node in SYMBOL_NAMES:
+            return fmt.symbol(node)
+        if len(node) == 1:
+            return node
+        raise SchemaError(
+            f"symbol notation: '{node}' is neither a letter nor a letter name — "
+            f'write up({node}) or it({node}) to set the word as one symbol; {_NOTATION}'
+        )
+    function, args = node
+    if function not in _FUNCTIONS:
+        raise SchemaError(f"symbol notation: unknown function '{function}'; {_NOTATION}")
+    if len(args) != _FUNCTIONS[function]:
+        raise SchemaError(f'symbol notation: {function}() takes {_FUNCTIONS[function]} argument(s), got {len(args)}')
+    if function in ('up', 'it'):
+        if not isinstance(args[0], str):
+            raise SchemaError(f'symbol notation: {function}() takes a plain word')
+        return fmt.upright(args[0]) if function == 'up' else fmt.italic(args[0])
+    if function == 'sup':
+        if not isinstance(args[1], str):
+            raise SchemaError('symbol notation: the qualifier in sup(base, qualifier) is a plain word')
+        return fmt.superscript(_spell_node(args[0], fmt), fmt.upright(args[1]))
+    inner = _spell_node(args[0], fmt)
+    return {'cal': fmt.script, 'bar': fmt.bar, 'under': fmt.underline}[function](inner)
+
+
+def _spell(entry: str, fmt: Format, where: str) -> str:
+    """One table entry through *fmt*, or a :class:`SchemaError` naming *where*."""
+    try:
+        return _spell_node(_parse(entry), fmt)
+    except SchemaError as error:
+        raise SchemaError(f"symbol table: '{where}': {error}") from None
+
+
+def _spell_prose(text: str, fmt: Format, where: str) -> str:
+    """A description with each ``$…$`` span spelled through *fmt*."""
+
+    def span(m: re.Match[str]) -> str:
+        return fmt.math(_spell(m.group(1), fmt, where))
+
+    return _MATH_SPAN.sub(span, text)
 
 
 def _derive_name_symbol(name: str, declared: frozenset[str], fmt: Format) -> str:
@@ -71,7 +170,11 @@ class Symbols:
         declared = frozenset({*schema.dimensions, *schema.parameters, *schema.variables})
 
         self.name: dict[str, str] = {
-            name: table.names.get(name) or _derive_name_symbol(name, declared, fmt)
+            name: (
+                _spell(table.names[name], fmt, name)
+                if name in table.names
+                else _derive_name_symbol(name, declared, fmt)
+            )
             for name in (*schema.parameters, *schema.variables)
         }
         spoken_for = {s for s in self.name.values() if len(s) == 1}
@@ -83,13 +186,18 @@ class Symbols:
             override = table.indices.get(dim)
             letter = override or _first_free(_index_candidates(dim), taken_index)
             taken_index.add(letter)
-            self.index[dim] = letter if len(letter) <= 1 or override else fmt.upright(letter)
+            if override:
+                self.index[dim] = _spell(override, fmt, f'{dim}: index')
+            else:
+                self.index[dim] = letter if len(letter) <= 1 else fmt.upright(letter)
             given = table.sets.get(dim)
             upper = _first_free(_set_candidates(dim, letter), taken_set)
             taken_set.add(upper)
-            self.set[dim] = given or fmt.script(upper)
+            self.set[dim] = _spell(given, fmt, f'{dim}: set') if given else fmt.script(upper)
 
-        self.description: dict[str, str] = dict(table.descriptions)
+        self.description: dict[str, str] = {
+            name: _spell_prose(text, fmt, name) for name, text in table.descriptions.items()
+        }
 
 
 def _index_candidates(dim: str) -> list[str]:
@@ -120,15 +228,20 @@ class SymbolTable:
     Presentation is not language: nothing here changes what the file means, no
     lane reads it, and a model with no table still renders.
 
+    Entries speak the neutral notation of :func:`_parse` — ``cal(T)``,
+    ``ell``, ``bar(p)``, ``sup(c, marg)`` — never one format's syntax, so one
+    table prints through every format (#321). Inside a description, math goes
+    in ``$…$`` spans of the same notation.
+
     Deliberately strict — an unrecognised name is an error naming the near
     miss, the failure mode of a silent typo being a symbol that never applies
     and a reader who never finds out::
 
         dimensions:
-          snapshot: {index: t, set: "\\mathcal{T}"}
+          snapshot: {index: t, set: cal(T)}
           plant:    {index: n}
         names:
-          marginal_cost: "c^{\\mathrm{marg}}"
+          marginal_cost: sup(c, marg)
         descriptions:
           snapshot: hourly, over one year
     """
@@ -152,7 +265,7 @@ class SymbolTable:
         sets: dict[str, str] = {}
         for dim, spec in (raw.get('dimensions') or {}).items():
             if not isinstance(spec, Mapping):
-                msg = f"symbol table: dimension '{dim}' must be a mapping like {{index: t, set: '\\\\mathcal{{T}}'}}"
+                msg = f"symbol table: dimension '{dim}' must be a mapping like {{index: t, set: cal(T)}}"
                 raise SchemaError(msg)
             extra = set(spec) - {'index', 'set'}
             if extra:

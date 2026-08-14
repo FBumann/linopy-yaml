@@ -88,7 +88,8 @@ def typeset(
 
     Raises:
         LanguageError: A model that does not compile; it does not print.
-        SchemaError: A symbol table entry naming nothing in the model.
+        SchemaError: A symbol table entry naming nothing in the model,
+            or one outside the notation.
     """
     schema = expand_piecewise(load_model(model))
     table = symbols if isinstance(symbols, SymbolTable) else SymbolTable.load(symbols or {})

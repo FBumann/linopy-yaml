@@ -65,6 +65,24 @@ OPERATOR_NAMES = frozenset(
 )
 
 
+#: Every letter a symbol-table entry may name outright: the greek alphabet as
+#: LaTeX and Typst both spell it by name (which is why ``omicron`` and the
+#: capitals that are just latin letters are absent), plus ``ell``. A format
+#: supplies the spelling via :meth:`Format.symbol`; the *set* lives here so the
+#: table's vocabulary has one home, exactly as :data:`OPERATOR_NAMES` does for
+#: the walk's.
+SYMBOL_NAMES = frozenset(
+    {
+        'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta',
+        'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi', 'rho', 'sigma',
+        'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega',
+        'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon',
+        'Phi', 'Psi', 'Omega',
+        'ell',
+    }
+)  # fmt: skip
+
+
 @dataclass(frozen=True)
 class Line:
     """One typeset line of the model, split where a format may align it.
@@ -139,6 +157,18 @@ class Format(Protocol):
 
     def math(self, expression: str) -> str:
         """Wrap bare math for embedding in prose."""
+        ...
+
+    def symbol(self, name: str) -> str:
+        """One of :data:`SYMBOL_NAMES`, as this format spells it."""
+        ...
+
+    def bar(self, inner: str) -> str:
+        """A bar accent — an upper limit's conventional dress."""
+        ...
+
+    def underline(self, inner: str) -> str:
+        """An underline — the lower limit's counterpart."""
         ...
 
     # -- structure ---------------------------------------------------------

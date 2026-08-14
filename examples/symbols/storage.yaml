@@ -10,18 +10,18 @@
 # $s-1$ cannot say it; $s \ominus 1$ can, and the legend defines it.
 
 dimensions:
-  snapshot: {index: s, set: "\\mathcal{S}"}
-  generator: {index: g, set: "\\mathcal{G}"}
+  snapshot: {index: s, set: cal(S)}
+  generator: {index: g, set: cal(G)}
 
 names:
   cost: "c"
-  load: "\\ell"
-  p_max: "\\bar p"
+  load: ell
+  p_max: bar(p)
   # Upright, as the gallery sets them: these are quantities named by a word,
   # not products of single-letter symbols.
-  soc: "\\mathrm{soc}"
-  charge: "\\mathrm{charge}"
-  discharge: "\\mathrm{discharge}"
+  soc: up(soc)
+  charge: up(charge)
+  discharge: up(discharge)
 
 descriptions:
   snapshot: dispatch periods, cyclic at the horizon

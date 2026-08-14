@@ -9,8 +9,8 @@
 # engineer and the wrong ones for a reader who knows this problem.
 
 dimensions:
-  plant: {index: i, set: "\\mathcal{I}"}
-  market: {index: j, set: "\\mathcal{J}"}
+  plant: {index: i, set: cal(I)}
+  market: {index: j, set: cal(J)}
 
 names:
   shipment: "x"

@@ -45,7 +45,7 @@ caller already has — the CLI's `--symbols` is the path case:
 
 ```python
 lps.to_latex('dispatch.yaml', symbols='dispatch.symbols.yaml')  # a path
-lps.to_latex('dispatch.yaml', symbols={'names': {'load': r'\ell'}})  # a dict
+lps.to_latex('dispatch.yaml', symbols={'names': {'load': 'ell'}})  # a dict
 lps.to_latex('dispatch.yaml', symbols=lps.SymbolTable.load(table))  # the object
 ```
 
@@ -55,8 +55,12 @@ map. Whichever form, the table is checked against the model: a key naming
 nothing is an error with the near miss, because a silent typo is a symbol that
 never applies and a reader who never finds out.
 
-The values are LaTeX, including for Typst, which is a bug — see
-[#321](https://github.com/fluxopt/lpspec/issues/321).
+The values are format-neutral notation, not any format's syntax, so one table
+prints through every format: a single letter, a letter name (`ell`, `lambda`,
+…), `cal(X)`, `bar(x)`, `under(x)`, `up(word)`, `it(word)` or
+`sup(base, qualifier)`, and each format spells them exactly as it spells the
+walk's operators. An entry outside the vocabulary is an error naming the entry,
+not a compiler failure three tools later (#321).
 
 ## Adding a format
 

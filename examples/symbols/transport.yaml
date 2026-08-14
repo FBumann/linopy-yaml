@@ -12,17 +12,17 @@
 # $d$ (demand). Everything else matches the page.
 
 dimensions:
-  snapshot: {index: s, set: "\\mathcal{S}"}
-  generator: {index: g, set: "\\mathcal{G}"}
-  bus: {index: b, set: "\\mathcal{B}"}
-  line: {index: "\\ell", set: "\\mathcal{L}"}
+  snapshot: {index: s, set: cal(S)}
+  generator: {index: g, set: cal(G)}
+  bus: {index: b, set: cal(B)}
+  line: {index: ell, set: cal(L)}
 
 names:
   cost: "c"
   load: "d"
-  p_max: "\\bar p"
-  cap: "\\bar f"
-  neg_cap: "\\underline{f}"
+  p_max: bar(p)
+  cap: bar(f)
+  neg_cap: under(f)
 
 descriptions:
   snapshot: dispatch periods
@@ -30,7 +30,7 @@ descriptions:
   bus: network nodes
   line: transmission lines, each joining two buses
   p: output of generator $g$ in snapshot $s$
-  f: flow on line $\ell$, signed towards its `to` bus
+  f: flow on line $ell$, signed towards its `to` bus
   cost: marginal cost
   load: demand at each bus
   p_max: installed capacity

@@ -62,6 +62,15 @@ class MarkdownFormat:
     def math(self, expression: str) -> str:
         return _LATEX.math(expression)
 
+    def symbol(self, name: str) -> str:
+        return _LATEX.symbol(name)
+
+    def bar(self, inner: str) -> str:
+        return _LATEX.bar(inner)
+
+    def underline(self, inner: str) -> str:
+        return _LATEX.underline(inner)
+
     def subscript(self, base: str, indices: list[str]) -> str:
         return _LATEX.subscript(base, indices)
 

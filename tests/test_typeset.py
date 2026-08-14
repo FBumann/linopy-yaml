@@ -21,7 +21,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
-from lpspec.typeset.format import OPERATOR_NAMES
+from lpspec.typeset.format import OPERATOR_NAMES, SYMBOL_NAMES
 from lpspec.typeset.symbols import _derive_name_symbol
 from tests import golden
 from tests.conftest import MODEL_PATHS, override
@@ -501,11 +501,18 @@ def typst():
 
 def test_typst_output_compiles(typst, tmp_path: Path):
     """The only check that the Typst is real, and it has already earned its
-    place: the first run rejected `minus.circle`, which is not a Typst symbol."""
+    place: the first run rejected `minus.circle`, which is not a Typst symbol.
+
+    Each model also compiles *with* its committed symbol table — the pairing
+    #321 shipped broken, when the feature and this check existed and never met.
+    """
     for path in MODEL_PATHS:
-        source = tmp_path / f'{path.stem}.typ'
-        source.write_text(to_typst(path, standalone=True))
-        typst.compile(str(source), output=str(tmp_path / f'{path.stem}.pdf'))
+        table = Path('examples/symbols') / f'{path.stem}.yaml'
+        variants = {'': None, '-symbols': table} if table.exists() else {'': None}
+        for suffix, symbols in variants.items():
+            source = tmp_path / f'{path.stem}{suffix}.typ'
+            source.write_text(to_typst(path, symbols=symbols, standalone=True))
+            typst.compile(str(source), output=str(tmp_path / f'{path.stem}{suffix}.pdf'))
 
 
 def test_every_typst_operator_compiles(typst, tmp_path: Path):
@@ -514,6 +521,16 @@ def test_every_typst_operator_compiles(typst, tmp_path: Path):
     probe = tmp_path / 'operators.typ'
     probe.write_text('\n'.join(f'$ a {TYPST.operators[name]} b $' for name in sorted(OPERATOR_NAMES)))
     typst.compile(str(probe), output=str(tmp_path / 'operators.pdf'))
+
+
+def test_every_typst_symbol_name_compiles(typst, tmp_path: Path):
+    """The committed tables use a few letter names; the rest of the vocabulary
+    would otherwise first fail on somebody's own table."""
+    lines = [f'$ {TYPST.symbol(name)} $' for name in sorted(SYMBOL_NAMES)]
+    lines.append(f'$ {TYPST.script("X")} {TYPST.bar("x")} {TYPST.underline("x")} $')
+    probe = tmp_path / 'symbols.typ'
+    probe.write_text('\n'.join(lines))
+    typst.compile(str(probe), output=str(tmp_path / 'symbols.pdf'))
 
 
 # ---------------------------------------------------------------------------
@@ -597,8 +614,8 @@ def test_the_latex_is_structurally_well_formed(path: Path):
 # ---------------------------------------------------------------------------
 
 SYMBOLS = {
-    'dimensions': {'generator': {'index': 'u', 'set': r'\mathcal{U}'}},
-    'names': {'p': r'\pi', 'marginal_cost': r'c^{\mathrm{marg}}'},
+    'dimensions': {'generator': {'index': 'u', 'set': 'cal(U)'}},
+    'names': {'p': 'pi', 'marginal_cost': 'sup(c, marg)'},
     'descriptions': {'generator': 'dispatchable units'},
 }
 
@@ -621,6 +638,43 @@ def test_a_description_reaches_the_legend_without_hiding_the_name():
     tex = to_latex(WITH_MARGINAL_COST, symbols=SYMBOLS)
     assert r'\texttt{generator}' in tex
     assert 'dispatchable units' in tex
+
+
+def test_one_table_speaks_every_format():
+    """#321: entries are notation, not LaTeX, so Typst gets its own spelling
+    instead of `\\mathcal{U}` passed through verbatim."""
+    tex = to_latex(WITH_MARGINAL_COST, symbols=SYMBOLS, legend=False)
+    typ = to_typst(WITH_MARGINAL_COST, symbols=SYMBOLS, legend=False)
+    assert r'\pi_{t,u}' in tex
+    assert 'pi_(t,u)' in typ
+    assert r'c^{\mathrm{marg}}_{u}' in tex
+    assert 'c^(upright("marg"))_(u)' in typ
+    assert r'u \in \mathcal{U}' in tex
+    assert 'u in cal(U)' in typ
+
+
+def test_a_math_span_in_a_description_is_spelled_per_format():
+    symbols = {'descriptions': {'load': 'demand, denoted $ell$'}}
+    assert r'$\ell$' in to_latex(DISPATCH, symbols=symbols)
+    assert '$ell$' in to_typst(DISPATCH, symbols=symbols)
+
+
+@pytest.mark.parametrize(
+    ('entry', 'match'),
+    [
+        pytest.param(r'\mathcal{S}', 'expected a name', id='latex-is-not-the-notation'),
+        pytest.param('frak(S)', "unknown function 'frak'", id='an-unknown-function'),
+        pytest.param('soc', 'neither a letter nor a letter name', id='a-bare-word-needs-up-or-it'),
+        pytest.param('bar(p) x', 'trailing', id='trailing-text'),
+        pytest.param('sup(c)', 'takes 2 argument', id='a-missing-argument'),
+    ],
+)
+def test_an_entry_outside_the_notation_is_refused_naming_the_entry(entry, match):
+    """The old failure mode was the Typst compiler's `unknown variable: athcal`,
+    long after anything of ours could name the cause (#321)."""
+    with pytest.raises(lps.SchemaError, match=match) as caught:
+        to_latex(DISPATCH, symbols={'names': {'p': entry}})
+    assert "'p'" in str(caught.value), 'the refusal has to name the entry it sits under'
 
 
 @pytest.mark.parametrize(

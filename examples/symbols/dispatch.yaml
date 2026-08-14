@@ -12,13 +12,13 @@
 # written equation drifts silently and a generated one cannot.
 
 dimensions:
-  snapshot: {index: s, set: "\\mathcal{S}"}
-  generator: {index: g, set: "\\mathcal{G}"}
+  snapshot: {index: s, set: cal(S)}
+  generator: {index: g, set: cal(G)}
 
 names:
   cost: "c"
-  load: "\\ell"
-  p_max: "\\bar p"
+  load: ell
+  p_max: bar(p)
 
 descriptions:
   snapshot: dispatch periods

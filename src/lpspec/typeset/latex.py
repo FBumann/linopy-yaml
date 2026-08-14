@@ -95,6 +95,16 @@ class LatexFormat:
     def math(self, expression: str) -> str:
         return f'${expression}$'
 
+    def symbol(self, name: str) -> str:
+        return f'\\{name}'
+
+    def bar(self, inner: str) -> str:
+        r"""``\bar p`` for a letter — the brace-free form the accent binds to anyway."""
+        return rf'\bar {inner}' if len(inner) == 1 else rf'\bar{{{inner}}}'
+
+    def underline(self, inner: str) -> str:
+        return rf'\underline{{{inner}}}'
+
     # -- structure ---------------------------------------------------------
 
     def subscript(self, base: str, indices: list[str]) -> str:
