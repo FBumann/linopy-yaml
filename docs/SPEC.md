@@ -298,7 +298,7 @@ solver and not of the model. `convex` is a different model — exact only for a
 curve of matching curvature under optimisation pressure, which is checked
 against the breakpoint *values* at bind time — and it takes exactly two links
 and no `active`. `method: lp`, linopy's tangent-line formulation, is
-[#23](https://github.com/fluxopt/lpspec/issues/23) and not here.
+[#695](https://github.com/fluxopt/lpspec/issues/695) and not here.
 
 ### 4.1 `sos`
 
@@ -700,7 +700,7 @@ language: nothing there changes what a file means.
 |---|---|
 | time-series processing (resample, cluster, interpolate, align), file IO, units | data prep; pass a parameter |
 | solver breadth | two solver sinks — HiGHS, which ships, and Gurobi via the `[gurobi]` extra — chosen with `solver_name` at the call, never in the file; LP files for everything else ([#106](https://github.com/fluxopt/lpspec/issues/106)) |
-| indicator constraints | planned, as a *sink capability* rather than a language question — the same axis `sos:` (§4.1) landed on, and the same split: `lp_file` and Gurobi have the concept, the default solver does not ([#23](https://github.com/fluxopt/lpspec/issues/23), [Track 3](https://github.com/fluxopt/lpspec/issues/472)) |
+| indicator constraints | planned, as a *sink capability* rather than a language question — the same axis `sos:` (§4.1) landed on, and the same split: `lp_file` and Gurobi have the concept, the default solver does not ([#220](https://github.com/fluxopt/lpspec/issues/220), [Track 3](https://github.com/fluxopt/lpspec/issues/472)) |
 | multi-objective | one objective — declaring a second is a load error (§2); weight them into one expression |
 | schema migrations | — |
 | arbitrary array ops (`merge`, `reindex`, `apply_ufunc`) | data prep, or a declared `escape:` island — the closed AST is what makes streaming possible |
