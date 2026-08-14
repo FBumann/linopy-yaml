@@ -67,5 +67,13 @@ def test_a_bench_case_builds_on_the_smallest_rung(case: str, tmp_path: Path, ben
 def test_every_model_backs_a_case(bench_cases):
     """A model nothing runs, or a case whose model was renamed away. The two
     lists are matched by stem, which is what the parametrisation above assumes.
+    A case may generate its model per rung instead of committing one —
+    `declarations` does, and `bench/test_harness.py` gates the generated file —
+    so the stem match covers exactly the cases that name a committed file.
     """
-    assert sorted(bench_cases.CASES) == CASE_NAMES
+    static = sorted(name for name, case in bench_cases.CASES.items() if case.model is not None)
+    assert static == CASE_NAMES
+    for name, case in bench_cases.CASES.items():
+        assert (case.model is None) != (case.generate_model is None), (
+            f'{name}: a case carries a committed model or a generator — never both, never neither'
+        )

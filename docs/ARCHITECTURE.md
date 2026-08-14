@@ -455,7 +455,7 @@ must stay off the import path of a caller who does not use it.
 | `language/resolution.py` | one flat namespace; `NameNode` → typed `Variable`/`Parameter`/`Dimension` nodes |
 | `language/dimensions.py` | static dim-set checking over the resolved AST |
 | `language/degree.py` | degree 1: the ceiling's first clause, asked by both lanes and stated by neither |
-| `language/helpers.py` | the closed set of built-in operators: their *names* and *call shapes* — no registry |
+| `language/operators.py` | the closed set of built-in operators: their *names* and *call shapes* — no registry |
 | `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_model`, the language's front door |
 | `language/piecewise.py` | `piecewise:` → λ-formulation declarations |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_model` |
@@ -510,7 +510,7 @@ A fence says what may not happen; it does not say what belongs. The test is:
 
 Not "is it about syntax", not "does it run early" — *would a second opinion be
 wrong?* Every "one implementation each" rule in this file is that test applied:
-names resolve once (`resolution.py`), the operator set is closed (`helpers.py`)
+names resolve once (`resolution.py`), the operator set is closed (`operators.py`)
 and a test proves both lanes implement exactly it, an operator's dim rule lives
 only in `dimensions.py` with lowering **asking** for the verdict rather than
 deciding again, and degree lives only in `degree.py` — nothing about `x * y` is
@@ -587,7 +587,7 @@ beside `typeset/`, a fence test naming what it may import, and a walk. It reads
 a consumer, and the ceiling doc is the conversation to have first.
 
 **Add an operator:** grammar (usually free — `f(x, k=v)` already parses) →
-signature in `helpers.BUILTINS` (arity and which arguments name dimensions —
+signature in `operators.BUILTINS` (arity and which arguments name dimensions —
 resolution, validation and lowering all read it from there, so the shape is
 declared once) → eager implementation → plan node + locality class → engine →
 lowering case → differential test through a solver *and* the LP writer → SPEC
