@@ -112,9 +112,8 @@ class Format(Protocol):
 
     #: File suffix, for the CLI's default output name.
     suffix: ClassVar[str]
-    #: Which notation a :class:`~lpspec.typeset.symbols.SymbolTable` must be
-    #: written in to render here — ``latex`` or ``typst``. Markdown reads
-    #: ``latex``, because MathJax renders its math.
+    #: The notation a symbol table must be written in — ``latex`` or ``typst``;
+    #: markdown reads ``latex``, its math being MathJax's.
     notation: ClassVar[str]
     #: Spelling for each of :data:`OPERATOR_NAMES`.
     operators: ClassVar[Mapping[str, str]]

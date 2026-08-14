@@ -55,11 +55,9 @@ map. Whichever form, the table is checked against the model: a key naming
 nothing is an error with the near miss, because a silent typo is a symbol that
 never applies and a reader who never finds out.
 
-Every value is a spelling, printed verbatim — nothing parses or translates it,
-so anything the target language can say is sayable and the vocabulary is not
-this project's to cap. `notation` is what says which language a table is
-written in, and `Symbols` refuses a table the format cannot read: one
-comparison, and everything past it is the caller's to get right.
+Every value is a spelling, printed verbatim — nothing parses or translates it.
+`notation` says which language the table is written in; a format that reads the
+other one refuses. Everything past that comparison is the caller's.
 
 ## Adding a format
 

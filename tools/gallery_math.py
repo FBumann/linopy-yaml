@@ -117,10 +117,9 @@ def _home_block() -> str:
     A reader who sees ``load`` in the YAML and $\\ell$ in the math, with
     neither in front of them, has to take the page on faith.
 
-    Typst is absent because the committed table declares ``notation: latex``
-    and ``to_typst`` refuses it. A tab would need the same model's notation
-    written a second time, which is the one thing a page generated to prevent
-    drift should not carry.
+    Typst is absent: the committed table is ``notation: latex`` and a tab
+    would spell the same notation a second time on a page generated to
+    prevent drift.
     """
     table = SYMBOLS / 'dispatch.yaml'
     options = {'symbols': table, 'legend': True}
@@ -147,10 +146,8 @@ lps.to_markdown('dispatch.yaml')  # renders as-is on GitHub
 `symbols` is optional — drop it and the same model prints as
 $\\mathit{{load}}_t$, $p^{{\\mathrm{{max}}}}_g$. A dict, a YAML path or a
 `SymbolTable`; a key naming nothing in the model is an error, not a symbol that
-silently never applies. Every spelling is printed verbatim, so anything LaTeX
-can say is sayable — `notation` says which language they are, and `to_typst`
-refuses a table it cannot read rather than emitting `\\mathcal{{S}}` into a
-Typst document.
+silently never applies. Every spelling is printed verbatim — `notation` says
+which language they are, and a render in the other one refuses.
 
 Or from a shell, where the table is that same YAML on disk and `--standalone`
 emits a document that compiles rather than a fragment to `\\input`:

@@ -72,8 +72,8 @@ class Symbols:
     def __init__(self, schema: Model, fmt: Format, table: SymbolTable) -> None:
         if table.notation != fmt.notation:
             msg = (
-                f'symbol table: entries are written in {table.notation}, but this is a {fmt.notation} render. '
-                f'A table spells one notation and nothing translates between them; write a {fmt.notation} table.'
+                f'symbol table: written in {table.notation}, but this is a {fmt.notation} render '
+                f'and nothing translates between notations — write a {fmt.notation} table.'
             )
             raise SchemaError(msg)
         declared = frozenset({*schema.dimensions, *schema.parameters, *schema.variables})
@@ -119,10 +119,6 @@ def _first_free(candidates: list[str], taken: set[str]) -> str:
 # the symbol table (a sidecar file, not the model)
 # ---------------------------------------------------------------------------
 
-#: The valid ``notation:`` values — the ``Format.notation`` values, restated
-#: here so a table loads (and errors) without any format in hand.
-NOTATIONS = ('latex', 'typst')
-
 
 @dataclass(frozen=True)
 class SymbolTable:
@@ -131,10 +127,9 @@ class SymbolTable:
     Presentation is not language: nothing here changes what the file means, no
     lane reads it, and a model with no table still renders.
 
-    Every entry is a spelling, printed verbatim — nothing here parses or
-    translates notation, so anything the target language can say is sayable.
-    ``notation:`` is what says which language that is, and a render in the
-    other one refuses::
+    Every entry is a spelling, printed verbatim — nothing parses or translates
+    notation. ``notation:`` says which language they are written in, and a
+    render in the other one refuses::
 
         notation: latex
         dimensions:
@@ -150,10 +145,8 @@ class SymbolTable:
     and a reader who never finds out.
 
     Attributes:
-        notation: Which notation the entries are written in — one of
-            :data:`NOTATIONS`, matched against
-            :attr:`~lpspec.typeset.format.Format.notation` at render.
-            :meth:`load` accepts any casing and lower-cases it.
+        notation: The language the entries are written in, ``latex`` or
+            ``typst``; :meth:`load` lower-cases it.
     """
 
     notation: str
@@ -168,7 +161,7 @@ class SymbolTable:
 
         Raises:
             SchemaError: An unknown section, a malformed dimension, or a
-                ``notation:`` that is missing or outside :data:`NOTATIONS`.
+                ``notation:`` that is missing or not ``latex``/``typst``.
         """
         raw = dict(source) if isinstance(source, Mapping) else read_yaml(Path(source))
         unknown = set(raw) - {'notation', 'dimensions', 'names', 'descriptions'}
@@ -179,13 +172,10 @@ class SymbolTable:
             )
             raise SchemaError(msg)
         if 'notation' not in raw:
-            msg = (
-                "symbol table: 'notation:' is required — `latex` or `typst`, saying which one the entries are "
-                'written in. Nothing translates between them, so a table that does not say cannot be rendered.'
-            )
+            msg = "symbol table: 'notation:' is required — latex or typst, the language the entries are written in."
             raise SchemaError(msg)
         notation = str(raw['notation']).lower()
-        if notation not in NOTATIONS:
+        if notation not in ('latex', 'typst'):
             msg = f'symbol table: unknown notation {raw["notation"]!r}. Valid notations: latex, typst.'
             raise SchemaError(msg)
 

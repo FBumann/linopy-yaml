@@ -508,9 +508,7 @@ def test_typst_output_compiles(typst, tmp_path: Path):
 
 
 def test_typst_output_with_a_symbol_table_compiles(typst, tmp_path: Path):
-    """The gap that let #321 through: the compile test never ran with
-    `symbols=`, so nothing noticed that a table's spellings reached the
-    document unread."""
+    """The gap that let #321 through: the compile test never ran with `symbols=`."""
     source = tmp_path / 'symbols.typ'
     source.write_text(to_typst(DISPATCH, symbols=TYPST_SYMBOLS, standalone=True))
     typst.compile(str(source), output=str(tmp_path / 'symbols.pdf'))
@@ -659,8 +657,6 @@ def test_an_entry_naming_nothing_is_an_error_with_the_near_miss(symbols, match):
 
 
 def test_a_table_prints_its_own_notation_verbatim():
-    """Nothing parses or translates a spelling: `bar(p)` is Typst's, and it
-    reaches the document exactly as written."""
     typ = to_typst(DISPATCH, symbols=TYPST_SYMBOLS)
     assert 'pi_(t,u)' in typ
     assert 'bar(p)_(u)' in typ
@@ -690,9 +686,8 @@ def test_a_table_prints_its_own_notation_verbatim():
     ],
 )
 def test_a_table_in_the_wrong_notation_refuses(render, symbols, match):
-    """#321: a LaTeX table passed verbatim into a Typst document, which failed
-    three tools later as `unknown variable: athcal`. One comparison replaces
-    that with a refusal at the call, naming both notations."""
+    """#321 was this failing silently — LaTeX passed into a Typst document,
+    breaking three tools later; now it stops at the call, naming both notations."""
     with pytest.raises(lps.SchemaError, match=match):
         render(DISPATCH, symbols=symbols)
 
@@ -717,11 +712,9 @@ def test_the_table_loads_from_a_file_and_the_committed_one_applies():
 
 @pytest.mark.parametrize('table', sorted(Path('examples/symbols').glob('*.yaml')), ids=lambda p: p.stem)
 def test_every_committed_symbol_table_still_fits_its_model(table: Path):
-    """A sidecar is matched to its model by filename, and nothing else ties
-    them together — so renaming a parameter would leave the table naming
-    something that no longer exists. `checked_against` makes that an error, and
-    this is what runs it for every committed pair, in the notation the table
-    declares."""
+    """A sidecar is matched to its model by filename alone, so renaming a
+    parameter leaves the table naming nothing; `checked_against` makes that an
+    error, run here for every committed pair in its declared notation."""
     candidates = [Path('examples') / f'{table.stem}.yaml', Path('examples/ports') / f'{table.stem}.yaml']
     model = next((c for c in candidates if c.exists()), None)
     assert model is not None, f'{table} names no model: looked in {[str(c) for c in candidates]}'

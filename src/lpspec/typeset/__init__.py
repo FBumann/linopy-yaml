@@ -94,9 +94,8 @@ def typeset(
     """
     schema = expand_piecewise(load_model(model))
     if symbols is None:
-        table = SymbolTable(fmt.notation)
-    else:
-        table = symbols if isinstance(symbols, SymbolTable) else SymbolTable.load(symbols)
+        symbols = SymbolTable(fmt.notation)
+    table = symbols if isinstance(symbols, SymbolTable) else SymbolTable.load(symbols)
     walk = Walk(schema, Namespace.of(schema), Symbols(schema, fmt, table.checked_against(schema)), fmt)
 
     sections = [
