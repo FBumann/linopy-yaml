@@ -148,6 +148,14 @@ and each sink then answers for itself, `native` or `reformulated`, so a
 capability gap costs a worse relaxation rather than a refusal. The third value,
 `absent`, is what is left for the constructs no rewrite reaches.
 
+It is a **declaration** rather than a constraint for a reason that survives
+every sink growing native SOS: neither algebraic statement of a set is in this
+language. The complementarity form — `x_i * x_j == 0` wherever `|i - j| >= k`,
+which is SOS1 at `k=1` and SOS2 at `k=2` — is degree 2, and the cardinality
+form bounds the support, which is not affine at all. So a set is unsayable as
+math here whatever a sink can ingest, and saying it *about* a variable is the
+only spelling left.
+
 What a rewrite cannot buy back is the argument *for* declaring capability: an
 LP carrying a set comes back from HiGHS without duals and from Gurobi with
 them, and that asymmetry should be visible and the caller's to choose between
