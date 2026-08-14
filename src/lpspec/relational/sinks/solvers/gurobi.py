@@ -126,6 +126,10 @@ class Gurobi(Solver):
     requires = ('gurobipy', 'scipy')
     unavailable_message = 'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "lpspec[gurobi]"'
 
+    #: Gurobi branches on a set itself, which is the whole reason to declare
+    #: one: no binaries, no big-M, and no bound a member has to have.
+    sos = 'native'
+
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._m, self._x, self._blocks, self._env = _built(model, batch_rows, self._options)
 
@@ -221,11 +225,38 @@ def _built(
         )
         blocks.append(m.addMConstr(block, x, spelling[rows.sense[chunk.lo : chunk.hi]], rows.rhs[chunk.lo : chunk.hi]))
 
+    _add_sets(m, x, model, gurobipy)
     if model.objective_sense == 'max':
         m.ModelSense = gurobipy.GRB.MAXIMIZE
     m.ObjCon = model.objective_constant
     m.update()
     return m, x, blocks, environment
+
+
+def _add_sets(m: Any, x: Any, model: ModelTables, gurobipy: Any) -> None:
+    """Every special-ordered set, one ``addSOS`` call each.
+
+    The one stream with no bulk form: ``addSOS`` takes a list of ``Var`` and
+    their weights, so a set is a call and its members are Python objects. The
+    ``MVar`` is sliced rather than ``getVars()`` walked, which keeps that cost
+    proportional to the *members* — a model whose sets cover a corner of it
+    pays for the corner.
+
+    Nothing here is pushed on a rebind: a set is structure, so a model whose
+    members moved is one
+    :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
+    sent back to be loaded again.
+    """
+    if not model.sos.height:
+        return
+    order = {1: gurobipy.GRB.SOS_TYPE1, 2: gurobipy.GRB.SOS_TYPE2}
+    columns = x.tolist()
+    for members in model.sos.partition_by('set', maintain_order=True):
+        m.addSOS(
+            order[members.item(0, 'type')],
+            [columns[at] for at in members.get_column('col')],
+            members.get_column('weight').to_list(),
+        )
 
 
 #: Our spelling of a comparison against Gurobi's, by ``GRB`` attribute name —

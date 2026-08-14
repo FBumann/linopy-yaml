@@ -381,6 +381,12 @@ DIVERGENT = {
         "shows one generator's curve. The model carries the snapshot dim through λ "
         'as well, so the generated subscripts are (t, g, k) where the summary has (g, k).'
     ),
+    'sos': (
+        'states one curve, as the textbook writes it: λ_k against the breakpoints k. '
+        'The model carries snapshot and generator through λ as well, so the generated '
+        'subscripts are (t, g, b) — piecewise diverges from its own summary for the '
+        'same reason, these being the two spellings of one formulation.'
+    ),
     'transport_dantzig': (
         'is the textbook statement of the transportation problem, with an abstract '
         'c_{ij}. The model is the GAMS instance, whose cost is distance times freight over 1000.'

@@ -177,6 +177,7 @@ Reading a result:
 | **`is_ok` is not `has_primal`** | `is_ok` rolls up the termination condition; `has_primal` adds the solver's verdict on whether an incumbent exists, and is what every reader gates on. A MIP that hits `time_limit` before finding a feasible point is `ok` with nothing to read |
 | reading anyway | `NoSolutionError`; `objective` is `nan` |
 | `dual` **raises rather than zero-filling** | no values at all is `NoSolutionError`; values but no duals — any integer or binary variable makes them undefined — is `LpspecError`, because only this quantity is missing |
+| **the sink can make a model mixed-integer** | a `sos:` set ([SPEC §4.1](SPEC.md#41-sos)) reaches a solver with no SOS concept as binaries, so an otherwise continuous model solved on `highs` has no duals and says so. Solving it on `gurobi`, which branches on the set itself, keeps them |
 | duals exist only where a solver ran | either solver sink hands them back through the same join; a model written to LP and solved elsewhere never passes back through here. Reduced costs and slacks ride that join too and are not exposed yet |
 | `to_dataset` costs what it says | each variable arrives dense over its own dims — name a subset, or use `to_parquet` |
 | `write` | the **suffix** picks the writer — `.lp` today, anything else a `ValueError` listing what can be written. Checked before the build, so a format nothing can write costs no model |

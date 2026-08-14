@@ -1,0 +1,58 @@
+dimensions:
+  snapshot:
+    dtype: int
+  generator:
+    dtype: str
+  bp:
+    dtype: int
+
+parameters:
+  p_max:
+    dims: [generator]
+  load:
+    dims: [snapshot]
+  bp_x:
+    dims: [generator, bp]  # per-generator breakpoint positions
+  bp_y:
+    dims: [generator, bp]  # per-generator cost at each breakpoint
+
+variables:
+  p:
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_max
+  op_cost:
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  lam:  # convex-combination weight on each breakpoint
+    foreach: [snapshot, generator, bp]
+    bounds:
+      lower: 0
+      upper: 1
+
+sos:
+  on_one_segment:  # at most two neighbouring weights — the curve, not its hull
+    variable: lam
+    over: bp
+    type: 2
+
+constraints:
+  convexity:
+    foreach: [snapshot, generator]
+    expression: sum(lam, over=bp) == 1
+  dispatch:
+    foreach: [snapshot, generator]
+    expression: p == sum(lam * bp_x, over=bp)
+  cost:
+    foreach: [snapshot, generator]
+    expression: op_cost == sum(lam * bp_y, over=bp)
+  balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+
+objectives:
+  total_cost:
+    sense: minimize
+    expression: op_cost
