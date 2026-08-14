@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.129](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.128...v0.0.1-alpha.129) (2026-08-14)
+
+
+### Features
+
+* **language:** a variable declares its domain, not a pair of flags ([#720](https://github.com/fluxopt/lpspec/issues/720)) ([690cba1](https://github.com/fluxopt/lpspec/commit/690cba16a35a20e09c802a1054fd29653cd421f1))
+
 ## [0.0.1-alpha.128](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.127...v0.0.1-alpha.128) (2026-08-14)
 
 
