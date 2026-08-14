@@ -45,7 +45,7 @@ REF_BEGIN, REF_END = '<!-- references:begin -->', '<!-- references:end -->'
 
 #: Column order is the order a reader meets these in docs/SPEC.md, not alphabetical
 #: and not by how many models happen to use them.
-COLUMNS = ('sum', 'sum(group_by)', 'shift', "shift(edge='wrap')", 'where', 'bounds', 'piecewise', 'sos', 'MILP')
+COLUMNS = ('sum', 'sum(group_by)', 'at()', 'shift', "shift(edge='wrap')", 'where', 'bounds', 'piecewise', 'sos', 'MILP')
 
 
 def walk(node: Any) -> Iterator[Any]:
@@ -91,6 +91,8 @@ def constructs(model: Path) -> set[str]:
             used.add('sum')
         elif isinstance(node, plan.GroupSum):
             used.add('sum(group_by)')
+        elif isinstance(node, plan.At):
+            used.add('at()')
         elif isinstance(node, plan.Translate):
             used.add("shift(edge='wrap')" if node.wrap else 'shift')
 
