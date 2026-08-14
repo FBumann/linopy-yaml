@@ -49,7 +49,7 @@ COORDS = {'snapshot': range(6)}
 #: Two ways out of the language, caught at two different stages (see stage 7).
 _REFUSED = [
     (
-        'a helper that is not in the closed built-in set',
+        'an operator that is not in the closed built-in set',
         {
             'constraints': {
                 'cumulative': {
