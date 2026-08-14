@@ -79,19 +79,26 @@ def _ratio(a: float | None, b: float | None) -> str:
 
 
 _DENSITY_RUNG = re.compile(r'd\d+$')
+_DECLARATION_RUNG = re.compile(r'n\d+$')
+_SWEEPS = (_DENSITY_RUNG, _DECLARATION_RUNG)
 
 
-def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, density: bool = False) -> list[str]:
+def _sweep_of(size: str) -> re.Pattern[str] | None:
+    """The sweep a rung label belongs to — ``None`` is the size ladder."""
+    return next((p for p in _SWEEPS if p.match(size)), None)
+
+
+def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, sweep: re.Pattern[str] | None = None) -> list[str]:
     """Rung labels for *case*, smallest model first.
 
-    The density sweep is held at one model size, so mixing it into the size
-    ladder would sort four densities in among four sizes and read as a single
-    monotone column that is really two axes. They get separate tables.
+    A sweep is held at one model size, so mixing it into the size ladder would
+    sort its rungs in among the sizes and read as a single monotone column that
+    is really two axes. Each axis gets its own table.
     """
     seen = {
         s: r['counts']['columns']
         for (c, s, k, _), r in rows.items()
-        if c == case and k == sink and bool(_DENSITY_RUNG.match(s)) == density
+        if c == case and k == sink and _sweep_of(s) is sweep
     }
     return sorted(seen, key=lambda s: seen[s])
 
@@ -232,14 +239,14 @@ def marginal(loop_rows: list[Row]) -> str:
     most of the differences this file reports — so publishing one figure would
     misreport whichever use case it was not.
 
-    The density rungs are skipped: they are several masks at one model size and
-    would render as rows sharing a label. They have their own table.
+    The sweep rungs are skipped: each sweep is several variants of one model
+    size and would render as rows sharing a label. They have their own tables.
     """
     best: dict[tuple[str, str, str], Row] = {}
     for r in loop_rows:
         if 'error' in r or r.get('steady_build_seconds') is None:
             continue
-        if _DENSITY_RUNG.match(r['size']):
+        if _sweep_of(r['size']) is not None:
             continue
         key = (r['case'], r['size'], r['arm'])
         if key not in best or r['first_build_seconds'] < best[key]['first_build_seconds']:
@@ -290,7 +297,7 @@ def density(rows: dict[Key, Row]) -> str:
     this is the one comparison where the two lanes are not doing the same work
     in different orders — they are doing different amounts of work.
     """
-    cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, 'lp', density=True)]
+    cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, 'lp', sweep=_DENSITY_RUNG)]
     if not cases:
         return ''
     cols = ARMS
@@ -311,7 +318,7 @@ def density(rows: dict[Key, Row]) -> str:
         '|' + '---|' * len(head),
     ]
     for case in cases:
-        for size in reversed(sizes_of(case, rows, 'lp', density=True)):
+        for size in reversed(sizes_of(case, rows, 'lp', sweep=_DENSITY_RUNG)):
             arms = {a: rows.get((case, size, 'lp', a)) for a in cols}
             ref = next((r for r in arms.values() if r), None)
             if ref is None:
@@ -321,6 +328,55 @@ def density(rows: dict[Key, Row]) -> str:
             cells = [
                 case,
                 _live(ref),
+                _si(ref['counts']['columns']),
+                *(f'{wall[a]:.2f} s' if wall[a] else '—' for a in cols),
+                _ratio(wall['lpspec'], wall[_RATIO_AGAINST]),
+                *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
+                _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
+            ]
+            lines.append('| ' + ' | '.join(cells) + ' |')
+    return '\n'.join(lines)
+
+
+def declarations(rows: dict[Key, Row]) -> str:
+    """One model size, several declaration counts — the axis no size ladder varies.
+
+    Total variables and rows are flat across the sweep, so any movement down a
+    column is per-declaration cost — the loop over declarations both lanes
+    still run — rather than model size.
+    """
+    cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, 'lp', sweep=_DECLARATION_RUNG)]
+    if not cases:
+        return ''
+    cols = ARMS
+    head = (
+        ['case', 'declarations', 'variables']
+        + [f'wall: {a}' for a in cols]
+        + ['wall']
+        + [f'peak: {a}' for a in cols]
+        + ['peak']
+    )
+    lines = [
+        '### The declaration sweep',
+        '',
+        'One model size, through the `lp` sink. A fixed pool of units split into '
+        'N declarations of pool/N units each, so total variables and rows are '
+        'flat and only the declaration count moves.',
+        '',
+        '| ' + ' | '.join(head) + ' |',
+        '|' + '---|' * len(head),
+    ]
+    for case in cases:
+        for size in sorted(sizes_of(case, rows, 'lp', sweep=_DECLARATION_RUNG)):
+            arms = {a: rows.get((case, size, 'lp', a)) for a in cols}
+            ref = next((r for r in arms.values() if r), None)
+            if ref is None:
+                continue
+            wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
+            peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
+            cells = [
+                case,
+                str(int(size[1:])),
                 _si(ref['counts']['columns']),
                 *(f'{wall[a]:.2f} s' if wall[a] else '—' for a in cols),
                 _ratio(wall['lpspec'], wall[_RATIO_AGAINST]),
@@ -397,6 +453,10 @@ def main(argv: list[str] | None = None) -> int:
     if density_table:
         print()
         print(density_table)
+    declaration_table = declarations(rows)
+    if declaration_table:
+        print()
+        print(declaration_table)
     for key, error in sorted(failed.items()):
         print(f'\n<!-- {" ".join(k for k in key if k)}: {error} -->')
     return 0

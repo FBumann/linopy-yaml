@@ -320,7 +320,7 @@ def gate(request: pytest.FixtureRequest) -> Any:
         checked[case_name] = None
         smallest = CASES[case_name].ladder[0].label
         paths_ = resolve(case_name, smallest)
-        objectives = {a: objective(a, case_name, paths_, ENGINE.get(a)) for a in arms}
+        objectives = {a: objective(a, case_name, smallest, paths_, ENGINE.get(a)) for a in arms}
         lo, hi = min(objectives.values()), max(objectives.values())
         if abs(hi - lo) / max(abs(lo), 1e-12) > GATE_RTOL:
             raise AssertionError(f'{case_name}/{smallest}: arms disagree on the objective — {objectives}')

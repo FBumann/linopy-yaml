@@ -11,16 +11,19 @@ a selection out of it: `--cases / --sizes / --arms / --sinks`, plus `-k`.
 ```bash
 uv sync --group bench
 
-# every rung docs/benchmarks.md publishes. The size ladder and the mask sweep
-# go to separate files: a run REPLACES its results file rather than adding to
+# every rung docs/benchmarks.md publishes. The size ladder and each sweep go
+# to separate files: a run REPLACES its results file rather than adding to
 # it, and the report takes as many files as you give it
 uv run pytest bench --benchmark-memory --sizes xs s m l \
     --benchmark-json=bench/results/latest.json
 uv run pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --skip-gate \
     --benchmark-json=bench/results/density.json
+uv run pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --skip-gate \
+    --benchmark-json=bench/results/declarations.json
 
 uv run python -m bench.report bench/results/latest.json \
-    bench/results/density.json                              # -> markdown
+    bench/results/density.json \
+    bench/results/declarations.json                         # -> markdown
 uv run python -m bench.plot                                 # -> the chart page
 
 # anything narrower than the published ladder: send it somewhere else
@@ -218,6 +221,16 @@ a dense array over it is ~10 MB and the fixed cost of the process dominates.
 size, because sweeping size and density together leaves no way to tell one
 effect from the other. Run the full ladder with `--sizes all`.
 
+**The declaration count is the third swept axis.** Every size rung grows
+`snapshot` and holds its case's declaration count fixed, so a cost paid *per
+declaration* — a labelled frame each, a stack at the end — is sampled at
+whatever counts the cases happen to have. The `declarations` case splits a
+fixed pool of 512 units per snapshot into 2 / 8 / 32 / 128 variable
+declarations (rungs `n002`…`n128`), each with its own capacity constraint and
+objective term and one balance over all of them, at one model size for the
+density sweep's reason. Its model YAML varies per rung, so it is generated —
+`_declarations_model` in `bench/cases.py` — and cached beside the rung's data.
+
 **The report measures what survived rather than trusting the declaration.**
 `dispatch` declares `where: p_max > 0` against a p_max that is always positive,
 so its mask removes nothing and the engine pays for it anyway; the `live` column
@@ -304,6 +317,10 @@ Add a YAML file under `bench/models/`, a data generator and a ladder to `CASES`
 in `bench/cases.py`, and a function turning the same parquet paths into the
 linopy lane's `data=`/`coords=` shapes. Nothing else: the parametrization reads
 `CASES`, and the gate and the report are case-agnostic.
+
+A case whose YAML has to vary per rung sets `generate_model` instead of
+`model` — `declarations` is the template — and `Case.model_path(shape)` hands
+every consumer whichever of the two the case has.
 
 ## The map
 
