@@ -252,14 +252,17 @@ class PolarsEngine:
         only on it.
 
         Returns:
-            The share, and the rows that had *any* term. Those are read off the
-            stack before the prune, because that is the one question the pruned
-            share can no longer answer: a row whose every coefficient is zero
-            owns no entries and is not thereby a row with no terms.
+            The share, and the rows that had *any* term. Those are read off a
+            frame before a prune takes the answer away, because that is the one
+            question a pruned share can no longer answer: a row whose every
+            coefficient is zero owns no entries and is not thereby a row with
+            no terms.
         """
         stacked = pl.concat(pieces).collect(engine='streaming').rechunk()
         self._refuse_undefined_divisors(stacked, name, *expressions)
-        stacked, term_rows = _pruned(stacked)
+        pruned = _pruned(stacked)
+        term_rows = stacked.get_column('row').unique() if pruned.height != stacked.height else None
+        stacked = pruned
         row, col = pl.col('row'), pl.col('col')
         tied, ahead = row == row.shift(1), row > row.shift(1)
         repeat = tied & (col == col.shift(1))
@@ -280,8 +283,7 @@ class PolarsEngine:
             .sort('row', 'col')
             .collect(engine='streaming')
         )
-        matrix, cancelled = _pruned(aggregated)
-        return matrix, _rows_of(matrix, term_rows if term_rows is not None else cancelled)
+        return _pruned(aggregated), _rows_of(aggregated, term_rows)
 
     # ------------------------------------------------------------------
     # declarations
@@ -737,8 +739,8 @@ def _without_zeros(matrix: pl.DataFrame) -> pl.DataFrame:
     **A pruned share can no longer say which rows had terms**, and a row whose
     every coefficient is zero still asserts something — ``0 >= 10`` is
     infeasible — so it keeps its place and its bounds and simply owns no
-    entries. :meth:`~PolarsEngine._matrix_share` reads that row set off the
-    stack before pruning and hands it on; deriving it from the pruned share
+    entries. :meth:`~PolarsEngine._matrix_share` reads that row set off each
+    frame before pruning it and hands it on; deriving it from the pruned share
     instead would drop such a row and turn an infeasible model into a feasible
     one.
 
@@ -749,24 +751,21 @@ def _without_zeros(matrix: pl.DataFrame) -> pl.DataFrame:
     return matrix.filter(pl.col('coeff') != 0)
 
 
-def _pruned(matrix: pl.DataFrame) -> tuple[pl.DataFrame, pl.Series | None]:
-    """*matrix* without its zeros, and the rows it had before losing them.
+def _pruned(matrix: pl.DataFrame) -> pl.DataFrame:
+    """*matrix* without its zeros — unchanged, and not rechunked, when it has none.
 
     Behind a probe, like everything else in :meth:`PolarsEngine._matrix_share`:
     filtering leaves a chunked frame and the ``shift(1)`` probes downstream pay
     at every boundary (#576), so a share with no zero to drop must not pay a
-    rechunk to discover that. The row set comes back only when the prune
-    actually ran, because only then can the pruned frame no longer answer it —
-    and reading it unconditionally costs a hash of the *unaggregated* stack on
-    every model, which is the whole of a wide build's regression.
-
-    Returns:
-        The pruned matrix and the rows that owned an entry before it, or the
-        matrix unchanged and ``None`` when there was nothing to prune.
+    rechunk to discover that. A pruned frame can no longer say which rows had a
+    term, so a caller that needs that answer reads it off the frame it passes
+    in, before this runs — and only when it must: reading it unconditionally
+    costs a hash of the *unaggregated* stack on every model, which is the whole
+    of a wide build's regression.
     """
     if not matrix.select(pl.col('coeff').eq(0).any()).item():
-        return matrix, None
-    return _without_zeros(matrix).rechunk(), matrix.get_column('row').unique()
+        return matrix
+    return _without_zeros(matrix).rechunk()
 
 
 def _rows_of(matrix: pl.DataFrame, before: pl.Series | None) -> pl.Series:
