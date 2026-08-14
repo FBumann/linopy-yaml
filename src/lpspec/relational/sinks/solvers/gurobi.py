@@ -163,7 +163,9 @@ class Gurobi(Solver):
         status = _status_of(self._m)
         if not status.is_readable:
             return SolveAnswer.unreadable(status)
-        return SolveAnswer(status, self._m.ObjVal, solver_vector(self._x.X), _duals(self._blocks))
+        return SolveAnswer(
+            status, self._m.ObjVal, solver_vector(self._x.X), _duals(self._blocks), _activity(self._blocks)
+        )
 
     def close(self) -> None:
         """Release the model and the licence its environment holds.
@@ -319,6 +321,23 @@ def _wording(code: int) -> str:
     gurobipy = _gurobipy()
     names = {getattr(gurobipy.GRB.Status, name): name for name in dir(gurobipy.GRB.Status) if not name.startswith('_')}
     return names.get(code, str(code))
+
+
+def _activity(blocks: list[Any]) -> pl.Series:
+    """Each row's left-hand side at the solution, in row order.
+
+    Gurobi exposes no row value of its own — only ``Slack``, which is
+    ``rhs - activity`` uniformly across senses — so the one subtraction
+    recovers the solver's number. ``Slack`` exists whenever a solution does,
+    mixed-integer included, and a readable status guarantees one by the time
+    this is asked. Blocks were added in ascending row ranges, the same fact
+    :func:`_duals` leans on.
+    """
+    import numpy as np
+
+    slices = [block.RHS - block.Slack for block in blocks]
+    values = np.concatenate(slices) if slices else np.empty(0, dtype=np.float64)
+    return solver_vector(values)
 
 
 def _duals(blocks: list[Any]) -> pl.Series | None:

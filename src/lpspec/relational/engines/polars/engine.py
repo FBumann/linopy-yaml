@@ -683,12 +683,16 @@ class PolarsEngine:
         assert answer.primal is not None or not answer.status.is_readable, (
             'a readable status must come with a primal vector'
         )
-        primals, duals = self._read_back(answer.primal, answer.dual)
+        assert (answer.activity is None) == (answer.primal is None), (
+            'activity travels with the primal: every sink reads it whenever a solution exists, mixed-integer included'
+        )
+        primals, duals, activities = self._read_back(answer.primal, answer.dual, answer.activity)
         return Result(
             _status=answer.status,
             _objective=answer.objective,
             _primals=primals,
             _duals=duals,
+            _activities=activities,
             _no_duals=None
             if answer.dual is not None
             else no_duals_message(
@@ -719,8 +723,8 @@ class PolarsEngine:
         )
 
     def _read_back(
-        self, primal: pl.Series | None, dual: pl.Series | None
-    ) -> tuple[dict[str, pl.LazyFrame], dict[str, pl.LazyFrame]]:
+        self, primal: pl.Series | None, dual: pl.Series | None, activity: pl.Series | None
+    ) -> tuple[dict[str, pl.LazyFrame], dict[str, pl.LazyFrame], dict[str, pl.LazyFrame]]:
         """One solve's answer as one frame per declaration — a :class:`Result`'s own.
 
         References rather than copies: the frames point at this build's label
@@ -738,19 +742,25 @@ class PolarsEngine:
         through ``_no_duals``.
         """
         assert self._program is not None
+        program = self._program
+
+        def rows(values: pl.Series | None) -> dict[str, pl.LazyFrame]:
+            if values is None:
+                return {}
+            return {
+                c.name: self._laid_out(self._constraint_blocks[c.name], self._constraints[c.name], c.dims, values)
+                for c in program.constraints
+            }
+
         return (
             {
                 v.name: self._laid_out(self._variable_blocks[v.name], self._variables[v.name], v.dims, primal)
-                for v in self._program.variables
+                for v in program.variables
             }
             if primal is not None
             else {},
-            {
-                c.name: self._laid_out(self._constraint_blocks[c.name], self._constraints[c.name], c.dims, dual)
-                for c in self._program.constraints
-            }
-            if dual is not None
-            else {},
+            rows(dual),
+            rows(activity),
         )
 
     def _laid_out(

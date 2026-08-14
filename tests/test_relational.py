@@ -880,10 +880,11 @@ def test_a_solution_is_read_back_in_label_order_without_sorting_for_it():
     with lps.build(model, sources) as bound:
         primal = pl.Series('value', np.arange(bound._engine._n_cols, dtype=np.float64))
         dual = pl.Series('value', np.arange(bound._engine._n_rows, dtype=np.float64))
-        primals, duals = bound._engine._read_back(primal, dual)
+        primals, duals, activities = bound._engine._read_back(primal, dual, dual)
         assert 'SORT' not in primals['p'].explain(optimized=False), 'the labeller already ordered this'
         assert primals['p'].collect()['value'].to_list() == list(range(len(primal))), 'primal not in label order'
         assert duals['meet'].collect()['value'].to_list() == list(range(len(dual))), 'dual not in label order'
+        assert activities['meet'].collect()['value'].to_list() == list(range(len(dual))), 'activity not in label order'
 
 
 #: Three columns and three rows, the smallest model whose solution vector has a

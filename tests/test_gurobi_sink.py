@@ -91,15 +91,20 @@ CASES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
 
 
 @pytest.mark.parametrize(
-    ('name', 'variable', 'constraint'), [('LP', 'p', 'meet'), ('MAX', 'p', 'lim'), ('MIP', 'x', None)]
+    ('name', 'variable', 'constraint', 'has_duals'),
+    [('LP', 'p', 'meet', True), ('MAX', 'p', 'lim', True), ('MIP', 'x', 'budget', False)],
 )
-def test_gurobi_and_highs_agree(name: str, variable: str, constraint: str | None) -> None:
-    """The claim the second solver has to earn, on all three quantities.
+def test_gurobi_and_highs_agree(name: str, variable: str, constraint: str, has_duals: bool) -> None:
+    """The claim the second solver has to earn, on all four quantities.
 
     Coordinates as well as values, since a sink that loaded the columns in a
     different order would still reach the same objective on these models — and
     duals under ``maximize``, where a sign convention could differ and nothing
-    else in the suite would notice.
+    else in the suite would notice. Activity is the quantity the two sinks
+    reach through different doors — HiGHS reads its own ``row_value``, this
+    sink subtracts ``Slack`` from ``RHS`` — so agreement is two solvers *and*
+    two derivations, and it must hold on the MIP too: activity is gated on
+    ``has_primal`` alone, where duals are not.
     """
     with lps.solve(*CASES[name]) as highs, lps.solve(*CASES[name], solver_name='gurobi') as gb:
         assert gb.termination_condition == highs.termination_condition
@@ -110,7 +115,10 @@ def test_gurobi_and_highs_agree(name: str, variable: str, constraint: str | None
         assert got.drop('value').equals(expected.drop('value'))
         assert got['value'].to_list() == pytest.approx(expected['value'].to_list())
 
-        if constraint:
+        assert gb.activity(constraint)['value'].to_list() == pytest.approx(
+            highs.activity(constraint)['value'].to_list()
+        )
+        if has_duals:
             assert gb.dual(constraint)['value'].to_list() == pytest.approx(highs.dual(constraint)['value'].to_list())
 
 

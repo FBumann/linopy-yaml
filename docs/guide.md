@@ -110,6 +110,7 @@ sol = lps.solve('model.yaml', sources)  # to an answer
 sol.objective
 sol.primal('p')  # a polars.DataFrame
 sol.dual('power_balance')
+sol.activity('power_balance')  # the row's left-hand side at the solution
 ```
 
 `lps.check` is the CI verb — it parses, expands, resolves and lowers without
