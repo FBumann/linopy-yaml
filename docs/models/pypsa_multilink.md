@@ -19,7 +19,7 @@ and a four-ended link would change nothing but the data.
 
 One decision per link survives the tidying: `p`, what the link draws at its
 input — PyPSA's `p0`. The balance walks it out to every terminal with
-`at(p, onto=terminal, by=link_of)`, scales each end by its coefficient, and
+`at(p, by=link_of)`, scales each end by its coefficient, and
 lands it on that end's bus. Three terminals or two, the expression never says.
 
 The instance is a toy gas-to-energy system: a CHP (gas → 0.4 elec + 0.4 heat,
@@ -150,8 +150,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       nodal_balance:
         foreach: [bus]
         expression: >-
-          sum(gen, over=generator, group_by=gen_bus)
-          + sum(at(p, onto=terminal, by=link_of) * coefficient, over=terminal, group_by=bus_of)
+          sum(gen, by=gen_bus)
+          + sum(at(p, by=link_of) * coefficient, by=bus_of)
           == load
 
     objective:

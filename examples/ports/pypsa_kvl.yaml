@@ -54,9 +54,9 @@ constraints:
   nodal_balance:
     foreach: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, group_by=gen_bus)
-      + sum(f, over=line, group_by=to)
-      - sum(f, over=line, group_by=from)
+      sum(p, by=gen_bus)
+      + sum(f, by=to)
+      - sum(f, by=from)
       == load
 
   # Kirchhoff's voltage law: around each independent cycle, the

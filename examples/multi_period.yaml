@@ -35,7 +35,7 @@ variables:
 constraints:
   within_cap:
     foreach: [snapshot, generator]
-    expression: p <= at(p_nom, onto=snapshot, by=period_of)
+    expression: p <= at(p_nom, by=period_of)
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) == load

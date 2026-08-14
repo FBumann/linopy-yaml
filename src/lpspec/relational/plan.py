@@ -138,7 +138,7 @@ class At(Expression):
     and produces ``into``, this consumes ``into`` and produces ``over``. The
     fields are named for the *table* rather than the direction, so the pair
     reads as one relation; the surface says which end you stand on
-    (``sum(over=)`` consumes, ``at(onto=)`` produces, ``by=`` names the map).
+    (``sum(by=)`` consumes it, ``at(by=)`` produces it, the lookup names the map).
 
     The join fans out, many ``over`` labels sharing one ``into`` — the fan-out
     ``GroupSum`` pays in reverse, so the locality class is unchanged.

@@ -135,7 +135,7 @@ def check_coordinate_containment(d: str, cname: str, target: str, dimensions: Di
     raise DataError(
         f"dimension '{d}' lookup '{cname}' has value(s) that are not "
         f"'{target}' coordinates: {shown}. Every value must be a declared "
-        f"'{target}' label — otherwise sum(over={d}, group_by={cname}) drops "
+        f"'{target}' label — otherwise sum(by={cname}) drops "
         f'those terms in the join that places them, and the model builds and '
         f'solves without them.'
     )

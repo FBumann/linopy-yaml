@@ -85,7 +85,7 @@ def test_a_lookup_cannot_take_a_dimensions_name():
 def test_grouping_into_a_label_space_is_refused_with_the_promotion_rewrite():
     """The error teaches the promotion, not merely the refusal."""
     with pytest.raises(LpspecError, match="is a label space over 'snapshot'") as caught:
-        lps.check(_model('sum(x, over=snapshot, group_by=period)'))
+        lps.check(_model('sum(x, by=period)'))
     assert 'period_of: {over: snapshot, into: period}' in str(caught.value), (
         'the refusal has to show the axis-plus-lookup declaration that makes grouping sayable'
     )
@@ -119,7 +119,7 @@ def test_a_dimension_grouped_into_draws_no_advice():
         'constraints': {'c': {'foreach': ['generator'], 'expression': 'p <= 1'}},
         'objective': {
             'sense': 'minimize',
-            'expression': 'sum(sum(p * cost, over=generator, group_by=gen_bus), over=bus)',
+            'expression': 'sum(sum(p * cost, by=gen_bus), over=bus)',
         },
     }
     with warnings.catch_warnings():
@@ -166,9 +166,7 @@ def _unused_target_model(month: dict) -> dict:
         },
         'parameters': {'cap': {'dims': ['period']}},
         'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
-        'constraints': {
-            'budget': {'foreach': ['period'], 'expression': 'sum(p, over=snapshot, group_by=period_of) <= cap'}
-        },
+        'constraints': {'budget': {'foreach': ['period'], 'expression': 'sum(p, by=period_of) <= cap'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(p, over=snapshot)'},
     }
 

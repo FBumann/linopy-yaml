@@ -70,28 +70,28 @@ variables:
       lower: 0
 
 expressions:
-  reserve_of: sum(r, over=offer, group_by=gen_of)
+  reserve_of: sum(r, by=gen_of)
 
 constraints:
   balance:
     foreach: [bus]
     expression: >-
-      sum(p, over=generator, group_by=gen_bus)
-      + sum(f, over=line, group_by=to)
-      - sum(f, over=line, group_by=from)
+      sum(p, by=gen_bus)
+      + sum(f, by=to)
+      - sum(f, by=from)
       == load
   export_cap:
     foreach: [line]
-    expression: f <= at(bus_cap, onto=line, by=from)
+    expression: f <= at(bus_cap, by=from)
   requirement:
     foreach: [market]
-    expression: sum(r, over=offer, group_by=market_of) >= req
+    expression: sum(r, by=market_of) >= req
   headroom:
     foreach: [generator]
     expression: p + reserve_of <= p_max
   offer_cap:
     foreach: [offer]
-    expression: r <= at(tranche_frac, onto=offer, by=tranche_of) * at(p_max, onto=offer, by=gen_of)
+    expression: r <= at(tranche_frac, by=tranche_of) * at(p_max, by=gen_of)
   zone_cover:
     foreach: [zone]
     expression: sum(zone_share * reserve_of, over=generator) >= zone_req

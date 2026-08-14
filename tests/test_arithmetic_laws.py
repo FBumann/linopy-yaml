@@ -283,8 +283,8 @@ def test_sum_does_not_distribute_over_addition_either():
     change was made on: the two spellings separate, and both lanes agree about
     where they land.
     """
-    together = _wide_objective_of('sum(x + y, over=f, group_by=grp) <= 120', foreach=['g', 't'])
-    apart = _wide_objective_of('sum(x, over=f, group_by=grp) + sum(y, over=f, group_by=grp) <= 120', foreach=['g', 't'])
+    together = _wide_objective_of('sum(x + y, by=grp) <= 120', foreach=['g', 't'])
+    apart = _wide_objective_of('sum(x, by=grp) + sum(y, by=grp) <= 120', foreach=['g', 't'])
 
     assert together == pytest.approx(640.0, rel=RTOL)
     assert apart == pytest.approx(480.0, rel=RTOL)

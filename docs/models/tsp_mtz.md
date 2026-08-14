@@ -156,8 +156,8 @@ constraints:
     foreach: [from_city, to_city]
     where: "from_city != c01 AND to_city != c01"
     expression: >-
-      sum(u, over=city, group_by=as_from)
-      - sum(u, over=city, group_by=as_to)
+      sum(u, by=as_from)
+      - sum(u, by=as_to)
       + n * travel
       <= n - 1
 
@@ -179,12 +179,12 @@ lookups:
   as_to: {over: city, into: to_city}
 ```
 
-and `sum(u, over=city, group_by=as_from)` becomes a **relabel** rather than a
+and `sum(u, by=as_from)` becomes a **relabel** rather than a
 reduction — the map is one-to-one, so nothing is added up; `u` simply moves
 from the `city` axis onto the `from_city` axis. Doing it twice with different
 lookups puts the same variable at both ends of one row.
 
-That is `sum(group_by=)` doing a job it was not designed for and handling it because
+That is `sum(by=)` doing a job it was not designed for and handling it because
 [topology is data](pypsa_transport.md): a lookup is a join, and a join
 does not care whether it is many-to-one or one-to-one.
 
@@ -214,7 +214,7 @@ solves large instances this way.
 
 ## What it exercises
 
-`sum(group_by=)` as a relabel through a one-to-one lookup, a `where`
+`sum(by=)` as a relabel through a one-to-one lookup, a `where`
 comparing a dimension against a string label, sparsity standing in for an
 `i ≠ j` guard, and `binary` over a two-dimensional index.
 

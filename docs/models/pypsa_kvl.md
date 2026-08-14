@@ -141,9 +141,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       nodal_balance:
         foreach: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, group_by=gen_bus)
-          + sum(f, over=line, group_by=to)
-          - sum(f, over=line, group_by=from)
+          sum(p, by=gen_bus)
+          + sum(f, by=to)
+          - sum(f, by=from)
           == load
 
       # Kirchhoff's voltage law: around each independent cycle, the
@@ -236,7 +236,7 @@ says the same thing.
 
 A parameter over two dimensions multiplying a variable over one, reduced along
 the shared dimension — the shape that makes an incidence matrix sayable at all.
-Plus `sum(group_by=)` on both line endpoints for the nodal balance, as in rung 1.
+Plus `sum(by=)` on both line endpoints for the nodal balance, as in rung 1.
 
 No new construct was needed for the last rung of the ladder, which is the
 result worth reporting.

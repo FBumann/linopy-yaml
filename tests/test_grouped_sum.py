@@ -94,19 +94,29 @@ def test_sum_lowers_to_one_node_per_injection_term():
     ('expression', 'match'),
     [
         pytest.param(
-            'sum(p, over=nope, group_by=gen_bus)',
+            'sum(p, over=nope)',
             r'over=nope\) does not name a declared dimension',
             id='an-undeclared-dim',
         ),
         pytest.param(
-            'sum(p, over=generator, group_by=nope)',
-            r"group_by=nope\) does not name a lookup over 'generator'",
+            'sum(p, by=nope)',
+            r'by=nope\) does not name a lookup',
             id='a-lookup-nothing-declares',
         ),
         pytest.param(
-            'sum(p, over=generator, group_by=to)',
-            r"group_by=to\) does not name a lookup over 'generator'",
-            id='a-lookup-over-a-different-dim',
+            'sum(p, by=bus)',
+            r"by=bus\): 'bus' is a dimension, and by= takes a lookup",
+            id='a-dimension-where-a-lookup-belongs',
+        ),
+        pytest.param(
+            'sum(p, over=generator, by=gen_bus)',
+            r'sum\(\) takes exactly one of over= or by=',
+            id='both-halves-of-the-old-spelling',
+        ),
+        pytest.param(
+            'sum(p, over=generator, group_by=gen_bus)',
+            r'sum\(group_by=\.\.\.\) was removed',
+            id='the-retired-group_by-kwarg',
         ),
     ],
 )
@@ -121,7 +131,20 @@ def test_grouping_an_expression_that_lacks_the_dim_is_refused():
     lowering raises it by asking `dimensions`, not by restating it."""
     schema = schema_of(TRANSPORT_YAML)
     with pytest.raises(LanguageError, match='but the expression'):
-        _lower_expr(resolved('sum(f, over=generator, group_by=gen_bus)', schema), schema, 't')
+        _lower_expr(resolved('sum(f, by=gen_bus)', schema), schema, 't')
+
+
+def test_a_lookup_over_another_dim_is_a_dim_error_not_a_resolution_one():
+    """`by=` addresses the lookup registry, which is flat, so a lookup over
+    another dim *resolves* — the two-part spelling refused it in resolution,
+    because a name was only meaningful under the `over=` it was written beside.
+    What catches it now is the dim rule, one pass later and with the better
+    message: `p` does not carry `line`.
+    """
+    schema = schema_of(TRANSPORT_YAML)
+    node = resolved('sum(p, by=to)', schema)
+    with pytest.raises(LanguageError, match=r"sum\(by=to\) consumes 'line', the dim the lookup is over"):
+        _lower_expr(node, schema, 't')
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +232,7 @@ variables:
 constraints:
   meet:
     foreach: [g]
-    expression: sum(x, over=item, group_by=grp) >= target
+    expression: sum(x, by=grp) >= target
 objective:
   sense: minimize
   expression: sum(x, over=item)
@@ -271,7 +294,7 @@ BROADCAST_GROUP_SUM = {
     'constraints': {
         'cap': {
             'foreach': ['snapshot', 'bus'],
-            'expression': 'sum(x * w, over=generator, group_by=gen_bus) <= limit',
+            'expression': 'sum(x * w, by=gen_bus) <= limit',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'x'},
@@ -291,7 +314,7 @@ BROADCAST_SOURCES = {
 def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     """The variable does not carry the grouped dim, so a group holds it twice.
 
-    `sum(x * w, over=generator, group_by=bus)` with `x` indexed by snapshot
+    `sum(x * w, by=bus)` with `x` indexed by snapshot
     alone: `generator` reaches the fragment by broadcast from `w`, so two
     generators on one bus put the *same* `var_label` on one row. Nothing after
     this point can tell them apart — a solver handed a row with a column twice
@@ -315,7 +338,7 @@ def test_sum_over_a_foreach_dim_needs_no_such_collapse():
         BROADCAST_GROUP_SUM,
         **{
             'variables.x.foreach': ['snapshot', 'generator'],
-            'constraints.cap.expression': 'sum(x * w, over=generator, group_by=gen_bus) <= limit',
+            'constraints.cap.expression': 'sum(x * w, by=gen_bus) <= limit',
         },
     )
     with lps.build(model, BROADCAST_SOURCES) as bound:

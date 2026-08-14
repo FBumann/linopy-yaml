@@ -19,7 +19,7 @@ nothing else.
 Compare [transport](transport.md): there, $\mathrm{gen\_bus}$ is a lookup over
 `generator` and the sum is over generators at a bus. Here $\mathrm{month\_of}$ is a
 lookup over `snapshot` and the sum is over snapshots in a month. **It is the
-same construct** — `sum(group_by=)` — and time is not a special axis.
+same construct** — `sum(by=)` — and time is not a special axis.
 
 ## The model
 
@@ -114,7 +114,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         expression: sum(p, over=generator) == load
       monthly_budget:
         foreach: [month, generator]
-        expression: sum(p, over=snapshot, group_by=month_of) <= monthly_cap
+        expression: sum(p, by=month_of) <= monthly_cap
 
     objective:
       sense: minimize
@@ -179,7 +179,7 @@ shape: (6, 2)
 └─────────────────────┴──────────┘
 ```
 
-Three snapshots in January, one in February, two in March: `sum(group_by=)` needs a
+Three snapshots in January, one in February, two in March: `sum(by=)` needs a
 partition, not equal groups.
 
 That one expression is the only place a calendar appears anywhere. Swap it for
@@ -212,7 +212,7 @@ sol.primal('p').join(index, on='snapshot').group_by('month_of').agg(pl.col('valu
 A lookup with `into:` is a **function between two dimensions**, so it needs a
 codomain. `month` being one is not ceremony — three things rest on it:
 
-1. **`sum(group_by=)` replaces `over` with the dimension the lookup targets.**
+1. **`sum(by=)` lands terms on the dimension the lookup targets.**
    The expression's dims are therefore `[month, generator]`, and a `foreach:`
    can only name declared dimensions.
 2. **`monthly_cap` is indexed *by* month.** A parameter carries values *at*
@@ -238,7 +238,7 @@ misspelled is a mistake.
 
 ## What this cannot do
 
-`sum(group_by=)` takes a **partition**: `month_of` is a function from snapshot to
+`sum(by=)` takes a **partition**: `month_of` is a function from snapshot to
 month, so a snapshot with a month belongs to exactly one group. Unequal groups
 are fine, and a group with no members contributes nothing — as does a snapshot
 whose `month_of` is null, which belongs to no group and lands nowhere.
@@ -251,5 +251,5 @@ it is the fixed-width window, [#468](https://github.com/fluxopt/lpspec/issues/46
 The same split shows up one level up, where a *process* loops over plans
 rather than an expression looping over rows
 ([#457](https://github.com/fluxopt/lpspec/issues/457)): slicing a model per
-group is a partition, slicing it per window overlaps. Here `sum(group_by=)`
+group is a partition, slicing it per window overlaps. Here `sum(by=)`
 partitions, and the overlapping counterpart is the piece that has not landed.

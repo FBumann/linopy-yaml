@@ -58,8 +58,8 @@ constraints:
   nodal_balance:
     foreach: [bus]
     expression: >-
-      sum(gen, over=generator, group_by=gen_bus)
-      + sum(at(p, onto=terminal, by=link_of) * coefficient, over=terminal, group_by=bus_of)
+      sum(gen, by=gen_bus)
+      + sum(at(p, by=link_of) * coefficient, by=bus_of)
       == load
 
 objective:

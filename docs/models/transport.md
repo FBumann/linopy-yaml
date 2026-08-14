@@ -113,8 +113,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           upper: cap
 
     expressions:
-      gen_at_bus: sum(p, over=generator, group_by=gen_bus)
-      net_inflow: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+      gen_at_bus: sum(p, by=gen_bus)
+      net_inflow: sum(f, by=to) - sum(f, by=from)
 
     constraints:
       balance:
@@ -171,9 +171,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
 ## What it exercises
 
-Three `sum(group_by=)` calls, and they are what a network *is* in this language.
+Three `sum(by=)` calls, and they are what a network *is* in this language.
 A model can declare **lookups** — `gen_bus` maps `generator` onto `bus`, `from`
-and `to` map `line` — and `sum(f, over=line, group_by=to)` sums along a
+and `to` map `line` — and `sum(f, by=to)` sums along a
 line's `to` lookup, landing the result on `bus`. The same `f` is summed
 twice through two different lookups, once as an inflow and once as an
 outflow.

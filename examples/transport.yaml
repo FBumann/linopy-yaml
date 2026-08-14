@@ -38,8 +38,8 @@ variables:
       upper: cap
 
 expressions:
-  gen_at_bus: sum(p, over=generator, group_by=gen_bus)
-  net_inflow: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+  gen_at_bus: sum(p, by=gen_bus)
+  net_inflow: sum(f, by=to) - sum(f, by=from)
 
 constraints:
   balance:

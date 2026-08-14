@@ -98,7 +98,7 @@ does not join `'2024-01-01'` in the data.
 
 **A dimension and a lookup are different things, and the file keeps them
 apart.** A **dimension** is an axis of the model: something is indexed by it
-(`dims`, `foreach`) or an aggregation lands terms on it (`group_by=`, `at()`).
+(`dims`, `foreach`) or an aggregation lands terms on it (`by=`, `at()`).
 A **lookup** is a named single-valued map out of a dimension — a generator's
 bus, a snapshot's period — structure, never data: it is not legal in a value
 position, and a *value* riding a dimension is what a parameter is. The block
@@ -112,7 +112,7 @@ never an axis.
 fields it carries says which of two kinds it is:
 
 - **`into:` names a target dimension — the groupable kind.** The lookup's
-  values are labels of that dimension, which is what `sum(group_by=)` and
+  values are labels of that dimension, which is what `sum(by=)` and
   `at()` land terms on:
 
   ```yaml
@@ -128,9 +128,9 @@ fields it carries says which of two kinds it is:
 
   The target must be a declared dimension other than `over`. Non-null values
   are checked against the target once data is bound (§8) — the check that
-  makes `sum(group_by=)` safe. A **partial** lookup is legal: null says the
+  makes `sum(by=)` safe. A **partial** lookup is legal: null says the
   label belongs to no group (a generator on no bus, a line with one open end)
-  and `sum(group_by=)` places its terms nowhere, while an unknown *non-null*
+  and `sum(by=)` places its terms nowhere, while an unknown *non-null*
   value is a typo and an error.
 
 - **`dtype:` declares an inline label space — the selection-only kind.** It
@@ -396,6 +396,7 @@ for that reason. The objective carries no name at all (§2).
 |---|---|
 | expression (`p * cost`) | variable, parameter |
 | dimension argument (`over=`, `into=`) | dimension |
+| lookup argument (`by=` on `sum` / `at`) | lookup — never a dimension, and never a lookup a different helper kwarg has to agree with |
 | where string | parameter, dimension |
 | `bounds.lower` / `.upper` | parameter name, or a number |
 | `shift(x, over=d, by=n, edge=0)` — the `edge` key | `'wrap'` **quoted**, or a bare number; never a dimension. A bare word in a kwarg value is a *name to resolve*, and `wrap` is a literal — the same rule §6.1 uses for a `where`, so `over=wrap, edge='wrap'` reads unambiguously even where a dimension is called `wrap` |
@@ -420,8 +421,8 @@ name-checked, so **every node's dim set is computable before any data is bound**
 | `-x`, `+x` | `dims(x)` | |
 | `a + b`, `a * b`, `a / b` | `dims(a) ∪ dims(b)` | |
 | `sum(x, over=d)` | `dims(x) − {d}` | if `d ∉ dims(x)` |
-| `sum(x, over=d, group_by=c)` | `(dims(x) − {d}) ∪ {target(c)}` | unless `d ∈ dims(x)`, or `d` declares no coordinate `c` |
-| `at(x, onto=d, by=c)` | `(dims(x) − {target(c)}) ∪ {d}` | unless `target(c) ∈ dims(x)`, or `d` declares no coordinate `c`, or `d ∈ dims(x)` already |
+| `sum(x, by=l)` | `(dims(x) − {over(l)}) ∪ {into(l)}` | if `over(l) ∉ dims(x)`, or `into(l) ∈ dims(x)` already |
+| `at(x, by=l)` | `(dims(x) − {into(l)}) ∪ {over(l)}` | if `into(l) ∉ dims(x)`, or `over(l) ∈ dims(x)` already |
 | `shift(x, over=d, by=n)` | `dims(x)` | if `d ∉ dims(x)` |
 
 Binary operators **union**: an outer product is legitimate when the frame
@@ -595,8 +596,8 @@ arguments are name-checked at load time:
 | Operator | Result | Notes |
 |---|---|---|
 | `sum(array, over=dim)` | `dim` collapses | `array` must carry `dim` |
-| `sum(array, over=dim, group_by=coord)` | `over` → the dimension `coord` targets | `coord` is declared on `over` (§2); its values are the group labels, checked against the target dimension at bind time. The membership sum that makes topology data rather than structure; groups with no members contribute nothing |
-| `at(array, onto=dim, by=coord)` | the dimension `coord` targets → `over` | **The adjoint of `sum(group_by=)`, and deliberately the same two arguments**: `(over, by)` names one mapping table and the operator says which way it is walked. `sum(group_by=)` consumes `over` and produces the target; `at` consumes the target and produces `over`, reading one coarse value once per fine label pointing at it. Reads a *variable* as readily as a parameter, which is what a per-component decision gating its flows needs. A fine label whose coordinate is null reads nothing and its row is absent, matching `sum(group_by=)`'s null group |
+| `sum(array, by=lookup)` | the dim the lookup is over → the dim it maps into | `lookup` is a declared groupable lookup (§2); its values are the group labels, checked against the target dimension at bind time. The membership sum that makes topology data rather than structure; groups with no members contribute nothing |
+| `at(array, by=lookup)` | the dim the lookup maps into → the dim it is over | **The adjoint of `sum(by=)`, and deliberately the same one argument**: the lookup names one mapping table and the operator says which way it is walked. `sum(by=)` consumes the dim the lookup is over and produces its target; `at` consumes the target and produces that dim, reading one coarse value once per fine label pointing at it. Reads a *variable* as readily as a parameter, which is what a per-component decision gating its flows needs. A fine label whose lookup value is null reads nothing and its row is absent, matching `sum(by=)`'s null group |
 | `shift(array, over=dim, by=n)` | value at *t−n* | vacated positions are **absent**: they propagate and drop the row (§6) |
 | `shift(array, over=dim, by=n, edge='wrap')` | value at *t−n*, cyclic | coordinates fixed, values wrap; nothing is vacated |
 | `shift(array, over=dim, by=n, edge=v)` | value at *t−n* | vacated positions contribute the number **`v`** instead, and the row survives (`0` for a sum, `1` for a product) |

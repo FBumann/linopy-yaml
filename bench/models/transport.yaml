@@ -43,7 +43,7 @@ variables:
 constraints:
   balance:
     foreach: [snapshot, bus]
-    expression: sum(p, over=generator, group_by=gen_bus) + sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from) == load
+    expression: sum(p, by=gen_bus) + sum(f, by=to) - sum(f, by=from) == load
 
 objective:
   sense: minimize

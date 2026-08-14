@@ -11,8 +11,7 @@ A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
 The comparison the page cares about is the nodal balance. The YAML groups by
-lookups it declared over the dimensions — ``sum(p, over=generator,
-group_by=gen_bus)`` — where this script has to build the bus x generator and
+lookups it declared over the dimensions — ``sum(p, by=gen_bus)`` — where this script has to build the bus x generator and
 bus x line incidence matrices itself and multiply through them. Both say
 Kirchhoff's current law; one says it as a relation, the other as linear
 algebra.

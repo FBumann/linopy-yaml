@@ -34,7 +34,7 @@ constraints:
     expression: sum(p, over=generator) == load
   monthly_budget:
     foreach: [month, generator]
-    expression: sum(p, over=snapshot, group_by=month_of) <= monthly_cap
+    expression: sum(p, by=month_of) <= monthly_cap
 
 objective:
   sense: minimize

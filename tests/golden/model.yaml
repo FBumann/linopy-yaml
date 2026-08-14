@@ -39,7 +39,7 @@ variables:
 constraints:
   balance:      # sum over a lookup
     foreach: [snapshot, bus]
-    expression: sum(p, over=generator, group_by=gen_bus) + spill - slack == load
+    expression: sum(p, by=gen_bus) + spill - slack == load
   ramp:         # roll (cyclic) and shift (acyclic) in one equation
     foreach: [snapshot, generator]
     expression: p - shift(p, over=snapshot, by=1, edge='wrap') <= shift(p, over=snapshot, by=1) + p_max

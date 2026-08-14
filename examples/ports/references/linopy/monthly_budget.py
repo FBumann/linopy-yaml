@@ -11,7 +11,7 @@ A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
 The line worth comparing is the budget. The YAML groups by a lookup over
-snapshot — ``sum(p, over=snapshot, group_by=month_of)`` —
+snapshot — ``sum(p, by=month_of)`` —
 and linopy carries the same idea natively: ``p.groupby(month).sum()``, the
 way PyPSA's own optimization layer aggregates. The difference is where the
 calendar lives — a declared lookup in the YAML, a data array the model
