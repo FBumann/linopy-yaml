@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.128](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.127...v0.0.1-alpha.128) (2026-08-14)
+
+
+### Features
+
+* **api:** a slow build says where the time went ([#717](https://github.com/fluxopt/lpspec/issues/717)) ([bab22b0](https://github.com/fluxopt/lpspec/commit/bab22b0ad8a1e3de17d873f4d0942b944329ba2f))
+* **api:** a solved constraint row says its activity ([#716](https://github.com/fluxopt/lpspec/issues/716)) ([63205d4](https://github.com/fluxopt/lpspec/commit/63205d4e1843d23f446a4d3ac654890dd2a571f0))
+
 ## [0.0.1-alpha.127](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.126...v0.0.1-alpha.127) (2026-08-14)
 
 
