@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.125](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.124...v0.0.1-alpha.125) (2026-08-14)
+
+
+### Features
+
+* **language:** a second objective is unsayable, not caught ([#729](https://github.com/fluxopt/lpspec/issues/729)) ([6c9d986](https://github.com/fluxopt/lpspec/commit/6c9d9860f167c6390dc9da71080b0c5b1d164bbe))
+
 ## [0.0.1-alpha.124](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.123...v0.0.1-alpha.124) (2026-08-14)
 
 
