@@ -59,6 +59,7 @@ nav:
           - rung 4 — cyclic storage: models/pypsa_cyclic_storage.md
           - rung 5 — KVL: models/pypsa_kvl.md
           - unit commitment: models/pypsa_unit_commitment.md
+          - multi-link: models/pypsa_multilink.md
       - Published optima:
           - Dantzig transport: models/transport_dantzig.md
           - Dantzig, economies of scale: models/transport_pwl.md
