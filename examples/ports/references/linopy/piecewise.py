@@ -16,7 +16,7 @@ convex hull is linopy's ``add_piecewise_formulation``, fed the breakpoint
 tables pivoted wide and wrapped in its ``breakpoints`` factory. ``op_cost``
 is *bounded below* by the curve (``'>='``) rather than pinned to it — under
 minimisation the same convex hull, and what keeps the formulation a pure LP
-with duals, as ``convex: true`` does on the YAML side; the pinned form makes
+with duals, as ``method: convex`` does on the YAML side; the pinned form makes
 linopy reach for segment binaries.
 """
 

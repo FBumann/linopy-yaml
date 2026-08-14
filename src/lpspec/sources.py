@@ -92,7 +92,7 @@ def tidy_sources(
 
 
 def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
-    """Data-time guard for ``convex: true`` blocks (SPEC §3.6).
+    """Data-time guard for ``method: convex`` blocks (SPEC §3.6).
 
     The hull relaxation is silently wrong for mixed curvature and ill-defined
     when the x-breakpoints are not strictly monotone; both are checkable once
@@ -103,8 +103,8 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     lanes, which is why it sits beside ``tidy_sources``.
 
     Only the curvature check needs xarray, for the broadcast over dims, so the
-    import waits until a ``convex: true`` block is found. Such a block carries
-    exactly two links, which the pair unpack relies on.
+    import waits until a ``method: convex`` block is found. Such a block
+    carries exactly two links, which the pair unpack relies on.
 
     Raises:
         PiecewiseExpansionError: Breakpoints that are not strictly increasing,
@@ -139,15 +139,16 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
             dx = np.diff(xs)
             if not (dx > 0).all():
                 raise PiecewiseExpansionError(
-                    f"{ctx}: convex: true requires strictly increasing breakpoints in '{x_link.values}' (got {xs.tolist()})"
+                    f'{ctx}: method: convex requires strictly increasing breakpoints in '
+                    f"'{x_link.values}' (got {xs.tolist()})"
                 )
             curvature = np.diff(np.diff(ys) / dx)
             tol = 1e-9 * max(1.0, float(np.abs(ys).max()))
             if (curvature > tol).any() and (curvature < -tol).any():
                 raise PiecewiseExpansionError(
-                    f'{ctx}: convex: true is not exact for the mixed-curvature '
+                    f'{ctx}: method: convex is not exact for the mixed-curvature '
                     f"curve in '{y_link.values}' — the hull relaxation would silently "
-                    f'cut corners; drop convex: true to use the exact MILP form'
+                    f'cut corners; use method: adjacency or method: sos2 for the exact form'
                 )
 
 

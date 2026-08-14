@@ -125,7 +125,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         links:
           - [p, bp_x]
           - [op_cost, bp_y]
-        convex: true
+        method: convex
 
     constraints:
       balance:
@@ -174,11 +174,13 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 ## What it exercises
 
 `piecewise:` is a **declaration, not a helper** — it expands before lowering
-into the λ-formulation above. With `convex: true` the expansion emits no
+into the λ-formulation above. With `method: convex` the expansion emits no
 binaries at all: the convex hull is exact for a convex curve under
-minimisation, so the model stays a pure LP. Drop `convex: true` and the
-expansion adds segment binaries and adjacency constraints, and the model
-becomes a MILP that is still entirely inside the relational subset.
+minimisation, so the model stays a pure LP. `method: adjacency`, the default,
+adds segment binaries and adjacency constraints instead, and the model becomes
+a MILP that is still entirely inside the relational subset — while
+`method: sos2` states that same restriction as a [set](sos.md) and leaves the
+binaries to whichever sink needs them.
 
 By the time the logical plan exists there is nothing left called *piecewise* —
 which is why the construct matrix reads it from the surface declaration.

@@ -265,7 +265,7 @@ chp:
     - [power, power_bp]  # [expression, values-parameter]
     - [fuel, fuel_bp]
     - [heat, heat_bp]
-  convex: false  # true: pure-LP convex hull, no binaries
+  method: adjacency  # how the weights are restricted — below
   active: null  # optional gating expression: formulation pinned to 0
 
 # a two-link block may bound one side instead of pinning it
@@ -281,9 +281,24 @@ fuel_cap:
 other dims (per-generator, say); *sign* (`<=`/`>=`, at most one, only with
 exactly two links) bounds the link instead of pinning it. Blocks expand **before
 building** into plain variables and constraints via λ convex-combination —
-weights in `[0,1]` with a convexity row, one link row per tuple, and unless
-`convex: true` segment binaries with an adjacency row
-`lam <= seg + shift(seg, over=bp, by=1, edge=0)`.
+weights in `[0,1]` with a convexity row, and one link row per tuple.
+
+**`method` is the one thing that varies**, and it varies in exactly one place:
+how the weights are restricted, once they exist.
+
+| `method` | what it adds | |
+|---|---|---|
+| `adjacency` *(default)* | a binary per segment, and `lam <= seg + shift(seg, over=bp, by=1, edge=0)` | the curve, built |
+| `sos2` | a `sos:` block (§4.1) over the same weights | the curve, *said* — a sink that branches on a set does |
+| `convex` | nothing | the hull, which is a pure LP |
+
+`adjacency` and `sos2` state the same restriction and reach the same optimum;
+they differ in what the sink is handed, so which is faster is a property of the
+solver and not of the model. `convex` is a different model — exact only for a
+curve of matching curvature under optimisation pressure, which is checked
+against the breakpoint *values* at bind time — and it takes exactly two links
+and no `active`. `method: lp`, linopy's tangent-line formulation, is
+[#23](https://github.com/fluxopt/lpspec/issues/23) and not here.
 
 ### 4.1 `sos`
 
