@@ -167,7 +167,7 @@ default `float`.
 | `foreach` | list[str] | required — dim signature, one variable per coordinate |
 | `where` | str or null | `null` — §6; variables exist only where true |
 | `bounds.lower` / `.upper` | number or parameter name | `-inf` / `inf` |
-| `binary`, `integer` | bool | `false`; not both |
+| `domain` | str | `continuous`; or `integer`, or `binary` — which carries fixed 0/1 bounds |
 
 Omitting a bound means unbounded on that side — non-negativity is written, not
 assumed. Bounds are

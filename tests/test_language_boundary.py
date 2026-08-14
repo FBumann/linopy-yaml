@@ -32,7 +32,7 @@ def test_every_shipped_example_is_inside_the_language(path):
 @pytest.mark.parametrize(
     'patch',
     [
-        pytest.param({'variables.p.binary': True, 'variables.p.bounds': {}}, id='binary-variable'),
+        pytest.param({'variables.p.domain': 'binary', 'variables.p.bounds': {}}, id='binary-variable'),
         pytest.param({'variables.p.where': 'snapshot > 2'}, id='where-on-a-dimension-roadmap-5b'),
         pytest.param(_objective('sum(p * cost, over=generator)'), id='affine-product'),
     ],

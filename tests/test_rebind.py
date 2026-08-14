@@ -87,7 +87,7 @@ ITEMS = [f'item{i}' for i in range(12)]
 KNAPSACK = {
     'dimensions': {'item': {'values': ITEMS}},
     'parameters': {'worth': {'dims': ['item']}, 'weight': {'dims': ['item']}, 'capacity': {'dims': []}},
-    'variables': {'take': {'foreach': ['item'], 'binary': True}},
+    'variables': {'take': {'foreach': ['item'], 'domain': 'binary'}},
     'constraints': {'fits': {'foreach': [], 'expression': 'sum(weight * take, over=item) <= capacity'}},
     'objectives': {'total': {'sense': 'maximize', 'expression': 'take * worth'}},
 }
@@ -196,7 +196,7 @@ def bound(dispatch_yaml):
 
 def _priced(schema: Any) -> list[str]:
     """The constraints an answer carries prices for — none, where a variable is discrete."""
-    if any(v.binary or v.integer for v in schema.variables.values()):
+    if any(v.domain != 'continuous' for v in schema.variables.values()):
         return []
     return list(schema.constraints)
 
@@ -407,7 +407,7 @@ def _tables(model: Any) -> Any:
 #: language lets data touch — so they are pinned where they *are* reachable,
 #: one edit of the declaration apart.
 DECLARED = [
-    pytest.param({'variables.p.integer': True}, id='a variable type'),
+    pytest.param({'variables.p.domain': 'integer'}, id='a variable type'),
     pytest.param({'constraints.meet.expression': 'sum(reach * p, over=plant) == demand'}, id="a row's comparison"),
     pytest.param({'objectives.total.sense': 'maximize'}, id='the sense'),
 ]

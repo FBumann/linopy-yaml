@@ -242,8 +242,8 @@ def test_latex_binary_and_integer_variables_state_their_domain():
     model = override(
         DISPATCH,
         **{
-            'variables.on': {'foreach': ['snapshot', 'generator'], 'binary': True},
-            'variables.n': {'foreach': ['generator'], 'integer': True, 'bounds': {'lower': 0, 'upper': 5}},
+            'variables.on': {'foreach': ['snapshot', 'generator'], 'domain': 'binary'},
+            'variables.n': {'foreach': ['generator'], 'domain': 'integer', 'bounds': {'lower': 0, 'upper': 5}},
         },
     )
     tex = to_latex(model)

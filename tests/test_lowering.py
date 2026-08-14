@@ -134,7 +134,7 @@ def test_the_power_operator_stays_outside_the_relational_subset(dispatch_schema)
 
 
 def test_a_binary_variable_lowers_to_a_vtype():
-    program = lower_program(schema_of(DISPATCH_YAML, **{'variables.p.binary': True, 'variables.p.bounds': {}}))
+    program = lower_program(schema_of(DISPATCH_YAML, **{'variables.p.domain': 'binary', 'variables.p.bounds': {}}))
     assert program.variable('p').variable_type == 'binary'
 
 

@@ -1045,7 +1045,7 @@ def test_a_slice_without_duals_does_not_fail_the_sweep():
     do about it. A sweep of one model has one answer, so the first is carried
     rather than rewritten.
     """
-    integral = override(DISPATCH, **{'variables.p.integer': True})
+    integral = override(DISPATCH, **{'variables.p.domain': 'integer'})
     runs = lps.solve_over(integral, scenario_sources(), lps.EachCoordinate('scenario'))
 
     assert len(runs) == 3, 'every slice is still a row of the record'

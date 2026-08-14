@@ -97,7 +97,7 @@ variables:
   # constraint per (warehouse, customer) rather than aggregated.
   is_open:
     foreach: [warehouse]
-    binary: true
+    domain: binary
   serve:
     foreach: [warehouse, customer]
     bounds:

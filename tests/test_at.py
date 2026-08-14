@@ -103,7 +103,7 @@ COMPONENT_GATE = {
     'parameters': {'cost': {'dims': ['flow']}, 'oncost': {'dims': ['component']}},
     'variables': {
         'rate': {'foreach': ['flow', 't'], 'bounds': {'lower': 0, 'upper': 10}},
-        'on': {'foreach': ['component', 't'], 'binary': True},
+        'on': {'foreach': ['component', 't'], 'domain': 'binary'},
     },
     'constraints': {
         'gate': {'foreach': ['flow', 't'], 'expression': 'rate <= at(on, onto=flow, by=component) * 10'},
