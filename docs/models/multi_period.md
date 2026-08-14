@@ -37,7 +37,7 @@ within_cap:
 ```
 
 `at` and `sum(group_by=)` take the same two arguments because `(over, by)` names one
-mapping table and the helper says which direction it is walked.
+mapping table and the operator says which direction it is walked.
 
 A per-period **parameter** needs neither: data prep can join it onto the
 snapshot index before the model sees it. `p_nom` is a **variable**, and a
