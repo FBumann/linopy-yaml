@@ -652,3 +652,31 @@ def test_a_mask_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
     zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
     with lps.build(dispatch_yaml, zeroed, coords=COORDS) as bound:
         assert bound.diagnostics().columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)
+
+
+def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
+    """The objective frame may change height across a rebind. The solver may not.
+
+    A zero cost is pruned, so `obj` holds one row fewer than before — while
+    `structure` deliberately does not read `obj`, costs being pushable. The
+    column is still *there*; it is `dense_columns` that puts the zero back,
+    scattering the sparse frame over the solver's full index. A push that read
+    `obj` positionally instead would hand the solver one plant's cost under
+    another's name, and every answer after it would be confidently wrong.
+    """
+    given = reach_sources()
+    with lps.build(REACH, given) as bound:
+        bound.solve()
+        before = bound._engine._obj.height
+        assert bound.diagnostics().loads == 1, 'the first solve has nothing loaded to keep'
+
+        zeroed = pl.DataFrame({'plant': PLANTS, 'value': [0.0, 2.0, 3.0, 4.0]})
+        rebound = bound.rebind({'cost': zeroed}).solve()
+
+        assert bound._engine._obj.height == before - 1, 'the zero cost should have left the objective frame'
+        assert bound.diagnostics().loads == 1, 'a cost is pushed, so a cost falling to zero may not reload'
+
+    with lps.build(REACH, {**given, 'cost': zeroed}) as fresh:
+        assert rebound.objective == fresh.solve().objective, (
+            'the pushed cost vector disagrees with the one a cold build hands over'
+        )

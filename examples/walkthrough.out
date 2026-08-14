@@ -26,7 +26,7 @@ model: examples/walkthrough.yaml
 
 [4] plan + data -> the model frames  (relational/engines/polars/engine.py)
     cols                   18 rows
-    obj                    18 rows
+    obj                     6 rows
     rows                    6 rows
     A                      18 rows
 
@@ -52,16 +52,15 @@ model: examples/walkthrough.yaml
     min
     
     obj:
-    +0.0 x0
-    +0.0 x1
     +50.0 x2
-    +0.0 x3
-    +0.0 x4
     +50.0 x5
-    +0.0 x6
-    +0.0 x7
     +50.0 x8
-    ... (76 lines total)
+    +50.0 x11
+    +50.0 x14
+    +50.0 x17
+    
+    s.t.
+    ... (64 lines total)
 
 [6] sink: batches -> highspy -> solution frames  (relational/sinks/highs.py)
     status     ok (optimal)

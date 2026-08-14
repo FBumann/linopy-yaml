@@ -185,6 +185,13 @@ class PolarsEngine:
         of the build. :func:`_row_starts` reads the CSR index off that order,
         after which ``row`` is dropped: 8 bytes per entry no sink reads.
 
+        **What a zero coefficient states, absence already states**, so the
+        matrix is pruned of them before the CSR index is read
+        (:func:`_without_zeros`) and the objective of its own. Sparsity that
+        arrives as absence never becomes a term at all; sparsity spelled out as
+        zeros used to become one, and a solver's own load is most of what a
+        hand-off costs.
+
         **``rows`` leaves in row order too**, which a solver reads as its own
         index — so :meth:`~lpspec.relational.sinks.tables.ModelTables.dense_rows`
         takes the frame's own vectors instead of scattering by label on every
@@ -214,7 +221,7 @@ class PolarsEngine:
         self._sos = _stack(sets, _SOS)
         self._cols = _stack(cols, _COLS)
         self._rows = labels.in_position_order(_stack([r for r, _ in built], _ROWS), 'row')
-        ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
+        ordered = _without_zeros(_in_row_order(_stack([m for _, m in built if m is not None], _MATRIX)))
         self._matrix_starts = _row_starts(ordered, self._n_rows)
         self._matrix = ordered.select('col', 'coeff').rechunk()
         self._n_entries = self._matrix.height
@@ -557,9 +564,9 @@ class PolarsEngine:
         ]
         stacked = pl.concat(pieces).collect(engine='streaming')
         self._refuse_undefined_divisors(stacked, 'objective', o.expression)
-        if stacked.get_column('col').n_unique() == stacked.height:
-            return stacked
-        return stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
+        if stacked.get_column('col').n_unique() != stacked.height:
+            stacked = stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
+        return _without_zeros(stacked)
 
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the engine only supplies the frames
@@ -813,6 +820,29 @@ def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
     if matrix.height and not matrix['row'].is_sorted():
         return matrix.sort('row')
     return matrix
+
+
+def _without_zeros(matrix: pl.DataFrame) -> pl.DataFrame:
+    """*matrix* with the entries that cannot reach the answer removed.
+
+    A coefficient of exactly zero states that a variable is not in a row, which
+    is what an absent row already states — so the two say the same thing and
+    only one of them costs the solver a nonzero to load and presolve away. A
+    sparse parameter reaches here as absence and never builds a term (SPEC §8);
+    a parameter that spells its zeros out reaches here as this, and on a table
+    that is mostly zeros it is most of the matrix.
+
+    **After the termless rule, never before it.** A row whose every coefficient
+    is zero still asserts something — ``0 >= 10`` is infeasible — so it must
+    keep its place and its bounds and simply own no entries. Pruning earlier
+    would let :meth:`~PolarsEngine._drop_termless_rows` read it as a row with no
+    terms and drop it, turning an infeasible model into a feasible one.
+
+    Nulls cannot be here: a null coefficient is an undefined divisor and
+    :meth:`~PolarsEngine._refuse_undefined_divisors` has already refused the
+    build over it, which is why the comparison can be a bare ``!= 0``.
+    """
+    return matrix.filter(pl.col('coeff') != 0)
 
 
 def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
