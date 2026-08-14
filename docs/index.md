@@ -174,6 +174,34 @@ Only the notation is a choice, and **How** shows the one that was made here.
     \end{align}
     ```
 
+=== "Typst"
+
+    ```typst
+    == Sets
+    / $cal(S)$: index $s$ --- `snapshot` --- dispatch periods
+    / $cal(G)$: index $g$ --- `generator` --- generating units
+
+    == Parameters
+    / $bar(p)$: `p_max` over $cal(G)$ --- installed capacity
+    / $ell$: `load` over $cal(S)$ --- demand to be met
+    / $c$: `cost` over $cal(G)$ --- marginal cost
+
+    == Variables
+    / $p$: `p` over $cal(S) times cal(G)$ --- output of generator $g$ in snapshot $s$
+
+    == Objective
+    #set math.equation(numbering: "(1)")
+    $  & min & sum_(s in cal(S), g in cal(G)) p_(s,g) dot c_(g) $
+
+    == Subject to
+    #set math.equation(numbering: "(1)")
+    $ upright("power_balance") & sum_(g in cal(G)) p_(s,g) & = ell_(s) & forall s in cal(S) $
+
+    == Variable domains
+    #set math.equation(numbering: "(1)")
+    $ upright("p") & 0 <= p_(s,g) & <= bar(p)_(g) & forall s in cal(S), g in cal(G) colon bar(p)_(g) > 0 $
+    ```
+
 === "How"
 
     ```python
@@ -181,13 +209,13 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     symbols = {
         'dimensions': {
-            'snapshot': {'index': 's', 'set': '\\mathcal{S}'},
-            'generator': {'index': 'g', 'set': '\\mathcal{G}'},
+            'snapshot': {'index': 's', 'set': {'latex': '\\mathcal{S}', 'typst': 'cal(S)'}},
+            'generator': {'index': 'g', 'set': {'latex': '\\mathcal{G}', 'typst': 'cal(G)'}},
         },
         'names': {
             'cost': 'c',
-            'load': '\\ell',
-            'p_max': '\\bar p',
+            'load': {'latex': '\\ell', 'typst': 'ell'},
+            'p_max': {'latex': '\\bar p', 'typst': 'bar(p)'},
         },
         'descriptions': {
             'snapshot': 'dispatch periods',
@@ -200,14 +228,16 @@ Only the notation is a choice, and **How** shows the one that was made here.
     }
 
     lps.to_latex('dispatch.yaml', symbols=symbols)  # amsmath align
-    lps.to_typst('dispatch.yaml')  # compiles without a TeX toolchain
+    lps.to_typst('dispatch.yaml', symbols=symbols)  # compiles without a TeX toolchain
     lps.to_markdown('dispatch.yaml')  # renders as-is on GitHub
     ```
 
     `symbols` is optional — drop it and the same model prints as
     $\mathit{load}_t$, $p^{\mathrm{max}}_g$. A dict, a YAML path or a
     `SymbolTable`; a key naming nothing in the model is an error, not a symbol that
-    silently never applies.
+    silently never applies. An entry is one spelling every format uses verbatim, or
+    one per format (`{'latex': …, 'typst': …}`) — a format asked to render an
+    entry without its spelling refuses, naming it.
 
     Or from a shell, where the table is that same YAML on disk and `--standalone`
     emits a document that compiles rather than a fragment to `\input`:

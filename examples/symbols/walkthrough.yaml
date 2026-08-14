@@ -11,13 +11,13 @@
 # because the model does not declare them as parameters or variables.
 
 dimensions:
-  snapshot: {index: s, set: "\\mathcal{S}"}
-  generator: {index: g, set: "\\mathcal{G}"}
+  snapshot: {index: s, set: {latex: "\\mathcal{S}", typst: cal(S)}}
+  generator: {index: g, set: {latex: "\\mathcal{G}", typst: cal(G)}}
 
 names:
   cost: "c"
-  load: "\\ell"
-  p_max: "\\bar p"
+  load: {latex: "\\ell", typst: ell}
+  p_max: {latex: "\\bar p", typst: bar(p)}
 
 descriptions:
   snapshot: dispatch periods

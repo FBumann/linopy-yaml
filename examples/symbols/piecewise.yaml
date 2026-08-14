@@ -13,17 +13,17 @@
 # than a symbol that silently never applies.
 
 dimensions:
-  snapshot: {index: t, set: "\\mathcal{T}"}
-  generator: {index: g, set: "\\mathcal{G}"}
+  snapshot: {index: t, set: {latex: "\\mathcal{T}", typst: cal(T)}}
+  generator: {index: g, set: {latex: "\\mathcal{G}", typst: cal(G)}}
   # `bp` derives to `b`, which reads as a bus to anyone from power systems.
-  bp: {index: k, set: "\\mathcal{K}"}
+  bp: {index: k, set: {latex: "\\mathcal{K}", typst: cal(K)}}
 
 names:
   # The λ-formulation's own weights, emitted by the `piecewise:` block. The
   # renderer cannot know these are convex-combination weights — it sees a
   # variable named `cost_curve_lam` — but a reader expects a lambda.
-  cost_curve_lam: "\\lambda"
-  op_cost: "\\mathrm{cost}"
+  cost_curve_lam: {latex: "\\lambda", typst: lambda}
+  op_cost: {latex: "\\mathrm{cost}", typst: 'upright("cost")'}
   # `x` and `y`, as docs/models/piecewise.md already writes them.
   bp_x: "x"
   bp_y: "y"

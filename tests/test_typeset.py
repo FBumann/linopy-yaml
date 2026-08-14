@@ -500,11 +500,15 @@ def typst():
 
 def test_typst_output_compiles(typst, tmp_path: Path):
     """The only check that the Typst is real, and it has already earned its
-    place: the first run rejected `minus.circle`, which is not a Typst symbol."""
+    place: the first run rejected `minus.circle`, which is not a Typst symbol.
+    Models with a committed symbol table compile *with* it too — the run
+    that would have caught #321, where a table made the Typst uncompilable."""
     for path in MODEL_PATHS:
-        source = tmp_path / f'{path.stem}.typ'
-        source.write_text(to_typst(path, standalone=True))
-        typst.compile(str(source), output=str(tmp_path / f'{path.stem}.pdf'))
+        table = Path('examples/symbols') / path.name
+        for suffix, symbols in [('', None), ('-symbols', table)] if table.exists() else [('', None)]:
+            source = tmp_path / f'{path.stem}{suffix}.typ'
+            source.write_text(to_typst(path, symbols=symbols, standalone=True))
+            typst.compile(str(source), output=str(tmp_path / f'{path.stem}{suffix}.pdf'))
 
 
 def test_every_typst_operator_compiles(typst, tmp_path: Path):
@@ -640,6 +644,75 @@ def test_an_entry_naming_nothing_is_an_error_with_the_near_miss(symbols, match):
     finds out — so it fails, and says what it probably meant."""
     with pytest.raises(lps.SchemaError, match=match):
         to_latex(DISPATCH, symbols=symbols)
+
+
+PER_FORMAT = {
+    'dimensions': {'generator': {'set': {'latex': r'\mathcal{G}', 'typst': 'cal(G)'}}},
+    'names': {'p_max': {'latex': r'\bar p', 'typst': 'bar(p)'}},
+}
+
+
+def test_a_per_format_entry_prints_each_format_in_its_own_notation():
+    """Nothing translates: each format receives the spelling written for it,
+    verbatim, and markdown reads the latex one because MathJax renders it."""
+    assert r'\bar p' in to_latex(DISPATCH, symbols=PER_FORMAT)
+    assert 'bar(p)' in to_typst(DISPATCH, symbols=PER_FORMAT)
+    assert r'\bar p' in to_markdown(DISPATCH, symbols=PER_FORMAT)
+
+
+@pytest.mark.parametrize(
+    ('render', 'symbols', 'match'),
+    [
+        pytest.param(
+            to_typst,
+            {'names': {'p_max': {'latex': r'\bar p'}}},
+            r"'p_max' under names: spells \['latex'\] but not typst",
+            id='typst-asked-of-a-latex-only-entry',
+        ),
+        pytest.param(
+            to_latex,
+            {'names': {'p_max': {'typst': 'bar(p)'}}},
+            r"'p_max' under names: spells \['typst'\] but not latex",
+            id='latex-asked-of-a-typst-only-entry',
+        ),
+        pytest.param(
+            to_typst,
+            {'names': {'p_max': r'\bar p'}},
+            r"'p_max' under names: .*backslash",
+            id='a-bare-latex-string-reaching-typst',
+        ),
+        pytest.param(
+            to_typst,
+            {'descriptions': {'load': r'demand $\ell$'}},
+            r"'load' under descriptions: .*backslash",
+            id='a-latex-math-span-in-a-description-reaching-typst',
+        ),
+        pytest.param(
+            to_latex,
+            {'names': {'p_max': {'tex': r'\bar p'}}},
+            r"'p_max' under names: unknown notation",
+            id='an-unknown-notation-key',
+        ),
+        pytest.param(
+            to_latex,
+            {'names': {'p_max': {}}},
+            r"'p_max' under names: an empty mapping spells nothing",
+            id='an-empty-mapping',
+        ),
+    ],
+)
+def test_a_format_without_its_spelling_refuses_and_names_the_entry(render, symbols, match):
+    """The failure this replaces was silent: LaTeX passed verbatim into Typst
+    compiled to garbage three tools later (#321). Every wrong shape now stops
+    at the render that cannot honour it, naming the entry."""
+    with pytest.raises(lps.SchemaError, match=match):
+        render(DISPATCH, symbols=symbols)
+
+
+def test_a_bare_backslash_entry_is_still_open_latex():
+    """The heuristic refuses LaTeX reaching *Typst* only — a bare LaTeX string
+    stays legal for LaTeX and markdown, with no vocabulary to fit into."""
+    assert r'\heartsuit_{g}' in to_latex(DISPATCH, symbols={'names': {'p_max': r'\heartsuit'}})
 
 
 def test_the_table_loads_from_a_file_and_the_committed_one_applies():
