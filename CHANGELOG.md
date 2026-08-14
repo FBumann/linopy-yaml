@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.1-alpha.122](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.121...v0.0.1-alpha.122) (2026-08-14)
+
+
+### Features
+
+* **api:** diagnostics say what the sink added to the model it was handed ([#689](https://github.com/fluxopt/lpspec/issues/689)) ([0e6c75a](https://github.com/fluxopt/lpspec/commit/0e6c75a78a10347bb8ae3de250176d84d45cab43))
+* **language:** a piecewise curve may name its formulation ([#688](https://github.com/fluxopt/lpspec/issues/688)) ([d420c8b](https://github.com/fluxopt/lpspec/commit/d420c8b74ce2c9991fbc15583fcaacb10635d87f))
+* **language:** a variable may declare a special-ordered set over one of its dims ([#687](https://github.com/fluxopt/lpspec/issues/687)) ([94cc18e](https://github.com/fluxopt/lpspec/commit/94cc18e2529185c8269d9286fe3d403bca5f0ac5))
+
+
+### Performance
+
+* **engine:** a set costs a fraction of the variable it is declared over ([#691](https://github.com/fluxopt/lpspec/issues/691)) ([413d493](https://github.com/fluxopt/lpspec/commit/413d493d125b66329f2881b096b239f2507b4b53))
+
 ## [0.0.1-alpha.121](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.120...v0.0.1-alpha.121) (2026-08-13)
 
 
