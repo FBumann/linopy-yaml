@@ -50,6 +50,9 @@ constraints:
     foreach: [t]
     expression: soc == shift(soc, over=t, by=1) + charge * 0.9 - discharge
 
+expressions:
+  spend: sum(p * cost, over=generator)
+
 objective:
   sense: minimize
-  expression: sum(p * cost, over=generator)
+  expression: spend

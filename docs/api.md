@@ -251,7 +251,7 @@ runs.primal('soc')  # (snapshot_start, t, value) — the window, and the index i
 ```
 
 **`Runs` reads like `Result`, one dimension wider** — `primal`, `dual`,
-`to_pandas`, `to_dataarray`, `to_dataset`, `to_parquet`, under the same names
+`expression`, `to_pandas`, `to_dataarray`, `to_dataset`, `to_parquet`, under the same names
 and with the slice key prepended. That extra dimension is **named by you, not
 by the library**: `EachCoordinate('scenario')` keys on `scenario` and
 `EachCoordinate('draw')` on `draw`, a window on `<dim>_start`, and `key_name=`
@@ -259,13 +259,14 @@ overrides either. So `runs.to_dataarray('p')` on a scenario sweep is
 `(scenario, snapshot, generator)`, which is what a sweep is *for*: `.sel` one
 scenario, take a spread across them, plot the band.
 
-**`stitch=` is how you ask for the answer over real coordinates**, and it is a
-keyword on the readers rather than a reader of its own:
+**`original_index=` is how you ask for the answer over real coordinates**, and
+it is a keyword on the readers rather than a reader of its own:
 
 ```python
 runs.primal('soc')  # (snapshot_start, t, value) — keyed by slice
-runs.primal('soc', stitch=True)  # (snapshot, value)          — the answer
-runs.dual('balance', stitch=True)  # the same, for a price
+runs.primal('soc', original_index=True)  # (snapshot, value)          — the answer
+runs.dual('balance', original_index=True)  # the same, for a price
+runs.expression('spend', original_index=True)  # the model's own quantity, over real coordinates
 ```
 
 A flag rather than a method because what has to be undone is a property of the
@@ -286,8 +287,8 @@ back unchanged.
 window owns and drops the lookahead rows the sweep solved. A default that
 discarded computed answers would also key differently from `objective`, which
 is one row per slice always, and the two would stop joining. For the same
-reason `to_dataset` and `to_parquet` have no `stitch` — a bulk export of what
-the sweep holds is the wrong place to lose rows.
+reason `to_dataset` and `to_parquet` have no `original_index` — a bulk export
+of what the sweep holds is the wrong place to lose rows.
 
 Per slice is a partition of a frame you already have, so there is no reader for
 it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
@@ -298,8 +299,8 @@ it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
 | **one model, rebound per slice** | every slice is the same math over different numbers, so a serial sweep builds once and [rebinds](#re-solving-with-new-numbers): the YAML is parsed once, the plan lowered once, and a slice whose structure matches the last keeps the loaded solver. Peak is unchanged, a rebuild releasing the previous model before it starts. A sweep under `executor=` cannot — a built model is the one thing that does not cross a process — so it builds per slice, which is also why `carry` and `executor` are mutually exclusive |
 | **everything a slice produced is kept** | every variable's primals and every constraint's duals, read back through `runs.primal(name)` and `runs.dual(name)`. It is still a fold — each slice's *model* is released as the loop goes, so build peak stays at one slice however many there are, and what accumulates is the answer. Narrowing that is a later addition and an easy one; it is absent because it would need *two* keywords, a constraint being allowed to carry a variable's name |
 | **duals are keyed, never combined** | `runs.dual(name)` is `runs.primal(name)`'s shape. Averaging window prices, taking the last, and reading one slice alone are all defensible, so the reduction is the caller's. A slice whose model had an integer variable contributes none, and `runs.objective` says which |
+| **expressions are evaluated per slice** | every declared `expressions:` name, evaluated at each slice's solution as the fold reads it, back through `runs.expression(name)` in `runs.primal(name)`'s shape. Eager where `Result.expression` defers, because a deferred reader holds its build's frames and the fold releases each slice's model as it goes; per slice it costs what one more variable read does. Over `original_index=True` only the rows each window owns survive, so summing the stitched frame cannot double-count the lookahead — and a quantity *reduced over* the sliced dimension has no way back and is refused there, with the per-slice read named as the alternative |
 | **no aggregate objective** | `objective` is a frame keyed by slice. Scenarios are a distribution, not a sum; summing window objectives double-counts whatever the overlap discards |
-| **duals are not exposed** | a window's shadow price is that window's. Concatenating them into a price curve is wrong in a way nothing complains about |
 | `carry` is a copy, never arithmetic | `{parameter: (variable, index)}`. Accumulation — `existing += built` — is a derived variable in the YAML, where the math is reviewable |
 | **the two declarations say what is copied** | whichever dimension the *variable* has and the *parameter* does not is the one the carry collapses, and `index` names a coordinate of it. Everything else rides along. So `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t` and hands both stores forward, and `total` over `(generator)` into `existing` over `(generator)` drops nothing and needs no index — pass `None` |
 | the carry index is explicit | with `EachWindow(…, 48, 24, …)` the state to carry is at coordinate 23 of `into`, not 47. An implicit "last" is correct until overlap is introduced and silently wrong after |
