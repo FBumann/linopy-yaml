@@ -250,8 +250,8 @@ def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
     """The wide fixture solved through both lanes, for one expression.
 
     ``g`` and the coordinate that reaches it exist only for the grouped cases:
-    a dimension no declaration uses has no coordinate set to check against, and
-    the engine refuses it rather than carrying a dangling target.
+    the plain fixture passes no ``g`` index, and a target with no index of its
+    own is refused rather than carried as a dangling coordinate (#488).
     """
     grouped = 'g' in foreach
     dims = (

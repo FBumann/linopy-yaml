@@ -159,8 +159,15 @@ class _Binder:
     # -- dimensions --------------------------------------------------------
 
     def sourced_dimensions(self) -> None:
-        """Every dimension carrying its own index, before any parameter binds."""
-        for d in sorted(self._declared_dims()):
+        """Every dimension carrying its own index, before any parameter binds.
+
+        Coordinate targets are included beyond the axis dims: a coordinate may
+        target a dimension nothing spans yet — the incremental multi-period
+        shape, where the flat index declares every coordinate before the
+        constraints that group by them exist — and its supplied index is what
+        the containment check runs against (#488).
+        """
+        for d in sorted(self._declared_dims() | self._coordinate_targets()):
             if d in self.sources:
                 self._register(d, self._explicit_frame(d, self.sources[d], self.program.dimension(d).carried))
 
@@ -197,11 +204,13 @@ class _Binder:
 
         for d in sorted(dims):
             for c in sorted(self.program.dimension(d).coordinates):
-                if c.target not in self.cardinality:
+                if c.target not in self.dimensions:
                     raise DataError(
                         f"dimension '{d}' coordinate '{c.name}' targets '{c.target}', which "
-                        f'no declaration in this model uses, so it has no coordinate set '
-                        f'to check against'
+                        f'nothing in this model spans and which has no index of its own, so '
+                        f"the coordinate's values have no label set to be checked against. "
+                        f"Pass an index for '{c.target}' (under key '{c.target}' in data or "
+                        f'coords, or as values on its declaration), or remove the coordinate.'
                     )
                 data_validation.check_coordinate_containment(d, c.name, c.target, self.dimensions)
 
@@ -285,6 +294,9 @@ class _Binder:
         for p in self.program.parameters:
             dims.update(p.dims)
         return dims
+
+    def _coordinate_targets(self) -> set[str]:
+        return {c.target for d in self.program.dimensions for c in d.coordinates}
 
 
 def _plain_strings(frame: pl.LazyFrame, dims: tuple[str, ...]) -> pl.LazyFrame:
