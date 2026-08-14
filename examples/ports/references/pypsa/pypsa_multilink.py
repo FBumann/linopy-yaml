@@ -15,12 +15,13 @@ alignment and broadcasting decide which coefficient lands in which row; pandas
 holds the instance's tables and performs the pivot below.
 
 It reads the same instance the port binds. The port holds the link-to-bus
-relation tidy — one ``terminal`` row per link end, a signed ``coefficient``
-per row — and PyPSA holds it wide: ``bus0`` is the input, ``bus1``/``bus2``
-the outputs, ``efficiency``/``efficiency2`` their deratings, an empty ``bus2``
-where a link has only two ends. ``build`` opens with that pivot, so the two
-formulations stay independent while the data stays one instance. Nothing here
-imports lpspec.
+relation as one incidence table — a ``(link, bus, value)`` row per link end,
+``-1`` at the input, ``+efficiency`` at each output — and PyPSA holds it wide:
+``bus0`` is the input, ``bus1``/``bus2`` the outputs,
+``efficiency``/``efficiency2`` their deratings, an empty ``bus2`` where a link
+has only two ends. ``build`` opens with that pivot, so the two formulations
+stay independent while the data stays one instance. Nothing here imports
+lpspec.
 
 Beside the ladder rather than on it: a multi-link is the one PyPSA construct
 whose *schema* grows with the data — every arity adds a column pair — so the
@@ -47,27 +48,26 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network.
 
     ``tables`` is the same mapping the lpspec call binds as ``sources``; only
-    the terminal table changes shape on the way in, pivoted from one row per
-    link end into PyPSA's one row per link. The input terminal is the one with
-    the negative coefficient — PyPSA fixes its share at -1, so the pivot
-    asserts it: a different input share is sayable in rows and not in these
-    columns. Each output terminal becomes the link's next port, its
-    coefficient the port's efficiency, in the terminal table's row order. A
-    link narrower than the instance's widest is padded with ``''`` — PyPSA's
-    spelling for a port a link does not have — and a filler efficiency of 1.0
-    that no equation reads.
+    the incidence table changes shape on the way in, pivoted from one row per
+    link end into PyPSA's one row per link. The input end is the one with the
+    negative value — PyPSA fixes its share at -1, so the pivot asserts it: a
+    different input share is sayable in rows and not in these columns. Each
+    output end becomes the link's next port, its value the port's efficiency,
+    in the incidence table's row order. A link narrower than the instance's
+    widest is padded with ``''`` — PyPSA's spelling for a port a link does not
+    have — and a filler efficiency of 1.0 that no equation reads.
     """
-    terminals = tables['terminal'].merge(tables['coefficient'], on='terminal')
-    inputs = terminals[terminals['value'] < 0].set_index('link_of')
+    incidence = tables['incidence']
+    inputs = incidence[incidence['value'] < 0].set_index('link')
     assert (inputs['value'] == -1.0).all(), 'PyPSA fixes the input share of a Link at -1; this instance must too'
 
-    outputs = terminals[terminals['value'] > 0].copy()
-    outputs['port'] = outputs.groupby('link_of', sort=False).cumcount() + 1
-    buses = outputs.pivot(index='link_of', columns='port', values='bus_of')
-    efficiencies = outputs.pivot(index='link_of', columns='port', values='value')
+    outputs = incidence[incidence['value'] > 0].copy()
+    outputs['port'] = outputs.groupby('link', sort=False).cumcount() + 1
+    buses = outputs.pivot(index='link', columns='port', values='bus')
+    efficiencies = outputs.pivot(index='link', columns='port', values='value')
 
     links = pd.DataFrame(index=pd.Index(tables['link']['link'], name='link'))
-    links['bus0'] = inputs['bus_of']
+    links['bus0'] = inputs['bus']
     for port in buses.columns:
         links[f'bus{port}'] = buses[port].reindex(links.index).fillna('')
         links['efficiency' if port == 1 else f'efficiency{port}'] = efficiencies[port].reindex(links.index).fillna(1.0)

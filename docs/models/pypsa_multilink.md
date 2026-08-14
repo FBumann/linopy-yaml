@@ -10,17 +10,17 @@ heat, any conversion with more than one product.
 what a model *says*; a multi-link varies what a table *is*. PyPSA holds the
 relation wide — `bus0`, `bus1`, `bus2`, `efficiency`, `efficiency2`, an empty
 `bus2` where a link has only two ends — so every arity the data reaches adds a
-column pair to the component itself. Here the relation is an axis: a
-`terminal` is one end of one link, `link_of` and `bus_of` are its legs, and a
-signed `coefficient` carries its share of the link's draw — `-1` on the input,
-`+efficiency` on each output. Arity is the number of rows that name the link,
-so the three-ended CHP and the two-ended boiler sit in the same four columns,
+column pair to the component itself. Here the relation is one **incidence
+parameter** over `(link, bus)`: `-1` at the input, `+efficiency` at each
+output, rows absent elsewhere. Arity is the number of rows that name the link,
+so the three-ended CHP and the two-ended boiler sit in the same three columns,
 and a four-ended link would change nothing but the data.
 
 One decision per link survives the tidying: `p`, what the link draws at its
-input — PyPSA's `p0`. The balance walks it out to every terminal with
-`at(p, by=link_of)`, scales each end by its coefficient, and
-lands it on that end's bus. Three terminals or two, the expression never says.
+input — PyPSA's `p0`. The balance is the contraction `sum(incidence * p,
+over=link)`, which lands the draw on every bus the link's rows name — the same
+sum a linopy user writes as `(incidence * p).sum('link')` against a dense
+array, and one melt away from PyPSA's own wide CSV.
 
 The instance is a toy gas-to-energy system: a CHP (gas → 0.4 elec + 0.4 heat,
 capacity 50), a boiler (gas → 0.8 heat), an OCGT (gas → 0.5 elec), gas at 10.
@@ -43,7 +43,6 @@ CHP runs at its cap of 50 and the others top up: flows `(50, 20, 40)`, gas
 | $\mathcal{B}$ | index $b$ --- `bus` |
 | $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ |
 | $\mathcal{L}$ | index $l$ --- `link` |
-| $\mathcal{T}$ | index $t$ --- `terminal` with $\mathrm{link\_of}: \mathcal{T} \to \mathcal{L},\enspace \mathrm{bus\_of}: \mathcal{T} \to \mathcal{B}$ |
 
 #### Parameters
 
@@ -52,7 +51,7 @@ CHP runs at its cap of 50 and the others top up: flows `(50, 20, 40)`, gas
 | $\mathit{gen}^{\mathrm{p,nom}}$ | `gen_p_nom` over $\mathcal{G}$ |
 | $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ |
 | $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{L}$ |
-| $\mathit{coefficient}$ | `coefficient` over $\mathcal{T}$ |
+| $\mathit{incidence}$ | `incidence` over $\mathcal{L} \times \mathcal{B}$ |
 | $\mathit{load}$ | `load` over $\mathcal{B}$ |
 
 #### Variables
@@ -70,7 +69,7 @@ $$\min \sum_{g \in \mathcal{G}} \mathit{gen}_{g} \cdot \mathit{marginal\_cost}_{
 
 **`nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{t \in \mathcal{T} \thinspace:\thinspace \mathrm{bus\_of}(t) = b} p_{\mathrm{link\_of}(t)} \cdot \mathit{coefficient}_{t} = \mathit{load}_{b} \qquad \forall\thinspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathit{incidence}_{l,b} \cdot p_{l} = \mathit{load}_{b} \qquad \forall\thinspace b \in \mathcal{B}$$
 
 #### Variable domains
 
@@ -93,9 +92,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     # PyPSA multi-link: one Link, one input bus, several output buses, each output
     # derated by its own efficiency. PyPSA spells the relation wide — bus0, bus1,
     # bus2, efficiency, efficiency2, an empty bus2 where a link has no third
-    # terminal — and grows a column pair per arity. Here the relation is an axis:
-    # a `terminal` is one end of one link, its legs are lookups, and arity is the
-    # number of rows that name the link. Optimum 1100.0, from PyPSA itself.
+    # terminal — and grows a column pair per arity. Here the relation is one
+    # incidence parameter over (link, bus): -1 at the input, +efficiency at each
+    # output, rows absent elsewhere, so arity is the number of rows that name the
+    # link. Optimum 1100.0, from PyPSA itself.
 
     dimensions:
       bus:
@@ -104,13 +104,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         dtype: str
       link:
         dtype: str
-      terminal:
-        dtype: str
 
     lookups:
       gen_bus: {over: generator, into: bus}  # every generator sits on a bus
-      link_of: {over: terminal, into: link}  # a terminal is one end of one link
-      bus_of: {over: terminal, into: bus}  # the bus that end touches
 
     parameters:
       gen_p_nom:
@@ -120,11 +116,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       # The Link's own p_nom: a cap on what it draws at its input, p0 in PyPSA.
       p_nom:
         dims: [link]
-      # The terminal's share of the link's draw: -1 on the input terminal, and
-      # +efficiency on each output — PyPSA's efficiency, efficiency2, … columns,
-      # tidied into one weighted incidence.
-      coefficient:
-        dims: [terminal]
+      # Each bus's share of the link's draw — PyPSA's efficiency, efficiency2, …
+      # columns and the input's fixed -1, tidied into rows.
+      incidence:
+        dims: [link, bus]
       load:
         dims: [bus]
 
@@ -134,9 +129,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         bounds:
           lower: 0
           upper: gen_p_nom
-      # The one decision per link, PyPSA's p: what it draws at its input terminal.
-      # Every other terminal's flow is that draw scaled by its coefficient, so it
-      # needs no variable of its own.
+      # The one decision per link, PyPSA's p: what it draws at its input. Every
+      # other end's flow is that draw scaled by its incidence entry, so it needs
+      # no variable of its own.
       p:
         foreach: [link]
         bounds:
@@ -144,14 +139,13 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           upper: p_nom
 
     constraints:
-      # `at` walks p out to the link's terminals, the coefficient scales each end,
-      # and the group lands it on that end's bus — three terminals or two, the
-      # expression never says.
+      # The contraction lands p on every bus its link's incidence rows name —
+      # three ends or two, the expression never says.
       nodal_balance:
         foreach: [bus]
         expression: >-
           sum(gen, by=gen_bus)
-          + sum(at(p, by=link_of) * coefficient, by=bus_of)
+          + sum(incidence * p, over=link)
           == load
 
     objective:
@@ -175,27 +169,26 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         """The port's tables as a PyPSA network.
 
         ``tables`` is the same mapping the lpspec call binds as ``sources``; only
-        the terminal table changes shape on the way in, pivoted from one row per
-        link end into PyPSA's one row per link. The input terminal is the one with
-        the negative coefficient — PyPSA fixes its share at -1, so the pivot
-        asserts it: a different input share is sayable in rows and not in these
-        columns. Each output terminal becomes the link's next port, its
-        coefficient the port's efficiency, in the terminal table's row order. A
-        link narrower than the instance's widest is padded with ``''`` — PyPSA's
-        spelling for a port a link does not have — and a filler efficiency of 1.0
-        that no equation reads.
+        the incidence table changes shape on the way in, pivoted from one row per
+        link end into PyPSA's one row per link. The input end is the one with the
+        negative value — PyPSA fixes its share at -1, so the pivot asserts it: a
+        different input share is sayable in rows and not in these columns. Each
+        output end becomes the link's next port, its value the port's efficiency,
+        in the incidence table's row order. A link narrower than the instance's
+        widest is padded with ``''`` — PyPSA's spelling for a port a link does not
+        have — and a filler efficiency of 1.0 that no equation reads.
         """
-        terminals = tables['terminal'].merge(tables['coefficient'], on='terminal')
-        inputs = terminals[terminals['value'] < 0].set_index('link_of')
+        incidence = tables['incidence']
+        inputs = incidence[incidence['value'] < 0].set_index('link')
         assert (inputs['value'] == -1.0).all(), 'PyPSA fixes the input share of a Link at -1; this instance must too'
 
-        outputs = terminals[terminals['value'] > 0].copy()
-        outputs['port'] = outputs.groupby('link_of', sort=False).cumcount() + 1
-        buses = outputs.pivot(index='link_of', columns='port', values='bus_of')
-        efficiencies = outputs.pivot(index='link_of', columns='port', values='value')
+        outputs = incidence[incidence['value'] > 0].copy()
+        outputs['port'] = outputs.groupby('link', sort=False).cumcount() + 1
+        buses = outputs.pivot(index='link', columns='port', values='bus')
+        efficiencies = outputs.pivot(index='link', columns='port', values='value')
 
         links = pd.DataFrame(index=pd.Index(tables['link']['link'], name='link'))
-        links['bus0'] = inputs['bus_of']
+        links['bus0'] = inputs['bus']
         for port in buses.columns:
             links[f'bus{port}'] = buses[port].reindex(links.index).fillna('')
             links['efficiency' if port == 1 else f'efficiency{port}'] = efficiencies[port].reindex(links.index).fillna(1.0)
@@ -223,12 +216,17 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 rows into columns — finding the input, numbering the outputs, padding the
 narrow links with `''` and a filler efficiency no equation reads — before a
 single component exists. That reshape is not this port being awkward: it is
-what the wide schema demands of any tidy source, and it runs in reverse for
-any reader whose data starts wide. The lpspec tab binds the terminal table as
-it stands.
-
-**What the columns cannot say.** PyPSA fixes the input's share at `-1`, so the
-pivot asserts it. In rows that constant is just data — an input coefficient of
+what the wide schema demands of any tidy source. The lpspec tab binds the
+incidence table as it stands. And PyPSA fixes the input's share at `-1`, so
+the pivot asserts it; in rows that constant is just data — an input entry of
 `-1.05` would model a link burning 5% of its draw in station load, with no new
-column and no new construct. Nothing in this instance uses that; the point is
-where the wall sits.
+column and no new construct.
+
+**When a link end needs a name of its own, the incidence entry stops being
+enough.** A per-end variable or bound (a heat-offtake cap on the CHP's heat
+port alone), a value pulled through an end's bus with `at(..., by=…)`, or a
+link touching the same bus twice all need the ends reified as a dimension with
+leg lookups — a parameter holds one value per `(link, bus)` pair and gives the
+pair no identity. That is the other many-to-many idiom, and
+[reserves](reserves.md) proves it with its three-legged offers; until an end
+needs an identity, the incidence table is the readable form.
