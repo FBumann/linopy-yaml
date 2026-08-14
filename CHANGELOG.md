@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.127](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.126...v0.0.1-alpha.127) (2026-08-14)
+
+
+### Documentation
+
+* the builtins have one name and a derived dimension states its cost ([#715](https://github.com/fluxopt/lpspec/issues/715)) ([916cd8d](https://github.com/fluxopt/lpspec/commit/916cd8d215177463f59502272e37fb5943cfa884))
+
 ## [0.0.1-alpha.126](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.125...v0.0.1-alpha.126) (2026-08-14)
 
 
