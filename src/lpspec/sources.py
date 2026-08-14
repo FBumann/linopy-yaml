@@ -72,10 +72,13 @@ def tidy_sources(
         sources[pname] = table
 
     for dname, ddef in schema.dimensions.items():
+        declared = schema.declared_index(dname)
         if dname in data:
             src = data[dname]
         elif coords and dname in coords:
             src = coords[dname]
+        elif declared is not None:
+            src = declared
         elif ddef.values is not None:
             src = ddef.values
         else:

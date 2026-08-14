@@ -410,3 +410,105 @@ def test_a_targeted_lookup_orders_bytewise_not_by_declaration():
     with lps.solve(model, sources) as result:
         built = sorted(row['line'] for row in result.primal('f').to_dicts())
     assert built == ['ring_b'], "only ring_b sends from 'south'; declaration order would keep the 'north' lines too"
+
+
+# ---------------------------------------------------------------------------
+# a lookup's map, declared in the file
+# ---------------------------------------------------------------------------
+
+
+#: The whole model — no index table, no parameter carrying structure. What a
+#: dimension's own `values:` does for labels, `values:` on a lookup does for
+#: the map, so a relation small enough to read lives beside the equation that
+#: traverses it. `g3` maps to no bus: the partial case, declared by omission.
+DECLARED = {
+    'dimensions': {
+        'generator': {'values': ['g1', 'g2', 'g3']},
+        'bus': {'values': ['north', 'south']},
+    },
+    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus', 'values': {'g1': 'north', 'g2': 'south'}}},
+    'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
+    'variables': {'p': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'balance': {'foreach': ['bus'], 'expression': 'sum(p, by=gen_bus) >= load'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
+}
+
+DECLARED_SOURCES = {
+    'cost': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'value': [1.0, 2.0, 0.5]}),
+    'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [5.0, 4.0]}),
+}
+
+
+def test_a_declared_map_needs_no_index_source():
+    """The point: a model whose structure is in the file binds without one.
+
+    `g3` is the cheapest generator and contributes nothing, which is what a
+    null lookup means — so this also pins that an omitted key is the partial
+    case rather than an error or a default.
+    """
+    with lps.solve(DECLARED, DECLARED_SOURCES) as result:
+        built = {row['generator']: row['value'] for row in result.primal('p').to_dicts()}
+        assert result.objective == pytest.approx(13.0)
+    assert built['g3'] == pytest.approx(0.0), 'a generator on no bus can serve no load, however cheap'
+
+
+def test_a_declared_map_agrees_with_the_oracle():
+    """Both lanes assemble the same index out of the declaration."""
+    from tests.differential import differential
+    from tests.oracle import pd
+
+    data = {
+        'cost': pd.Series([1.0, 2.0, 0.5], index=['g1', 'g2', 'g3']),
+        'load': pd.Series([5.0, 4.0], index=['north', 'south']),
+    }
+    with differential(DECLARED, data) as run:
+        assert run.result.objective == pytest.approx(13.0)
+
+
+def test_a_caller_index_still_wins():
+    """`coords=` outranks the file, exactly as it does over a dimension's
+    `values:` — so a declared map is a default, not a lock."""
+    sources = {
+        **DECLARED_SOURCES,
+        'generator': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['north', 'north', 'south']}),
+    }
+    with lps.solve(DECLARED, sources) as result:
+        assert result.objective == pytest.approx(7.0), (
+            'the passed index puts g3 on south, so the cheapest generator can serve load: '
+            '4 x 0.5 there and 5 x 1.0 from g1 on north, against 13.0 under the declared map'
+        )
+        built = {row['generator']: row['value'] for row in result.primal('p').to_dicts()}
+    assert built['g3'] == pytest.approx(4.0), 'the passed index repointed g3 onto south'
+
+
+@pytest.mark.parametrize(
+    ('values', 'match'),
+    [
+        pytest.param({'g1': 'atlantis'}, 'not labels of', id='a-value-the-target-does-not-carry'),
+        pytest.param({'g9': 'north'}, 'not labels of', id='a-key-the-dimension-does-not-carry'),
+    ],
+)
+def test_a_declared_map_is_checked_without_data(values, match):
+    """Law 2: both sides are in the file, so this is decided at load.
+
+    The same mistake in an index source is a bind-time error, which is later
+    and needs the data to hand — declaring the map is what moves it earlier.
+    """
+    model = {**DECLARED, 'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus', 'values': values}}}
+    with pytest.raises(LpspecError, match=match):
+        load_model(model)
+
+
+def test_a_label_space_lookup_may_declare_its_values_too():
+    """Both kinds take the map, and a `where` reads what it declares."""
+    model = {
+        'dimensions': {'snapshot': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'lookups': {'period': {'over': 'snapshot', 'dtype': 'int', 'values': {0: 1, 1: 1, 2: 2}}},
+        'parameters': {'load': {'dims': ['snapshot']}},
+        'variables': {'x': {'foreach': ['snapshot'], 'where': 'period == 1', 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'c': {'foreach': ['snapshot'], 'where': 'period == 1', 'expression': 'x >= load'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x, over=snapshot)'},
+    }
+    with lps.solve(model, {'load': _load()}) as result:
+        built = sorted(row['snapshot'] for row in result.primal('x').to_dicts())
+    assert built == [0, 1], 'only period 1 is built, and the map that says so is in the file'
