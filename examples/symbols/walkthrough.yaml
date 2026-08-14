@@ -10,6 +10,8 @@
 # language rather than working around it: naming either would be an error,
 # because the model does not declare them as parameters or variables.
 
+notation: latex
+
 dimensions:
   snapshot: {index: s, set: "\\mathcal{S}"}
   generator: {index: g, set: "\\mathcal{G}"}

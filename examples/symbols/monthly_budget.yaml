@@ -5,6 +5,8 @@
 # generators onto buses, and notation that treated it as special would undercut
 # that before the reader reached the equation.
 
+notation: latex
+
 dimensions:
   snapshot: {index: t, set: "\\mathcal{T}"}
   month: {index: m, set: "\\mathcal{M}"}
