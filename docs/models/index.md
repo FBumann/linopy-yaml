@@ -157,7 +157,7 @@ cannot bind is not evidence that it works.
 law, and it needed nothing added to the language: a cycle basis is a sparse
 `(cycle, line)` incidence *parameter*, and the constraint is one
 `sum(f * cycle_incidence, over=line) == 0`. A line can belong to several
-cycles, so the incidence cannot be a declared coordinate — that is the shape
+cycles, so the incidence cannot be a declared lookup — that is the shape
 finding, and it is the same "topology is data" claim the corpus started with.
 Computing the basis is a graph algorithm and stays in data preparation, where
 the ceiling puts it.

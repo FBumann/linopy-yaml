@@ -1,11 +1,14 @@
 dimensions:
   snapshot:
     dtype: datetime
-    coords: [month]  # every snapshot falls in a month, exactly as a generator sits on a bus
   month:
     dtype: str
   generator:
     dtype: str
+
+lookups:
+  # every snapshot falls in a month, exactly as a generator sits on a bus
+  month_of: {over: snapshot, into: month}
 
 parameters:
   p_max:
@@ -31,7 +34,7 @@ constraints:
     expression: sum(p, over=generator) == load
   monthly_budget:
     foreach: [month, generator]
-    expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
+    expression: sum(p, over=snapshot, group_by=month_of) <= monthly_cap
 
 objective:
   sense: minimize

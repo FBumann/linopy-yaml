@@ -7,25 +7,26 @@ it — and the periods need not be the same size.
 
 ## The problem
 
-$$p_{t,g} \quad\le\quad \hat p_{\thinspace\mathrm{period}(t),\thinspace g}$$
+$$p_{t,g} \quad\le\quad \hat p_{\thinspace\mathrm{period\_of}(t),\thinspace g}$$
 
 Two dimensions cannot state this at the resolution a real study wants.
 `period × snapshot` is a **rectangle**, so every period gets the same number of
 snapshots — and a study that models 2030 hourly and 2050 in four-hour blocks is
 asking for exactly the opposite.
 
-So `snapshot` is one flat dimension carrying $\mathrm{period}$ as a
-[coordinate](../SPEC.md#2-declarations), the same way `generator` carries
-$\mathrm{bus}$ in [transport](transport.md). Ragged periods then cost nothing:
-a coordinate is a per-row column, and four snapshots in 2030 beside two in 2050
-is just a column with four of one value and two of another.
+So `snapshot` is one flat dimension mapped onto `period` by a
+[lookup](../SPEC.md#2-declarations), $\mathrm{period\_of}$, the same way
+`generator` carries $\mathrm{gen\_bus}$ in [transport](transport.md). Ragged
+periods then cost nothing: a lookup is a per-row column, and four snapshots in
+2030 beside two in 2050 is just a column with four of one value and two of
+another.
 
 ## Both directions of one mapping
 
-Grouping reads the coordinate one way:
-`sum(p, over=snapshot, group_by=period)` is a per-period CO₂ budget, and
+Grouping reads the lookup one way:
+`sum(p, over=snapshot, group_by=period_of)` is a per-period CO₂ budget, and
 [monthly_budget](monthly_budget.md) is the same construct on a different
-coordinate.
+lookup.
 
 `within_cap` reads it the other way. Capacity lives on `period` and binds at
 each `snapshot`, so a coarse quantity is pulled onto a fine one:
@@ -33,7 +34,7 @@ each `snapshot`, so a coarse quantity is pulled onto a fine one:
 ```yaml
 within_cap:
   foreach: [snapshot, generator]
-  expression: p <= at(p_nom, onto=snapshot, by=period)
+  expression: p <= at(p_nom, onto=snapshot, by=period_of)
 ```
 
 `at` and `sum(group_by=)` take the same two arguments because `(over, by)` names one
@@ -52,7 +53,7 @@ the pullback is a construct in the language rather than a step before it.
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{period}: \mathcal{T} \to \mathcal{E}$ |
+| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ |
 | $\mathcal{E}$ | index $e$ --- `period` |
 | $\mathcal{G}$ | index $g$ --- `generator` |
 
@@ -80,7 +81,7 @@ $$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E},\enspace g \in \mathca
 
 **`within_cap`**
 
-$$p_{t,g} \le p^{\mathrm{nom}}_{\mathrm{period}(t),g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$p_{t,g} \le p^{\mathrm{nom}}_{\mathrm{period\_of}(t),g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 **`balance`**
 
@@ -107,11 +108,13 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     dimensions:
       snapshot:
         dtype: int
-        coords: [period]
       period:
         dtype: int
       generator:
         dtype: str
+
+    lookups:
+      period_of: {over: snapshot, into: period}
 
     parameters:
       load:
@@ -139,7 +142,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     constraints:
       within_cap:
         foreach: [snapshot, generator]
-        expression: p <= at(p_nom, onto=snapshot, by=period)
+        expression: p <= at(p_nom, onto=snapshot, by=period_of)
       balance:
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
@@ -170,7 +173,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         weight: pd.Series = tables['weight'].set_index('snapshot')['value']
         opex: pd.Series = tables['opex'].set_index('generator')['value']
         capex = xr.DataArray(tables['capex'].pivot(index='period', columns='generator', values='value'))
-        period = xr.DataArray(tables['snapshot'].set_index('snapshot')['period'])
+        period = xr.DataArray(tables['snapshot'].set_index('snapshot')['period_of'].rename('period'))
 
         m = linopy.Model()
         p = m.add_variables(lower=0, coords=[load.index, opex.index], name='p')

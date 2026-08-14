@@ -16,7 +16,7 @@ applied in a different position.
 
 | # | Law | § |
 |---|---|---|
-| 1 | Nine top-level keys, and the schema is **closed at every level** — an unknown key is an error naming the near miss. Booleans are YAML 1.2, so `no` / `on` / `off` stay labels. | [§1](#1-file-shape) |
+| 1 | Ten top-level keys, and the schema is **closed at every level** — an unknown key is an error naming the near miss. Booleans are YAML 1.2, so `no` / `on` / `off` stay labels. | [§1](#1-file-shape) |
 | 2 | Everything decidable without data is **decided without data**. | [§9](#9-errors) |
 | 3 | **One flat namespace, no shadowing** — a collision is a load error naming both declarations. | [§5.1](#51-name-resolution) |
 | 4 | **Position decides which kinds of name are legal**, and a name's kind is fixed at load time. A dimension is never legal in a value position: it is a coordinate space, not data. | [§5.1](#51-name-resolution) |
@@ -29,9 +29,9 @@ applied in a different position.
 
 ## 1. File shape
 
-Nine top-level keys: `dimensions`, `parameters`, `variables`, `constraints`,
-`objective` (§2), `expressions`, `macros` (§3), `piecewise` (§4), `sos` (§4.1),
-plus `version` (below). The schema accepts any subset, but `check`, `solve` and
+Ten top-level keys: `dimensions`, `lookups`, `parameters`, `variables`,
+`constraints`, `objective` (§2), `expressions`, `macros` (§3), `piecewise`
+(§4), `sos` (§4.1), plus `version` (below). The schema accepts any subset, but `check`, `solve` and
 `write` require an objective — there is nothing to optimise without one.
 
 **`version` declares which surface the file is written against.** It is
@@ -96,65 +96,68 @@ be of the declared `dtype` — `values: [2024-01-01]` under the default
 `dtype: str` is a load error, because YAML resolved it to a date and a date
 does not join `'2024-01-01'` in the data.
 
-**A dimension and a coordinate are different things, and the file keeps them
+**A dimension and a lookup are different things, and the file keeps them
 apart.** A **dimension** is an axis of the model: something is indexed by it
 (`dims`, `foreach`) or an aggregation lands terms on it (`group_by=`, `at()`).
-A **coordinate** is a label a dimension's members carry — a generator's bus, a
-snapshot's period — structure, never data: it is not legal in a value position,
-and a *value* riding a dimension is what a parameter is. The block invariant
-follows: **everything under `dimensions:` is an axis.** If `b` is single-valued
-per `a`, `b` is a coordinate of `a`, not a dimension — a `foreach` product over
-functionally dependent dims cut back by a mask is the shape `coords` exists to
-replace. `check` warns about a declared dimension that is never an axis.
+A **lookup** is a named single-valued map out of a dimension — a generator's
+bus, a snapshot's period — structure, never data: it is not legal in a value
+position, and a *value* riding a dimension is what a parameter is. The block
+invariant follows: **everything under `dimensions:` is an axis.** If `b` is
+single-valued per `a`, `b` is a lookup over `a`, not a dimension — a `foreach`
+product over functionally dependent dims cut back by a mask is the shape
+`lookups` exists to replace. `check` warns about a declared dimension that is
+never an axis.
 
-`coords` declares the labels, and the shape of each entry's value says which of
-two kinds it is:
+**`lookups`** declares the maps, each under its own name, and which of the two
+fields it carries says which of two kinds it is:
 
-- **A string names a target dimension — the groupable kind.** The coordinate's
+- **`into:` names a target dimension — the groupable kind.** The lookup's
   values are labels of that dimension, which is what `sum(group_by=)` and
-  `at()` land terms on. Written as a list when the two names coincide, or as a
-  mapping when they do not:
+  `at()` land terms on:
 
   ```yaml
   dimensions:
     bus: {dtype: str}
-    generator:
-      coords: [bus]  # same as {bus: bus}
-    line:
-      coords: {from: bus, to: bus}  # two coordinates onto one dimension
+    generator: {dtype: str}
+    line: {dtype: str}
+  lookups:
+    gen_bus: {over: generator, into: bus}
+    from: {over: line, into: bus}  # two lookups onto one dimension
+    to: {over: line, into: bus}
   ```
 
-  The target must be a declared dimension, must not be the dimension carrying
-  the coordinate, and a coordinate must not be named after a *different*
-  dimension. Non-null values are checked against the target once data is bound
-  (§8) — the check that makes `sum(group_by=)` safe. A **partial** coordinate
-  is legal: null says the label belongs to no group (a generator on no bus, a
-  line with one open end) and `sum(group_by=)` places its terms nowhere, while
-  an unknown *non-null* value is a typo and an error.
+  The target must be a declared dimension other than `over`. Non-null values
+  are checked against the target once data is bound (§8) — the check that
+  makes `sum(group_by=)` safe. A **partial** lookup is legal: null says the
+  label belongs to no group (a generator on no bus, a line with one open end)
+  and `sum(group_by=)` places its terms nowhere, while an unknown *non-null*
+  value is a typo and an error.
 
-- **A mapping declares an inline label space — the selection-only kind.** It
+- **`dtype:` declares an inline label space — the selection-only kind.** It
   owns its values, targets nothing, and puts no entry under `dimensions:`,
   because a label space nothing aggregates into is not part of the model's
   dimensionality:
 
   ```yaml
   dimensions:
-    snapshot:
-      dtype: int
-      coords:
-        period: {dtype: int}  # a label on snapshot — nothing else
+    snapshot: {dtype: int}
+  lookups:
+    period: {over: snapshot, dtype: int}  # a label on snapshot — nothing else
   ```
 
-  An inline coordinate's name joins the flat namespace (law 3). Grouping into
-  one is refused with the rewrite: declare the axis and target it
-  (`period: {...}` under `dimensions:`, `coords: {period: period}` on
-  `snapshot`) — a one-word promotion, made the day the model genuinely gains
-  the axis.
+  A lookup declares exactly one of `into:` and `dtype:`. Grouping into a
+  label space is refused with the rewrite: declare the axis and target it
+  under a name of its own (`period: {...}` under `dimensions:`,
+  `period_of: {over: snapshot, into: period}`) — a promotion made the day the
+  model genuinely gains the axis.
 
-Either kind is single-valued per label, and a dimension declaring `coords`
-needs an index source carrying those columns; they are never inferred from the
-parameters that use the dimension, since inferring would let a mistyped label
-extend the label space instead of being rejected.
+Every lookup name joins the flat namespace (law 3) — a lookup shadowing a
+dimension, its own target included, is a load error, so `generator`'s map onto
+`bus` is `gen_bus`, never a second `bus`. Either kind is single-valued per
+label, and a dimension carrying lookups needs an index source with one column
+per lookup, named after it; values are never inferred from the parameters that
+use the dimension, since inferring would let a mistyped label extend the label
+space instead of being rejected.
 
 **`parameters`** — declared shape only; data binds by name at run time (§8).
 `dims` required (`[]` is a scalar); `dtype` ∈ {`float`, `int`, `bool`, `str`},
@@ -439,7 +442,7 @@ but a state the language tracks (law 6).
 | `where:` on a variable | the variable, at the masked coordinates |
 | `where:` on a constraint | the row |
 | `shift(x, over=d, by=n)` with no `edge=` | the vacated edge coordinate (§7) |
-| a null value in a dimension's `coords:` | that label's group membership (§2) |
+| a null value in a lookup | that label's group membership (§2) |
 
 **A sparse parameter table is not one of them.** Missing rows are compressed
 encoding, and law 8 says what one reads as: the reading under which the missing
@@ -640,13 +643,13 @@ highest precedence first:
 1. a key in `sources` — a table carrying a column of that name, or a parquet
    path; first occurrence of each value is its position
 2. `coords=` — anything `pd.Index()` accepts, or a table carrying the label
-   column plus one column per declared coordinate (§2)
+   column plus one column per lookup over the dimension (§2)
 3. `values:` in the YAML
 4. derived from the parameter tables that carry the dim, as **sorted** distinct
    values
 
-Step 4 is unavailable to a dimension declaring `coords`: it reads index columns
-only, so it cannot supply a coordinate. Otherwise it exists because a dim some
+Step 4 is unavailable to a dimension carrying lookups: it reads index columns
+only, so it cannot supply a lookup column. Otherwise it exists because a dim some
 parameter already spans needs no second declaration — but it costs the *declared
 order*, which `shift` reads positionally, so pass an explicit index whenever
 order matters. It also costs a full pass — a scan plus a dedup — over *every*
@@ -670,7 +673,7 @@ inputs, and has no step 4 —
 Coordinate values in the data must be a subset of the master coordinate; values
 outside it raise rather than being dropped silently. Every declared parameter
 must be provided, and every provided key must be declared — the YAML is the
-source of truth. Validation order: dimension coords → parameter presence → dim
+source of truth. Validation order: lookup columns → parameter presence → dim
 names → coordinate values → unknown keys.
 
 The loader deliberately does **not** check that values are sensible, that a

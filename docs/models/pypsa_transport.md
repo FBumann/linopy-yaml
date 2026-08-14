@@ -16,7 +16,7 @@ PyPSA linear optimal power flow, first rung: transport model, linear marginal co
 |---|---|
 | $\mathcal{T}$ | index $t$ --- `snapshot` |
 | $\mathcal{B}$ | index $b$ --- `bus` |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{bus}: \mathcal{G} \to \mathcal{B}$ |
+| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ |
 | $\mathcal{L}$ | index $l$ --- `link` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ |
 
 #### Parameters
@@ -44,7 +44,7 @@ $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit
 
 **`nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 #### Variable domains
 
@@ -74,10 +74,13 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         dtype: str
       generator:
         dtype: str
-        coords: [bus]  # every generator sits on a bus
       link:
         dtype: str
-        coords: {from: bus, to: bus}  # both endpoints are buses
+
+    lookups:
+      gen_bus: {over: generator, into: bus}  # every generator sits on a bus
+      from: {over: link, into: bus}  # both endpoints are buses
+      to: {over: link, into: bus}
 
     parameters:
       p_nom:
@@ -109,7 +112,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       nodal_balance:
         foreach: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, group_by=bus)
+          sum(p, over=generator, group_by=gen_bus)
           + sum(f, over=link, group_by=to)
           - sum(f, over=link, group_by=from)
           == load
@@ -150,7 +153,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         n.add(
             'Generator',
             generators.index,
-            bus=generators['bus'],
+            bus=generators['gen_bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )

@@ -9,13 +9,16 @@ dimensions:
     dtype: str
   generator:
     dtype: str
-    coords: [bus]  # every generator sits on a bus
   link:
     dtype: str
-    coords: {from: bus, to: bus}  # both endpoints are buses
   storage:
     dtype: str
-    coords: [bus]  # a storage unit sits on a bus too
+
+lookups:
+  gen_bus: {over: generator, into: bus}  # every generator sits on a bus
+  from: {over: link, into: bus}  # both endpoints are buses
+  to: {over: link, into: bus}
+  storage_bus: {over: storage, into: bus}  # a storage unit sits on a bus too
 
 parameters:
   p_nom:
@@ -74,11 +77,11 @@ constraints:
   nodal_balance:
     foreach: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, group_by=bus)
+      sum(p, over=generator, group_by=gen_bus)
       + sum(f, over=link, group_by=to)
       - sum(f, over=link, group_by=from)
-      + sum(p_dispatch, over=storage, group_by=bus)
-      - sum(p_store, over=storage, group_by=bus)
+      + sum(p_dispatch, over=storage, group_by=storage_bus)
+      - sum(p_store, over=storage, group_by=storage_bus)
       == load
 
   ramp_up:

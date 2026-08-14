@@ -4,11 +4,14 @@
 dimensions:
   city:
     dtype: str
-    coords: {as_from: from_city, as_to: to_city}
   from_city:
     dtype: str
   to_city:
     dtype: str
+
+lookups:
+  as_from: {over: city, into: from_city}
+  as_to: {over: city, into: to_city}
 
 parameters:
   # No row on the diagonal: a city has no distance to itself, so no arc

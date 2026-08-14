@@ -62,7 +62,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Generator',
         generators.index,
-        bus=generators['bus'],
+        bus=generators['gen_bus'],
         p_nom=tables['p_nom'].set_index('generator')['value'],
         marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         ramp_limit_up=tables['ramp_limit_up'].set_index('generator')['value'],
@@ -81,7 +81,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'StorageUnit',
         storages.index,
-        bus=storages['bus'],
+        bus=storages['storage_bus'],
         p_nom=p_nom,
         max_hours=tables['soc_max'].set_index('storage')['value'] / p_nom,
         efficiency_store=tables['efficiency_store'].set_index('storage')['value'],

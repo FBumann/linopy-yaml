@@ -9,12 +9,15 @@ dimensions:
     dtype: str
   generator:
     dtype: str
-    coords: [bus]  # every generator sits on a bus
   line:
     dtype: str
-    coords: {from: bus, to: bus}  # both endpoints are buses
   cycle:
     dtype: str  # one independent loop of the network
+
+lookups:
+  gen_bus: {over: generator, into: bus}  # every generator sits on a bus
+  from: {over: line, into: bus}  # both endpoints are buses
+  to: {over: line, into: bus}
 
 parameters:
   p_nom:
@@ -26,8 +29,8 @@ parameters:
   neg_s_nom:
     dims: [line]
   # The cycle basis, as a sparse (cycle, line) table of reactance x direction.
-  # A line may belong to several cycles, so this cannot be a coordinate on
-  # `line` — a coordinate is single-valued per label. It is a parameter over
+  # A line may belong to several cycles, so this cannot be a lookup over
+  # `line` — a lookup is single-valued per label. It is a parameter over
   # both dims, and rows are absent where a line is not in a cycle.
   cycle_incidence:
     dims: [cycle, line]
@@ -51,7 +54,7 @@ constraints:
   nodal_balance:
     foreach: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, group_by=bus)
+      sum(p, over=generator, group_by=gen_bus)
       + sum(f, over=line, group_by=to)
       - sum(f, over=line, group_by=from)
       == load

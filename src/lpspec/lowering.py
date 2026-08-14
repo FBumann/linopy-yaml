@@ -136,10 +136,10 @@ def lower_program(schema: Model) -> plan.Program:
     dimensions = tuple(
         plan.DimensionDeclaration(
             dname,
-            tuple(plan.CoordinateTarget(cname, target) for cname, target in ddef.targeted.items()),
-            tuple(ddef.labels),
+            tuple(plan.CoordinateTarget(cname, target) for cname, target in schema.targeted_of(dname).items()),
+            tuple(schema.labels_of(dname)),
         )
-        for dname, ddef in schema.dimensions.items()
+        for dname in schema.dimensions
     )
     sos = tuple(
         plan.SosDeclaration(
@@ -451,18 +451,16 @@ def advice(program: plan.Program) -> list[str]:
             owner, cname = targeted[d.name]
             notes.append(
                 f"dimension '{d.name}' is never an axis: nothing is indexed by it and nothing "
-                f"aggregates into it — it only serves as the target of coordinate '{cname}' on "
-                f"'{owner}'. That is a label space, not a dimension of this model; declare it "
-                f'inline instead:\n'
-                f'  dimensions:\n'
-                f'    {owner}:\n'
-                f'      coords:\n'
-                f'        {cname}: {{dtype: str}}'
+                f"aggregates into it — it only serves as the target of lookup '{cname}' over "
+                f"'{owner}'. That is a label space, not a dimension of this model; declare the "
+                f'lookup as one instead:\n'
+                f'  lookups:\n'
+                f'    {cname}: {{over: {owner}, dtype: str}}'
             )
         else:
             notes.append(
                 f"dimension '{d.name}' is never used: nothing is indexed by it, nothing "
-                f'aggregates into it, and no coordinate targets it. Remove it — or keep it '
+                f'aggregates into it, and no lookup targets it. Remove it — or keep it '
                 f'knowingly, if an extension file supplies the use.'
             )
     return notes

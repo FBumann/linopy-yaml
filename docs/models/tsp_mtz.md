@@ -109,11 +109,14 @@ $$1 \le u_{c} \le 17 \qquad \forall\thinspace c \in \mathcal{C}$$
 dimensions:
   city:
     dtype: str
-    coords: {as_from: from_city, as_to: to_city}
   from_city:
     dtype: str
   to_city:
     dtype: str
+
+lookups:
+  as_from: {over: city, into: from_city}
+  as_to: {over: city, into: to_city}
 
 parameters:
   # No row on the diagonal: a city has no distance to itself, so no arc
@@ -171,17 +174,18 @@ self-join that looks like it should need a primitive.
 It does not. Declare the identity map from `city` onto each end of the pair:
 
 ```yaml
-city:
-  coords: {as_from: from_city, as_to: to_city}
+lookups:
+  as_from: {over: city, into: from_city}
+  as_to: {over: city, into: to_city}
 ```
 
 and `sum(u, over=city, group_by=as_from)` becomes a **relabel** rather than a
 reduction — the map is one-to-one, so nothing is added up; `u` simply moves
 from the `city` axis onto the `from_city` axis. Doing it twice with different
-coordinates puts the same variable at both ends of one row.
+lookups puts the same variable at both ends of one row.
 
 That is `sum(group_by=)` doing a job it was not designed for and handling it because
-[topology is data](pypsa_transport.md): a coordinate map is a join, and a join
+[topology is data](pypsa_transport.md): a lookup is a join, and a join
 does not care whether it is many-to-one or one-to-one.
 
 **The diagonal takes care of itself.** `distance` has no row where a city meets
@@ -210,8 +214,8 @@ solves large instances this way.
 
 ## What it exercises
 
-`sum(group_by=)` as a relabel through a one-to-one coordinate map, a `where`
-comparing a dimension against a string coordinate, sparsity standing in for an
+`sum(group_by=)` as a relabel through a one-to-one lookup, a `where`
+comparing a dimension against a string label, sparsity standing in for an
 `i ≠ j` guard, and `binary` over a two-dimensional index.
 
 No new construct. The honest summary is that the ceiling refuses an

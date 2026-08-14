@@ -8,17 +8,17 @@ a generator on a bus.
 
 ## The problem
 
-$$\sum_{t \thinspace:\thinspace \mathrm{month}(t) = m} p_{t,g} \quad\le\quad \bar E_{m,g}$$
+$$\sum_{t \thinspace:\thinspace \mathrm{month\_of}(t) = m} p_{t,g} \quad\le\quad \bar E_{m,g}$$
 
-$\mathrm{month}$ is a **coordinate the snapshot dimension declares**, not a
+$\mathrm{month\_of}$ is a **lookup the model declares over snapshot**, not a
 calendar the language understands. Its values arrive as a column in the
 snapshot index, so the same model expresses weeks, seasons, fiscal quarters,
 peak/off-peak blocks or representative days by changing that one column and
 nothing else.
 
-Compare [transport](transport.md): there, $\mathrm{bus}$ is a coordinate on
-`generator` and the sum is over generators at a bus. Here $\mathrm{month}$ is a
-coordinate on `snapshot` and the sum is over snapshots in a month. **It is the
+Compare [transport](transport.md): there, $\mathrm{gen\_bus}$ is a lookup over
+`generator` and the sum is over generators at a bus. Here $\mathrm{month\_of}$ is a
+lookup over `snapshot` and the sum is over snapshots in a month. **It is the
 same construct** — `sum(group_by=)` — and time is not a special axis.
 
 ## The model
@@ -31,7 +31,7 @@ same construct** — `sum(group_by=)` — and time is not a special axis.
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{month}: \mathcal{T} \to \mathcal{M}$ --- dispatch periods, each falling in one month |
+| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}$ --- dispatch periods, each falling in one month |
 | $\mathcal{M}$ | index $m$ --- `month` --- the grouping the budget is stated over |
 | $\mathcal{G}$ | index $g$ --- `generator` --- generating units |
 
@@ -62,7 +62,7 @@ $$\sum_{g \in \mathcal{G}} p_{t,g} = \ell_{t} \qquad \forall\thinspace t \in \ma
 
 **`monthly_budget`**
 
-$$\sum_{t \in \mathcal{T} \thinspace:\thinspace \mathrm{month}(t) = m} p_{t,g} \le \bar E_{m,g} \qquad \forall\thinspace m \in \mathcal{M},\enspace g \in \mathcal{G}$$
+$$\sum_{t \in \mathcal{T} \thinspace:\thinspace \mathrm{month\_of}(t) = m} p_{t,g} \le \bar E_{m,g} \qquad \forall\thinspace m \in \mathcal{M},\enspace g \in \mathcal{G}$$
 
 #### Variable domains
 
@@ -81,11 +81,14 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     dimensions:
       snapshot:
         dtype: datetime
-        coords: [month]  # every snapshot falls in a month, exactly as a generator sits on a bus
       month:
         dtype: str
       generator:
         dtype: str
+
+    lookups:
+      # every snapshot falls in a month, exactly as a generator sits on a bus
+      month_of: {over: snapshot, into: month}
 
     parameters:
       p_max:
@@ -111,7 +114,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         expression: sum(p, over=generator) == load
       monthly_budget:
         foreach: [month, generator]
-        expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
+        expression: sum(p, over=snapshot, group_by=month_of) <= monthly_cap
 
     objective:
       sense: minimize
@@ -139,7 +142,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         cost: pd.Series = tables['cost'].set_index('generator')['value']
         load: pd.Series = tables['load'].set_index('snapshot')['value']
         cap = xr.DataArray(tables['monthly_cap'].pivot(index='month', columns='generator', values='value'))
-        month = xr.DataArray(tables['snapshot'].set_index('snapshot')['month'])
+        month = xr.DataArray(tables['snapshot'].set_index('snapshot')['month_of'].rename('month'))
 
         m = linopy.Model()
         p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')
@@ -151,10 +154,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
 ## The grouping is data
 
-The `month` column is produced before the model, by whatever rule you want:
+The `month_of` column is produced before the model, by whatever rule you want:
 
 ```python
-index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
+index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month_of'))
 ```
 
 What that produces is the snapshot index the model binds against — a second
@@ -162,18 +165,18 @@ column beside the timestamps, and nothing else:
 
 ```text
 shape: (6, 2)
-┌─────────────────────┬─────────┐
-│ snapshot            ┆ month   │
-│ ---                 ┆ ---     │
-│ datetime[μs]        ┆ str     │
-╞═════════════════════╪═════════╡
-│ 2030-01-01 00:00:00 ┆ 2030-01 │
-│ 2030-01-16 00:00:00 ┆ 2030-01 │
-│ 2030-01-31 00:00:00 ┆ 2030-01 │
-│ 2030-02-15 00:00:00 ┆ 2030-02 │
-│ 2030-03-02 00:00:00 ┆ 2030-03 │
-│ 2030-03-17 00:00:00 ┆ 2030-03 │
-└─────────────────────┴─────────┘
+┌─────────────────────┬──────────┐
+│ snapshot            ┆ month_of │
+│ ---                 ┆ ---      │
+│ datetime[μs]        ┆ str      │
+╞═════════════════════╪══════════╡
+│ 2030-01-01 00:00:00 ┆ 2030-01  │
+│ 2030-01-16 00:00:00 ┆ 2030-01  │
+│ 2030-01-31 00:00:00 ┆ 2030-01  │
+│ 2030-02-15 00:00:00 ┆ 2030-02  │
+│ 2030-03-02 00:00:00 ┆ 2030-03  │
+│ 2030-03-17 00:00:00 ┆ 2030-03  │
+└─────────────────────┴──────────┘
 ```
 
 Three snapshots in January, one in February, two in March: `sum(group_by=)` needs a
@@ -201,25 +204,25 @@ Per-month *results* need no language support at all — a primal is a tidy frame
 so it is a join and a `group_by`:
 
 ```python
-sol.primal('p').join(index, on='snapshot').group_by('month').agg(pl.col('value').sum())
+sol.primal('p').join(index, on='snapshot').group_by('month_of').agg(pl.col('value').sum())
 ```
 
 ## Why `month` is a dimension
 
-A `coords:` entry is a **function between two dimensions**, so it needs a
+A lookup with `into:` is a **function between two dimensions**, so it needs a
 codomain. `month` being one is not ceremony — three things rest on it:
 
-1. **`sum(group_by=)` replaces `over` with the dimension the coordinate targets.**
+1. **`sum(group_by=)` replaces `over` with the dimension the lookup targets.**
    The expression's dims are therefore `[month, generator]`, and a `foreach:`
    can only name declared dimensions.
 2. **`monthly_cap` is indexed *by* month.** A parameter carries values *at*
-   coordinates; it cannot be the thing a `foreach` ranges over. So month could
+   labels; it cannot be the thing a `foreach` ranges over. So month could
    not be a parameter even if the grouping did not need it.
 3. **It is what makes a typo an error.** A value in the snapshot index that is
-   not a coordinate of `month` is rejected at bind time:
+   not a label of `month` is rejected at bind time:
 
 ```text
-DataError: dimension 'snapshot' coordinate 'month' has value(s) that are
+DataError: dimension 'snapshot' lookup 'month_of' has value(s) that are
            not 'month' coordinates: '2030-3'
 ```
 
@@ -235,10 +238,10 @@ misspelled is a mistake.
 
 ## What this cannot do
 
-`sum(group_by=)` takes a **partition**: `coords` is a function from snapshot to
+`sum(group_by=)` takes a **partition**: `month_of` is a function from snapshot to
 month, so a snapshot with a month belongs to exactly one group. Unequal groups
 are fine, and a group with no members contributes nothing — as does a snapshot
-whose coordinate is null, which belongs to no group and lands nowhere.
+whose `month_of` is null, which belongs to no group and lands nowhere.
 
 What it cannot express is an **overlapping** aggregate — *"trailing twelve
 months, at every month"* — because each snapshot would belong to twelve groups
@@ -248,5 +251,5 @@ it is the fixed-width window, [#468](https://github.com/fluxopt/lpspec/issues/46
 The same split shows up one level up, where a *process* loops over plans
 rather than an expression looping over rows
 ([#457](https://github.com/fluxopt/lpspec/issues/457)): slicing a model per
-coordinate is a partition, slicing it per window overlaps. Here `sum(group_by=)`
+group is a partition, slicing it per window overlaps. Here `sum(group_by=)`
 partitions, and the overlapping counterpart is the piece that has not landed.

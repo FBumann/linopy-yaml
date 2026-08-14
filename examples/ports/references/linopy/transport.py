@@ -11,8 +11,8 @@ A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
 The comparison the page cares about is the nodal balance. The YAML groups by
-coordinates it declared on the dimensions — ``sum(p, over=generator,
-group_by=bus)`` — where this script has to build the bus x generator and
+lookups it declared over the dimensions — ``sum(p, over=generator,
+group_by=gen_bus)`` — where this script has to build the bus x generator and
 bus x line incidence matrices itself and multiply through them. Both say
 Kirchhoff's current law; one says it as a relation, the other as linear
 algebra.
@@ -53,7 +53,7 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     snapshots, buses = load.indexes['snapshot'], load.indexes['bus']
 
     gen_at = pd.DataFrame(0.0, index=buses, columns=p_max.index)
-    for gen, bus in zip(tables['generator']['generator'], tables['generator']['bus'], strict=True):
+    for gen, bus in zip(tables['generator']['generator'], tables['generator']['gen_bus'], strict=True):
         gen_at.loc[bus, gen] = 1.0
     flow_in = pd.DataFrame(0.0, index=buses, columns=cap.index)
     for line, src, dst in zip(tables['line']['line'], tables['line']['from'], tables['line']['to'], strict=True):

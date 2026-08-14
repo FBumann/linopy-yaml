@@ -1,5 +1,5 @@
 {
-  "generator": {"generator": ["wind_n", "gas_s"], "bus": ["north", "south"]},
+  "generator": {"generator": ["wind_n", "gas_s"], "gen_bus": ["north", "south"]},
   "line": {"line": ["n_to_s"], "from": ["north"], "to": ["south"]},
   "p_max": {"generator": ["wind_n", "gas_s"], "value": [60.0, 150.0]},
   "cost": {"generator": ["wind_n", "gas_s"], "value": [10.0, 40.0]},

@@ -8,7 +8,7 @@
 \paragraph{Sets}
 \begin{description}
 \item[$\mathcal{T}$] index $t$ --- \texttt{snapshot}
-\item[$\mathcal{G}$] index $g$ --- \texttt{generator} with $\mathrm{bus}: \mathcal{G} \to \mathcal{B}$
+\item[$\mathcal{G}$] index $g$ --- \texttt{generator} with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$
 \item[$\mathcal{B}$] index $b$ --- \texttt{bus}
 \end{description}
 
@@ -40,7 +40,7 @@
 
 \paragraph{Subject to}
 \begin{align}
-\text{balance} && \sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g} + \mathit{spill}_{t} - \mathit{slack}_{t} & = \mathit{load}_{t,b} && \forall\, t \in \mathcal{T},\ b \in \mathcal{B} \\
+\text{balance} && \sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \mathit{spill}_{t} - \mathit{slack}_{t} & = \mathit{load}_{t,b} && \forall\, t \in \mathcal{T},\ b \in \mathcal{B} \\
 \text{ramp} && p_{t,g} - p_{t \ominus 1,g} & \le p_{t - 1,g} + p^{\mathrm{max}}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
 \text{arithmetic} && \sum_{g \in \mathcal{G}} \left( \frac{p_{t,g}}{2} + -\mathit{cost}_{g} \right) & \ge \left( -\left( \sum_{g \in \mathcal{G}} p_{t,g} \right) \right) \cdot 3 && \forall\, t \in \mathcal{T}
 \end{align}

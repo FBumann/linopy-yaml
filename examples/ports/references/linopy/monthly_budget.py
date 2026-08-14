@@ -10,11 +10,11 @@
 A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
-The line worth comparing is the budget. The YAML groups by a coordinate the
-snapshot dimension declares — ``sum(p, over=snapshot, group_by=month)`` —
+The line worth comparing is the budget. The YAML groups by a lookup over
+snapshot — ``sum(p, over=snapshot, group_by=month_of)`` —
 and linopy carries the same idea natively: ``p.groupby(month).sum()``, the
 way PyPSA's own optimization layer aggregates. The difference is where the
-calendar lives — a declared coordinate in the YAML, a data array the model
+calendar lives — a declared lookup in the YAML, a data array the model
 author threads through by hand here.
 """
 
@@ -44,7 +44,7 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     cost: pd.Series = tables['cost'].set_index('generator')['value']
     load: pd.Series = tables['load'].set_index('snapshot')['value']
     cap = xr.DataArray(tables['monthly_cap'].pivot(index='month', columns='generator', values='value'))
-    month = xr.DataArray(tables['snapshot'].set_index('snapshot')['month'])
+    month = xr.DataArray(tables['snapshot'].set_index('snapshot')['month_of'].rename('month'))
 
     m = linopy.Model()
     p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')

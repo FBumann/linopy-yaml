@@ -3,7 +3,7 @@
 
 == Sets
 / $cal(T)$: index $t$ --- `snapshot`
-/ $cal(G)$: index $g$ --- `generator` with $upright("bus"): cal(G) arrow.r cal(B)$
+/ $cal(G)$: index $g$ --- `generator` with $upright("gen_bus"): cal(G) arrow.r cal(B)$
 / $cal(B)$: index $b$ --- `bus`
 
 == Parameters
@@ -29,7 +29,7 @@ $  & max & sum_(t in cal(T), g in cal(G)) p_(t,g) dot italic("cost")_(g) $
 
 == Subject to
 #set math.equation(numbering: "(1)")
-$ upright("balance") & sum_(g in cal(G) colon upright("bus")(g) = b) p_(t,g) + italic("spill")_(t) - italic("slack")_(t) & = italic("load")_(t,b) & forall t in cal(T), b in cal(B) \
+$ upright("balance") & sum_(g in cal(G) colon upright("gen_bus")(g) = b) p_(t,g) + italic("spill")_(t) - italic("slack")_(t) & = italic("load")_(t,b) & forall t in cal(T), b in cal(B) \
   upright("ramp") & p_(t,g) - p_(t minus.o 1,g) & <= p_(t - 1,g) + p^(upright("max"))_(g) & forall t in cal(T), g in cal(G) \
   upright("arithmetic") & sum_(g in cal(G)) (frac(p_(t,g), 2) + -italic("cost")_(g)) & >= (-(sum_(g in cal(G)) p_(t,g))) dot 3 & forall t in cal(T) $
 

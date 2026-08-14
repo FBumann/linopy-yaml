@@ -360,7 +360,7 @@ order plus a `row_starts` offset array, the same three arrays a solver takes,
 at 12 bytes per entry. Masks
 are **row absence** — no NaN sentinels, no `-1` labels. Broadcasting is a join,
 `sum` drops coordinate columns, `sum(group_by=)` joins the dim table and projects a
-declared coordinate in place of the grouped dim. Neither aggregates: both
+declared lookup in place of the grouped dim. Neither aggregates: both
 rewrite a fragment's dim tuple, and duplicates collapse in the terminal
 `SUM(coeff) GROUP BY row, col` at assembly.
 
@@ -475,7 +475,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/polars/binding.py` | a caller's sources → `BoundSources`, the frozen frames every query is written against |
 | `relational/engines/polars/engine.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
-| `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued coords |
+| `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued lookups |
 | `relational/sinks/tables.py` | what every sink reads and no more — the five frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
@@ -520,7 +520,7 @@ emits declarations, and declarations are language.
 
 The test cuts the other way too, which is what keeps it from swallowing
 everything. `lowering.py` legitimately refuses **plan shapes** — `shift(by=)`
-must be an integer literal, `sum(group_by=)` a declared coordinate — because
+must be an integer literal, `sum(group_by=)` a declared lookup — because
 those are about what a plan node can represent, and a second opinion about them
 is not a bug, it is the other lane's own business. What a consumer may not do is
 state a rule about the *language* that another consumer then has to restate.
