@@ -9,19 +9,21 @@
 # explain "with $s-1$ wrapping at the horizon" in prose underneath, because
 # $s-1$ cannot say it; $s \ominus 1$ can, and the legend defines it.
 
+notation: latex
+
 dimensions:
-  snapshot: {index: s, set: {latex: "\\mathcal{S}", typst: cal(S)}}
-  generator: {index: g, set: {latex: "\\mathcal{G}", typst: cal(G)}}
+  snapshot: {index: s, set: "\\mathcal{S}"}
+  generator: {index: g, set: "\\mathcal{G}"}
 
 names:
   cost: "c"
-  load: {latex: "\\ell", typst: ell}
-  p_max: {latex: "\\bar p", typst: bar(p)}
+  load: "\\ell"
+  p_max: "\\bar p"
   # Upright, as the gallery sets them: these are quantities named by a word,
   # not products of single-letter symbols.
-  soc: {latex: "\\mathrm{soc}", typst: 'upright("soc")'}
-  charge: {latex: "\\mathrm{charge}", typst: 'upright("charge")'}
-  discharge: {latex: "\\mathrm{discharge}", typst: 'upright("discharge")'}
+  soc: "\\mathrm{soc}"
+  charge: "\\mathrm{charge}"
+  discharge: "\\mathrm{discharge}"
 
 descriptions:
   snapshot: dispatch periods, cyclic at the horizon

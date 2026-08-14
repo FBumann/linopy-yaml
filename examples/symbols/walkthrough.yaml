@@ -10,14 +10,16 @@
 # language rather than working around it: naming either would be an error,
 # because the model does not declare them as parameters or variables.
 
+notation: latex
+
 dimensions:
-  snapshot: {index: s, set: {latex: "\\mathcal{S}", typst: cal(S)}}
-  generator: {index: g, set: {latex: "\\mathcal{G}", typst: cal(G)}}
+  snapshot: {index: s, set: "\\mathcal{S}"}
+  generator: {index: g, set: "\\mathcal{G}"}
 
 names:
   cost: "c"
-  load: {latex: "\\ell", typst: ell}
-  p_max: {latex: "\\bar p", typst: bar(p)}
+  load: "\\ell"
+  p_max: "\\bar p"
 
 descriptions:
   snapshot: dispatch periods

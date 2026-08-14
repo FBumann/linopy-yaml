@@ -500,15 +500,20 @@ def typst():
 
 def test_typst_output_compiles(typst, tmp_path: Path):
     """The only check that the Typst is real, and it has already earned its
-    place: the first run rejected `minus.circle`, which is not a Typst symbol.
-    Models with a committed symbol table compile *with* it too — the run
-    that would have caught #321, where a table made the Typst uncompilable."""
+    place: the first run rejected `minus.circle`, which is not a Typst symbol."""
     for path in MODEL_PATHS:
-        table = Path('examples/symbols') / path.name
-        for suffix, symbols in [('', None), ('-symbols', table)] if table.exists() else [('', None)]:
-            source = tmp_path / f'{path.stem}{suffix}.typ'
-            source.write_text(to_typst(path, symbols=symbols, standalone=True))
-            typst.compile(str(source), output=str(tmp_path / f'{path.stem}{suffix}.pdf'))
+        source = tmp_path / f'{path.stem}.typ'
+        source.write_text(to_typst(path, standalone=True))
+        typst.compile(str(source), output=str(tmp_path / f'{path.stem}.pdf'))
+
+
+def test_typst_output_with_a_symbol_table_compiles(typst, tmp_path: Path):
+    """The gap that let #321 through: the compile test never ran with
+    `symbols=`, so nothing noticed that a table's spellings reached the
+    document unread."""
+    source = tmp_path / 'symbols.typ'
+    source.write_text(to_typst(DISPATCH, symbols=TYPST_SYMBOLS, standalone=True))
+    typst.compile(str(source), output=str(tmp_path / 'symbols.pdf'))
 
 
 def test_every_typst_operator_compiles(typst, tmp_path: Path):
@@ -600,9 +605,16 @@ def test_the_latex_is_structurally_well_formed(path: Path):
 # ---------------------------------------------------------------------------
 
 SYMBOLS = {
+    'notation': 'latex',
     'dimensions': {'generator': {'index': 'u', 'set': r'\mathcal{U}'}},
     'names': {'p': r'\pi', 'marginal_cost': r'c^{\mathrm{marg}}'},
     'descriptions': {'generator': 'dispatchable units'},
+}
+
+TYPST_SYMBOLS = {
+    'notation': 'typst',
+    'dimensions': {'generator': {'index': 'u', 'set': 'cal(U)'}},
+    'names': {'p': 'pi', 'p_max': 'bar(p)'},
 }
 
 
@@ -643,21 +655,16 @@ def test_an_entry_naming_nothing_is_an_error_with_the_near_miss(symbols, match):
     """A silent typo means a symbol that never applies and a reader who never
     finds out — so it fails, and says what it probably meant."""
     with pytest.raises(lps.SchemaError, match=match):
-        to_latex(DISPATCH, symbols=symbols)
+        to_latex(DISPATCH, symbols={'notation': 'latex', **symbols})
 
 
-PER_FORMAT = {
-    'dimensions': {'generator': {'set': {'latex': r'\mathcal{G}', 'typst': 'cal(G)'}}},
-    'names': {'p_max': {'latex': r'\bar p', 'typst': 'bar(p)'}},
-}
-
-
-def test_a_per_format_entry_prints_each_format_in_its_own_notation():
-    """Nothing translates: each format receives the spelling written for it,
-    verbatim, and markdown reads the latex one because MathJax renders it."""
-    assert r'\bar p' in to_latex(DISPATCH, symbols=PER_FORMAT)
-    assert 'bar(p)' in to_typst(DISPATCH, symbols=PER_FORMAT)
-    assert r'\bar p' in to_markdown(DISPATCH, symbols=PER_FORMAT)
+def test_a_table_prints_its_own_notation_verbatim():
+    """Nothing parses or translates a spelling: `bar(p)` is Typst's, and it
+    reaches the document exactly as written."""
+    typ = to_typst(DISPATCH, symbols=TYPST_SYMBOLS)
+    assert 'pi_(t,u)' in typ
+    assert 'bar(p)_(u)' in typ
+    assert 'u in cal(U)' in typ
 
 
 @pytest.mark.parametrize(
@@ -665,54 +672,40 @@ def test_a_per_format_entry_prints_each_format_in_its_own_notation():
     [
         pytest.param(
             to_typst,
-            {'names': {'p_max': {'latex': r'\bar p'}}},
-            r"'p_max' under names: spells \['latex'\] but not typst",
-            id='typst-asked-of-a-latex-only-entry',
+            {'notation': 'latex', 'names': {'p_max': r'\bar p'}},
+            'written in latex, but this is a typst render',
+            id='a-latex-table-into-typst',
         ),
+        pytest.param(to_latex, TYPST_SYMBOLS, 'written in typst, but this is a latex render', id='typst-table-latex'),
+        pytest.param(
+            to_markdown, TYPST_SYMBOLS, 'written in typst, but this is a latex render', id='typst-table-markdown'
+        ),
+        pytest.param(to_latex, {'names': {'p': 'x'}}, "'notation:' is required", id='a-table-that-does-not-say'),
         pytest.param(
             to_latex,
-            {'names': {'p_max': {'typst': 'bar(p)'}}},
-            r"'p_max' under names: spells \['typst'\] but not latex",
-            id='latex-asked-of-a-typst-only-entry',
-        ),
-        pytest.param(
-            to_typst,
-            {'names': {'p_max': r'\bar p'}},
-            r"'p_max' under names: .*backslash",
-            id='a-bare-latex-string-reaching-typst',
-        ),
-        pytest.param(
-            to_typst,
-            {'descriptions': {'load': r'demand $\ell$'}},
-            r"'load' under descriptions: .*backslash",
-            id='a-latex-math-span-in-a-description-reaching-typst',
-        ),
-        pytest.param(
-            to_latex,
-            {'names': {'p_max': {'tex': r'\bar p'}}},
-            r"'p_max' under names: unknown notation",
-            id='an-unknown-notation-key',
-        ),
-        pytest.param(
-            to_latex,
-            {'names': {'p_max': {}}},
-            r"'p_max' under names: an empty mapping spells nothing",
-            id='an-empty-mapping',
+            {'notation': 'latx', 'names': {'p': 'x'}},
+            "unknown notation 'latx'. Valid notations",
+            id='a-notation-outside-the-vocabulary',
         ),
     ],
 )
-def test_a_format_without_its_spelling_refuses_and_names_the_entry(render, symbols, match):
-    """The failure this replaces was silent: LaTeX passed verbatim into Typst
-    compiled to garbage three tools later (#321). Every wrong shape now stops
-    at the render that cannot honour it, naming the entry."""
+def test_a_table_in_the_wrong_notation_refuses(render, symbols, match):
+    """#321: a LaTeX table passed verbatim into a Typst document, which failed
+    three tools later as `unknown variable: athcal`. One comparison replaces
+    that with a refusal at the call, naming both notations."""
     with pytest.raises(lps.SchemaError, match=match):
         render(DISPATCH, symbols=symbols)
 
 
-def test_a_bare_backslash_entry_is_still_open_latex():
-    """The heuristic refuses LaTeX reaching *Typst* only — a bare LaTeX string
-    stays legal for LaTeX and markdown, with no vocabulary to fit into."""
-    assert r'\heartsuit_{g}' in to_latex(DISPATCH, symbols={'names': {'p_max': r'\heartsuit'}})
+def test_notation_is_case_insensitive():
+    assert to_latex(DISPATCH, symbols={'notation': 'LaTeX', 'names': {'p': r'\pi'}}) == to_latex(
+        DISPATCH, symbols={'notation': 'latex', 'names': {'p': r'\pi'}}
+    ), 'load lower-cases the notation, so casing never changes the render'
+
+
+def test_an_empty_override_is_used_not_fallen_through():
+    tex = to_latex(DISPATCH, symbols={'notation': 'latex', 'names': {'p_max': ''}})
+    assert r'p^{\mathrm{max}}' not in tex, 'an entry in the table is used verbatim, even empty — never re-derived'
 
 
 def test_the_table_loads_from_a_file_and_the_committed_one_applies():
@@ -723,20 +716,20 @@ def test_the_table_loads_from_a_file_and_the_committed_one_applies():
 
 
 @pytest.mark.parametrize('table', sorted(Path('examples/symbols').glob('*.yaml')), ids=lambda p: p.stem)
-@EVERY_FORMAT
-def test_every_committed_symbol_table_still_fits_its_model(table: Path, fmt: Format):
+def test_every_committed_symbol_table_still_fits_its_model(table: Path):
     """A sidecar is matched to its model by filename, and nothing else ties
     them together — so renaming a parameter would leave the table naming
     something that no longer exists. `checked_against` makes that an error, and
-    this is what runs it for every committed pair."""
+    this is what runs it for every committed pair, in the notation the table
+    declares."""
     candidates = [Path('examples') / f'{table.stem}.yaml', Path('examples/ports') / f'{table.stem}.yaml']
     model = next((c for c in candidates if c.exists()), None)
     assert model is not None, f'{table} names no model: looked in {[str(c) for c in candidates]}'
-    assert typeset(model, fmt, symbols=table).strip()
+    assert typeset(model, FORMATS[SymbolTable.load(table).notation], symbols=table).strip()
 
 
 def test_a_model_renders_identically_with_an_empty_table():
-    assert to_latex(DISPATCH) == to_latex(DISPATCH, symbols=SymbolTable())
+    assert to_latex(DISPATCH) == to_latex(DISPATCH, symbols=SymbolTable('latex'))
 
 
 def test_exported_from_the_package():
