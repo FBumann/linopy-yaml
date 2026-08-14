@@ -100,13 +100,14 @@ def main() -> None:
     import lpspec as lps
 
     case = bench_cases.CASES[args.case]
-    sources = case.data(case.shape(args.size))
+    shape = case.shape(args.size)
+    sources = case.data(shape)
 
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
         started = time.perf_counter()
-        with lps.build(case.model, sources) as engine:
+        with lps.build(case.model_path(shape), sources) as engine:
             build = time.perf_counter() - started
             phase['now'] = 'emit'
             started = time.perf_counter()

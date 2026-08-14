@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 Counts = dict[str, Any]
 
 
-def split_sources(case: Case, paths: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+def split_sources(case: Case, size: str, paths: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
     """Parameters from dimension index tables, by what the model declares.
 
     Harness bookkeeping, and it runs *before* the clock on the lpspec arm: it
@@ -50,14 +50,15 @@ def split_sources(case: Case, paths: dict[str, str]) -> tuple[dict[str, str], di
     """
     import yaml as pyyaml
 
-    schema = pyyaml.safe_load(case.model.read_text())
+    model = case.model_path(case.shape(size))
+    schema = pyyaml.safe_load(model.read_text())
     params = set(schema.get('parameters', {}))
     dims = set(schema.get('dimensions', {}))
     undeclared = sorted(set(paths) - params - dims)
     if undeclared:
         raise ValueError(
             f'{case.name}: {undeclared} declared as neither parameter nor dimension in '
-            f'{case.model} — the build would not see it. Stale files under bench/.cache/?'
+            f'{model} — the build would not see it. Stale files under bench/.cache/?'
         )
     return (
         {k: v for k, v in paths.items() if k in params},
@@ -98,7 +99,7 @@ def _engine(engine: str | None) -> None:
 
 
 def lpspec_build_and_emit(
-    case_name: str, sink: str, sources: dict[str, str], coords: dict[str, str], engine: str | None = None
+    case_name: str, size: str, sink: str, sources: dict[str, str], coords: dict[str, str], engine: str | None = None
 ) -> Counts:
     """Build relationally and hand the model over — an LP file, or a solver.
 
@@ -115,9 +116,10 @@ def lpspec_build_and_emit(
     _engine(engine)
     import lpspec as lps
 
+    case = CASES[case_name]
     with (
         tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp,
-        lps.build(CASES[case_name].model, sources, coords=coords) as bound,
+        lps.build(case.model_path(case.shape(size)), sources, coords=coords) as bound,
     ):
         if sink == 'lp':
             bound.write(Path(tmp) / 'model.lp')
@@ -139,7 +141,9 @@ def lpspec_build_and_emit(
         }
 
 
-def linopy_build_and_emit(case_name: str, sink: str, paths: dict[str, str], io_api: str = 'lp-polars') -> Counts:
+def linopy_build_and_emit(
+    case_name: str, size: str, sink: str, paths: dict[str, str], io_api: str = 'lp-polars'
+) -> Counts:
     """The same YAML, the same parquet, the same seam — on the eager lane.
 
     ``set_names=False`` is load-bearing. linopy names every variable and
@@ -158,7 +162,7 @@ def linopy_build_and_emit(case_name: str, sink: str, paths: dict[str, str], io_a
     case = CASES[case_name]
     with tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp:
         data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(case.model, data=data, coords=coords)
+        m = lpspec_linopy.build(case.model_path(case.shape(size)), data=data, coords=coords)
         if sink == 'lp':
             m.to_file(Path(tmp) / 'model.lp', io_api=io_api, progress=False)
         elif sink == 'gurobi':
@@ -168,7 +172,7 @@ def linopy_build_and_emit(case_name: str, sink: str, paths: dict[str, str], io_a
         return {'columns': int(m.nvars), 'rows': int(m.ncons), 'nonzeros': None}
 
 
-def build_only(arm: str, case_name: str, paths: dict[str, str], engine: str | None = None) -> Counts:
+def build_only(arm: str, case_name: str, size: str, paths: dict[str, str], engine: str | None = None) -> Counts:
     """Just the build — no sink, nothing to release.
 
     The verb behind the *first vs steady* question: what a caller pays who
@@ -177,23 +181,24 @@ def build_only(arm: str, case_name: str, paths: dict[str, str], engine: str | No
     with warm-up in the engine.
     """
     case = CASES[case_name]
+    model = case.model_path(case.shape(size))
     if arm == 'linopy':
         from lpspec import linopy as lpspec_linopy
 
         data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(case.model, data=data, coords=coords)
+        m = lpspec_linopy.build(model, data=data, coords=coords)
         return {'columns': int(m.nvars), 'rows': int(m.ncons), 'nonzeros': None}
 
     _engine(engine)
     import lpspec as lps
 
-    sources, coords_ = split_sources(case, paths)
-    with lps.build(case.model, sources, coords=coords_) as bound:
+    sources, coords_ = split_sources(case, size, paths)
+    with lps.build(model, sources, coords=coords_) as bound:
         tables = _tables(bound)
         return {'columns': tables.column_count, 'rows': tables.row_count, 'nonzeros': None}
 
 
-def objective(arm: str, case_name: str, paths: dict[str, str], engine: str | None = None) -> float:
+def objective(arm: str, case_name: str, size: str, paths: dict[str, str], engine: str | None = None) -> float:
     """Solve, and return the objective the parity gate compares.
 
     Not a measurement — the one thing the harness does that is allowed to be
@@ -206,11 +211,12 @@ def objective(arm: str, case_name: str, paths: dict[str, str], engine: str | Non
     really a vocabulary mismatch.
     """
     case = CASES[case_name]
+    model = case.model_path(case.shape(size))
     if arm == 'linopy':
         from lpspec import linopy as lpspec_linopy
 
         data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(case.model, data=data, coords=coords)
+        m = lpspec_linopy.build(model, data=data, coords=coords)
         m.solve(solver_name='highs', output_flag=False)
         if m.status != 'ok':
             raise RuntimeError(f'linopy solve finished {m.status!r}, not ok')
@@ -219,8 +225,8 @@ def objective(arm: str, case_name: str, paths: dict[str, str], engine: str | Non
     _engine(engine)
     import lpspec as lps
 
-    sources, coords_ = split_sources(case, paths)
-    with lps.solve(case.model, sources, coords=coords_) as sol:
+    sources, coords_ = split_sources(case, size, paths)
+    with lps.solve(model, sources, coords=coords_) as sol:
         if sol.termination_condition != 'optimal':
             raise RuntimeError(f'lpspec solve terminated {sol.termination_condition!r}, not optimal')
         return float(sol.objective)

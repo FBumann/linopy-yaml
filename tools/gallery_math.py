@@ -99,6 +99,9 @@ def _literal(table: Path) -> str:
     raw = read_yaml(table)
     lines = ['symbols = {']
     for section, entries in raw.items():
+        if not isinstance(entries, dict):
+            lines.append(f'    {section!r}: {entries!r},')
+            continue
         lines.append(f'    {section!r}: {{')
         lines += [f'        {key!r}: {value!r},' for key, value in entries.items()]
         lines.append('    },')
@@ -114,11 +117,9 @@ def _home_block() -> str:
     A reader who sees ``load`` in the YAML and $\\ell$ in the math, with
     neither in front of them, has to take the page on faith.
 
-    Typst is deliberately absent: :class:`~lpspec.typeset.symbols.SymbolTable`
-    entries are LaTeX strings, and ``to_typst`` passes them through verbatim,
-    so this model prints ``\\mathcal{S}`` into a Typst document. That is a bug
-    in the symbol table, not something a docs page should paper over by
-    quietly showing derived symbols instead.
+    Typst is absent: the committed table is ``notation: latex`` and a tab
+    would spell the same notation a second time on a page generated to
+    prevent drift.
     """
     table = SYMBOLS / 'dispatch.yaml'
     options = {'symbols': table, 'legend': True}
@@ -145,7 +146,8 @@ lps.to_markdown('dispatch.yaml')  # renders as-is on GitHub
 `symbols` is optional — drop it and the same model prints as
 $\\mathit{{load}}_t$, $p^{{\\mathrm{{max}}}}_g$. A dict, a YAML path or a
 `SymbolTable`; a key naming nothing in the model is an error, not a symbol that
-silently never applies.
+silently never applies. Every spelling is printed verbatim — `notation` says
+which language they are, and a render in the other one refuses.
 
 Or from a shell, where the table is that same YAML on disk and `--standalone`
 emits a document that compiles rather than a fragment to `\\input`:

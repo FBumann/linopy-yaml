@@ -603,8 +603,8 @@ def test_every_plan_node_is_handled_by_the_compiler():
         assert not unhandled, f'plan.{base.__name__} nodes unknown to the compiler: {unhandled}'
 
 
-def test_both_lanes_implement_exactly_the_closed_helper_set():
-    """Hard rule 3: one language, two lanes. A helper name the eager lane
+def test_both_lanes_implement_exactly_the_closed_operator_set():
+    """Hard rule 3: one language, two lanes. An operator name the eager lane
     evaluates but the relational lane cannot lower (or vice versa) is a
     dialect split, and it would make the differential tests meaningless.
 
@@ -615,11 +615,11 @@ def test_both_lanes_implement_exactly_the_closed_helper_set():
     ``lowering.py``, so every declared name has to appear there as a lowering
     branch.
     """
-    from lpspec.language.helpers import BUILTIN_NAMES
+    from lpspec.language.operators import BUILTIN_NAMES
 
     tree = ast.parse((PKG / 'linopy' / 'builder.py').read_text())
     table = next(
-        node.value for node in tree.body if isinstance(node, ast.AnnAssign) and ast.unparse(node.target) == '_HELPERS'
+        node.value for node in tree.body if isinstance(node, ast.AnnAssign) and ast.unparse(node.target) == '_OPERATORS'
     )
     assert isinstance(table, ast.Dict)
     eager = {ast.literal_eval(k) for k in table.keys if k is not None}
@@ -630,7 +630,7 @@ def test_both_lanes_implement_exactly_the_closed_helper_set():
 
     lowering_src = (PKG / 'lowering.py').read_text()
     missing = [name for name in BUILTIN_NAMES if f"'{name}'" not in lowering_src]
-    assert not missing, f'built-in helpers with no lowering case: {missing}'
+    assert not missing, f'built-in operators with no lowering case: {missing}'
 
 
 def test_every_module_is_documented_somewhere():

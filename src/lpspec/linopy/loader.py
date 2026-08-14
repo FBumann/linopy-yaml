@@ -157,7 +157,7 @@ def build_dim_coords(
                 if unknown:
                     msg = (
                         f"Dimension '{dim_name}' lookup '{cname}' has value(s) that are "
-                        f"not '{target}' coordinates: {', '.join(unknown)}. Every value must "
+                        f"not '{target}' labels: {', '.join(unknown)}. Every value must "
                         f"be a declared '{target}' label — otherwise "
                         f'sum(by={cname}) drops those terms and the '
                         f'model builds and solves without them.'

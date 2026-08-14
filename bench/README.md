@@ -11,16 +11,19 @@ a selection out of it: `--cases / --sizes / --arms / --sinks`, plus `-k`.
 ```bash
 uv sync --group bench
 
-# every rung docs/benchmarks.md publishes. The size ladder and the mask sweep
-# go to separate files: a run REPLACES its results file rather than adding to
+# every rung docs/benchmarks.md publishes. The size ladder and each sweep go
+# to separate files: a run REPLACES its results file rather than adding to
 # it, and the report takes as many files as you give it
 uv run pytest bench --benchmark-memory --sizes xs s m l \
     --benchmark-json=bench/results/latest.json
 uv run pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --skip-gate \
     --benchmark-json=bench/results/density.json
+uv run pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --skip-gate \
+    --benchmark-json=bench/results/declarations.json
 
 uv run python -m bench.report bench/results/latest.json \
-    bench/results/density.json                              # -> markdown
+    bench/results/density.json \
+    bench/results/declarations.json                         # -> markdown
 uv run python -m bench.plot                                 # -> the chart page
 
 # anything narrower than the published ladder: send it somewhere else
@@ -194,6 +197,7 @@ verdict off the SQL"), not to cover the language:
 | `transport` | three `sum(by=)` joins per row | the mapping-table path, where the eager lane must materialise a bus x generator product |
 | `sector` | dense snapshots x dense carriers x sparse portfolio | mixed density in one model — the shape a sector-coupled model actually has, and where the sparsity claim is visible |
 | `storage` | a cyclic `shift` recurrence | the self-join, and the only locality class with no eager cost analogue: xarray shifts an array, we join a term stream against itself on `snapshot.ord - 1` |
+| `commitment` | dispatch gated by a binary `u`, `p <= p_max * u` | the MILP — the only case whose `vtype` stream is not all-continuous, so integrality reaches every sink at scale |
 
 **`nodal` is the case worth explaining.** It is dispatch over nodes and
 technologies, and a technology only generates at a node where it is installed:
@@ -218,6 +222,16 @@ a dense array over it is ~10 MB and the fixed cost of the process dominates.
 size, because sweeping size and density together leaves no way to tell one
 effect from the other. Run the full ladder with `--sizes all`.
 
+**The declaration count is the third swept axis.** Every size rung grows
+`snapshot` and holds its case's declaration count fixed, so a cost paid *per
+declaration* — a labelled frame each, a stack at the end — is sampled at
+whatever counts the cases happen to have. The `declarations` case splits a
+fixed pool of 512 units per snapshot into 2 / 8 / 32 / 128 variable
+declarations (rungs `n002`…`n128`), each with its own capacity constraint and
+objective term and one balance over all of them, at one model size for the
+density sweep's reason. Its model YAML varies per rung, so it is generated —
+`_declarations_model` in `bench/cases.py` — and cached beside the rung's data.
+
 **The report measures what survived rather than trusting the declaration.**
 `dispatch` declares `where: p_max > 0` against a p_max that is always positive,
 so its mask removes nothing and the engine pays for it anyway; the `live` column
@@ -229,7 +243,39 @@ Data is generated deterministically (a blake2b digest of the shape seeds the
 RNG — `hash()` is salted per process and would give the two arms different
 numbers), cached under `bench/.cache/`, and feasible by construction.
 
-A MILP through the `highs` solver is the next rung — see docs/benchmarks.md.
+**`commitment` is a MILP, and the gate still costs one cheap solve.** The gate
+solves only the *smallest* rung of a case, once per arm, and the measured pass
+never solves at all — so the `l`/`xl` rungs of a MILP ladder cost the gate
+nothing. What the case has to guarantee is that its bottom rung solves to
+proven optimality: `GATE_RTOL` is 1e-9 and HiGHS's default `mip_rel_gap` is
+1e-4, so a rung where branch and bound stops at a gap could hand the two arms
+different incumbents. The bottom rung is therefore deliberately tiny, with
+every cost a distinct float — there is no MIP-aware tolerance, and that is a
+decision rather than an omission.
+
+## The speed-of-light floor
+
+The ladder's ratios have linopy as their only denominator, which ranks two
+engines without saying how much headroom either has left. `bench/floor.py` is
+the missing denominator: it hand-writes **one** model — `transport` — from the
+case's cached parquet straight into numpy arrays and a CSR matrix, no lpspec
+and no expression engine anywhere in the path, and ends at the same seam as
+the `highs` sink: a populated `highspy.Highs` with `run()` never called. What
+it costs is the irreducible price of emitting the coefficients, and with it
+the sentence becomes *"we are at Nx the floor and linopy is at Mx"* — a claim
+about engineering rather than a ranking.
+
+```bash
+uv run python -m bench.floor l            # phase minima + peak RSS
+uv run python -m bench.floor xs --check   # one solve each way, objectives compared
+```
+
+It is **not a fourth arm**: it hardcodes one model, so it has no place in the
+`case x size x sink x arm` product, and its numbers are quoted beside the
+ladder's rather than inside it. `--check` solves the smallest rung through the
+floor and through lpspec and compares objectives at the gate's tolerance;
+`bench/test_harness.py` pins the cheaper fingerprint — the floor's column, row
+and nonzero counts against lpspec's — on every bare `pytest bench`.
 
 ## The other question: regressions
 
@@ -305,6 +351,10 @@ in `bench/cases.py`, and a function turning the same parquet paths into the
 linopy lane's `data=`/`coords=` shapes. Nothing else: the parametrization reads
 `CASES`, and the gate and the report are case-agnostic.
 
+A case whose YAML has to vary per rung sets `generate_model` instead of
+`model` — `declarations` is the template — and `Case.model_path(shape)` hands
+every consumer whichever of the two the case has.
+
 ## The map
 
 | file | |
@@ -314,6 +364,7 @@ linopy lane's `data=`/`coords=` shapes. Nothing else: the parametrization reads
 | `conftest.py` | selection flags, the ragged parametrization, the data fixture, the parity gate |
 | `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
+| `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |
 | `profile_build.py` | which *query* inside one build spends the time — a profiler, not a benchmark. Wraps every collect, so read its shares and not its seconds |
 | `profile_phases.py` | which *phase*, in seconds comparable to a real run. Hoists the parse, the lowering and the parquet read out of the loop and reuses one binding, which takes the spread from 12-55% down to a few percent — the difference between a 10% change being visible and not |

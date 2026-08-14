@@ -167,9 +167,9 @@ def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
     bad.loc[bad.index[0], 'bus'] = 'nowhere'  # a bus that does not exist
     data, coords = _inputs(bad, lines, load)
 
-    with pytest.raises(DataError, match="not 'bus' coordinates"):
+    with pytest.raises(DataError, match="not 'bus' labels"):
         _relationally(data, coords)
-    with pytest.raises(DataError, match="not 'bus' coordinates"):
+    with pytest.raises(DataError, match="not 'bus' labels"):
         lpspec_linopy.build(TRANSPORT_YAML, data=data, coords=coords)
 
 
@@ -517,7 +517,7 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
     typo = index.with_columns(
         pl.when(pl.col('month_of') == '2030-03').then(pl.lit('2030-3')).otherwise(pl.col('month_of')).alias('month_of')
     )
-    with pytest.raises(DataError, match=r"lookup 'month_of' has value\(s\) that are not 'month' coordinates"):
+    with pytest.raises(DataError, match=r"lookup 'month_of' has value\(s\) that are not 'month' labels"):
         lps.solve(MONTHLY_YAML, {**sources, 'snapshot': typo})
 
 
