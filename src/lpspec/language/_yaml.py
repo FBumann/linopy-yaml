@@ -1,4 +1,8 @@
-"""How this project reads a YAML file.
+"""How this project reads a YAML file — the ``[yaml]`` extra's module.
+
+Importing it needs pyyaml, so every import is lazy, from the suffix dispatch in
+``validation.load_model`` and the writers that serialise back out. JSON and
+in-memory mappings never reach it.
 
 `yaml.safe_load` implements YAML 1.1, and two of its rules are actively wrong
 for a language whose scalars are user data. The loader is the only layer that
@@ -31,9 +35,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError as exc:
+    msg = 'Reading or writing YAML requires the [yaml] extra: pip install "lpspec[yaml]"'
+    raise ModuleNotFoundError(msg) from exc
 
-from lpspec.errors import SchemaError
+from lpspec.errors import SchemaError, mapping_document_message
 
 #: The YAML 1.2 core-schema boolean set — nothing else resolves to a bool.
 _BOOL_1_2 = re.compile(r'^(?:true|True|TRUE|false|False|FALSE)$')
@@ -118,6 +126,10 @@ def parse_yaml(text: str, origin: str = '<string>') -> dict[str, Any]:
     if data is None:
         return {}
     if not isinstance(data, dict):
-        msg = f'{origin}: a model file must be a mapping of sections (dimensions:, variables:, …), got {type(data).__name__}.'
-        raise SchemaError(msg)
+        raise SchemaError(mapping_document_message(origin, type(data).__name__))
     return data
+
+
+def dump_yaml(data: dict[str, Any]) -> str:
+    """*data* as YAML text — :meth:`Model.to_yaml`'s writer, behind the same guard."""
+    return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)

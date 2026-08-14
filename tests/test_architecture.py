@@ -702,6 +702,12 @@ DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
         'Same cycle: validation.py imports Model to build one, and Model calls '
         'validate_expressions on itself so the type cannot exist half-checked.'
     ),
+    # not a cycle but an extra: _yaml.py needs pyyaml, which ships as
+    # `lpspec[yaml]`, so importing it at module level would make pyyaml a
+    # hard dependency again. Only the `.yaml` branch may pay for it.
+    ('language/validation.py', 'lpspec.language._yaml'): ('the [yaml] extra — see the comment above'),
+    ('language/model.py', 'lpspec.language._yaml'): ('the [yaml] extra — see the comment above'),
+    ('typeset/symbols.py', 'lpspec.language._yaml'): ('the [yaml] extra — see the comment above'),
 }
 
 

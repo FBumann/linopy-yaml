@@ -165,6 +165,8 @@ To see it rather than read it, `python examples/walkthrough.py` runs one small m
 
 ```bash
 pip install lpspec  # the relational engine (polars, highspy)
+pip install "lpspec[yaml]"  # adds pyyaml: .yaml model files
+                            # (.json files and dicts need nothing)
 pip install "lpspec[linopy]"  # adds linopy + xarray + pandas: the shim, the
                               # oracle, and to_pandas / to_dataarray
 pip install "lpspec[gurobi]"  # adds the gurobi sink: solver_name='gurobi'

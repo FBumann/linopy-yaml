@@ -105,6 +105,14 @@ def did_you_mean(name: str, known: Iterable[str], *, label: str = 'Declared') ->
     return f'{label}: {", ".join(candidates) or "nothing"}.'
 
 
+def mapping_document_message(where: str, got: str) -> str:
+    """A model file whose document is not a mapping — one wording, every format.
+
+    Otherwise ``Model(**raw)`` raises a bare TypeError about ``**``.
+    """
+    return f'{where}: a model file must be a mapping of sections (dimensions:, variables:, …), got {got}.'
+
+
 def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
     """Why a constant side may not be sparse — one wording, both lanes.
 

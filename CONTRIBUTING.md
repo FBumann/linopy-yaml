@@ -49,13 +49,15 @@ Everything below is the first one, in the order it runs.
 | **bare install, at the floors** | the engine reached for something it does not declare. |
 
 **The bare-install job is the one worth understanding.** It reinstalls with
-`--resolution lowest-direct` and *no* dev group, asserts `linopy` is absent,
-and runs the suite. It proves two things at once: that the relational lane
-builds, solves and reads results back with no pandas, pyarrow, linopy or
-xarray; and that the declared lower bounds are real rather than decorative.
-Tests that need a second lane route through `tests/oracle.py`, which skips
-them when it is not installed — a bare `import pandas` in a test file breaks
-this job, and only this job.
+`--resolution lowest-direct` and *no* dev group, asserts `linopy` and `yaml`
+are absent and a `.json` model still loads, then adds the `[yaml]` extra —
+the suite authors its models as YAML — and runs the suite. It proves three
+things at once: that the relational lane builds, solves and reads results
+back with no pandas, pyarrow, linopy or xarray; that a bare install carries
+no YAML parser and says which extra restores one; and that the declared
+lower bounds are real rather than decorative. Tests that need a second lane
+route through `tests/oracle.py`, which skips them when it is not installed —
+a bare `import pandas` in a test file breaks this job, and only this job.
 
 Raise a floor when the code relies on that version's behaviour. Do not raise
 one to chase a newer interpreter.

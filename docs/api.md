@@ -151,8 +151,11 @@ pandas / xarray, which ship with the `[linopy]` extra. The only build knob is
 the solver.
 
 **Every verb takes the model four ways**: a path, a `str`, a `dict`, or a
-`Model`. `check`, `build`, `solve` and `write` share one first argument, so a
-framework that emits declarations never writes a temporary file to run them:
+`Model`. A path is read by its suffix — `.yaml`/`.yml` (needs the `[yaml]`
+extra) or `.json`; anything else is a load error naming that set. `check`,
+`build`, `solve` and `write` share one first argument — and so do the shim's
+`build` and `extend` — so a framework that emits declarations never writes a
+temporary file to run them:
 
 ```python
 model = {'dimensions': ..., 'variables': ..., 'constraints': ..., 'objective': ...}

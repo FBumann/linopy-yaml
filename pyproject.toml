@@ -43,7 +43,6 @@ dependencies = [
     # object rather than its str, which `errors.schema_error` unwraps to keep
     # the documented class. 2.0 flattens every model error to SchemaError.
     "pydantic>=2.1",
-    "pyyaml>=6.0",
     # 1.13 is where `changeRowsBounds` arrives — the bulk form the loaded
     # solver pushes a rebound model's right-hand sides through. 1.10 has only
     # the per-row `changeRowBounds`, which is a Python call per constraint.
@@ -51,6 +50,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The YAML reader (language/_yaml.py). An extra because the contract is the
+# schema, not a serialization: `.json` files and in-memory mappings load on a
+# bare install with the stdlib, and exactly one module needs a YAML parser.
+# A `.yaml` path without it is a load error naming this extra.
+yaml = [
+    "pyyaml>=6.0",
+]
 # linopy + xarray power the compatibility layer (lpspec.linopy): YAML math
 # on a Python-built linopy.Model, plus the differential-test oracle.
 # The relational engine never imports them, and `dev` installs this extra by
@@ -143,6 +149,9 @@ codspeed = [
     "pytest-codspeed==5.0.3",
     "pandas>=2.2",
     "pyarrow>=16",
+    # the benchmarked models are `.yaml` files, and this group installs with
+    # `--no-default-groups`, so the reader cannot arrive through `dev`.
+    "lpspec[yaml]",
 ]
 # The published site (mkdocs.yml). Its own group, not `dev`: nothing in the
 # test suite imports any of it, and a contributor running `uv run pytest` should
@@ -171,6 +180,9 @@ dev = [
     "ruff==0.16.1",
     "pyrefly==1.2.0",
     "pre-commit==4.6.1",
+    # the YAML reader, by reference: nearly every test authors its model as
+    # YAML text. The bare-install CI job is where yaml-free operation is proved.
+    "lpspec[yaml]",
     # the shim and the oracle, by reference: the pins live in the extra above,
     # so they cannot drift from what a user installing `lpspec[linopy]` gets
     "lpspec[linopy]",

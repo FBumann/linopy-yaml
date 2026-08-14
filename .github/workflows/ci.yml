@@ -167,6 +167,11 @@ jobs:
       # it, so `lowest-direct` there tries a source build and fails. Raise a
       # floor when the code relies on that version's behaviour, not to chase
       # a newer interpreter — see the early-development note in RELEASING.md.
+      # The suite authors its models as YAML text, so pyyaml joins pytest as
+      # test tooling (via the extra, so its floor stays real) — but only after
+      # the yaml-free claim is proved: a bare install carries no YAML parser,
+      # loads a .json model with the stdlib, and refuses a .yaml path with the
+      # error that names the [yaml] extra.
       - name: bare install, at the dependency floors
         if: steps.scope.outputs.inert != 'true'
         run: |
@@ -175,4 +180,29 @@ jobs:
           uv pip install --resolution lowest-direct .
           uv pip install pytest
           uv run --no-sync python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('linopy') is not None)"
+          uv run --no-sync python - <<'EOF'
+          import importlib.util, json, pathlib, tempfile
+
+          assert importlib.util.find_spec('yaml') is None, 'a bare install must carry no YAML parser'
+
+          import lpspec as lps
+
+          model = {
+              'dimensions': {'g': {'values': ['wind', 'gas']}},
+              'parameters': {'cost': {'dims': ['g']}},
+              'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
+              'objective': {'expression': 'sum(p * cost, over=g)'},
+          }
+          path = pathlib.Path(tempfile.mkdtemp()) / 'm.json'
+          path.write_text(json.dumps(model))
+          lps.check(path)
+
+          try:
+              lps.load_model(path.with_suffix('.yaml'))
+          except ModuleNotFoundError as exc:
+              assert 'lpspec[yaml]' in str(exc), f'a .yaml path must name the extra, got: {exc}'
+          else:
+              raise AssertionError('a .yaml path loaded without pyyaml installed')
+          EOF
+          uv pip install --resolution lowest-direct '.[yaml]'
           uv run --no-sync pytest -q

@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
+import textwrap
+
 import pytest
 
 import lpspec as lps
@@ -122,3 +127,79 @@ def test_a_non_mapping_document_is_a_load_error(tmp_path):
 def test_an_empty_file_is_an_empty_model(tmp_path):
     assert read_yaml(_write(tmp_path, '')) == {}
     assert read_yaml(_write(tmp_path, '# only a comment\n')) == {}
+
+
+@pytest.mark.parametrize(
+    'name',
+    [
+        pytest.param('m.json', id='json'),
+        pytest.param('M.JSON', id='suffix-case-insensitive'),
+    ],
+)
+def test_a_json_model_is_the_same_model(tmp_path, name):
+    """`.json` dispatches to the stdlib reader — a feature, not a YAML accident (#136)."""
+    raw = read_yaml(_write(tmp_path, MODEL))
+    path = _write(tmp_path, json.dumps(raw), name=name)
+
+    assert load_model(path).model_dump() == load_model(raw).model_dump()
+
+
+@pytest.mark.parametrize(
+    'name',
+    [
+        pytest.param('m.toml', id='another-format'),
+        pytest.param('m.yaml.txt', id='only-the-last-suffix-counts'),
+        pytest.param('model', id='no-suffix-at-all'),
+    ],
+)
+def test_an_unknown_suffix_is_refused_naming_the_supported_set(tmp_path, name):
+    path = _write(tmp_path, MODEL, name=name)
+
+    with pytest.raises(ValueError, match=r"suffix declares its format.*not one of '\.yaml', '\.yml' or '\.json'"):
+        load_model(path)
+
+
+@pytest.mark.parametrize(
+    ('text', 'match'),
+    [
+        pytest.param('[1, 2]', 'must be a mapping of sections', id='a-list-is-not-a-model'),
+        pytest.param('{"dimensions": ', 'not valid JSON', id='truncated-json'),
+    ],
+)
+def test_a_json_document_that_is_not_a_model_is_a_load_error(tmp_path, text, match):
+    with pytest.raises(ValueError, match=match):
+        load_model(_write(tmp_path, text, name='m.json'))
+
+
+def test_a_missing_yaml_parser_names_the_extra(tmp_path):
+    """Without pyyaml a `.yaml` path errors with the install line; `.json` still loads.
+
+    A subprocess with the import blocked, because this suite runs with pyyaml
+    installed — the bare-install CI job proves the same claim on a genuinely
+    bare environment, at the dependency floors.
+    """
+    json_path = _write(tmp_path, json.dumps(read_yaml(_write(tmp_path, MODEL))), name='m.json')
+    script = textwrap.dedent(f"""
+        import sys
+
+        class NoYaml:
+            def find_spec(self, name, *args):
+                if name == 'yaml' or name.startswith('yaml.'):
+                    raise ModuleNotFoundError("No module named 'yaml'")
+
+        sys.meta_path.insert(0, NoYaml())
+
+        from lpspec.language.validation import load_model
+
+        load_model({str(json_path)!r})
+        try:
+            load_model({str(json_path.with_suffix('.yaml'))!r})
+        except ModuleNotFoundError as exc:
+            assert 'pip install "lpspec[yaml]"' in str(exc), str(exc)
+        else:
+            raise AssertionError('a .yaml path loaded with the parser blocked')
+        print('YAML_FREE_OK')
+    """)
+    out = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0, out.stderr
+    assert 'YAML_FREE_OK' in out.stdout

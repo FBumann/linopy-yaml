@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def yaml_file(tmp_path):
-    """Write YAML text to a file — the only shape the eager lane accepts."""
+    """Write YAML text to a file — the model handed to the shim as a path."""
 
     def write(text: str, name: str = 'm.yaml'):
         path = tmp_path / name
@@ -51,6 +51,44 @@ def model_with():
         return m
 
     return build
+
+
+# ---------------------------------------------------------------------------
+# both lanes take the model the same ways
+# ---------------------------------------------------------------------------
+
+#: A model small enough to hand over in every accepted form.
+_DICT_MODEL = {
+    'dimensions': {'g': {'values': ['a', 'b']}},
+    'parameters': {'cost': {'dims': ['g']}},
+    'variables': {'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'objective': {'expression': 'sum(p * cost, over=g)'},
+}
+
+
+@pytest.mark.parametrize(
+    'given',
+    [
+        pytest.param(lambda: dict(_DICT_MODEL), id='dict'),
+        pytest.param(lambda: schema_of(dict(_DICT_MODEL)), id='Model'),
+    ],
+)
+def test_build_takes_the_native_lanes_model_forms(given):
+    """The shim's first argument is the native union, not a path (#136)."""
+    m = lpspec_linopy.build(given(), data={'cost': {'a': 1.0, 'b': 2.0}})
+
+    assert list(m.variables) == ['p']
+    assert list(m.constraints) == []
+
+
+def test_extend_takes_a_dict(model_with):
+    m = model_with(p=('g', ['a', 'b']))
+
+    lpspec_linopy.extend(
+        m, {'dimensions': {'g': {}}, 'constraints': {'cap': {'foreach': ['g'], 'expression': 'p <= 100'}}}
+    )
+
+    assert 'cap' in m.constraints
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +478,7 @@ def test_a_failure_names_the_declaration_and_the_file(yaml_file, tail, error, ma
         lpspec_linopy.build(bad)
 
     assert context in str(ei.value) or _has_note(ei.value, context)
-    assert _has_note(ei.value, f"while loading YAML '{bad}'")
+    assert _has_note(ei.value, f"while loading '{bad}'")
 
 
 def test_a_failure_inside_extend_names_the_extension_file(yaml_file, model_with):
@@ -450,7 +488,7 @@ def test_a_failure_inside_extend_names_the_extension_file(yaml_file, model_with)
     with pytest.raises(ValueError) as ei:
         lpspec_linopy.extend(m, ext)
 
-    assert _has_note(ei.value, f"while extending with YAML '{ext}'")
+    assert _has_note(ei.value, f"while extending with '{ext}'")
 
 
 # --------------------------------------------------------------------------

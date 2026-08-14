@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import SchemaError, did_you_mean
-from lpspec.language._yaml import read_yaml
 
 if TYPE_CHECKING:
     from lpspec.language.model import Model
@@ -156,13 +155,18 @@ class SymbolTable:
 
     @classmethod
     def load(cls, source: str | Path | Mapping[str, Any]) -> SymbolTable:
-        """A table from a YAML path or the mapping it parses to.
+        """A table from a mapping or a YAML sidecar path — the path needs the ``[yaml]`` extra.
 
         Raises:
             SchemaError: An unknown section, a malformed dimension, or a
                 ``notation:`` that is missing or not ``latex``/``typst``.
         """
-        raw = dict(source) if isinstance(source, Mapping) else read_yaml(Path(source))
+        if isinstance(source, Mapping):
+            raw = dict(source)
+        else:
+            from lpspec.language._yaml import read_yaml
+
+            raw = read_yaml(Path(source))
         unknown = set(raw) - {'notation', 'dimensions', 'names'}
         if unknown:
             msg = f'symbol table: unknown section(s) {sorted(unknown)}. Valid sections: notation, dimensions, names.'

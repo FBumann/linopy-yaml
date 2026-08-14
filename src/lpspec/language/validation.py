@@ -18,14 +18,14 @@ own formals, so an unused macro still fails at load time.
 from __future__ import annotations
 
 import datetime
+import json
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, assert_never
 
 from pydantic import ValidationError
 
-from lpspec.errors import SchemaError, schema_error
-from lpspec.language._yaml import read_yaml
+from lpspec.errors import SchemaError, mapping_document_message, schema_error
 from lpspec.language.dimensions import check_schema
 from lpspec.language.expansion import expand, parse_and_expand, parse_template
 from lpspec.language.expression_parser import (
@@ -64,7 +64,9 @@ def load_model(
     formulation emits.
 
     Args:
-        model: A YAML path, a mapping, or a loaded :class:`Model`.
+        model: A ``.yaml``/``.yml``/``.json`` path — the format is the suffix,
+            and reading YAML needs the ``[yaml]`` extra — a mapping, or a
+            loaded :class:`Model`.
         known_variables: Variables the file may reference without declaring,
             mapped to their dims — what ``lpspec.linopy.extend`` passes for an
             extension, which is the one file not valid alone.
@@ -85,11 +87,43 @@ def load_model(
         raise TypeError(msg)
     if isinstance(model, Model):
         return model
-    raw = model if isinstance(model, dict) else read_yaml(Path(model))
+    raw = model if isinstance(model, dict) else _read_model_file(Path(model))
     try:
         return Model.model_validate(raw, context={'known_variables': known_variables})
     except ValidationError as exc:
         raise schema_error(exc) from None
+
+
+def _read_model_file(path: Path) -> dict[str, Any]:
+    """One model file as a mapping — the suffix declares the format.
+
+    ``.json`` reads with the stdlib; ``.yaml``/``.yml`` with the strict reader
+    behind the ``[yaml]`` extra, imported only on that branch so a bare install
+    loads everything else. Any other suffix is refused rather than guessed.
+    """
+    suffix = path.suffix.lower()
+    if suffix == '.json':
+        return _read_json(path)
+    if suffix in {'.yaml', '.yml'}:
+        from lpspec.language._yaml import read_yaml
+
+        return read_yaml(path)
+    msg = (
+        f"{path}: a model file's suffix declares its format, and {suffix!r} "
+        f"is not one of '.yaml', '.yml' or '.json'. Rename the file, or pass the parsed mapping."
+    )
+    raise SchemaError(msg)
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        msg = f'{path}:{exc.lineno}: not valid JSON — {exc.msg}.'
+        raise SchemaError(msg) from None
+    if not isinstance(data, dict):
+        raise SchemaError(mapping_document_message(str(path), type(data).__name__))
+    return data
 
 
 def validate_expressions(

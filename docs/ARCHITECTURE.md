@@ -46,7 +46,7 @@ value — which is what makes `show it` and `check it` free.
 
 ```mermaid
 flowchart TB
-    Y[YAML file] --> LANG
+    Y[model file — .yaml / .json] --> LANG
 
     subgraph LANG["language/ — imports nothing but errors.py"]
         direction TB
@@ -448,7 +448,7 @@ must stay off the import path of a caller who does not use it.
 
 | Module | Role |
 |---|---|
-| `language/_yaml.py` | the only place a file is read: YAML 1.2 booleans, duplicate keys refused |
+| `language/_yaml.py` | the YAML reader, behind the `[yaml]` extra: YAML 1.2 booleans, duplicate keys refused. `.json` reads with the stdlib in `validation.py` |
 | `language/model.py` | pydantic schema incl. `expressions:` / `macros:` / `piecewise:` |
 | `language/expression_parser.py`, `language/where_parser.py` | text → core AST; grammar only, dependency-free |
 | `language/expansion.py` | named-expression / macro substitution (pre-dispatch) |

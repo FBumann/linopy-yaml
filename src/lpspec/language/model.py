@@ -731,11 +731,12 @@ class Model(_StrictBlock):
         Hard rule 5 is that the model is the file you review and diff; a model
         a framework emitted as a dict has no such file. Generated rather than
         authored, so length costs a reader nothing and being unambiguous saves
-        them knowing this package's defaults at all.
+        them knowing this package's defaults at all. Needs the ``[yaml]``
+        extra, and says so when it is absent.
         """
-        import yaml
+        from lpspec.language._yaml import dump_yaml
 
-        return yaml.safe_dump(self.to_dict(), sort_keys=False, allow_unicode=True)
+        return dump_yaml(self.to_dict())
 
     @model_validator(mode='after')
     def _validate_references(self) -> Model:

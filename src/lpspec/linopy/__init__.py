@@ -55,7 +55,10 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from lpspec.language.model import Model
 
 try:
     import linopy
@@ -87,18 +90,19 @@ __all__ = ['build', 'expression', 'extend']
 
 
 def build(
-    path: str | Path,
+    model: str | Path | dict[str, Any] | Model,
     *,
     data: dict[str, Any] | None = None,
     coords: dict[str, Any] | None = None,
 ) -> linopy.Model:
-    """Build a ``linopy.Model`` from a YAML math definition.
+    """Build a ``linopy.Model`` from a declared math definition.
 
     Args:
-        path: Path to the YAML file.
-        data: Parameter data, keyed by the names the YAML declares.
+        model: What the native verbs take — a ``.yaml``/``.yml``/``.json``
+            path, a mapping, or a loaded :class:`~lpspec.language.model.Model`.
+        data: Parameter data, keyed by the names the model declares.
         coords: Dimension coordinate values. Overrides ``values:`` declared
-            in the YAML.
+            in the model.
 
     Returns:
         A model carrying every declaration the file makes.
@@ -108,9 +112,8 @@ def build(
             its declarations or its expressions.
         DataError: A file that is fine, and data that does not fit it.
     """
-    path = Path(path)
-    with note(f"while loading YAML '{path}'"):
-        original = load_model(path)
+    with note(f'while loading {_named(model)}'):
+        original = load_model(model)
         schema = expand_piecewise(original)
 
         master_coords = build_master_coords(schema, coords)
@@ -118,20 +121,20 @@ def build(
         dataset = load_parameters(schema, data, master_coords)
         validate_piecewise_data(original, dataset)
 
-        model = linopy.Model()
-        build_model(model, schema, dataset, master_coords, dim_coords)
+        built = linopy.Model()
+        build_model(built, schema, dataset, master_coords, dim_coords)
 
-    return model
+    return built
 
 
 def extend(
     model: linopy.Model,
-    path: str | Path,
+    extension: str | Path | dict[str, Any] | Model,
     *,
     data: dict[str, Any] | None = None,
     coords: dict[str, Any] | None = None,
 ) -> None:
-    """Add variables, constraints, and/or an objective from YAML to *model*.
+    """Add variables, constraints, and/or an objective from *extension* to *model*.
 
     Expressions may reference variables *model* already carries; every
     parameter they use is declared in this file and supplied in this call. A
@@ -140,8 +143,9 @@ def extend(
 
     Args:
         model: Extended in place.
-        path: Path to the YAML file.
-        data: Parameter data, keyed by the names the YAML declares.
+        extension: The declarations to add, in the same forms :func:`build`
+            takes.
+        data: Parameter data, keyed by the names the extension declares.
         coords: Dimension coordinate values.
 
     Raises:
@@ -150,10 +154,9 @@ def extend(
         DataError: A dimension nothing resolves, or parameter data that does
             not fit the file.
     """
-    path = Path(path)
-    with note(f"while extending with YAML '{path}'"):
+    with note(f'while extending with {_named(extension)}'):
         known_variables = _variable_dims(model)
-        original = load_model(path, known_variables=known_variables)
+        original = load_model(extension, known_variables=known_variables)
         schema = expand_piecewise(original, known_variables=known_variables)
 
         existing_coords = _infer_coords(model)
@@ -202,7 +205,8 @@ def expression(
 
     Args:
         model: A solved model carrying this file's variables.
-        path: Path to the YAML file declaring the expression.
+        path: Path to the file declaring the expression, in the suffixes
+            :func:`build` reads.
         name: A name declared under ``expressions:`` — never an expression
             string.
         data: Parameter data, as :func:`build` takes it.
@@ -218,7 +222,7 @@ def expression(
         DataError: Data that does not fit the file.
     """
     path = Path(path)
-    with note(f"while reading named expression '{name}' from YAML '{path}'"):
+    with note(f"while reading named expression '{name}' from {_named(path)}"):
         schema = expand_piecewise(load_model(path))
         if name not in schema.expressions:
             raise KeyError(
@@ -237,6 +241,11 @@ def expression(
         if isinstance(value, xarray.DataArray):
             return value
         return xarray.DataArray(float(value))
+
+
+def _named(model: str | Path | dict[str, Any] | Model) -> str:
+    """How the failure notes name the model: a path by name, the rest generically."""
+    return f"'{model}'" if isinstance(model, (str, Path)) else 'the model'
 
 
 def _variable_dims(model: linopy.Model) -> dict[str, list[str]]:

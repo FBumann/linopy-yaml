@@ -83,14 +83,22 @@ inside any declaration — is a load error naming the near miss (`unknown key
 model: a dropped `bounds:` leaves a variable unbounded, a dropped `where:`
 leaves it unmasked.
 
-**Reading rules.** Booleans are YAML 1.2 (`true`/`false` only), everything else
+**File formats.** A model file is `.yaml`, `.yml` or `.json`, read by suffix;
+any other suffix is a load error naming that set. In every format the document
+must be a mapping. Reading YAML needs the `[yaml]` extra
+(`pip install "lpspec[yaml]"`); JSON and in-memory mappings load on a bare
+install.
+
+### 1.1 Reading YAML
+
+Hazards of one serialization, not laws of the language — a JSON file has none
+of them. Booleans are YAML 1.2 (`true`/`false` only), everything else
 1.1 — under 1.1 `on`/`off`/`yes`/`no`/`y`/`n` become booleans and silently
 destroy dimension labels that are country codes, so `values: [no, se, on]` is
 three labels here. The implicit timestamp (`2024-01-01`) and sexagesimal ints
 (`12:30` → `750`) deliberately survive; the `dtype` guard below catches them
 wherever they were not meant. A duplicate key is a load error naming both lines. `<<:` merge keys are
-honoured, and a key the mapping declares itself overrides the merged value. The
-document must be a mapping.
+honoured, and a key the mapping declares itself overrides the merged value.
 
 ## 2. Declarations
 
