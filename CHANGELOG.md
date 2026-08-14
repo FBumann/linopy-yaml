@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.131](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.130...v0.0.1-alpha.131) (2026-08-14)
+
+
+### Bug Fixes
+
+* **typeset:** a symbol table says which notation it is written in ([#740](https://github.com/fluxopt/lpspec/issues/740)) ([9e392ab](https://github.com/fluxopt/lpspec/commit/9e392ab9cf9dc40bb9f3b58206c2be6e7d250513))
+
 ## [0.0.1-alpha.130](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.129...v0.0.1-alpha.130) (2026-08-14)
 
 
