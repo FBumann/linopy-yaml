@@ -19,6 +19,7 @@ import pytest
 
 import lpspec as lps
 from lpspec import strategy
+from lpspec.api import BoundModel
 from tests.conftest import DISPATCH_MODEL, override
 
 # ---------------------------------------------------------------------------
@@ -252,6 +253,35 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
 
     by_key = dict(zip(runs.objective['scenario'], runs.objective['objective'], strict=True))
     assert by_key['low'] < by_key['mid'] < by_key['high'], 'a bigger load is a costlier dispatch'
+
+
+def test_a_serial_fold_asks_every_slice_to_start_from_the_last(monkeypatch):
+    """The fold opts into `start='previous'`; `solve` itself does not.
+
+    A purpose-built probe, and it says why: the choice is invisible in the
+    answer *and* in `loads`, since keeping the solver and keeping what it
+    reached are separate halves and the fold takes both. Deleting the opt-in
+    leaves every other assertion in this file green, so without this the
+    decision could be reverted by accident and nothing would say so.
+
+    Read off the call rather than the result because it is the *request* that
+    is the decision: a slice whose labels moved is loaded again and correctly
+    reports `cold`, which would make an assertion on `started` a test of the
+    data instead.
+    """
+    asked: list[object] = []
+    original = BoundModel.solve
+
+    def recording(self, *args, **kwargs):
+        asked.append(kwargs.get('start'))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(BoundModel, 'solve', recording)
+
+    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+
+    assert len(runs) == 3, 'three slices'
+    assert asked == ['previous'] * 3, f'the fold asked for {asked}, not previous at every slice'
 
 
 def test_a_serial_fold_builds_once_and_rebinds(builds):
