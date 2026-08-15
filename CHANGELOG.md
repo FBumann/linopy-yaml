@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.145](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.144...v0.0.1-alpha.145) (2026-08-15)
+
+
+### Documentation
+
+* **gallery:** the model list names every model ([#819](https://github.com/fluxopt/lpspec/issues/819)) ([6a78fcc](https://github.com/fluxopt/lpspec/commit/6a78fccb161039f2de2d3727a928ac766bb5177f))
+
 ## [0.0.1-alpha.144](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.143...v0.0.1-alpha.144) (2026-08-15)
 
 
