@@ -122,7 +122,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     expressions:
       gen_at_bus: sum(p, over=generator, group_by=bus)
-      net_inflow: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+      net_inflow:
+        expression: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+        description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
     constraints:
       balance:

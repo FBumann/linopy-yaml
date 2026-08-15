@@ -175,7 +175,7 @@ def lower_expression(schema: Model, name: str) -> plan.Expression:
     schema = expand_piecewise(schema)
     context = f"named expression '{name}'"
     ns = Namespace.of(schema)
-    ast = expression_of(schema.expressions[name], schema, ns, context)
+    ast = expression_of(schema.expressions[name].expression, schema, ns, context)
     assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
     return _lower_expr(ast, schema, context)
 

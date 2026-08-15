@@ -275,6 +275,9 @@ DESCRIBED = {
         'balance': {'foreach': ['snapshot'], 'expression': 'p == load', 'description': 'supply meets demand'},
     },
     'objective': {'expression': 'sum(op_cost, over=snapshot)', 'description': 'operating cost'},
+    'expressions': {
+        'spend': {'expression': 'sum(op_cost, over=snapshot)', 'description': 'what the horizon costs'},
+    },
     'macros': {
         'weighted': {'args': ['a', 'w'], 'template': 'sum(a * w, over=snapshot)', 'description': 'a weighted sum'},
     },
@@ -291,6 +294,7 @@ DECLARATION_KINDS = [
     pytest.param('parameters', 'load', id='parameter'),
     pytest.param('variables', 'p', id='variable'),
     pytest.param('constraints', 'balance', id='constraint'),
+    pytest.param('expressions', 'spend', id='named-expression'),
     pytest.param('macros', 'weighted', id='macro'),
     pytest.param('piecewise', 'cost_curve', id='piecewise'),
     pytest.param('sos', 'pick', id='sos'),
@@ -355,3 +359,53 @@ def test_a_model_description_survives_a_round_trip():
     schema = Model.model_validate({'description': 'least-cost dispatch', **DESCRIBED})
     assert Model.model_validate(schema.to_dict()).description == 'least-cost dispatch'
     assert 'description' not in Model.model_validate(DESCRIBED).to_dict(), 'None is stripped, as every other default is'
+
+
+# ---------------------------------------------------------------------------
+# a named expression is a string until it has more than one thing to say
+# ---------------------------------------------------------------------------
+
+
+EXPRESSIONS = {
+    'dimensions': {'g': {'values': ['a'], 'dtype': 'str'}},
+    'parameters': {'rate': {'dims': ['g']}},
+    'variables': {'p': {'foreach': ['g']}},
+}
+
+
+def test_a_named_expression_is_written_as_a_bare_string():
+    schema = Model.model_validate({**EXPRESSIONS, 'expressions': {'total': 'sum(p, over=g)'}})
+    assert schema.expressions['total'].expression == 'sum(p, over=g)'
+    assert schema.expressions['total'].description is None
+
+
+def test_a_named_expression_carrying_a_description_is_written_as_a_mapping():
+    body = {'expression': 'sum(p * rate, over=g)', 'description': 'CO2 released'}
+    schema = Model.model_validate({**EXPRESSIONS, 'expressions': {'emissions': body}})
+    assert schema.expressions['emissions'].description == 'CO2 released'
+
+
+@pytest.mark.parametrize(
+    ('written', 'id_'),
+    [
+        pytest.param('sum(p, over=g)', 'a-bare-string', id='a-bare-string'),
+        pytest.param(
+            {'expression': 'sum(p, over=g)', 'description': 'total output'},
+            'a-mapping',
+            id='a-mapping-with-a-description',
+        ),
+    ],
+)
+def test_a_named_expression_round_trips_in_the_form_it_was_written(written, id_):
+    """A file that says it in one line gets one line back — the same trade
+    `PiecewiseLink` makes for its list form."""
+    schema = Model.model_validate({**EXPRESSIONS, 'expressions': {'e': written}})
+    assert schema.to_dict()['expressions']['e'] == written, f'{id_} did not survive to_dict'
+    assert Model.model_validate(schema.to_dict()).expressions['e'].expression == 'sum(p, over=g)'
+
+
+def test_an_unknown_key_in_a_named_expression_is_rejected():
+    """The mapping form is a block like any other, so it is closed too."""
+    body = {'expression': 'sum(p, over=g)', 'describtion': 'typo'}
+    with pytest.raises(SchemaError, match=r"unknown key 'describtion' in a named expression"):
+        Model.model_validate({**EXPRESSIONS, 'expressions': {'e': body}})
