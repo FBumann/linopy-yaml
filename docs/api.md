@@ -108,7 +108,7 @@ one more of them — and only the last drop is a bet.
 |---|---|---|
 | `keep='nothing'` | the hand-off, the presolve and the whole search, on every solve. `diagnostics().loads` ticks with it, the model having been transferred again | you are **measuring**. The held solver is discarded *before* the load, so cold is structural rather than scrubbed — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to clear. That is what a benchmark needs, and what comparing two sets of `solver_options` needs so the first run cannot flatter the second |
 | `keep='solver'` (default) | the presolve and the whole search. The matrix crosses once however often you rebind, its new numbers pushed onto what the solver holds | **always, until you have measured otherwise.** It does the same search as a fresh solver — same iterations, solve for solve — and skips the hand-off, so it cannot be slower than starting over (#815). Every ordinary rebind loop wants this and nothing else |
-| `keep='progress'` | a shortened search: the solver resumes where it left off, which is also why it **skips the presolve** it would otherwise run | the model is **hard for presolve** *and* consecutive solves differ by a small step — a rolling horizon, a myopic pathway, a search that inches. Opt-in because it swings both ways, and the two ways are far apart |
+| `keep='progress'` | a shortened search: the solver resumes where it left off, which is also why it **forgoes the presolve** it would otherwise run — the two do not combine, on either sink | the model is **hard for presolve** *and* consecutive solves differ by a small step — a rolling horizon, a myopic pathway, a search that inches. Opt-in because it swings both ways, and the two ways are far apart |
 
 **What it costs when it is wrong.** Six rebinds, HiGHS, measured both ways
 (#815): on a dispatch presolve cracks outright, carrying the solver's work cost
@@ -118,11 +118,16 @@ recurrence it cannot crack, carrying cost **111.2 s against 213.9 s** — a 1.9�
 unmeasured model: the downside was an order of magnitude, the upside a factor of
 two.
 
-Nothing here is `warm=True` by another name, and the two knobs that would
-overlap it stay where they belong. Keeping the *solver* is not a bet and needs
-no switch; keeping a basis **and** still running presolve is a solver option
-(`solver_options={'presolve': 'on'}`), in the solver's own vocabulary rather
-than this one.
+**The middle rung is not a solver option in disguise**, because no option
+spells it. Keeping a basis *and* still running presolve is not on offer: on
+HiGHS, `solver_options={'presolve': 'on'}` under `keep='progress'` changes
+nothing — the same 8,583 simplex iterations, against 0 for `keep='solver'`,
+the basis winning over the option. Gurobi does expose the trade
+(`LPWarmStart`), and on the same shape no setting of it reached the
+discarded-work arm either: 231 iterations at its default and 388 forcing the
+basis through presolve, against 120 for `keep='solver'` (#815). **Discarding
+the work is how you get the presolve back** — which is the whole reason the
+middle word exists.
 
 `result.kept` is read off what happened, never off what was asked, so a rebind
 that had to rebuild reports the `'nothing'` it got rather than the `'progress'`
