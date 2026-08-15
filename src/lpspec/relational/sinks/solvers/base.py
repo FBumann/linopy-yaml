@@ -33,6 +33,36 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class WarmStart:
+    """What one solve leaves for a later session: a basis, or an incumbent.
+
+    Read with :meth:`Solver.warm_start`, applied with :meth:`Solver.warm`.
+    Which fields are filled is the reading solver's decision: an LP leaves its
+    simplex basis (both status vectors, paired), a mixed-integer solve leaves
+    no valid basis anywhere and carries its incumbent instead.
+
+    Opaque, and the statuses are the reading solver's own encoding, so only a
+    session of the same solver takes them back. **Machinery, not a surface**:
+    nothing above ``solvers/`` carries one yet, because the case that wants it
+    — a cutting-plane master re-solved after gaining a row — gains rows, and
+    a basis spans the model it was read from. #382 holds what a carry across
+    a rebuild has to answer before this reaches a caller.
+    """
+
+    #: Which member of ``SOLVERS`` read it; only that member takes it back.
+    solver: str
+    #: Basis status per column in label order, or ``None`` after a solve that
+    #: left no valid basis.
+    column_statuses: Any | None
+    #: Basis status per row in label order; filled exactly when
+    #: :attr:`column_statuses` is.
+    row_statuses: Any | None
+    #: Primal value per column in label order — a mixed-integer incumbent —
+    #: or ``None`` where the basis carries the start instead.
+    column_values: Any | None
+
+
+@dataclass(frozen=True)
 class SolveAnswer:
     """What a solve concluded, and the vectors it left.
 
@@ -93,6 +123,11 @@ class Solver(ABC):
         #: holding the frames themselves would keep two models alive across a
         #: rebuild.
         self._structure = model.structure
+        #: The loaded model's spans — of the *ingested* tables, which on a
+        #: reformulating sink are wider than what was built — so a warm start
+        #: is checked against the model the solver actually holds.
+        self._columns = model.column_count
+        self._rows = model.row_count
 
     #: The packages this member imports lazily, and so the ones an environment
     #: has to have for it to run at all. Data rather than a probe per member:
@@ -152,6 +187,74 @@ class Solver(ABC):
         after *model*'s digest matched the loaded one. Whole vectors rather
         than a diff: the model that would say which cells moved is the one
         this replaces.
+        """
+
+    @abstractmethod
+    def warm_start(self) -> WarmStart | None:
+        """What the loaded model holds to warm a later session, if anything.
+
+        Returns:
+            The basis after an LP solve, the incumbent after a mixed-integer
+            one — a solved MIP leaves no valid basis on any solver — and
+            ``None`` where the model holds neither, which is every model not
+            yet solved.
+        """
+
+    def warm(self, ws: WarmStart) -> None:
+        """Start the next :meth:`run` from *ws* instead of from scratch.
+
+        The caller vouches that *ws* was read from a model with this one's
+        label set; what is checked here is what can be — the sink it came
+        from, and that its vectors span the loaded model. A member writes
+        :meth:`_warm`; this is the contract around it, as :meth:`run` is
+        around :meth:`_run`.
+
+        Raises:
+            LpspecError: A warm start read from another solver, or whose
+                vectors do not span the loaded model.
+        """
+        self._takes(ws)
+        self._warm(ws)
+
+    def _takes(self, ws: WarmStart) -> None:
+        """Refuse a warm start that describes a different model.
+
+        Raises:
+            LpspecError: A start from another solver — statuses are each
+                solver's own encoding — or one whose vectors have the wrong
+                span, which a basis being positional makes a start about a
+                different model.
+        """
+        mine = type(self).__name__.lower()
+        if ws.solver != mine:
+            raise LpspecError(
+                f'this warm start was read from {ws.solver!r} and cannot warm a {mine!r} session: '
+                f"basis statuses and incumbents are the reading solver's own encoding, so applied "
+                f'elsewhere they would start the solve from a state that means something else. '
+                f'Read a warm start from the solver that will take it back.'
+            )
+        spans = (
+            ('column statuses', ws.column_statuses, self._columns, 'columns'),
+            ('row statuses', ws.row_statuses, self._rows, 'rows'),
+            ('column values', ws.column_values, self._columns, 'columns'),
+        )
+        for quantity, values, expected, axis in spans:
+            if values is not None and len(values) != expected:
+                raise LpspecError(
+                    f'this warm start carries {len(values)} {quantity} for a model with {expected} '
+                    f'{axis}. A basis and an incumbent are positional, so one read from a '
+                    f'differently shaped model would start the solve from a state about a '
+                    f'different one — carry a warm start only across builds whose label set '
+                    f'is unchanged.'
+                )
+
+    @abstractmethod
+    def _warm(self, ws: WarmStart) -> None:
+        """Apply *ws* onto the loaded model, its spans already checked.
+
+        Reached only through :meth:`warm`, so a member may assume the vectors
+        span the model it holds and that filled fields pair the way
+        :class:`WarmStart` says they do.
         """
 
     def run(self, model: ModelTables) -> SolveAnswer:

@@ -7,6 +7,7 @@ import pytest
 import lpspec as lps
 from lpspec.language._yaml import read_yaml
 from lpspec.language.validation import load_model
+from tests.conftest import raw_of
 
 MODEL = """dimensions:
   snapshot: {dtype: int, values: [0, 1]}
@@ -44,6 +45,23 @@ def test_only_true_and_false_are_booleans(tmp_path):
     path = _write(tmp_path, 'dimensions:\n  c: {dtype: str, values: [no, se, on, off, yes, n, y]}\n')
 
     assert read_yaml(path)['dimensions']['c']['values'] == ['no', 'se', 'on', 'off', 'yes', 'n', 'y']
+
+
+def test_the_harness_reads_a_model_the_way_the_product_does(tmp_path):
+    """``raw_of`` is the door every test walks through, and it was a different one.
+
+    It read YAML 1.1, so a ``no`` label reached the schema as ``False`` while
+    ``load_model`` saw the string — and a differential test on such a model
+    compared two lanes that had loaded different files. The corpus has no
+    ``no``/``yes``/``on``/``off`` label today, which is why nothing said so.
+    """
+    text = 'dimensions:\n  country: {dtype: str, values: [uk, de, no]}\n'
+    path = _write(tmp_path, text)
+
+    assert raw_of(path) == read_yaml(path), 'a path through the harness reads what the product reads'
+    assert raw_of(text)['dimensions']['country']['values'] == ['uk', 'de', 'no'], (
+        'and so does YAML text, which is the form most fixtures take'
+    )
 
 
 def test_real_booleans_still_parse(tmp_path):

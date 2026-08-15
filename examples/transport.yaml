@@ -1,37 +1,57 @@
 dimensions:
   snapshot:
+    description: dispatch periods
     dtype: int
   generator:
+    description: generating units
     dtype: str
   bus:
+    description: network nodes
     dtype: str
   line:
+    description: transmission lines, each joining two buses
     dtype: str
 
 lookups:
-  gen_bus: {over: generator, into: bus}  # every generator sits on a bus
-  from: {over: line, into: bus}  # both endpoints are buses
-  to: {over: line, into: bus}
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  from:
+    description: the bus a line leaves
+    over: line
+    into: bus
+  to:
+    description: the bus a line arrives at
+    over: line
+    into: bus
 
 parameters:
   p_max:
+    description: installed capacity
     dims: [generator]
   cost:
+    description: marginal cost
     dims: [generator]
   cap:
+    description: forward transmission limit
     dims: [line]
   neg_cap:
+    description: reverse transmission limit
     dims: [line]
   load:
+    description: demand at each bus
     dims: [snapshot, bus]
 
 variables:
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     bounds:
       lower: 0
       upper: p_max
   f:
+    description: flow on a line, signed towards its `to` bus
     foreach: [snapshot, line]
     bounds:
       lower: neg_cap
@@ -39,7 +59,9 @@ variables:
 
 expressions:
   gen_at_bus: sum(p, over=generator, group_by=gen_bus)
-  net_inflow: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+  net_inflow:
+    expression: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+    description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
 constraints:
   balance:

@@ -12,16 +12,20 @@ module exists for two narrow jobs:
    That is only meaningful because both accept *exactly* the same language —
    there is no construct that works here and not there.
 
-Two functions, and they are **pure producers**: YAML goes in, a model comes
-out, and nothing is retained. No accessor, no session, no state on the model.
-A file's meaning never depends on what was loaded before it (docs/ARCHITECTURE.md,
-hard rule 5), so every file declares the parameters it uses and the caller
-supplies their data per call::
+Three functions — two producers and one reader — and all are **pure**: YAML
+goes in, a model or a value comes out, and nothing is retained. No accessor
+on the model, no session, no state. A file's meaning never depends on what was
+loaded before it (docs/ARCHITECTURE.md, hard rule 5), so every file declares
+the parameters it uses and the caller supplies their data per call — the
+reader included, which is why :func:`expression` takes ``data=`` again rather
+than remembering what :func:`build` saw::
 
     from lpspec import linopy as lpspec_linopy
 
     m = lpspec_linopy.build('model.yaml', data={...})
     lpspec_linopy.extend(m, 'ramp_constraint.yaml', data={...})
+    m.solve(...)
+    lpspec_linopy.expression(m, 'model.yaml', 'co2', data={...})
 
 For models declared entirely in YAML, use the native API — it streams::
 
@@ -56,17 +60,19 @@ from typing import Any
 try:
     import linopy
     import pandas as pd
-    import xarray  # noqa: F401 — guarded here so the message covers it
+    import xarray
 except ModuleNotFoundError as exc:
     msg = 'The linopy compatibility layer requires the [linopy] extra: pip install "lpspec[linopy]"'
     raise ModuleNotFoundError(msg) from exc
 
 
 from lpspec._notes import note
-from lpspec.errors import LanguageError
+from lpspec.errors import LanguageError, unknown_name_message
+from lpspec.language.expression_parser import ComparisonNode
 from lpspec.language.piecewise import expand_piecewise
+from lpspec.language.resolution import Namespace, expression_of
 from lpspec.language.validation import load_model
-from lpspec.linopy.builder import build_model
+from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
 from lpspec.linopy.loader import (
     build_dim_coords,
     build_master_coords,
@@ -77,7 +83,7 @@ from lpspec.sources import validate_piecewise_data
 
 linopy.options['semantics'] = 'v1'
 
-__all__ = ['build', 'extend']
+__all__ = ['build', 'expression', 'extend']
 
 
 def build(
@@ -176,6 +182,61 @@ def extend(
         validate_piecewise_data(original, dataset)
 
         build_model(model, schema, dataset, master_coords, dim_coords)
+
+
+def expression(
+    model: linopy.Model,
+    path: str | Path,
+    name: str,
+    *,
+    data: dict[str, Any] | None = None,
+    coords: dict[str, Any] | None = None,
+) -> xarray.DataArray:
+    """Evaluate named expression *name* of *path* at *model*'s solution.
+
+    The eager lane's half of readable expressions — the streaming lane spells
+    it ``result.expression(name)``. Pure like the other two verbs: nothing was
+    retained by :func:`build`, so the same *data* and *coords* the model was
+    built with are passed again, the declared expression is evaluated on the
+    model, and linopy's native ``.solution`` is the answer.
+
+    Args:
+        model: A solved model carrying this file's variables.
+        path: Path to the YAML file declaring the expression.
+        name: A name declared under ``expressions:`` — never an expression
+            string.
+        data: Parameter data, as :func:`build` takes it.
+        coords: Dimension coordinate values, as :func:`build` takes them.
+
+    Returns:
+        The expression's value over its own dims, as an ``xarray.DataArray``
+        (0-dimensional for a variable-free scalar expression).
+
+    Raises:
+        KeyError: No named expression called *name*.
+        LanguageError: A file the language does not accept.
+        DataError: Data that does not fit the file.
+    """
+    path = Path(path)
+    with note(f"while reading named expression '{name}' from YAML '{path}'"):
+        schema = expand_piecewise(load_model(path))
+        if name not in schema.expressions:
+            raise KeyError(
+                unknown_name_message('named expression', name, schema.expressions)
+                + ' expression() takes a name declared under expressions:, never an expression string.'
+            )
+        master_coords = build_master_coords(schema, coords)
+        dim_coords = build_dim_coords(schema, coords, master_coords)
+        dataset = load_parameters(schema, data, master_coords)
+        ns = Namespace.of(schema, [str(v) for v in model.variables])
+        ast = expression_of(schema.expressions[name].expression, schema, ns, f"named expression '{name}'")
+        assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
+        value = _eval_ast(ast, EvaluationContext(model, dataset, master_coords, schema, ns, dim_coords))
+        if hasattr(value, 'solution'):
+            return value.solution
+        if isinstance(value, xarray.DataArray):
+            return value
+        return xarray.DataArray(float(value))
 
 
 def _variable_dims(model: linopy.Model) -> dict[str, list[str]]:

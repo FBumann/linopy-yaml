@@ -29,15 +29,3 @@ names:
   # `x` and `y`, as docs/models/piecewise.md already writes them.
   bp_x: "x"
   bp_y: "y"
-
-descriptions:
-  snapshot: dispatch periods
-  generator: dispatchable units
-  bp: breakpoints of the cost curve
-  p: dispatched power
-  op_cost: operating cost, piecewise-linear in dispatch
-  cost_curve_lam: convex-combination weight on breakpoint $k$
-  bp_x: breakpoint dispatch levels
-  bp_y: cost at each breakpoint
-  p_max: maximum dispatch
-  load: demand to be met

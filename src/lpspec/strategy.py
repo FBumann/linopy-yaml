@@ -180,9 +180,14 @@ class _Answer:
     meta: _SliceMeta
     primals: dict[str, pl.DataFrame]
     duals: dict[str, pl.DataFrame]
+    #: Every declared named expression, evaluated at this slice's solution.
+    expressions: dict[str, pl.DataFrame]
     #: Why this slice has none, when it has none. Carried rather than raised:
     #: one mixed-integer slice must not fail a whole sweep.
     no_duals: str | None
+    #: Per expression, why this slice could not evaluate it — the same
+    #: carried-not-raised rule, per name because each fails on its own data.
+    no_expressions: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -212,7 +217,19 @@ class _OriginalIndex:
         the original coordinate, and because a coordinate may appear only once
         under its own index, the lookahead rows have nowhere to go. Sorted on
         the restored dimension, so a sweep reads back in the caller's order.
+
+        Raises:
+            LpspecError: *frame* has no ``local`` column — the quantity was
+                reduced over the sliced dimension, so there is no way back.
         """
+        if self.local not in frame.columns:
+            raise LpspecError(
+                f'cannot read this over {self.dim!r}: the frame has no {self.local!r} column, because the '
+                f'quantity was reduced over the sliced dimension — each row already covers a whole slice, '
+                f'lookahead included under an overlapping window. Read it without original_index for the '
+                f'per-slice values, or read a quantity that keeps {self.local!r} and aggregate the '
+                f'stitched frame.'
+            )
         keys = [key_name, self.local]
         restored = frame.join(self.owned, on=keys, how='inner').drop(keys)
         rest = [column for column in restored.columns if column not in (self.dim, 'value')]
@@ -351,7 +368,9 @@ class Runs:
     #: never exists beside the pieces it was built from.
     _primals: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
     _duals: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
+    _expressions: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
     _no_duals: str | None = field(repr=False, default=None)
+    _no_expressions: dict[str, str] = field(repr=False, default_factory=dict)
     _original: _OriginalIndex | None = field(repr=False, default=None)
 
     @property
@@ -405,6 +424,31 @@ class Runs:
         """
         return self._reindexed(
             self._read(self._duals, 'constraint', name, self._no_duals), original_index=original_index
+        )
+
+    def expression(self, name: str, *, original_index: bool = False) -> pl.DataFrame:
+        """One named expression's values across every slice, the slice key prepended.
+
+        :meth:`primal`'s shape and arguments, for the quantities the model
+        declares under ``expressions:`` — each slice's value was evaluated at
+        that slice's solution when the fold read it, so it costs a sweep the
+        same as one more variable and a reader nothing it has not already paid.
+
+        Over the original index each coordinate carries the value of the window
+        that owns it — the lookahead rows every overlapping window recomputed
+        are dropped, which is what makes summing the stitched frame safe where
+        summing per-window values double-counts. An expression *reduced over*
+        the sliced dimension has no way back to it and is refused there; read
+        it without ``original_index`` for the per-slice values instead.
+
+        Raises:
+            LpspecError: No slice produced *name* — an evaluation that failed
+                on every slice carries its own reason — or ``original_index``
+                on a quantity reduced over the sliced dimension.
+        """
+        return self._reindexed(
+            self._read(self._expressions, 'named expression', name, self._no_expressions.get(name)),
+            original_index=original_index,
         )
 
     def _reindexed(self, frame: pl.DataFrame, *, original_index: bool) -> pl.DataFrame:
@@ -621,7 +665,9 @@ def solve_over(
     rows: list[dict[str, Any]] = []
     primals: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
     shadow: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
+    valued: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
     no_duals: str | None = None
+    no_expressions: dict[str, str] = {}
 
     answered = (
         _serially(schema, cuts, build_kwargs, solving, plan)
@@ -631,8 +677,10 @@ def solve_over(
     with closing(answered) as stream:
         for key, answer in stream:
             no_duals = no_duals or answer.no_duals
+            for name, reason in answer.no_expressions.items():
+                no_expressions.setdefault(name, reason)
             rows.append({key_name: key, **answer.meta._asdict()})
-            for into, produced in ((primals, answer.primals), (shadow, answer.duals)):
+            for into, produced in ((primals, answer.primals), (shadow, answer.duals), (valued, answer.expressions)):
                 for name, frame in produced.items():
                     into[name].append(frame.select(pl.lit(key).alias(key_name), pl.all()))
 
@@ -641,7 +689,9 @@ def solve_over(
         meta=pl.DataFrame(rows),
         _primals=dict(primals),
         _duals=dict(shadow),
+        _expressions=dict(valued),
         _no_duals=no_duals,
+        _no_expressions=no_expressions,
         _original=original,
     )
 
@@ -736,7 +786,15 @@ def _pooled(
     ]
     for cut, future in zip(cuts, futures, strict=True):
         answer = future.result()
-        yield cut.key, replace(answer, primals=_decode(answer.primals), duals=_decode(answer.duals))
+        yield (
+            cut.key,
+            replace(
+                answer,
+                primals=_decode(answer.primals),
+                duals=_decode(answer.duals),
+                expressions=_decode(answer.expressions),
+            ),
+        )
 
 
 def _answers(result: Any, model: Any) -> _Answer:
@@ -744,7 +802,12 @@ def _answers(result: Any, model: Any) -> _Answer:
 
     Read here rather than held, so that what a sweep accumulates is frames and
     never results — a result keeps reading across a rebind (#634), but holding
-    one per slice would hold that slice's label frames with it.
+    one per slice would hold that slice's label frames with it. That is also
+    why every declared expression is **evaluated here, eagerly**, where a lone
+    :meth:`~lpspec.relational.result.Result.expression` defers: its deferred
+    reader holds the build's frames, which is the very thing this fold refuses
+    to accumulate. Per slice the expression costs what one more primal read
+    does, symmetric with reading every variable and every constraint above.
 
     **A slice that answered nothing is not a failure**, and neither is one
     whose duals are undefined: an integer variable makes them so, and one such
@@ -759,12 +822,20 @@ def _answers(result: Any, model: Any) -> _Answer:
         objective=result.objective if result.has_primal else float('nan'),
     )
     if not result.has_primal:
-        return _Answer(meta, {}, {}, None)
+        return _Answer(meta, {}, {}, {}, None, {})
     primals = {name: result.primal(name) for name in model.variables}
+    expressions: dict[str, pl.DataFrame] = {}
+    no_expressions: dict[str, str] = {}
+    for name in model.expressions:
+        try:
+            expressions[name] = result.expression(name)
+        except LpspecError as exc:
+            no_expressions[name] = str(exc)
     try:
-        return _Answer(meta, primals, {name: result.dual(name) for name in model.constraints}, None)
+        duals = {name: result.dual(name) for name in model.constraints}
+        return _Answer(meta, primals, duals, expressions, None, no_expressions)
     except LpspecError as exc:
-        return _Answer(meta, primals, {}, str(exc))
+        return _Answer(meta, primals, {}, expressions, str(exc), no_expressions)
 
 
 def _run_slice(
@@ -786,7 +857,12 @@ def _run_slice(
         answer = _answers(result, model)
         if not encode_out:
             return answer
-        return replace(answer, primals=_encode(answer.primals, {}), duals=_encode(answer.duals, {}))
+        return replace(
+            answer,
+            primals=_encode(answer.primals, {}),
+            duals=_encode(answer.duals, {}),
+            expressions=_encode(answer.expressions, {}),
+        )
 
 
 def _key_column(

@@ -58,7 +58,7 @@ The [instance](https://github.com/fluxopt/lpspec/blob/main/examples/ports/data/t
 |---|---|
 | $\mathit{shipment}$ | `shipment` over $\mathcal{P} \times \mathcal{M}$ |
 | $\mathit{scaled}$ | `scaled` over $\mathcal{P} \times \mathcal{M}$ |
-| $\mathit{economies\_of\_scale\_lam}$ | `economies_of_scale_lam` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ |
+| $\mathit{economies\_of\_scale\_lam}$ | `economies_of_scale_lam` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
 | $\mathit{economies\_of\_scale\_seg}$ | `economies_of_scale_seg` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ |
 
 #### Objective

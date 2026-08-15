@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 
-from lpspec.lowering import lower_program
+from lpspec.lowering import expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 from tests.conftest import raw_of, schema_of, solve_lp_file
@@ -106,7 +106,7 @@ def differential(
         assert np.isfinite(oracle), 'the eager oracle is infeasible or unbounded — fix the data, not the tolerance'
 
         with PolarsEngine() as engine:
-            engine.build(lower_program(schema), tidy_sources(schema, data, coords))
+            engine.build(lower_program(schema), tidy_sources(schema, data, coords), expression_thunks(schema))
             result = engine.solve()
             assert result.is_ok
             assert result.objective == pytest.approx(oracle, rel=rel)
