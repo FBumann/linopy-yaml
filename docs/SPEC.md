@@ -16,7 +16,7 @@ applied in a different position.
 
 | # | Law | § |
 |---|---|---|
-| 1 | Nine top-level keys, and the schema is **closed at every level** — an unknown key is an error naming the near miss. Booleans are YAML 1.2, so `no` / `on` / `off` stay labels. | [§1](#1-file-shape) |
+| 1 | Nine declaration keys plus `version` and `description`, and the schema is **closed at every level** — an unknown key is an error naming the near miss. Booleans are YAML 1.2, so `no` / `on` / `off` stay labels. | [§1](#1-file-shape) |
 | 2 | Everything decidable without data is **decided without data**. | [§9](#9-errors) |
 | 3 | **One flat namespace, no shadowing** — a collision is a load error naming both declarations. | [§5.1](#51-name-resolution) |
 | 4 | **Position decides which kinds of name are legal**, and a name's kind is fixed at load time. A dimension is never legal in a value position: it is a coordinate space, not data. | [§5.1](#51-name-resolution) |
@@ -29,10 +29,24 @@ applied in a different position.
 
 ## 1. File shape
 
-Nine top-level keys: `dimensions`, `parameters`, `variables`, `constraints`,
+Nine declaration keys: `dimensions`, `parameters`, `variables`, `constraints`,
 `objective` (§2), `expressions`, `macros` (§3), `piecewise` (§4), `sos` (§4.1),
-plus `version` (below). The schema accepts any subset, but `check`, `solve` and
-`write` require an objective — there is nothing to optimise without one.
+plus `version` and `description` (both below). The schema accepts any subset,
+but `check`, `solve` and `write` require an objective — there is nothing to
+optimise without one.
+
+**`description` says what the file as a whole is** — the same plain prose a
+declaration's `description:` takes (§2), and the typeset document opens with
+it. Optional, never parsed, default `null`:
+
+<!-- doctest: skip -->
+```yaml
+description: Least-cost dispatch of a generator fleet against an hourly load.
+dimensions: ...
+```
+
+A `#` comment above the file says this too, and is thrown away by the parser. A
+description is the version a reader who never opens the YAML still gets.
 
 **`version` declares which surface the file is written against.** It is
 optional, and absent means `0`:

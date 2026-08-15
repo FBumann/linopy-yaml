@@ -19,6 +19,8 @@ $$\min \sum_{s,g} c_g \thinspace p_{s,g}
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Least-cost dispatch of a generator fleet against an hourly load.
+
 #### Sets
 
 | Symbol | Meaning |
@@ -64,6 +66,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
+    description: Least-cost dispatch of a generator fleet against an hourly load.
+
     dimensions:
       snapshot:
         description: dispatch periods

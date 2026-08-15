@@ -100,6 +100,8 @@ Only the notation is a choice, and **How** shows the one that was made here.
 <!-- home-math:begin -->
 === "The math"
 
+    Least-cost dispatch of a generator fleet against an hourly load.
+
     #### Sets
 
     | Symbol | Meaning |
@@ -140,6 +142,8 @@ Only the notation is a choice, and **How** shows the one that was made here.
 === "LaTeX"
 
     ```latex
+    \noindent Least-cost dispatch of a generator fleet against an hourly load.
+
     \paragraph{Sets}
     \begin{description}
     \item[$\mathcal{S}$] index $s$ --- \texttt{snapshot} --- dispatch periods

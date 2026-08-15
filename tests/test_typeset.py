@@ -752,3 +752,15 @@ def test_a_model_renders_identically_with_an_empty_table():
 def test_exported_from_the_package():
     assert lps.to_latex is to_latex
     assert lps.to_typst is to_typst
+
+
+@EVERY_FORMAT
+def test_the_model_description_opens_the_document(fmt: Format):
+    """What the file says it is, printed before anything it declares — and
+    printed with `legend=False` too, since it is not a symbol table."""
+    described = override(DISPATCH, description='least-cost dispatch of a generator fleet')
+    for options in ({}, {'legend': False}):
+        out = typeset(described, fmt, **options)
+        assert 'least-cost dispatch of a generator fleet' in out, f'missing with {options}'
+        assert out.index('least-cost dispatch') < out.index(fmt.operators['minimize']), 'it opens the document'
+    assert 'least-cost dispatch' not in typeset(DISPATCH, fmt), 'a model without one prints no empty paragraph'
