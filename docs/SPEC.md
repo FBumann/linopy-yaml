@@ -106,8 +106,8 @@ the constraints that use it.
 parsed, no length limit, default `null`. Unlike a `#` comment it is part of the
 loaded model, so it reaches AST consumers: the typeset legend prints the one on
 a dimension, parameter or variable. That is every block in this section plus
-`macros` (§3), `piecewise` (§4) and `sos` (§4.1); a named *expression* is a bare
-string, so a described one is written as a macro with no formals.
+`expressions`, `macros` (§3), `piecewise` (§4) and `sos` (§4.1) — a named
+expression is written as a bare string until it carries one (§3).
 
 It is **plain prose, in no notation**. The same words are set by every format
 and nothing translates between them, so a `$\ell$` that reads correctly in LaTeX
@@ -275,12 +275,18 @@ lanes see the same core AST. The two blocks are not one thing, though:
 dimensions:
   generator:
     dtype: str
+parameters:
+  rate:
+    dims: [generator]
 variables:
   p:
     foreach: [generator]
 
 expressions:
   total_generation: sum(p, over=generator)
+  emissions:
+    expression: sum(p * rate, over=generator)
+    description: CO2 released, the quantity a cap would bound
 macros:
   weighted_sum:
     args: [array, weights]  # positional formals, default []

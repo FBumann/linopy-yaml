@@ -229,7 +229,7 @@ def expression(
         dim_coords = build_dim_coords(schema, coords, master_coords)
         dataset = load_parameters(schema, data, master_coords)
         ns = Namespace.of(schema, [str(v) for v in model.variables])
-        ast = expression_of(schema.expressions[name], schema, ns, f"named expression '{name}'")
+        ast = expression_of(schema.expressions[name].expression, schema, ns, f"named expression '{name}'")
         assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
         value = _eval_ast(ast, EvaluationContext(model, dataset, master_coords, schema, ns, dim_coords))
         if hasattr(value, 'solution'):
