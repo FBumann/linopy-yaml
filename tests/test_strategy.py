@@ -476,6 +476,108 @@ def test_keyed_is_the_default_because_stitching_drops_rows(overlapping):
     )
 
 
+# ---------------------------------------------------------------------------
+# named expressions across a sweep
+# ---------------------------------------------------------------------------
+
+#: The window model with its cost named twice: `spend` keeps the local index
+#: (pointwise in `t`, so it can be stitched) and `window_spend` reduces over it
+#: (one number per window, so it cannot).
+SPENDING = override(
+    WINDOW,
+    **{
+        'expressions.spend': 'sum(p * cost, over=generator)',
+        'expressions.window_spend': 'sum(sum(p * cost, over=generator), over=t)',
+    },
+)
+
+
+@pytest.fixture(scope='module')
+def priced() -> strategy.Runs:
+    """The overlapping-window sweep of the expression-bearing model, solved once."""
+    return lps.solve_over(
+        SPENDING,
+        horizon_sources(12),
+        lps.EachWindow('snapshot', length=6, step=3, into='t'),
+        carry={'soc_initial': ('soc', 2)},
+    )
+
+
+def test_a_stitched_expression_prices_only_the_rows_a_window_owns(priced):
+    """`expression(original_index=True)` is the fix for the lookahead double-count.
+
+    The oracle is the polars restatement it replaces: price the stitched
+    dispatch by hand and the two must agree to the float. The keyed sum must
+    exceed it — the overlap is in the keyed frames, which is the double-count
+    the stitched read exists to drop.
+    """
+    stitched = priced.expression('spend', original_index=True)
+    assert stitched.columns == ['snapshot', 'value']
+    assert stitched['snapshot'].to_list() == list(range(12)), 'one value per coordinate, like a stitched primal'
+
+    by_hand = (
+        priced.primal('p', original_index=True)
+        .join(STATIC['cost'].rename({'value': 'cost'}), on='generator')
+        .group_by('snapshot')
+        .agg((pl.col('value') * pl.col('cost')).sum())
+        .sort('snapshot')
+    )
+    assert stitched['value'].to_list() == pytest.approx(by_hand['value'].to_list())
+    assert priced.expression('spend')['value'].sum() > stitched['value'].sum(), (
+        'the keyed frames still carry the lookahead rows, so their sum double-counts'
+    )
+
+
+def test_a_quantity_reduced_over_the_sliced_dimension_has_no_way_back(priced):
+    """Per window it reads; over the original index the refusal says why not."""
+    keyed = priced.expression('window_spend')
+    assert keyed.columns == ['snapshot_start', 'value']
+    assert keyed.height == len(priced), 'one total per window, keyed like objective'
+    with pytest.raises(lps.LpspecError, match='reduced over the sliced dimension'):
+        priced.expression('window_spend', original_index=True)
+
+
+def test_each_slice_expression_matches_solving_that_slice_alone():
+    """The fold must not change an expression's value — the oracle is `solve`."""
+    model = override(DISPATCH, **{'expressions.spend': 'sum(p * cost, over=generator)'})
+    runs = lps.solve_over(model, scenario_sources(), lps.EachCoordinate('scenario'))
+
+    for scenario in runs.keys:
+        one = scenario_sources()
+        one['load'] = _draw(one, scenario)
+        with lps.solve(model, one) as result:
+            alone = result.expression('spend')
+            folded = runs.expression('spend').filter(pl.col('scenario') == scenario).drop('scenario')
+            assert folded['value'].to_list() == pytest.approx(alone['value'].to_list()), (
+                'a slice read out of the sweep is the slice solved alone'
+            )
+
+
+def test_an_expression_the_sweep_does_not_hold_says_what_it_does_hold(priced):
+    with pytest.raises(lps.LpspecError, match="no named expression 'nope' in this sweep"):
+        priced.expression('nope')
+
+
+def test_an_expression_no_slice_could_evaluate_carries_its_reason():
+    """A failing evaluation is carried per name, never raised mid-fold.
+
+    `ratio` divides by a parameter with one row, so every slice's evaluation
+    fails on the sparse divisor — and the sweep must still complete, hold every
+    other frame, and hand the caller the divisor's own sentence on read.
+    """
+    model = override(
+        SPENDING,
+        **{'parameters.scale': {'dims': ['t']}, 'expressions.ratio': 'load / scale'},
+    )
+    sources = {**horizon_sources(12), 'scale': pl.DataFrame({'snapshot': [0], 'value': [2.0]})}
+    runs = lps.solve_over(model, sources, lps.EachWindow('snapshot', length=6, step=6, into='t'))
+
+    assert runs.primal('p').height > 0, 'the failing expression must not fail the sweep'
+    assert runs.expression('spend').height > 0, 'nor take the healthy expression with it'
+    with pytest.raises(lps.LpspecError, match='scale'):
+        runs.expression('ratio')
+
+
 #: Six coordinates, three windows of two, whatever the coordinates *are*.
 #:
 #: `length` and `step` count coordinates rather than coordinate values, and
@@ -795,6 +897,29 @@ def test_every_executor_gives_the_same_answers_in_the_same_order(make_executor):
     assert parallel.keys == sequential.keys
     assert parallel.objective.equals(sequential.objective)
     assert parallel.primal('p').equals(sequential.primal('p'))
+
+
+@pytest.mark.parametrize('make_executor', EXECUTORS)
+def test_every_executor_carries_expressions_the_same(make_executor):
+    """Expression frames cross the wire the way primals do — encoded and back.
+
+    The process pools are the point: a thread pool never encodes, so only they
+    exercise `_encode`/`_decode` on the expression frames a worker returns.
+    """
+    model = override(DISPATCH, **{'expressions.spend': 'sum(p * cost, over=generator)'})
+    sources = scenario_sources()
+    sequential = lps.solve_over(model, sources, lps.EachCoordinate('scenario'))
+
+    pool = make_executor()
+    if hasattr(pool, '__enter__'):
+        with pool as live:
+            parallel = lps.solve_over(model, sources, lps.EachCoordinate('scenario'), executor=live)
+    else:
+        parallel = lps.solve_over(model, sources, lps.EachCoordinate('scenario'), executor=pool)
+
+    assert parallel.expression('spend').equals(sequential.expression('spend')), (
+        'a sweep reads the same named expression under any executor'
+    )
 
 
 def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses(monkeypatch):
