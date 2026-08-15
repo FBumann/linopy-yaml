@@ -57,6 +57,7 @@ nav:
           - rung 3 — storage: models/pypsa_storage.md
           - rung 4 — cyclic storage: models/pypsa_cyclic_storage.md
           - rung 5 — KVL: models/pypsa_kvl.md
+          - rung 6 — AC-DC, two coordinates: models/pypsa_ac_dc.md
           - unit commitment: models/pypsa_unit_commitment.md
       - Published optima:
           - Dantzig transport: models/transport_dantzig.md
