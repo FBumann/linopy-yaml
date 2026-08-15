@@ -63,7 +63,7 @@ $$\mathit{spend}_{f} \ge 0 \qquad \forall\thinspace f \in \mathcal{F}$$
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # Stigler's diet problem (1945): the cheapest set of foods meeting a year's
@@ -119,7 +119,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The port's tables as a linopy model, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
         ``per_dollar`` is the sparse table filled back out: a missing
         (food, nutrient) pair means that food supplies none of that nutrient.
         """

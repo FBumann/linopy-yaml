@@ -58,8 +58,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from lpspec.language._yaml import read_yaml
-from lpspec.typeset import to_latex, to_markdown
+from charter.language._yaml import read_yaml
+from charter.typeset import to_latex, to_markdown
 from tools.constructs import models
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -134,7 +134,7 @@ def _home_block() -> str:
 
 
 _HOW = """```python
-import lpspec as lps
+import charter as lps
 
 {symbols}
 
@@ -153,8 +153,8 @@ Or from a shell, where the table is that same YAML on disk and `--standalone`
 emits a document that compiles rather than a fragment to `\\input`:
 
 ```bash
-python -m lpspec latex dispatch.yaml --symbols dispatch.symbols.yaml
-python -m lpspec typst dispatch.yaml --standalone -o dispatch.typ
+python -m charter latex dispatch.yaml --symbols dispatch.symbols.yaml
+python -m charter typst dispatch.yaml --standalone -o dispatch.typ
 ```"""
 
 

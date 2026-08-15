@@ -1,0 +1,24 @@
+"""Sinks: how a built model leaves the engine. See README.md.
+
+**Two families.** A *solver* takes the tables and runs them (``solvers/``,
+chosen by name); a *writer* renders them to a file (``writers/``, chosen by
+suffix). They are directories rather than a convention, so
+``tests/test_architecture.py`` reads membership off the path.
+
+``tables.py`` is what both read, and neither family imports the other.
+"""
+
+from charter.relational.sinks.solvers import SOLVERS, Solver, ingestible, loaded, solver
+from charter.relational.sinks.tables import ModelTables
+from charter.relational.sinks.writers import WRITERS, writer
+
+__all__ = [
+    'SOLVERS',
+    'WRITERS',
+    'ModelTables',
+    'Solver',
+    'ingestible',
+    'loaded',
+    'solver',
+    'writer',
+]

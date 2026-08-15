@@ -1,7 +1,7 @@
 """sum: the transport YAML through both backends, and what coordinates buy.
 
 Three-way differential on examples/transport.yaml:
-  1. eager lpspec_linopy.build + solve (sum via linopy groupby)
+  1. eager charter_linopy.build + solve (sum via linopy groupby)
   2. lowered Program -> PolarsEngine -> the `highs` solver, plus the LP file
   3. hand-built indicator-matrix linopy model (an independent oracle that
      involves no sum at all)
@@ -21,20 +21,20 @@ import numpy as np
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.errors import DataError, LanguageError
-from lpspec.lowering import _lower_expr, lower_program
-from lpspec.relational.engines.polars.engine import PolarsEngine
-from lpspec.relational.plan import (
+import charter as lps
+from charter.errors import DataError, LanguageError
+from charter.lowering import _lower_expr, lower_program
+from charter.relational.engines.polars.engine import PolarsEngine
+from charter.relational.plan import (
     Add,
     GroupSum,
     Negate,
     Variable,
 )
-from lpspec.sources import tidy_sources
+from charter.sources import tidy_sources
 from tests.conftest import override, resolved, schema_of
 from tests.differential import RTOL, differential
-from tests.oracle import lpspec_linopy, pd, transport_eager_objective, xr
+from tests.oracle import charter_linopy, pd, transport_eager_objective, xr
 
 TRANSPORT_YAML = Path('examples/transport.yaml')
 
@@ -147,7 +147,7 @@ def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
     with pytest.raises(DataError, match="not 'bus' coordinates"):
         _relationally(data, coords)
     with pytest.raises(DataError, match="not 'bus' coordinates"):
-        lpspec_linopy.build(TRANSPORT_YAML, data=data, coords=coords)
+        charter_linopy.build(TRANSPORT_YAML, data=data, coords=coords)
 
 
 def test_a_coordinate_must_be_single_valued(transport_data):
@@ -254,7 +254,7 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
             'the orphan is still a variable; it just carries no group obligation'
         )
 
-    model = lpspec_linopy.build(path, data=data, coords=coords)
+    model = charter_linopy.build(path, data=data, coords=coords)
     model.solve(solver_name='highs', output_flag=False)
     assert float(model.objective.value) == pytest.approx(3.0)
 

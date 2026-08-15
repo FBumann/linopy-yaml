@@ -15,14 +15,14 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
 REPO = Path(__file__).parent.parent
-PKG = REPO / 'src' / 'lpspec'
+PKG = REPO / 'src' / 'charter'
 
 FORBIDDEN_RUNTIME = {'linopy', 'xarray'}
 
 
 def _in_linopy_lane(path: Path) -> bool:
     """The linopy/oracle lane — the ONLY modules allowed to import linopy or
-    xarray at module level (they load only via ``import lpspec.linopy``).
+    xarray at module level (they load only via ``import charter.linopy``).
 
     Structural, not a filename allowlist: membership is "lives under
     ``linopy/``". A new eager-lane module therefore cannot land outside the
@@ -94,7 +94,7 @@ def _reaches_past(
 ) -> dict[str, list[str]]:
     """Modules under *package* importing a name its fence forbids.
 
-    Forbidden is an ``lpspec`` name outside *allowed* and *allowlist*, or a
+    Forbidden is an ``charter`` name outside *allowed* and *allowlist*, or a
     name whose root package is in *third_party*. Lazy imports are included by
     default: a fence a function body could step over is not one — *nodes* can
     prune instead (:func:`_runtime_nodes`). Membership is read off the path,
@@ -108,7 +108,7 @@ def _reaches_past(
             n
             for n in _imported(ast.parse(path.read_text()), nodes=nodes)
             if n.split('.')[0] in third_party
-            or (n.startswith('lpspec') and not n.startswith(allowed) and n not in allowlist)
+            or (n.startswith('charter') and not n.startswith(allowed) and n not in allowlist)
         ]
         if bad:
             offenders[str(path.relative_to(PKG))] = sorted(set(bad))
@@ -231,7 +231,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 #: Package modules the engine may import: dependency-free leaves that carry no
 #: YAML, schema or AST knowledge. ``errors.py`` is one — without it there is no
 #: single exception class a caller can catch across both lanes.
-ENGINE_MAY_IMPORT = {'lpspec.errors'}
+ENGINE_MAY_IMPORT = {'charter.errors'}
 
 
 def test_engine_is_isolated():
@@ -245,7 +245,7 @@ def test_engine_is_isolated():
     """
     offenders = _reaches_past(
         'relational',
-        ('lpspec.relational',),
+        ('charter.relational',),
         ENGINE_MAY_IMPORT,
         third_party=FORBIDDEN_RUNTIME | {'yaml'},
         nodes=_runtime_nodes,
@@ -305,7 +305,7 @@ def test_language_never_reaches_a_consumer():
     That is what makes ``lps.check()`` a pass with no data and no plan, and a
     second consumer cheap rather than a second opinion.
     """
-    offenders = _reaches_past('language', ('lpspec.language',), LANGUAGE_MAY_IMPORT)
+    offenders = _reaches_past('language', ('charter.language',), LANGUAGE_MAY_IMPORT)
     assert not offenders, (
         f'the language reaches forward to a consumer: {offenders} — a front-end module '
         f'may not depend on what is done with the AST it produces'
@@ -314,7 +314,7 @@ def test_language_never_reaches_a_consumer():
 
 #: What ``typeset/`` may reach. The language and nothing else: a renderer reads
 #: the AST and writes text, so it must not be able to acquire an opinion an
-#: engine holds. ``lpspec.errors`` for the exception hierarchy, as everywhere.
+#: engine holds. ``charter.errors`` for the exception hierarchy, as everywhere.
 TYPESET_MAY_IMPORT = ENGINE_MAY_IMPORT
 
 
@@ -324,11 +324,11 @@ def test_typeset_reads_the_language_and_reaches_no_engine():
     ``typeset/`` is the proof that a consumer of the AST is cheap: it renders
     any model the lanes can build, from one walk, holding no opinion they do
     not already hold. That claim is only worth anything if it *cannot* reach
-    the plan, a sink, a solver or a dataframe — so ``import lpspec.typeset``
+    the plan, a sink, a solver or a dataframe — so ``import charter.typeset``
     must not drag in an engine. It used to, through ``api.load_model``, and
     nothing failed; the module map said otherwise and no test read it.
     """
-    offenders = _reaches_past('typeset', ('lpspec.language', 'lpspec.typeset'), TYPESET_MAY_IMPORT)
+    offenders = _reaches_past('typeset', ('charter.language', 'charter.typeset'), TYPESET_MAY_IMPORT)
     assert not offenders, (
         f'typeset reaches past the language: {offenders} — a renderer reads the AST '
         f'and writes text; it may not reach a plan, a sink, a solver or a dataframe'
@@ -344,20 +344,20 @@ def test_typesets_import_closure_needs_no_third_party_engine():
     consumer binding no data costs is the point of the fence, not which names
     it happens to spell.
 
-    Deliberately not observed via ``import lpspec.typeset`` in a subprocess:
-    importing a submodule runs ``lpspec/__init__.py``, which eagerly exposes
+    Deliberately not observed via ``import charter.typeset`` in a subprocess:
+    importing a submodule runs ``charter/__init__.py``, which eagerly exposes
     ``build``/``solve`` and so loads the runner whatever this subpackage does.
     That is a property of the top-level namespace, not of ``typeset/``.
 
-    The walk follows module-level ``from lpspec.x import y`` edges, resolved
+    The walk follows module-level ``from charter.x import y`` edges, resolved
     back to modules.
     """
     heavy = {'polars', 'highspy', 'numpy', 'pandas'} | FORBIDDEN_RUNTIME
     by_module = {
-        f'lpspec.{p.relative_to(PKG).with_suffix("").as_posix().replace("/", ".").removesuffix(".__init__")}': p
+        f'charter.{p.relative_to(PKG).with_suffix("").as_posix().replace("/", ".").removesuffix(".__init__")}': p
         for p in _all_modules()
     }
-    seen, stack, reached = set(), ['lpspec.typeset'], {}
+    seen, stack, reached = set(), ['charter.typeset'], {}
     while stack:
         mod = stack.pop()
         if mod in seen or mod not in by_module:
@@ -367,10 +367,10 @@ def test_typesets_import_closure_needs_no_third_party_engine():
             if imported in heavy:
                 reached.setdefault(imported, []).append(mod)
         for node in ast.walk(ast.parse(by_module[mod].read_text())):
-            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith('lpspec'):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith('charter'):
                 stack.append(node.module)
             elif isinstance(node, ast.Import):
-                stack += [a.name for a in node.names if a.name.startswith('lpspec')]
+                stack += [a.name for a in node.names if a.name.startswith('charter')]
     assert not reached, (
         f'the typeset import closure reaches an engine dependency: {reached} — '
         f'typesetting a model must not cost a dataframe library or a solver binding'
@@ -387,7 +387,7 @@ PUBLIC_API = {
     'load it': {'load_model', 'Model'},
     'show it': {'to_latex', 'to_markdown', 'to_typst', 'SymbolTable'},
     'catch it': {
-        'LpspecError',
+        'CharterError',
         'LanguageError',
         'DataError',
         'DimensionError',
@@ -416,22 +416,22 @@ def test_the_public_surface_is_exactly_what_is_declared():
     """
     import inspect
 
-    import lpspec
+    import charter
 
     declared = {name for names in PUBLIC_API.values() for name in names}
-    assert set(lpspec.__all__) == declared, (
-        f'lpspec.__all__ and PUBLIC_API disagree: only in __all__ '
-        f'{sorted(set(lpspec.__all__) - declared)}, only in the table '
-        f'{sorted(declared - set(lpspec.__all__))} — add the name to PUBLIC_API '
+    assert set(charter.__all__) == declared, (
+        f'charter.__all__ and PUBLIC_API disagree: only in __all__ '
+        f'{sorted(set(charter.__all__) - declared)}, only in the table '
+        f'{sorted(declared - set(charter.__all__))} — add the name to PUBLIC_API '
         f'with the role it plays, and to docs/ARCHITECTURE.md'
     )
 
     leaked = sorted(
         name
-        for name in dir(lpspec)
+        for name in dir(charter)
         if not name.startswith('_')
         and name not in declared
-        and not inspect.ismodule(getattr(lpspec, name))  # submodules are import paths, not API
+        and not inspect.ismodule(getattr(charter, name))  # submodules are import paths, not API
     )
     assert not leaked, (
         f'public names outside __all__: {leaked} — a surface that grows by '
@@ -504,12 +504,12 @@ def test_each_sink_family_is_its_directory_and_its_registry():
     """
     import importlib
 
-    from lpspec.relational.sinks import SOLVERS, WRITERS, Solver
+    from charter.relational.sinks import SOLVERS, WRITERS, Solver
 
     solvers = _family('solvers') - {'base'}
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
     for name in sorted(solvers):
-        module = importlib.import_module(f'lpspec.relational.sinks.solvers.{name}')
+        module = importlib.import_module(f'charter.relational.sinks.solvers.{name}')
         held = SOLVERS[name]
         assert issubclass(held, Solver), f'SOLVERS[{name!r}] is not a Solver'
         assert held.__module__.rsplit('.', 1)[-1] == name, (
@@ -536,8 +536,8 @@ def test_the_engine_dtype_table_matches_the_declared_vocabulary():
     added to ``DIMENSION_DTYPES`` without a polars dtype here would fail
     ``labels_frame`` on the empty-index path with a ``KeyError``.
     """
-    from lpspec.language.model import DIMENSION_DTYPES
-    from lpspec.relational.frames import _DECLARED
+    from charter.language.model import DIMENSION_DTYPES
+    from charter.relational.frames import _DECLARED
 
     assert set(_DECLARED) == set(DIMENSION_DTYPES), 'the two homes of the dimension dtype vocabulary disagree'
 
@@ -552,8 +552,8 @@ def test_the_plan_variable_type_matches_the_declared_domains():
     """
     from typing import get_args
 
-    from lpspec.language.model import VARIABLE_DOMAINS
-    from lpspec.relational.plan import VariableType
+    from charter.language.model import VARIABLE_DOMAINS
+    from charter.relational.plan import VariableType
 
     assert set(get_args(VariableType)) == set(VARIABLE_DOMAINS), (
         'the two homes of the variable domain vocabulary disagree'
@@ -580,7 +580,7 @@ def test_no_sink_reaches_a_sibling():
             reached = {
                 name
                 for name in _imported(ast.parse(path.read_text()))
-                if name.startswith('lpspec.relational.sinks.') and not name.endswith(shareable)
+                if name.startswith('charter.relational.sinks.') and not name.endswith(shareable)
             }
             if reached and path.stem != '__init__':
                 offenders[f'{family}/{path.name}'] = sorted(reached)
@@ -598,7 +598,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
     the engine moves around it. Grep-level drift alarm; the differential
     tests prove semantics.
     """
-    import lpspec.relational.plan as plan
+    import charter.relational.plan as plan
 
     compiler_src = (PKG / 'relational' / 'engines' / 'polars' / 'compiler.py').read_text()
     for base in (plan.Expression, plan.Predicate):
@@ -618,7 +618,7 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     ``lowering.py``, so every declared name has to appear there as a lowering
     branch.
     """
-    from lpspec.language.operators import BUILTIN_NAMES
+    from charter.language.operators import BUILTIN_NAMES
 
     tree = ast.parse((PKG / 'linopy' / 'builder.py').read_text())
     table = next(
@@ -685,7 +685,7 @@ def test_every_schema_model_is_strict():
     )
 
 
-#: Every in-function ``lpspec`` import in the package, with why it is one.
+#: Every in-function ``charter`` import in the package, with why it is one.
 #: Empty, and that is the claim: the layers are ordered with no exception at
 #: all. The one entry this used to hold broke a real cycle — ``piecewise``
 #: consulted the plan's subset test while lowering had to expand before it
@@ -693,12 +693,12 @@ def test_every_schema_model_is_strict():
 #: gone rather than deferred, and a lazy import here is once again only ever
 #: a leftover.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
-    ('language/model.py', 'lpspec.language.piecewise'): (
+    ('language/model.py', 'charter.language.piecewise'): (
         'Model validates its own expressions, and the checkers read Model. Both '
         'sit in `language/`, so this is one layer calling itself rather than a '
         'reach across layers.'
     ),
-    ('language/model.py', 'lpspec.language.validation'): (
+    ('language/model.py', 'charter.language.validation'): (
         'Same cycle: validation.py imports Model to build one, and Model calls '
         'validate_expressions on itself so the type cannot exist half-checked.'
     ),
@@ -728,7 +728,7 @@ def test_lazy_intra_package_imports_are_all_declared():
             if (
                 isinstance(node, ast.ImportFrom)
                 and node.module
-                and node.module.startswith('lpspec')
+                and node.module.startswith('charter')
                 and id(node) not in module_level
             ):
                 found[(str(path.relative_to(PKG)), node.module)] = node.lineno

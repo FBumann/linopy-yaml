@@ -75,7 +75,7 @@ $$0 \le p_{t,g} \le \bar p_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspa
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     dimensions:
@@ -136,7 +136,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The instance's tables as a linopy model, row for row.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
         """
         p_max: pd.Series = tables['p_max'].set_index('generator')['value']
         cost: pd.Series = tables['cost'].set_index('generator')['value']
@@ -246,10 +246,10 @@ whose coordinate is null, which belongs to no group and lands nowhere.
 What it cannot express is an **overlapping** aggregate — *"trailing twelve
 months, at every month"* — because each snapshot would belong to twelve groups
 and no single column can say so. That is a sliding window over a variable, and
-it is the fixed-width window, [#468](https://github.com/fluxopt/lpspec/issues/468).
+it is the fixed-width window, [#468](https://github.com/fluxopt/charter/issues/468).
 
 The same split shows up one level up, where a *process* loops over plans
 rather than an expression looping over rows
-([#457](https://github.com/fluxopt/lpspec/issues/457)): slicing a model per
+([#457](https://github.com/fluxopt/charter/issues/457)): slicing a model per
 coordinate is a partition, slicing it per window overlaps. Here `sum(group_by=)`
 partitions, and the overlapping counterpart is the piece that has not landed.

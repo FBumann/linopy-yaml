@@ -11,12 +11,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-import lpspec as lps
-from lpspec.errors import DataError, DimensionError, LanguageError
-from lpspec.language.model import Model
-from lpspec.language.resolution import Namespace
-from lpspec.lowering import _lower_expr, _lower_where, lower_program
-from lpspec.relational.plan import (
+import charter as lps
+from charter.errors import DataError, DimensionError, LanguageError
+from charter.language.model import Model
+from charter.language.resolution import Namespace
+from charter.lowering import _lower_expr, _lower_where, lower_program
+from charter.relational.plan import (
     At,
     DimensionComparison,
     Divide,
@@ -27,7 +27,7 @@ from lpspec.relational.plan import (
     Variable,
     divisor_parameters,
 )
-from lpspec.sources import tidy_sources
+from charter.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, resolved, schema_of
 from tests.differential import differential
 

@@ -1,4 +1,4 @@
-"""A rolling horizon on lpspec, checked against the horizon it approximates.
+"""A rolling horizon on charter, checked against the horizon it approximates.
 
     uv run python examples/rolling/run.py
 
@@ -39,7 +39,7 @@ from pathlib import Path
 
 import polars as pl
 
-import lpspec as lps
+import charter as lps
 
 HERE = Path(__file__).parent
 MODEL = HERE / 'horizon.yaml'

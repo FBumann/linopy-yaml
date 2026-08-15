@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from lpspec.relational import plan
+from charter.relational import plan
 from tests.differential import differential
 
 COMMITMENT_YAML = """

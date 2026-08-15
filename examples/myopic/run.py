@@ -1,4 +1,4 @@
-"""A myopic investment pathway on lpspec, one period at a time.
+"""A myopic investment pathway on charter, one period at a time.
 
     uv run python examples/myopic/run.py
 
@@ -37,7 +37,7 @@ from pathlib import Path
 
 import polars as pl
 
-import lpspec as lps
+import charter as lps
 
 HERE = Path(__file__).parent
 MODEL = HERE / 'pathway.yaml'

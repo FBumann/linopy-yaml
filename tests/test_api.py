@@ -1,7 +1,7 @@
 """Native API: YAML → streaming engine → solver, with linopy never imported.
 
 The linopy-free guarantee is asserted in a subprocess so conftest's optional
-lpspec_linopy import cannot pollute the check.
+charter_linopy import cannot pollute the check.
 
 This module is deliberately **pandas-free**: it is the bare install's proof
 that the native path — frames in, build, solve, frames out — needs no
@@ -20,8 +20,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.language.model import Model
+import charter as lps
+from charter.language.model import Model
 from tests.conftest import schema_of, solve_lp_file
 
 
@@ -89,7 +89,7 @@ def test_runtime_is_linopy_free(dispatch_yaml):
         assert "linopy" not in sys.modules
 
         import polars as pl
-        import lpspec as lps
+        import charter as lps
         for lib in {absent!r}:
             assert lib not in sys.modules, f"package import pulled in {{lib}}"
 
@@ -153,11 +153,11 @@ def test_check_reports_language_errors_before_any_data_is_bound(
 def test_error_hierarchy_is_one_catchable_tree():
     """One ``except`` covers the package, and the model/run split is real."""
     for cls in (lps.LanguageError, lps.DataError):
-        assert issubclass(cls, lps.LpspecError)
+        assert issubclass(cls, lps.CharterError)
     for cls in (lps.SchemaError, lps.DimensionError, lps.PiecewiseExpansionError):
         assert issubclass(cls, lps.LanguageError)
     assert not issubclass(lps.DataError, lps.LanguageError)
-    assert issubclass(lps.LpspecError, ValueError)
+    assert issubclass(lps.CharterError, ValueError)
 
 
 def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispatch_frame_inputs):
@@ -166,10 +166,10 @@ def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispa
     answer that cannot be right. Here rather than in ``test_gurobi_sink.py``,
     which skips without the extra: the closed set is a property of the package,
     not of gurobi. Refused before the build, as an unwritable suffix is."""
-    from lpspec.relational.sinks import SOLVERS
+    from charter.relational.sinks import SOLVERS
 
     sources, coords = dispatch_frame_inputs
-    with pytest.raises(lps.LpspecError, match='unknown solver'):
+    with pytest.raises(lps.CharterError, match='unknown solver'):
         lps.solve(dispatch_yaml, sources, solver_name='cplex', coords=coords)
     assert set(SOLVERS) == {'highs', 'gurobi'}
 
@@ -179,7 +179,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 ):
     """A name in the closed set is not a promise the package is installed.
 
-    `gurobi` is a name lpspec knows on an install that never took the extra, so
+    `gurobi` is a name charter knows on an install that never took the extra, so
     the two mistakes are different and get different sentences. Both refuse
     where the sink is resolved, which is before the build: resolving it there is
     what makes naming a sink nothing can serve cost no model, and that was only
@@ -189,8 +189,8 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
     so the check runs wherever the suite does and still goes through the real
     probe.
     """
-    from lpspec import api
-    from lpspec.relational.sinks import SOLVERS
+    from charter import api
+    from charter.relational.sinks import SOLVERS
 
     sources, coords = dispatch_frame_inputs
     monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))
@@ -272,7 +272,7 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
     assert result.primal('p').height == height, 'still readable, with no close in sight'
 
     result.close()
-    with pytest.raises(lps.LpspecError, match='this result was closed'):
+    with pytest.raises(lps.CharterError, match='this result was closed'):
         result.primal('p')
 
 
@@ -328,7 +328,7 @@ def test_no_operator_registry_anywhere():
     makes the differential tests an oracle rather than a comparison of
     dialects (docs/ARCHITECTURE.md, "The expressive ceiling").
     """
-    import lpspec.language.operators as operators
+    import charter.language.operators as operators
 
     assert not hasattr(lps, 'register')
     assert not hasattr(operators, 'register')
@@ -416,10 +416,10 @@ def test_to_dataset_defaults_to_every_variable():
     ],
 )
 def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
-    """Every documented door answers with `LpspecError` (#527).
+    """Every documented door answers with `CharterError` (#527).
 
     Model checking happens in two places — pydantic's validators and the
-    language checkers — and they failed differently, so `except LpspecError`,
+    language checkers — and they failed differently, so `except CharterError`,
     the thing `docs/api.md` tells a caller to write, missed the majority of
     model mistakes and a caller had no way to know which.
 
@@ -436,7 +436,7 @@ def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
         'Model.model_validate_json': lambda: Model.model_validate_json(json.dumps(raw)),
     }
     for door, call in doors.items():
-        with pytest.raises(lps.LpspecError) as ei:
+        with pytest.raises(lps.CharterError) as ei:
             call()
         assert 'errors.pydantic.dev' not in str(ei.value), f"{door} leaks pydantic's envelope"
 
@@ -458,5 +458,5 @@ def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs
     assert frame.height > 0, 'a frame read before the close is its own data'
     assert sol.objective == objective, 'and the outcome needs no model to report'
     for read in (lambda: sol.primal('p'), lambda: sol.dual('power_balance')):
-        with pytest.raises(lps.LpspecError, match='this result was closed'):
+        with pytest.raises(lps.CharterError, match='this result was closed'):
             read()

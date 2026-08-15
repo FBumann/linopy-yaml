@@ -44,16 +44,16 @@ import highspy
 import numpy as np
 import polars as pl
 
-import lpspec as lps
+import charter as lps
 from bench.cases import Shape, _seed
-from lpspec.relational import sinks
-from lpspec.relational.sinks.solvers import SOLVERS
-from lpspec.relational.sinks.solvers.base import WarmStart
+from charter.relational import sinks
+from charter.relational.sinks.solvers import SOLVERS
+from charter.relational.sinks.solvers.base import WarmStart
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from lpspec.relational.engines.polars.engine import PolarsEngine
+    from charter.relational.engines.polars.engine import PolarsEngine
 
 MODELS = Path(__file__).resolve().parent / 'expansion'
 

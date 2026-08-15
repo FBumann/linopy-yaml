@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import pytest
 import yaml as pyyaml
 
-import lpspec as lps
+import charter as lps
 from tests.conftest import MODEL_PATHS
 
 if TYPE_CHECKING:

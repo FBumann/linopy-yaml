@@ -51,14 +51,14 @@ from typing import Any, NamedTuple, get_args
 import pytest
 import yaml
 
-import lpspec as lps
-from lpspec.api import BoundModel
-from lpspec.language.model import Model
-from lpspec.language.validation import load_model
-from lpspec.relational.result import Result
+import charter as lps
+from charter.api import BoundModel
+from charter.language.model import Model
+from charter.language.validation import load_model
+from charter.relational.result import Result
 
 try:
-    from lpspec import linopy as linopy_lane
+    from charter import linopy as linopy_lane
 except ModuleNotFoundError:
     linopy_lane = None  # bare install, no [linopy] extra
 
@@ -78,7 +78,7 @@ TRACKED = [
 #: Anything else (pd, np, network, ...) is external and not our contract.
 ROOTS: dict[str, Any] = {
     'lps': lps,
-    'lpspec_linopy': linopy_lane,
+    'charter_linopy': linopy_lane,
     'result': Result,
     'bound': BoundModel,
     'schema': Model,
@@ -379,7 +379,7 @@ def test_every_block_is_covered() -> None:
 # module docstrings — where the engine leak actually lived
 # --------------------------------------------------------------------------
 
-DOCSTRING_MODULES = ['src/lpspec/__init__.py', 'src/lpspec/api.py', 'src/lpspec/linopy/__init__.py']
+DOCSTRING_MODULES = ['src/charter/__init__.py', 'src/charter/api.py', 'src/charter/linopy/__init__.py']
 
 
 def _docstring_examples(path: Path) -> list[str]:

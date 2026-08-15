@@ -1,6 +1,6 @@
-"""Referenced models, checked against an optimum that did not come from lpspec.
+"""Referenced models, checked against an optimum that did not come from charter.
 
-Every other test here compares lpspec against lpspec. Even the differential
+Every other test here compares charter against charter. Even the differential
 harness compares two lanes consuming the *same resolved AST* (hard rule 1), so
 a **shared misreading** — both lanes agreeing on a meaning the modeller did not
 intend — passes the whole suite green. This is the net for that class.
@@ -22,7 +22,7 @@ from typing import Any
 import polars as pl
 import pytest
 
-import lpspec as lps
+import charter as lps
 from tests.conftest import bindable_on_this_install
 from tests.conftest import port_sources as sources
 
@@ -59,7 +59,7 @@ def test_port_reaches_the_reference_duals(port: dict[str, Any]) -> None:
 
     Ports with no ``duals`` block are skipped rather than passing vacuously:
     ``pypsa_unit_commitment`` is a MILP, where a dual solution is undefined and
-    lpspec refuses to invent one.
+    charter refuses to invent one.
     """
     bindable_on_this_install(port['name'])
     expected = port.get('duals')

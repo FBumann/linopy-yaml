@@ -104,7 +104,7 @@ $$\mathit{shut\_down}_{t,g} \in \{0, 1\} \qquad \forall\thinspace t \in \mathcal
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # PyPSA unit commitment: binary status per generator per snapshot, with
@@ -207,7 +207,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
         """
         n = pypsa.Network()
         n.set_snapshots(tables['snapshot']['snapshot'])
@@ -253,7 +253,7 @@ initial state of charge.
 | shut-downs | `peak` at snapshot 0 (begins off) and at 3 = 100 |
 | **total** | **24900** |
 
-`base` runs throughout; `peak` covers the two peak snapshots. lpspec and PyPSA
+`base` runs throughout; `peak` covers the two peak snapshots. charter and PyPSA
 agree on the schedule as well as the cost.
 
 ## What it exercises

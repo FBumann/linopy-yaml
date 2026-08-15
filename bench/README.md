@@ -1,6 +1,6 @@
 # The performance harness
 
-Not shipped in the wheel, not imported by `lpspec`, not run in CI. It exists so
+Not shipped in the wheel, not imported by `charter`, not run in CI. It exists so
 that [docs/benchmarks.md](../docs/benchmarks.md) has a *provenance* — the last
 set of published numbers came from a `scratch/` script that was deleted, and a
 claim nobody can re-run is a claim with a shelf life.
@@ -59,8 +59,8 @@ closely. `git checkout` gets it back; noticing is the hard part.
 
 | | `lp` | `highs` | `gurobi` |
 |---|---|---|---|
-| `lpspec` | `lps.build(...)` then `bound.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
-| `linopy` | `lpspec.linopy.build(...)` then `Model.to_file(io_api='lp-polars')` | … then `Model.to_highspy(set_names=False)` | … then `Model.to_gurobipy(set_names=False)` |
+| `charter` | `lps.build(...)` then `bound.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
+| `linopy` | `charter.linopy.build(...)` then `Model.to_file(io_api='lp-polars')` | … then `Model.to_highspy(set_names=False)` | … then `Model.to_gurobipy(set_names=False)` |
 
 `gurobi` is opt-in (`--sinks gurobi`): it needs the `[gurobi]` extra, where the
 other two need nothing a contributor does not already have. It measures the
@@ -125,13 +125,13 @@ available at all.
 both. `rss` is the whole-process high-water mark — the number `/usr/bin/time -l`
 agrees with — and it is the only one honest across two libraries; the memray
 peak is deterministic and attributable to a call stack, which is what makes it
-right for comparing lpspec to itself. Both are in every result file, and which
+right for comparing charter to itself. Both are in every result file, and which
 one a table reads is a decision, not an accident. The measured reason is below.
 
 **The harness is pytest, and deliberately nothing more.** Selection, the
 ragged parametrization, per-pass isolation, the JSON, the repeats and the
 minimum are all things pytest and its plugins already do and have tested. What
-is left in this directory is what is specific to lpspec: the cases, the verbs,
+is left in this directory is what is specific to charter: the cases, the verbs,
 and the parity gate.
 
 **The parity gate runs before any timing.** The smallest rung of each case is
@@ -145,11 +145,11 @@ performance number describing two different models is worse than none.
 The easiest way to publish a wrong number is to time something in one arm that
 the other never does. The boundaries are therefore explicit:
 
-| | lpspec | linopy |
+| | charter | linopy |
 |---|---|---|
 | **before the clock** | splitting parquet paths into parameters vs dimensions (harness bookkeeping — it re-parses the YAML only because the *runner* decides which file is which) | — |
-| `import` | `import lpspec` | `import lpspec.linopy` → linopy, xarray |
-| `build` | `lps.build(...)` — the engine scans the parquet itself | `read_parquet` + reshape + `lpspec.linopy.build(...)` |
+| `import` | `import charter` | `import charter.linopy` → linopy, xarray |
+| `build` | `lps.build(...)` — the engine scans the parquet itself | `read_parquet` + reshape + `charter.linopy.build(...)` |
 | `emit` | `bound.write(path)` / `build_highs(_tables(bound))` | `Model.to_file(path, io_api='lp-polars')` / `Model.to_highspy()` |
 | `teardown` | `bound.close()` — releases the built model | — (nothing to release) |
 | **after the clock** | row, column and nonzero counts off the built frames | `nvars` / `ncons` |
@@ -157,7 +157,7 @@ the other never does. The boundaries are therefore explicit:
 Three of those are deliberate calls rather than defaults:
 
 - **Import is excluded from `wall_seconds`** but recorded. It is fixed, paid
-  once per process, and at the `xs` rung linopy's import alone exceeds lpspec's
+  once per process, and at the `xs` rung linopy's import alone exceeds charter's
   entire build — including it would make the small end meaningless.
 - **Teardown is included, and it is now near-free.** It was there to charge the
   arm holding a scratch database for releasing it. There is no scratch database
@@ -166,7 +166,7 @@ Three of those are deliberate calls rather than defaults:
   acquired a lifetime again.
 - **`progress=False` is passed to linopy.** Its default is
   `m._xCounter > 10_000`, so every rung above `xs` would render tqdm bars that
-  the lpspec arm has no equivalent of — ~7% of the write at 10M variables, and
+  the charter arm has no equivalent of — ~7% of the write at 10M variables, and
   stderr noise in a harness that parses stdout.
 
 Both arms start from the same parquet files and stop at the same seam, so
@@ -197,7 +197,7 @@ across a session, and this machine has drifted 2x on wall time between the
 start of a session and the end of one. Check out A, measure, check out B,
 measure, and go back — not A once and B once an hour later. The tell that you
 needed to is the other arm: if linopy moved too, the machine moved, because
-nothing in `src/lpspec/relational/` can reach it. Peak RSS is far steadier than
+nothing in `src/charter/relational/` can reach it. Peak RSS is far steadier than
 wall time and is usually the honest half of a before/after claim.
 
 ## The cases
@@ -273,7 +273,7 @@ decision rather than an omission.
 The ladder's ratios have linopy as their only denominator, which ranks two
 engines without saying how much headroom either has left. `bench/floor.py` is
 the missing denominator: it hand-writes **one** model — `transport` — from the
-case's cached parquet straight into numpy arrays and a CSR matrix, no lpspec
+case's cached parquet straight into numpy arrays and a CSR matrix, no charter
 and no expression engine anywhere in the path, and ends at the same seam as
 the `highs` sink: a populated `highspy.Highs` with `run()` never called. What
 it costs is the irreducible price of emitting the coefficients, and with it
@@ -288,9 +288,9 @@ uv run python -m bench.floor xs --check   # one solve each way, objectives compa
 It is **not a fourth arm**: it hardcodes one model, so it has no place in the
 `case x size x sink x arm` product, and its numbers are quoted beside the
 ladder's rather than inside it. `--check` solves the smallest rung through the
-floor and through lpspec and compares objectives at the gate's tolerance;
+floor and through charter and compares objectives at the gate's tolerance;
 `bench/test_harness.py` pins the cheaper fingerprint — the floor's column, row
-and nonzero counts against lpspec's — on every bare `pytest bench`.
+and nonzero counts against charter's — on every bare `pytest bench`.
 
 ## The warm-start payoff
 
@@ -338,8 +338,8 @@ to linopy*, and it wants a different metric — but it does not want a different
 harness. It is the same suite with one lane selected:
 
 ```bash
-uv run pytest bench --arms lpspec --sizes s m --benchmark-memory
-uv run pytest bench --arms lpspec --sizes s m --benchmark-memory \
+uv run pytest bench --arms charter --sizes s m --benchmark-memory
+uv run pytest bench --arms charter --sizes s m --benchmark-memory \
     --benchmark-memory-compare=0001 --benchmark-memory-compare-fail=mean:10%
 ```
 
@@ -350,7 +350,7 @@ request's base and once against its head — and what it gates on.
 
 | arm | `ru_maxrss` | memray peak |
 |---|---|---|
-| lpspec | 309 MB | 211 MB |
+| charter | 309 MB | 211 MB |
 | linopy | 604 MB | **2967 MB** |
 
 memray counts polars' reserved arenas as allocated and does not count the
@@ -414,7 +414,7 @@ every consumer whichever of the two the case has.
 | file | |
 |---|---|
 | `cases.py` | the models, the data generators, the ladders |
-| `workloads.py` | what is measured — one verb per arm, picklable, lpspec imported inside |
+| `workloads.py` | what is measured — one verb per arm, picklable, charter imported inside |
 | `conftest.py` | selection flags, the ragged parametrization, the data fixture, the parity gate |
 | `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |

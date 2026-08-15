@@ -83,7 +83,7 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # PyPSA linear optimal power flow, rung 2: rung 1 plus generator ramp limits.
@@ -169,7 +169,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
         """
         n = pypsa.Network()
         n.set_snapshots(tables['snapshot']['snapshot'])

@@ -30,7 +30,7 @@ green having quietly stopped checking the lanes against each other on precisely
 the cases the convention changed.
 
 The shim is imported under its own name rather than something shorter, because
-this module re-exports the *real* ``linopy`` too: ``lpspec_linopy`` names the
+this module re-exports the *real* ``linopy`` too: ``charter_linopy`` names the
 module it actually is, and cannot be confused with it.
 """
 
@@ -51,10 +51,10 @@ if 'semantics' not in getattr(linopy.options, '_defaults', {}):
         f'measure against the legacy convention instead. Install the pin in pyproject.toml '
         f'([tool.uv.sources]: PyPSA/linopy@feat/arithmetic-convention) — `uv sync`.'
     )
-from lpspec import linopy as lpspec_linopy  # noqa: E402  — must follow the guard above
-from lpspec.linopy import builder, loader  # noqa: E402
+from charter import linopy as charter_linopy  # noqa: E402  — must follow the guard above
+from charter.linopy import builder, loader  # noqa: E402
 
-__all__ = ['builder', 'linopy', 'loader', 'lpspec_linopy', 'pd', 'transport_eager_objective', 'xr']
+__all__ = ['builder', 'charter_linopy', 'linopy', 'loader', 'pd', 'transport_eager_objective', 'xr']
 
 
 def transport_eager_objective(gens, lines, load) -> float:

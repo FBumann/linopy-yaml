@@ -15,13 +15,13 @@ import numpy as np
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.errors import DataError, LanguageError, LpspecError
-from lpspec.language.model import Model
-from lpspec.lowering import lower_program
-from lpspec.relational import chunking
-from lpspec.relational.engines.polars.engine import PolarsEngine
-from lpspec.relational.plan import (
+import charter as lps
+from charter.errors import CharterError, DataError, LanguageError
+from charter.language.model import Model
+from charter.lowering import lower_program
+from charter.relational import chunking
+from charter.relational.engines.polars.engine import PolarsEngine
+from charter.relational.plan import (
     Constant,
     ConstraintDeclaration,
     CoordinateTarget,
@@ -36,8 +36,8 @@ from lpspec.relational.plan import (
     Variable,
     VariableDeclaration,
 )
-from lpspec.relational.sinks import SOLVERS
-from lpspec.relational.sinks.solvers.highs import Highs
+from charter.relational.sinks import SOLVERS
+from charter.relational.sinks.solvers.highs import Highs
 from tests.conftest import by_coord, override, solve_lp_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, transport_eager_objective, xr
@@ -927,7 +927,7 @@ def test_a_solver_vector_that_does_not_span_the_model_is_refused(monkeypatch, le
     monkeypatch.setitem(SOLVERS, 'highs', Crooked)
     with (
         lps.build(SOLVER_VECTOR_MODEL, SOLVER_VECTOR_LOAD) as bound,
-        pytest.raises(LpspecError, match=f'returned {length} primal values for a model with 3'),
+        pytest.raises(CharterError, match=f'returned {length} primal values for a model with 3'),
     ):
         bound.solve()
 
@@ -1633,7 +1633,7 @@ FLAT_COST = pl.DataFrame({'n': ['a', 'b'], 'value': [1.0, 1.0]})
 
 def _aligned_for(model, data, monkeypatch):
     """Which bound parameters took the positional path building *model*."""
-    from lpspec.relational.engines.polars import compiler as compiler_module
+    from charter.relational.engines.polars import compiler as compiler_module
 
     real = compiler_module.PolarsCompiler._aligned_bound
     seen = {}
@@ -1645,7 +1645,7 @@ def _aligned_for(model, data, monkeypatch):
 
     monkeypatch.setattr(compiler_module.PolarsCompiler, '_aligned_bound', spy)
     # the decision is recorded while the plan is built, before it runs
-    with contextlib.suppress(LpspecError):
+    with contextlib.suppress(CharterError):
         lps.build(model, data).close()
     return seen
 

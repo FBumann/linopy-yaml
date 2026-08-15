@@ -28,7 +28,7 @@
             "brand_raw": "Apple M3"
         },
         "versions": {
-            "lpspec": "0.0.1a61.dev3+gf319cd10f.d20260731",
+            "charter": "0.0.1a61.dev3+gf319cd10f.d20260731",
             "linopy": "0.8.0.post1.dev140+g346943317",
             "highspy": "1.15.1",
             "gurobipy": "13.0.2",
@@ -51,15 +51,15 @@
     "benchmarks": [
         {
             "group": null,
-            "name": "test_emit[dispatch-xs-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-xs-lpspec-lp]",
+            "name": "test_emit[dispatch-xs-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-xs-charter-lp]",
             "params": {
                 "case_name": "dispatch",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "dispatch-xs-lpspec-lp",
+            "param": "dispatch-xs-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -186,15 +186,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-xs-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-xs-lpspec-highs]",
+            "name": "test_emit[dispatch-xs-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-xs-charter-highs]",
             "params": {
                 "case_name": "dispatch",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "dispatch-xs-lpspec-highs",
+            "param": "dispatch-xs-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -353,15 +353,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-xs-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-xs-lpspec-gurobi]",
+            "name": "test_emit[dispatch-xs-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-xs-charter-gurobi]",
             "params": {
                 "case_name": "dispatch",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "dispatch-xs-lpspec-gurobi",
+            "param": "dispatch-xs-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -860,15 +860,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-s-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-s-lpspec-lp]",
+            "name": "test_emit[dispatch-s-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-s-charter-lp]",
             "params": {
                 "case_name": "dispatch",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "dispatch-s-lpspec-lp",
+            "param": "dispatch-s-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -975,15 +975,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-s-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-s-lpspec-highs]",
+            "name": "test_emit[dispatch-s-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-s-charter-highs]",
             "params": {
                 "case_name": "dispatch",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "dispatch-s-lpspec-highs",
+            "param": "dispatch-s-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -1114,15 +1114,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-s-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-s-lpspec-gurobi]",
+            "name": "test_emit[dispatch-s-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-s-charter-gurobi]",
             "params": {
                 "case_name": "dispatch",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "dispatch-s-lpspec-gurobi",
+            "param": "dispatch-s-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -1508,15 +1508,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-m-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-m-lpspec-lp]",
+            "name": "test_emit[dispatch-m-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-m-charter-lp]",
             "params": {
                 "case_name": "dispatch",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "dispatch-m-lpspec-lp",
+            "param": "dispatch-m-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -1591,15 +1591,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-m-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-m-lpspec-highs]",
+            "name": "test_emit[dispatch-m-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-m-charter-highs]",
             "params": {
                 "case_name": "dispatch",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "dispatch-m-lpspec-highs",
+            "param": "dispatch-m-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -1685,15 +1685,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-m-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-m-lpspec-gurobi]",
+            "name": "test_emit[dispatch-m-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-m-charter-gurobi]",
             "params": {
                 "case_name": "dispatch",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "dispatch-m-lpspec-gurobi",
+            "param": "dispatch-m-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -2031,15 +2031,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-l-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-l-lpspec-lp]",
+            "name": "test_emit[dispatch-l-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-l-charter-lp]",
             "params": {
                 "case_name": "dispatch",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "dispatch-l-lpspec-lp",
+            "param": "dispatch-l-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -2118,15 +2118,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-l-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-l-lpspec-highs]",
+            "name": "test_emit[dispatch-l-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-l-charter-highs]",
             "params": {
                 "case_name": "dispatch",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "dispatch-l-lpspec-highs",
+            "param": "dispatch-l-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -2205,15 +2205,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[dispatch-l-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[dispatch-l-lpspec-gurobi]",
+            "name": "test_emit[dispatch-l-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-l-charter-gurobi]",
             "params": {
                 "case_name": "dispatch",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "dispatch-l-lpspec-gurobi",
+            "param": "dispatch-l-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -2525,15 +2525,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-xs-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-xs-lpspec-lp]",
+            "name": "test_emit[fleet-xs-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-xs-charter-lp]",
             "params": {
                 "case_name": "fleet",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "fleet-xs-lpspec-lp",
+            "param": "fleet-xs-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -2634,15 +2634,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-xs-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-xs-lpspec-highs]",
+            "name": "test_emit[fleet-xs-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-xs-charter-highs]",
             "params": {
                 "case_name": "fleet",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "fleet-xs-lpspec-highs",
+            "param": "fleet-xs-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -2732,15 +2732,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-xs-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-xs-lpspec-gurobi]",
+            "name": "test_emit[fleet-xs-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-xs-charter-gurobi]",
             "params": {
                 "case_name": "fleet",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "fleet-xs-lpspec-gurobi",
+            "param": "fleet-xs-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -3079,15 +3079,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-s-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-s-lpspec-lp]",
+            "name": "test_emit[fleet-s-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-s-charter-lp]",
             "params": {
                 "case_name": "fleet",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "fleet-s-lpspec-lp",
+            "param": "fleet-s-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -3167,15 +3167,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-s-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-s-lpspec-highs]",
+            "name": "test_emit[fleet-s-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-s-charter-highs]",
             "params": {
                 "case_name": "fleet",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "fleet-s-lpspec-highs",
+            "param": "fleet-s-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -3252,15 +3252,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-s-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-s-lpspec-gurobi]",
+            "name": "test_emit[fleet-s-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-s-charter-gurobi]",
             "params": {
                 "case_name": "fleet",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "fleet-s-lpspec-gurobi",
+            "param": "fleet-s-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -3573,15 +3573,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-m-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-m-lpspec-lp]",
+            "name": "test_emit[fleet-m-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-m-charter-lp]",
             "params": {
                 "case_name": "fleet",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "fleet-m-lpspec-lp",
+            "param": "fleet-m-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -3656,15 +3656,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-m-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-m-lpspec-highs]",
+            "name": "test_emit[fleet-m-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-m-charter-highs]",
             "params": {
                 "case_name": "fleet",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "fleet-m-lpspec-highs",
+            "param": "fleet-m-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -3735,15 +3735,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-m-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-m-lpspec-gurobi]",
+            "name": "test_emit[fleet-m-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-m-charter-gurobi]",
             "params": {
                 "case_name": "fleet",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "fleet-m-lpspec-gurobi",
+            "param": "fleet-m-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -4095,15 +4095,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-l-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-l-lpspec-lp]",
+            "name": "test_emit[fleet-l-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-l-charter-lp]",
             "params": {
                 "case_name": "fleet",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "fleet-l-lpspec-lp",
+            "param": "fleet-l-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -4174,15 +4174,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-l-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-l-lpspec-highs]",
+            "name": "test_emit[fleet-l-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-l-charter-highs]",
             "params": {
                 "case_name": "fleet",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "fleet-l-lpspec-highs",
+            "param": "fleet-l-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -4253,15 +4253,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[fleet-l-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[fleet-l-lpspec-gurobi]",
+            "name": "test_emit[fleet-l-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[fleet-l-charter-gurobi]",
             "params": {
                 "case_name": "fleet",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "fleet-l-lpspec-gurobi",
+            "param": "fleet-l-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -4589,15 +4589,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-xs-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-xs-lpspec-lp]",
+            "name": "test_emit[nodal-xs-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-xs-charter-lp]",
             "params": {
                 "case_name": "nodal",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "nodal-xs-lpspec-lp",
+            "param": "nodal-xs-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -4723,15 +4723,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-xs-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-xs-lpspec-highs]",
+            "name": "test_emit[nodal-xs-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-xs-charter-highs]",
             "params": {
                 "case_name": "nodal",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "nodal-xs-lpspec-highs",
+            "param": "nodal-xs-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -4856,15 +4856,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-xs-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-xs-lpspec-gurobi]",
+            "name": "test_emit[nodal-xs-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-xs-charter-gurobi]",
             "params": {
                 "case_name": "nodal",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "nodal-xs-lpspec-gurobi",
+            "param": "nodal-xs-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -5337,15 +5337,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-s-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-s-lpspec-lp]",
+            "name": "test_emit[nodal-s-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-s-charter-lp]",
             "params": {
                 "case_name": "nodal",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "nodal-s-lpspec-lp",
+            "param": "nodal-s-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -5459,15 +5459,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-s-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-s-lpspec-highs]",
+            "name": "test_emit[nodal-s-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-s-charter-highs]",
             "params": {
                 "case_name": "nodal",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "nodal-s-lpspec-highs",
+            "param": "nodal-s-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -5592,15 +5592,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-s-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-s-lpspec-gurobi]",
+            "name": "test_emit[nodal-s-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-s-charter-gurobi]",
             "params": {
                 "case_name": "nodal",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "nodal-s-lpspec-gurobi",
+            "param": "nodal-s-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -5995,15 +5995,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-m-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-m-lpspec-lp]",
+            "name": "test_emit[nodal-m-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-m-charter-lp]",
             "params": {
                 "case_name": "nodal",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "nodal-m-lpspec-lp",
+            "param": "nodal-m-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -6090,15 +6090,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-m-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-m-lpspec-highs]",
+            "name": "test_emit[nodal-m-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-m-charter-highs]",
             "params": {
                 "case_name": "nodal",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "nodal-m-lpspec-highs",
+            "param": "nodal-m-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -6193,15 +6193,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-m-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-m-lpspec-gurobi]",
+            "name": "test_emit[nodal-m-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-m-charter-gurobi]",
             "params": {
                 "case_name": "nodal",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "nodal-m-lpspec-gurobi",
+            "param": "nodal-m-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -6545,15 +6545,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-l-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-l-lpspec-lp]",
+            "name": "test_emit[nodal-l-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-l-charter-lp]",
             "params": {
                 "case_name": "nodal",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "nodal-l-lpspec-lp",
+            "param": "nodal-l-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -6628,15 +6628,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-l-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-l-lpspec-highs]",
+            "name": "test_emit[nodal-l-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-l-charter-highs]",
             "params": {
                 "case_name": "nodal",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "nodal-l-lpspec-highs",
+            "param": "nodal-l-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -6715,15 +6715,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[nodal-l-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[nodal-l-lpspec-gurobi]",
+            "name": "test_emit[nodal-l-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[nodal-l-charter-gurobi]",
             "params": {
                 "case_name": "nodal",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "nodal-l-lpspec-gurobi",
+            "param": "nodal-l-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -7047,15 +7047,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-xs-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-xs-lpspec-lp]",
+            "name": "test_emit[profiled-xs-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-xs-charter-lp]",
             "params": {
                 "case_name": "profiled",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "profiled-xs-lpspec-lp",
+            "param": "profiled-xs-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -7192,15 +7192,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-xs-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-xs-lpspec-highs]",
+            "name": "test_emit[profiled-xs-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-xs-charter-highs]",
             "params": {
                 "case_name": "profiled",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "profiled-xs-lpspec-highs",
+            "param": "profiled-xs-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -7344,15 +7344,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-xs-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-xs-lpspec-gurobi]",
+            "name": "test_emit[profiled-xs-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-xs-charter-gurobi]",
             "params": {
                 "case_name": "profiled",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "profiled-xs-lpspec-gurobi",
+            "param": "profiled-xs-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -7785,15 +7785,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-s-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-s-lpspec-lp]",
+            "name": "test_emit[profiled-s-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-s-charter-lp]",
             "params": {
                 "case_name": "profiled",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "profiled-s-lpspec-lp",
+            "param": "profiled-s-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -7906,15 +7906,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-s-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-s-lpspec-highs]",
+            "name": "test_emit[profiled-s-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-s-charter-highs]",
             "params": {
                 "case_name": "profiled",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "profiled-s-lpspec-highs",
+            "param": "profiled-s-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -8012,15 +8012,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-s-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-s-lpspec-gurobi]",
+            "name": "test_emit[profiled-s-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-s-charter-gurobi]",
             "params": {
                 "case_name": "profiled",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "profiled-s-lpspec-gurobi",
+            "param": "profiled-s-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -8394,15 +8394,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-m-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-m-lpspec-lp]",
+            "name": "test_emit[profiled-m-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-m-charter-lp]",
             "params": {
                 "case_name": "profiled",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "profiled-m-lpspec-lp",
+            "param": "profiled-m-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -8481,15 +8481,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-m-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-m-lpspec-highs]",
+            "name": "test_emit[profiled-m-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-m-charter-highs]",
             "params": {
                 "case_name": "profiled",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "profiled-m-lpspec-highs",
+            "param": "profiled-m-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -8560,15 +8560,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-m-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-m-lpspec-gurobi]",
+            "name": "test_emit[profiled-m-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-m-charter-gurobi]",
             "params": {
                 "case_name": "profiled",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "profiled-m-lpspec-gurobi",
+            "param": "profiled-m-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -8908,15 +8908,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-l-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-l-lpspec-lp]",
+            "name": "test_emit[profiled-l-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-l-charter-lp]",
             "params": {
                 "case_name": "profiled",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "profiled-l-lpspec-lp",
+            "param": "profiled-l-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -8987,15 +8987,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-l-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-l-lpspec-highs]",
+            "name": "test_emit[profiled-l-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-l-charter-highs]",
             "params": {
                 "case_name": "profiled",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "profiled-l-lpspec-highs",
+            "param": "profiled-l-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -9074,15 +9074,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[profiled-l-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[profiled-l-lpspec-gurobi]",
+            "name": "test_emit[profiled-l-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[profiled-l-charter-gurobi]",
             "params": {
                 "case_name": "profiled",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "profiled-l-lpspec-gurobi",
+            "param": "profiled-l-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -9410,15 +9410,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-xs-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-xs-lpspec-lp]",
+            "name": "test_emit[sector-xs-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-xs-charter-lp]",
             "params": {
                 "case_name": "sector",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "sector-xs-lpspec-lp",
+            "param": "sector-xs-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -9540,15 +9540,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-xs-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-xs-lpspec-highs]",
+            "name": "test_emit[sector-xs-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-xs-charter-highs]",
             "params": {
                 "case_name": "sector",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "sector-xs-lpspec-highs",
+            "param": "sector-xs-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -9688,15 +9688,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-xs-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-xs-lpspec-gurobi]",
+            "name": "test_emit[sector-xs-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-xs-charter-gurobi]",
             "params": {
                 "case_name": "sector",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "sector-xs-lpspec-gurobi",
+            "param": "sector-xs-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -10150,15 +10150,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-s-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-s-lpspec-lp]",
+            "name": "test_emit[sector-s-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-s-charter-lp]",
             "params": {
                 "case_name": "sector",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "sector-s-lpspec-lp",
+            "param": "sector-s-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -10270,15 +10270,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-s-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-s-lpspec-highs]",
+            "name": "test_emit[sector-s-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-s-charter-highs]",
             "params": {
                 "case_name": "sector",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "sector-s-lpspec-highs",
+            "param": "sector-s-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -10402,15 +10402,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-s-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-s-lpspec-gurobi]",
+            "name": "test_emit[sector-s-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-s-charter-gurobi]",
             "params": {
                 "case_name": "sector",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "sector-s-lpspec-gurobi",
+            "param": "sector-s-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -10797,15 +10797,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-m-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-m-lpspec-lp]",
+            "name": "test_emit[sector-m-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-m-charter-lp]",
             "params": {
                 "case_name": "sector",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "sector-m-lpspec-lp",
+            "param": "sector-m-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -10891,15 +10891,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-m-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-m-lpspec-highs]",
+            "name": "test_emit[sector-m-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-m-charter-highs]",
             "params": {
                 "case_name": "sector",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "sector-m-lpspec-highs",
+            "param": "sector-m-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -10991,15 +10991,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-m-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-m-lpspec-gurobi]",
+            "name": "test_emit[sector-m-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-m-charter-gurobi]",
             "params": {
                 "case_name": "sector",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "sector-m-lpspec-gurobi",
+            "param": "sector-m-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -11331,15 +11331,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-l-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-l-lpspec-lp]",
+            "name": "test_emit[sector-l-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-l-charter-lp]",
             "params": {
                 "case_name": "sector",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "sector-l-lpspec-lp",
+            "param": "sector-l-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -11422,15 +11422,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-l-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-l-lpspec-highs]",
+            "name": "test_emit[sector-l-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-l-charter-highs]",
             "params": {
                 "case_name": "sector",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "sector-l-lpspec-highs",
+            "param": "sector-l-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -11509,15 +11509,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[sector-l-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[sector-l-lpspec-gurobi]",
+            "name": "test_emit[sector-l-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[sector-l-charter-gurobi]",
             "params": {
                 "case_name": "sector",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "sector-l-lpspec-gurobi",
+            "param": "sector-l-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -11833,15 +11833,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-xs-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-xs-lpspec-lp]",
+            "name": "test_emit[transport-xs-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-charter-lp]",
             "params": {
                 "case_name": "transport",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "transport-xs-lpspec-lp",
+            "param": "transport-xs-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -11952,15 +11952,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-xs-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-xs-lpspec-highs]",
+            "name": "test_emit[transport-xs-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-charter-highs]",
             "params": {
                 "case_name": "transport",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "transport-xs-lpspec-highs",
+            "param": "transport-xs-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -12076,15 +12076,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-xs-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-xs-lpspec-gurobi]",
+            "name": "test_emit[transport-xs-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-charter-gurobi]",
             "params": {
                 "case_name": "transport",
                 "size": "xs",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "transport-xs-lpspec-gurobi",
+            "param": "transport-xs-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -12475,15 +12475,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-s-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-s-lpspec-lp]",
+            "name": "test_emit[transport-s-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-charter-lp]",
             "params": {
                 "case_name": "transport",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "transport-s-lpspec-lp",
+            "param": "transport-s-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -12573,15 +12573,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-s-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-s-lpspec-highs]",
+            "name": "test_emit[transport-s-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-charter-highs]",
             "params": {
                 "case_name": "transport",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "transport-s-lpspec-highs",
+            "param": "transport-s-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -12687,15 +12687,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-s-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-s-lpspec-gurobi]",
+            "name": "test_emit[transport-s-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-charter-gurobi]",
             "params": {
                 "case_name": "transport",
                 "size": "s",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "transport-s-lpspec-gurobi",
+            "param": "transport-s-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -13029,15 +13029,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-m-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-m-lpspec-lp]",
+            "name": "test_emit[transport-m-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-charter-lp]",
             "params": {
                 "case_name": "transport",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "transport-m-lpspec-lp",
+            "param": "transport-m-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -13112,15 +13112,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-m-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-m-lpspec-highs]",
+            "name": "test_emit[transport-m-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-charter-highs]",
             "params": {
                 "case_name": "transport",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "transport-m-lpspec-highs",
+            "param": "transport-m-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -13191,15 +13191,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-m-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-m-lpspec-gurobi]",
+            "name": "test_emit[transport-m-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-charter-gurobi]",
             "params": {
                 "case_name": "transport",
                 "size": "m",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "transport-m-lpspec-gurobi",
+            "param": "transport-m-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -13555,15 +13555,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-l-lpspec-lp]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-l-lpspec-lp]",
+            "name": "test_emit[transport-l-charter-lp]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-charter-lp]",
             "params": {
                 "case_name": "transport",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "lp"
             },
-            "param": "transport-l-lpspec-lp",
+            "param": "transport-l-charter-lp",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -13642,15 +13642,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-l-lpspec-highs]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-l-lpspec-highs]",
+            "name": "test_emit[transport-l-charter-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-charter-highs]",
             "params": {
                 "case_name": "transport",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "highs"
             },
-            "param": "transport-l-lpspec-highs",
+            "param": "transport-l-charter-highs",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -13733,15 +13733,15 @@
         },
         {
             "group": null,
-            "name": "test_emit[transport-l-lpspec-gurobi]",
-            "fullname": "bench/test_ladder.py::test_emit[transport-l-lpspec-gurobi]",
+            "name": "test_emit[transport-l-charter-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-charter-gurobi]",
             "params": {
                 "case_name": "transport",
                 "size": "l",
-                "arm": "lpspec",
+                "arm": "charter",
                 "sink": "gurobi"
             },
-            "param": "transport-l-lpspec-gurobi",
+            "param": "transport-l-charter-gurobi",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -14077,14 +14077,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[dispatch-xs-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-xs-lpspec]",
+            "name": "test_rebuild[dispatch-xs-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-xs-charter]",
             "params": {
                 "case_name": "dispatch",
                 "size": "xs",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "dispatch-xs-lpspec",
+            "param": "dispatch-xs-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -14224,14 +14224,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[dispatch-s-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-s-lpspec]",
+            "name": "test_rebuild[dispatch-s-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-s-charter]",
             "params": {
                 "case_name": "dispatch",
                 "size": "s",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "dispatch-s-lpspec",
+            "param": "dispatch-s-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -14368,14 +14368,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[dispatch-m-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-m-lpspec]",
+            "name": "test_rebuild[dispatch-m-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-m-charter]",
             "params": {
                 "case_name": "dispatch",
                 "size": "m",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "dispatch-m-lpspec",
+            "param": "dispatch-m-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -14506,14 +14506,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[dispatch-l-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-l-lpspec]",
+            "name": "test_rebuild[dispatch-l-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[dispatch-l-charter]",
             "params": {
                 "case_name": "dispatch",
                 "size": "l",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "dispatch-l-lpspec",
+            "param": "dispatch-l-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -14650,14 +14650,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[fleet-xs-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[fleet-xs-lpspec]",
+            "name": "test_rebuild[fleet-xs-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-xs-charter]",
             "params": {
                 "case_name": "fleet",
                 "size": "xs",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "fleet-xs-lpspec",
+            "param": "fleet-xs-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -14791,14 +14791,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[fleet-s-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[fleet-s-lpspec]",
+            "name": "test_rebuild[fleet-s-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-s-charter]",
             "params": {
                 "case_name": "fleet",
                 "size": "s",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "fleet-s-lpspec",
+            "param": "fleet-s-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -14938,14 +14938,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[fleet-m-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[fleet-m-lpspec]",
+            "name": "test_rebuild[fleet-m-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-m-charter]",
             "params": {
                 "case_name": "fleet",
                 "size": "m",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "fleet-m-lpspec",
+            "param": "fleet-m-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -15079,14 +15079,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[fleet-l-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[fleet-l-lpspec]",
+            "name": "test_rebuild[fleet-l-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[fleet-l-charter]",
             "params": {
                 "case_name": "fleet",
                 "size": "l",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "fleet-l-lpspec",
+            "param": "fleet-l-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -15217,14 +15217,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[nodal-xs-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[nodal-xs-lpspec]",
+            "name": "test_rebuild[nodal-xs-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[nodal-xs-charter]",
             "params": {
                 "case_name": "nodal",
                 "size": "xs",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "nodal-xs-lpspec",
+            "param": "nodal-xs-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -15361,14 +15361,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[nodal-s-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[nodal-s-lpspec]",
+            "name": "test_rebuild[nodal-s-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[nodal-s-charter]",
             "params": {
                 "case_name": "nodal",
                 "size": "s",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "nodal-s-lpspec",
+            "param": "nodal-s-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -15502,14 +15502,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[nodal-m-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[nodal-m-lpspec]",
+            "name": "test_rebuild[nodal-m-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[nodal-m-charter]",
             "params": {
                 "case_name": "nodal",
                 "size": "m",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "nodal-m-lpspec",
+            "param": "nodal-m-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -15652,14 +15652,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[nodal-l-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[nodal-l-lpspec]",
+            "name": "test_rebuild[nodal-l-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[nodal-l-charter]",
             "params": {
                 "case_name": "nodal",
                 "size": "l",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "nodal-l-lpspec",
+            "param": "nodal-l-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -15796,14 +15796,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[profiled-xs-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[profiled-xs-lpspec]",
+            "name": "test_rebuild[profiled-xs-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[profiled-xs-charter]",
             "params": {
                 "case_name": "profiled",
                 "size": "xs",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "profiled-xs-lpspec",
+            "param": "profiled-xs-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -15946,14 +15946,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[profiled-s-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[profiled-s-lpspec]",
+            "name": "test_rebuild[profiled-s-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[profiled-s-charter]",
             "params": {
                 "case_name": "profiled",
                 "size": "s",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "profiled-s-lpspec",
+            "param": "profiled-s-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -16087,14 +16087,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[profiled-m-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[profiled-m-lpspec]",
+            "name": "test_rebuild[profiled-m-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[profiled-m-charter]",
             "params": {
                 "case_name": "profiled",
                 "size": "m",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "profiled-m-lpspec",
+            "param": "profiled-m-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -16231,14 +16231,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[profiled-l-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[profiled-l-lpspec]",
+            "name": "test_rebuild[profiled-l-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[profiled-l-charter]",
             "params": {
                 "case_name": "profiled",
                 "size": "l",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "profiled-l-lpspec",
+            "param": "profiled-l-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -16384,14 +16384,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[sector-xs-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[sector-xs-lpspec]",
+            "name": "test_rebuild[sector-xs-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[sector-xs-charter]",
             "params": {
                 "case_name": "sector",
                 "size": "xs",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "sector-xs-lpspec",
+            "param": "sector-xs-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -16528,14 +16528,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[sector-s-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[sector-s-lpspec]",
+            "name": "test_rebuild[sector-s-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[sector-s-charter]",
             "params": {
                 "case_name": "sector",
                 "size": "s",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "sector-s-lpspec",
+            "param": "sector-s-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -16672,14 +16672,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[sector-m-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[sector-m-lpspec]",
+            "name": "test_rebuild[sector-m-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[sector-m-charter]",
             "params": {
                 "case_name": "sector",
                 "size": "m",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "sector-m-lpspec",
+            "param": "sector-m-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -16819,14 +16819,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[sector-l-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[sector-l-lpspec]",
+            "name": "test_rebuild[sector-l-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[sector-l-charter]",
             "params": {
                 "case_name": "sector",
                 "size": "l",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "sector-l-lpspec",
+            "param": "sector-l-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -16960,14 +16960,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[transport-xs-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[transport-xs-lpspec]",
+            "name": "test_rebuild[transport-xs-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-xs-charter]",
             "params": {
                 "case_name": "transport",
                 "size": "xs",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "transport-xs-lpspec",
+            "param": "transport-xs-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -17113,14 +17113,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[transport-s-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[transport-s-lpspec]",
+            "name": "test_rebuild[transport-s-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-s-charter]",
             "params": {
                 "case_name": "transport",
                 "size": "s",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "transport-s-lpspec",
+            "param": "transport-s-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -17266,14 +17266,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[transport-m-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[transport-m-lpspec]",
+            "name": "test_rebuild[transport-m-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-m-charter]",
             "params": {
                 "case_name": "transport",
                 "size": "m",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "transport-m-lpspec",
+            "param": "transport-m-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
@@ -17407,14 +17407,14 @@
         },
         {
             "group": null,
-            "name": "test_rebuild[transport-l-lpspec]",
-            "fullname": "bench/test_ladder.py::test_rebuild[transport-l-lpspec]",
+            "name": "test_rebuild[transport-l-charter]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-l-charter]",
             "params": {
                 "case_name": "transport",
                 "size": "l",
-                "arm": "lpspec"
+                "arm": "charter"
             },
-            "param": "transport-l-lpspec",
+            "param": "transport-l-charter",
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [

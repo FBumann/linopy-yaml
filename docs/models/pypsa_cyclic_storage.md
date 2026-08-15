@@ -122,7 +122,7 @@ $$0 \le \mathit{soc}_{t,s} \le \mathit{soc}^{\mathrm{max}}_{s} \qquad \forall\th
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # PyPSA linear optimal power flow, rung 4: rung 3's storage, closed into a
@@ -243,7 +243,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
 
         ``max_hours`` is the ratio PyPSA stores; the port carries the product it
         implies (``soc_max``), because a bound there takes a name, not arithmetic.

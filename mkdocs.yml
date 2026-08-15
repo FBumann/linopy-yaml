@@ -1,8 +1,8 @@
-site_name: lpspec
+site_name: charter
 site_description: Self-documenting optimisation models — declarative LP/MILP, built relationally and handed straight to the solver
-site_url: https://lpspec.readthedocs.io/en/latest/
-repo_url: https://github.com/fluxopt/lpspec
-repo_name: fluxopt/lpspec
+site_url: https://charter.readthedocs.io/en/latest/
+repo_url: https://github.com/fluxopt/charter
+repo_name: fluxopt/charter
 edit_uri: edit/main/docs/
 strict: true
 
@@ -194,11 +194,11 @@ extra_css:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/fluxopt/lpspec
-      name: lpspec on GitHub
+      link: https://github.com/fluxopt/charter
+      name: charter on GitHub
     - icon: simple/pypi
-      link: https://pypi.org/project/lpspec/
-      name: lpspec on PyPI
+      link: https://pypi.org/project/charter/
+      name: charter on PyPI
 
 extra_javascript:
   - javascripts/mathjax.js

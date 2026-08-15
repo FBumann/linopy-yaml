@@ -34,9 +34,9 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
-import lpspec as lps
-from lpspec.errors import DataError
-from tests.oracle import lpspec_linopy, pd  # skips the module without the [linopy] extra
+import charter as lps
+from charter.errors import DataError
+from tests.oracle import charter_linopy, pd  # skips the module without the [linopy] extra
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -131,7 +131,7 @@ def _verdict_relational(path: Path, data: dict[str, Any]) -> type[Exception] | s
 
 def _verdict_eager(path: Path, data: dict[str, Any]) -> type[Exception] | str:
     try:
-        m = lpspec_linopy.build(path, data=data)
+        m = charter_linopy.build(path, data=data)
         m.solve(solver_name='highs', output_flag=False)
     except DataError:
         return DataError

@@ -131,7 +131,7 @@ $$\mathit{link}^{\mathrm{p,nom}}_{i} \ge 0 \qquad \forall\thinspace i \in \mathc
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose
@@ -280,7 +280,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
 
         The port carries its cycle basis as ``cycle_incidence`` because computing
         one is a graph algorithm and so data preparation; PyPSA derives its own

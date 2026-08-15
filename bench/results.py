@@ -124,7 +124,7 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
         'processor': machine.get('processor') or machine.get('machine'),
         'python': machine.get('python_version'),
         'versions': machine.get('versions', {}),
-        'commits': {'lpspec': _commit(commit)},
+        'commits': {'charter': _commit(commit)},
     }
 
     for b in doc.get('benchmarks', []):

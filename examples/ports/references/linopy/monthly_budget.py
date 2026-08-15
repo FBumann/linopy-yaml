@@ -38,7 +38,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     """The instance's tables as a linopy model, row for row.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the charter call binds as ``sources``.
     """
     p_max: pd.Series = tables['p_max'].set_index('generator')['value']
     cost: pd.Series = tables['cost'].set_index('generator')['value']

@@ -25,9 +25,9 @@ from typing import Any
 
 from bench import results as bench_results
 
-ARMS = ('lpspec', 'linopy')
+ARMS = ('charter', 'linopy')
 
-#: The ratio columns are lpspec ÷ linopy: the eager lane is what this one is
+#: The ratio columns are charter ÷ linopy: the eager lane is what this one is
 #: judged against, and the only arm still measured.
 _RATIO_AGAINST = 'linopy'
 
@@ -114,7 +114,7 @@ def suspect(row: Row | None) -> bool:
     minimum landed within 1% of a clean re-take, so stddev would have marked a
     sound number. Interference sustained across *every* round is what `min`
     cannot survive, and it spreads the whole distribution instead:
-    `transport-m-lpspec-highs` read iqr/median 54% on a minimum inflated 2.33x
+    `transport-m-charter-highs` read iqr/median 54% on a minimum inflated 2.33x
     against a clean re-take. pytest-benchmark's own outlier counters miss that
     cell (`2;0`, `iqr_outliers 0`) for the reason that makes it dangerous —
     when every round is slow, none of them is an outlier.
@@ -195,17 +195,17 @@ def figures() -> str:
 
 #: How each arm reaches each sink, said once so a table can name its own seam.
 _SEAM = {
-    'lp': 'lpspec writes the LP file, linopy through its `lp-polars` writer.',
+    'lp': 'charter writes the LP file, linopy through its `lp-polars` writer.',
     'highs': (
         'Both arms end holding a populated `highspy.Highs` with `run()` never '
-        'called: lpspec through `build_highs`, linopy through '
+        'called: charter through `build_highs`, linopy through '
         '`to_highspy(set_names=False)`. The simplex is the same work whoever '
         'filled the model, so timing it would say nothing about the lane that '
         'filled it.'
     ),
     'gurobi': (
         'Both arms end holding a populated `gurobipy.Model` with `optimize()` '
-        'never called: lpspec through `build_gurobi`, linopy through '
+        'never called: charter through `build_gurobi`, linopy through '
         '`to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` '
         'extra — and the same discipline as the `highs` sink.'
     ),
@@ -256,9 +256,9 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
             _live(ref),
             _si(ref['counts']['rows']),
             *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in cols),
-            _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
+            _marked(_ratio(wall['charter'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
             *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
-            _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
+            _ratio(peak['charter'], peak[_RATIO_AGAINST]),
         ]
         marked = marked or any(noisy.values())
         lines.append('| ' + ' | '.join(cells) + ' |')
@@ -326,7 +326,7 @@ def marginal(loop_rows: list[Row]) -> str:
 
     seen = sorted(
         {(c, s) for c, s, _ in best},
-        key=lambda k: best[(k[0], k[1], 'lpspec')].get('nominal_variables', 0),
+        key=lambda k: best[(k[0], k[1], 'charter')].get('nominal_variables', 0),
     )
     lines = [
         '### Marginal cost per model',
@@ -335,11 +335,11 @@ def marginal(loop_rows: list[Row]) -> str:
         'and **steady** the best of the rounds after it, so the pair is what a '
         'rolling horizon pays for its second window against its first. ' + _settling(best, seen),
         '',
-        '| case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | steady vs linopy |',
+        '| case | vars | charter: first | charter: steady | linopy: first | linopy: steady | steady vs linopy |',
         '|---|---|---|---|---|---|---|',
     ]
     for case, size in seen:
-        ours, eager = best.get((case, size, 'lpspec')), best.get((case, size, 'linopy'))
+        ours, eager = best.get((case, size, 'charter')), best.get((case, size, 'linopy'))
         if not ours or not eager:
             continue
         lines.append(
@@ -402,9 +402,9 @@ def density(rows: dict[Key, Row]) -> str:
                 _live(ref),
                 _si(ref['counts']['columns']),
                 *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in cols),
-                _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
+                _marked(_ratio(wall['charter'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
                 *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
-                _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
+                _ratio(peak['charter'], peak[_RATIO_AGAINST]),
             ]
             marked = marked or any(noisy.values())
             lines.append('| ' + ' | '.join(cells) + ' |')
@@ -454,9 +454,9 @@ def declarations(rows: dict[Key, Row]) -> str:
                 str(int(size[1:])),
                 _si(ref['counts']['columns']),
                 *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in cols),
-                _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
+                _marked(_ratio(wall['charter'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
                 *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
-                _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
+                _ratio(peak['charter'], peak[_RATIO_AGAINST]),
             ]
             marked = marked or any(noisy.values())
             lines.append('| ' + ' | '.join(cells) + ' |')

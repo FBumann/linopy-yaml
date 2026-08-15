@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import pytest
 
-from lpspec.errors import DataError
+from charter.errors import DataError
 from tests.conftest import override
 from tests.differential import RTOL, differential
 from tests.oracle import pd

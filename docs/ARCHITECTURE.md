@@ -5,13 +5,13 @@ this file in the same PR. The language is [docs/SPEC.md](SPEC.md); what may
 enter it is [docs/design/ceiling.md](design/ceiling.md); plans and refusals
 are [docs/ROADMAP.md](ROADMAP.md); measured results are
 [docs/benchmarks.md](benchmarks.md), produced by the harness in
-[bench/](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — which is
+[bench/](https://github.com/fluxopt/charter/blob/main/bench/README.md) — which is
 also how a claim here gets falsified.
 
 `python examples/walkthrough.py` executes the pipeline below stage by stage
 and prints what each one produces — the same public calls `lps.solve` makes,
 so the demonstration cannot drift from the code. Its output is committed as
-[examples/walkthrough.out](https://github.com/fluxopt/lpspec/blob/main/examples/walkthrough.out) and asserted line for line
+[examples/walkthrough.out](https://github.com/fluxopt/charter/blob/main/examples/walkthrough.out) and asserted line for line
 (`tests/test_walkthrough.py`), so reading it is the same as running it — and a
 stage that starts telling a different story shows up as a diff in that file.
 
@@ -59,7 +59,7 @@ flowchart TB
 
     AST --> LOWER
     AST --> WALK
-    AST -.->|"opt-in: lpspec.linopy"| BUILD
+    AST -.->|"opt-in: charter.linopy"| BUILD
 
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> SRC
     DATA -.->|"opt-in: data="| LOAD
@@ -122,7 +122,7 @@ Eligibility is decided by **attempting the lowering** — `lower_program` return
 a `Program` or raises `lps.LanguageError` — so it cannot drift from what the
 engine supports. Errors split model from run: everything under `LanguageError`
 is decidable without data, `DataError` is what a source failed to supply, and
-both are `LpspecError` (`errors.py`). Expansion precedes validation in **both** lanes,
+both are `CharterError` (`errors.py`). Expansion precedes validation in **both** lanes,
 because a formulation emits declarations and those are language too — a stray
 dim in generated math is the same error as a stray dim in a written one.
 
@@ -172,7 +172,7 @@ not read off the model, since a symbol table is presentation — hence a sidecar
 file (`examples/symbols/`) rather than keys on `Model`, and a model with no
 table still renders. It splits the way `relational/sinks/writers/` does, one
 module per output format, so a format is a spelling table rather than a second
-walk that could disagree. `python -m lpspec <format>` is its shell front, one verb per
+walk that could disagree. `python -m charter <format>` is its shell front, one verb per
 entry in `typeset.FORMATS`: a consumer that needs no data needs no runner.
 
 **That front is typeset's, not the package's**, and it is not the start of a
@@ -198,7 +198,7 @@ new primitive is taxed. What is planned, and why, is
 **Nineteen names, and the count is the feature.** The model is the YAML file; Python
 is how you *run* it — so the whole surface is the diagram above written out,
 with nothing that constructs math and nothing that reaches the plan. Names are
-`lpspec.` unless shown otherwise, and what each one *does* is
+`charter.` unless shown otherwise, and what each one *does* is
 [docs/api.md](api.md). **Data?** is the column that matters: a verb
 that says *no* needs nothing but the file, which is what makes it a CI verb.
 *Italic rows are the ones the shape makes cheap and nobody has built.*
@@ -207,7 +207,7 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 |---|---|---|---|
 | **load it** | parse and validate, and stop there | `load_model` → `Model` | no |
 | **show it** | typeset for a paper or a review | `to_latex` · `to_typst` · `to_markdown` (spelling: `SymbolTable`) | no |
-| | render one from a Makefile | `python -m lpspec <format>` — the only shell front, and typeset-only | no |
+| | render one from a Makefile | `python -m charter <format>` — the only shell front, and typeset-only | no |
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
 | | *will that solver take it* | | |
 | **run it** | stream it straight into a solver | `solve`, or `build` → `BoundModel` to drive several sinks off one build | **yes** |
@@ -215,19 +215,19 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | | how big is it, what did the build and its solves do, and where did the time go | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `solves` · `loads` · `timings`, all advisory | **yes** |
 | | write an LP file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
-| | put the same math on a `linopy.Model` | `lpspec.linopy.build` · `.extend` (`data=`, its own coercion) | **yes** |
+| | put the same math on a `linopy.Model` | `charter.linopy.build` · `.extend` (`data=`, its own coercion) | **yes** |
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
-| | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `lpspec.linopy.expression` on the other lane | — |
+| | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `charter.linopy.expression` on the other lane | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
-| **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` | — |
+| **catch it** | tell a bad model from bad data | `CharterError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` | — |
 
-**Flat, and a namespace marks a lane rather than a topic.** `lpspec.linopy` is
+**Flat, and a namespace marks a lane rather than a topic.** `charter.linopy` is
 the only one, and it earns it by being a different lane — its own dependencies,
 its own oracle, its own three-verb surface with its own test. `strategy.py` is not
 a lane, so `solve_over` and its axes sit at the top level beside `solve`.
 
 That is a rule with teeth rather than a taste: the surface test exempts
-submodules (`not inspect.ismodule`), so moving names under `lpspec.something`
+submodules (`not inspect.ismodule`), so moving names under `charter.something`
 moves them out from under the list a reviewer reads. **Grouping trades an
 enforced surface for a tidier one**, which is the opposite of what the count is
 for.
@@ -315,7 +315,7 @@ choice load-bearing in the language's rulebook.
 5. **The public interface is a declared model, not a Python API.** YAML is what
    we ship and document; the contract underneath is `Model`, and whether
    that seam is ever blessed is open
-   ([#381](https://github.com/fluxopt/lpspec/issues/381)). The Python surface is
+   ([#381](https://github.com/fluxopt/charter/issues/381)). The Python surface is
    the runner (`api.py`) and the driver over it (`strategy.py`); the plan is
    internal. The whole of it is
    [nineteen names](#the-python-surface), pinned by a test — so the surface grows
@@ -418,7 +418,7 @@ satisfies one — `native` or `reformulated` — and the *family* acts on the
 answer (`solvers.ingestible`), handing a sink that cannot take a set the same
 feasible region as binaries and linking rows (`sinks/sos.py`, whose README
 carries the per-sink table). Declared rather than discovered at the hand-off is
-what [Track 3](https://github.com/fluxopt/lpspec/issues/472) asked for, and this
+what [Track 3](https://github.com/fluxopt/charter/issues/472) asked for, and this
 is its first two entries.
 
 What the rewrite adds goes **after** the model, which is the label contract
@@ -459,8 +459,8 @@ must stay off the import path of a caller who does not use it.
 | `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_model`, the language's front door |
 | `language/piecewise.py` | `piecewise:` → λ-formulation declarations |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_model` |
-| `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/typeset/README.md)) |
-| `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
+| `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/charter/blob/main/src/charter/typeset/README.md)) |
+| `__main__.py` | `python -m charter <format>` — the typeset shell front, and the only one there is |
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `method: convex` curvature guard, which is the one check that needs values |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the exception hierarchy; the one module either fenced side may import |
@@ -478,7 +478,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued coords |
 | `relational/sinks/tables.py` | what every sink reads and no more — the five frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
-| `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
+| `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/charter/blob/main/src/charter/relational/sinks/README.md) |
 | `linopy/__init__.py` | opt-in shim: `build` / `extend` on a `linopy.Model`, and `expression` reading a named quantity off a solved one |
 | `linopy/loader.py` | data coercion to `xr.Dataset`, master coords |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
@@ -578,7 +578,7 @@ read back by joining labels to coordinates.
 extra and imported inside the function), or one in `writers/` keyed by suffix in
 `WRITERS`. Nothing above it changes — no method on the engine, no branch in
 `api.py`, no name on the Python surface. The
-[README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md)
+[README](https://github.com/fluxopt/charter/blob/main/src/charter/relational/sinks/README.md)
 is the full list, and `tests/test_architecture.py` checks the shape off the path.
 
 **Add a consumer of the AST** (a renderer, a checker, a report): a directory

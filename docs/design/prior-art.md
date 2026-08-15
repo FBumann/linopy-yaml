@@ -16,7 +16,7 @@ coverage against, which is a different thing from a specification we match
 and the denominator.** Where a concept is already theirs we copy the spelling
 rather than invent a second one; every language feature is differentially
 tested against a linopy build; every ratio on the [benchmarks](../benchmarks.md)
-page is lpspec ÷ linopy. The three relationships are
+page is charter ÷ linopy. The three relationships are
 [one page](linopy.md). The ported models in [the gallery](../models/index.md)
 and their reference optima are **PyPSA**'s.
 

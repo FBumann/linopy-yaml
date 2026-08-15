@@ -1,4 +1,4 @@
-"""Shared fixtures and schema helpers for lpspec tests.
+"""Shared fixtures and schema helpers for charter tests.
 
 Everything here is linopy-free *and pandas-free at import*, so it loads on a
 bare install. On a bare install (no [linopy] extra) the eager/oracle modules
@@ -34,12 +34,12 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
-from lpspec.language._yaml import parse_yaml, read_yaml
-from lpspec.language.validation import load_model
+from charter.language._yaml import parse_yaml, read_yaml
+from charter.language.validation import load_model
 from tools import constructs
 
 if TYPE_CHECKING:
-    from lpspec.language.model import Model
+    from charter.language.model import Model
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
@@ -200,7 +200,7 @@ def resolved(text, schema):
     this: a raw `parse_expression` result still holds NameNodes, and both
     backends now assert those never reach them (resolution.py).
     """
-    from lpspec.language.resolution import Namespace, expression_of
+    from charter.language.resolution import Namespace, expression_of
 
     return expression_of(text, schema, Namespace.of(schema), 't')
 

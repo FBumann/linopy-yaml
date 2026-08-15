@@ -27,12 +27,12 @@ from typing import Any
 
 import polars as pl
 
-import lpspec as lps
-from lpspec.language.expansion import parse_and_expand
-from lpspec.language.expression_parser import parse_expression
-from lpspec.lowering import expression_thunks, lower_program
-from lpspec.relational.engines.polars.engine import PolarsEngine
-from lpspec.sources import tidy_sources
+import charter as lps
+from charter.language.expansion import parse_and_expand
+from charter.language.expression_parser import parse_expression
+from charter.lowering import expression_thunks, lower_program
+from charter.relational.engines.polars.engine import PolarsEngine
+from charter.sources import tidy_sources
 
 HERE = Path(__file__).parent
 MODEL = HERE / 'walkthrough.yaml'

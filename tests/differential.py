@@ -36,17 +36,17 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 
-from lpspec.lowering import expression_thunks, lower_program
-from lpspec.relational.engines.polars.engine import PolarsEngine
-from lpspec.sources import tidy_sources
+from charter.lowering import expression_thunks, lower_program
+from charter.relational.engines.polars.engine import PolarsEngine
+from charter.sources import tidy_sources
 from tests.conftest import raw_of, schema_of, solve_lp_file
-from tests.oracle import linopy, lpspec_linopy
+from tests.oracle import charter_linopy, linopy
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
-    from lpspec.language.model import Model
-    from lpspec.relational.engines.polars.engine import Result
+    from charter.language.model import Model
+    from charter.relational.engines.polars.engine import Result
 
 #: Both lanes hand the same numbers to the same solver, so they must agree to
 #: solver precision, not to a fudge factor. One tolerance, one place.
@@ -100,7 +100,7 @@ def differential(
         work = Path(tmp)
         path = model if isinstance(model, Path) else _write(work / 'model.yaml', model)
 
-        m = lpspec_linopy.build(path, data=dict(data), coords=dict(coords) if coords else None)
+        m = charter_linopy.build(path, data=dict(data), coords=dict(coords) if coords else None)
         m.solve(solver_name='highs', output_flag=False, reformulate_sos='auto')
         oracle = float(m.objective.value)
         assert np.isfinite(oracle), 'the eager oracle is infeasible or unbounded — fix the data, not the tolerance'

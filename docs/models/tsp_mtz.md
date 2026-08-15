@@ -33,7 +33,7 @@ precise about: a data-dependent *row count* is not itself a refusal — the
 scale is the size of the data, not the shape of the language.
 
 **Lazy generation is the thing every serious TSP code actually does**, which is
-why "lpspec can express TSP" and "lpspec is a good way to solve a large TSP"
+why "charter can express TSP" and "charter is a good way to solve a large TSP"
 are different sentences, and only the first is true.
 
 ## What that leaves

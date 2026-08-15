@@ -31,14 +31,14 @@ from bench.conftest import (
     take_lock,
 )
 from bench.workloads import _engine, _tables, split_sources
-from lpspec.relational.engines.polars.engine import _Block
-from lpspec.relational.sinks.solvers.base import WarmStart
+from charter.relational.engines.polars.engine import _Block
+from charter.relational.sinks.solvers.base import WarmStart
 
 
 def test_the_default_arm_clears_the_engine_rather_than_leaving_it() -> None:
     """A set-only switch leaks, and a leak here is a confident wrong number.
 
-    One pytest session is one interpreter, so `LPSPEC_ENGINE` set by an arm
+    One pytest session is one interpreter, so `CHARTER_ENGINE` set by an arm
     that names an engine outlives that arm. The default arm has to clear it —
     otherwise the first named engine selects itself for every arm after it and
     a two-engine comparison measures one engine against itself, at ratios near
@@ -48,10 +48,10 @@ def test_the_default_arm_clears_the_engine_rather_than_leaving_it() -> None:
     bug; the docstring saying so outlived the runner it described.
     """
     _engine('duckdb')
-    assert os.environ.get('LPSPEC_ENGINE') == 'duckdb'
+    assert os.environ.get('CHARTER_ENGINE') == 'duckdb'
 
     _engine(None)
-    assert 'LPSPEC_ENGINE' not in os.environ, (
+    assert 'CHARTER_ENGINE' not in os.environ, (
         'the default arm left the previous engine selected, so every arm after it measures that one'
     )
 
@@ -109,7 +109,7 @@ def test_the_interlock_is_wired_into_session_start(tmp_path) -> None:
     lock check runs before the load check, so the refusal asserted here is
     deterministic on a busy machine too.
     """
-    (tmp_path / 'lpspec-bench.lock').write_text(f'pid {os.getpid()}, started 03:14')
+    (tmp_path / 'charter-bench.lock').write_text(f'pid {os.getpid()}, started 03:14')
     env = {k: v for k, v in os.environ.items() if k != 'CI'}
     env['TMPDIR'] = str(tmp_path)
     child = subprocess.run(
@@ -157,7 +157,7 @@ def _timing(arm: str, **over: Any) -> dict[str, Any]:
 
 
 def _rendered(**over: Any) -> str:
-    return report.table('dispatch', report.best([_timing('lpspec', **over), _timing('linopy')]), 'lp')
+    return report.table('dispatch', report.best([_timing('charter', **over), _timing('linopy')]), 'lp')
 
 
 @pytest.mark.parametrize(
@@ -203,7 +203,7 @@ def test_the_ratio_beside_a_marked_cell_is_marked_too() -> None:
 def test_a_cell_with_no_number_in_it_is_never_marked() -> None:
     """A ratio needs both arms. One noisy arm and nothing to divide it by leaves
     an em dash, and a mark on that claims doubt about a measurement nobody took."""
-    table = report.table('dispatch', report.best([_timing('lpspec', iqr=1.9)]), 'lp')
+    table = report.table('dispatch', report.best([_timing('charter', iqr=1.9)]), 'lp')
     assert '| — |' in table, 'the arm that was not measured still renders as absent'
     assert f'—{report.MARK}' not in table, 'an absent measurement cannot be noisy'
 
@@ -213,12 +213,12 @@ def test_a_measurement_without_a_peak_is_skipped_rather_than_divided(tmp_path: P
     and the figures divide it — unguarded that is a `TypeError` halfway through
     a render, where a missing point is what it actually is."""
     path = tmp_path / 'results.jsonl'
-    records = [_timing('lpspec'), _timing('linopy', size='l', peak_rss_bytes=None)]
+    records = [_timing('charter'), _timing('linopy', size='l', peak_rss_bytes=None)]
     path.write_text('\n'.join(json.dumps(r) for r in records))
 
     table = plot.best(path, 'lp')
     assert ('dispatch', 'l', 'linopy') not in table['wall'], 'a record with no peak cannot be plotted, so it is dropped'
-    assert ('dispatch', 'm', 'lpspec') in table['wall'], 'and the records around it still are'
+    assert ('dispatch', 'm', 'charter') in table['wall'], 'and the records around it still are'
 
 
 @pytest.mark.parametrize(
@@ -265,12 +265,12 @@ def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: P
     """A model file nobody committed still has to pass the front door.
 
     Both arms parse the same YAML — the linopy arm through
-    `lpspec.linopy.build`, the lpspec arm through `lps.build` — so a generated
+    `charter.linopy.build`, the charter arm through `lps.build` — so a generated
     file the validator refuses would kill every rung of the sweep at once, and
     only at run time.
     """
-    from lpspec.language.validation import load_model
-    from lpspec.lowering import lower_program
+    from charter.language.validation import load_model
+    from charter.lowering import lower_program
 
     case = CASES['declarations']
     shape = case.shape(label)
@@ -286,7 +286,7 @@ def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
     engine (#345). The sweep's own smallest rung is a million variables, so the
     build gate runs on a tiny shape of the same generated model instead.
     """
-    import lpspec as lps
+    import charter as lps
 
     case = CASES['declarations']
     shape = Shape('tiny', {'declaration': 2, 'unit': 8, 'snapshot': 20}, 20 * 16)
@@ -328,8 +328,8 @@ def test_the_milp_case_lowers_with_both_variable_types() -> None:
     and nothing downstream would notice — every sink handles an all-continuous
     model happily.
     """
-    from lpspec.language.validation import load_model
-    from lpspec.lowering import lower_program
+    from charter.language.validation import load_model
+    from charter.lowering import lower_program
 
     program = lower_program(load_model(str(CASES['commitment'].model)))
     types = {v.name: v.variable_type for v in program.variables}
@@ -338,14 +338,14 @@ def test_the_milp_case_lowers_with_both_variable_types() -> None:
     )
 
 
-def test_the_floor_builds_the_model_lpspec_builds() -> None:
-    """The floor's counts match lpspec's on `transport/xs`, so its headroom claim is about one model.
+def test_the_floor_builds_the_model_charter_builds() -> None:
+    """The floor's counts match charter's on `transport/xs`, so its headroom claim is about one model.
 
     Columns, rows and nonzeros are the cheap fingerprint; the objectives are
     compared by the test below. A floor that quietly dropped a term would post
     an unbeatable time for a model nobody built.
     """
-    import lpspec as lps
+    import charter as lps
 
     case = CASES[floor.CASE]
     paths = case.data(case.ladder[0])
@@ -402,7 +402,7 @@ def test_the_splice_shifts_a_later_declarations_rows() -> None:
     )
 
 
-def test_the_floor_and_lpspec_agree_on_the_answer() -> None:
+def test_the_floor_and_charter_agree_on_the_answer() -> None:
     """`check()` runs, and the two models solve to one objective.
 
     The counts above are a fingerprint, not the answer — they match for a floor
@@ -411,8 +411,8 @@ def test_the_floor_and_lpspec_agree_on_the_answer() -> None:
     does, so a signature change there went unnoticed until someone ran the flag
     by hand.
     """
-    ours, lpspec = floor.check()
+    ours, charter = floor.check()
 
-    assert ours == pytest.approx(lpspec, rel=1e-9), (
-        f'the floor solves a different model than lpspec: {ours} against {lpspec}'
+    assert ours == pytest.approx(charter, rel=1e-9), (
+        f'the floor solves a different model than charter: {ours} against {charter}'
     )

@@ -11,7 +11,7 @@ Unlike the ports, nothing here was published: the model is this project's own
 smallest teaching example, so what verifies it is *agreement* — an independent
 hand-written formulation on a different modelling stack reaching the same
 objective and the same prices. ``references.json`` records what this script
-printed, and ``tests/test_ports.py`` holds lpspec to it.
+printed, and ``tests/test_ports.py`` holds charter to it.
 
 One deliberate difference: the YAML's ``where: p_max > 0`` gives the retired
 generator no columns at all, where this script keeps them bounded to zero.
@@ -37,7 +37,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     """The instance's tables as a linopy model, row for row.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the charter call binds as ``sources``.
     """
     p_max: pd.Series = tables['p_max'].set_index('generator')['value']
     cost: pd.Series = tables['cost'].set_index('generator')['value']

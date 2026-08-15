@@ -64,7 +64,7 @@ $$x_{i,j} \ge 0 \qquad \forall\thinspace i \in \mathcal{I},\enspace j \in \mathc
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # Dantzig's transportation problem (GAMS model library #1). Optimum 153.675,
@@ -133,7 +133,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The port's tables as a linopy model, term for term.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
         """
         capacity: pd.Series = tables['capacity'].set_index('plant')['value']
         demand: pd.Series = tables['demand'].set_index('market')['value']
@@ -171,4 +171,4 @@ would fail on a solver upgrade that broke nothing.
 
 ---
 
-[`examples/ports/transport_dantzig.yaml`](https://github.com/fluxopt/lpspec/blob/main/examples/ports/transport_dantzig.yaml) · back to [all models](index.md)
+[`examples/ports/transport_dantzig.yaml`](https://github.com/fluxopt/charter/blob/main/examples/ports/transport_dantzig.yaml) · back to [all models](index.md)

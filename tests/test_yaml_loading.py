@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-import lpspec as lps
-from lpspec.language._yaml import read_yaml
-from lpspec.language.validation import load_model
+import charter as lps
+from charter.language._yaml import read_yaml
+from charter.language.validation import load_model
 from tests.conftest import raw_of
 
 MODEL = """dimensions:

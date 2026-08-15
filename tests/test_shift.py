@@ -12,10 +12,10 @@ import numpy as np
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.errors import LanguageError
-from lpspec.lowering import _lower_expr
-from lpspec.relational.plan import (
+import charter as lps
+from charter.errors import LanguageError
+from charter.lowering import _lower_expr
+from charter.relational.plan import (
     Translate,
     Variable,
 )

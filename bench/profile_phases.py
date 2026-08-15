@@ -49,11 +49,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--rounds', type=int, default=9, help='timed builds per arm; the minimum is reported')
     args = parser.parse_args(argv)
 
-    from lpspec.language.validation import load_model
-    from lpspec.lowering import lower_program
-    from lpspec.relational.engines.polars import engine as executor_module
-    from lpspec.relational.engines.polars.engine import PolarsEngine
-    from lpspec.sources import tidy_sources
+    from charter.language.validation import load_model
+    from charter.lowering import lower_program
+    from charter.relational.engines.polars import engine as executor_module
+    from charter.relational.engines.polars.engine import PolarsEngine
+    from charter.sources import tidy_sources
 
     spent: dict[str, list[float]] = collections.defaultdict(list)
     for name in PHASES:

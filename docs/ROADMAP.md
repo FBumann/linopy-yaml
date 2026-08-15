@@ -3,9 +3,9 @@
 Why this project exists, and what it is becoming. **No work items live here.**
 The work is issues, grouped under three parents:
 
-- [Track 1 — primitives](https://github.com/fluxopt/lpspec/issues/470)
-- [Track 2 — the operational surface](https://github.com/fluxopt/lpspec/issues/471)
-- [Track 3 — capabilities, and the degree line](https://github.com/fluxopt/lpspec/issues/472)
+- [Track 1 — primitives](https://github.com/fluxopt/charter/issues/470)
+- [Track 2 — the operational surface](https://github.com/fluxopt/charter/issues/471)
+- [Track 3 — capabilities, and the degree line](https://github.com/fluxopt/charter/issues/472)
 
 An index maintained by hand beside an issue tracker is a second copy that
 drifts, so there is not one here: the issues are the list, and this page is the
@@ -20,7 +20,7 @@ constraints and nothing can read the model except the program that wrote it.
 Reviewing such a model means reviewing a program, which is a different and much
 harder job.
 
-lpspec makes the math the artifact. A YAML file says what the variables,
+charter makes the math the artifact. A YAML file says what the variables,
 constraints and objective *are*; the file is validated at load time, built at
 runtime, and can be reviewed by someone who understands the math without
 understanding the builder. That is the whole thesis, and every rule below is

@@ -8,11 +8,11 @@ anything in `docs/SPEC.md` moving.
 
 Peak RSS and wall time for the same model built two ways — declaratively on the
 relational engine, and eagerly through linopy — from the same parquet files to
-the same destination. `wall` and `peak` columns are **lpspec ÷ linopy: below
+the same destination. `wall` and `peak` columns are **charter ÷ linopy: below
 1.00 is a win for us.** The [chart page](benchmarks-scaling.html) plots the same
 run.
 
-**The eager arm is `lpspec.linopy.build`, not hand-written linopy** — our own
+**The eager arm is `charter.linopy.build`, not hand-written linopy** — our own
 YAML→`linopy.Model` shim, so it carries our loader on top of linopy's work.
 Against hand-written linopy on the same model the shim costs a constant
 **~2.3 ms**: a fixed offset, nowhere near enough to move a conclusion.
@@ -24,8 +24,8 @@ you actually use.
 
 ## How to reproduce it
 
-Read straight off [`latest.json`](https://github.com/fluxopt/lpspec/blob/main/bench/results/latest.json) and
-[`density.jsonl`](https://github.com/fluxopt/lpspec/blob/main/bench/results/density.jsonl), each carrying the machine
+Read straight off [`latest.json`](https://github.com/fluxopt/charter/blob/main/bench/results/latest.json) and
+[`density.jsonl`](https://github.com/fluxopt/charter/blob/main/bench/results/density.jsonl), each carrying the machine
 fingerprint, the library versions and the commit that produced it. Separate
 files because a run *replaces* its output: one narrower than the tables it
 publishes would leave them unprovenanced while still looking complete.
@@ -44,7 +44,7 @@ uv run python -m bench.plot  # the figures above, and the chart page's numbers
 ```
 
 The results committed today are the `.jsonl` the runner before
-[#448](https://github.com/fluxopt/lpspec/pull/448) wrote; both readers take
+[#448](https://github.com/fluxopt/charter/pull/448) wrote; both readers take
 either, so the figures regenerate against the tree as it stands rather than
 only after the next full ladder.
 
@@ -58,7 +58,7 @@ carries the hash and the dirty flag, so a number here can be traced to the code
 that produced it — which is the whole point of committing the files. `density`
 and `scaling` are older files, at `98f382d`, and say so.
 
-Darwin 25.2.0, python 3.13.2, 26 GB · lpspec 0.0.1a61 · polars 1.43.1 · linopy
+Darwin 25.2.0, python 3.13.2, 26 GB · charter 0.0.1a61 · polars 1.43.1 · linopy
 0.8.0.post1.dev140+g346943317 (the v1-semantics build, PyPSA/linopy#717) ·
 highspy 1.15.1 · gurobipy 13.0.2 · scipy 1.18.0 · numpy 2.5.1. Nine rounds per
 measurement; the report takes the minimum. Parity gate: all six cases
@@ -71,7 +71,7 @@ under 0.4 are a different quantity wearing the same name, and are not mixed in.
 
 *This lane replaced a duckdb engine, and the three-way comparison that decided
 it — speed against a settable memory ceiling — is in
-[#189](https://github.com/fluxopt/lpspec/pull/189) and in git. It is not
+[#189](https://github.com/fluxopt/charter/pull/189) and in git. It is not
 re-measured here: duckdb is no longer a dependency, and a column nobody can
 re-run is a claim with a shelf life.*
 
@@ -96,9 +96,9 @@ re-run is a claim with a shelf life.*
 
 **dispatch — gurobi sink**
 
-Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: lpspec through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
+Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: charter through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 10k | 100% | 100 | 0.01 s | 0.02 s | 0.61x | 0.20 GB | 0.22 GB | 0.91x | — |
 | 100k | 100% | 1k | 0.06 s | 0.08 s | 0.80x | 0.26 GB | 0.25 GB | 1.02x | — |
@@ -107,9 +107,9 @@ Both arms end holding a populated `gurobipy.Model` with `optimize()` never calle
 
 **dispatch — highs sink**
 
-Both arms end holding a populated `highspy.Highs` with `run()` never called: lpspec through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
+Both arms end holding a populated `highspy.Highs` with `run()` never called: charter through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 10k | 100% | 100 | 0.01 s | 0.01 s | 0.50x | 0.19 GB | 0.21 GB | 0.87x | — |
 | 100k | 100% | 1k | 0.01 s | 0.02 s | 0.59x | 0.22 GB | 0.23 GB | 0.96x | — |
@@ -118,9 +118,9 @@ Both arms end holding a populated `highspy.Highs` with `run()` never called: lps
 
 **dispatch — lp sink**
 
-lpspec writes the LP file, linopy through its `lp-polars` writer.
+charter writes the LP file, linopy through its `lp-polars` writer.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 10k | 100% | 100 | 0.01 s | 0.02 s | 0.52x | 0.18 GB | 0.24 GB | 0.77x | — |
 | 100k | 100% | 1k | 0.02 s | 0.03 s | 0.68x | 0.22 GB | 0.28 GB | 0.78x | — |
@@ -134,9 +134,9 @@ lpspec writes the LP file, linopy through its `lp-polars` writer.
 
 **fleet — gurobi sink**
 
-Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: lpspec through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
+Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: charter through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 12k | 100% | 6.02k | 0.04 s | 0.11 s | 0.38x | 0.20 GB | 0.22 GB | 0.90x | — |
 | 120k | 100% | 60.2k | 0.12 s | 0.20 s | 0.63x | 0.29 GB | 0.29 GB | 1.00x | — |
@@ -145,9 +145,9 @@ Both arms end holding a populated `gurobipy.Model` with `optimize()` never calle
 
 **fleet — highs sink**
 
-Both arms end holding a populated `highspy.Highs` with `run()` never called: lpspec through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
+Both arms end holding a populated `highspy.Highs` with `run()` never called: charter through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 12k | 100% | 6.02k | 0.03 s | 0.09 s | 0.34x | 0.19 GB | 0.22 GB | 0.88x | — |
 | 120k | 100% | 60.2k | 0.04 s | 0.10 s | 0.39x | 0.24 GB | 0.24 GB | 0.99x | — |
@@ -156,9 +156,9 @@ Both arms end holding a populated `highspy.Highs` with `run()` never called: lps
 
 **fleet — lp sink**
 
-lpspec writes the LP file, linopy through its `lp-polars` writer.
+charter writes the LP file, linopy through its `lp-polars` writer.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 12k | 100% | 6.02k | 0.03 s | 0.11 s | 0.31x | 0.19 GB | 0.24 GB | 0.79x | — |
 | 120k | 100% | 60.2k | 0.05 s | 0.13 s | 0.39x | 0.26 GB | 0.27 GB | 0.94x | — |
@@ -172,9 +172,9 @@ lpspec writes the LP file, linopy through its `lp-polars` writer.
 
 **nodal — gurobi sink**
 
-Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: lpspec through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
+Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: charter through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 3k | 25% | 1k | 0.01 s | 0.02 s | 0.46x | 0.20 GB | 0.22 GB | 0.89x | — |
 | 30k | 25% | 10k | 0.03 s | 0.05 s | 0.67x | 0.22 GB | 0.23 GB | 0.97x | — |
@@ -183,9 +183,9 @@ Both arms end holding a populated `gurobipy.Model` with `optimize()` never calle
 
 **nodal — highs sink**
 
-Both arms end holding a populated `highspy.Highs` with `run()` never called: lpspec through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
+Both arms end holding a populated `highspy.Highs` with `run()` never called: charter through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 3k | 25% | 1k | 0.01 s | 0.02 s | 0.41x | 0.19 GB | 0.22 GB | 0.86x | — |
 | 30k | 25% | 10k | 0.01 s | 0.02 s | 0.43x | 0.20 GB | 0.22 GB | 0.92x | — |
@@ -194,9 +194,9 @@ Both arms end holding a populated `highspy.Highs` with `run()` never called: lps
 
 **nodal — lp sink**
 
-lpspec writes the LP file, linopy through its `lp-polars` writer.
+charter writes the LP file, linopy through its `lp-polars` writer.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 3k | 25% | 1k | 0.01 s | 0.02 s | 0.41x | 0.18 GB | 0.24 GB | 0.77x | — |
 | 30k | 25% | 10k | 0.01 s | 0.03 s | 0.51x | 0.21 GB | 0.26 GB | 0.78x | — |
@@ -210,9 +210,9 @@ lpspec writes the LP file, linopy through its `lp-polars` writer.
 
 **profiled — gurobi sink**
 
-Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: lpspec through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
+Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: charter through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 12k | 100% | 1k | 0.02 s | 0.03 s | 0.56x | 0.20 GB | 0.22 GB | 0.92x | — |
 | 120k | 100% | 10k | 0.08 s | 0.10 s | 0.76x | 0.32 GB | 0.27 GB | 1.16x | — |
@@ -221,9 +221,9 @@ Both arms end holding a populated `gurobipy.Model` with `optimize()` never calle
 
 **profiled — highs sink**
 
-Both arms end holding a populated `highspy.Highs` with `run()` never called: lpspec through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
+Both arms end holding a populated `highspy.Highs` with `run()` never called: charter through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 12k | 100% | 1k | 0.01 s | 0.02 s | 0.45x | 0.19 GB | 0.22 GB | 0.88x | — |
 | 120k | 100% | 10k | 0.02 s | 0.03 s | 0.78x | 0.28 GB | 0.24 GB | 1.14x | — |
@@ -232,9 +232,9 @@ Both arms end holding a populated `highspy.Highs` with `run()` never called: lps
 
 **profiled — lp sink**
 
-lpspec writes the LP file, linopy through its `lp-polars` writer.
+charter writes the LP file, linopy through its `lp-polars` writer.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 12k | 100% | 1k | 0.01 s | 0.02 s | 0.46x | 0.19 GB | 0.24 GB | 0.79x | — |
 | 120k | 100% | 10k | 0.03 s | 0.04 s | 0.80x | 0.27 GB | 0.32 GB | 0.86x | — |
@@ -248,9 +248,9 @@ lpspec writes the LP file, linopy through its `lp-polars` writer.
 
 **sector — gurobi sink**
 
-Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: lpspec through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
+Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: charter through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 1k | 6% | 1k | 0.01 s | 0.03 s | 0.41x | 0.20 GB | 0.22 GB | 0.89x | — |
 | 10k | 6% | 10k | 0.02 s | 0.05 s | 0.49x | 0.21 GB | 0.24 GB | 0.90x | — |
@@ -259,9 +259,9 @@ Both arms end holding a populated `gurobipy.Model` with `optimize()` never calle
 
 **sector — highs sink**
 
-Both arms end holding a populated `highspy.Highs` with `run()` never called: lpspec through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
+Both arms end holding a populated `highspy.Highs` with `run()` never called: charter through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 1k | 6% | 1k | 0.01 s | 0.02 s | 0.39x | 0.19 GB | 0.22 GB | 0.86x | — |
 | 10k | 6% | 10k | 0.01 s | 0.03 s | 0.39x | 0.20 GB | 0.23 GB | 0.86x | — |
@@ -270,9 +270,9 @@ Both arms end holding a populated `highspy.Highs` with `run()` never called: lps
 
 **sector — lp sink**
 
-lpspec writes the LP file, linopy through its `lp-polars` writer.
+charter writes the LP file, linopy through its `lp-polars` writer.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 1k | 6% | 1k | 0.01 s | 0.03 s | 0.41x | 0.18 GB | 0.24 GB | 0.78x | — |
 | 10k | 6% | 10k | 0.01 s | 0.04 s | 0.41x | 0.20 GB | 0.26 GB | 0.77x | — |
@@ -286,9 +286,9 @@ lpspec writes the LP file, linopy through its `lp-polars` writer.
 
 **transport — gurobi sink**
 
-Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: lpspec through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
+Both arms end holding a populated `gurobipy.Model` with `optimize()` never called: charter through `build_gurobi`, linopy through `to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` extra — and the same discipline as the `highs` sink.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 9.8k | 100% | 1.4k | 0.02 s | 0.04 s | 0.45x | 0.20 GB | 0.22 GB | 0.92x | — |
 | 98k | 100% | 14k | 0.07 s | 0.10 s | 0.70x | 0.28 GB | 0.26 GB | 1.08x | — |
@@ -297,9 +297,9 @@ Both arms end holding a populated `gurobipy.Model` with `optimize()` never calle
 
 **transport — highs sink**
 
-Both arms end holding a populated `highspy.Highs` with `run()` never called: lpspec through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
+Both arms end holding a populated `highspy.Highs` with `run()` never called: charter through `build_highs`, linopy through `to_highspy(set_names=False)`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 9.8k | 100% | 1.4k | 0.01 s | 0.03 s | 0.38x | 0.19 GB | 0.22 GB | 0.88x | — |
 | 98k | 100% | 14k | 0.02 s | 0.04 s | 0.48x | 0.24 GB | 0.23 GB | 1.02x | — |
@@ -308,9 +308,9 @@ Both arms end holding a populated `highspy.Highs` with `run()` never called: lps
 
 **transport — lp sink**
 
-lpspec writes the LP file, linopy through its `lp-polars` writer.
+charter writes the LP file, linopy through its `lp-polars` writer.
 
-| variables | live | rows | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak | LP |
+| variables | live | rows | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak | LP |
 |---|---|---|---|---|---|---|---|---|---|
 | 9.8k | 100% | 1.4k | 0.02 s | 0.04 s | 0.39x | 0.19 GB | 0.24 GB | 0.78x | — |
 | 98k | 100% | 14k | 0.03 s | 0.05 s | 0.56x | 0.25 GB | 0.31 GB | 0.81x | — |
@@ -353,7 +353,7 @@ its order of magnitude, not its second digit**, and treat anything within 5% of
 **Gurobi is the slowest destination for both arms — and the only one we lead
 across the board.** 5.7s against 6.5s on `dispatch`, where `highs` is 0.46s
 against 0.76s. gurobipy's ingestion is a per-row and per-column cost neither
-lane can route around ([#434](https://github.com/fluxopt/lpspec/pull/434)), so
+lane can route around ([#434](https://github.com/fluxopt/charter/pull/434)), so
 it is a constant added to both; what is left showing is the build in front of
 it, which is ours.
 
@@ -383,9 +383,9 @@ the wrong one for a rolling horizon, which pays it once.
 
 ### Marginal cost per model
 
-Build only, repeated in one process. **first** is the first recorded round and **steady** the best of the rounds after it, so the pair is what a rolling horizon pays for its second window against its first. The harness warms up before it records, so neither column carries the one-time import cost: the median gap between them is +1.1 ms on lpspec and +2.0 ms on linopy.
+Build only, repeated in one process. **first** is the first recorded round and **steady** the best of the rounds after it, so the pair is what a rolling horizon pays for its second window against its first. The harness warms up before it records, so neither column carries the one-time import cost: the median gap between them is +1.1 ms on charter and +2.0 ms on linopy.
 
-| case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | steady vs linopy |
+| case | vars | charter: first | charter: steady | linopy: first | linopy: steady | steady vs linopy |
 |---|---|---|---|---|---|
 | transport | 9.8k | 17.1 ms | **12.6 ms** | 218.0 ms | 33.8 ms | 0.37x |
 | dispatch | 10k | 10.3 ms | **5.9 ms** | 195.6 ms | 12.8 ms | 0.46x |
@@ -418,7 +418,7 @@ Build only, repeated in one process. **first** is the first recorded round and *
 the ladder covers. Best of two, read from `bench/results/scaling.jsonl`,
 plotted in [benchmarks-scaling.html](benchmarks-scaling.html):
 
-| variables | lpspec | linopy | wall | peak |
+| variables | charter | linopy | wall | peak |
 |---|---|---|---|---|
 | 10k | **0.01 s** / 0.17 GB | 0.20 s / 0.22 GB | **0.07x** | **0.76x** |
 | 100k | **0.02 s** / 0.21 GB | 0.22 s / 0.27 GB | **0.11x** | **0.78x** |
@@ -438,7 +438,7 @@ scaling one". That does not survive re-measurement: peak is **0.68-0.78x across
 four orders of magnitude**, 0.73x at the top rung.
 
 Two things moved it and only one is us. `cols` became positional
-([#433](https://github.com/fluxopt/lpspec/pull/433)) and took ~20% off this
+([#433](https://github.com/fluxopt/charter/pull/433)) and took ~20% off this
 case. The rest is that the earlier reading came from a run *this section itself
 flagged as noisy* — it recorded linopy at 38.5 s and 106.2 s for the same rung.
 The old number was a conclusion drawn across the noise floor.
@@ -458,7 +458,7 @@ relational lane nothing and costs the eager lane a NaN, so the gap should widen
 as density falls. One model size, through the `lp` sink; `live` is how many of
 the 12 technologies each node has installed.
 
-| case | live | variables | wall: lpspec | wall: linopy | wall | peak: lpspec | peak: linopy | peak |
+| case | live | variables | wall: charter | wall: linopy | wall | peak: charter | peak: linopy | peak |
 |---|---|---|---|---|---|---|---|---|
 | nodal | 100% | 1.2M | 0.16 s | 0.38 s | 0.41x | 0.54 GB | 0.62 GB | 0.88x |
 | nodal | 50% | 600k | 0.10 s | 0.31 s | 0.32x | 0.41 GB | 0.60 GB | 0.68x |
@@ -497,7 +497,7 @@ Wall time behaves throughout: our advantage grows as the model thins, 1.0x to
 What each sink can ingest, measured against the shipped solvers rather than
 assumed. The architectural reading is in
 [docs/design/ceiling.md](design/ceiling.md#capability-is-not-the-ceiling); the plan is
-[Track 3](https://github.com/fluxopt/lpspec/issues/472).
+[Track 3](https://github.com/fluxopt/charter/issues/472).
 
 The SOS row is the one this table has since been acted on: `sos:`
 ([SPEC §4.1](SPEC.md#41-sos)) ships to all three, natively where the row says
@@ -584,7 +584,7 @@ mask-density sweep.
 
 ## Method
 
-Recorded in [`bench/README.md`](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — one process per
+Recorded in [`bench/README.md`](https://github.com/fluxopt/charter/blob/main/bench/README.md) — one process per
 measurement, `ru_maxrss` rather than a tracker, import excluded from
 `wall_seconds` and teardown included, and a parity gate that aborts the run
 before anything is timed if the two lanes disagree. Failures are results and are

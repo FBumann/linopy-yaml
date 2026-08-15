@@ -1,7 +1,7 @@
 # Preparing the data
 
 Every model page's tabs start from the same place: **the instance's tables,
-one frame per parameter** — the mapping the lpspec call binds as `sources` and
+one frame per parameter** — the mapping the charter call binds as `sources` and
 the reference scripts take as `tables`. Nobody's data is born in that shape.
 It is born in files, and this page is the one place the journey from files to
 that mapping is spelled out, so the model pages can start where it ends.
@@ -55,7 +55,7 @@ itself.
 
 ## What each framework still needs on top
 
-- **lpspec** — nothing. Tidy tables per parameter are its native shape, so the
+- **charter** — nothing. Tidy tables per parameter are its native shape, so the
   `select` calls above are the whole cost of arriving from an entity table,
   and the model pages' calls are three lines.
 - **linopy** — coordinate-carrying pandas. The `set_index` lines opening every

@@ -7,7 +7,7 @@ The ladder's ratios have linopy as their only denominator, which ranks two
 engines without saying how much headroom either has left. This module is the
 missing denominator: ``transport`` — the case whose ratios docs/benchmarks.md
 discusses — built straight from the case's cached parquet into numpy arrays
-and a CSR matrix, with no lpspec and no polars expression engine anywhere in
+and a CSR matrix, with no charter and no polars expression engine anywhere in
 the path. What it costs is the irreducible price of emitting the coefficients,
 and with it the sentence becomes *"we are at Nx the floor and linopy is at
 Mx"* — a claim about engineering rather than a ranking.
@@ -46,7 +46,7 @@ from bench import cases as bench_cases
 CASE = 'transport'
 
 #: The relative gap ``--check`` accepts between the floor's objective and
-#: lpspec's — the parity gate's own tolerance (``bench/conftest.py``).
+#: charter's — the parity gate's own tolerance (``bench/conftest.py``).
 CHECK_RTOL = 1e-9
 
 
@@ -177,7 +177,7 @@ def handoff(model: Floor) -> Any:
 
 
 def check() -> tuple[float, float]:
-    """Solve the smallest rung both ways and return (floor, lpspec) objectives.
+    """Solve the smallest rung both ways and return (floor, charter) objectives.
 
     A correctness probe rather than a measurement: it is the one place the
     floor is allowed to call ``run()``, and it exists because a floor that
@@ -191,7 +191,7 @@ def check() -> tuple[float, float]:
     paths = case.data(rung)
     h = handoff(arrays(read(paths)))
     h.run()
-    return float(h.getInfo().objective_function_value), objective('lpspec', CASE, rung.label, paths)
+    return float(h.getInfo().objective_function_value), objective('charter', CASE, rung.label, paths)
 
 
 def _maxrss_mb() -> float:
@@ -240,10 +240,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f'\n  ru_maxrss {_maxrss_mb():.0f} MB (process peak over all rounds)')
 
     if args.check:
-        ours, lpspec = check()
-        gap = abs(ours - lpspec) / max(abs(lpspec), 1e-12)
+        ours, charter = check()
+        gap = abs(ours - charter) / max(abs(charter), 1e-12)
         verdict = 'agree' if gap <= CHECK_RTOL else 'DISAGREE'
-        print(f'\n  check ({case.ladder[0].label}): floor {ours!r}, lpspec {lpspec!r} — {verdict} ({gap:.1e} relative)')
+        print(
+            f'\n  check ({case.ladder[0].label}): floor {ours!r}, charter {charter!r} — {verdict} ({gap:.1e} relative)'
+        )
         if gap > CHECK_RTOL:
             return 1
     return 0

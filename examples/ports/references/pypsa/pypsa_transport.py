@@ -20,7 +20,7 @@ this script emits byte-identical output on either side of that change.
 
 It reads the same instance the port binds, since a reference optimum means
 nothing against a different one, and builds the network with PyPSA's own
-objects. Nothing here imports lpspec.
+objects. Nothing here imports charter.
 
 Rung 1: transport model, linear marginal cost. Links rather than lines is what
 makes it one — a link's flow is a variable bounded by its rating, with no
@@ -47,7 +47,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the charter call binds as ``sources``.
 
     ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
     a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so

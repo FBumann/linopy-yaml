@@ -9,8 +9,8 @@ is a row that stops failing.
 
 import pytest
 
-from lpspec.errors import SchemaError
-from lpspec.language.model import Model
+from charter.errors import SchemaError
+from charter.language.model import Model
 
 
 def test_empty_schema():
@@ -70,7 +70,7 @@ def test_an_omitted_bound_means_unbounded_all_the_way_down():
     checks the relational lane carries the default through rather than
     re-defaulting it on the way to the plan.
     """
-    from lpspec.lowering import _bound_expression
+    from charter.lowering import _bound_expression
 
     s = Model.model_validate(
         {'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': {'foreach': ['x']}}}

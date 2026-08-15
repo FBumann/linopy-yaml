@@ -7,12 +7,12 @@ pinned by a test and the reasoning behind its size is
 [ARCHITECTURE](ARCHITECTURE.md#the-python-surface).
 
 Six verbs — `check`, `load_model`, `build`, `solve`, `solve_over`, `write` — and the
-exception tree rooted at `LpspecError`: `LanguageError` (with `SchemaError`,
+exception tree rooted at `CharterError`: `LanguageError` (with `SchemaError`,
 `DimensionError`, `PiecewiseExpansionError`) for the model, `DataError` for what
 was bound to it.
 
 ```python
-import lpspec as lps
+import charter as lps
 
 lps.check('model.yaml')  # parse → validate → lower, no data bound
 model = lps.load_model('model.yaml')  # Model — the declared math
@@ -69,7 +69,7 @@ for capacity in search:
 | **the answer is the reference build's** | `bound.rebind(x)` solves what `build(model, sources \| x)` solves, always. That is an equality a test asserts, not a promise — it is also the oracle to reach for when a loop looks wrong |
 | **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
 | **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model HiGHS already holds, and the next solve starts from the basis the last one ended on. A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, and that model is loaded again and solved cold |
-| **which one ran is `bound.diagnostics()`** | `loads` counts the solves that had to load the model from scratch, against `solves` as its denominator. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies". Advisory — nothing about the answer depends on it |
+| **which one ran is `bound.diagnostics()`** | `loads` counts the solves that had to load the model from scratch, against `solves` as its denominator. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "charter is slow" and "this model masks on a parameter that varies". Advisory — nothing about the answer depends on it |
 | **earlier results keep reading** | a `Result` owns its values and a reference to the label frames of the build it answered; a rebind builds new frames without touching those, so an old answer stays an answer over its own coordinates. What retaining one costs is those frames staying alive until it is dropped or `close()`d |
 | **a rebind that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
 
@@ -114,7 +114,7 @@ can be started from.
 out of a session and set it on another, but nothing above them does: the case
 that wants it most — a cutting-plane master re-solved after gaining a cut — is
 a model that gained a *row*, and a basis spans the model it was read from.
-[#382](https://github.com/fluxopt/lpspec/issues/382) is where that is being
+[#382](https://github.com/fluxopt/charter/issues/382) is where that is being
 worked out.
 
 `diagnostics()` is what a build and its solves did that the answer does not
@@ -222,8 +222,8 @@ Reading a result:
 |---|---|
 | **`is_ok` is not `has_primal`** | `is_ok` rolls up the termination condition; `has_primal` adds the solver's verdict on whether an incumbent exists, and is what every reader gates on. A MIP that hits `time_limit` before finding a feasible point is `ok` with nothing to read |
 | reading anyway | `NoSolutionError`; `objective` is `nan` |
-| **`expression` reads what the model named** | the value of a declared named expression ([SPEC §3](SPEC.md#3-expressions-and-macros)) at the solution, aggregated to the expression's own dims (declaration order — an expression has no `foreach`). Takes a declared name only, never an expression string; an unknown one is a `KeyError` listing what is declared. Lowered and compiled **at the read**, through the same compiler the constraints use, so a build with fifty declared expressions that reads none pays for none. Semantics are a constraint's: an uncovered parameter coordinate contributes zero (SPEC §8), a coordinate where a term's variable is absent has no row (SPEC §7), an undefined divisor is a `DataError`. On the linopy lane the same read is `lpspec.linopy.expression(m, path, name, data=…)` |
-| `dual` **raises rather than zero-filling** | no values at all is `NoSolutionError`; values but no duals — any integer or binary variable makes them undefined — is `LpspecError`, because only this quantity is missing |
+| **`expression` reads what the model named** | the value of a declared named expression ([SPEC §3](SPEC.md#3-expressions-and-macros)) at the solution, aggregated to the expression's own dims (declaration order — an expression has no `foreach`). Takes a declared name only, never an expression string; an unknown one is a `KeyError` listing what is declared. Lowered and compiled **at the read**, through the same compiler the constraints use, so a build with fifty declared expressions that reads none pays for none. Semantics are a constraint's: an uncovered parameter coordinate contributes zero (SPEC §8), a coordinate where a term's variable is absent has no row (SPEC §7), an undefined divisor is a `DataError`. On the linopy lane the same read is `charter.linopy.expression(m, path, name, data=…)` |
+| `dual` **raises rather than zero-filling** | no values at all is `NoSolutionError`; values but no duals — any integer or binary variable makes them undefined — is `CharterError`, because only this quantity is missing |
 | **the sink can make a model mixed-integer** | a `sos:` set ([SPEC §4.1](SPEC.md#41-sos)) reaches a solver with no SOS concept as binaries, so an otherwise continuous model solved on `highs` has no duals and says so. Solving it on `gurobi`, which branches on the set itself, keeps them |
 | duals exist only where a solver ran | either solver sink hands them back through the same join; a model written to LP and solved elsewhere never passes back through here. Reduced costs and slacks ride that join too and are not exposed yet |
 | `to_dataset` costs what it says | each variable arrives dense over its own dims — name a subset, or use `to_parquet` |
@@ -311,7 +311,7 @@ it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
 | **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`, so the key column is `snapshot_start` and holds where each window began. Naming it `snapshot` would put window starts under the name of the coordinate they are not, and join cleanly against real data |
 | a slice that did not solve | contributes no `primal` rows, so that frame can be shorter than the sweep. `objective` is one row per slice always, and is the record of which slices those were |
 | **the lookahead is `t >= step`** | overlapping windows return every row they solved, including the tail the next window recomputes. Keeping only what each window owns is one clause and no special case — `runs.primal('soc').filter(pl.col('t') < step)` — because the final window can never hold more than `step` rows |
-| **a sweep's memory grows with its answer** | each slice's *model* is released as the fold goes, so build peak stays at one slice — but the extracted frames accumulate, and nothing bounds them. `to_parquet` copies out frames already in memory: a bridge, not a bound. Whether to bound it, and how, is [#610](https://github.com/fluxopt/lpspec/issues/610) |
+| **a sweep's memory grows with its answer** | each slice's *model* is released as the fold goes, so build peak stays at one slice — but the extracted frames accumulate, and nothing bounds them. `to_parquet` copies out frames already in memory: a bridge, not a bound. Whether to bound it, and how, is [#610](https://github.com/fluxopt/charter/issues/610) |
 | **a window spans coordinates, not values** | `length=48` is forty-eight snapshots however they are numbered, so the dimension only has to be **orderable** — datetimes, strings and gapped integers all work. `into` is a dense `0..n-1` local index, which is what keeps the seam's `where: "t == 0"` matching, and it has no default because the name belongs to the model |
 | non-positional grouping | *"each calendar month"* has unequal groups, so it is a precomputed column plus `EachCoordinate`. What `EachWindow` uniquely offers is **overlap** |
 | `carry` excludes `executor` | a carried value makes slice *i+1* depend on slice *i*, so the slices cannot run concurrently. Refused rather than one silently winning |
@@ -370,7 +370,7 @@ have** — there is nothing to tune. (`df.lazy()` is not an optimisation: an eag
 frame is embedded in the plan, so it pickles *larger* than the frame. Only
 `scan_parquet` is a reference.)
 
-**The linopy shim** (`lpspec.linopy.build` / `.extend` / `.expression`,
+**The linopy shim** (`charter.linopy.build` / `.extend` / `.expression`,
 `[linopy]` extra) puts the same YAML math on a `linopy.Model` that already
 exists in memory, and reads a named expression back off a solved one. It is
 documented with everything else about that relationship in

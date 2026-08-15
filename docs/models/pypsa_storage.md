@@ -109,7 +109,7 @@ $$0 \le \mathit{soc}_{t,s} \le \mathit{soc}^{\mathrm{max}}_{s} \qquad \forall\th
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # PyPSA linear optimal power flow, rung 3: rung 2 plus a storage unit carrying
@@ -249,7 +249,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
 
         ``max_hours`` is the ratio PyPSA stores; the port carries the product it
         implies (``soc_max``), because a bound there takes a name, not arithmetic.
@@ -321,6 +321,6 @@ result that merely looks sensible.
 a five-term `sum(group_by=)` nodal balance — generators, both ends of every link,
 and both directions of storage, all projected onto `bus`.
 
-It also asks for [#31](https://github.com/fluxopt/lpspec/issues/31) a third
+It also asks for [#31](https://github.com/fluxopt/charter/issues/31) a third
 time: `soc_max` is `p_nom × max_hours` in PyPSA, and a bound here takes a name
 or a number, so the product ships as a column.

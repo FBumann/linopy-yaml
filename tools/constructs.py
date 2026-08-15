@@ -42,9 +42,9 @@ import yaml
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-from lpspec.api import load_model
-from lpspec.lowering import lower_program
-from lpspec.relational import plan
+from charter.api import load_model
+from charter.lowering import lower_program
+from charter.relational import plan
 
 ROOT = Path(__file__).resolve().parent.parent
 GALLERY = ROOT / 'docs' / 'models'

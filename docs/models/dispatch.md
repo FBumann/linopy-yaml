@@ -63,7 +63,7 @@ $$0 \le p_{s,g} \le \bar p_{g} \qquad \forall\thinspace s \in \mathcal{S},\enspa
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     description: Least-cost dispatch of a generator fleet against an hourly load.
@@ -121,7 +121,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The instance's tables as a linopy model, row for row.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
         """
         p_max: pd.Series = tables['p_max'].set_index('generator')['value']
         cost: pd.Series = tables['cost'].set_index('generator')['value']
@@ -144,4 +144,4 @@ language reference.
 
 ---
 
-[`examples/dispatch.yaml`](https://github.com/fluxopt/lpspec/blob/main/examples/dispatch.yaml) · back to [all models](index.md)
+[`examples/dispatch.yaml`](https://github.com/fluxopt/charter/blob/main/examples/dispatch.yaml) · back to [all models](index.md)

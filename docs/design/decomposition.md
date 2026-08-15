@@ -1,13 +1,13 @@
 # Decomposition, as evidence
 
-**This page is not a feature announcement.** lpspec ships no decomposition
+**This page is not a feature announcement.** charter ships no decomposition
 driver, and whether it should is
-[#596](https://github.com/fluxopt/lpspec/issues/596). What it shows is narrower
+[#596](https://github.com/fluxopt/charter/issues/596). What it shows is narrower
 and checkable: the language can *express* a decomposition, and the answer it
 reaches is right.
 
 The whole example is in
-[`examples/benders/`](https://github.com/fluxopt/lpspec/blob/main/examples/benders/run.py)
+[`examples/benders/`](https://github.com/fluxopt/charter/blob/main/examples/benders/run.py)
 and every block below is validated against it.
 
 ## Why anyone wants it
@@ -139,7 +139,7 @@ The slope is the capacity constraint's shadow price, weighted by availability
 and summed over snapshots:
 
 ```python
-import lpspec as lps
+import charter as lps
 import polars as pl
 
 with lps.solve('examples/benders/sub.yaml', sources) as sub:
@@ -159,7 +159,7 @@ parameter tables the master already declares.
 ## When the subproblem is infeasible
 
 Below some capacity there is no dispatch at all, and the subproblem says so by
-being infeasible. lpspec hands back **no Farkas ray** — an infeasible solve has
+being infeasible. charter hands back **no Farkas ray** — an infeasible solve has
 no readable status, so `dual()` raises rather than returning a vector of zeros
 indistinguishable from an answer.
 
@@ -226,7 +226,7 @@ for step in range(25):
 
 Twenty lines, three `lps.solve` calls, and a growing pair of tables. **A reader
 could write this**, which is the observation that matters most for
-[#596](https://github.com/fluxopt/lpspec/issues/596).
+[#596](https://github.com/fluxopt/charter/issues/596).
 
 The models are loaded above the loop because none of them changes — a cut is a
 row in a parameter table, not an edit to a file. `lps.solve` accepts a `Model`
@@ -259,7 +259,7 @@ first optimality cut then closes the gap exactly.
 
 ## The check is the algorithm's own
 
-A decomposed answer is only interesting if it is the *same* answer, and lpspec
+A decomposed answer is only interesting if it is the *same* answer, and charter
 can always build the monolith from the same sources. So the example solves both
 and prints the difference — `0.0e+00` above, asserted in
 `tests/test_benders_example.py`.
@@ -275,6 +275,6 @@ decomposition survive a real model: cut management as the master grows,
 stabilisation, multi-cut, tolerances that hold when duals are degenerate, and an
 answer for when convergence simply does not happen.
 
-That is the surface [#596](https://github.com/fluxopt/lpspec/issues/596) asks
+That is the surface [#596](https://github.com/fluxopt/charter/issues/596) asks
 whether to own. Nothing here settles it. What this page settles is that the
 *language* is not the obstacle.

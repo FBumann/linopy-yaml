@@ -19,7 +19,7 @@ whose NA handling changed in 3.0. The floor is checked rather than assumed —
 this script emits byte-identical output on either side of that change.
 
 It reads the same instance the port binds and builds the network with PyPSA's
-own objects. Nothing here imports lpspec.
+own objects. Nothing here imports charter.
 
 Rung 3: rung 2 plus a ``StorageUnit``. Its state of charge carries energy
 between snapshots, charged at ``efficiency_store`` and discharged at
@@ -47,7 +47,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the charter call binds as ``sources``.
 
     ``max_hours`` is the ratio PyPSA stores; the port carries the product it
     implies (``soc_max``), because a bound there takes a name, not arithmetic.

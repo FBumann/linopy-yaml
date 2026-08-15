@@ -1,6 +1,6 @@
-# lpspec
+# charter
 
-**Self-documenting optimisation models — at any scale.**
+**The model is a document, not a program.**
 
 Write the math in YAML, bind data at runtime, solve. Today that means linear and
 mixed-integer programs. The model is never a dense Python object: it is tidy
@@ -41,7 +41,7 @@ flowchart LR
     R -->|"yes"| S["relational engine<br/>polars"]
     S --> OUT["solver (batched) / LP file"]
     R -->|"no"| ERR["load error<br/>naming the construct + rewrite"]
-    AST -.->|"opt-in shim: same language,<br/>for models already in memory"| E["lpspec.linopy"]
+    AST -.->|"opt-in shim: same language,<br/>for models already in memory"| E["charter.linopy"]
     E --> LS["linopy.Model → solve"]
 
     classDef stream fill:#f0f7f0,stroke:#3a7d44,stroke-width:2px,color:#111
@@ -83,7 +83,7 @@ objective:
 
 <!--solve-start-->
 ```python
-import lpspec as lps, polars as pl
+import charter as lps, polars as pl
 
 generators = ['wind', 'solar', 'gas']
 sources = {
@@ -129,9 +129,9 @@ inside wiring code, and a Python function is not a sharable artefact. When the
 modification *is just math*, a file fixes all three:
 
 ```python
-from lpspec import linopy as lpspec_linopy
+from charter import linopy as charter_linopy
 
-lpspec_linopy.extend(m, 'ramp.yaml', data={'ramp_max': network.generators['ramp_max']})
+charter_linopy.extend(m, 'ramp.yaml', data={'ramp_max': network.generators['ramp_max']})
 ```
 <!-- doctest: extends=p(snapshot,generator) -->
 ```yaml
@@ -164,10 +164,10 @@ refused. All of it is indexed in [docs/](docs/README.md); to work on it,
 To see it rather than read it, `python examples/walkthrough.py` runs one small model through every stage — YAML → schema → core AST → logical plan → model frames → LP text → solution — printing the artifact each stage produces, plus two models the language refuses and why. Its output is committed as [examples/walkthrough.out](examples/walkthrough.out) if you would rather just read that.
 
 ```bash
-pip install lpspec  # the relational engine (polars, highspy)
-pip install "lpspec[linopy]"  # adds linopy + xarray + pandas: the shim, the
+pip install charter  # the relational engine (polars, highspy)
+pip install "charter[linopy]"  # adds linopy + xarray + pandas: the shim, the
                               # oracle, and to_pandas / to_dataarray
-pip install "lpspec[gurobi]"  # adds the gurobi sink: solver_name='gurobi'
+pip install "charter[gurobi]"  # adds the gurobi sink: solver_name='gurobi'
 ```
 
 Not a solver wrapper, not a domain package, not a data-loading layer — bring
@@ -193,7 +193,7 @@ compatibility shim for every earlier spelling would defeat the point of a small
 language.
 
 In practice: pin an exact version if you depend on this, and read the
-[changelog](https://github.com/fluxopt/lpspec/blob/main/CHANGELOG.md) before upgrading — every entry links the PR that
+[changelog](https://github.com/fluxopt/charter/blob/main/CHANGELOG.md) before upgrading — every entry links the PR that
 describes the break, and a retired spelling fails at load naming its rewrite
 rather than drifting on silently. What exists is tested: real models round-trip
 through solve, differentially verified against linopy. It is the

@@ -19,16 +19,16 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-import lpspec as lps
-from lpspec.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
-from lpspec.typeset.format import OPERATOR_NAMES
-from lpspec.typeset.symbols import _derive_name_symbol
+import charter as lps
+from charter.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
+from charter.typeset.format import OPERATOR_NAMES
+from charter.typeset.symbols import _derive_name_symbol
 from tests import golden
 from tests.conftest import MODEL_PATHS, override
 from tools import gallery_math
 
 if TYPE_CHECKING:
-    from lpspec.typeset.format import Format
+    from charter.typeset.format import Format
 
 LATEX, TYPST = FORMATS['latex'], FORMATS['typst']
 EVERY_FORMAT = pytest.mark.parametrize('fmt', list(FORMATS.values()), ids=list(FORMATS))
@@ -145,7 +145,7 @@ def test_macros_and_named_expressions_are_expanded_away(fmt: Format):
 @EVERY_FORMAT
 def test_an_invalid_model_fails_the_same_way_check_does(fmt: Format):
     broken = override(DISPATCH, **{'objective.expression': 'p * nonexistent'})
-    with pytest.raises(lps.LpspecError):
+    with pytest.raises(lps.CharterError):
         typeset(broken, fmt)
 
 

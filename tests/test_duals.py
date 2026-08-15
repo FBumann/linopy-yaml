@@ -18,8 +18,8 @@ import re
 import numpy as np
 import pytest
 
-import lpspec as lps
-from lpspec.errors import LpspecError, NoSolutionError
+import charter as lps
+from charter.errors import CharterError, NoSolutionError
 from tests.differential import differential
 from tests.oracle import pd  # through the guard: a bare import would beat it
 from tests.test_milp import COMMITMENT_YAML
@@ -81,7 +81,7 @@ def test_milp_refuses_duals_and_names_the_variable(commitment_inputs):
     data, coords = commitment_inputs
 
     with differential(COMMITMENT_YAML, data, coords) as run:
-        with pytest.raises(LpspecError) as excinfo:
+        with pytest.raises(CharterError) as excinfo:
             run.result.dual('balance')
 
         message = str(excinfo.value)

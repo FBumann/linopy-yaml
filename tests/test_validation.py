@@ -6,8 +6,8 @@ import datetime
 
 import pytest
 
-from lpspec.language.model import Model
-from lpspec.language.validation import load_model, validate_expressions
+from charter.language.model import Model
+from charter.language.validation import load_model, validate_expressions
 
 
 def _schema(**overrides) -> Model:
@@ -175,7 +175,7 @@ class TestLoadTimeIntegration:
 
     def test_from_yaml_fails_before_data_validation(self, tmp_path):
         """A typo in an expression errors even when data= is absent."""
-        from tests.oracle import lpspec_linopy
+        from tests.oracle import charter_linopy
 
         f = tmp_path / 'm.yaml'
         f.write_text(
@@ -191,28 +191,28 @@ class TestLoadTimeIntegration:
             '    expression: pp <= 100\n'
         )
         with pytest.raises(ValueError, match="'pp' not found"):
-            lpspec_linopy.build(f)
+            charter_linopy.build(f)
 
     def test_extend_sees_existing_model_variables(self, tmp_path):
         """An extension may reference variables already on the model."""
-        from tests.oracle import linopy, lpspec_linopy, pd
+        from tests.oracle import charter_linopy, linopy, pd
 
         model = linopy.Model()
         model.add_variables(coords={'g': pd.Index(['wind', 'solar'], name='g')}, name='p')
 
         f = tmp_path / 'ext.yaml'
         f.write_text(CAP_EXTENSION)
-        lpspec_linopy.extend(model, f)
+        charter_linopy.extend(model, f)
         assert 'cap' in model.constraints
 
     def test_extend_flags_unknown_variable(self, tmp_path):
-        from tests.oracle import linopy, lpspec_linopy
+        from tests.oracle import charter_linopy, linopy
 
         model = linopy.Model()
         f = tmp_path / 'ext.yaml'
         f.write_text(CAP_EXTENSION)
         with pytest.raises(ValueError, match="'p' not found"):
-            lpspec_linopy.extend(model, f)
+            charter_linopy.extend(model, f)
 
 
 class TestDimensionKwargs:
@@ -456,7 +456,7 @@ class TestVersion:
         message = str(exc.value)
         assert 'declares version 1' in message
         assert 'understands [0]' in message, 'the error has to say what this reader can read'
-        assert 'Upgrade lpspec' in message, 'and what to do about it'
+        assert 'Upgrade charter' in message, 'and what to do about it'
 
     def test_the_version_gates_no_behaviour(self):
         """Reject-only. Two files differing only in a *declared* supported

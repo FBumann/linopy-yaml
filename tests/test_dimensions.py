@@ -10,12 +10,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from lpspec.language.dimensions import DimensionError, check_schema, dims_of
-from lpspec.language.resolution import Namespace, expression_of
+from charter.language.dimensions import DimensionError, check_schema, dims_of
+from charter.language.resolution import Namespace, expression_of
 from tests.conftest import MODEL_PATHS, override, schema_of
 
 if TYPE_CHECKING:
-    from lpspec.language.model import Model
+    from charter.language.model import Model
 
 #: A *network* dispatch model: `conftest.DISPATCH_MODEL` plus buses, so
 #: `sum` and per-bus loads are in scope. The dim rules are mostly about
@@ -182,7 +182,7 @@ def test_an_ill_dimensioned_declaration_is_rejected(patch, match):
 def test_checking_needs_no_data():
     """The whole point: every rule above is decided from declarations alone,
     so `lps.check()` catches them in CI with no sources bound."""
-    import lpspec as lps
+    import charter as lps
 
     raw = override(BASE, **{'constraints.stray': {'foreach': ['snapshot'], 'expression': 'p <= p_max'}})
     with pytest.raises(DimensionError):

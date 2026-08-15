@@ -11,8 +11,8 @@ Every verb here is **top-level and picklable**, because ``isolate=True`` sends
 it to a fresh process: peak RSS is a property of a process, and two
 measurements in one interpreter report the larger of them twice.
 
-`lpspec` is imported *inside* the verbs, never at module scope. The import is
-part of what an arm costs — linopy's alone exceeds lpspec's entire build at the
+`charter` is imported *inside* the verbs, never at module scope. The import is
+part of what an arm costs — linopy's alone exceeds charter's entire build at the
 `xs` rung — so a harness that had already paid for it before measuring would be
 charging one arm for the other's work.
 """
@@ -37,8 +37,8 @@ Counts = dict[str, Any]
 def split_sources(case: Case, size: str, paths: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
     """Parameters from dimension index tables, by what the model declares.
 
-    Harness bookkeeping, and it runs *before* the clock on the lpspec arm: it
-    re-parses the YAML only because the runner, not lpspec, decides which
+    Harness bookkeeping, and it runs *before* the clock on the charter arm: it
+    re-parses the YAML only because the runner, not charter, decides which
     parquet file is which. The linopy arm has no counterpart — its own
     ``read_parquet`` and reshape are inside its build, where they belong.
 
@@ -80,7 +80,7 @@ def _tables(handle: Any) -> Any:
 def _engine(engine: str | None) -> None:
     """Select the engine the way a caller does, in this process.
 
-    ``LPSPEC_ENGINE`` is the switch lpspec ships; setting it here rather than
+    ``CHARTER_ENGINE`` is the switch charter ships; setting it here rather than
     reaching for a private selector is what makes a second engine's arm a
     measurement of the shipped mechanism.
 
@@ -93,12 +93,12 @@ def _engine(engine: str | None) -> None:
     like a result.
     """
     if engine is None:
-        os.environ.pop('LPSPEC_ENGINE', None)
+        os.environ.pop('CHARTER_ENGINE', None)
     else:
-        os.environ['LPSPEC_ENGINE'] = engine
+        os.environ['CHARTER_ENGINE'] = engine
 
 
-def lpspec_build_and_emit(
+def charter_build_and_emit(
     case_name: str, size: str, sink: str, sources: dict[str, str], coords: dict[str, str], engine: str | None = None
 ) -> Counts:
     """Build relationally and hand the model over — an LP file, or a solver.
@@ -114,21 +114,21 @@ def lpspec_build_and_emit(
     exposes its own shape, so the nonzero count stays optional.
     """
     _engine(engine)
-    import lpspec as lps
+    import charter as lps
 
     case = CASES[case_name]
     with (
-        tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp,
+        tempfile.TemporaryDirectory(prefix='charter-bench-') as tmp,
         lps.build(case.model_path(case.shape(size)), sources, coords=coords) as bound,
     ):
         if sink == 'lp':
             bound.write(Path(tmp) / 'model.lp')
         elif sink == 'gurobi':
-            from lpspec.relational.sinks.solvers.gurobi import build_gurobi
+            from charter.relational.sinks.solvers.gurobi import build_gurobi
 
             _handle = build_gurobi(_tables(bound))
         else:
-            from lpspec.relational.sinks.solvers.highs import build_highs
+            from charter.relational.sinks.solvers.highs import build_highs
 
             _handle = build_highs(_tables(bound))
 
@@ -154,15 +154,15 @@ def linopy_build_and_emit(
 
     ``progress=False`` for the same reason in the other direction: linopy's
     default is ``m._xCounter > 10_000``, so every rung above `xs` would render
-    tqdm bars the lpspec arm has no equivalent of — ~7% of the write at 10M
+    tqdm bars the charter arm has no equivalent of — ~7% of the write at 10M
     variables.
     """
-    from lpspec import linopy as lpspec_linopy
+    from charter import linopy as charter_linopy
 
     case = CASES[case_name]
-    with tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp:
+    with tempfile.TemporaryDirectory(prefix='charter-bench-') as tmp:
         data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(case.model_path(case.shape(size)), data=data, coords=coords)
+        m = charter_linopy.build(case.model_path(case.shape(size)), data=data, coords=coords)
         if sink == 'lp':
             m.to_file(Path(tmp) / 'model.lp', io_api=io_api, progress=False)
         elif sink == 'gurobi':
@@ -183,14 +183,14 @@ def build_only(arm: str, case_name: str, size: str, paths: dict[str, str], engin
     case = CASES[case_name]
     model = case.model_path(case.shape(size))
     if arm == 'linopy':
-        from lpspec import linopy as lpspec_linopy
+        from charter import linopy as charter_linopy
 
         data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(model, data=data, coords=coords)
+        m = charter_linopy.build(model, data=data, coords=coords)
         return {'columns': int(m.nvars), 'rows': int(m.ncons), 'nonzeros': None}
 
     _engine(engine)
-    import lpspec as lps
+    import charter as lps
 
     sources, coords_ = split_sources(case, size, paths)
     with lps.build(model, sources, coords=coords_) as bound:
@@ -213,20 +213,20 @@ def objective(arm: str, case_name: str, size: str, paths: dict[str, str], engine
     case = CASES[case_name]
     model = case.model_path(case.shape(size))
     if arm == 'linopy':
-        from lpspec import linopy as lpspec_linopy
+        from charter import linopy as charter_linopy
 
         data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(model, data=data, coords=coords)
+        m = charter_linopy.build(model, data=data, coords=coords)
         m.solve(solver_name='highs', output_flag=False)
         if m.status != 'ok':
             raise RuntimeError(f'linopy solve finished {m.status!r}, not ok')
         return float(m.objective.value)
 
     _engine(engine)
-    import lpspec as lps
+    import charter as lps
 
     sources, coords_ = split_sources(case, size, paths)
     with lps.solve(model, sources, coords=coords_) as sol:
         if sol.termination_condition != 'optimal':
-            raise RuntimeError(f'lpspec solve terminated {sol.termination_condition!r}, not optimal')
+            raise RuntimeError(f'charter solve terminated {sol.termination_condition!r}, not optimal')
         return float(sol.objective)

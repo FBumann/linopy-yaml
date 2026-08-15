@@ -85,7 +85,7 @@ $$0 \le \lambda_{t,g,k} \le 1 \qquad \forall\thinspace t \in \mathcal{T},\enspac
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     dimensions:
@@ -159,7 +159,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The instance's tables as a linopy model, row for row.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
         """
         p_max: pd.Series = tables['p_max'].set_index('generator')['value']
         load: pd.Series = tables['load'].set_index('snapshot')['value']
@@ -193,4 +193,4 @@ which is why the construct matrix reads it from the surface declaration.
 
 ---
 
-[`examples/piecewise.yaml`](https://github.com/fluxopt/lpspec/blob/main/examples/piecewise.yaml) · back to [all models](index.md)
+[`examples/piecewise.yaml`](https://github.com/fluxopt/charter/blob/main/examples/piecewise.yaml) · back to [all models](index.md)

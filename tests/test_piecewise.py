@@ -20,14 +20,14 @@ import numpy as np
 import pytest
 import yaml as pyyaml
 
-import lpspec as lps
-from lpspec.errors import DimensionError
-from lpspec.language.piecewise import PiecewiseExpansionError, expand_piecewise
-from lpspec.lowering import lower_program
-from lpspec.sources import tidy_sources, validate_piecewise_data
+import charter as lps
+from charter.errors import DimensionError
+from charter.language.piecewise import PiecewiseExpansionError, expand_piecewise
+from charter.lowering import lower_program
+from charter.sources import tidy_sources, validate_piecewise_data
 from tests.conftest import by_coord, override, raw_of, schema_of
 from tests.differential import differential
-from tests.oracle import lpspec_linopy, pd
+from tests.oracle import charter_linopy, pd
 
 NONCONVEX_YAML = """
 dimensions:
@@ -574,7 +574,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
     carrying a dim the links do not is a stray dim in generated math — one row
     per zone where the file reads as one per snapshot. The native lane used to
     validate the file as written, which made ``lps.check()`` pass on a model
-    ``lpspec_linopy.build`` refused: the same YAML, two answers (hard rule 3).
+    ``charter_linopy.build`` refused: the same YAML, two answers (hard rule 3).
     """
     raw = override(
         raw_of(NONCONVEX_YAML),
@@ -588,7 +588,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
     path = tmp_path / 'stray_dim.yaml'
     path.write_text(pyyaml.safe_dump(raw))
     with pytest.raises(DimensionError, match=stray):
-        lpspec_linopy.build(path)
+        charter_linopy.build(path)
 
 
 # ---------------------------------------------------------------------------

@@ -20,8 +20,8 @@ from typing import Any, NamedTuple
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.relational.sinks import SOLVERS
+import charter as lps
+from charter.relational.sinks import SOLVERS
 from tests.conftest import bindable_on_this_install, override, port_sources
 
 GENERATORS = ['wind', 'solar', 'gas']
@@ -305,7 +305,7 @@ def _prices(result: Any, schema: Any) -> dict[str, pl.DataFrame] | None:
     """
     try:
         return {name: result.dual(name) for name in schema.constraints}
-    except lps.LpspecError:
+    except lps.CharterError:
         return None
 
 
@@ -637,7 +637,7 @@ def test_a_rebind_that_cannot_build_leaves_nothing_half_built(bound):
     with pytest.raises(lps.DataError):
         bound.rebind({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
 
-    with pytest.raises(lps.LpspecError, match='no built model to hand over'):
+    with pytest.raises(lps.CharterError, match='no built model to hand over'):
         bound.solve()
 
 

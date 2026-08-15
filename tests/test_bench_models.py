@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-import lpspec as lps
+import charter as lps
 
 MODELS = Path(__file__).resolve().parent.parent / 'bench' / 'models'
 

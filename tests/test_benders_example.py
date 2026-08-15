@@ -1,6 +1,6 @@
 """The decomposition example must keep reaching the monolith, or it is not evidence.
 
-`examples/benders/run.py` is the claim that lpspec can *express* Benders — four
+`examples/benders/run.py` is the claim that charter can *express* Benders — four
 files, cuts as data, no engine change. A claim like that is worth exactly as
 much as the check behind it, so the check is the one the algorithm itself
 provides: the decomposed answer has to equal the answer the monolith gives on

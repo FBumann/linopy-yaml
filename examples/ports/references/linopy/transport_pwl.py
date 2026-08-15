@@ -9,11 +9,11 @@ piecewise formulation. See docs/models/index.md.
     uv run --script examples/ports/references/linopy/transport_pwl.py
 
 **The independence here is sharper than usual.** Every other reference is
-independent of lpspec because it is a different program; this one is
-independent of the construct under test. `lpspec`'s ``piecewise:`` block and
+independent of charter because it is a different program; this one is
+independent of the construct under test. `charter`'s ``piecewise:`` block and
 linopy's ``add_piecewise_formulation`` are two implementations of the same
 λ convex-combination idea, written separately, and this compares them on a
-model neither was written for. Nothing here imports lpspec.
+model neither was written for. Nothing here imports charter.
 
 The model is GAMS model library ``trnspwl`` — Dantzig's transportation problem
 with **economies of scale**: shipping cost grows as ``sqrt(x)`` rather than
@@ -52,7 +52,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     """The port's tables as a linopy model, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the charter call binds as ``sources``.
     ``scaled`` is what the objective is actually charged on — ``sqrt(shipment)``
     read off the discretised curve rather than computed.
     """

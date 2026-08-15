@@ -32,7 +32,7 @@ env:
   # twice in a job. `--skip-gate` because a single-arm gate compares an
   # objective with itself — the cross-lane check belongs to the published run.
   SELECT: >-
-    --arms lpspec --sizes s m
+    --arms charter --sizes s m
     --cases dispatch nodal transport profiled
     --skip-gate
 

@@ -11,7 +11,7 @@ name: CodSpeed
 # `--benchmark-memory` swaps in pytest-benchmem's. Same tests, same workloads, a
 # different instrument — and the selection flags are the suite's own, so what
 # runs here is a slice of what a contributor runs by hand rather than a copy of
-# it. One lane and the small rung: this measures lpspec against itself, and the
+# it. One lane and the small rung: this measures charter against itself, and the
 # cross-lane comparison is the published ladder's job.
 #
 # What it buys over bench.yml, which already gates on memory: **the baseline**.
@@ -200,7 +200,7 @@ jobs:
           POLARS_MAX_THREADS: 1
         with:
           mode: memory
-          run: uv run --no-sync pytest bench --arms lpspec --sizes s --skip-gate --codspeed
+          run: uv run --no-sync pytest bench --arms charter --sizes s --skip-gate --codspeed
 
   walltime:
     name: Wall time (macro runner)
@@ -251,4 +251,4 @@ jobs:
       - uses: CodSpeedHQ/action@v5
         with:
           mode: walltime
-          run: uv run --no-sync pytest bench --arms lpspec --sizes m l --skip-gate --codspeed
+          run: uv run --no-sync pytest bench --arms charter --sizes m l --skip-gate --codspeed

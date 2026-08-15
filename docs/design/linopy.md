@@ -17,13 +17,13 @@ of the docs noisy:
 or LP file, and import nothing from linopy, xarray or pandas. CI proves it: the
 bare-install job runs the whole suite with none of them present.
 
-`pip install "lpspec[linopy]"` adds linopy, xarray and pandas, which buys two
+`pip install "charter[linopy]"` adds linopy, xarray and pandas, which buys two
 things and nothing else — the shim below, and the `to_pandas` / `to_dataarray`
 bridges out of a result.
 
 **Nothing on the product path names linopy, including in a traceback.** The
-public exception tree is rooted at `LpspecError`, with no alias
-([#389](https://github.com/fluxopt/lpspec/issues/389)) — a name from this
+public exception tree is rooted at `CharterError`, with no alias
+([#389](https://github.com/fluxopt/charter/issues/389)) — a name from this
 extra has no business reaching a caller who never installed it.
 
 ## 2. It is the oracle
@@ -58,12 +58,12 @@ network, say, where the model is built by something else and you want to add
 declared constraints to it.
 
 ```python
-from lpspec import linopy as lpspec_linopy
+from charter import linopy as charter_linopy
 
-m = lpspec_linopy.build('model.yaml', data={...}, coords={...})  # -> linopy.Model
-lpspec_linopy.extend(m, 'ramp.yaml', data={...})  # mutates m in place
+m = charter_linopy.build('model.yaml', data={...}, coords={...})  # -> linopy.Model
+charter_linopy.extend(m, 'ramp.yaml', data={...})  # mutates m in place
 m.solve(...)
-lpspec_linopy.expression(m, 'model.yaml', 'co2', data={...})  # a named quantity, read back
+charter_linopy.expression(m, 'model.yaml', 'co2', data={...})  # a named quantity, read back
 ```
 
 All three are *pure*: YAML in, a model or a value out, nothing retained.
@@ -91,7 +91,7 @@ oracle an oracle, and a construct outside the language is a load error naming
 the rewrite, never a redirection to the other path.
 
 What differs is what each will take as *data*, which is a wart rather than a
-design ([#60](https://github.com/fluxopt/lpspec/issues/60)):
+design ([#60](https://github.com/fluxopt/charter/issues/60)):
 
 | | product path (`sources=`) | shim (`data=` / `coords=`) |
 |---|---|---|
@@ -112,7 +112,7 @@ solver layer. The first is data prep
 ([SPEC §11](../SPEC.md#11-out-of-scope)), the second is
 [hard rule 5](../ARCHITECTURE.md#hard-rules) — the model is the file you review
 and diff — and the third is
-[#106](https://github.com/fluxopt/lpspec/issues/106), where we adopt linopy's
+[#106](https://github.com/fluxopt/charter/issues/106), where we adopt linopy's
 *design* for declared solver capabilities without adopting its code.
 
 The modeling API is the one a reader arriving from linopy misses first, and

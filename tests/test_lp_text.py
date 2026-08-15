@@ -21,9 +21,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.relational.sinks.writers import lp_file
-from lpspec.relational.sinks.writers.lp_file import _number, _signed
+import charter as lps
+from charter.relational.sinks.writers import lp_file
+from charter.relational.sinks.writers.lp_file import _number, _signed
 from tests.conftest import DISPATCH_MODEL, override
 
 #: Doubles that break naive formatters: repeating binary fractions, the

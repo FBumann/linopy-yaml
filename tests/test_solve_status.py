@@ -23,11 +23,11 @@ from typing import Any
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.errors import NoSolutionError
-from lpspec.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
-from lpspec.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
-from lpspec.relational.status import STATUS_TO_TERMINATION_CONDITIONS, SolveStatus
+import charter as lps
+from charter.errors import NoSolutionError
+from charter.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
+from charter.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
+from charter.relational.status import STATUS_TO_TERMINATION_CONDITIONS, SolveStatus
 
 INFEASIBLE = {
     'dimensions': {'snapshot': {'dtype': 'int', 'values': [0]}},

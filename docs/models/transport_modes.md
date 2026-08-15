@@ -72,7 +72,7 @@ $$\mathit{min\_load}_{c} \le \mathit{moved}_{c} \le \mathit{max\_load}_{c} \qqua
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # Moving 180 tonnes of chemicals out of four depots to three recycling
@@ -148,7 +148,7 @@ which reads as semi-continuous — either nothing or at least ten. The book's ow
 Mosel model writes `flow(a) >= MINCAP(a)` unconditionally, so every rail
 connection carries at least 10 t whether it is wanted or not, and the published
 1715 is that reading. The port matches the model that produced the number, and
-the semi-continuous variant is a different question ([#383](https://github.com/fluxopt/lpspec/issues/383)) rather than a
+the semi-continuous variant is a different question ([#383](https://github.com/fluxopt/charter/issues/383)) rather than a
 workaround hidden here.
 
 ## What it exercises

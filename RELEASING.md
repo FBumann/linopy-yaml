@@ -190,8 +190,8 @@ To keep releasing 0.1.x after `main` moves to 0.2, cut a `0.1.x` branch and run
 Don't cut a release for this — install from the ref:
 
 ```bash
-uv add "lpspec @ git+ssh://git@github.com/fluxopt/lpspec@feat/some-branch"
-uv add "lpspec @ git+https://github.com/fluxopt/lpspec@d09aab6"
+uv add "charter @ git+ssh://git@github.com/fluxopt/charter@feat/some-branch"
+uv add "charter @ git+https://github.com/fluxopt/charter@d09aab6"
 ```
 
 Every tagged build also attaches its wheel and sdist to the GitHub release.
@@ -205,5 +205,5 @@ Every tagged build also attaches its wheel and sdist to the GitHub release.
 - **PyPI** — currently off. The `pypi` job is skipped unless the repo variable
   `PUBLISH_TO_PYPI` is `true`. To go live: register a
   [trusted publisher](https://docs.pypi.org/trusted-publishers/) for
-  `lpspec` (workflow `publish.yaml`, environment `pypi`), create the `pypi`
+  `charter` (workflow `publish.yaml`, environment `pypi`), create the `pypi`
   environment, then set the variable.

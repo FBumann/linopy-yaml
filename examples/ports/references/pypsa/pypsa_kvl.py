@@ -19,7 +19,7 @@ whose NA handling changed in 3.0. The floor is checked rather than assumed —
 this script emits byte-identical output on either side of that change.
 
 It reads the same instance the port binds and builds the network with PyPSA's
-own objects. Nothing here imports lpspec.
+own objects. Nothing here imports charter.
 
 **Rung 5, the last one: Kirchhoff's voltage law.** Every earlier rung moved
 power over ``Link`` objects, whose flow is a decision variable — a transport
@@ -54,7 +54,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the charter call binds as ``sources``.
 
     ``r=0`` keeps a line purely reactive: the linearised power flow is a
     function of ``x`` alone, and a resistance would only add losses the DC

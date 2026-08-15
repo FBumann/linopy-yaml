@@ -68,7 +68,7 @@ $$\mathit{flow}_{p} \ge 0, \mathit{flow}_{p} \in \mathbb{Z} \qquad \forall\thins
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # Routing telephone calls over a five-city network: how many of the 425

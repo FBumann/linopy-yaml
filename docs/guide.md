@@ -106,7 +106,7 @@ them; either way you would build a different model than the file reads as.
 ## Then: check, build, solve
 
 ```python
-import lpspec as lps
+import charter as lps
 
 lps.check('model.yaml')  # compiles? no data needed
 sol = lps.solve('model.yaml', sources)  # to an answer
@@ -131,7 +131,7 @@ Worth knowing before you start, rather than after:
 
 - **Bounds take a name or a number, never arithmetic.** `upper: p_max` is
   fine; `upper: -rating` is not. This one has bitten a real port —
-  [#31](https://github.com/fluxopt/lpspec/issues/31), and the workaround is to
+  [#31](https://github.com/fluxopt/charter/issues/31), and the workaround is to
   ship the negated column as data.
 - **Every expression is affine in the variables.** Degree 1, always: no
   variable times variable. That is the ceiling the whole design is built

@@ -32,7 +32,7 @@ import pytest
 
 from bench.cases import CASES
 from bench.conftest import ENGINE, shape_of
-from bench.workloads import build_only, linopy_build_and_emit, lpspec_build_and_emit, split_sources
+from bench.workloads import build_only, charter_build_and_emit, linopy_build_and_emit, split_sources
 
 
 def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -> None:
@@ -89,7 +89,7 @@ def test_emit(
         counts = benchmark(linopy_build_and_emit, case_name, size, sink, case_paths, io_api)
     else:
         sources, coords = split_sources(CASES[case_name], size, case_paths)
-        counts = benchmark(lpspec_build_and_emit, case_name, size, sink, sources, coords, ENGINE[arm])
+        counts = benchmark(charter_build_and_emit, case_name, size, sink, sources, coords, ENGINE[arm])
     _record(benchmark, counts, case_name, size)
 
 

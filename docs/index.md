@@ -6,13 +6,13 @@ hide:
 
 <div class="hero" markdown>
 
-# lpspec
+# charter
 
-**Self-documenting optimisation models — at any scale.**
+**The model is a document, not a program.**
 
 Write the math in YAML, bind data at runtime, solve.
 
-[![PyPI](https://img.shields.io/pypi/v/lpspec)](https://pypi.org/project/lpspec/)
+[![PyPI](https://img.shields.io/pypi/v/charter)](https://pypi.org/project/charter/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -181,7 +181,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 === "How"
 
     ```python
-    import lpspec as lps
+    import charter as lps
 
     symbols = {
         'notation': 'latex',
@@ -211,8 +211,8 @@ Only the notation is a choice, and **How** shows the one that was made here.
     emits a document that compiles rather than a fragment to `\input`:
 
     ```bash
-    python -m lpspec latex dispatch.yaml --symbols dispatch.symbols.yaml
-    python -m lpspec typst dispatch.yaml --standalone -o dispatch.typ
+    python -m charter latex dispatch.yaml --symbols dispatch.symbols.yaml
+    python -m charter typst dispatch.yaml --standalone -o dispatch.typ
     ```
 <!-- home-math:end -->
 
@@ -268,10 +268,10 @@ Only the notation is a choice, and **How** shows the one that was made here.
 </div>
 
 ```bash
-pip install lpspec  # the relational engine (polars, highspy)
-pip install "lpspec[linopy]"  # adds linopy + xarray + pandas: the shim, the
+pip install charter  # the relational engine (polars, highspy)
+pip install "charter[linopy]"  # adds linopy + xarray + pandas: the shim, the
                               # oracle, and to_pandas / to_dataarray
-pip install "lpspec[gurobi]"  # adds the gurobi sink: solver_name='gurobi'
+pip install "charter[gurobi]"  # adds the gurobi sink: solver_name='gurobi'
 ```
 
 !!! warning "Alpha, pre-1.0"

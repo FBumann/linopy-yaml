@@ -17,10 +17,10 @@ import warnings
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.errors import DataError, LpspecError, LpspecWarning
-from lpspec.language.validation import load_model
-from lpspec.typeset import FORMATS, typeset
+import charter as lps
+from charter.errors import CharterError, CharterWarning, DataError
+from charter.language.validation import load_model
+from charter.typeset import FORMATS, typeset
 
 
 def _model(objective: str = 'sum(x, over=snapshot)') -> dict:
@@ -68,20 +68,20 @@ def test_an_inline_coordinate_puts_nothing_under_dimensions():
 def test_an_inline_coordinate_joins_the_flat_namespace():
     model = _model()
     model['parameters']['period'] = {'dims': ['snapshot']}
-    with pytest.raises(LpspecError, match="Label coordinate 'period' collides with the parameter"):
+    with pytest.raises(CharterError, match="Label coordinate 'period' collides with the parameter"):
         load_model(model)
 
 
 def test_two_dimensions_cannot_carry_one_label_name():
     model = _model()
     model['dimensions']['scenario'] = {'coords': {'period': {'dtype': 'int'}}}
-    with pytest.raises(LpspecError, match="'period' collides"):
+    with pytest.raises(CharterError, match="'period' collides"):
         load_model(model)
 
 
 def test_grouping_into_a_label_is_refused_with_the_promotion_rewrite():
     """The error teaches the one-word promotion, not merely the refusal."""
-    with pytest.raises(LpspecError, match="is a label on 'snapshot'") as caught:
+    with pytest.raises(CharterError, match="is a label on 'snapshot'") as caught:
         lps.check(_model('sum(x, over=snapshot, group_by=period)'))
     assert 'coords: {period: period}' in str(caught.value)
 
@@ -91,14 +91,14 @@ def test_check_advises_a_label_space_wearing_a_dimensions_clothes():
     model = _model()
     model['dimensions']['period'] = {'dtype': 'int'}
     model['dimensions']['snapshot']['coords'] = {'period': 'period'}
-    with pytest.warns(LpspecWarning, match='label space, not a dimension'):
+    with pytest.warns(CharterWarning, match='label space, not a dimension'):
         lps.check(model)
 
 
 def test_check_advises_an_unused_dimension():
     model = _model()
     model['dimensions']['scenario'] = {'dtype': 'str'}
-    with pytest.warns(LpspecWarning, match="'scenario' is never used"):
+    with pytest.warns(CharterWarning, match="'scenario' is never used"):
         lps.check(model)
 
 

@@ -29,7 +29,7 @@ from typing import Any
 
 from bench import results as bench_results
 
-NAME = {'lpspec': 'polars', 'linopy': 'linopy'}
+NAME = {'charter': 'polars', 'linopy': 'linopy'}
 LADDER = ('xs', 's', 'm', 'l')
 SCALING = ('xs', 's', 'm', 'l', 'xl', '2xl')
 _DATA = re.compile(r'^const DATA = .*;$', re.MULTILINE)
@@ -114,7 +114,7 @@ def figures(results: Path) -> list[tuple[str, Any]]:
                             ],
                             slot=i,
                         )
-                        for i, arm in enumerate(('lpspec', 'linopy'))
+                        for i, arm in enumerate(('charter', 'linopy'))
                     ],
                 )
             )
@@ -139,7 +139,7 @@ def figures(results: Path) -> list[tuple[str, Any]]:
                         [(_at(table['cols'], (name, r)), _at(table['wall'], (name, r, arm))) for r in LADDER],
                         slot=i,
                     )
-                    for i, arm in enumerate(('lpspec', 'linopy'))
+                    for i, arm in enumerate(('charter', 'linopy'))
                 ],
             )
             for name in names
@@ -176,7 +176,7 @@ def figures(results: Path) -> list[tuple[str, Any]]:
         for case in sorted({r['case'] for r in rows}):
             bars_ = []
             for sink in ('lp', 'highs', 'gurobi'):
-                for arm in ('lpspec', 'linopy'):
+                for arm in ('charter', 'linopy'):
                     hits = [
                         r['wall_seconds'] for r in rows if r['case'] == case and r['sink'] == sink and r['arm'] == arm
                     ]
@@ -205,8 +205,8 @@ def main() -> int:
     scaling = best(measurements('scaling'), 'lp')
     cases = sorted({c for c, _, _ in ladder['wall']})
     data = {
-        'scaling': panel(scaling, 'dispatch', SCALING, ('lpspec', 'linopy')),
-        'cases': {c: panel(ladder, c, LADDER, ('lpspec', 'linopy')) for c in cases},
+        'scaling': panel(scaling, 'dispatch', SCALING, ('charter', 'linopy')),
+        'cases': {c: panel(ladder, c, LADDER, ('charter', 'linopy')) for c in cases},
         'caseNames': cases,
         'rungs': list(LADDER),
     }

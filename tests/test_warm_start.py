@@ -30,8 +30,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.relational.sinks import SOLVERS
+import charter as lps
+from charter.relational.sinks import SOLVERS
 
 # ---------------------------------------------------------------------------
 # models: an LP big enough to make the simplex work, and a MIP
@@ -311,7 +311,7 @@ def test_a_warm_start_for_a_differently_shaped_model_is_refused(solver_name, mod
     tables = _tables(other_model, other_given, other_coords)
     session = SOLVERS[solver_name](tables)
     try:
-        with pytest.raises(lps.LpspecError, match='warm start carries'):
+        with pytest.raises(lps.CharterError, match='warm start carries'):
             session.warm(ws)
     finally:
         session.close()
@@ -324,7 +324,7 @@ def test_a_warm_start_from_another_solver_is_refused(solver_name):
     tables = _tables(DISPATCH, dispatch_sources(), {'snapshot': SNAPSHOTS})
     session = SOLVERS[solver_name](tables)
     try:
-        with pytest.raises(lps.LpspecError, match='read from'):
+        with pytest.raises(lps.CharterError, match='read from'):
             session.warm(replace(ws, solver='someone_else'))
     finally:
         session.close()
@@ -377,7 +377,7 @@ def test_a_hint_the_solver_refuses_is_loud_not_a_silent_cold_start(model, given,
         ws = session.warm_start()
         assert ws is not None
         session._handle = _Refusing(session._handle, call)
-        with pytest.raises(lps.LpspecError, match='refused'):
+        with pytest.raises(lps.CharterError, match='refused'):
             session.warm(ws)
     finally:
         session.close()

@@ -42,10 +42,10 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from lpspec.errors import LanguageError
-from lpspec.relational import plan
-from lpspec.relational.engines.polars.binding import BoundSources
-from lpspec.relational.engines.polars.compiler import PolarsCompiler
+from charter.errors import LanguageError
+from charter.relational import plan
+from charter.relational.engines.polars.binding import BoundSources
+from charter.relational.engines.polars.compiler import PolarsCompiler
 
 PROGRAM = plan.Program(
     parameters=(

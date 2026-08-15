@@ -21,7 +21,7 @@ build:
       - $HOME/.local/bin/uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
     # The `docs` group *and* the project: mkdocs.yml executes
     # `docs/interactive.ipynb` during the build and its first cell imports
-    # lpspec, so the site can no longer be built against the docs toolchain
+    # charter, so the site can no longer be built against the docs toolchain
     # alone. A page whose outputs are this build's own is what that buys, and
     # there is no way to have it without running the package here.
     #

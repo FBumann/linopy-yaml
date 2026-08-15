@@ -1,6 +1,6 @@
 # The feasibility subproblem: how far from dispatchable is this capacity?
 #
-# lpspec hands back no Farkas ray for an infeasible solve — `dual` needs a
+# charter hands back no Farkas ray for an infeasible solve — `dual` needs a
 # readable status — so a feasibility cut cannot be read off the infeasible
 # subproblem. This is the standard answer and, here, the only one: minimise the
 # violation instead. Its optimum is zero exactly when `strict_sub` is feasible,

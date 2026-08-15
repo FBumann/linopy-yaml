@@ -26,7 +26,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-import lpspec as lps
+import charter as lps
 from tests.conftest import EXAMPLES_DIR
 
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'

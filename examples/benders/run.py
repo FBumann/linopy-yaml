@@ -1,10 +1,10 @@
-"""Benders decomposition on lpspec, checked against the model it decomposes.
+"""Benders decomposition on charter, checked against the model it decomposes.
 
     uv run python examples/benders/run.py
 
 **This is evidence, not a feature.** It shows what the language can express and
-that the answer is right; lpspec ships no decomposition driver, and whether it
-should is https://github.com/fluxopt/lpspec/issues/596.
+that the answer is right; charter ships no decomposition driver, and whether it
+should is https://github.com/fluxopt/charter/issues/596.
 
 Four files, and the split is the whole idea:
 
@@ -35,7 +35,7 @@ from pathlib import Path
 
 import polars as pl
 
-import lpspec as lps
+import charter as lps
 
 HERE = Path(__file__).parent
 SNAPSHOTS = [0, 1, 2, 3]

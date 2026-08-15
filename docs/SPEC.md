@@ -2,7 +2,7 @@
 
 What a YAML file may contain and what it means. *Why* it is shaped this way:
 [docs/ARCHITECTURE.md](ARCHITECTURE.md). What is planned or refused:
-[docs/ROADMAP.md](ROADMAP.md). A worked example: [README](https://github.com/fluxopt/lpspec/blob/main/README.md#example).
+[docs/ROADMAP.md](ROADMAP.md). A worked example: [README](https://github.com/fluxopt/charter/blob/main/README.md#example).
 
 ## 0. The laws
 
@@ -70,8 +70,8 @@ that costs one line. A file from the future is refused rather than
 misinterpreted, which is the whole reason to carry the field:
 
 ```
-model declares version 1, and lpspec 0.0.1a75 understands [0].
-Upgrade lpspec, or write the version this file actually targets.
+model declares version 1, and charter 0.0.1a75 understands [0].
+Upgrade charter, or write the version this file actually targets.
 ```
 
 It is a **language** version, not a package one — it moves when the accepted
@@ -99,7 +99,7 @@ for a parameter's `dims: []`, one column for a variable's `foreach: []`, one row
 for a constraint's. That is the ordinary reading of a product over nothing, not
 a special case, so a dummy dimension of size 1 is never how a scalar is written.
 One gap: a scalar **variable** may not carry a `where`
-([#340](https://github.com/fluxopt/lpspec/issues/340)) — put the condition on
+([#340](https://github.com/fluxopt/charter/issues/340)) — put the condition on
 the constraints that use it.
 
 **Every declaration block takes an optional `description:`** — free text, never
@@ -201,7 +201,7 @@ Omitting a bound means unbounded on that side — non-negativity is written, not
 assumed. Bounds are
 a *narrower* language than expressions (a name or a number, never arithmetic) and
 the error says so rather than reporting a parse failure; expressions there are
-[#31](https://github.com/fluxopt/lpspec/issues/31). A bound parameter's dims must
+[#31](https://github.com/fluxopt/charter/issues/31). A bound parameter's dims must
 not exceed `foreach`.
 
 **Equal bounds pin a variable**, which is how one declaration covers a quantity
@@ -346,7 +346,7 @@ solver and not of the model. `convex` is a different model — exact only for a
 curve of matching curvature under optimisation pressure, which is checked
 against the breakpoint *values* at bind time — and it takes exactly two links
 and no `active`. `method: lp`, linopy's tangent-line formulation, is
-[#695](https://github.com/fluxopt/lpspec/issues/695) and not here.
+[#695](https://github.com/fluxopt/charter/issues/695) and not here.
 
 ### 4.1 `sos`
 
@@ -381,7 +381,7 @@ index, and there is no per-set weight to supply.
 **A set is a *sink capability*, not a language question**, and it is the one
 construct whose sink shows: where a sink has no SOS concept it is handed
 binaries and big-M rows instead (which sink does what, and why the sink family
-decides it, is [the sink README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md)).
+decides it, is [the sink README](https://github.com/fluxopt/charter/blob/main/src/charter/relational/sinks/README.md)).
 Two consequences reach the model, so neither is silent:
 
 - that rewrite is **mixed-integer**, so a set on an otherwise continuous model
@@ -673,7 +673,7 @@ Four rules govern `edge=`, and all four are law 8 in this position:
 
 Anything composable out of these belongs in `macros:`. Math that is not sayable
 at all goes to a declared `escape:` island
-([#38](https://github.com/fluxopt/lpspec/issues/38)): named in the file,
+([#38](https://github.com/fluxopt/charter/issues/38)): named in the file,
 bounded by the preceding `where` mask, terminal (it yields a constraint, never a
 sub-expression), and billed against a label budget before any Python runs.
 
@@ -750,8 +750,8 @@ language: nothing there changes what a file means.
 | Not here | Instead |
 |---|---|
 | time-series processing (resample, cluster, interpolate, align), file IO, units | data prep; pass a parameter |
-| solver breadth | two solver sinks — HiGHS, which ships, and Gurobi via the `[gurobi]` extra — chosen with `solver_name` at the call, never in the file; LP files for everything else ([#106](https://github.com/fluxopt/lpspec/issues/106)) |
-| indicator constraints | planned, as a *sink capability* rather than a language question — the same axis `sos:` (§4.1) landed on, and the same split: `lp_file` and Gurobi have the concept, the default solver does not ([#220](https://github.com/fluxopt/lpspec/issues/220), [Track 3](https://github.com/fluxopt/lpspec/issues/472)) |
+| solver breadth | two solver sinks — HiGHS, which ships, and Gurobi via the `[gurobi]` extra — chosen with `solver_name` at the call, never in the file; LP files for everything else ([#106](https://github.com/fluxopt/charter/issues/106)) |
+| indicator constraints | planned, as a *sink capability* rather than a language question — the same axis `sos:` (§4.1) landed on, and the same split: `lp_file` and Gurobi have the concept, the default solver does not ([#220](https://github.com/fluxopt/charter/issues/220), [Track 3](https://github.com/fluxopt/charter/issues/472)) |
 | multi-objective | one `objective:` block — a second is unsayable (§2); weight them into one expression |
 | schema migrations | — |
 | arbitrary array ops (`merge`, `reindex`, `apply_ufunc`) | data prep, or a declared `escape:` island — the closed AST is what makes streaming possible |
@@ -765,4 +765,4 @@ readable `.yaml` representation and will not get one: the *math* side is
 feasible, but expression and where strings come back as anonymous arrays, so the
 round-trip is functional and not reviewable — which is the whole point of the
 file. Whether Python may *emit* declarations at all is a separate and open
-question ([#381](https://github.com/fluxopt/lpspec/issues/381)).
+question ([#381](https://github.com/fluxopt/charter/issues/381)).

@@ -9,9 +9,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from lpspec.language.expansion import parse_and_expand
-from lpspec.language.expression_parser import parse_expression
-from lpspec.language.model import Model
+from charter.language.expansion import parse_and_expand
+from charter.language.expression_parser import parse_expression
+from charter.language.model import Model
 from tests.conftest import DISPATCH_MODEL, schema_of
 
 WEIGHTED_SUM = {

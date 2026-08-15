@@ -21,9 +21,9 @@ from typing import Any
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.errors import DataError, LanguageError, LpspecError
-from lpspec.relational.sinks import sos as sos_sink
+import charter as lps
+from charter.errors import CharterError, DataError, LanguageError
+from charter.relational.sinks import sos as sos_sink
 from tests.conftest import solve_lp_file
 
 SITES = ['north', 'south']
@@ -302,7 +302,7 @@ def test_the_solution_reads_back_past_the_appended_columns():
 def test_a_reformulated_model_says_why_it_has_no_duals():
     """The model declares no integrality, so the ordinary message would lie."""
     result = lps.solve(model(1), DATA)
-    with pytest.raises(LpspecError, match="no SOS concept, so 'pick' reached it as binaries"):
+    with pytest.raises(CharterError, match="no SOS concept, so 'pick' reached it as binaries"):
         result.dual('total')
 
 

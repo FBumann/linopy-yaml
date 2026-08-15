@@ -2,7 +2,7 @@
 
 There is no runtime fallback — the streaming subset IS the language
 (docs/ARCHITECTURE.md). The eager builder survives only as the opt-in
-compatibility layer (`lpspec.linopy`) and the differential oracle.
+compatibility layer (`charter.linopy`) and the differential oracle.
 Errors must carry the construct and its context, verbatim.
 """
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from lpspec.errors import LanguageError
-from lpspec.lowering import lower_program
+from charter.errors import LanguageError
+from charter.lowering import lower_program
 from tests.conftest import EXAMPLES_DIR, MODEL_PATHS, schema_of
 
 DISPATCH = EXAMPLES_DIR / 'dispatch.yaml'

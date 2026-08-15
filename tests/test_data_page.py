@@ -5,7 +5,7 @@ files, then one frame per parameter — so it is the one place a reader checks
 whether the comparison is rigged. Three ways it could quietly become a lie:
 the CSV shown drifts from the committed file, the committed file drifts from
 the JSON instance the verification machinery reads, or the preparation code
-stops producing tables lpspec accepts. One test each.
+stops producing tables charter accepts. One test each.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-import lpspec as lps
+import charter as lps
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = ROOT / 'docs' / 'models' / 'data.md'
@@ -45,7 +45,7 @@ def test_the_preparation_code_runs_and_solves(monkeypatch: pytest.MonkeyPatch) -
 
     Everything else the page says about frameworks points at tab content the
     gallery tests already byte-assert; this block is new, so it runs here —
-    all the way to the optimum, because tables lpspec merely *accepts* could
+    all the way to the optimum, because tables charter merely *accepts* could
     still be the wrong tables.
     """
     monkeypatch.chdir(ROOT)

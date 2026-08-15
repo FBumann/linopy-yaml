@@ -84,7 +84,7 @@ $$0 \le \mathrm{soc}_{s} \le 100 \qquad \forall\thinspace s \in \mathcal{S}$$
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     dimensions:
@@ -161,7 +161,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         """The instance's tables as a linopy model, row for row.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
         """
         p_max: pd.Series = tables['p_max'].set_index('generator')['value']
         cost: pd.Series = tables['cost'].set_index('generator')['value']
@@ -194,4 +194,4 @@ size, which is why it is named in *Not measured yet* in
 
 ---
 
-[`examples/storage.yaml`](https://github.com/fluxopt/lpspec/blob/main/examples/storage.yaml) · back to [all models](index.md)
+[`examples/storage.yaml`](https://github.com/fluxopt/charter/blob/main/examples/storage.yaml) · back to [all models](index.md)

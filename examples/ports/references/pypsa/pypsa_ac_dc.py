@@ -10,7 +10,7 @@
 Pinned to the versions that produced the number in ``references.json`` and run
 out of band — PyPSA is not a dependency of this project. It reads the same
 instance the port binds and builds the network with PyPSA's own objects.
-Nothing here imports lpspec.
+Nothing here imports charter.
 
 **Rung 6: two coordinates on one dimension.** Every earlier rung put a
 generator on a bus and stopped there. Here a generator also burns a *carrier*,
@@ -55,7 +55,7 @@ def _series(frame: pd.DataFrame, index: str) -> pd.Series:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the charter call binds as ``sources``.
 
     The port carries its cycle basis as ``cycle_incidence`` because computing
     one is a graph algorithm and so data preparation; PyPSA derives its own

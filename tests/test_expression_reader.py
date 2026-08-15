@@ -13,11 +13,11 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.errors import LpspecError
-from lpspec.language.dimensions import dims_of
-from lpspec.language.resolution import Namespace, expression_of
-from lpspec.relational.engines.polars.compiler import PolarsCompiler
+import charter as lps
+from charter.errors import CharterError
+from charter.language.dimensions import dims_of
+from charter.language.resolution import Namespace, expression_of
+from charter.relational.engines.polars.compiler import PolarsCompiler
 
 MODEL = {
     'dimensions': {
@@ -175,5 +175,5 @@ def test_a_closed_result_refuses_an_expression_read(result):
     with lps.build(MODEL, sources()) as bound:
         outcome = bound.solve()
     outcome.close()
-    with pytest.raises(LpspecError, match='closed'):
+    with pytest.raises(CharterError, match='closed'):
         outcome.expression('spend')

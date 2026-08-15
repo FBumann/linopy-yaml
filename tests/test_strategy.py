@@ -17,8 +17,8 @@ from unittest import mock
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec import strategy
+import charter as lps
+from charter import strategy
 from tests.conftest import DISPATCH_MODEL, override
 
 # ---------------------------------------------------------------------------
@@ -294,11 +294,11 @@ def test_a_pooled_fold_builds_per_slice(builds):
 
     Stated as a test because the two branches now differ in more than where
     they run, and a `BoundModel` handed to `_run_slice` would fail in the
-    worker rather than here. Counted at `lpspec.api.build`, which is what a
+    worker rather than here. Counted at `charter.api.build`, which is what a
     slice reaches through `solve`; the serial branch holds its own reference
     and is counted at that one.
     """
-    from lpspec import api
+    from charter import api
 
     built = builds(api)
 
@@ -327,9 +327,9 @@ def test_an_axis_naming_a_column_no_source_carries_says_so():
 
 def test_a_name_the_sweep_does_not_hold_says_what_it_does_hold(sweep):
     """Everything a slice produced is kept, so a miss is a name, not a flag."""
-    with pytest.raises(lps.LpspecError, match="no variable 'q' in this sweep"):
+    with pytest.raises(lps.CharterError, match="no variable 'q' in this sweep"):
         sweep.primal('q')
-    with pytest.raises(lps.LpspecError, match="no constraint 'nope' in this sweep"):
+    with pytest.raises(lps.CharterError, match="no constraint 'nope' in this sweep"):
         sweep.dual('nope')
 
 
@@ -344,7 +344,7 @@ def test_a_sweep_that_solved_nothing_blames_the_solve():
 
     assert len(runs) == 3, 'an unsolvable slice is still a row of the record'
     assert runs.objective['objective'].is_nan().all()
-    with pytest.raises(lps.LpspecError, match='holds no variable frames at all') as raised:
+    with pytest.raises(lps.CharterError, match='holds no variable frames at all') as raised:
         runs.primal('p')
     assert 'infeasible' in str(raised.value), 'the message names what the slices actually did'
 
@@ -533,7 +533,7 @@ def test_a_quantity_reduced_over_the_sliced_dimension_has_no_way_back(priced):
     keyed = priced.expression('window_spend')
     assert keyed.columns == ['snapshot_start', 'value']
     assert keyed.height == len(priced), 'one total per window, keyed like objective'
-    with pytest.raises(lps.LpspecError, match='reduced over the sliced dimension'):
+    with pytest.raises(lps.CharterError, match='reduced over the sliced dimension'):
         priced.expression('window_spend', original_index=True)
 
 
@@ -554,7 +554,7 @@ def test_each_slice_expression_matches_solving_that_slice_alone():
 
 
 def test_an_expression_the_sweep_does_not_hold_says_what_it_does_hold(priced):
-    with pytest.raises(lps.LpspecError, match="no named expression 'nope' in this sweep"):
+    with pytest.raises(lps.CharterError, match="no named expression 'nope' in this sweep"):
         priced.expression('nope')
 
 
@@ -574,7 +574,7 @@ def test_an_expression_no_slice_could_evaluate_carries_its_reason():
 
     assert runs.primal('p').height > 0, 'the failing expression must not fail the sweep'
     assert runs.expression('spend').height > 0, 'nor take the healthy expression with it'
-    with pytest.raises(lps.LpspecError, match='scale'):
+    with pytest.raises(lps.CharterError, match='scale'):
         runs.expression('ratio')
 
 
@@ -789,7 +789,7 @@ def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(model, sourc
     The axis matters twice: a window's length bounds the index a carry may
     name, and scenarios have no "next" slice for a value to move into.
     """
-    with pytest.raises(lps.LpspecError, match=expected) as raised:
+    with pytest.raises(lps.CharterError, match=expected) as raised:
         lps.solve_over(model, sources(), axis, carry=carry)
     if names is not None:
         assert names in str(raised.value), 'the message names the dimensions it could not choose between'
@@ -806,12 +806,12 @@ def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
     missing = tmp_path / 'not-written-yet.parquet'
     sources = {**horizon_sources(), 'load': str(missing)}
 
-    with pytest.raises(lps.LpspecError, match='does not declare'):
+    with pytest.raises(lps.CharterError, match='does not declare'):
         lps.solve_over(WINDOW, sources, WINDOW_AXIS, carry={'soc_initial': ('nope', 3)})
 
     with pytest.raises(Exception, match='not-written-yet') as raised:
         lps.solve_over(WINDOW, sources, WINDOW_AXIS, carry={'soc_initial': ('soc', 3)})
-    assert not isinstance(raised.value, lps.LpspecError), 'the file, not the carry, is what failed'
+    assert not isinstance(raised.value, lps.CharterError), 'the file, not the carry, is what failed'
 
 
 # ---------------------------------------------------------------------------
@@ -822,7 +822,7 @@ def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
 def test_carry_and_executor_are_refused_together():
     """Sequential by definition, so the combination is a call-time error rather
     than something discovered at slice two."""
-    with pytest.raises(lps.LpspecError, match='mutually exclusive'):
+    with pytest.raises(lps.CharterError, match='mutually exclusive'):
         lps.solve_over(
             WINDOW,
             horizon_sources(),
@@ -1068,7 +1068,7 @@ def test_to_parquet_writes_one_file_per_kept_variable(sweep, tmp_path):
 def test_a_reader_for_a_name_the_sweep_lacks_fails_the_way_primal_does(sweep):
     """One explanation, reached through every reader."""
     for read in (sweep.to_pandas, sweep.to_dataarray):
-        with pytest.raises(lps.LpspecError, match="no variable 'q' in this sweep"):
+        with pytest.raises(lps.CharterError, match="no variable 'q' in this sweep"):
             read('q')
 
 
@@ -1084,7 +1084,7 @@ def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
     base = scenario_sources()
     cuts = [(name, {**base, 'load': _draw(base, name)}, {}) for name in ('low', 'high')]
 
-    with pytest.raises(lps.LpspecError, match='hand-built axis needs key_name='):
+    with pytest.raises(lps.CharterError, match='hand-built axis needs key_name='):
         lps.solve_over(DISPATCH, base, cuts)
 
     runs = lps.solve_over(DISPATCH, base, cuts, key_name='draw')
@@ -1140,7 +1140,7 @@ def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
     assert runs.objective.columns[0] == 'case'
     assert set(runs.primal('p').columns) == {'case', 'snapshot', 'generator', 'value'}
 
-    with pytest.raises(lps.LpspecError, match=r"key_name='generator' is already a dimension of \['p'\]"):
+    with pytest.raises(lps.CharterError, match=r"key_name='generator' is already a dimension of \['p'\]"):
         lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), key_name='generator')
 
 
@@ -1175,7 +1175,7 @@ def test_a_slice_without_duals_does_not_fail_the_sweep():
 
     assert len(runs) == 3, 'every slice is still a row of the record'
     assert runs.primal('p').height > 0, 'primals are unaffected'
-    with pytest.raises(lps.LpspecError, match='duals are undefined for a mixed-integer model') as raised:
+    with pytest.raises(lps.CharterError, match='duals are undefined for a mixed-integer model') as raised:
         runs.dual('balance')
     assert "'p' is not continuous" in str(raised.value), 'the sweep names the variable, as one solve does'
 
@@ -1190,7 +1190,7 @@ def test_a_bad_name_is_reported_without_the_optional_dependency(sweep):
     sweep does hold still needs the dependency.
     """
     with mock.patch.dict(sys.modules, {'pandas': None}):
-        with pytest.raises(lps.LpspecError, match="no variable 'q' in this sweep"):
+        with pytest.raises(lps.CharterError, match="no variable 'q' in this sweep"):
             sweep.to_pandas('q')
         with pytest.raises(ImportError):
             sweep.to_pandas('p')

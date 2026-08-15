@@ -16,7 +16,7 @@ is only a floor: it holds the instance's tables; nothing recorded here is
 reshaped with it.
 
 It reads the same instance the port binds and builds the network with PyPSA's
-own objects. Nothing here imports lpspec.
+own objects. Nothing here imports charter.
 
 **The MILP entry in the corpus.** ``committable=True`` gives each generator a
 binary ``status`` per snapshot, plus binary ``start_up`` and ``shut_down``, and
@@ -48,7 +48,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     """The port's tables as a PyPSA network, column for column.
 
-    ``tables`` is the same mapping the lpspec call binds as ``sources``.
+    ``tables`` is the same mapping the charter call binds as ``sources``.
     """
     n = pypsa.Network()
     n.set_snapshots(tables['snapshot']['snapshot'])

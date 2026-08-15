@@ -117,7 +117,7 @@ def test_the_session_leaves_a_file(session: tuple[dict[str, Any], str]) -> None:
     """``to_yaml`` on the patched spec is what the reader diffs against the model."""
     import yaml
 
-    import lpspec as lps
+    import charter as lps
 
     namespace, _ = session
     patched = lps.load_model(namespace['spec'])

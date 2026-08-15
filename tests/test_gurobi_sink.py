@@ -24,9 +24,9 @@ from typing import Any
 import polars as pl
 import pytest
 
-import lpspec as lps
-from lpspec.errors import LpspecError, NoSolutionError
-from lpspec.relational.sinks.solvers.gurobi import build_gurobi
+import charter as lps
+from charter.errors import CharterError, NoSolutionError
+from charter.relational.sinks.solvers.gurobi import build_gurobi
 from tests.conftest import port_sources
 
 gurobipy = pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
@@ -178,7 +178,7 @@ def test_a_mixed_integer_model_has_no_duals() -> None:
     refusal on as the ``None`` that makes ``dual`` explain itself."""
     with lps.solve(*CASES['MIP'], solver_name='gurobi') as solution:
         assert solution.has_primal
-        with pytest.raises(LpspecError, match='mixed-integer'):
+        with pytest.raises(CharterError, match='mixed-integer'):
             solution.dual('budget')
 
 

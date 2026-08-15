@@ -25,7 +25,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 DOCS = REPO / 'docs'
-REPO_URL = 'https://github.com/fluxopt/lpspec'
+REPO_URL = 'https://github.com/fluxopt/charter'
 BLOB = f'{REPO_URL}/blob/main'
 
 #: `](target)` and `[label]: target`, the two ways markdown names a destination.

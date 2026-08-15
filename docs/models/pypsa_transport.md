@@ -61,7 +61,7 @@ $$\mathit{neg\_rating}_{l} \le f_{t,l} \le \mathit{rating}_{l} \qquad \forall\th
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # PyPSA linear optimal power flow, rung 1: transport model, linear marginal
@@ -134,7 +134,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         """The port's tables as a PyPSA network, column for column.
 
-        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        ``tables`` is the same mapping the charter call binds as ``sources``.
 
         ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
         a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
@@ -191,10 +191,10 @@ boundary condition · 5 KVL.
 **This rung hit the ceiling once**, and that is recorded rather than worked
 around quietly: PyPSA's `p_min_pu = -1` is a bound of `-rating`, an expression
 this language cannot yet put in `bounds:`. It ships as a `neg_rating` column
-instead, and the gap is [issue #31](https://github.com/fluxopt/lpspec/issues/31)
+instead, and the gap is [issue #31](https://github.com/fluxopt/charter/issues/31)
 with the verdict *primitive*. See
 [the ledger](index.md#ledger--what-a-port-could-not-say).
 
 ---
 
-[`examples/ports/pypsa_transport.yaml`](https://github.com/fluxopt/lpspec/blob/main/examples/ports/pypsa_transport.yaml) · back to [all models](index.md)
+[`examples/ports/pypsa_transport.yaml`](https://github.com/fluxopt/charter/blob/main/examples/ports/pypsa_transport.yaml) · back to [all models](index.md)

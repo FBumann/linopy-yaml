@@ -101,7 +101,7 @@ $$\mathit{build}_{t,v} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace
 
 The tabs start from [the instance’s tables](data.md) — one frame per parameter.
 
-=== "lpspec"
+=== "charter"
 
     ```yaml
     # OSeMOSYS's UTOPIA: what to build and run, 1990-2010, to meet three end-use

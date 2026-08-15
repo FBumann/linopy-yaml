@@ -181,4 +181,4 @@ sink that takes it.
 
 ---
 
-[`examples/sos.yaml`](https://github.com/fluxopt/lpspec/blob/main/examples/sos.yaml) · back to [all models](index.md)
+[`examples/sos.yaml`](https://github.com/fluxopt/charter/blob/main/examples/sos.yaml) · back to [all models](index.md)

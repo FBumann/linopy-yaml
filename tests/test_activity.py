@@ -13,8 +13,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-import lpspec as lps
-from lpspec.errors import LpspecError, NoSolutionError
+import charter as lps
+from charter.errors import CharterError, NoSolutionError
 from tests.differential import differential
 from tests.oracle import pd  # through the guard: a bare import would beat it
 from tests.test_milp import COMMITMENT_YAML
@@ -86,7 +86,7 @@ def test_a_milp_returns_activity_where_dual_refuses(commitment_inputs):
         assert balance == pytest.approx(data['load'].sort_index().to_numpy(), rel=ACTIVITY_RTOL), (
             'the == balance row is met exactly at any feasible incumbent, so its activity is the load'
         )
-        with pytest.raises(LpspecError, match='mixed-integer'):
+        with pytest.raises(CharterError, match='mixed-integer'):
             run.result.dual('balance')
 
 
@@ -119,5 +119,5 @@ def test_a_closed_result_refuses_activity(dispatch_yaml, dispatch_frame_inputs):
     data, coords = dispatch_frame_inputs
     with lps.solve(dispatch_yaml, data, coords=coords) as sol:
         pass
-    with pytest.raises(LpspecError, match='closed'):
+    with pytest.raises(CharterError, match='closed'):
         sol.activity('power_balance')
