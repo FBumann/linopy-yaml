@@ -191,14 +191,15 @@ def solution(engine: PolarsEngine) -> None:
 
     Never densified. ``primal()`` hands back a frame: the engine's own shape,
     and the one a caller can pass on without this package depending on their
-    library. Sorted here because a join's output order is the planner's
-    business, not a fact about the architecture this file is narrating.
+    library. Printed unsorted because the order *is* a fact this file narrates
+    — label order, row-major over the coordinate product, which is what the
+    read-back join is built to give and what ``Result.primal`` documents.
     """
     banner(6, 'sink: batches -> highspy -> solution frames', 'relational/sinks/highs.py')
     result = engine.solve()
     print(f'    status     {result.status} ({result.termination_condition})')
     print(f'    objective  {result.objective:,.1f}')
-    print(_indent(result.primal('p').sort('snapshot', 'generator').head(6)))
+    print(_indent(result.primal('p').head(6)))
 
 
 def refusals() -> None:
