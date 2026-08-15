@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.140](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.139...v0.0.1-alpha.140) (2026-08-15)
+
+
+### Documentation
+
+* **site:** the notebook pages say it once ([#798](https://github.com/fluxopt/lpspec/issues/798)) ([fd32ad1](https://github.com/fluxopt/lpspec/commit/fd32ad141e154e0ce0e132d2a4b4acd15050c5c1))
+
 ## [0.0.1-alpha.139](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.138...v0.0.1-alpha.139) (2026-08-15)
 
 
