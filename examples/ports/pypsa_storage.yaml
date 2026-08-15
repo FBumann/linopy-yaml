@@ -1,76 +1,102 @@
-# PyPSA linear optimal power flow, rung 3: rung 2 plus a storage unit carrying
-# energy between snapshots. Non-cyclic — the horizon starts at soc_initial and
-# ends free. Optimum 15253.178322993519, from PyPSA itself.
+description: >-
+  PyPSA linear optimal power flow, rung 3: rung 2 plus a storage unit carrying
+  energy between snapshots. Non-cyclic — the horizon starts at the initial
+  state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
 
 dimensions:
   snapshot:
+    description: dispatch periods
     dtype: int
   bus:
+    description: network nodes
     dtype: str
   generator:
+    description: generating units, each sitting on one bus
     dtype: str
-    coords: [bus]  # every generator sits on a bus
+    coords: [bus]
   link:
+    description: controllable connections, each joining two buses
     dtype: str
-    coords: {from: bus, to: bus}  # both endpoints are buses
+    coords: {from: bus, to: bus}
   storage:
+    description: storage units, each sitting on one bus
     dtype: str
-    coords: [bus]  # a storage unit sits on a bus too
+    coords: [bus]
 
 parameters:
   p_nom:
+    description: installed capacity of a generator
     dims: [generator]
   marginal_cost:
+    description: cost of one unit of output
     dims: [generator]
   ramp_limit_up:
+    description: share of capacity output may rise by from one snapshot to the next
     dims: [generator]
   ramp_limit_down:
+    description: share of capacity output may fall by from one snapshot to the next
     dims: [generator]
   rating:
+    description: most a link may carry towards its `to` bus
     dims: [link]
   neg_rating:
+    description: most a link may carry the other way, negative by convention
     dims: [link]
   storage_p_nom:
+    description: most a storage unit may charge or discharge in one snapshot
     dims: [storage]
-  # p_nom * max_hours in PyPSA. Carried as a column because a bound takes a
-  # name or a number, never arithmetic (#31) — the third model to want that.
   soc_max:
+    description: >-
+      how much energy a storage unit holds when full — PyPSA's capacity times its
+      hours of storage, carried as a column because a bound takes a name or a
+      number, never arithmetic (issue 31)
     dims: [storage]
   soc_initial:
+    description: energy in the store before the first snapshot
     dims: [storage]
   efficiency_store:
+    description: share of charging energy that reaches the store
     dims: [storage]
   efficiency_dispatch:
+    description: share of stored energy that reaches the bus on the way out
     dims: [storage]
   standing_loss:
+    description: share of the carried-over level lost between snapshots
     dims: [storage]
   load:
+    description: demand at each bus in each snapshot
     dims: [snapshot, bus]
 
 variables:
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     bounds:
       lower: 0
       upper: p_nom
   f:
+    description: flow on a link, signed towards its `to` bus
     foreach: [snapshot, link]
     bounds:
       lower: neg_rating
       upper: rating
-  # PyPSA splits a storage unit's power into two non-negative variables rather
-  # than one signed one, so the two efficiencies can differ.
   p_dispatch:
+    description: >-
+      power a storage unit puts onto its bus — PyPSA splits a unit's power into
+      two non-negative variables rather than one signed one, so the two
+      efficiencies can differ
     foreach: [snapshot, storage]
     bounds:
       lower: 0
       upper: storage_p_nom
   p_store:
+    description: power a storage unit takes off its bus
     foreach: [snapshot, storage]
     bounds:
       lower: 0
       upper: storage_p_nom
   soc:
+    description: energy in the store at the end of a snapshot
     foreach: [snapshot, storage]
     bounds:
       lower: 0
@@ -78,6 +104,9 @@ variables:
 
 constraints:
   nodal_balance:
+    description: >-
+      what is generated at a bus, plus what arrives over the links and out of
+      the stores, meets the load there
     foreach: [snapshot, bus]
     expression: >-
       sum(p, over=generator, group_by=bus)
@@ -88,19 +117,20 @@ constraints:
       == load
 
   ramp_up:
+    description: output rises no faster than the ramp limit allows
     foreach: [snapshot, generator]
     expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
 
   ramp_down:
+    description: output falls no faster than the ramp limit allows
     foreach: [snapshot, generator]
     expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
 
-  # Charging is derated on the way in and discharging on the way out, so the
-  # two efficiencies enter on opposite sides of the division. `standing_loss`
-  # decays only what was *carried over* — PyPSA does not apply it to
-  # soc_initial, which is why the first snapshot is its own equation rather
-  # than a carry-over with a seeded value.
   energy_balance_initial:
+    description: >-
+      the first snapshot's level is its own equation, because standing loss
+      decays only what was carried over and PyPSA does not apply it to the
+      initial state of charge
     foreach: [snapshot, storage]
     where: "snapshot == 0"
     expression: >-
@@ -109,6 +139,10 @@ constraints:
       - p_dispatch / efficiency_dispatch
 
   energy_balance:
+    description: >-
+      the level carried into a snapshot, decayed, plus what was stored and less
+      what was taken — charging is derated on the way in and discharging on the
+      way out, so the two efficiencies enter on opposite sides of the division
     foreach: [snapshot, storage]
     expression: >-
       soc == shift(soc, over=snapshot, by=1) * (1 - standing_loss)
@@ -117,4 +151,5 @@ constraints:
 
 objective:
   sense: minimize
+  description: total cost of generation; storage and transmission are free here
   expression: p * marginal_cost

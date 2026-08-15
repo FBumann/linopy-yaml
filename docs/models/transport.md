@@ -19,12 +19,14 @@ $\ell$ is already the line index.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Least-cost dispatch over a network, where a generator sits on a bus, a line joins two of them, and what is generated has to reach the load over the lines.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
 | $\mathcal{S}$ | index $s$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{bus}: \mathcal{G} \to \mathcal{B}$ --- generating units |
+| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
 | $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
 | $\mathcal{L}$ | index $\ell$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, each joining two buses |
 
@@ -73,21 +75,26 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
+    description: >-
+      Least-cost dispatch over a network, where a generator sits on a bus, a line
+      joins two of them, and what is generated has to reach the load over the
+      lines.
+
     dimensions:
       snapshot:
         description: dispatch periods
         dtype: int
       generator:
-        description: generating units
+        description: generating units, each sitting on one bus
         dtype: str
-        coords: [bus]  # every generator sits on a bus
+        coords: [bus]
       bus:
         description: network nodes
         dtype: str
       line:
         description: transmission lines, each joining two buses
         dtype: str
-        coords: {from: bus, to: bus}  # both endpoints are buses
+        coords: {from: bus, to: bus}
 
     parameters:
       p_max:
@@ -121,18 +128,22 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           upper: cap
 
     expressions:
-      gen_at_bus: sum(p, over=generator, group_by=bus)
+      gen_at_bus:
+        expression: sum(p, over=generator, group_by=bus)
+        description: what the generators sitting on a bus produce there
       net_inflow:
         expression: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
         description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
     constraints:
       balance:
+        description: what is generated at a bus plus what arrives over the lines meets the load there
         foreach: [snapshot, bus]
         expression: gen_at_bus + net_inflow == load
 
     objective:
       sense: minimize
+      description: total cost of generation; moving power over a line is free here
       expression: p * cost
     ```
 

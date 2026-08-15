@@ -17,6 +17,8 @@ $$\min \sum_{i,j} c_{ij} x_{ij}
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Dantzig's transportation problem, the first model of the GAMS library: ship canned goods from plants to markets at least freight cost. Optimum 153.675, published with the model.
+
 #### Sets
 
 | Symbol | Meaning |
@@ -67,8 +69,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # Dantzig's transportation problem (GAMS model library #1). Optimum 153.675,
-    # published with the model.
+    description: >-
+      Dantzig's transportation problem, the first model of the GAMS library: ship
+      canned goods from plants to markets at least freight cost. Optimum 153.675,
+      published with the model.
 
     dimensions:
       plant:
@@ -101,15 +105,19 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       within_capacity:
+        description: a plant cannot ship more than it can can
         foreach: [plant]
         expression: sum(shipment, over=market) <= capacity
       meet_demand:
+        description: every market receives at least what it asked for
         foreach: [market]
         expression: sum(shipment, over=plant) >= demand
 
     objective:
       sense: minimize
-      # f * d / 1000 in the source: arithmetic, not a precomputed cost table
+      description: >-
+        total freight, priced as rate times distance the way the source does — the
+        cost of a route is arithmetic here, not a precomputed table
       expression: shipment * distance * freight / 1000
     ```
 

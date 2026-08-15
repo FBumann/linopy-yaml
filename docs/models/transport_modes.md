@@ -24,28 +24,30 @@ four.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Moving 180 tonnes of chemicals out of four depots to three recycling centres, where a depot may reach a centre by rail or by road at different cost. The connection is a thing with a name, so two of them may join the same depot and centre and keep their own cost and their own band; a cost matrix indexed by depot and centre has one cell for the pair and cannot. The rail and road links between the same depot and centre disagree on all three numbers. Guéret, Prins, Sevaux and Heipcke, Applications of Optimization with Xpress-MP, section 10.2. Optimum 1715, published in section 10.2.3.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{D}$ | index $d$ --- `depot` |
-| $\mathcal{C}$ | index $c$ --- `connection` with $\mathrm{origin}: \mathcal{C} \to \mathcal{D}$ |
+| $\mathcal{D}$ | index $d$ --- `depot` --- depots the chemicals leave from |
+| $\mathcal{C}$ | index $c$ --- `connection` with $\mathrm{origin}: \mathcal{C} \to \mathcal{D}$ --- one way of reaching one centre from one depot, by rail or by road |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{stock}$ | `stock` over $\mathcal{D}$ |
-| $\mathit{cost}$ | `cost` over $\mathcal{C}$ |
-| $\mathit{min\_load}$ | `min_load` over $\mathcal{C}$ |
-| $\mathit{max\_load}$ | `max_load` over $\mathcal{C}$ |
-| $\mathit{total\_to\_move}$ | `total_to_move` (scalar) |
+| $\mathit{stock}$ | `stock` over $\mathcal{D}$ --- tonnes standing at a depot |
+| $\mathit{cost}$ | `cost` over $\mathcal{C}$ --- cost per tonne moved over a connection |
+| $\mathit{min\_load}$ | `min_load` over $\mathcal{C}$ --- smallest delivery a connection accepts — rail carries between 10 and 50 tonnes per delivery, and road is unconstrained |
+| $\mathit{max\_load}$ | `max_load` over $\mathcal{C}$ --- largest delivery a connection accepts |
+| $\mathit{total\_to\_move}$ | `total_to_move` (scalar) --- tonnes that have to leave the depots altogether |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{moved}$ | `moved` over $\mathcal{C}$ |
+| $\mathit{moved}$ | `moved` over $\mathcal{C}$ --- tonnes sent over a connection |
 
 #### Objective
 
@@ -75,39 +77,47 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # Moving 180 tonnes of chemicals out of four depots to three recycling
-    # centres, where a depot may reach a centre by rail *or* by road at different
-    # cost. Guéret, Prins, Sevaux & Heipcke, Applications of Optimization with
-    # Xpress-MP, §10.2. Optimum 1715, published in §10.2.3.
-    #
-    # The connection is a thing with a name, so two of them may join the same
-    # depot and centre and keep their own cost and their own band. A cost matrix
-    # indexed by (depot, centre) has one cell for the pair and cannot.
+    description: >-
+      Moving 180 tonnes of chemicals out of four depots to three recycling centres,
+      where a depot may reach a centre by rail or by road at different cost. The
+      connection is a thing with a name, so two of them may join the same depot and
+      centre and keep their own cost and their own band; a cost matrix indexed by
+      depot and centre has one cell for the pair and cannot. The rail and road
+      links between the same depot and centre disagree on all three numbers.
+      Guéret, Prins, Sevaux and Heipcke, Applications of Optimization with
+      Xpress-MP, section 10.2. Optimum 1715, published in section 10.2.3.
 
     dimensions:
       depot:
+        description: depots the chemicals leave from
         dtype: str
       connection:
+        description: one way of reaching one centre from one depot, by rail or by road
         dtype: str
-        coords: {origin: depot}  # every connection leaves one depot
+        coords: {origin: depot}
 
     parameters:
       stock:
+        description: tonnes standing at a depot
         dims: [depot]
       cost:
+        description: cost per tonne moved over a connection
         dims: [connection]
-      # Rail carries between 10 and 50 tonnes per delivery; road is unconstrained.
-      # The band is per connection, which is the point: `d2_c2_rail` and
-      # `d2_c2_road` share a depot and a centre and disagree on all three numbers.
       min_load:
+        description: >-
+          smallest delivery a connection accepts — rail carries between 10 and 50
+          tonnes per delivery, and road is unconstrained
         dims: [connection]
       max_load:
+        description: largest delivery a connection accepts
         dims: [connection]
       total_to_move:
+        description: tonnes that have to leave the depots altogether
         dims: []
 
     variables:
       moved:
+        description: tonnes sent over a connection
         foreach: [connection]
         bounds:
           lower: min_load
@@ -115,15 +125,18 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       within_stock:
+        description: a depot cannot send out more than it holds
         foreach: [depot]
         expression: sum(moved, over=connection, group_by=origin) <= stock
 
       move_the_lot:
+        description: everything that has to be moved is moved
         foreach: []
         expression: sum(moved, over=connection) == total_to_move
 
     objective:
       sense: minimize
+      description: total cost of the deliveries
       expression: moved * cost
     ```
 
