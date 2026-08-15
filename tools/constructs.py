@@ -170,11 +170,15 @@ def references_table() -> str:
     return '\n'.join(lines) + ('\n\n' + '\n\n'.join(notes) if notes else '')
 
 
+def ports() -> list[Path]:
+    """The ported models — somebody else's model, against somebody else's optimum."""
+    return sorted((ROOT / 'examples' / 'ports').glob('*.yaml'))
+
+
 def models() -> list[tuple[str, Path]]:
     """Every model the gallery shows, examples before ports."""
     examples = sorted((ROOT / 'examples').glob('*.yaml'))
-    ports = sorted((ROOT / 'examples' / 'ports').glob('*.yaml'))
-    return [(p.stem, p) for p in examples] + [(p.stem, p) for p in ports]
+    return [(p.stem, p) for p in examples] + [(p.stem, p) for p in ports()]
 
 
 def _replace(page: str, begin: str, end: str, body: str) -> str:
