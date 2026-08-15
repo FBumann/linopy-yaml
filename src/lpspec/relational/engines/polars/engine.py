@@ -651,6 +651,7 @@ class PolarsEngine:
         *,
         solver_options: Mapping[str, Any] | None = None,
         batch_rows: int | None = None,
+        warm: bool = True,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -678,6 +679,13 @@ class PolarsEngine:
                 (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
                 This method's parameter alone, kept off the public handle:
                 nothing outside the chunking tests sets it.
+            warm: Whether this solve may start from what the session holds.
+                ``True``, the default, keeps it — warm on a kept session, cold
+                on a fresh load. ``False`` is deliberately cold, held to
+                structurally: the held solver is closed before the load
+                decision, so the fresh one has nothing to start from, whatever
+                a member squirrels away. :attr:`~lpspec.relational.result.Diagnostics.loads`
+                ticks with it, the whole model having been transferred again.
 
         Returns:
             The solution, holding this engine and the build it answered.
@@ -687,8 +695,12 @@ class PolarsEngine:
             tables = sinks.ingestible(solver_name, built)
             self._sink_columns = tables.column_count - built.column_count
             self._sink_rows = tables.row_count - built.row_count
+            if not warm and self._solver is not None:
+                self._solver.close()
+                self._solver = None
             held = self._solver
             self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
+            started: Literal['cold', 'session'] = 'session' if self._solver is held else 'cold'
         self._solves += 1
         if self._solver is not held:
             self._loads += 1
@@ -707,6 +719,7 @@ class PolarsEngine:
             _primals=primals,
             _duals=duals,
             _activities=activities,
+            _started=started,
             _no_duals=None
             if answer.dual is not None
             else no_duals_message(

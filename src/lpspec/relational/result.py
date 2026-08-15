@@ -107,7 +107,8 @@ class Diagnostics:
     #: already held it. Read together: ``loads == 1`` is a driver on the fast
     #: path — the first solve had nothing to keep — and ``loads == solves`` on
     #: an iterating driver is the difference between "lpspec is slow" and
-    #: "this model masks on a parameter that varies".
+    #: "this model masks on a parameter that varies", unless the driver asked
+    #: for ``warm=False``, which loads by construction.
     solves: int
     loads: int
 
@@ -159,6 +160,9 @@ class Result:
     #: :attr:`_duals` — same frames, same row order — and present whenever the
     #: primals are: unlike a dual, an activity exists at any incumbent.
     _activities: Mapping[str, pl.LazyFrame] | None
+    #: Where this solve started, read off what actually ran — never off what
+    #: was asked for.
+    _started: Literal['cold', 'session']
     #: Why there are no duals, when a solve that left values still has none.
     #: ``None`` whenever :attr:`_duals` holds them.
     _no_duals: str | None = None
@@ -191,6 +195,21 @@ class Result:
     def objective(self) -> float:
         """The objective value, or ``nan`` when there is no solution."""
         return self._objective
+
+    @property
+    def started(self) -> Literal['cold', 'session']:
+        """Where this solve started: ``cold`` or ``session``.
+
+        ``cold`` is a solver loaded fresh with nothing to start from — a
+        first solve, a structure that moved, or ``warm=False``; ``session``
+        is the kept solver re-solving from wherever its last solve left it.
+        Provenance, deliberately, not mechanism — whether a start is a basis,
+        an incumbent or a solver's own notion stays the sink's business, so a
+        solver with no simplex fits the same words, and a word can be added
+        the day something else can be started from. Advisory, like
+        :class:`Diagnostics`: no answer depends on it.
+        """
+        return self._started
 
     def _readable(self, frames: Mapping[str, pl.LazyFrame] | None, what: str) -> Mapping[str, pl.LazyFrame]:
         """*frames*, or why they cannot be read — closed first, then the status.
