@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.146](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.145...v0.0.1-alpha.146) (2026-08-15)
+
+
+### Features
+
+* **gallery:** a fuel curve is a floor per piece ([#808](https://github.com/fluxopt/lpspec/issues/808)) ([c2b0ef6](https://github.com/fluxopt/lpspec/commit/c2b0ef6c1c1bcb3bd875cda17993ec348a2e78e8))
+
+
+### Documentation
+
+* **gallery:** every model says what it is, and so does every declaration in it ([#825](https://github.com/fluxopt/lpspec/issues/825)) ([28eae9b](https://github.com/fluxopt/lpspec/commit/28eae9b7983a0f985502a30e69075dbb8e54cd27))
+
 ## [0.0.1-alpha.145](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.144...v0.0.1-alpha.145) (2026-08-15)
 
 
