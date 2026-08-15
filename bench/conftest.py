@@ -73,6 +73,31 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
+#: Rounds every measurement gets at least, which is what `docs/benchmarks.md`
+#: publishes as the method. pytest-benchmark's own default is 5, and its
+#: calibration hands the fewest rounds to the slowest cells — exactly where
+#: interference sustained across every round is most likely and a clean round
+#: hardest to come by, which is how a minimum ends up 2.33x wrong (#797).
+MIN_ROUNDS = 9
+
+
+def flag_passed(config: pytest.Config, flag: str) -> bool:
+    """Whether *flag* was given on the command line, in either `--x=v` or `--x v` form."""
+    return any(arg == flag or arg.startswith(f'{flag}=') for arg in config.invocation_params.args)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Hold every measurement to the number of rounds the published method claims.
+
+    A default rather than a fixed value: an explicit ``--benchmark-min-rounds``
+    still wins, so a narrow re-take can ask for more. Silent where
+    pytest-benchmark is absent — the CodSpeed job runs this same suite under a
+    plugin that has no such option.
+    """
+    if hasattr(config.option, 'benchmark_min_rounds') and not flag_passed(config, '--benchmark-min-rounds'):
+        config.option.benchmark_min_rounds = MIN_ROUNDS
+
+
 #: Machine-global on purpose — `tempfile.gettempdir()`, not the repo: the run
 #: this lock exists to refuse comes from *another worktree* (#705), which shares
 #: nothing with this one but the machine.

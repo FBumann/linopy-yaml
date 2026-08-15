@@ -98,6 +98,21 @@ than a rival dialect.
 Not measured, deliberately: solve time (that is HiGHS, identical either way, and
 it would swamp the build), and anything about expressiveness.
 
+**A number the run cannot stand behind is marked, not dropped.** Every
+measurement's distribution — `iqr`, `median`, `rounds` — is carried into the
+result file beside the minimum the tables publish, and `bench.report` appends
+`~` to any wall cell, and to the ratio beside it, whose IQR exceeds
+`SPREAD_BUDGET` of its own median. That is the case `min` cannot survive: not
+one wild round, which the minimum ignores by construction, but *every* round
+slow, which leaves no clean one to fall back on — #797 is the cell that was
+publication-ready at 2.33x wrong. A marked cell is one to re-take on an idle
+machine, never one to quote.
+
+**Nine rounds is the floor, and the harness sets it.** pytest-benchmark's own
+default is 5, and its calibration gives the fewest rounds to the slowest cells —
+exactly where sustained interference is most likely and a clean round hardest
+to come by. `--benchmark-min-rounds` still wins where a run wants more.
+
 ## Why it is built this way
 
 **One process per measurement.** Peak RSS is a property of a process: a second
