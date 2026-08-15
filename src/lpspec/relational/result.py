@@ -31,28 +31,29 @@ if TYPE_CHECKING:
     from lpspec.relational.status import SolveStatus
 
 
-#: Where a solve begins, as a request to :meth:`lpspec.api.BoundModel.solve`
-#: and as the report in :attr:`Result.started`. One word rather than a pair of
-#: flags because the two things a solve may keep — the loaded model and the
-#: answer it reached — are kept in that order and never the other way: there
-#: is no continuing from a solver that was closed.
-Start = Literal['cold', 'loaded', 'previous']
+#: How much of the session a solve keeps, as a request to
+#: :meth:`lpspec.api.BoundModel.solve` and as the report in
+#: :attr:`Result.kept`. One word rather than a pair of flags because the two
+#: things a session holds — the solver with the model on it, and the work that
+#: solver did — can only be dropped in that order: there is no carrying on from
+#: a solver that was closed, so the fourth combination does not exist.
+Keep = Literal['nothing', 'solver', 'progress']
 
-#: What each start keeps, in the order of how much that is. Deliberately
-#: about provenance and not mechanism: whether *previous* means a basis, an
-#: incumbent or a sink's own notion is the sink's business, so a solver with
-#: no simplex fits these words unchanged.
-STARTS: Mapping[Start, str] = {
-    'cold': 'the model is loaded into a fresh solver, which has nothing to begin from',
-    'loaded': 'the solver already holding the model is reused, and what the last solve reached is discarded',
-    'previous': 'the solver is reused and continues from what the last solve reached',
+#: What each word keeps, in the order of how much that is. Deliberately about
+#: provenance and not mechanism: whether *progress* is a basis, an incumbent
+#: or a sink's own notion is the sink's business, so a solver with no simplex
+#: fits these words unchanged.
+KEEPS: Mapping[Keep, str] = {
+    'nothing': 'the model is handed to a fresh solver, which has nothing to begin from',
+    'solver': 'the solver already holding the model is reused, and the work the last solve did is discarded',
+    'progress': 'the solver is reused and carries on from where the last solve got to',
 }
 
 
-def unknown_start_message(start: object) -> str:
-    """Why *start* is not one, and what the three are."""
-    options = '\n'.join(f'  {name}: {what}' for name, what in STARTS.items())
-    return f'unknown start {start!r}. A solve may begin from:\n{options}'
+def unknown_keep_message(keep: object) -> str:
+    """Why *keep* is not one, and what the three are."""
+    options = '\n'.join(f'  {name}: {what}' for name, what in KEEPS.items())
+    return f'unknown keep {keep!r}. A solve may keep:\n{options}'
 
 
 def tidy_to_pandas(frame: pl.DataFrame) -> pd.DataFrame:
@@ -132,7 +133,9 @@ class Diagnostics:
     #: path — the first solve had nothing to keep — and ``loads == solves`` on
     #: an iterating driver is the difference between "lpspec is slow" and
     #: "this model masks on a parameter that varies", unless the driver asked
-    #: for ``start='cold'``, which loads by construction.
+    #: for ``keep='nothing'``, which loads by construction. ``loads`` ticks on
+    #: exactly the solves that report :attr:`Result.kept` of ``nothing`` —
+    #: the same event, counted here and named there.
     solves: int
     loads: int
 
@@ -184,9 +187,9 @@ class Result:
     #: :attr:`_duals` — same frames, same row order — and present whenever the
     #: primals are: unlike a dual, an activity exists at any incumbent.
     _activities: Mapping[str, pl.LazyFrame] | None
-    #: Where this solve started, read off what actually ran — never off what
-    #: was asked for.
-    _started: Start
+    #: How much of the session this solve kept, read off what actually ran —
+    #: never off what was asked for.
+    _kept: Keep
     #: One deferred reader per declared named expression. A callable rather
     #: than a frame because deferral is the contract (SPEC §3): nothing about
     #: an expression is lowered or compiled until its reader is called, so a
@@ -227,17 +230,17 @@ class Result:
         return self._objective
 
     @property
-    def started(self) -> Start:
-        """Where this solve began — one of :data:`STARTS`.
+    def kept(self) -> Keep:
+        """How much of the session this solve kept — one of :data:`KEEPS`.
 
-        What *happened*, not what was asked: ``start=`` is a preference, and
-        a first solve or a structure that moved is ``cold`` whatever it
-        requested, the solver having been loaded again and holding nothing.
-        So a driver that asked for ``previous`` and reads ``cold`` back is
-        being told its labels moved. Advisory, like :class:`Diagnostics`: no
-        answer depends on it.
+        What *happened*, not what was asked: ``keep=`` is a preference, and a
+        first solve or a structure that moved keeps ``nothing`` whatever it
+        requested, the solver having been loaded again. So a driver that asked
+        to keep ``progress`` and reads ``nothing`` back is being told its
+        labels moved. Advisory, like :class:`Diagnostics`: no answer depends
+        on it.
         """
-        return self._started
+        return self._kept
 
     def _readable(self, frames: Mapping[str, pl.LazyFrame] | None, what: str) -> Mapping[str, pl.LazyFrame]:
         """*frames*, or why they cannot be read — closed first, then the status.

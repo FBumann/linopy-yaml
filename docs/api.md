@@ -68,7 +68,7 @@ for capacity in search:
 | **it names what changed** | everything else keeps what `build` bound. A parameter, or a dimension index — a coordinate set grows by handing over a longer table and the `coords=` to match, which is how a Benders cut family is *data* |
 | **the answer is the reference build's** | `bound.rebind(x)` solves what `build(model, sources \| x)` solves, always. That is an equality a test asserts, not a promise — it is also the oracle to reach for when a loop looks wrong |
 | **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
-| **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model HiGHS already holds, so the matrix is not handed over twice; whether the next solve also continues from the last answer is `start=`, below. A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, and that model is loaded again and solved cold |
+| **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model HiGHS already holds, so the matrix is not handed over twice; whether the next solve also carries on from the work the last one did is `keep=`, below. A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, and that model is loaded again and solved cold |
 | **which one ran is `bound.diagnostics()`** | `loads` counts the solves that had to load the model from scratch, against `solves` as its denominator. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies". Advisory — nothing about the answer depends on it |
 | **earlier results keep reading** | a `Result` owns its values and a reference to the label frames of the build it answered; a rebind builds new frames without touching those, so an old answer stays an answer over its own coordinates. What retaining one costs is those frames staying alive until it is dropped or `close()`d |
 | **a rebind that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
@@ -82,57 +82,59 @@ set of numbers depends on *you* — a notebook — it is
 costlier ones a session also has: growing a coordinate set, and patching the
 declarations.
 
-### Where a solve starts
+### How much of the session a solve keeps
 
-A rebind keeps the solver loaded, so a second solve never hands the matrix
-over again. Whether it also continues from the *answer* the last solve reached
-is a separate question, and `start=` is where it is asked:
+A session holds two things: the solver with the model on it, and the work that
+solver did. A rebind keeps the first, so a second solve never hands the matrix
+over again. Whether it keeps the second is `keep=`, and the two can only be
+dropped in that order — there is no carrying on from a solver that was closed:
 
 ```python
 result = bound.rebind({'load': load}).solve()
-result.started  # 'loaded' — the solver was kept, its last answer discarded
+result.kept  # 'solver' — reused, and the work it did discarded
 
-again = bound.rebind({'load': more}).solve(start='previous')
-again.started  # 'previous' — it carried on from where the last solve ended
+again = bound.rebind({'load': more}).solve(keep='progress')
+again.kept  # 'progress' — it carried on from where the last solve got to
 
-baseline = bound.solve(start='cold')  # whatever the session held, gone
-baseline.started  # 'cold'
+baseline = bound.solve(keep='nothing')  # whatever the session held, gone
+baseline.kept  # 'nothing'
 ```
 
 | | |
 |---|---|
-| `start='loaded'` (default) | the solver already holding the model is reused and the hand-off skipped; what it reached is discarded, so the run begins as if the model had never been solved |
-| `start='previous'` | that answer is kept too — **opt-in, because it swings both ways**. A solver told where to begin skips the presolve it would otherwise run, and which of the two is worth more is a fact about your model. Six rebinds, HiGHS, measured both ways (#815): on a dispatch presolve cracks outright, carrying cost **76.6 s against 4.3 s** — an 18× *loss*; on a storage model with a cyclic recurrence it cannot crack, carrying cost **111.2 s against 213.9 s** — a 1.9× *win*. Same procedure, opposite answers, so nothing here guesses on your behalf — measure it, below |
-| `start='cold'` | held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again |
+| `keep='solver'` (default) | the solver already holding the model is reused and the hand-off skipped; the work it did is discarded, so the run begins as if the model had never been solved |
+| `keep='progress'` | that work is kept too — **opt-in, because it swings both ways**. A solver told where to begin skips the presolve it would otherwise run, and which of the two is worth more is a fact about your model. Six rebinds, HiGHS, measured both ways (#815): on a dispatch presolve cracks outright, carrying cost **76.6 s against 4.3 s** — an 18× *loss*; on a storage model with a cyclic recurrence it cannot crack, carrying cost **111.2 s against 213.9 s** — a 1.9× *win*. Same procedure, opposite answers, so nothing here guesses on your behalf — measure it, below |
+| `keep='nothing'` | held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again |
 
-`result.started` is read off what happened, never off what was asked, so a
-rebind that had to rebuild reports the cold start it got rather than the one it
-hoped for. It is what a benchmark needs — a cold baseline you can prove
+`result.kept` is read off what happened, never off what was asked, so a rebind
+that had to rebuild reports the `'nothing'` it got rather than the `'progress'`
+it hoped for. It is what a benchmark needs — a cold baseline you can prove
 is cold — and what an iterating driver reads when a loop is slower than it
-should be: `'cold'` every iteration means the session is being rebuilt away.
-**Provenance, deliberately, not mechanism**: whether a start is a basis, an
+should be: `'nothing'` every iteration means the session is being rebuilt away,
+and `loads` ticks on exactly those solves.
+**Provenance, deliberately, not mechanism**: whether progress is a basis, an
 incumbent or a solver's own notion stays the sink's business, so a solver with
 no simplex fits the same words and a word can be added the day something else
-can be started from.
+can be kept.
 
-**Which start your model wants is measured, not reasoned about.** Run the loop
-each way and read the clock the package already keeps; `started` confirms the
-request was honoured rather than quietly downgraded to `cold`:
+**Which keep your model wants is measured, not reasoned about.** Run the loop
+each way and read the clock the package already keeps; `kept` confirms the
+request was honoured rather than quietly downgraded:
 
 ```python
-for start in ('loaded', 'previous'):
+for keep in ('solver', 'progress'):
     bound = lps.build('model.yaml', sources)
     for numbers in walk:
-        assert bound.rebind(numbers).solve(start=start).started in {start, 'cold'}
-    print(start, bound.diagnostics().timings['solve'])
+        assert bound.rebind(numbers).solve(keep=keep).kept in {keep, 'nothing'}
+    print(keep, bound.diagnostics().timings['solve'])
 ```
 
 Take the faster one. Nothing about the answer changes either way — across both
 models above the objectives agreed to 2e-15 relative — so this is a timing
 question and only a timing question.
 
-**Carrying a start across a rebuild is not here yet.** The sinks can read one
-out of a session and set it on another, but nothing above them does: the case
+**Carrying progress across a rebuild is not here yet.** The sinks can read a
+start out of a session and set it on another, but nothing above them does: the case
 that wants it most — a cutting-plane master re-solved after gaining a cut — is
 a model that gained a *row*, and a basis spans the model it was read from.
 [#382](https://github.com/fluxopt/lpspec/issues/382) is where that is being
@@ -318,7 +320,7 @@ it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
 |---|---|
 | **a partition is a filter on the sources** | not a narrower `coords` — the containment check refuses parameter rows outside the declared coordinates, by design. The axis rewrites the sources and supplies the matching `coords` together |
 | **one model, rebound per slice** | every slice is the same math over different numbers, so a serial sweep builds once and [rebinds](#re-solving-with-new-numbers): the YAML is parsed once, the plan lowered once, and a slice whose structure matches the last keeps the loaded solver. Peak is unchanged, a rebuild releasing the previous model before it starts. A sweep under `executor=` cannot — a built model is the one thing that does not cross a process — so it builds per slice, which is also why `carry` and `executor` are mutually exclusive |
-| **`start` reaches every slice, and the fold chooses none of them** | it defaults exactly as [`solve`](#where-a-solve-starts) does, `'loaded'`. A fold is where `start='previous'` has something to carry, consecutive slices differing by one step — but whether carrying pays is a fact about the *model*, and the driver knows no more about that than you do, so it does not decide for you. Under `executor=` it cannot apply at all: a pooled sweep builds per slice, so every slice is a first solve and reports `'cold'` |
+| **`keep` reaches every slice, and the fold chooses none of them** | it defaults exactly as [`solve`](#how-much-of-the-session-a-solve-keeps) does, `'solver'`. A fold is where `keep='progress'` has something to carry, consecutive slices differing by one step — but whether carrying pays is a fact about the *model*, and the driver knows no more about that than you do, so it does not decide for you. Under `executor=` it cannot apply at all: a pooled sweep builds per slice, so every slice is a first solve and keeps `'nothing'` |
 | **everything a slice produced is kept** | every variable's primals and every constraint's duals, read back through `runs.primal(name)` and `runs.dual(name)`. It is still a fold — each slice's *model* is released as the loop goes, so build peak stays at one slice however many there are, and what accumulates is the answer. Narrowing that is a later addition and an easy one; it is absent because it would need *two* keywords, a constraint being allowed to carry a variable's name |
 | **duals are keyed, never combined** | `runs.dual(name)` is `runs.primal(name)`'s shape. Averaging window prices, taking the last, and reading one slice alone are all defensible, so the reduction is the caller's. A slice whose model had an integer variable contributes none, and `runs.objective` says which |
 | **expressions are evaluated per slice** | every declared `expressions:` name, evaluated at each slice's solution as the fold reads it, back through `runs.expression(name)` in `runs.primal(name)`'s shape. Eager where `Result.expression` defers, because a deferred reader holds its build's frames and the fold releases each slice's model as it goes; per slice it costs what one more variable read does. Over `original_index=True` only the rows each window owns survive, so summing the stitched frame cannot double-count the lookahead — and a quantity *reduced over* the sliced dimension has no way back and is refused there, with the per-slice read named as the alternative |

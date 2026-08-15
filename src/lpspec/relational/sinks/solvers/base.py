@@ -304,15 +304,15 @@ class Solver(ABC):
 
     @abstractmethod
     def forget(self) -> None:
-        """Discard what the last solve reached, keeping the model loaded.
+        """Discard the work the last solve did, keeping the model loaded.
 
-        The middle of the three starts: the matrix stays handed over, and the
-        next run begins as if it had never been solved. Separate from
-        :meth:`close` because the two costs are not the same one — a solver
-        that keeps its model skips the hand-off, while a solver that keeps its
-        *answer* skips whatever preprocessing that answer made unnecessary,
-        and the second is the one that can lose. A member with nothing to
-        discard implements this as a no-op.
+        The middle rung of :data:`~lpspec.relational.result.KEEPS`: the matrix
+        stays handed over, and the next run begins as if it had never been
+        solved. Separate from :meth:`close` because the two costs are not the
+        same one — keeping the *solver* skips the hand-off, while keeping its
+        *progress* skips whatever preprocessing that progress made
+        unnecessary, and the second is the one that can lose. A member with
+        nothing to discard implements this as a no-op.
         """
 
     @abstractmethod

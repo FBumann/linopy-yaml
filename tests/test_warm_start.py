@@ -1,16 +1,16 @@
-"""How a solve starts: the three starts, and the machinery under them.
+"""How much of a session a solve keeps, and the machinery under it.
 
 Two levels, and the split is the point.
 
-**The public half** is `solve(start=...)` and `result.started`. A solve may
-keep two things — the loaded model and the answer the last solve reached — and
-it keeps them in that order, which is why one word says it rather than two
-flags: `'cold'` keeps neither, `'loaded'` keeps the model, `'previous'` keeps
-both. The two observables are independent and both are checked: `loads` says
-whether the model was handed over again, and the iteration count says whether
-the answer survived. `'cold'` refuses **structurally** — the held solver is
-discarded, so the fresh one has nothing to start from whatever a member
-squirrels away.
+**The public half** is `solve(keep=...)` and `result.kept`. A session holds two
+things — the solver with the model on it, and the work that solver did — and
+they can only be dropped in that order, which is why one word says it rather
+than two flags: `'nothing'` keeps neither, `'solver'` keeps the first,
+`'progress'` keeps both. The two observables are independent and both are
+checked: `loads` says whether the model was handed over again, and the
+iteration count says whether the work survived. `'nothing'` refuses
+**structurally** — the held solver is discarded, so the fresh one has nothing
+to begin from whatever a member squirrels away.
 
 **The sink half** is `Solver.warm_start()` / `warm()`, machinery with no
 caller above the family yet (#382). It is tested here because it exists: a
@@ -34,7 +34,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from lpspec.relational.result import STARTS
+from lpspec.relational.result import KEEPS
 from lpspec.relational.sinks import SOLVERS
 
 # ---------------------------------------------------------------------------
@@ -192,49 +192,49 @@ def test_a_carried_basis_answers_what_the_cold_session_answered(solver_name):
 
 
 # ---------------------------------------------------------------------------
-# the three starts, told apart by what each keeps
+# the three keeps, told apart by what each holds on to
 # ---------------------------------------------------------------------------
 
 
-def test_the_three_starts_keep_the_two_things_independently(solver_name):
-    """Each start keeps one more than the last, and both halves are observed.
+def test_the_three_keeps_hold_the_two_things_independently(solver_name):
+    """Each word keeps one more than the last, and both halves are observed.
 
-    The model kept shows up as `loads`, the answer kept as the iteration
-    count, and the point of three words rather than one flag is that the
-    middle row exists: `loaded` skips the hand-off *and* begins from nothing,
-    which no boolean over one axis can say.
+    The solver kept shows up as `loads`, the work kept as the iteration count,
+    and the point of three words rather than one flag is that the middle rung
+    exists: `solver` skips the hand-off *and* begins from nothing, which no
+    boolean over one axis can say.
     """
     with lps.build(DISPATCH, dispatch_sources(), coords={'snapshot': SNAPSHOTS}) as bound:
         first = bound.solve(solver_name=solver_name)
         scratch = SIMPLEX_ITERATIONS[solver_name](bound._engine._solver)
-        assert first.started == 'cold', 'a first solve has nothing to start from'
+        assert first.kept == 'nothing', 'a first solve has nothing to keep'
         assert scratch > 0, 'the model must make the simplex work, or none of this is observable'
 
-        carried = bound.solve(solver_name=solver_name, start='previous')
-        assert carried.started == 'previous', 'a kept solver asked to carry on reports that it did'
-        assert bound.diagnostics().loads == 1, 'previous keeps the loaded model'
+        carried = bound.solve(solver_name=solver_name, keep='progress')
+        assert carried.kept == 'progress', 'a kept solver asked to carry on reports that it did'
+        assert bound.diagnostics().loads == 1, 'progress keeps the solver too'
         assert SIMPLEX_ITERATIONS[solver_name](bound._engine._solver) < scratch, (
-            'carrying on from the last answer must cost less work than starting over, or it buys nothing'
+            'carrying the last solve on must cost less work than starting over, or it buys nothing'
         )
 
-        loaded = bound.solve(solver_name=solver_name, start='loaded')
-        assert loaded.started == 'loaded', 'the default keeps the solver and drops what it reached'
-        assert bound.diagnostics().loads == 1, 'loaded keeps the loaded model too — that is the half it shares'
+        reused = bound.solve(solver_name=solver_name, keep='solver')
+        assert reused.kept == 'solver', 'the default keeps the solver and drops the work it did'
+        assert bound.diagnostics().loads == 1, 'solver keeps the loaded model — that is the half it shares'
         assert SIMPLEX_ITERATIONS[solver_name](bound._engine._solver) == scratch, (
-            'loaded begins from nothing, so it repeats the first solve iteration for iteration'
+            'keeping only the solver begins from nothing, so it repeats the first solve iteration for iteration'
         )
 
-        cold = bound.solve(solver_name=solver_name, start='cold')
-        assert cold.started == 'cold', 'cold is a cold start however much the session held'
-        assert bound.diagnostics().loads == 2, 'cold discards the held solver, so the model loads again'
+        cold = bound.solve(solver_name=solver_name, keep='nothing')
+        assert cold.kept == 'nothing', 'nothing is kept however much the session held'
+        assert bound.diagnostics().loads == 2, 'keeping nothing discards the held solver, so the model loads again'
 
-        assert loaded.objective == pytest.approx(first.objective), 'a start moves the route, never the answer'
+        assert reused.objective == pytest.approx(first.objective), 'a keep moves the route, never the answer'
         assert carried.objective == pytest.approx(first.objective)
         assert cold.objective == pytest.approx(first.objective)
 
 
-def test_loaded_is_the_default(solver_name):
-    """Not `previous`: continuing from the last answer is opt-in.
+def test_the_solver_is_kept_by_default_and_its_progress_is_not(solver_name):
+    """Not `progress`: carrying the solver's work on is opt-in.
 
     A solve that skips preprocessing it would otherwise do is faster only on
     a model that preprocessing cannot crack, and nothing at this call site
@@ -243,19 +243,19 @@ def test_loaded_is_the_default(solver_name):
     """
     with lps.build(DISPATCH, dispatch_sources(), coords={'snapshot': SNAPSHOTS}) as bound:
         bound.solve(solver_name=solver_name)
-        assert bound.solve(solver_name=solver_name).started == 'loaded'
+        assert bound.solve(solver_name=solver_name).kept == 'solver'
 
 
-def test_an_unknown_start_names_the_three(solver_name):
+def test_an_unknown_keep_names_the_three(solver_name):
     with (
         lps.build(DISPATCH, dispatch_sources(), coords={'snapshot': SNAPSHOTS}) as bound,
-        pytest.raises(lps.LpspecError, match='unknown start') as raised,
+        pytest.raises(lps.LpspecError, match='unknown keep') as raised,
     ):
-        bound.solve(solver_name=solver_name, start='warm')
-    assert all(word in str(raised.value) for word in STARTS), 'the refusal has to say what the three are'
+        bound.solve(solver_name=solver_name, keep='warm')
+    assert all(word in str(raised.value) for word in KEEPS), 'the refusal has to say what the three are'
 
 
-def test_a_cold_start_after_a_mip_solve_is_cold_too(solver_name):
+def test_keeping_nothing_after_a_mip_solve_is_cold_too(solver_name):
     """The structural guarantee covers the MIP state no basis carries.
 
     An incumbent, a MIP start, cut pools — whatever the member squirrels away
@@ -263,9 +263,9 @@ def test_a_cold_start_after_a_mip_solve_is_cold_too(solver_name):
     """
     with lps.build(KNAPSACK, knapsack_sources()) as bound:
         first = bound.solve(solver_name=solver_name)
-        cold = bound.solve(solver_name=solver_name, start='cold')
+        cold = bound.solve(solver_name=solver_name, keep='nothing')
 
-        assert cold.started == 'cold'
+        assert cold.kept == 'nothing'
         assert cold.objective == pytest.approx(first.objective)
         assert bound.diagnostics().loads == 2, 'the discarded solver is the guarantee, and it shows up here'
 

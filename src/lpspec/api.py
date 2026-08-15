@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from lpspec.language.model import Model
-    from lpspec.relational.result import Diagnostics, Result, Start
+    from lpspec.relational.result import Diagnostics, Keep, Result
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a
 #: consumer that binds no data (``typeset``) must be able to reach it without
@@ -161,43 +161,43 @@ class BoundModel:
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, Any] | None = None,
-        start: Start = 'loaded',
+        keep: Keep = 'solver',
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
         A solver that can stay loaded is kept between calls, so a rebound
         model skips the hand-off and only its numbers are pushed. Whether the
-        *answer* the last solve reached is kept too is *start*, and it is off
-        by default: continuing from it suppresses the preprocessing a solver
+        *work* that solver did is kept too is *keep*, and it is off by
+        default: carrying it forward suppresses the preprocessing a solver
         would otherwise do, which is a win where the model is hard and a loss
-        where it is not, and only a caller knows which. Where this solve
-        actually began is its
-        :attr:`~lpspec.relational.result.Result.started`.
+        where it is not, and only a caller knows which. How much this solve
+        actually kept is its
+        :attr:`~lpspec.relational.result.Result.kept`.
 
         Args:
             solver_name: ``highs``, which ships with the package, or
                 ``gurobi``, which needs the ``[gurobi]`` extra.
             solver_options: Forwarded to the solver verbatim, in its own
                 vocabulary (``{'time_limit': 60}``).
-            start: What this solve may begin from — one of
-                :data:`~lpspec.relational.result.STARTS`. ``loaded``, the
-                default, reuses the solver and discards what it reached;
-                ``previous`` keeps that too, which is what an iterating
-                driver moving one step at a time wants; ``cold`` keeps
-                neither, which is what timing a build or comparing against a
-                cold baseline needs and what no solver option can promise.
-                A preference: a model whose structure moved is loaded again
-                whatever was asked.
+            keep: How much of the session this solve may keep — one of
+                :data:`~lpspec.relational.result.KEEPS`. ``solver``, the
+                default, reuses the solver holding the model and discards the
+                work it did; ``progress`` keeps that work too, which is what
+                an iterating driver moving one step at a time wants;
+                ``nothing`` keeps neither, which is what timing a build or
+                comparing against a cold baseline needs and what no solver
+                option can promise. A preference: a model whose structure
+                moved is loaded again whatever was asked.
 
         Returns:
             The solution, holding this model.
 
         Raises:
             LpspecError: A solver name nothing serves, one this environment
-                cannot run, or a *start* outside
-                :data:`~lpspec.relational.result.STARTS`.
+                cannot run, or a *keep* outside
+                :data:`~lpspec.relational.result.KEEPS`.
         """
-        return self._engine.solve(solver_name, solver_options=solver_options, start=start)
+        return self._engine.solve(solver_name, solver_options=solver_options, keep=keep)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
@@ -284,11 +284,11 @@ def solve(
     The one-shot spelling: a caller who will solve the same model again with
     new numbers wants :func:`build` and :meth:`BoundModel.rebind`.
 
-    There is no ``start`` here and no room for one — this builds the model it
+    There is no ``keep`` here and no room for one — this builds the model it
     solves, so the solve is the first of that model's life and
-    :attr:`~lpspec.relational.result.Result.started` is always ``cold``.
-    Choosing a start is :meth:`BoundModel.solve`, where a previous solve
-    exists to keep something from.
+    :attr:`~lpspec.relational.result.Result.kept` is always ``nothing``.
+    Choosing what to keep is :meth:`BoundModel.solve`, where a previous solve
+    exists to keep something of.
 
     Args:
         model: A YAML path, a mapping, or a loaded :class:`Model`.
