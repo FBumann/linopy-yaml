@@ -75,7 +75,11 @@ for capacity in search:
 `solve_over` is the other spelling and the one to reach for first — a sweep,
 a rolling horizon or a myopic pathway is a *fold*, and it is written for you.
 `rebind` is the primitive underneath: reach for it when the next set of numbers
-depends on the last answer, which is what a fold cannot express.
+depends on the last answer, which is what a fold cannot express. Where the next
+set of numbers depends on *you* — a notebook — it is
+[examples/interactive.ipynb](https://github.com/fluxopt/lpspec/blob/main/examples/interactive.ipynb),
+which runs this loop beside the two costlier ones a session also has: growing a
+coordinate set, and patching the declarations.
 
 `diagnostics()` is what a build and its solves did that the answer does not
 show: the shape the build produced (`columns`, `rows`, `nonzeros` — what

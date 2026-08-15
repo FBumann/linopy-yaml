@@ -177,6 +177,12 @@ dev = [
     # the bare-install job runs the suite without it.
     "pyarrow>=16",
     "typst>=0.15.0",
+    # `examples/interactive.ipynb` renders the math it edits through
+    # `IPython.display`. IPython alone, not a kernel: `tests/test_notebook.py`
+    # execs the cells in one namespace, which is the property the notebook
+    # claims about itself, and jupyter_client plus ipykernel would prove no more
+    # of it while adding a process to every run of the suite.
+    "ipython>=8.18",
 ]
 
 [tool.ruff]
@@ -221,6 +227,7 @@ extend-fixable = ["B", "SIM", "RUF", "C4", "UP"]
 # reads, and elsewhere a docstring argues for one assertion or narrates a
 # script, where a summary line it has to fit in is the worse sentence.
 "examples/**/*.py" = ["T20", "D"]  # the walkthrough's whole output is its point
+"examples/**/*.ipynb" = ["T20"]  # a cell that prints is a cell showing its answer
 "bench/**/*.py" = ["T20", "D"]  # a harness reports by printing; stdout is its interface
 "tools/**/*.py" = ["T20", "D"]  # same: a generator says what it wrote
 "tests/**/*.py" = ["D"]

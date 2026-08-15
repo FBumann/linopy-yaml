@@ -108,6 +108,13 @@ and diff — and the third is
 [#106](https://github.com/fluxopt/lpspec/issues/106), where we adopt linopy's
 *design* for declared solver capabilities without adopting its code.
 
+The modeling API is the one a reader arriving from linopy misses first, and
+what replaces it in a notebook is
+[examples/interactive.ipynb](https://github.com/fluxopt/lpspec/blob/main/examples/interactive.ipynb):
+`rebind` for new numbers, a longer table for more rows, a patched `dict` for new
+math. What it cannot replace is the *lifecycle* — mutating a built model,
+`fix`, `relax`, an IIS — and the notebook says so in its own last cell.
+
 Where linopy is genuinely ahead, and why none of it is a ceiling question, is the
 honest snapshot in [ROADMAP](../ROADMAP.md#honest-snapshot).
 
