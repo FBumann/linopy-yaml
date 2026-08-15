@@ -37,7 +37,7 @@ $$\min \sum_{i,j} c_{ij} x_{ij}
 
 | Symbol | Meaning |
 |---|---|
-| $x$ | `shipment` over $\mathcal{I} \times \mathcal{J}$ --- cases shipped from plant $i$ to market $j$ |
+| $x$ | `shipment` over $\mathcal{I} \times \mathcal{J}$ --- cases shipped from a plant to a market |
 
 #### Objective
 
@@ -72,22 +72,29 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     dimensions:
       plant:
+        description: canning plants, with limited capacity
         values: [seattle, san-diego]
       market:
+        description: markets, with demand to be met
         values: [new-york, chicago, topeka]
 
     parameters:
       capacity:
+        description: capacity of each plant
         dims: [plant]
       demand:
+        description: demand at each market
         dims: [market]
       distance:
+        description: distance from plant to market
         dims: [plant, market]
       freight:
+        description: freight rate per case per unit distance
         dims: []
 
     variables:
       shipment:
+        description: cases shipped from a plant to a market
         foreach: [plant, market]
         bounds:
           lower: 0

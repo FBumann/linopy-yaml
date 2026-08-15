@@ -17,8 +17,3 @@ names:
   load: "\\ell"
   p_max: "\\bar p"
   monthly_cap: "\\bar E"  # E for energy: a cap on a sum over time, not on a rate
-
-descriptions:
-  snapshot: dispatch periods, each falling in one month
-  month: the grouping the budget is stated over
-  generator: generating units

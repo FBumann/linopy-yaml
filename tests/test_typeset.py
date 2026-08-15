@@ -606,7 +606,6 @@ SYMBOLS = {
     'notation': 'latex',
     'dimensions': {'generator': {'index': 'u', 'set': r'\mathcal{U}'}},
     'names': {'p': r'\pi', 'marginal_cost': r'c^{\mathrm{marg}}'},
-    'descriptions': {'generator': 'dispatchable units'},
 }
 
 TYPST_SYMBOLS = {
@@ -630,10 +629,30 @@ def test_the_table_overrides_and_the_rest_is_still_derived():
     assert r'u \in \mathcal{U}' in tex
 
 
-def test_a_description_reaches_the_legend_without_hiding_the_name():
-    tex = to_latex(WITH_MARGINAL_COST, symbols=SYMBOLS)
-    assert r'\texttt{generator}' in tex
-    assert 'dispatchable units' in tex
+DESCRIBED = override(
+    DISPATCH,
+    **{
+        'dimensions.generator.description': 'dispatchable units',
+        'parameters.p_max.description': 'installed capacity',
+        'variables.p.description': 'output of a generator in a snapshot',
+    },
+)
+
+
+@EVERY_FORMAT
+def test_a_description_reaches_the_legend_without_hiding_the_name(fmt: Format):
+    """The declaration's own `description:` is what the legend reads — no
+    sidecar involved, so a model carries its prose wherever it goes."""
+    out = typeset(DESCRIBED, fmt)
+    for text in ('dispatchable units', 'installed capacity', 'output of a generator in a snapshot'):
+        assert text in out, f'{text!r} never reached the legend'
+    assert 'generator' in out, 'the description sits beside the name, it does not replace it'
+
+
+def test_a_generated_variable_carries_the_description_its_expander_gave_it():
+    """`piecewise:` invents the λ weights, so nothing the author wrote can
+    describe them — the expander is the only thing that knows what they are."""
+    assert 'convex-combination weight on a breakpoint' in to_latex('examples/piecewise.yaml')
 
 
 @pytest.mark.parametrize(
@@ -646,6 +665,11 @@ def test_a_description_reaches_the_legend_without_hiding_the_name():
             id='a-misspelled-dimension',
         ),
         pytest.param({'symbols': {'p': 'x'}}, 'unknown section', id='an-unknown-section'),
+        pytest.param(
+            {'descriptions': {'p': 'the output'}},
+            r"unknown section\(s\) \['descriptions'\]",
+            id='a-table-still-carrying-descriptions',
+        ),
         pytest.param({'dimensions': {'generator': {'letter': 'g'}}}, 'unknown key', id='an-unknown-key'),
     ],
 )

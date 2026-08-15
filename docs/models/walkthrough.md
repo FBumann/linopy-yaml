@@ -27,7 +27,7 @@ The dispatch model plus a macro and a named expression — the one used to print
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of generator $g$ in snapshot $s$ |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
 
 #### Objective
 
@@ -55,16 +55,18 @@ $$0 \le p_{s,g} \le \bar p_{g} \qquad \forall\thinspace s \in \mathcal{S},\enspa
 
 dimensions:
   snapshot:
+    description: dispatch periods
     dtype: int
   generator:
+    description: generating units, including the retired one
     # oil is declared but retired (p_max = 0) — the `where` below gives it no
     # columns at all, so the built model is smaller than the coord product.
     values: [wind, solar, gas, oil]
 
 parameters:
-  p_max: {dims: [generator]}
-  load: {dims: [snapshot]}
-  cost: {dims: [generator]}
+  p_max: {dims: [generator], description: "installed capacity, zero for a retired unit"}
+  load: {dims: [snapshot], description: "demand to be met"}
+  cost: {dims: [generator], description: "marginal cost"}
 
 # Tier 2 — free composition. Neither block survives past expansion.py, so no
 # backend ever sees them (docs/ARCHITECTURE.md, hard rule 1).
@@ -79,6 +81,7 @@ macros:
 
 variables:
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     where: "p_max > 0"
     bounds:

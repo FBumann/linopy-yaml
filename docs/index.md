@@ -119,7 +119,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     | Symbol | Meaning |
     |---|---|
-    | $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of generator $g$ in snapshot $s$ |
+    | $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
 
     #### Objective
 
@@ -155,7 +155,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     \paragraph{Variables}
     \begin{description}
-    \item[$p$] \texttt{p} over $\mathcal{S} \times \mathcal{G}$ --- output of generator $g$ in snapshot $s$
+    \item[$p$] \texttt{p} over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot
     \end{description}
 
     \paragraph{Objective}
@@ -189,14 +189,6 @@ Only the notation is a choice, and **How** shows the one that was made here.
             'cost': 'c',
             'load': '\\ell',
             'p_max': '\\bar p',
-        },
-        'descriptions': {
-            'snapshot': 'dispatch periods',
-            'generator': 'generating units',
-            'p': 'output of generator $g$ in snapshot $s$',
-            'cost': 'marginal cost',
-            'load': 'demand to be met',
-            'p_max': 'installed capacity',
         },
     }
 

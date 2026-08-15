@@ -80,11 +80,14 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     ```yaml
     dimensions:
       snapshot:
+        description: dispatch periods, each falling in one month
         dtype: datetime
         coords: [month]  # every snapshot falls in a month, exactly as a generator sits on a bus
       month:
+        description: the grouping the budget is stated over
         dtype: str
       generator:
+        description: generating units
         dtype: str
 
     parameters:
