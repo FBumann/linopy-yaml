@@ -213,7 +213,7 @@ is refused by design rather than unimplemented. The two halves of that answer
 are worth keeping apart: one is a macro nobody has written, the other is the
 ceiling doing its job.
 
-Three rows from fourteen ports — a rate worth watching once the corpus has hit
+Three rows from fifteen ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 **The TSP row is the one to read**, and it is narrower than it first looked.
