@@ -1,0 +1,136 @@
+# OSeMOSYS's UTOPIA: what to build and run, 1990-2010, to meet three end-use
+# demands at least discounted cost. The reference system bundled with MARKAL.
+# Optimum 29446.86269, from OSeMOSYS itself under GLPK.
+#
+# Discounting, the annuity, salvage value and the operational-life window are
+# arithmetic over years, so they are folded into coefficients before the model
+# is built. What is left is the decision: how much to build, and how hard to
+# run it.
+
+dimensions:
+  technology:
+    dtype: str
+  fuel:
+    dtype: str
+  timeslice:
+    dtype: str
+  mode:
+    dtype: int
+  year:
+    dtype: int
+  # A second axis over the same years: capacity standing in `year` was built
+  # in some `vintage`, and the two are joined by `still_live`.
+  vintage:
+    dtype: int
+
+parameters:
+  # 1 where a vintage is still inside its technology's operational life in
+  # that year. A plant's life is read from data and differs by technology, so
+  # the window cannot be a fixed shift — it is an incidence table, the shape
+  # `pypsa_kvl` uses for a cycle basis.
+  still_live:
+    dims: [technology, year, vintage]
+  residual_capacity:
+    dims: [technology, year]
+
+  build_cost:
+    dims: [technology, vintage]
+  holding_cost:
+    dims: [technology, year]
+  running_cost:
+    dims: [timeslice, technology, mode, year]
+
+  year_split:
+    dims: [timeslice, year]
+  capacity_available:
+    dims: [technology, timeslice, year]
+  input_ratio:
+    dims: [technology, fuel, mode, year]
+  output_ratio:
+    dims: [technology, fuel, mode, year]
+
+  sliced_demand:
+    dims: [fuel, timeslice, year]
+  annual_demand:
+    dims: [fuel, year]
+
+  max_capacity:
+    dims: [technology, year]
+  min_capacity:
+    dims: [technology, year]
+
+  reserve_margin:
+    dims: [year]
+  reserve_tagged:
+    dims: [technology, year]
+  reserve_demand:
+    dims: [technology, fuel, mode, year]
+
+  # Fixed O&M owed on the capacity that already stood in 1990.
+  residual_holding:
+    dims: []
+
+variables:
+  # How hard a technology runs, per timeslice and mode.
+  activity:
+    foreach: [timeslice, technology, mode, year]
+    bounds:
+      lower: 0
+  # How much capacity is built, and when.
+  build:
+    foreach: [technology, vintage]
+    bounds:
+      lower: 0
+
+expressions:
+  # Capacity standing in a year: every vintage still inside its life, plus
+  # what was already there in 1990.
+  built_capacity: sum(build * still_live, over=vintage)
+  capacity: built_capacity + residual_capacity
+
+constraints:
+  # A technology cannot run beyond the capacity standing that year.
+  within_capacity:
+    foreach: [timeslice, technology, year]
+    expression: sum(activity, over=mode) <= capacity * capacity_available
+
+  # Every fuel balances in every timeslice: what is produced covers the demand
+  # placed on it plus what other technologies consume.
+  fuel_balance:
+    foreach: [timeslice, fuel, year]
+    expression: >-
+      sum(sum(activity * output_ratio, over=mode), over=technology) * year_split
+      >= sliced_demand
+      + sum(sum(activity * input_ratio, over=mode), over=technology) * year_split
+
+  # And balances again over the year, for demands that are not sliced.
+  annual_balance:
+    foreach: [fuel, year]
+    expression: >-
+      sum(sum(sum(activity * output_ratio * year_split, over=mode), over=technology), over=timeslice)
+      >= annual_demand
+      + sum(sum(sum(activity * input_ratio * year_split, over=mode), over=technology), over=timeslice)
+
+  capacity_ceiling:
+    foreach: [technology, year]
+    expression: capacity <= max_capacity
+
+  capacity_floor:
+    foreach: [technology, year]
+    expression: capacity >= min_capacity
+
+  # Firm capacity must exceed the electricity demand of the moment by the
+  # reserve margin.
+  reserve:
+    foreach: [timeslice, year]
+    expression: >-
+      sum(sum(sum(activity * reserve_demand, over=mode), over=fuel), over=technology) * reserve_margin
+      <= sum(capacity * reserve_tagged, over=technology)
+
+objective:
+  sense: minimize
+  expression: >-
+    build * build_cost
+    + built_capacity * holding_cost
+    + activity * running_cost
+    + residual_holding

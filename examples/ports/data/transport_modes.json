@@ -1,0 +1,137 @@
+{
+ "depot": {
+  "depot": [
+   "d1",
+   "d2",
+   "d3",
+   "d4"
+  ]
+ },
+ "connection": {
+  "connection": [
+   "d1_c1_road",
+   "d1_c2_road",
+   "d2_c2_rail",
+   "d2_c2_road",
+   "d3_c2_road",
+   "d3_c3_rail",
+   "d3_c3_road",
+   "d4_c2_rail",
+   "d4_c2_road",
+   "d4_c3_rail",
+   "d4_c3_road"
+  ],
+  "origin": [
+   "d1",
+   "d1",
+   "d2",
+   "d2",
+   "d3",
+   "d3",
+   "d3",
+   "d4",
+   "d4",
+   "d4",
+   "d4"
+  ]
+ },
+ "stock": {
+  "depot": [
+   "d1",
+   "d2",
+   "d3",
+   "d4"
+  ],
+  "value": [
+   50.0,
+   40.0,
+   35.0,
+   65.0
+  ]
+ },
+ "cost": {
+  "connection": [
+   "d1_c1_road",
+   "d1_c2_road",
+   "d2_c2_rail",
+   "d2_c2_road",
+   "d3_c2_road",
+   "d3_c3_rail",
+   "d3_c3_road",
+   "d4_c2_rail",
+   "d4_c2_road",
+   "d4_c3_rail",
+   "d4_c3_road"
+  ],
+  "value": [
+   12.0,
+   11.0,
+   12.0,
+   14.0,
+   9.0,
+   4.0,
+   5.0,
+   11.0,
+   14.0,
+   10.0,
+   14.0
+  ]
+ },
+ "min_load": {
+  "connection": [
+   "d1_c1_road",
+   "d1_c2_road",
+   "d2_c2_rail",
+   "d2_c2_road",
+   "d3_c2_road",
+   "d3_c3_rail",
+   "d3_c3_road",
+   "d4_c2_rail",
+   "d4_c2_road",
+   "d4_c3_rail",
+   "d4_c3_road"
+  ],
+  "value": [
+   0.0,
+   0.0,
+   10.0,
+   0.0,
+   0.0,
+   10.0,
+   0.0,
+   10.0,
+   0.0,
+   10.0,
+   0.0
+  ]
+ },
+ "max_load": {
+  "connection": [
+   "d1_c1_road",
+   "d1_c2_road",
+   "d2_c2_rail",
+   "d2_c2_road",
+   "d3_c2_road",
+   "d3_c3_rail",
+   "d3_c3_road",
+   "d4_c2_rail",
+   "d4_c2_road",
+   "d4_c3_rail",
+   "d4_c3_road"
+  ],
+  "value": [
+   1000000000.0,
+   1000000000.0,
+   50.0,
+   1000000000.0,
+   1000000000.0,
+   50.0,
+   1000000000.0,
+   50.0,
+   1000000000.0,
+   50.0,
+   1000000000.0
+  ]
+ },
+ "total_to_move": 180.0
+}

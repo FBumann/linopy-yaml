@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.0.1-alpha.145](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.144...v0.0.1-alpha.145) (2026-08-15)
+
+
+### Documentation
+
+* **gallery:** the model list names every model ([#819](https://github.com/fluxopt/lpspec/issues/819)) ([6a78fcc](https://github.com/fluxopt/lpspec/commit/6a78fccb161039f2de2d3727a928ac766bb5177f))
+
+## [0.0.1-alpha.144](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.143...v0.0.1-alpha.144) (2026-08-15)
+
+
+### Features
+
+* **language:** a declaration says what it is, and the legend reads it ([#812](https://github.com/fluxopt/lpspec/issues/812)) ([6b31278](https://github.com/fluxopt/lpspec/commit/6b3127863818da8c6653e4821e7b7444f13b2402))
+* **language:** a file says what model it is ([#813](https://github.com/fluxopt/lpspec/issues/813)) ([6c081e1](https://github.com/fluxopt/lpspec/commit/6c081e1f08257e497cae399175d806cde7209b86))
+* **language:** a named expression can say what it counts ([#814](https://github.com/fluxopt/lpspec/issues/814)) ([d57aad1](https://github.com/fluxopt/lpspec/commit/d57aad1935a9dff843263b63136685cdfe137ad2))
+
+## [0.0.1-alpha.143](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.142...v0.0.1-alpha.143) (2026-08-15)
+
+
+### Features
+
+* **gallery:** an operational life is a window read from data ([#805](https://github.com/fluxopt/lpspec/issues/805)) ([7071fc0](https://github.com/fluxopt/lpspec/commit/7071fc009d59b142f67a293efb86b060a6777988))
+
+## [0.0.1-alpha.142](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.141...v0.0.1-alpha.142) (2026-08-15)
+
+
+### Features
+
+* **gallery:** two connections may join one depot and centre ([#790](https://github.com/fluxopt/lpspec/issues/790)) ([80d1949](https://github.com/fluxopt/lpspec/commit/80d1949fd2c803f9fef2ec4db03ce279924c1e07))
+
+## [0.0.1-alpha.141](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.140...v0.0.1-alpha.141) (2026-08-15)
+
+
+### Features
+
+* **gallery:** a path serves one call and crosses many arcs ([#789](https://github.com/fluxopt/lpspec/issues/789)) ([640558b](https://github.com/fluxopt/lpspec/commit/640558beb202161a529fc3864cd49bd58cdf95d5))
+
 ## [0.0.1-alpha.140](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.139...v0.0.1-alpha.140) (2026-08-15)
 
 

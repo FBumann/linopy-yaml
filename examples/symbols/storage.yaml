@@ -24,14 +24,3 @@ names:
   soc: "\\mathrm{soc}"
   charge: "\\mathrm{charge}"
   discharge: "\\mathrm{discharge}"
-
-descriptions:
-  snapshot: dispatch periods, cyclic at the horizon
-  generator: generating units
-  p: output of generator $g$ in snapshot $s$
-  cost: marginal cost
-  load: demand to be met
-  p_max: installed capacity
-  soc: state of charge carried into the next snapshot
-  charge: energy into the store
-  discharge: energy out of the store

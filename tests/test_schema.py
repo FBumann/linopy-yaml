@@ -185,7 +185,7 @@ def test_an_unknown_key_is_rejected(raw, match):
         ),
         pytest.param(
             {'foreach': ['x'], 'zzzz': 1},
-            'Valid keys: bounds, domain, foreach, where',
+            'Valid keys: bounds, description, domain, foreach, where',
             id='anything-else-lists-the-valid-keys',
         ),
     ],
@@ -250,3 +250,162 @@ def test_coords_mapping_allows_two_coordinates_onto_one_dimension():
 def test_a_coordinate_that_does_not_name_a_target_is_rejected(dimensions, match):
     with pytest.raises(SchemaError, match=match):
         Model.model_validate({'dimensions': dimensions})
+
+
+# ---------------------------------------------------------------------------
+# `description:` — free text on every declaration kind, never parsed (#222)
+# ---------------------------------------------------------------------------
+
+
+DESCRIBED = {
+    'dimensions': {
+        'snapshot': {'dtype': 'int', 'values': [0, 1], 'description': 'the operational hours'},
+        'bp': {'dtype': 'int', 'values': [0, 1]},
+    },
+    'parameters': {
+        'load': {'dims': ['snapshot'], 'description': 'demand per hour'},
+        'bp_x': {'dims': ['bp']},
+        'bp_y': {'dims': ['bp']},
+    },
+    'variables': {
+        'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 100}, 'description': 'dispatch'},
+        'op_cost': {'foreach': ['snapshot'], 'bounds': {'lower': 0}},
+    },
+    'constraints': {
+        'balance': {'foreach': ['snapshot'], 'expression': 'p == load', 'description': 'supply meets demand'},
+    },
+    'objective': {'expression': 'sum(op_cost, over=snapshot)', 'description': 'operating cost'},
+    'expressions': {
+        'spend': {'expression': 'sum(op_cost, over=snapshot)', 'description': 'what the horizon costs'},
+    },
+    'macros': {
+        'weighted': {'args': ['a', 'w'], 'template': 'sum(a * w, over=snapshot)', 'description': 'a weighted sum'},
+    },
+    'piecewise': {
+        'cost_curve': {'over': 'bp', 'links': [['p', 'bp_x'], ['op_cost', 'bp_y']], 'description': 'the cost curve'},
+    },
+    'sos': {
+        'pick': {'variable': 'p', 'over': 'snapshot', 'type': 1, 'description': 'at most one hour dispatches'},
+    },
+}
+
+DECLARATION_KINDS = [
+    pytest.param('dimensions', 'snapshot', id='dimension'),
+    pytest.param('parameters', 'load', id='parameter'),
+    pytest.param('variables', 'p', id='variable'),
+    pytest.param('constraints', 'balance', id='constraint'),
+    pytest.param('expressions', 'spend', id='named-expression'),
+    pytest.param('macros', 'weighted', id='macro'),
+    pytest.param('piecewise', 'cost_curve', id='piecewise'),
+    pytest.param('sos', 'pick', id='sos'),
+]
+
+
+@pytest.mark.parametrize(('section', 'name'), DECLARATION_KINDS)
+def test_a_description_survives_loading(section, name):
+    schema = Model.model_validate(DESCRIBED)
+    block = getattr(schema, section)[name]
+    assert block.description == DESCRIBED[section][name]['description'], (
+        'the description is part of the Model, so it must reach AST consumers verbatim'
+    )
+
+
+def test_the_objective_carries_one_too():
+    """`objective:` is one block rather than a mapping, so it misses the
+    parametrization above and would otherwise go unchecked."""
+    assert Model.model_validate(DESCRIBED).objective.description == 'operating cost'
+
+
+def test_an_undescribed_declaration_carries_none():
+    assert Model.model_validate(DESCRIBED).variables['op_cost'].description is None, (
+        'absent means None, never an empty string'
+    )
+
+
+@pytest.mark.parametrize(
+    ('raw', 'match'),
+    [
+        pytest.param(
+            {
+                'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
+                'variables': {'v': {'foreach': ['x'], 'bounds': {'lower': 0, 'description': 'floor'}}},
+            },
+            "unknown key 'description' in a bounds block",
+            id='bounds',
+        ),
+        pytest.param(
+            {'dimensions': {'x': {'values': [1], 'coords': {'period': {'dtype': 'int', 'description': 'era'}}}}},
+            "unknown key 'description' in a coordinate declaration",
+            id='coordinate-spec',
+        ),
+    ],
+)
+def test_a_description_on_a_non_declaration_block_is_rejected(raw, match):
+    """The key belongs to declarations; the sub-blocks inside one stay closed."""
+    with pytest.raises(SchemaError, match=match):
+        Model.model_validate(raw)
+
+
+def test_the_file_itself_is_describable():
+    """The one description with no declaration under it: what the model *is*,
+    which every example otherwise states in a `#` comment the parser throws
+    away."""
+    schema = Model.model_validate({'description': 'least-cost dispatch', **DESCRIBED})
+    assert schema.description == 'least-cost dispatch'
+    assert Model.model_validate(DESCRIBED).description is None, 'absent means None, never an empty string'
+
+
+def test_a_model_description_survives_a_round_trip():
+    schema = Model.model_validate({'description': 'least-cost dispatch', **DESCRIBED})
+    assert Model.model_validate(schema.to_dict()).description == 'least-cost dispatch'
+    assert 'description' not in Model.model_validate(DESCRIBED).to_dict(), 'None is stripped, as every other default is'
+
+
+# ---------------------------------------------------------------------------
+# a named expression is a string until it has more than one thing to say
+# ---------------------------------------------------------------------------
+
+
+EXPRESSIONS = {
+    'dimensions': {'g': {'values': ['a'], 'dtype': 'str'}},
+    'parameters': {'rate': {'dims': ['g']}},
+    'variables': {'p': {'foreach': ['g']}},
+}
+
+
+def test_a_named_expression_is_written_as_a_bare_string():
+    schema = Model.model_validate({**EXPRESSIONS, 'expressions': {'total': 'sum(p, over=g)'}})
+    assert schema.expressions['total'].expression == 'sum(p, over=g)'
+    assert schema.expressions['total'].description is None
+
+
+def test_a_named_expression_carrying_a_description_is_written_as_a_mapping():
+    body = {'expression': 'sum(p * rate, over=g)', 'description': 'CO2 released'}
+    schema = Model.model_validate({**EXPRESSIONS, 'expressions': {'emissions': body}})
+    assert schema.expressions['emissions'].description == 'CO2 released'
+
+
+@pytest.mark.parametrize(
+    ('written', 'id_'),
+    [
+        pytest.param('sum(p, over=g)', 'a-bare-string', id='a-bare-string'),
+        pytest.param(
+            {'expression': 'sum(p, over=g)', 'description': 'total output'},
+            'a-mapping',
+            id='a-mapping-with-a-description',
+        ),
+    ],
+)
+def test_a_named_expression_round_trips_in_the_form_it_was_written(written, id_):
+    """A file that says it in one line gets one line back — the same trade
+    `PiecewiseLink` makes for its list form."""
+    schema = Model.model_validate({**EXPRESSIONS, 'expressions': {'e': written}})
+    assert schema.to_dict()['expressions']['e'] == written, f'{id_} did not survive to_dict'
+    assert Model.model_validate(schema.to_dict()).expressions['e'].expression == 'sum(p, over=g)'
+
+
+def test_an_unknown_key_in_a_named_expression_is_rejected():
+    """The mapping form is a block like any other, so it is closed too."""
+    body = {'expression': 'sum(p, over=g)', 'describtion': 'typo'}
+    with pytest.raises(SchemaError, match=r"unknown key 'describtion' in a named expression"):
+        Model.model_validate({**EXPRESSIONS, 'expressions': {'e': body}})

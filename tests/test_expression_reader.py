@@ -100,7 +100,7 @@ def test_a_variable_free_expression_is_legal_and_reads_its_constant(result):
 @pytest.mark.parametrize('name', [pytest.param(n, id=n) for n in MODEL['expressions']])
 def test_the_frame_carries_exactly_the_dims_dims_of_computes(result, name):
     schema = lps.load_model(MODEL)
-    ast = expression_of(schema.expressions[name], schema, Namespace.of(schema), name)
+    ast = expression_of(schema.expressions[name].expression, schema, Namespace.of(schema), name)
     frame = result.expression(name)
     assert set(frame.columns) - {'value'} == set(dims_of(ast, schema, name)), (
         'the returned frame answers over the dim set the language computes for the expression'
