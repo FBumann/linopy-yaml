@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.142](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.141...v0.0.1-alpha.142) (2026-08-15)
+
+
+### Features
+
+* **gallery:** two connections may join one depot and centre ([#790](https://github.com/fluxopt/lpspec/issues/790)) ([80d1949](https://github.com/fluxopt/lpspec/commit/80d1949fd2c803f9fef2ec4db03ce279924c1e07))
+
 ## [0.0.1-alpha.141](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.140...v0.0.1-alpha.141) (2026-08-15)
 
 
