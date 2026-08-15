@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.137](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.136...v0.0.1-alpha.137) (2026-08-15)
+
+
+### Documentation
+
+* **examples:** a notebook changes a model without a modelling API ([#788](https://github.com/fluxopt/lpspec/issues/788)) ([50dd21f](https://github.com/fluxopt/lpspec/commit/50dd21f5ff7cfd76c769229ee103a8c5e29093b4))
+
 ## [0.0.1-alpha.136](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.135...v0.0.1-alpha.136) (2026-08-15)
 
 
