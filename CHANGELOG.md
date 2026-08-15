@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.139](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.138...v0.0.1-alpha.139) (2026-08-15)
+
+
+### Bug Fixes
+
+* **bench:** the floor's parity check runs again ([#799](https://github.com/fluxopt/lpspec/issues/799)) ([9f240ba](https://github.com/fluxopt/lpspec/commit/9f240badab1cb5cecf28bc6552bfa2c961c5ca1b))
+
 ## [0.0.1-alpha.138](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.137...v0.0.1-alpha.138) (2026-08-15)
 
 
