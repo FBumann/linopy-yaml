@@ -19,7 +19,6 @@ reference implementation. This directory is the source; that is the guided tour.
 | `monthly_budget.yaml` | a cap per calendar month: time grouped through a coordinate, exactly as a generator sits on a bus (`sum(group_by=)`) |
 | `multi_period.yaml` | capacity decided once per investment period and binding at every snapshot in it (`at()`) |
 | `walkthrough.yaml` | the model `walkthrough.py` prints every pipeline stage for |
-| `interactive.ipynb` | the three loops a session has — new numbers, more rows, new math — over `dispatch.yaml` |
 | `rolling/` | a storage schedule solved a window at a time, and what the lookahead buys (`solve_over`, `EachWindow`) |
 | `myopic/` | an investment pathway over periods of typical days, each inheriting the last one's fleet (`solve_over`, `carry`) |
 | `benders/` | the problem split in two and reassembled, checked against the monolith it decomposes |
@@ -34,12 +33,11 @@ asserted, so it cannot drift from what the code does:
 python examples/walkthrough.py
 ```
 
-`interactive.ipynb` is the other direction — not how a model is built but how
-one is *changed*, which in a notebook is three different loops with three
-different costs: `rebind` for new numbers, a longer table plus `coords=` for
-more rows, and a patched `dict` for new math. It ships with its cells cleared,
-and `tests/test_notebook.py` runs them in order and checks what the prose
-claims, so a reader's kernel sees what the file says it will.
+The other direction — not how a model is built but how one is *changed* — is a
+notebook rather than a script, and lives with the docs it is a page of:
+[docs/interactive.ipynb](../docs/interactive.ipynb) runs `dispatch.yaml` through
+the three loops a session has. It ships with its cells cleared and the published
+page executes it, so what a reader sees rendered is what that build produced.
 
 `ports/` carries three or four files per model — the YAML, the instance, the
 recorded objective with its provenance, and a reference implementation

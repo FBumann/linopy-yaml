@@ -1,6 +1,6 @@
 """The interactive notebook must keep running, and keep claiming true things.
 
-``examples/interactive.ipynb`` teaches the three loops a session actually has —
+``docs/interactive.ipynb`` teaches the three loops a session actually has —
 rebind, grow a coordinate set, patch the spec — and every one of them is a real
 call, so a signature change breaks this test rather than leaving a notebook that
 reads fine and errors in a reader's kernel.
@@ -14,6 +14,8 @@ here without these assertions, and would teach the wrong loop.
 Cells are exec'd in order in one namespace rather than run through a kernel:
 the property under test is that the notebook works top to bottom, and a kernel
 would add jupyter_client and ipykernel to the dev group to prove the same thing.
+The site does run it on one — ``execute: true`` in mkdocs.yml — so a build is
+the second place this would fail, several minutes later and only on a push.
 """
 
 from __future__ import annotations
@@ -29,7 +31,8 @@ from tests.conftest import EXAMPLES_DIR
 
 pytest.importorskip('IPython', reason='the notebook displays through IPython, which the bare install lacks')
 
-NOTEBOOK = EXAMPLES_DIR / 'interactive.ipynb'
+DOCS_DIR = EXAMPLES_DIR.parent / 'docs'
+NOTEBOOK = DOCS_DIR / 'interactive.ipynb'
 
 
 def cells(kind: str) -> list[str]:
@@ -41,12 +44,13 @@ def cells(kind: str) -> list[str]:
 def session() -> tuple[dict[str, Any], str]:
     """One top-to-bottom run: the namespace it ends with, and what it printed.
 
-    Runs from ``examples/`` because that is where a reader opens it and why the
-    notebook says ``dispatch.yaml`` rather than a path.
+    Runs from ``docs/`` because that is where the notebook sits, and so where
+    both a reader's kernel and mkdocs-jupyter's start it — which is what makes
+    ``../examples/dispatch.yaml`` resolve.
     """
     namespace: dict[str, Any] = {'__name__': '__notebook__'}
     printed = io.StringIO()
-    with contextlib.chdir(EXAMPLES_DIR), contextlib.redirect_stdout(printed):
+    with contextlib.chdir(DOCS_DIR), contextlib.redirect_stdout(printed):
         for source in cells('code'):
             exec(compile(source, str(NOTEBOOK), 'exec'), namespace)
     return namespace, printed.getvalue()

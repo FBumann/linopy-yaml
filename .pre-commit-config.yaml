@@ -15,6 +15,18 @@ repos:
       - id: check-merge-conflict
       - id: debug-statements
 
+  # A notebook is committed with its cells cleared, so its diff is the source
+  # and nothing else. The site runs it — `execute: true` in mkdocs.yml — which
+  # is what makes a stored output redundant as well as unreadable, and
+  # `tests/test_notebook.py` fails if one is committed anyway. `execution` and
+  # `ExecuteTime` are cell metadata a kernel writes even when the outputs go,
+  # and are the same two linopy's hook strips.
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+      - id: nbstripout
+        args: [--extra-keys=cell.metadata.ExecuteTime cell.metadata.execution]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.1
     hooks:

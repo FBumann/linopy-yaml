@@ -6,11 +6,10 @@ that only works on this page.
 
 If you would rather see the machinery than read about it,
 `python examples/walkthrough.py` prints every stage — YAML → schema → AST →
-plan → frames → LP text → solution — for one small model. To *change* a model
-rather than read one,
-[examples/interactive.ipynb](https://github.com/fluxopt/lpspec/blob/main/examples/interactive.ipynb)
-is the notebook loop: new numbers, more rows, new math, and how to tell which of
-the three you are paying for.
+plan → frames → LP text → solution — for one small model. And to *change* a
+model rather than read one, [Changing a model](interactive.ipynb) is the
+notebook loop — new numbers, more rows, new math, and how to tell which of the
+three you are paying for. Every output on that page is the site build's own run.
 
 ## 1. A dimension is declared; its coordinates usually are not
 
