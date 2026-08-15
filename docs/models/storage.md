@@ -21,6 +21,8 @@ an $\eta$.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Dispatch plus a battery whose state of charge is closed into a cycle: the horizon ends where it began.
+
 #### Sets
 
 | Symbol | Meaning |
@@ -87,6 +89,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
+    description: >-
+      Dispatch plus a battery whose state of charge is closed into a cycle: the
+      horizon ends where it began.
+
     dimensions:
       snapshot:
         description: dispatch periods, cyclic at the horizon
@@ -134,15 +140,20 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       power_balance:
+        description: generation plus what the store gives back covers the load, net of charging
         foreach: [snapshot]
         expression: sum(p, over=generator) + discharge - charge == load
       soc_balance:
+        description: >-
+          the level carried out of a snapshot is the one carried in plus what was
+          stored, minus what was taken — and it wraps at the horizon, so the first
+          snapshot inherits from the last
         foreach: [snapshot]
-      # cyclic storage: soc wraps around the snapshot horizon
         expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
 
     objective:
       sense: minimize
+      description: total cost of generation; storing and releasing energy is free here
       expression: p * cost
     ```
 

@@ -1,58 +1,65 @@
-# Storage dispatch over one window of a rolling horizon.
-#
-# The model never mentions the global clock. It is written over `t`, a local
-# index dense 0..n-1 that `EachWindow(..., into='t')` supplies, because "the
-# first snapshot of *this* window" is not a literal in global numbering.
-#
-# The seam is `soc_open` and `soc_step`, and it needs nothing that does not
-# ship: a dimension comparison picks the first local row, and `shift` without
-# `edge=` drops the vacated one rather than wrapping it.
+description: >-
+  Storage dispatch over one window of a rolling horizon. The model never
+  mentions the global clock: it is written over t, a local index dense from
+  zero that the window strategy supplies, because "the first snapshot of this
+  window" is not a literal in global numbering.
 version: 0
 
 dimensions:
-  t: {dtype: int}
-  generator: {dtype: str}
+  t: {dtype: int, description: "local index of a snapshot inside the window"}
+  generator: {dtype: str, description: "generating units"}
 
 parameters:
-  p_max: {dims: [t, generator]} # availability: wind blows at night, not by day
-  cost: {dims: [generator]}
-  load: {dims: [t]}
-  soc_initial: {dims: []} # what the previous window carried across
+  p_max: {dims: [t, generator], description: "availability — wind blows at night, not by day"}
+  cost: {dims: [generator], description: "marginal cost"}
+  load: {dims: [t], description: "demand to be met"}
+  soc_initial: {dims: [], description: "what the previous window carried across"}
 
 variables:
   p:
+    description: output of a generator in a local snapshot
     foreach: [t, generator]
     bounds: {lower: 0, upper: p_max}
   charge:
+    description: energy into the store
     foreach: [t]
     bounds: {lower: 0, upper: 25}
   discharge:
+    description: energy out of the store
     foreach: [t]
     bounds: {lower: 0, upper: 25}
   soc:
+    description: state of charge at the end of a local snapshot
     foreach: [t]
     bounds: {lower: 0, upper: 120}
 
 constraints:
   balance:
+    description: generation plus what the store gives back covers the load, net of charging
     foreach: [t]
     expression: sum(p, over=generator) + discharge - charge == load
 
-  # the seam: at the window's first local row the level comes from the carry
   soc_open:
+    description: >-
+      the seam — at the window's first local row the level comes from what the
+      previous window carried across
     foreach: [t]
     where: 't == 0'
     expression: soc == soc_initial + charge * 0.9 - discharge
 
-  # everywhere else it comes from the row before; no edge=, so t == 0 drops out
-  # on its own, with no gate restating the origin
   soc_step:
+    description: >-
+      everywhere else the level comes from the row before; with no edge given
+      the first row drops out on its own, so nothing has to restate the origin
     foreach: [t]
     expression: soc == shift(soc, over=t, by=1) + charge * 0.9 - discharge
 
 expressions:
-  spend: sum(p * cost, over=generator)
+  spend:
+    expression: sum(p * cost, over=generator)
+    description: what the fleet costs to run in a local snapshot
 
 objective:
   sense: minimize
+  description: cost of running the fleet over the window
   expression: spend

@@ -1,31 +1,38 @@
-# The feasibility subproblem: how far from dispatchable is this capacity?
-#
-# lpspec hands back no Farkas ray for an infeasible solve — `dual` needs a
-# readable status — so a feasibility cut cannot be read off the infeasible
-# subproblem. This is the standard answer and, here, the only one: minimise the
-# violation instead. Its optimum is zero exactly when `strict_sub` is feasible,
-# and its capacity duals are the subgradient the cut needs.
+description: >-
+  The feasibility subproblem: how far from dispatchable is this capacity? No
+  Farkas ray comes back from an infeasible solve — reading a dual needs a
+  readable status — so a feasibility cut cannot be taken off the infeasible
+  subproblem. This is the standard answer and, here, the only one: minimise the
+  violation instead. Its optimum is zero exactly when the strict subproblem is
+  feasible, and its capacity duals are the subgradient the cut needs.
 dimensions:
-  snapshot: {dtype: int}
-  generator: {values: [wind, gas]}
+  snapshot: {dtype: int, description: "dispatch periods"}
+  generator: {values: [wind, gas], description: "generating units"}
 parameters:
-  load: {dims: [snapshot]}
-  avail: {dims: [snapshot, generator]}
-  cap_hat: {dims: [generator]}
+  load: {dims: [snapshot], description: "demand to be met"}
+  avail: {dims: [snapshot, generator], description: "capacity factor"}
+  cap_hat: {dims: [generator], description: "the capacity the master proposed, fixed here"}
 variables:
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     bounds: {lower: 0}
   short:
+    description: load left unserved, which is what this model exists to measure
     foreach: [snapshot]
     bounds: {lower: 0}
 constraints:
   capacity:
+    description: >-
+      output is capped by the proposed capacity, derated by availability — and
+      its duals are the subgradient the feasibility cut needs
     foreach: [snapshot, generator]
     expression: p <= cap_hat * avail
   balance:
+    description: the fleet covers the load in every snapshot, or the shortfall says by how much it misses
     foreach: [snapshot]
     expression: sum(p, over=generator) + short >= load
 objective:
   sense: minimize
+  description: total shortfall, which is zero exactly when the capacity can be dispatched
   expression: short

@@ -98,11 +98,13 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       power_balance:
+        description: the fleet meets the load exactly in every snapshot
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
 
     objective:
       sense: minimize
+      description: total cost of generation over the horizon
       expression: p * cost
     ```
 

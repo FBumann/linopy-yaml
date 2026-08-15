@@ -27,6 +27,8 @@ same construct** — `sum(group_by=)` — and time is not a special axis.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+A cap on what each technology may generate per calendar month — an aggregate over a coarser grouping of time than the model is dispatched on.
+
 #### Sets
 
 | Symbol | Meaning |
@@ -39,16 +41,16 @@ same construct** — `sum(group_by=)` — and time is not a special axis.
 
 | Symbol | Meaning |
 |---|---|
-| $\bar p$ | `p_max` over $\mathcal{G}$ |
-| $c$ | `cost` over $\mathcal{G}$ |
-| $\ell$ | `load` over $\mathcal{T}$ |
-| $\bar E$ | `monthly_cap` over $\mathcal{M} \times \mathcal{G}$ |
+| $\bar p$ | `p_max` over $\mathcal{G}$ --- installed capacity |
+| $c$ | `cost` over $\mathcal{G}$ --- marginal cost |
+| $\ell$ | `load` over $\mathcal{T}$ --- demand to be met |
+| $\bar E$ | `monthly_cap` over $\mathcal{M} \times \mathcal{G}$ --- the budget the group sum is checked against, one per month and technology |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
 
 #### Objective
 
@@ -78,11 +80,15 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
+    description: >-
+      A cap on what each technology may generate per calendar month — an aggregate
+      over a coarser grouping of time than the model is dispatched on.
+
     dimensions:
       snapshot:
         description: dispatch periods, each falling in one month
         dtype: datetime
-        coords: [month]  # every snapshot falls in a month, exactly as a generator sits on a bus
+        coords: [month]
       month:
         description: the grouping the budget is stated over
         dtype: str
@@ -92,17 +98,21 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     parameters:
       p_max:
+        description: installed capacity
         dims: [generator]
       cost:
+        description: marginal cost
         dims: [generator]
       load:
+        description: demand to be met
         dims: [snapshot]
-      # the budget the group sum is checked against, one per month and technology
       monthly_cap:
+        description: the budget the group sum is checked against, one per month and technology
         dims: [month, generator]
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         bounds:
           lower: 0
@@ -110,14 +120,17 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       balance:
+        description: the fleet meets the load exactly in every snapshot
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
       monthly_budget:
+        description: what a generator produces across a month stays inside that month's budget
         foreach: [month, generator]
         expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
 
     objective:
       sense: minimize
+      description: total cost of generation over the horizon
       expression: sum(p * cost, over=generator)
     ```
 

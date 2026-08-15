@@ -1,32 +1,37 @@
-# Two cut families, because a subproblem can fail in two ways.
-#
-# An *optimality* cut says what operating a capacity costs. A *feasibility* cut
-# says a capacity cannot be operated at all, and carries no `theta`: it is a
-# statement about `cap` alone. Both are declared once and grow as data.
+description: >-
+  The Benders master: choose capacity against two cut families, because a
+  subproblem can fail in two ways. Both are declared once and grow as data.
 dimensions:
-  generator: {values: [wind, gas]}
-  cut: {dtype: int}
-  fcut: {dtype: int}
+  generator: {values: [wind, gas], description: "generating units to size"}
+  cut: {dtype: int, description: "optimality cuts gathered so far"}
+  fcut: {dtype: int, description: "feasibility cuts gathered so far"}
 parameters:
-  invest: {dims: [generator]}
-  cut_const: {dims: [cut]}
-  cut_slope: {dims: [cut, generator]}
-  fcut_const: {dims: [fcut]}
-  fcut_slope: {dims: [fcut, generator]}
+  invest: {dims: [generator], description: "cost of a unit of capacity"}
+  cut_const: {dims: [cut], description: "intercept of an optimality cut"}
+  cut_slope: {dims: [cut, generator], description: "how an optimality cut prices capacity"}
+  fcut_const: {dims: [fcut], description: "intercept of a feasibility cut"}
+  fcut_slope: {dims: [fcut, generator], description: "how a feasibility cut prices capacity"}
 variables:
   cap:
+    description: capacity to build, which is all the master decides
     foreach: [generator]
     bounds: {lower: 0, upper: 100}
   theta:
+    description: the master's estimate of what operating that capacity will cost
     foreach: []
     bounds: {lower: 0}
 constraints:
   optimality_cut:
+    description: what operating a capacity costs, as the subproblem has reported it so far
     foreach: [cut]
     expression: theta >= cut_const + sum(cut_slope * cap, over=generator)
   feasibility_cut:
+    description: >-
+      a capacity that cannot be operated at all is ruled out — a statement
+      about capacity alone, which is why it carries no cost estimate
     foreach: [fcut]
     expression: sum(fcut_slope * cap, over=generator) <= fcut_const
 objective:
   sense: minimize
+  description: what the capacity costs to build, plus the estimate of running it
   expression: cap * invest + theta

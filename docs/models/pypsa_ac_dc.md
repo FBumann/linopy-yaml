@@ -21,46 +21,48 @@ what it builds as well as what it runs.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose generators sit on a bus and burn a carrier, with capacity to build and a CO2 budget priced through the second map: the nodal balance groups through the bus coordinate, and the budget reads an emissions rate back down through the carrier. PyPSA's own ac-dc-meshed example. Optimum 18441021.477729216, from PyPSA itself.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` |
-| $\mathcal{B}$ | index $b$ --- `bus` |
-| $\mathcal{C}$ | index $c$ --- `carrier` |
-| $\mathcal{E}$ | index $e$ --- `generator` with $\mathrm{bus}: \mathcal{E} \to \mathcal{B},\enspace \mathrm{carrier}: \mathcal{E} \to \mathcal{C}$ |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ |
-| $\mathcal{I}$ | index $i$ --- `link` with $\mathrm{link\_from}: \mathcal{I} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{I} \to \mathcal{B}$ |
-| $\mathcal{Y}$ | index $y$ --- `cycle` |
+| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
+| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
+| $\mathcal{C}$ | index $c$ --- `carrier` --- what a generator burns, and what its emissions are a property of |
+| $\mathcal{E}$ | index $e$ --- `generator` with $\mathrm{bus}: \mathcal{E} \to \mathcal{B},\enspace \mathrm{carrier}: \mathcal{E} \to \mathcal{C}$ --- generating units, each sitting on a bus and burning a carrier — two coordinates on one dimension, landing on two different axes |
+| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
+| $\mathcal{I}$ | index $i$ --- `link` with $\mathrm{link\_from}: \mathcal{I} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{I} \to \mathcal{B}$ --- controllable connections, each joining two buses |
+| $\mathcal{Y}$ | index $y$ --- `cycle` --- one independent loop per meshed sub-network |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ |
-| $p^{\mathrm{max,pu}}$ | `p_max_pu` over $\mathcal{T} \times \mathcal{E}$ |
-| $p^{\mathrm{nom,min}}$ | `p_nom_min` over $\mathcal{E}$ |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ |
-| $\mathit{gen\_capital\_cost}$ | `gen_capital_cost` over $\mathcal{E}$ |
-| $\mathit{efficiency}$ | `efficiency` over $\mathcal{E}$ |
-| $\mathit{co2\_per\_mwh}$ | `co2_per_mwh` over $\mathcal{C}$ |
-| $\mathit{line}^{\mathrm{capital,cost}}$ | `line_capital_cost` over $\mathcal{L}$ |
-| $\mathit{link}^{\mathrm{capital,cost}}$ | `link_capital_cost` over $\mathcal{I}$ |
-| $\mathit{link}^{\mathrm{p,max,pu}}$ | `link_p_max_pu` over $\mathcal{I}$ |
-| $\mathit{link}^{\mathrm{p,min,pu}}$ | `link_p_min_pu` over $\mathcal{I}$ |
-| $\mathit{cycle}^{\mathrm{incidence}}$ | `cycle_incidence` over $\mathcal{Y} \times \mathcal{L}$ |
-| $\mathit{co2\_limit}$ | `co2_limit` (scalar) |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $p^{\mathrm{max,pu}}$ | `p_max_pu` over $\mathcal{T} \times \mathcal{E}$ --- share of built capacity a generator can produce in a snapshot |
+| $p^{\mathrm{nom,min}}$ | `p_nom_min` over $\mathcal{E}$ --- capacity a generator already has, and cannot fall below |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ --- cost of one unit of output |
+| $\mathit{gen\_capital\_cost}$ | `gen_capital_cost` over $\mathcal{E}$ --- annualised cost of a unit of generator capacity |
+| $\mathit{efficiency}$ | `efficiency` over $\mathcal{E}$ --- share of the carrier's energy a generator turns into output |
+| $\mathit{co2\_per\_mwh}$ | `co2_per_mwh` over $\mathcal{C}$ --- emissions per unit of carrier burned, a property of the carrier |
+| $\mathit{line}^{\mathrm{capital,cost}}$ | `line_capital_cost` over $\mathcal{L}$ --- annualised cost of a unit of line capacity |
+| $\mathit{link}^{\mathrm{capital,cost}}$ | `link_capital_cost` over $\mathcal{I}$ --- annualised cost of a unit of link capacity |
+| $\mathit{link}^{\mathrm{p,max,pu}}$ | `link_p_max_pu` over $\mathcal{I}$ --- share of its capacity a link may carry forwards |
+| $\mathit{link}^{\mathrm{p,min,pu}}$ | `link_p_min_pu` over $\mathcal{I}$ --- share of its capacity a link may carry backwards, negative by convention |
+| $\mathit{cycle}^{\mathrm{incidence}}$ | `cycle_incidence` over $\mathcal{Y} \times \mathcal{L}$ --- the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
+| $\mathit{co2\_limit}$ | `co2_limit` (scalar) --- emissions the whole horizon is allowed |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ |
-| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ |
-| $g$ | `g` over $\mathcal{T} \times \mathcal{I}$ |
-| $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{I}$ |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ --- output of a generator in a snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ --- generator capacity to hold, built on top of what already stands |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `to` bus — not chosen, but whatever the voltage law leaves |
+| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- line capacity to build |
+| $g$ | `g` over $\mathcal{T} \times \mathcal{I}$ --- flow on a link, signed towards its `link_to` bus — chosen, which is what makes it a link and not a line |
+| $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{I}$ --- link capacity to build |
 
 #### Objective
 
@@ -134,109 +136,144 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose
-    # generators sit on a bus *and* burn a carrier, with a CO2 budget priced
-    # through the second map. PyPSA's own `ac-dc-meshed` example.
-    # Optimum 18441021.477729216, from PyPSA itself.
+    description: >-
+      PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose
+      generators sit on a bus and burn a carrier, with capacity to build and a CO2
+      budget priced through the second map: the nodal balance groups through the
+      bus coordinate, and the budget reads an emissions rate back down through the
+      carrier. PyPSA's own ac-dc-meshed example.
+      Optimum 18441021.477729216, from PyPSA itself.
 
     dimensions:
       snapshot:
+        description: dispatch periods
         dtype: int
       bus:
+        description: network nodes
         dtype: str
       carrier:
+        description: what a generator burns, and what its emissions are a property of
         dtype: str
-      # A generator sits on a bus and burns a carrier: two coordinates on one
-      # dimension, landing on two different axes. The balance groups through the
-      # first; the CO2 budget reads a price back down through the second.
       generator:
+        description: >-
+          generating units, each sitting on a bus and burning a carrier — two
+          coordinates on one dimension, landing on two different axes
         dtype: str
         coords: [bus, carrier]
-      # Passive lines and controllable links are separate axes with separate
-      # physics, and both have two ends on the same bus dimension.
       line:
+        description: passive AC lines, each joining two buses
         dtype: str
         coords: {from: bus, to: bus}
       link:
+        description: controllable connections, each joining two buses
         dtype: str
         coords: {link_from: bus, link_to: bus}
       cycle:
-        dtype: str  # one independent loop per meshed sub-network
+        description: one independent loop per meshed sub-network
+        dtype: str
 
     parameters:
       load:
+        description: demand at each bus in each snapshot
         dims: [snapshot, bus]
       p_max_pu:
+        description: share of built capacity a generator can produce in a snapshot
         dims: [snapshot, generator]
       p_nom_min:
+        description: capacity a generator already has, and cannot fall below
         dims: [generator]
       marginal_cost:
+        description: cost of one unit of output
         dims: [generator]
       gen_capital_cost:
+        description: annualised cost of a unit of generator capacity
         dims: [generator]
       efficiency:
+        description: share of the carrier's energy a generator turns into output
         dims: [generator]
-      # Emissions are a property of the carrier, not of the generator burning it.
       co2_per_mwh:
+        description: emissions per unit of carrier burned, a property of the carrier
         dims: [carrier]
       line_capital_cost:
+        description: annualised cost of a unit of line capacity
         dims: [line]
       link_capital_cost:
+        description: annualised cost of a unit of link capacity
         dims: [link]
       link_p_max_pu:
+        description: share of its capacity a link may carry forwards
         dims: [link]
       link_p_min_pu:
+        description: share of its capacity a link may carry backwards, negative by convention
         dims: [link]
-      # The cycle basis, as a sparse (cycle, line) table of impedance x direction.
-      # A line may belong to several cycles, so this cannot be a coordinate.
       cycle_incidence:
+        description: >-
+          the cycle basis, as a sparse table of impedance times direction. A line
+          may belong to several cycles, so this cannot be a coordinate.
         dims: [cycle, line]
       co2_limit:
+        description: emissions the whole horizon is allowed
         dims: []
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         bounds:
           lower: 0
       p_nom:
+        description: generator capacity to hold, built on top of what already stands
         foreach: [generator]
         bounds:
           lower: p_nom_min
-      # A line's flow is not chosen: it is whatever the voltage law leaves.
       f:
+        description: >-
+          flow on a line, signed towards its `to` bus — not chosen, but whatever
+          the voltage law leaves
         foreach: [snapshot, line]
       s_nom:
+        description: line capacity to build
         foreach: [line]
         bounds:
           lower: 0
-      # A link's flow is chosen — that is what makes it a link and not a line.
       g:
+        description: >-
+          flow on a link, signed towards its `link_to` bus — chosen, which is what
+          makes it a link and not a line
         foreach: [snapshot, link]
       link_p_nom:
+        description: link capacity to build
         foreach: [link]
         bounds:
           lower: 0
 
     constraints:
       within_capacity:
+        description: a generator produces no more than the built capacity available to it
         foreach: [snapshot, generator]
         expression: p <= p_nom * p_max_pu
 
       line_upper:
+        description: a line carries no more forwards than its built capacity
         foreach: [snapshot, line]
         expression: f <= s_nom
       line_lower:
+        description: a line carries no more backwards than its built capacity
         foreach: [snapshot, line]
         expression: f >= -s_nom
       link_upper:
+        description: a link carries no more forwards than its share of built capacity
         foreach: [snapshot, link]
         expression: g <= link_p_nom * link_p_max_pu
       link_lower:
+        description: a link carries no more backwards than its share of built capacity
         foreach: [snapshot, link]
         expression: g >= link_p_nom * link_p_min_pu
 
       nodal_balance:
+        description: >-
+          what is generated at a bus plus what arrives over the lines and links
+          meets the load there
         foreach: [snapshot, bus]
         expression: >-
           sum(p, over=generator, group_by=bus)
@@ -245,12 +282,15 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           == load
 
       kirchhoff_voltage_law:
+        description: around each independent cycle the impedance-weighted flows sum to zero
         foreach: [snapshot, cycle]
         expression: sum(f * cycle_incidence, over=line) == 0
 
-      # PyPSA's primary_energy constraint: a generator's emissions are its output
-      # divided by its efficiency, priced at its carrier's rate.
       co2_budget:
+        description: >-
+          PyPSA's primary_energy constraint — a generator's emissions are its
+          output divided by its efficiency, priced at its carrier's rate, and the
+          horizon's total stays inside the budget
         foreach: []
         expression: >-
           sum(sum(p * at(co2_per_mwh, onto=generator, by=carrier) / efficiency, over=generator), over=snapshot)
@@ -258,6 +298,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     objective:
       sense: minimize
+      description: what the fleet costs to run, plus what the generation and network capacity cost to build
       expression: >-
         p * marginal_cost
         + p_nom * gen_capital_cost

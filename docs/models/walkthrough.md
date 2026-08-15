@@ -8,12 +8,14 @@ The dispatch model plus a macro and a named expression — the one used to print
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+The dispatch model of README.md, plus one macro and one named expression — small enough to print in full, complete enough that every pipeline stage in examples/walkthrough.py has something to show.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
 | $\mathcal{S}$ | index $s$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, including the retired one |
+| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, including oil, which is retired and gets no columns at all |
 
 #### Parameters
 
@@ -27,7 +29,7 @@ The dispatch model plus a macro and a named expression — the one used to print
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product |
 
 #### Objective
 
@@ -49,18 +51,19 @@ $$0 \le p_{s,g} \le \bar p_{g} \qquad \forall\thinspace s \in \mathcal{S},\enspa
 <!-- math:end -->
 
 ```yaml
-# The dispatch model of README.md, plus one macro and one named expression —
-# small enough to print in full, complete enough that every pipeline stage in
-# examples/walkthrough.py has something to show.
+description: >-
+  The dispatch model of README.md, plus one macro and one named expression —
+  small enough to print in full, complete enough that every pipeline stage in
+  examples/walkthrough.py has something to show.
 
 dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
   generator:
-    description: generating units, including the retired one
-    # oil is declared but retired (p_max = 0) — the `where` below gives it no
-    # columns at all, so the built model is smaller than the coord product.
+    description: >-
+      generating units, including oil, which is retired and gets no columns at
+      all
     values: [wind, solar, gas, oil]
 
 parameters:
@@ -68,20 +71,23 @@ parameters:
   load: {dims: [snapshot], description: "demand to be met"}
   cost: {dims: [generator], description: "marginal cost"}
 
-# Tier 2 — free composition. Neither block survives past expansion.py, so no
-# backend ever sees them (docs/ARCHITECTURE.md, hard rule 1).
 expressions:
-  total_supply: sum(p, over=generator)
+  total_supply:
+    expression: sum(p, over=generator)
+    description: what the whole fleet produces in a snapshot
 
 macros:
   weighted_sum:
+    description: an array priced by a second one and summed over a dimension
     args: [array, weights]
     kwargs: [over]
     template: sum(array * weights, over=over)
 
 variables:
   p:
-    description: output of a generator in a snapshot
+    description: >-
+      output of a generator in a snapshot — the `where` drops the retired unit
+      entirely, so the built model is smaller than the coordinate product
     foreach: [snapshot, generator]
     where: "p_max > 0"
     bounds:
@@ -90,11 +96,13 @@ variables:
 
 constraints:
   power_balance:
+    description: the fleet meets the load exactly in every snapshot
     foreach: [snapshot]
     expression: total_supply == load
 
 objective:
   sense: minimize
+  description: total cost of generation over the horizon
   expression: weighted_sum(p, cost, over=generator)
 ```
 

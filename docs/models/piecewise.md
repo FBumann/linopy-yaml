@@ -19,6 +19,8 @@ $$p_g = \sum_k \lambda_{g,k}\, x_{g,k}, \quad
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Least-cost dispatch where each generator's cost curve is piecewise-linear in its output, expanded into a lambda formulation.
+
 #### Sets
 
 | Symbol | Meaning |
@@ -33,8 +35,8 @@ $$p_g = \sum_k \lambda_{g,k}\, x_{g,k}, \quad
 |---|---|
 | $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ --- maximum dispatch |
 | $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
-| $x$ | `bp_x` over $\mathcal{G} \times \mathcal{K}$ --- breakpoint dispatch levels |
-| $y$ | `bp_y` over $\mathcal{G} \times \mathcal{K}$ --- cost at each breakpoint |
+| $x$ | `bp_x` over $\mathcal{G} \times \mathcal{K}$ --- breakpoint dispatch levels, one curve per generator |
+| $y$ | `bp_y` over $\mathcal{G} \times \mathcal{K}$ --- cost at each breakpoint, one curve per generator |
 
 #### Variables
 
@@ -88,6 +90,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
+    description: >-
+      Least-cost dispatch where each generator's cost curve is piecewise-linear in
+      its output, expanded into a lambda formulation.
+
     dimensions:
       snapshot:
         description: dispatch periods
@@ -107,11 +113,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: demand to be met
         dims: [snapshot]
       bp_x:
-        description: breakpoint dispatch levels
-        dims: [generator, bp]  # per-generator breakpoint positions
+        description: breakpoint dispatch levels, one curve per generator
+        dims: [generator, bp]
       bp_y:
-        description: cost at each breakpoint
-        dims: [generator, bp]  # per-generator cost at each breakpoint
+        description: cost at each breakpoint, one curve per generator
+        dims: [generator, bp]
 
     variables:
       p:
@@ -128,6 +134,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     piecewise:
       cost_curve:
+        description: >-
+          cost read off the generator's curve — convex, so the weights need no
+          binaries to keep them on one segment
         over: bp
         links:
           - [p, bp_x]
@@ -136,11 +145,13 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       balance:
+        description: the fleet meets the load exactly in every snapshot
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
 
     objective:
       sense: minimize
+      description: total operating cost, taken off the curves rather than from a marginal rate
       expression: op_cost
     ```
 
