@@ -677,6 +677,11 @@ class Model(_StrictBlock):
         maps themselves, first appearance ordered; a label a map omits is null,
         the partial case (SPEC §2).
 
+        **Columns rather than a frame** because ``language/`` may not import a
+        dataframe library: a typeset renderer reaches this module and would pay
+        for polars, which ``test_architecture`` forbids. Each lane builds its
+        own frame from this.
+
         Returns:
             ``{dimension: labels, lookup: values, …}``, or ``None`` where no
             lookup over *dimension* declares its values — leaving every
