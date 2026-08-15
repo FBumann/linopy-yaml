@@ -217,13 +217,13 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | put the same math on a `linopy.Model` | `lpspec.linopy.build` · `.extend` (`data=`, its own coercion) | **yes** |
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
+| | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `lpspec.linopy.expression` on the other lane | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
-| | *derived results* | | |
 | **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` | — |
 
 **Flat, and a namespace marks a lane rather than a topic.** `lpspec.linopy` is
 the only one, and it earns it by being a different lane — its own dependencies,
-its own oracle, its own two-verb surface with its own test. `strategy.py` is not
+its own oracle, its own three-verb surface with its own test. `strategy.py` is not
 a lane, so `solve_over` and its axes sit at the top level beside `solve`.
 
 That is a rule with teeth rather than a taste: the surface test exempts
@@ -479,7 +479,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/sinks/tables.py` | what every sink reads and no more — the five frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
-| `linopy/__init__.py` | opt-in shim: `build` / `extend` on a `linopy.Model` |
+| `linopy/__init__.py` | opt-in shim: `build` / `extend` on a `linopy.Model`, and `expression` reading a named quantity off a solved one |
 | `linopy/loader.py` | data coercion to `xr.Dataset`, master coords |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
 

@@ -8,17 +8,31 @@ is timed.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
+import numpy as np
 import pytest
 
-from bench import floor
+from bench import conftest as harness
+from bench import floor, plot, report, warm_payoff
 from bench.cases import CASES, Shape
-from bench.conftest import _holder_if_alive, pytest_benchmark_update_machine_info, refuse_unless_idle, take_lock
+from bench.conftest import (
+    MIN_ROUNDS,
+    _holder_if_alive,
+    flag_passed,
+    pytest_benchmark_update_machine_info,
+    refuse_unless_idle,
+    take_lock,
+)
 from bench.workloads import _engine, _tables, split_sources
+from lpspec.relational.engines.polars.engine import _Block
+from lpspec.relational.sinks.solvers.base import WarmStart
 
 
 def test_the_default_arm_clears_the_engine_rather_than_leaving_it() -> None:
@@ -119,6 +133,133 @@ def test_the_fingerprint_carries_the_load_triple(request: pytest.FixtureRequest)
     )
 
 
+# ---------------------------------------------------------------------------
+# a contaminated minimum is marked rather than published as fact (#797)
+# ---------------------------------------------------------------------------
+
+
+def _timing(arm: str, **over: Any) -> dict[str, Any]:
+    """One `timing` record in the shape `bench.results` emits, tight by default."""
+    return {
+        'record': 'timing',
+        'case': 'dispatch',
+        'size': 'm',
+        'sink': 'lp',
+        'arm': arm,
+        'wall_seconds': 1.0,
+        'median': 2.0,
+        'iqr': 0.0,
+        'rounds': 9,
+        'peak_rss_bytes': 1e9,
+        'live_fraction': 1.0,
+        'counts': {'columns': 1000, 'rows': 100, 'nonzeros': 1000},
+    } | over
+
+
+def _rendered(**over: Any) -> str:
+    return report.table('dispatch', report.best([_timing('lpspec', **over), _timing('linopy')]), 'lp')
+
+
+@pytest.mark.parametrize(
+    ('iqr', 'marked'),
+    [
+        pytest.param(2.0 * (report.SPREAD_BUDGET + 0.01), True, id='spread-past-the-budget-is-marked'),
+        pytest.param(2.0 * (report.SPREAD_BUDGET - 0.01), False, id='spread-inside-the-budget-is-not'),
+        pytest.param(None, False, id='a-file-written-before-the-spread-was-carried-is-not'),
+    ],
+)
+def test_a_cell_is_marked_by_its_spread_over_its_own_median(iqr: float | None, marked: bool) -> None:
+    """The signal is iqr/median: a minimum whose whole distribution is spread had
+    no clean round to fall back on, which is the one contamination `min` cannot
+    filter out (#797 measured a cell 2.33x wrong)."""
+    assert (report.MARK in _rendered(iqr=iqr)) is marked, (
+        f'iqr/median of {iqr} against a budget of {report.SPREAD_BUDGET} must {"mark" if marked else "leave"} the cell'
+    )
+
+
+def test_the_note_appears_exactly_where_a_cell_is_marked() -> None:
+    assert report._SPREAD_NOTE not in _rendered(), 'a table with nothing to doubt must not carry the warning'
+    assert _rendered(iqr=1.9).count(report._SPREAD_NOTE) == 1, (
+        'a marked table says once what the mark means, or the mark is decoration'
+    )
+
+
+def test_marking_leaves_the_published_number_alone() -> None:
+    """The mark is a doubt about the minimum, not a different statistic: the
+    number in a marked cell is the same one an unmarked run would print."""
+    clean, dirty = _rendered(), _rendered(iqr=1.9)
+    assert '| 1.00 s |' in clean and '| 1.00 s~ |' in dirty, 'the marked cell still prints its minimum'
+    assert dirty.removesuffix('\n\n' + report._SPREAD_NOTE).replace(report.MARK, '') == clean, (
+        'marking must annotate the table, not restate it'
+    )
+
+
+def test_the_ratio_beside_a_marked_cell_is_marked_too() -> None:
+    """A ratio is only as quotable as the two minima it divides, and #797 is a
+    ratio that would have flipped from 0.73x to 1.23x on one contaminated arm."""
+    assert '| 1.00x~ |' in _rendered(iqr=1.9), 'a ratio drawn from a marked minimum carries the doubt'
+
+
+def test_a_cell_with_no_number_in_it_is_never_marked() -> None:
+    """A ratio needs both arms. One noisy arm and nothing to divide it by leaves
+    an em dash, and a mark on that claims doubt about a measurement nobody took."""
+    table = report.table('dispatch', report.best([_timing('lpspec', iqr=1.9)]), 'lp')
+    assert '| — |' in table, 'the arm that was not measured still renders as absent'
+    assert f'—{report.MARK}' not in table, 'an absent measurement cannot be noisy'
+
+
+def test_a_measurement_without_a_peak_is_skipped_rather_than_divided(tmp_path: Path) -> None:
+    """`peak_rss_bytes` is `None` for a run taken without `benchmem(isolate=True)`,
+    and the figures divide it — unguarded that is a `TypeError` halfway through
+    a render, where a missing point is what it actually is."""
+    path = tmp_path / 'results.jsonl'
+    records = [_timing('lpspec'), _timing('linopy', size='l', peak_rss_bytes=None)]
+    path.write_text('\n'.join(json.dumps(r) for r in records))
+
+    table = plot.best(path, 'lp')
+    assert ('dispatch', 'l', 'linopy') not in table['wall'], 'a record with no peak cannot be plotted, so it is dropped'
+    assert ('dispatch', 'm', 'lpspec') in table['wall'], 'and the records around it still are'
+
+
+@pytest.mark.parametrize(
+    ('args', 'given', 'expected'),
+    [
+        pytest.param((), 5, MIN_ROUNDS, id='the-plugin-default-becomes-the-documented-nine'),
+        pytest.param(('--benchmark-min-rounds=3',), 3, 3, id='an-explicit-flag-wins'),
+        pytest.param(('--benchmark-min-rounds', '3'), 3, 3, id='an-explicit-flag-wins-when-spaced'),
+    ],
+)
+def test_the_rounds_default_is_the_documented_one_and_an_explicit_flag_wins(
+    args: tuple[str, ...], given: int, expected: int
+) -> None:
+    config = SimpleNamespace(
+        invocation_params=SimpleNamespace(args=args),
+        option=SimpleNamespace(benchmark_min_rounds=given),
+    )
+    harness.pytest_configure(config)  # pyrefly: ignore[bad-argument-type]
+    assert config.option.benchmark_min_rounds == expected, (
+        'docs/benchmarks.md publishes nine rounds per measurement; a run that asks for another count keeps it'
+    )
+
+
+def test_the_rounds_default_is_silent_where_the_plugin_is_absent() -> None:
+    """The CodSpeed job runs this same suite under a plugin with no such option."""
+    config = SimpleNamespace(invocation_params=SimpleNamespace(args=()), option=SimpleNamespace())
+    harness.pytest_configure(config)  # pyrefly: ignore[bad-argument-type]
+    assert not hasattr(config.option, 'benchmark_min_rounds'), 'nothing to set, so nothing is set'
+
+
+def test_the_rounds_default_is_wired_into_the_session(request: pytest.FixtureRequest) -> None:
+    """A default and the session applying it can coexist without meeting (#321 did)."""
+    if not hasattr(request.config.option, 'benchmark_min_rounds'):
+        pytest.skip('pytest-benchmark is not installed (uv sync --group bench)')
+    if flag_passed(request.config, '--benchmark-min-rounds'):
+        pytest.skip('this session asked for a round count of its own')
+    assert request.config.option.benchmark_min_rounds == MIN_ROUNDS, (
+        'the documented command has to reproduce the documented method'
+    )
+
+
 @pytest.mark.parametrize('label', [pytest.param(s.label, id=s.label) for s in CASES['declarations'].ladder])
 def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: Path) -> None:
     """A model file nobody committed still has to pass the front door.
@@ -200,9 +341,9 @@ def test_the_milp_case_lowers_with_both_variable_types() -> None:
 def test_the_floor_builds_the_model_lpspec_builds() -> None:
     """The floor's counts match lpspec's on `transport/xs`, so its headroom claim is about one model.
 
-    Columns, rows and nonzeros are the cheap fingerprint; `--check` compares
-    objectives on top and is run by hand. A floor that quietly dropped a term
-    would post an unbeatable time for a model nobody built.
+    Columns, rows and nonzeros are the cheap fingerprint; the objectives are
+    compared by the test below. A floor that quietly dropped a term would post
+    an unbeatable time for a model nobody built.
     """
     import lpspec as lps
 
@@ -216,3 +357,62 @@ def test_the_floor_builds_the_model_lpspec_builds() -> None:
         assert model.column_count == tables.column_count, 'the floor holds a different number of variables'
         assert model.row_count == tables.row_count, 'the floor holds a different number of constraints'
         assert model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
+
+
+def test_a_spliced_basis_reproduces_the_cold_answer() -> None:
+    """The measurement's own claim, on the smallest instance it can be made on.
+
+    `warm_payoff.sweep` asserts objective equality step by step; running it
+    here is what makes that a gate rather than a claim in a module nothing
+    exercises. A carried basis may move the route and never the optimum, so a
+    splice that indexed rows wrongly would show up as a different answer.
+    """
+    run = warm_payoff.sweep(warm_payoff.SIZES['xs'], n_snap=4, steps=8)
+    assert len(run.steps) > 1, 'a single rebuild carries nothing, so the splice would go unexercised'
+    for i, step in enumerate(run.steps):
+        assert step.warm_objective == pytest.approx(step.cold_objective, rel=1e-9), (
+            f'step {i}: a carried basis moved the answer'
+        )
+
+
+def test_the_splice_shifts_a_later_declarations_rows() -> None:
+    """The whole reason the carry is not a truncation.
+
+    `feasibility_cut` follows `optimality_cut`, so a row gained by the first
+    moves every row of the second. Truncating the previous basis to the new
+    height would leave the second family reading the first's statuses — right
+    only for a model whose growth is all in the last declaration.
+    """
+    was = {'optimality_cut': _Block(0, 2), 'feasibility_cut': _Block(2, 2)}
+    now = {'optimality_cut': _Block(0, 3), 'feasibility_cut': _Block(3, 2)}
+    previous = WarmStart(
+        solver='highs',
+        column_statuses=np.zeros(4, dtype=np.int8),
+        row_statuses=np.array([10, 11, 20, 21], dtype=np.int8),
+        column_values=None,
+    )
+    order = ['optimality_cut', 'feasibility_cut']
+
+    carried = warm_payoff.spliced(previous, was, now, order, 5).row_statuses
+    assert list(carried) == [10, 11, warm_payoff.BASIC, 20, 21], (
+        'the second declaration keeps its own statuses at its new start, and the gained row starts basic'
+    )
+    assert list(warm_payoff.prefixed(previous, 5).row_statuses) == [10, 11, 20, 21, warm_payoff.BASIC], (
+        'the prefix carry is the mistake this splice exists to avoid; it must stay measurably different'
+    )
+
+
+def test_the_floor_and_lpspec_agree_on_the_answer() -> None:
+    """`check()` runs, and the two models solve to one objective.
+
+    The counts above are a fingerprint, not the answer — they match for a floor
+    that permuted a coefficient. This calls what `--check` calls, which is also
+    the only thing that reaches `workloads.objective`: the counts test never
+    does, so a signature change there went unnoticed until someone ran the flag
+    by hand.
+    """
+    ours, lpspec = floor.check()
+
+    assert ours == pytest.approx(lpspec, rel=1e-9), (
+        f'the floor solves a different model than lpspec: {ours} against {lpspec}'
+    )

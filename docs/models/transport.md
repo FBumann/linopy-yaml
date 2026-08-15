@@ -42,8 +42,8 @@ $\ell$ is already the line index.
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of generator $g$ in snapshot $s$ |
-| $f$ | `f` over $\mathcal{S} \times \mathcal{L}$ --- flow on line $\ell$, signed towards its `to` bus |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
+| $f$ | `f` over $\mathcal{S} \times \mathcal{L}$ --- flow on a line, signed towards its `to` bus |
 
 #### Objective
 
@@ -75,38 +75,58 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     ```yaml
     dimensions:
       snapshot:
+        description: dispatch periods
         dtype: int
       generator:
+        description: generating units
         dtype: str
       bus:
+        description: network nodes
         dtype: str
       line:
+        description: transmission lines, each joining two buses
         dtype: str
 
     lookups:
-      gen_bus: {over: generator, into: bus}  # every generator sits on a bus
-      from: {over: line, into: bus}  # both endpoints are buses
-      to: {over: line, into: bus}
+      gen_bus:
+        description: the bus a generator sits on
+        over: generator
+        into: bus
+      from:
+        description: the bus a line leaves
+        over: line
+        into: bus
+      to:
+        description: the bus a line arrives at
+        over: line
+        into: bus
 
     parameters:
       p_max:
+        description: installed capacity
         dims: [generator]
       cost:
+        description: marginal cost
         dims: [generator]
       cap:
+        description: forward transmission limit
         dims: [line]
       neg_cap:
+        description: reverse transmission limit
         dims: [line]
       load:
+        description: demand at each bus
         dims: [snapshot, bus]
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         bounds:
           lower: 0
           upper: p_max
       f:
+        description: flow on a line, signed towards its `to` bus
         foreach: [snapshot, line]
         bounds:
           lower: neg_cap
@@ -114,7 +134,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     expressions:
       gen_at_bus: sum(p, by=gen_bus)
-      net_inflow: sum(f, by=to) - sum(f, by=from)
+      net_inflow:
+        expression: sum(f, by=to) - sum(f, by=from)
+        description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
     constraints:
       balance:
@@ -181,9 +203,12 @@ outflow.
 No adjacency matrix, and no join written by the modeller: the topology is
 data on the dimension.
 
-The two halves of the balance are **named expressions** — pure substitution
-before either backend sees the model, so naming them costs nothing at build or
-solve; what it buys is a constraint that reads as the sentence it is.
+The two halves of the balance are **named expressions** — substituted into the
+constraint before either backend sees the model, so naming them costs nothing
+at build or solve; what it buys is a constraint that reads as the sentence it
+is, and a quantity the solution can hand back: `expression('net_inflow')` is
+the bus-by-bus net flow the balance constrained, one definition for the
+constraint and the report.
 
 ---
 

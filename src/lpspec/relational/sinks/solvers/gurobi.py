@@ -22,7 +22,7 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
-from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver
+from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
@@ -150,6 +150,49 @@ class Gurobi(Solver):
             block.RHS = rhs[at : at + block.shape[0]]
             at += block.shape[0]
         self._m.ObjCon = model.objective_constant
+        self._m.update()
+
+    def warm_start(self) -> WarmStart | None:
+        """The basis the last solve left, or its incumbent where Gurobi holds none.
+
+        Gurobi refuses ``VBasis`` outright where no basis exists — after a
+        mixed-integer solve, and before any — so the refusal itself routes to
+        the incumbent, and to ``None`` where ``SolCount`` says there is not
+        one of those either. Row statuses concatenate across the constraint
+        blocks the way :func:`_duals` reads prices.
+        """
+        import numpy as np
+
+        gurobipy = _gurobipy()
+        try:
+            columns = np.asarray(self._x.VBasis, dtype=np.int32)
+            slices = [np.asarray(block.CBasis, dtype=np.int32) for block in self._blocks]
+        except (AttributeError, gurobipy.GurobiError):
+            if self._m.SolCount > 0:
+                values = np.asarray(self._x.X, dtype=np.float64)
+                return WarmStart(solver='gurobi', column_statuses=None, row_statuses=None, column_values=values)
+            return None
+        rows = np.concatenate(slices) if slices else np.empty(0, dtype=np.int32)
+        return WarmStart(solver='gurobi', column_statuses=columns, row_statuses=rows, column_values=None)
+
+    def _warm(self, ws: WarmStart) -> None:
+        """``VBasis``/``CBasis`` for a basis, ``Start`` for an incumbent.
+
+        Written through the same handles a push writes, the row statuses
+        sliced per block the way a push slices the right-hand sides —
+        and ``update`` after, gurobipy's changes being queued.
+        """
+        if ws.column_statuses is not None and ws.row_statuses is not None:
+            self._x.VBasis = ws.column_statuses
+            at = 0
+            for block in self._blocks:
+                block.CBasis = ws.row_statuses[at : at + block.shape[0]]
+                at += block.shape[0]
+        else:
+            assert ws.column_values is not None, (
+                'a warm start with no basis carries an incumbent — it holds nothing else'
+            )
+            self._x.Start = ws.column_values
         self._m.update()
 
     def _run(self, model: ModelTables) -> SolveAnswer:

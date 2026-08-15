@@ -116,6 +116,7 @@ class LookupBlock(_StrictBlock):
     over: str
     into: str | None = None
     dtype: str | None = None
+    description: str | None = None
 
     @field_validator('dtype')
     @classmethod
@@ -145,6 +146,7 @@ class DimensionBlock(_StrictBlock):
 
     dtype: str = 'str'
     values: list[Any] | None = None
+    description: str | None = None
 
     @field_validator('dtype')
     @classmethod
@@ -175,6 +177,7 @@ class ParameterBlock(_StrictBlock):
 
     dims: list[str]
     dtype: str = 'float'
+    description: str | None = None
 
     @property
     def referenced_dims(self) -> list[str]:
@@ -210,6 +213,7 @@ class VariableBlock(_StrictBlock):
     where: str | None = None
     bounds: BoundsBlock = BoundsBlock()
     domain: str = 'continuous'
+    description: str | None = None
 
     @property
     def referenced_dims(self) -> list[str]:
@@ -247,6 +251,7 @@ class ConstraintBlock(_StrictBlock):
     foreach: list[str]
     where: str | None = None
     expression: str
+    description: str | None = None
 
     @property
     def referenced_dims(self) -> list[str]:
@@ -265,6 +270,7 @@ class ObjectiveBlock(_StrictBlock):
 
     sense: str = 'minimize'
     expression: str
+    description: str | None = None
 
     @field_validator('sense')
     @classmethod
@@ -314,6 +320,7 @@ class MacroBlock(_StrictBlock):
     args: list[str] = []
     kwargs: list[str] = []
     template: str
+    description: str | None = None
 
     @model_validator(mode='after')
     def _check_formals(self) -> MacroBlock:
@@ -322,6 +329,42 @@ class MacroBlock(_StrictBlock):
             msg = f'duplicate formal names: {formals}'
             raise ValueError(msg)
         return self
+
+
+class ExpressionBlock(_StrictBlock):
+    """A named quantity: one arithmetic expression, readable after a solve.
+
+    Written in YAML as a bare string, or as a mapping once it carries a
+    ``description:`` — and serialised back to whichever form it was written in,
+    so a round trip through :meth:`Model.to_yaml` reproduces the file::
+
+        expressions:
+          total_generation: sum(p, over=generator)
+          emissions:
+            expression: sum(p * rate, over=generator)
+            description: CO2 released, the quantity the cap bounds
+
+    The description matters more here than anywhere else: a named expression is
+    expanded away before the typeset walk, so its whole surface is
+    ``result.expression(name)`` after a solve — a name arriving in a summary
+    with nothing else to say what it counts.
+    """
+
+    _label: ClassVar[str] = 'a named expression'
+
+    expression: str
+    description: str | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def _from_string(cls, data: Any) -> Any:
+        return {'expression': data} if isinstance(data, str) else data
+
+    @model_serializer
+    def _as_written(self) -> str | dict[str, str]:
+        if self.description is None:
+            return self.expression
+        return {'expression': self.expression, 'description': self.description}
 
 
 class PiecewiseLink(_StrictBlock):
@@ -397,6 +440,7 @@ class PiecewiseBlock(_StrictBlock):
     links: list[PiecewiseLink]
     method: str = 'adjacency'
     active: str | None = None
+    description: str | None = None
 
     @property
     def convex(self) -> bool:
@@ -488,6 +532,7 @@ class SosBlock(_StrictBlock):
     over: str
     type: int
     big_m: float | None = None
+    description: str | None = None
 
     @field_validator('type')
     @classmethod
@@ -569,9 +614,10 @@ class Model(_StrictBlock):
     *says*, ``plan.Program`` what it lowers to, an engine what a build holds.
     Nothing here has seen data.
 
-    The API is the ten declaration sections plus ``version``, and two ways
-    back out: :meth:`to_dict` for the model as data, :meth:`to_yaml` for the
-    file a reviewer reads. In goes through ``lps.load_model``, which raises
+    The API is the ten declaration sections plus ``version`` and
+    ``description``, and two ways back out: :meth:`to_dict` for the model as
+    data, :meth:`to_yaml` for the file a reviewer reads. In goes through
+    ``lps.load_model``, which raises
     :class:`~lpspec.errors.LanguageError` on a model the language refuses.
 
     Everything else on this class is pydantic's, not a contract this package
@@ -592,13 +638,16 @@ class Model(_StrictBlock):
     #: any release — and declaring it is what lets a later reader refuse a file
     #: it cannot read rather than misinterpret it.
     version: int = 0
+    #: What the file as a whole is, in the same plain prose a declaration's
+    #: ``description:`` takes. The typeset document opens with it.
+    description: str | None = None
     dimensions: dict[str, DimensionBlock] = {}
     lookups: dict[str, LookupBlock] = {}
     parameters: dict[str, ParameterBlock] = {}
     variables: dict[str, VariableBlock] = {}
     constraints: dict[str, ConstraintBlock] = {}
     objective: ObjectiveBlock | None = None
-    expressions: dict[str, str] = {}
+    expressions: dict[str, ExpressionBlock] = {}
     macros: dict[str, MacroBlock] = {}
     piecewise: dict[str, PiecewiseBlock] = {}
     sos: dict[str, SosBlock] = {}

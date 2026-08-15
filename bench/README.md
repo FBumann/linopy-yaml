@@ -98,6 +98,21 @@ than a rival dialect.
 Not measured, deliberately: solve time (that is HiGHS, identical either way, and
 it would swamp the build), and anything about expressiveness.
 
+**A number the run cannot stand behind is marked, not dropped.** Every
+measurement's distribution — `iqr`, `median`, `rounds` — is carried into the
+result file beside the minimum the tables publish, and `bench.report` appends
+`~` to any wall cell, and to the ratio beside it, whose IQR exceeds
+`SPREAD_BUDGET` of its own median. That is the case `min` cannot survive: not
+one wild round, which the minimum ignores by construction, but *every* round
+slow, which leaves no clean one to fall back on — #797 is the cell that was
+publication-ready at 2.33x wrong. A marked cell is one to re-take on an idle
+machine, never one to quote.
+
+**Nine rounds is the floor, and the harness sets it.** pytest-benchmark's own
+default is 5, and its calibration gives the fewest rounds to the slowest cells —
+exactly where sustained interference is most likely and a clean round hardest
+to come by. `--benchmark-min-rounds` still wins where a run wants more.
+
 ## Why it is built this way
 
 **One process per measurement.** Peak RSS is a property of a process: a second
@@ -277,6 +292,45 @@ floor and through lpspec and compares objectives at the gate's tolerance;
 `bench/test_harness.py` pins the cheaper fingerprint — the floor's column, row
 and nonzero counts against lpspec's — on every bare `pytest bench`.
 
+## The warm-start payoff
+
+*Does carrying a basis across a genuine rebuild pay?* is the question #382 has
+to answer before the engine work is worth writing, and until this module there
+was nothing in the tree to answer it on: `examples/benders/run.py` is the only
+driver that rebuilds a model every iteration, and its master is 3 columns and
+25 rows, where a cold solve costs one simplex iteration.
+
+`bench/warm_payoff.py` is that missing case — a capacity-expansion Benders
+whose master is sized from data (`bench/expansion/*.yaml`), with the master
+solved three ways at every rebuild: cold, from the previous iteration's basis
+spliced per declaration, and from that basis merely truncated to the new
+height. The subproblem is a real dispatch LP and is deliberately *not* what is
+measured: `cap_hat * avail` reaches the rows as a right-hand side, so a new
+capacity pushes values onto the loaded solver and never rebuilds.
+
+```bash
+uv run python -m bench.warm_payoff s m l --steps 400
+uv run python -m bench.warm_payoff m --wall   # only on an idle box
+```
+
+**Simplex iterations are the measurement.** They are deterministic, so this
+ladder needs no idle machine, and they are the quantity a basis actually moves.
+`--wall` prints seconds and the load averages beside them, and carries none of
+the argument.
+
+It is **not an arm** — like `floor.py` it hardcodes one model, prints its own
+table and never touches the ladder's results files — and it is **not a
+feature**: no `src/` code carries a basis across a rebuild, and the splice
+lives here so that the evidence could be taken before the engine work was
+written. Its models sit under `bench/expansion/` rather than `bench/models/`,
+which `tests/test_bench_models.py` reserves for files backing a ladder case.
+
+The splice exists because **rows do not append**: a master with two cut
+families numbers rows per declaration, so a row gained by `optimality_cut`
+shifts every row of `feasibility_cut`. A wrong carry cannot produce a wrong
+answer — a basis moves the route, not the optimum — so the third arm is how the
+splice is shown to be worth its complication at all.
+
 ## The other question: regressions
 
 *Did this change make it worse?* is a different question from *how do we compare
@@ -365,6 +419,7 @@ every consumer whichever of the two the case has.
 | `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |
+| `warm_payoff.py` / `expansion/` | does a basis carried across a rebuild pay? A scaled Benders, its master solved cold and warm at every rebuild |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |
 | `profile_build.py` | which *query* inside one build spends the time — a profiler, not a benchmark. Wraps every collect, so read its shares and not its seconds |
 | `profile_phases.py` | which *phase*, in seconds comparable to a real run. Hoists the parse, the lowering and the parquet read out of the loop and reuses one binding, which takes the spread from 12-55% down to a few percent — the difference between a 10% change being visible and not |

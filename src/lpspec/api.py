@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from lpspec.errors import DataError, LpspecWarning
 from lpspec.language.validation import load_model
-from lpspec.lowering import advice, lower_program
+from lpspec.lowering import advice, expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
 from lpspec.sources import tidy_sources
@@ -105,7 +105,11 @@ class BoundModel:
         model is released and the exception is the caller's.
         """
         try:
-            self._engine.build(self._program, tidy_sources(self._schema, dict(self._sources), self._coords))
+            self._engine.build(
+                self._program,
+                tidy_sources(self._schema, dict(self._sources), self._coords),
+                expressions=expression_thunks(self._schema),
+            )
         except BaseException:
             self._engine.close()
             raise
@@ -157,26 +161,36 @@ class BoundModel:
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, Any] | None = None,
+        warm: bool = True,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
-        A solver that can stay loaded is kept between calls, so a rebound model
-        re-solves from the basis the last one ended on.
+        A solver that can stay loaded is kept between calls, so a rebound
+        model re-solves from wherever the last solve ended, and one whose
+        structure moved is loaded again and starts cold. Where the answer's
+        solve actually started is its
+        :attr:`~lpspec.relational.result.Result.started`.
 
         Args:
             solver_name: ``highs``, which ships with the package, or
                 ``gurobi``, which needs the ``[gurobi]`` extra.
             solver_options: Forwarded to the solver verbatim, in its own
                 vocabulary (``{'time_limit': 60}``).
+            warm: Whether this solve may start from what the session holds.
+                ``True``, the default, keeps it. ``False`` is deliberately
+                cold, held to structurally: the held solver is discarded
+                first, so the fresh one has nothing to start from — what a
+                caller timing a build or comparing against a cold baseline
+                needs, and what no option on the solver can promise.
 
         Returns:
             The solution, holding this model.
 
         Raises:
-            LpspecError: A solver name nothing serves, or one this environment
-                cannot run.
+            LpspecError: A solver name nothing serves, or one this
+                environment cannot run.
         """
-        return self._engine.solve(solver_name, solver_options=solver_options)
+        return self._engine.solve(solver_name, solver_options=solver_options, warm=warm)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.

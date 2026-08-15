@@ -7,7 +7,9 @@ and safe move was to leave every one of those lines alone and change only what
 feeds them — so this module speaks the record shape they already read:
 
     {'record': 'timing', 'case', 'size', 'arm', 'sink',
-     'wall_seconds', 'peak_rss_bytes', 'counts': {...}, 'live_fraction'}
+     'wall_seconds', 'iqr', 'median', 'rounds',
+     'peak_rss_bytes', 'peak_bytes', 'allocations',
+     'counts': {...}, 'live_fraction'}
     {'record': 'loop',   'case', 'size', 'arm',
      'first_build_seconds', 'steady_build_seconds'}
     {'record': 'run',    'platform', 'python', 'versions', 'commits'}
@@ -20,6 +22,12 @@ records under ``benchmem(isolate=True)`` and the only memory number honest
 across two libraries (see `bench/test_ladder.py`). ``first`` and ``steady`` are
 read off the per-round series: round 0 is the cold build, and the minimum of
 the rest is what a rolling horizon pays.
+
+**The distribution rides along with the minimum.** ``iqr``, ``median`` and
+``rounds`` are carried so the report can say whether a published minimum is
+trustworthy: a run whose every round was slow prints a clean-looking minimum
+and nothing else in the record contradicts it (#797). They are a quality
+signal, not a second headline — the tables still publish ``min``.
 
 **One thing the old runner did that this does not: record a failure as a
 result.** It caught a child that died, kept the exception line, and the report
@@ -66,9 +74,15 @@ def _commit(info: dict[str, Any]) -> str | None:
     return f'{head}-dirty' if info.get('dirty') else head
 
 
-def _rss(extra: dict[str, Any]) -> float | None:
-    """The whole-process peak, minimum across repeats. ``None`` without `isolate=True`."""
-    series = (extra.get(BENCHMEM) or {}).get('rss_bytes')
+def _benchmem(extra: dict[str, Any], field: str) -> float | None:
+    """One pytest-benchmem series, reduced across repeats. ``None`` without `isolate=True`.
+
+    Minimum for every field, the same rule as the wall clock: `rss_bytes` and
+    `peak_bytes` are high-water marks that interference only pushes up, and
+    `allocations` is a count the measured region owns, so a repeat above the
+    smallest one is the harness paying for something the model did not ask for.
+    """
+    series = (extra.get(BENCHMEM) or {}).get(field)
     return min(float(v) for v in series) if series else None
 
 
@@ -136,7 +150,12 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
             'record': 'timing',
             'sink': params.get('sink'),
             'wall_seconds': stats.get('min'),
-            'peak_rss_bytes': _rss(extra),
+            'iqr': stats.get('iqr'),
+            'median': stats.get('median'),
+            'rounds': stats.get('rounds'),
+            'peak_rss_bytes': _benchmem(extra, 'rss_bytes'),
+            'peak_bytes': _benchmem(extra, 'peak_bytes'),
+            'allocations': _benchmem(extra, 'allocations'),
             'counts': _counts(extra),
             'live_fraction': extra.get('live_fraction'),
         }

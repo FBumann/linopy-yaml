@@ -72,9 +72,9 @@ Write the math in YAML, bind data at runtime, solve.
 
     ---
 
-    Eleven models in the gallery match an optimum this project did not compute —
-    GAMS, PyPSA, OR-Library, TSPLIB — objectives *and* shadow prices.
-    [The corpus](models/index.md)
+    Every ported model matches an optimum this project did not compute — GAMS,
+    PyPSA, OSeMOSYS, OR-Library, TSPLIB — objectives *and*, where the reference
+    records them, shadow prices. [The corpus](models/index.md)
 
 </div>
 
@@ -100,6 +100,8 @@ Only the notation is a choice, and **How** shows the one that was made here.
 <!-- home-math:begin -->
 === "The math"
 
+    Least-cost dispatch of a generator fleet against an hourly load.
+
     #### Sets
 
     | Symbol | Meaning |
@@ -119,7 +121,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     | Symbol | Meaning |
     |---|---|
-    | $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of generator $g$ in snapshot $s$ |
+    | $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
 
     #### Objective
 
@@ -140,6 +142,8 @@ Only the notation is a choice, and **How** shows the one that was made here.
 === "LaTeX"
 
     ```latex
+    \noindent Least-cost dispatch of a generator fleet against an hourly load.
+
     \paragraph{Sets}
     \begin{description}
     \item[$\mathcal{S}$] index $s$ --- \texttt{snapshot} --- dispatch periods
@@ -155,7 +159,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     \paragraph{Variables}
     \begin{description}
-    \item[$p$] \texttt{p} over $\mathcal{S} \times \mathcal{G}$ --- output of generator $g$ in snapshot $s$
+    \item[$p$] \texttt{p} over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot
     \end{description}
 
     \paragraph{Objective}
@@ -189,14 +193,6 @@ Only the notation is a choice, and **How** shows the one that was made here.
             'cost': 'c',
             'load': '\\ell',
             'p_max': '\\bar p',
-        },
-        'descriptions': {
-            'snapshot': 'dispatch periods',
-            'generator': 'generating units',
-            'p': 'output of generator $g$ in snapshot $s$',
-            'cost': 'marginal cost',
-            'load': 'demand to be met',
-            'p_max': 'installed capacity',
         },
     }
 
@@ -232,7 +228,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
 <div class="grid cards" markdown>
 
--   :material-school: __Writing a model__
+-   :material-school: __Write a model__
 
     ---
 

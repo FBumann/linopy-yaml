@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import LpspecError
-from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver
+from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
 
@@ -142,7 +142,9 @@ class Highs(Solver):
     What makes an iterative driver cheap. The second solve of a rebound model
     changes bounds, costs and right-hand sides on the model HiGHS already
     holds and starts from the basis the last solve ended on, where loading
-    again would hand over the matrix a second time and start cold.
+    again would hand over the matrix a second time and start cold — unless
+    the caller carries the basis across with :meth:`warm_start` and
+    :meth:`~lpspec.relational.sinks.solvers.base.Solver.warm`.
 
     **Values are re-pushed, never diffed** — the previous model is *gone* by
     the time the new one exists, so there is nothing held to diff against;
@@ -185,6 +187,52 @@ class Highs(Solver):
         rows = np.arange(model.row_count, dtype=np.int32)
         rlb, rub = _row_bounds(model.dense_rows(inf), inf)
         _loaded(self._handle, self._handle.changeRowsBounds(model.row_count, rows, rlb, rub), 'new right-hand sides')
+
+    def warm_start(self) -> WarmStart | None:
+        """The basis the last solve left, or its incumbent where none is valid.
+
+        A solved MIP is the model that holds an answer but no valid basis —
+        ``getBasis().valid`` is false — so what crosses is ``col_value`` as an
+        incumbent. A model not yet solved holds neither.
+        """
+        import highspy
+        import numpy as np
+
+        basis = self._handle.getBasis()
+        if basis.valid:
+            return WarmStart(
+                solver='highs',
+                column_statuses=np.fromiter((int(status) for status in basis.col_status), dtype=np.int8),
+                row_statuses=np.fromiter((int(status) for status in basis.row_status), dtype=np.int8),
+                column_values=None,
+            )
+        if self._handle.getInfo().primal_solution_status == int(highspy.SolutionStatus.kSolutionStatusFeasible):
+            values = np.asarray(self._handle.getSolution().col_value, dtype=np.float64)
+            return WarmStart(solver='highs', column_statuses=None, row_statuses=None, column_values=values)
+        return None
+
+    def _warm(self, ws: WarmStart) -> None:
+        """``setBasis`` for a basis, ``setSolution`` for an incumbent.
+
+        Both report a refusal by return value, like every hand-off here, so
+        both go through :func:`_took` — an unchecked call would start cold and
+        call it warm.
+        """
+        import highspy
+
+        if ws.column_statuses is not None and ws.row_statuses is not None:
+            basis = highspy.HighsBasis()
+            basis.col_status = [highspy.HighsBasisStatus(int(status)) for status in ws.column_statuses]
+            basis.row_status = [highspy.HighsBasisStatus(int(status)) for status in ws.row_statuses]
+            basis.valid = True
+            _took(self._handle.setBasis(basis), 'the carried basis')
+        else:
+            assert ws.column_values is not None, (
+                'a warm start with no basis carries an incumbent — it holds nothing else'
+            )
+            solution = highspy.HighsSolution()
+            solution.col_value = [float(value) for value in ws.column_values]
+            _took(self._handle.setSolution(solution), 'the carried incumbent')
 
     def _run(self, model: ModelTables) -> SolveAnswer:
         import highspy
@@ -240,6 +288,27 @@ def _loaded(h: Any, status: Any, what: str) -> None:
             f'The model it holds is not the one handed over, so any answer would describe a '
             f'different one. This is an engine bug rather than a problem with the model — '
             f'please report it.'
+        )
+
+
+def _took(status: Any, what: str) -> None:
+    """Raise unless the solver accepted a warm-start hint.
+
+    HiGHS reports a refusal by return value and carries on, and a dropped
+    hint would not corrupt the model — the solve would just silently start
+    cold, a wrong answer in the time dimension that the value dimension can
+    never show.
+
+    Raises:
+        LpspecError: If the hint was refused.
+    """
+    import highspy
+
+    if status == highspy.HighsStatus.kError:
+        raise LpspecError(
+            f'HiGHS refused {what} even though it spans the loaded model, so the solve would '
+            f'silently start cold instead of warm. This is an engine bug rather than a problem '
+            f'with the model — please report it.'
         )
 
 

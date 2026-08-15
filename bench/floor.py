@@ -187,10 +187,11 @@ def check() -> tuple[float, float]:
     from bench.workloads import objective
 
     case = bench_cases.CASES[CASE]
-    paths = case.data(case.ladder[0])
+    rung = case.ladder[0]
+    paths = case.data(rung)
     h = handoff(arrays(read(paths)))
     h.run()
-    return float(h.getInfo().objective_function_value), objective('lpspec', CASE, paths)
+    return float(h.getInfo().objective_function_value), objective('lpspec', CASE, rung.label, paths)
 
 
 def _maxrss_mb() -> float:

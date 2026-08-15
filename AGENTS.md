@@ -147,6 +147,14 @@ moved where.
   the PR (#658 is the template). A deletion the suite survives gets a
   purpose-built probe before merge; a green suite proves nothing about a guard
   no test can reach.
+- **A bug is reproduced as a strict `xfail` before it is fixed.** Write the test
+  against the reported behaviour and watch it fail first — one that passes on
+  the broken tree is testing something else, and the fix it certifies is not the
+  fix. `xfail_strict` does the rest: the moment the fix lands the test XPASSes
+  and the suite goes red, so the marker comes off in the same PR and what was
+  wrong moves into the docstring
+  (`test_a_constraint_row_left_with_no_variables` is the model). A bug filed and
+  not yet fixed keeps its `xfail`, `reason` naming the issue.
 - **Two comments are not explanation, and stay where the eye lands**: a **case
   label** where parametrizing would distort the test, and a **one-line
   justification of a line that reads as a mistake** — a bare

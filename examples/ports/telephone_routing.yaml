@@ -1,0 +1,57 @@
+# Routing telephone calls over a five-city network: how many of the 425
+# requested circuits can be carried at once. Guéret, Prins, Sevaux & Heipcke,
+# Applications of Optimization with Xpress-MP, §12.3.
+# Optimum 380 circuits, published in §12.3.3.
+#
+# A path serves exactly one city pair — a coordinate — and traverses several
+# arcs — an incidence parameter. Both relations, each said the way it is.
+
+dimensions:
+  arc:
+    dtype: str  # an undirected link, capacity in circuits
+  call:
+    dtype: str  # a city pair with circuits to place
+  path:
+    dtype: str
+
+lookups:
+  call_of:
+    description: the city pair a path serves, end to end
+    over: path
+    into: call
+
+parameters:
+  capacity:
+    dims: [arc]
+  demand:
+    dims: [call]
+  # Which arcs a path traverses: many-to-many, so rows and not a coordinate.
+  # A path uses an arc or it does not, so the value is 1 and absence is 0.
+  uses:
+    dims: [path, arc]
+
+variables:
+  # Circuits carried on a path. A circuit reserves both directions of every arc
+  # it crosses, which is why the network is undirected and the flow is not
+  # signed. Integral because a multi-commodity flow is not integral by nature,
+  # even though this instance's relaxation happens to be.
+  flow:
+    foreach: [path]
+    domain: integer
+    bounds:
+      lower: 0
+
+constraints:
+  # A pair cannot be carried more than it asked for, however many paths serve it.
+  within_demand:
+    foreach: [call]
+    expression: sum(flow, by=call_of) <= demand
+
+  # An arc carries every path that traverses it, and no more than its capacity.
+  within_capacity:
+    foreach: [arc]
+    expression: sum(flow * uses, over=path) <= capacity
+
+objective:
+  sense: maximize
+  expression: sum(flow, over=path)

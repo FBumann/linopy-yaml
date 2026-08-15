@@ -91,6 +91,11 @@ jobs:
       # the docs group is small and adds a few seconds to a job we already pay
       # a whole minute for. It comes after the suite and before the bare
       # install, which wipes .venv.
+      #
+      # The build also *runs* `docs/interactive.ipynb` (`execute: true`), so
+      # this step needs the package importable and a failing cell fails the
+      # gate. `uv sync` installs the project, which is what makes that work
+      # here and what `.readthedocs.yaml` had to be changed to match.
       - run: uv sync --group docs
       - run: uv run --no-sync mkdocs build --strict
 

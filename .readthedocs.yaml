@@ -19,15 +19,16 @@ build:
       # by path rather than on PATH: each job runs in its own shell, so what the
       # installer appended to the profile is not in scope here
       - $HOME/.local/bin/uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
-    # The `docs` group only — the site needs no lpspec install. Nothing in
-    # mkdocs.yml imports the package (no mkdocstrings, no notebooks to execute),
-    # so a build here proves the docs, not the wheel.
+    # The `docs` group *and* the project: mkdocs.yml executes
+    # `docs/interactive.ipynb` during the build and its first cell imports
+    # lpspec, so the site can no longer be built against the docs toolchain
+    # alone. A page whose outputs are this build's own is what that buys, and
+    # there is no way to have it without running the package here.
     #
     # Spelled out rather than `python.install: {method: uv}`, which RTD grew in
-    # April 2026: both flags are load-bearing and that form documents neither.
-    # `--no-default-groups` is what keeps `dev` out, and `dev` resolves linopy
-    # from a git branch; `--no-install-project` is the second sentence above. A
-    # `groups:` key that lowers to a plain `uv sync --group docs` reinstates
-    # both, and RTD does not say whether it does.
+    # April 2026: `--no-default-groups` is load-bearing and that form documents
+    # it — it is what keeps `dev` out, and `dev` resolves linopy from a git
+    # branch. A `groups:` key that lowers to a plain `uv sync --group docs`
+    # reinstates it, and RTD does not say whether it does.
     install:
-      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" $HOME/.local/bin/uv sync --no-default-groups --group docs --no-install-project
+      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" $HOME/.local/bin/uv sync --no-default-groups --group docs
