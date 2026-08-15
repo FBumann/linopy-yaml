@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.134](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.133...v0.0.1-alpha.134) (2026-08-15)
+
+
+### Bug Fixes
+
+* **tests:** the harness reads a model through the product's loader ([#778](https://github.com/fluxopt/lpspec/issues/778)) ([bf9e8f6](https://github.com/fluxopt/lpspec/commit/bf9e8f65a163fc26269c64784fa1b4ae741fe6f7))
+
 ## [0.0.1-alpha.133](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.132...v0.0.1-alpha.133) (2026-08-14)
 
 
