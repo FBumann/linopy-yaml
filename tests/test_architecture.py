@@ -396,8 +396,9 @@ PUBLIC_API = {
     },
 }
 
-#: The opt-in shim, which is a surface of its own — and deliberately two verbs.
-PUBLIC_API_LINOPY = {'build', 'extend'}
+#: The opt-in shim, which is a surface of its own — deliberately three verbs:
+#: two producers, and the named-expression reader both lanes owe (#562).
+PUBLIC_API_LINOPY = {'build', 'expression', 'extend'}
 
 
 def test_the_public_surface_is_exactly_what_is_declared():
@@ -438,13 +439,15 @@ def test_the_public_surface_is_exactly_what_is_declared():
     )
 
 
-def test_the_linopy_shim_stays_two_verbs():
-    """The shim attaches YAML math to a model that already exists.
+def test_the_linopy_shim_stays_three_verbs():
+    """The shim attaches YAML math to a model, and reads back what it named.
 
-    That is the whole of it — ``build`` makes one, ``extend`` adds to one. A
-    third verb would mean the shim had started being a lane of its own, which
-    hard rule 3 spends its length refusing. Read statically: the module
-    imports linopy, and this must run on a bare install.
+    ``build`` makes a model, ``extend`` adds to one, ``expression`` evaluates
+    a declared named quantity at its solution — the eager half of a reader
+    both lanes owe (hard rule 3), pure like the producers. A fourth verb would
+    mean the shim had started being a lane of its own, which hard rule 3
+    spends its length refusing. Read statically: the module imports linopy,
+    and this must run on a bare install.
     """
     tree = ast.parse((PKG / 'linopy' / '__init__.py').read_text())
     declared = next(

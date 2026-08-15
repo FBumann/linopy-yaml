@@ -78,6 +78,17 @@ model: examples/walkthrough.yaml
     │ 1        ┆ solar     ┆ 60.0  │
     │ 1        ┆ gas       ┆ 0.0   │
     └──────────┴───────────┴───────┘
+    shape: (3, 2)
+    ┌──────────┬───────┐
+    │ snapshot ┆ value │
+    │ ---      ┆ ---   │
+    │ i64      ┆ f64   │
+    ╞══════════╪═══════╡
+    │ 0        ┆ 80.0  │
+    │ 1        ┆ 120.0 │
+    │ 2        ┆ 150.0 │
+    └──────────┴───────┘
+                 ^ the named expression, read back at the solution
 
 [7] and what the language refuses  (validation.py, lowering.py)
 

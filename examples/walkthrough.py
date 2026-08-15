@@ -30,7 +30,7 @@ import polars as pl
 import lpspec as lps
 from lpspec.language.expansion import parse_and_expand
 from lpspec.language.expression_parser import parse_expression
-from lpspec.lowering import lower_program
+from lpspec.lowering import expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
 
@@ -110,7 +110,9 @@ def expanded_ast(schema: lps.Model) -> None:
 
     Hard rule 1: the core AST is the whole language. Everything above it is
     pure substitution, which is why a macro costs nothing and cannot make the
-    two lanes disagree — neither lane ever sees one.
+    two lanes disagree — neither lane ever sees one. A named expression is
+    substituted the same way wherever a constraint uses it, but its name
+    survives on the model: stage 6 reads it back at the solution.
     """
     banner(2, 'expand macros / named expressions -> core AST', 'expansion.py')
     objective_text = schema.objective.expression
@@ -151,7 +153,7 @@ def model_frames(engine: PolarsEngine, schema: lps.Model, program: Any) -> None:
     the whole point.
     """
     banner(4, 'plan + data -> the model frames', 'relational/engines/polars/engine.py')
-    engine.build(program, tidy_sources(schema, SOURCES, COORDS))
+    engine.build(program, tidy_sources(schema, SOURCES, COORDS), expression_thunks(schema))
     model = engine._tables()
     for name, frame in (
         ('cols', model.cols),
@@ -194,12 +196,18 @@ def solution(engine: PolarsEngine) -> None:
     library. Printed unsorted because the order *is* a fact this file narrates
     — label order, row-major over the coordinate product, which is what the
     read-back join is built to give and what ``Result.primal`` documents.
+
+    ``expression()`` reads the quantity stage 1 named: lowered on this call,
+    not at build, so declaring it cost the stages in between nothing. It comes
+    back in the same order, and is printed the same way, for the same reason.
     """
     banner(6, 'sink: batches -> highspy -> solution frames', 'relational/sinks/highs.py')
     result = engine.solve()
     print(f'    status     {result.status} ({result.termination_condition})')
     print(f'    objective  {result.objective:,.1f}')
     print(_indent(result.primal('p').head(6)))
+    print(_indent(result.expression('total_supply').head(3)))
+    print('                 ^ the named expression, read back at the solution')
 
 
 def refusals() -> None:

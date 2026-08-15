@@ -228,9 +228,20 @@ own shape.
 
 ## 3. `expressions` and `macros`
 
-Pure AST substitution: they are expanded away before anything consumes the
-model, so they cost nothing at build time. A named expression is a macro with no
-formals.
+Two tiers of composition, one substitution engine. Where a constraint or an
+objective references either, it is expanded away before anything consumes the
+model — substitution, so a reference costs nothing at build time and both
+lanes see the same core AST. The two blocks are not one thing, though:
+
+- A **named expression** has fixed dims — they fall out of its body, no
+  `foreach` needed — and an **observable identity**: after a solve it is
+  readable by name, `result.expression(name)` ([§10](#10-python-api)), lowered
+  on demand at the read and never at build, so a model that reads none pays
+  for none. That is the point of naming a quantity: the CO₂ a constraint
+  bounds and the CO₂ a summary reports are one definition, validated once.
+- A **macro** is parameterised: it has no dims until called and each call site
+  may give it different ones, so it has no value a solve could report and is
+  never readable. A macro is pure AST substitution and nothing else.
 
 ```yaml
 dimensions:
