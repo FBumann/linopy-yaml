@@ -1,3 +1,5 @@
+description: Least-cost dispatch of a generator fleet against an hourly load.
+
 dimensions:
   snapshot:
     description: dispatch periods

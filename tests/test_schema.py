@@ -322,11 +322,6 @@ def test_an_undescribed_declaration_carries_none():
     ('raw', 'match'),
     [
         pytest.param(
-            {'description': 'a whole model'},
-            "unknown key 'description' in the top level",
-            id='top-level',
-        ),
-        pytest.param(
             {
                 'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
                 'variables': {'v': {'foreach': ['x'], 'bounds': {'lower': 0, 'description': 'floor'}}},
@@ -345,3 +340,18 @@ def test_a_description_on_a_non_declaration_block_is_rejected(raw, match):
     """The key belongs to declarations; the sub-blocks inside one stay closed."""
     with pytest.raises(SchemaError, match=match):
         Model.model_validate(raw)
+
+
+def test_the_file_itself_is_describable():
+    """The one description with no declaration under it: what the model *is*,
+    which every example otherwise states in a `#` comment the parser throws
+    away."""
+    schema = Model.model_validate({'description': 'least-cost dispatch', **DESCRIBED})
+    assert schema.description == 'least-cost dispatch'
+    assert Model.model_validate(DESCRIBED).description is None, 'absent means None, never an empty string'
+
+
+def test_a_model_description_survives_a_round_trip():
+    schema = Model.model_validate({'description': 'least-cost dispatch', **DESCRIBED})
+    assert Model.model_validate(schema.to_dict()).description == 'least-cost dispatch'
+    assert 'description' not in Model.model_validate(DESCRIBED).to_dict(), 'None is stripped, as every other default is'
