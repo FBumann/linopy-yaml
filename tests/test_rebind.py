@@ -246,6 +246,14 @@ WALK = [1.0, 1.25, 0.8]
 #: of the time.
 TOO_SLOW_TO_WALK = {'tsp_mtz'}
 
+#: `transport_modes` prices two of its eleven connections at 12 — `d1_c1_road`
+#: and `d2_c2_rail` — so once the walk scales the stocks the optimum is reached
+#: at more than one vertex, and which one a solve lands on is a simplex route
+#: rather than an answer. The objective is compared as before; only the primal
+#: is not, because there is no single right one to compare against. Book data,
+#: so the tie is the source's and not ours to perturb away.
+ALTERNATE_OPTIMA = {'transport_modes'}
+
 #: Constraints whose prices the walk compares for layout but not for numbers.
 #: An investment optimum sits on a kink of the piecewise-linear value of
 #: capacity — the marginal MW is worth more than capex on one side of a load
@@ -356,9 +364,13 @@ def test_a_rebind_walk_answers_what_a_fresh_build_answers(port):
                     assert got.objective == pytest.approx(reference.objective), f'{where}: a different optimum'
                     wanted = _prices(reference, schema)
                     assert (_prices(got, schema) is None) == (wanted is None), f'{where}: one is priced and one is not'
+                    unique = port['name'] not in ALTERNATE_OPTIMA
                     for name in schema.variables:
                         _laid_out_alike(
-                            got.primal(name), reference.primal(name), values=wanted is not None, where=f'{where} {name}'
+                            got.primal(name),
+                            reference.primal(name),
+                            values=wanted is not None and unique,
+                            where=f'{where} {name}',
                         )
                     for name in wanted or {}:
                         exact = name not in NONUNIQUE_PRICES.get(port['name'], set())

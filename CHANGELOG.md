@@ -1,5 +1,93 @@
 # Changelog
 
+## [0.0.1-alpha.145](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.144...v0.0.1-alpha.145) (2026-08-15)
+
+
+### Documentation
+
+* **gallery:** the model list names every model ([#819](https://github.com/fluxopt/lpspec/issues/819)) ([6a78fcc](https://github.com/fluxopt/lpspec/commit/6a78fccb161039f2de2d3727a928ac766bb5177f))
+
+## [0.0.1-alpha.144](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.143...v0.0.1-alpha.144) (2026-08-15)
+
+
+### Features
+
+* **language:** a declaration says what it is, and the legend reads it ([#812](https://github.com/fluxopt/lpspec/issues/812)) ([6b31278](https://github.com/fluxopt/lpspec/commit/6b3127863818da8c6653e4821e7b7444f13b2402))
+* **language:** a file says what model it is ([#813](https://github.com/fluxopt/lpspec/issues/813)) ([6c081e1](https://github.com/fluxopt/lpspec/commit/6c081e1f08257e497cae399175d806cde7209b86))
+* **language:** a named expression can say what it counts ([#814](https://github.com/fluxopt/lpspec/issues/814)) ([d57aad1](https://github.com/fluxopt/lpspec/commit/d57aad1935a9dff843263b63136685cdfe137ad2))
+
+## [0.0.1-alpha.143](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.142...v0.0.1-alpha.143) (2026-08-15)
+
+
+### Features
+
+* **gallery:** an operational life is a window read from data ([#805](https://github.com/fluxopt/lpspec/issues/805)) ([7071fc0](https://github.com/fluxopt/lpspec/commit/7071fc009d59b142f67a293efb86b060a6777988))
+
+## [0.0.1-alpha.142](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.141...v0.0.1-alpha.142) (2026-08-15)
+
+
+### Features
+
+* **gallery:** two connections may join one depot and centre ([#790](https://github.com/fluxopt/lpspec/issues/790)) ([80d1949](https://github.com/fluxopt/lpspec/commit/80d1949fd2c803f9fef2ec4db03ce279924c1e07))
+
+## [0.0.1-alpha.141](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.140...v0.0.1-alpha.141) (2026-08-15)
+
+
+### Features
+
+* **gallery:** a path serves one call and crosses many arcs ([#789](https://github.com/fluxopt/lpspec/issues/789)) ([640558b](https://github.com/fluxopt/lpspec/commit/640558beb202161a529fc3864cd49bd58cdf95d5))
+
+## [0.0.1-alpha.140](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.139...v0.0.1-alpha.140) (2026-08-15)
+
+
+### Documentation
+
+* **site:** the notebook pages say it once ([#798](https://github.com/fluxopt/lpspec/issues/798)) ([fd32ad1](https://github.com/fluxopt/lpspec/commit/fd32ad141e154e0ce0e132d2a4b4acd15050c5c1))
+
+## [0.0.1-alpha.139](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.138...v0.0.1-alpha.139) (2026-08-15)
+
+
+### Bug Fixes
+
+* **bench:** the floor's parity check runs again ([#799](https://github.com/fluxopt/lpspec/issues/799)) ([9f240ba](https://github.com/fluxopt/lpspec/commit/9f240badab1cb5cecf28bc6552bfa2c961c5ca1b))
+
+## [0.0.1-alpha.138](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.137...v0.0.1-alpha.138) (2026-08-15)
+
+
+### Features
+
+* **api:** a named expression is readable after a solve ([#726](https://github.com/fluxopt/lpspec/issues/726)) ([e41fbe1](https://github.com/fluxopt/lpspec/commit/e41fbe10f8870bd20e8d879b6c0cd33188629579))
+* **gallery:** a generator sits on a bus and burns a carrier ([#783](https://github.com/fluxopt/lpspec/issues/783)) ([5334608](https://github.com/fluxopt/lpspec/commit/53346088f9ed48ce6deddc9ca1b12d65d28a071e))
+* **strategy:** a sweep reads the quantity its model names ([#748](https://github.com/fluxopt/lpspec/issues/748)) ([1268fb5](https://github.com/fluxopt/lpspec/commit/1268fb5d57dcdca98ef617498d4c7c0913db3053))
+
+## [0.0.1-alpha.137](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.136...v0.0.1-alpha.137) (2026-08-15)
+
+
+### Documentation
+
+* **examples:** a notebook changes a model without a modelling API ([#788](https://github.com/fluxopt/lpspec/issues/788)) ([50dd21f](https://github.com/fluxopt/lpspec/commit/50dd21f5ff7cfd76c769229ee103a8c5e29093b4))
+
+## [0.0.1-alpha.136](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.135...v0.0.1-alpha.136) (2026-08-15)
+
+
+### Features
+
+* **api:** a solve says what it started from, and can be forced cold ([#728](https://github.com/fluxopt/lpspec/issues/728)) ([dcf760e](https://github.com/fluxopt/lpspec/commit/dcf760eaca984455987735c59850c0c0528424ce))
+
+## [0.0.1-alpha.135](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.134...v0.0.1-alpha.135) (2026-08-15)
+
+
+### Documentation
+
+* **agents:** a bug fix has to prove the bug was there ([#784](https://github.com/fluxopt/lpspec/issues/784)) ([5de3b49](https://github.com/fluxopt/lpspec/commit/5de3b496f64c4a0ec1de9763b369895887818767))
+
+## [0.0.1-alpha.134](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.133...v0.0.1-alpha.134) (2026-08-15)
+
+
+### Bug Fixes
+
+* **tests:** the harness reads a model through the product's loader ([#778](https://github.com/fluxopt/lpspec/issues/778)) ([bf9e8f6](https://github.com/fluxopt/lpspec/commit/bf9e8f65a163fc26269c64784fa1b4ae741fe6f7))
+
 ## [0.0.1-alpha.133](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.132...v0.0.1-alpha.133) (2026-08-14)
 
 

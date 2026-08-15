@@ -1,13 +1,20 @@
-"""The gallery's two evidence tables: what each model exercises, and what
-somebody else says its answer is.
+"""The gallery's catalogue and its two evidence tables: which models there are,
+what each exercises, and what somebody else says its answer is.
 
-    uv run python -m tools.constructs           # rewrite both tables
-    uv run python -m tools.constructs --check   # fail if either has drifted
+    uv run python -m tools.constructs           # rewrite all three blocks
+    uv run python -m tools.constructs --check   # fail if any has drifted
 
-The point of generating them is that a hand-kept evidence table is the exact
-shape of claim that rots: it is written once when it is true, and nothing
-fails when a model changes underneath it. ``tests/test_models_gallery.py``
-asserts the committed tables equal what this produces.
+The point of generating them is that a hand-kept table is the exact shape of
+claim that rots: it is written once when it is true, and nothing fails when a
+model changes underneath it. ``tests/test_models_gallery.py`` asserts the
+committed blocks equal what this produces.
+
+**The catalogue** is read off ``mkdocs.yml``'s nav and each page's own opening
+line, so the list on the page and the list in the sidebar are one list. The nav
+is already the complete one — ``strict: true`` with ``nav.omitted_files: warn``
+fails the build on a page missing from it — which is what lets the section head
+say *every* model. The hand-kept version it replaced had drifted to sixteen of
+twenty-three.
 
 **Constructs** are read off the **logical plan**, not the YAML text. Grepping
 for ``shift(`` would count a construct inside a macro that never expands, miss
@@ -30,6 +37,8 @@ from dataclasses import fields, is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import yaml
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -38,8 +47,11 @@ from lpspec.lowering import lower_program
 from lpspec.relational import plan
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGE = ROOT / 'docs' / 'models' / 'index.md'
+GALLERY = ROOT / 'docs' / 'models'
+PAGE = GALLERY / 'index.md'
+MKDOCS = ROOT / 'mkdocs.yml'
 REFERENCES = json.loads((ROOT / 'examples' / 'ports' / 'references.json').read_text())
+CAT_BEGIN, CAT_END = '<!-- catalogue:begin -->', '<!-- catalogue:end -->'
 BEGIN, END = '<!-- constructs:begin -->', '<!-- constructs:end -->'
 REF_BEGIN, REF_END = '<!-- references:begin -->', '<!-- references:end -->'
 
@@ -116,6 +128,61 @@ def _bounded(v: plan.VariableDeclaration) -> bool:
     return False
 
 
+class _NavLoader(yaml.SafeLoader):
+    """``mkdocs.yml`` is not safe-loadable: its markdown extensions are
+    configured with ``!!python/name:`` and ``!!python/object/apply:`` tags.
+
+    Resolving them would mean importing pymdownx to read a nav, so every tag
+    becomes ``None`` instead — the nav itself is plain lists and strings.
+    """
+
+
+_NavLoader.add_multi_constructor('tag:yaml.org,2002:python/', lambda *_: None)
+
+
+def nav_groups() -> list[tuple[str, list[tuple[str, str]]]]:
+    """The Models section of the site nav: group title, then its pages.
+
+    Each page is ``(label, name)`` — the label the sidebar shows and the
+    model's name, which is also its page and its YAML file. Entries in the
+    section that are not groups (the index itself, the data page) are skipped:
+    they are not models, and :func:`catalogue` is checked against
+    :func:`models` for the ones that are.
+    """
+    nav = yaml.load(MKDOCS.read_text(), Loader=_NavLoader)['nav']
+    section = next(entry['Models'] for entry in nav if isinstance(entry, dict) and 'Models' in entry)
+    groups = []
+    for entry in section:
+        if not isinstance(entry, dict):
+            continue
+        ((title, target),) = entry.items()
+        if isinstance(target, list):
+            groups.append((title, [(label, Path(path).stem) for page in target for label, path in page.items()]))
+    return groups
+
+
+def _summary(name: str) -> str:
+    """The opening line of a model's page, as one line.
+
+    The page is where a model describes itself, so the catalogue quotes it
+    rather than keeping a second description that can disagree with the first.
+    Links inside it resolve unchanged — every gallery page is a sibling of the
+    index.
+    """
+    _, _, body = (GALLERY / f'{name}.md').read_text().partition('\n')
+    summary = next(block for block in body.split('\n\n') if block.strip())
+    return ' '.join(summary.split())
+
+
+def catalogue() -> str:
+    """Every model, grouped and described exactly as the sidebar groups it."""
+    blocks = []
+    for title, pages in nav_groups():
+        rows = '\n'.join(f'| [{label}]({name}.md) | {_summary(name)} |' for label, name in pages)
+        blocks.append(f'### {title}\n\n| | |\n|---|---|\n{rows}')
+    return '\n\n'.join(blocks)
+
+
 def table(models: list[tuple[str, Path]]) -> str:
     """Markdown, one row per model, `·` where a construct is absent.
 
@@ -170,11 +237,15 @@ def references_table() -> str:
     return '\n'.join(lines) + ('\n\n' + '\n\n'.join(notes) if notes else '')
 
 
+def ports() -> list[Path]:
+    """The ported models — somebody else's model, against somebody else's optimum."""
+    return sorted((ROOT / 'examples' / 'ports').glob('*.yaml'))
+
+
 def models() -> list[tuple[str, Path]]:
     """Every model the gallery shows, examples before ports."""
     examples = sorted((ROOT / 'examples').glob('*.yaml'))
-    ports = sorted((ROOT / 'examples' / 'ports').glob('*.yaml'))
-    return [(p.stem, p) for p in examples] + [(p.stem, p) for p in ports]
+    return [(p.stem, p) for p in examples] + [(p.stem, p) for p in ports()]
 
 
 def _replace(page: str, begin: str, end: str, body: str) -> str:
@@ -183,14 +254,15 @@ def _replace(page: str, begin: str, end: str, body: str) -> str:
 
 
 def rendered(page: str) -> str:
-    """*page* with both generated blocks replaced."""
+    """*page* with all three generated blocks replaced."""
+    page = _replace(page, CAT_BEGIN, CAT_END, catalogue())
     page = _replace(page, BEGIN, END, table(models()))
     return _replace(page, REF_BEGIN, REF_END, references_table())
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--check', action='store_true', help='fail if the committed table has drifted')
+    ap.add_argument('--check', action='store_true', help='fail if any committed block has drifted')
     opts = ap.parse_args(argv)
 
     page = PAGE.read_text()

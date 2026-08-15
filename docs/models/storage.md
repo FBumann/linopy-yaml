@@ -40,7 +40,7 @@ an $\eta$.
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of generator $g$ in snapshot $s$ |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
 | $\mathrm{charge}$ | `charge` over $\mathcal{S}$ --- energy into the store |
 | $\mathrm{discharge}$ | `discharge` over $\mathcal{S}$ --- energy out of the store |
 | $\mathrm{soc}$ | `soc` over $\mathcal{S}$ --- state of charge carried into the next snapshot |
@@ -89,35 +89,44 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     ```yaml
     dimensions:
       snapshot:
+        description: dispatch periods, cyclic at the horizon
         dtype: int
       generator:
+        description: generating units
         dtype: str
 
     parameters:
       p_max:
+        description: installed capacity
         dims: [generator]
       cost:
+        description: marginal cost
         dims: [generator]
       load:
+        description: demand to be met
         dims: [snapshot]
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         bounds:
           lower: 0
           upper: p_max
       charge:
+        description: energy into the store
         foreach: [snapshot]
         bounds:
           lower: 0
           upper: 30
       discharge:
+        description: energy out of the store
         foreach: [snapshot]
         bounds:
           lower: 0
           upper: 30
       soc:
+        description: state of charge carried into the next snapshot
         foreach: [snapshot]
         bounds:
           lower: 0

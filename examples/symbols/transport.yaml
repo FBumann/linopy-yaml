@@ -25,16 +25,3 @@ names:
   p_max: "\\bar p"
   cap: "\\bar f"
   neg_cap: "\\underline{f}"
-
-descriptions:
-  snapshot: dispatch periods
-  generator: generating units
-  bus: network nodes
-  line: transmission lines, each joining two buses
-  p: output of generator $g$ in snapshot $s$
-  f: flow on line $\ell$, signed towards its `to` bus
-  cost: marginal cost
-  load: demand at each bus
-  p_max: installed capacity
-  cap: forward transmission limit
-  neg_cap: reverse transmission limit

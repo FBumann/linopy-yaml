@@ -24,9 +24,10 @@ result = lps.solve('model.yaml', sources, solver_options={'time_limit': 60})
 result.status, result.termination_condition, result.objective
 result.is_ok  # rolled-up verdict: not an error, abort or refusal
 result.has_primal  # narrower: are there values to read
-result.primal('p')  # tidy frame (dims…, value) — the native shape
+result.primal('p')  # tidy frame (dims…, value) in label order — the native shape
 result.dual('power_balance')  # shadow prices, the same shape and the same join
 result.activity('power_balance')  # each row's left-hand side at the solution — defined for a MILP, unlike dual
+result.expression('co2')  # a named expression at the solution — same shape, its own dims
 result.to_pandas('p')  # the same, as a DataFrame
 result.to_dataarray('p')  # the same, labelled: .sel / resample / plot
 result.to_dataset()  # every variable by default; names for a subset
@@ -75,7 +76,46 @@ for capacity in search:
 `solve_over` is the other spelling and the one to reach for first — a sweep,
 a rolling horizon or a myopic pathway is a *fold*, and it is written for you.
 `rebind` is the primitive underneath: reach for it when the next set of numbers
-depends on the last answer, which is what a fold cannot express.
+depends on the last answer, which is what a fold cannot express. Where the next
+set of numbers depends on *you* — a notebook — it is
+[Change a model](interactive.ipynb), which runs this loop beside the two
+costlier ones a session also has: growing a coordinate set, and patching the
+declarations.
+
+### Where a solve starts
+
+A rebind keeps the solver loaded, so a second solve starts from wherever the
+last one left it. Two things make that visible and refusable:
+
+```python
+result = bound.rebind({'load': load}).solve()
+result.started  # 'session' — the kept solver carried on; 'cold' if it had to load again
+
+baseline = bound.solve(warm=False)  # deliberately cold, whatever the session held
+baseline.started  # 'cold'
+```
+
+| | |
+|---|---|
+| `warm=True` (default) | the session: a kept solver re-solves from wherever its last solve ended, a fresh load starts cold |
+| `warm=False` | deliberately cold, held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again |
+
+`result.started` is read off what happened, never off what was asked, so a
+rebind that had to rebuild reports the cold start it got rather than the warm
+one it hoped for. It is what a benchmark needs — a cold baseline you can prove
+is cold — and what an iterating driver reads when a loop is slower than it
+should be: `'cold'` every iteration means the session is being rebuilt away.
+**Provenance, deliberately, not mechanism**: whether a start is a basis, an
+incumbent or a solver's own notion stays the sink's business, so a solver with
+no simplex fits the same words and a word can be added the day something else
+can be started from.
+
+**Carrying a start across a rebuild is not here yet.** The sinks can read one
+out of a session and set it on another, but nothing above them does: the case
+that wants it most — a cutting-plane master re-solved after gaining a cut — is
+a model that gained a *row*, and a basis spans the model it was read from.
+[#382](https://github.com/fluxopt/lpspec/issues/382) is where that is being
+worked out.
 
 `diagnostics()` is what a build and its solves did that the answer does not
 show: the shape the build produced (`columns`, `rows`, `nonzeros` — what
@@ -182,6 +222,7 @@ Reading a result:
 |---|---|
 | **`is_ok` is not `has_primal`** | `is_ok` rolls up the termination condition; `has_primal` adds the solver's verdict on whether an incumbent exists, and is what every reader gates on. A MIP that hits `time_limit` before finding a feasible point is `ok` with nothing to read |
 | reading anyway | `NoSolutionError`; `objective` is `nan` |
+| **`expression` reads what the model named** | the value of a declared named expression ([SPEC §3](SPEC.md#3-expressions-and-macros)) at the solution, aggregated to the expression's own dims (declaration order — an expression has no `foreach`). Takes a declared name only, never an expression string; an unknown one is a `KeyError` listing what is declared. Lowered and compiled **at the read**, through the same compiler the constraints use, so a build with fifty declared expressions that reads none pays for none. Semantics are a constraint's: an uncovered parameter coordinate contributes zero (SPEC §8), a coordinate where a term's variable is absent has no row (SPEC §7), an undefined divisor is a `DataError`. On the linopy lane the same read is `lpspec.linopy.expression(m, path, name, data=…)` |
 | `dual` **raises rather than zero-filling** | no values at all is `NoSolutionError`; values but no duals — any integer or binary variable makes them undefined — is `LpspecError`, because only this quantity is missing |
 | **the sink can make a model mixed-integer** | a `sos:` set ([SPEC §4.1](SPEC.md#41-sos)) reaches a solver with no SOS concept as binaries, so an otherwise continuous model solved on `highs` has no duals and says so. Solving it on `gurobi`, which branches on the set itself, keeps them |
 | duals exist only where a solver ran | either solver sink hands them back through the same join; a model written to LP and solved elsewhere never passes back through here. Reduced costs and slacks ride that join too and are not exposed yet |
@@ -210,7 +251,7 @@ runs.primal('soc')  # (snapshot_start, t, value) — the window, and the index i
 ```
 
 **`Runs` reads like `Result`, one dimension wider** — `primal`, `dual`,
-`to_pandas`, `to_dataarray`, `to_dataset`, `to_parquet`, under the same names
+`expression`, `to_pandas`, `to_dataarray`, `to_dataset`, `to_parquet`, under the same names
 and with the slice key prepended. That extra dimension is **named by you, not
 by the library**: `EachCoordinate('scenario')` keys on `scenario` and
 `EachCoordinate('draw')` on `draw`, a window on `<dim>_start`, and `key_name=`
@@ -218,13 +259,14 @@ overrides either. So `runs.to_dataarray('p')` on a scenario sweep is
 `(scenario, snapshot, generator)`, which is what a sweep is *for*: `.sel` one
 scenario, take a spread across them, plot the band.
 
-**`stitch=` is how you ask for the answer over real coordinates**, and it is a
-keyword on the readers rather than a reader of its own:
+**`original_index=` is how you ask for the answer over real coordinates**, and
+it is a keyword on the readers rather than a reader of its own:
 
 ```python
 runs.primal('soc')  # (snapshot_start, t, value) — keyed by slice
-runs.primal('soc', stitch=True)  # (snapshot, value)          — the answer
-runs.dual('balance', stitch=True)  # the same, for a price
+runs.primal('soc', original_index=True)  # (snapshot, value)          — the answer
+runs.dual('balance', original_index=True)  # the same, for a price
+runs.expression('spend', original_index=True)  # the model's own quantity, over real coordinates
 ```
 
 A flag rather than a method because what has to be undone is a property of the
@@ -245,8 +287,8 @@ back unchanged.
 window owns and drops the lookahead rows the sweep solved. A default that
 discarded computed answers would also key differently from `objective`, which
 is one row per slice always, and the two would stop joining. For the same
-reason `to_dataset` and `to_parquet` have no `stitch` — a bulk export of what
-the sweep holds is the wrong place to lose rows.
+reason `to_dataset` and `to_parquet` have no `original_index` — a bulk export
+of what the sweep holds is the wrong place to lose rows.
 
 Per slice is a partition of a frame you already have, so there is no reader for
 it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
@@ -257,8 +299,8 @@ it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
 | **one model, rebound per slice** | every slice is the same math over different numbers, so a serial sweep builds once and [rebinds](#re-solving-with-new-numbers): the YAML is parsed once, the plan lowered once, and a slice whose structure matches the last keeps the loaded solver. Peak is unchanged, a rebuild releasing the previous model before it starts. A sweep under `executor=` cannot — a built model is the one thing that does not cross a process — so it builds per slice, which is also why `carry` and `executor` are mutually exclusive |
 | **everything a slice produced is kept** | every variable's primals and every constraint's duals, read back through `runs.primal(name)` and `runs.dual(name)`. It is still a fold — each slice's *model* is released as the loop goes, so build peak stays at one slice however many there are, and what accumulates is the answer. Narrowing that is a later addition and an easy one; it is absent because it would need *two* keywords, a constraint being allowed to carry a variable's name |
 | **duals are keyed, never combined** | `runs.dual(name)` is `runs.primal(name)`'s shape. Averaging window prices, taking the last, and reading one slice alone are all defensible, so the reduction is the caller's. A slice whose model had an integer variable contributes none, and `runs.objective` says which |
+| **expressions are evaluated per slice** | every declared `expressions:` name, evaluated at each slice's solution as the fold reads it, back through `runs.expression(name)` in `runs.primal(name)`'s shape. Eager where `Result.expression` defers, because a deferred reader holds its build's frames and the fold releases each slice's model as it goes; per slice it costs what one more variable read does. Over `original_index=True` only the rows each window owns survive, so summing the stitched frame cannot double-count the lookahead — and a quantity *reduced over* the sliced dimension has no way back and is refused there, with the per-slice read named as the alternative |
 | **no aggregate objective** | `objective` is a frame keyed by slice. Scenarios are a distribution, not a sum; summing window objectives double-counts whatever the overlap discards |
-| **duals are not exposed** | a window's shadow price is that window's. Concatenating them into a price curve is wrong in a way nothing complains about |
 | `carry` is a copy, never arithmetic | `{parameter: (variable, index)}`. Accumulation — `existing += built` — is a derived variable in the YAML, where the math is reviewable |
 | **the two declarations say what is copied** | whichever dimension the *variable* has and the *parameter* does not is the one the carry collapses, and `index` names a coordinate of it. Everything else rides along. So `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t` and hands both stores forward, and `total` over `(generator)` into `existing` over `(generator)` drops nothing and needs no index — pass `None` |
 | the carry index is explicit | with `EachWindow(…, 48, 24, …)` the state to carry is at coordinate 23 of `into`, not 47. An implicit "last" is correct until overlap is introduced and silently wrong after |
@@ -328,7 +370,8 @@ have** — there is nothing to tune. (`df.lazy()` is not an optimisation: an eag
 frame is embedded in the plan, so it pickles *larger* than the frame. Only
 `scan_parquet` is a reference.)
 
-**The linopy shim** (`lpspec.linopy.build` / `.extend`, `[linopy]` extra) puts
-the same YAML math on a `linopy.Model` that already exists in memory. It is
+**The linopy shim** (`lpspec.linopy.build` / `.extend` / `.expression`,
+`[linopy]` extra) puts the same YAML math on a `linopy.Model` that already
+exists in memory, and reads a named expression back off a solved one. It is
 documented with everything else about that relationship in
 [docs/design/linopy.md](design/linopy.md#3-the-shim).

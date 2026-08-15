@@ -1,6 +1,6 @@
 # Examples
 
-**These are fixtures, not samples.** Eleven test modules load them by path, and
+**These are fixtures, not samples.** The test suite loads them by path and
 `docs/models/` embeds them, so the file you read here is the file CI runs.
 Renaming one breaks tests; changing one changes what the docs claim, and a test
 will say so.
@@ -23,7 +23,7 @@ reference implementation. This directory is the source; that is the guided tour.
 | `rolling/` | a storage schedule solved a window at a time, and what the lookahead buys (`solve_over`, `EachWindow`) |
 | `myopic/` | an investment pathway over periods of typical days, each inheriting the last one's fleet (`solve_over`, `carry`) |
 | `benders/` | the problem split in two and reassembled, checked against the monolith it decomposes |
-| `ports/` | eleven models somebody else already solved, checked against an optimum that did not come from us |
+| `ports/` | sixteen models somebody else already solved, checked against an optimum that did not come from us |
 
 `walkthrough.py` runs one model through YAML → schema → AST → plan → frames →
 LP text → solution, printing what each stage produces, then two models the
@@ -33,6 +33,14 @@ asserted, so it cannot drift from what the code does:
 ```bash
 python examples/walkthrough.py
 ```
+
+The other direction — not how a model is built but how one is *changed* — is a
+notebook rather than a script, and lives with the docs it is a page of:
+[docs/interactive.ipynb](../docs/interactive.ipynb) runs `dispatch.yaml` through
+the three loops a session has, and [docs/lifecycle.ipynb](../docs/lifecycle.ipynb)
+aims them at linopy's `fix`, `relax` and `remove_constraints`. Both ship with
+their cells cleared and the published pages execute them, so what a reader sees
+rendered is what that build produced.
 
 `ports/` carries three or four files per model — the YAML, the instance, the
 recorded objective with its provenance, and a reference implementation

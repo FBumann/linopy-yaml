@@ -33,6 +33,9 @@ scratch/relational_spike/*.lp
 
 # the built site (`mkdocs build`); Read the Docs builds it from source
 site/
+# mkdocs-jupyter's store of executed notebooks, keyed by content, so a local
+# rebuild does not re-run one that did not change
+.cache/
 
 # rendered presentation output (sources docs/*.md + docs/*.svg are tracked)
 docs/*.html
