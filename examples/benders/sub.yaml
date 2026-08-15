@@ -1,25 +1,32 @@
-# The subproblem with no crutch: dispatch at a given capacity, or nothing.
-# Below some capacity there is no feasible dispatch at all, and this says so by
-# being infeasible — which is the case `benders.py` avoided with `unserved`.
+description: >-
+  The Benders subproblem with no crutch: dispatch at a given capacity, or
+  nothing. Below some capacity there is no feasible dispatch at all, and this
+  model says so by being infeasible rather than by pricing unserved energy.
 dimensions:
-  snapshot: {dtype: int}
-  generator: {values: [wind, gas]}
+  snapshot: {dtype: int, description: "dispatch periods"}
+  generator: {values: [wind, gas], description: "generating units"}
 parameters:
-  cost: {dims: [generator]}
-  load: {dims: [snapshot]}
-  avail: {dims: [snapshot, generator]}
-  cap_hat: {dims: [generator]}
+  cost: {dims: [generator], description: "marginal cost"}
+  load: {dims: [snapshot], description: "demand to be met"}
+  avail: {dims: [snapshot, generator], description: "capacity factor"}
+  cap_hat: {dims: [generator], description: "the capacity the master proposed, fixed here"}
 variables:
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     bounds: {lower: 0}
 constraints:
   capacity:
+    description: >-
+      output is capped by the proposed capacity, derated by availability — and
+      its duals are the slope of the optimality cut
     foreach: [snapshot, generator]
     expression: p <= cap_hat * avail
   balance:
+    description: the fleet covers the load in every snapshot
     foreach: [snapshot]
     expression: sum(p, over=generator) >= load
 objective:
   sense: minimize
+  description: cost of dispatching at the proposed capacity
   expression: p * cost

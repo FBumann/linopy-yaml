@@ -25,6 +25,11 @@
     "rtol": 1e-09,
     "provenance": "published by OR-Library (Beasley) for instance cap71 of the uncapacitated warehouse location set, in the file uncapopt: http://people.brunel.ac.uk/~mastjjb/jeb/orlib/uncapinfo.html"
   },
+  "genx_piecewise_fuel": {
+    "objective": 2341.8230753008093,
+    "rtol": 1e-09,
+    "provenance": "published by GenX: asserted in test/test_piecewisefuel.jl as obj_true = 2341.82308 under genx_setup UCommit=2, CO2Cap=1, ParameterScale=1, and reproduced here by running GenX itself (julia 1.12.6, HiGHS) which reports 2341.8230753008093"
+  },
   "monthly_budget": {
     "objective": 9500.0,
     "rtol": 1e-09,

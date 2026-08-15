@@ -30,9 +30,11 @@ variables:
 
 constraints:
   power_balance:
+    description: the fleet meets the load exactly in every snapshot
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
 
 objective:
   sense: minimize
+  description: total cost of generation over the horizon
   expression: p * cost

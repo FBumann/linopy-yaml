@@ -1,8 +1,8 @@
 """Attribute build wall time to the queries that spend it.
 
-``bench/run.py`` says *how much* slower we are; this says *where*. It wraps
-``LazyFrame.collect`` and tags every collection with the build step that issued
-it, so the output is a ranked list of queries rather than a single number.
+``bench/test_ladder.py`` says *how much* slower we are; this says *where*. It
+wraps ``LazyFrame.collect`` and tags every collection with the build step that
+issued it, so the output is a ranked list of queries rather than a single number.
 
 Collection is the right thing to wrap: a lazy frame costs nothing until
 something asks for its rows, so every second of the build is inside one of
@@ -12,9 +12,9 @@ these calls.
     uv run python -m bench.profile_build transport m
 
 The wrapper adds Python overhead per call, so **absolute times here are not
-comparable to ``bench/run.py``** — there are only a few dozen collections, but
-the process is otherwise unoptimised. Read the shares, not the seconds; to
-quote a number, measure it with the harness.
+comparable to the ladder's** — there are only a few dozen collections, but the
+process is otherwise unoptimised. Read the shares, not the seconds; to quote a
+number, measure it with the harness.
 """
 
 from __future__ import annotations

@@ -21,9 +21,12 @@ import re
 import statistics
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bench import results as bench_results
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 ARMS = ('lpspec', 'linopy')
 
@@ -66,6 +69,9 @@ def load(
 
 Row = dict[str, Any]
 Key = tuple[str, str, str, str]
+#: One rung's two arms. A missing arm is ``None`` rather than an absent key, so
+#: a table renders a half-measured rung instead of skipping it silently.
+Arms = dict[str, Row | None]
 
 
 def _key(r: Row) -> Key:
@@ -139,6 +145,53 @@ def _note(lines: list[str], *, marked: bool) -> list[str]:
     return [*lines, '', _SPREAD_NOTE] if marked else lines
 
 
+def _grid(heading: list[str], leading: tuple[str, ...], body: Iterable[tuple[list[str], Arms]]) -> str:
+    """A comparison table: cells that identify a row, then both arms and their ratios.
+
+    Every table on this page shares one tail — each arm's minimum, the ratio
+    between them, and `MARK` on any wall cell whose rounds spread past
+    `SPREAD_BUDGET` — and differs only in what identifies a row and in what
+    order the rows come. Those are the two arguments; the rule is here once.
+
+    It is one rule rather than three that look alike: #801 added the noise mark
+    and had to write the same four lines into each of the three renderers this
+    replaces, which is the duplication showing itself.
+    """
+    head = [*leading, *(f'wall: {a}' for a in ARMS), 'wall', *(f'peak: {a}' for a in ARMS), 'peak']
+    lines = [*heading, '', '| ' + ' | '.join(head) + ' |', '|' + '---|' * len(head)]
+    marked = False
+    for cells, arms in body:
+        wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
+        peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
+        noisy = {a: suspect(r) for a, r in arms.items()}
+        marked = marked or any(noisy.values())
+        lines.append(
+            '| '
+            + ' | '.join(
+                [
+                    *cells,
+                    *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in ARMS),
+                    _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
+                    *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in ARMS),
+                    _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
+                ]
+            )
+            + ' |'
+        )
+    return '\n'.join(_note(lines, marked=marked))
+
+
+def _at_rung(rows: dict[Key, Row], case: str, size: str, sink: str) -> tuple[Arms, Row | None]:
+    """Both arms at one rung, and whichever of them is there to read shared cells off.
+
+    The shared cells — the counts, the live fraction — are a property of the
+    *model*, so either arm answers for them and a rung measured on only one arm
+    still renders. ``None`` for the second value means neither arm ran it.
+    """
+    arms = {a: rows.get((case, size, sink, a)) for a in ARMS}
+    return arms, next((r for r in arms.values() if r), None)
+
+
 _DENSITY_RUNG = re.compile(r'd\d+$')
 _DECLARATION_RUNG = re.compile(r'n\d+$')
 _SWEEPS = (_DENSITY_RUNG, _DECLARATION_RUNG)
@@ -164,33 +217,11 @@ def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, sweep: re.Pat
     return sorted(seen, key=lambda s: seen[s])
 
 
-#: The figures `bench.plot` writes, in the order the page reads them. Paired
-#: light/dark because mkdocs-material's toggle stamps the *host* page and an
-#: `<img>`-referenced SVG cannot see it; GitHub takes the first of the pair.
-FIGURES = (
-    ('wall', 'Wall time to a loaded solver, by model size'),
-    ('peak', 'Peak resident memory, by model size'),
-    ('cases', 'Every model in the corpus, through the highs sink'),
-    ('sinks', 'The l rung through every sink, both arms'),
-)
-
-
-def figures() -> str:
-    """The figure embeds, as markdown that renders in both places.
-
-    One pointer at the interactive page for the whole set rather than one per
-    figure: these are pictures, and reading a value off one is what that page
-    is for.
-    """
-    out = []
-    for name, alt in FIGURES:
-        out.append(f'![{alt}](charts/{name}-light.svg#only-light)')
-        out.append(f'![{alt}](charts/{name}-dark.svg#only-dark)')
-        out.append('')
-    out.append(
-        '*Static, so they render anywhere. The same data with a cursor: [the chart page](benchmarks-scaling.html).*'
-    )
-    return '\n'.join(out)
+#: Where a reader goes to trace a curve, which is the one thing the tables
+#: below cannot do. It is a link rather than an embed because a static figure
+#: has to be regenerated in lockstep with the numbers beside it to stay true,
+#: and one that is not is worse than no figure at all.
+_CHART_PAGE = '*The same runs with a cursor: [the chart page](benchmarks-scaling.html).*'
 
 
 #: How each arm reaches each sink, said once so a table can name its own seam.
@@ -218,51 +249,17 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
     The caption is bold rather than a heading: these live inside a collapsed
     ``<details>``, and a heading in there still lands in the table of contents
     — a rail full of entries for tables the page has just called the appendix.
-
-    A wall cell whose rounds spread past `SPREAD_BUDGET` carries `MARK`, and so
-    does the ratio beside it: a ratio is only as quotable as the two minima it
-    divides, and a flipped ratio is the harm this exists to prevent. The peak
-    columns are never marked — pytest-benchmem records a series per repeat, not
-    a distribution over rounds, so there is no equivalent signal to mark them
-    with.
     """
-    cols = ARMS
-    head = (
-        ['variables', 'live', 'rows']
-        + [f'wall: {a}' for a in cols]
-        + ['wall']
-        + [f'peak: {a}' for a in cols]
-        + ['peak']
+    return _grid(
+        [f'**{case} — {sink} sink**', '', _SEAM[sink]],
+        ('variables', 'live', 'rows'),
+        (
+            ([_si(ref['counts']['columns']), _live(ref), _si(ref['counts']['rows'])], arms)
+            for size in sizes_of(case, rows, sink)
+            for arms, ref in [_at_rung(rows, case, size, sink)]
+            if ref
+        ),
     )
-    lines = [
-        f'**{case} — {sink} sink**',
-        '',
-        _SEAM[sink],
-        '',
-        '| ' + ' | '.join(head) + ' |',
-        '|' + '---|' * len(head),
-    ]
-    marked = False
-    for size in sizes_of(case, rows, sink):
-        arms = {a: rows.get((case, size, sink, a)) for a in cols}
-        ref = next((r for r in arms.values() if r), None)
-        if ref is None:
-            continue
-        wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
-        peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
-        noisy = {a: suspect(r) for a, r in arms.items()}
-        cells = [
-            _si(ref['counts']['columns']),
-            _live(ref),
-            _si(ref['counts']['rows']),
-            *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in cols),
-            _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
-            *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
-            _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
-        ]
-        marked = marked or any(noisy.values())
-        lines.append('| ' + ' | '.join(cells) + ' |')
-    return '\n'.join(_note(lines, marked=marked))
 
 
 def _live(r: Row) -> str:
@@ -324,10 +321,21 @@ def marginal(loop_rows: list[Row]) -> str:
     if not best:
         return ''
 
-    seen = sorted(
-        {(c, s) for c, s, _ in best},
-        key=lambda k: best[(k[0], k[1], 'lpspec')].get('nominal_variables', 0),
-    )
+    def order(key: tuple[str, str]) -> tuple[float, str, str]:
+        """Widest model last, then by name — a *total* order, off whichever arm ran.
+
+        Both halves are load-bearing. Reading the width off `lpspec` alone
+        raised `KeyError` on a file measured with `--arms linopy`; widths also
+        tie by construction — `_ladder` grows every case by the same factors,
+        so `fleet`, `nodal` and `profiled` share all six — and a set's
+        iteration order is not stable across processes, so ties left the same
+        results file rendering in a different row order run to run. A published
+        table that a re-render reshuffles has a diff that means nothing.
+        """
+        widths = (best[(*key, a)].get('nominal_variables') for a in ARMS if (*key, a) in best)
+        return (next((w for w in widths if w is not None), 0), *key)
+
+    seen = sorted({(c, s) for c, s, _ in best}, key=order)
     lines = [
         '### Marginal cost per model',
         '',
@@ -360,6 +368,30 @@ def marginal(loop_rows: list[Row]) -> str:
     return '\n'.join(lines)
 
 
+def _sweep(rows: dict[Key, Row], rung: re.Pattern[str], heading: list[str], second: str, newest_first: bool) -> str:
+    """A sweep table: one model size, one axis varied, every case that has it.
+
+    Held at one model size, so this is the axis the size ladder cannot show.
+    *second* names the column between the case and its width — what the sweep
+    actually varies — and is read off the rung label, because the label is the
+    only place the swept value survives into the results file.
+    """
+    cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, 'lp', sweep=rung)]
+    if not cases:
+        return ''
+
+    def body() -> Iterable[tuple[list[str], Arms]]:
+        for case in cases:
+            sizes = sizes_of(case, rows, 'lp', sweep=rung)
+            for size in reversed(sizes) if newest_first else sorted(sizes):
+                arms, ref = _at_rung(rows, case, size, 'lp')
+                if ref:
+                    label = _live(ref) if second == 'live' else str(int(size[1:]))
+                    yield [case, label, _si(ref['counts']['columns'])], arms
+
+    return _grid(heading, ('case', second, 'variables'), body())
+
+
 def density(rows: dict[Key, Row]) -> str:
     """One model size, four mask densities — the axis the ladder cannot show.
 
@@ -367,48 +399,18 @@ def density(rows: dict[Key, Row]) -> str:
     this is the one comparison where the two lanes are not doing the same work
     in different orders — they are doing different amounts of work.
     """
-    cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, 'lp', sweep=_DENSITY_RUNG)]
-    if not cases:
-        return ''
-    cols = ARMS
-    head = (
-        ['case', 'live', 'variables']
-        + [f'wall: {a}' for a in cols]
-        + ['wall']
-        + [f'peak: {a}' for a in cols]
-        + ['peak']
+    return _sweep(
+        rows,
+        _DENSITY_RUNG,
+        [
+            '### The mask sweep',
+            '',
+            'One model size, through the `lp` sink. For `nodal`, `live` is how many '
+            'of the 12 technologies each node has installed: 12 / 6 / 3 / 1.',
+        ],
+        second='live',
+        newest_first=True,
     )
-    lines = [
-        '### The mask sweep',
-        '',
-        'One model size, through the `lp` sink. For `nodal`, `live` is how many '
-        'of the 12 technologies each node has installed: 12 / 6 / 3 / 1.',
-        '',
-        '| ' + ' | '.join(head) + ' |',
-        '|' + '---|' * len(head),
-    ]
-    marked = False
-    for case in cases:
-        for size in reversed(sizes_of(case, rows, 'lp', sweep=_DENSITY_RUNG)):
-            arms = {a: rows.get((case, size, 'lp', a)) for a in cols}
-            ref = next((r for r in arms.values() if r), None)
-            if ref is None:
-                continue
-            wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
-            peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
-            noisy = {a: suspect(r) for a, r in arms.items()}
-            cells = [
-                case,
-                _live(ref),
-                _si(ref['counts']['columns']),
-                *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in cols),
-                _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
-                *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
-                _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
-            ]
-            marked = marked or any(noisy.values())
-            lines.append('| ' + ' | '.join(cells) + ' |')
-    return '\n'.join(_note(lines, marked=marked))
 
 
 def declarations(rows: dict[Key, Row]) -> str:
@@ -418,49 +420,19 @@ def declarations(rows: dict[Key, Row]) -> str:
     column is per-declaration cost — the loop over declarations both lanes
     still run — rather than model size.
     """
-    cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, 'lp', sweep=_DECLARATION_RUNG)]
-    if not cases:
-        return ''
-    cols = ARMS
-    head = (
-        ['case', 'declarations', 'variables']
-        + [f'wall: {a}' for a in cols]
-        + ['wall']
-        + [f'peak: {a}' for a in cols]
-        + ['peak']
+    return _sweep(
+        rows,
+        _DECLARATION_RUNG,
+        [
+            '### The declaration sweep',
+            '',
+            'One model size, through the `lp` sink. A fixed pool of units split into '
+            'N declarations of pool/N units each, so total variables and rows are '
+            'flat and only the declaration count moves.',
+        ],
+        second='declarations',
+        newest_first=False,
     )
-    lines = [
-        '### The declaration sweep',
-        '',
-        'One model size, through the `lp` sink. A fixed pool of units split into '
-        'N declarations of pool/N units each, so total variables and rows are '
-        'flat and only the declaration count moves.',
-        '',
-        '| ' + ' | '.join(head) + ' |',
-        '|' + '---|' * len(head),
-    ]
-    marked = False
-    for case in cases:
-        for size in sorted(sizes_of(case, rows, 'lp', sweep=_DECLARATION_RUNG)):
-            arms = {a: rows.get((case, size, 'lp', a)) for a in cols}
-            ref = next((r for r in arms.values() if r), None)
-            if ref is None:
-                continue
-            wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
-            peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
-            noisy = {a: suspect(r) for a, r in arms.items()}
-            cells = [
-                case,
-                str(int(size[1:])),
-                _si(ref['counts']['columns']),
-                *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in cols),
-                _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
-                *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
-                _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
-            ]
-            marked = marked or any(noisy.values())
-            lines.append('| ' + ' | '.join(cells) + ' |')
-    return '\n'.join(_note(lines, marked=marked))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -510,7 +482,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print('Parity gate: enforced at measurement time — every arm below built the same model.')
     print()
-    print(figures())
+    print(_CHART_PAGE)
     for case in sorted({c for c, _, _, _ in rows}):
         sinks = [k for k in sorted({k for c, _, k, _ in rows if c == case}) if sizes_of(case, rows, k)]
         if not sinks:

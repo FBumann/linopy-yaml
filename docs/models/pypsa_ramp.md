@@ -22,33 +22,35 @@ them, 18200.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+PyPSA linear optimal power flow, rung 2: rung 1 plus a limit on how fast a generator may change output between snapshots. Optimum 18200.0, from PyPSA itself.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` |
-| $\mathcal{B}$ | index $b$ --- `bus` |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ |
-| $\mathcal{L}$ | index $l$ --- `link` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ |
+| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
+| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
+| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
+| $\mathcal{L}$ | index $l$ --- `link` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- controllable connections, each joining two buses |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ |
-| $\mathit{ramp\_limit\_up}$ | `ramp_limit_up` over $\mathcal{G}$ |
-| $\mathit{ramp\_limit\_down}$ | `ramp_limit_down` over $\mathcal{G}$ |
-| $\mathit{rating}$ | `rating` over $\mathcal{L}$ |
-| $\mathit{neg\_rating}$ | `neg_rating` over $\mathcal{L}$ |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
+| $\mathit{ramp\_limit\_up}$ | `ramp_limit_up` over $\mathcal{G}$ --- share of capacity output may rise by from one snapshot to the next |
+| $\mathit{ramp\_limit\_down}$ | `ramp_limit_down` over $\mathcal{G}$ --- share of capacity output may fall by from one snapshot to the next |
+| $\mathit{rating}$ | `rating` over $\mathcal{L}$ --- most a link may carry towards its `to` bus |
+| $\mathit{neg\_rating}$ | `neg_rating` over $\mathcal{L}$ --- most a link may carry the other way, negative by convention |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a link, signed towards its `to` bus |
 
 #### Objective
 
@@ -86,47 +88,71 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # PyPSA linear optimal power flow, rung 2: rung 1 plus generator ramp limits.
-    # Optimum 18200.0, from PyPSA itself.
+    description: >-
+      PyPSA linear optimal power flow, rung 2: rung 1 plus a limit on how fast a
+      generator may change output between snapshots. Optimum 18200.0, from PyPSA
+      itself.
 
     dimensions:
       snapshot:
+        description: dispatch periods
         dtype: int
       bus:
+        description: network nodes
         dtype: str
       generator:
+        description: generating units, each sitting on one bus
         dtype: str
       link:
+        description: controllable connections, each joining two buses
         dtype: str
 
     lookups:
-      gen_bus: {over: generator, into: bus}  # every generator sits on a bus
-      from: {over: link, into: bus}  # both endpoints are buses
-      to: {over: link, into: bus}
+      gen_bus:
+        description: the bus a generator sits on
+        over: generator
+        into: bus
+      from:
+        description: the bus a link leaves
+        over: link
+        into: bus
+      to:
+        description: the bus a link arrives at
+        over: link
+        into: bus
 
     parameters:
       p_nom:
+        description: installed capacity of a generator
         dims: [generator]
       marginal_cost:
+        description: cost of one unit of output
         dims: [generator]
       ramp_limit_up:
+        description: share of capacity output may rise by from one snapshot to the next
         dims: [generator]
       ramp_limit_down:
+        description: share of capacity output may fall by from one snapshot to the next
         dims: [generator]
       rating:
+        description: most a link may carry towards its `to` bus
         dims: [link]
       neg_rating:
+        description: most a link may carry the other way, negative by convention
         dims: [link]
       load:
+        description: demand at each bus in each snapshot
         dims: [snapshot, bus]
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         bounds:
           lower: 0
           upper: p_nom
       f:
+        description: flow on a link, signed towards its `to` bus
         foreach: [snapshot, link]
         bounds:
           lower: neg_rating
@@ -134,6 +160,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       nodal_balance:
+        description: what is generated at a bus plus what arrives over the links meets the load there
         foreach: [snapshot, bus]
         expression: >-
           sum(p, over=generator, group_by=gen_bus)
@@ -142,15 +169,18 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           == load
 
       ramp_up:
+        description: output rises no faster than the ramp limit allows
         foreach: [snapshot, generator]
         expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
 
       ramp_down:
+        description: output falls no faster than the ramp limit allows
         foreach: [snapshot, generator]
         expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
 
     objective:
       sense: minimize
+      description: total cost of generation; moving power over a link is free here
       expression: p * marginal_cost
     ```
 
