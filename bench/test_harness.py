@@ -203,9 +203,9 @@ def test_the_milp_case_lowers_with_both_variable_types() -> None:
 def test_the_floor_builds_the_model_lpspec_builds() -> None:
     """The floor's counts match lpspec's on `transport/xs`, so its headroom claim is about one model.
 
-    Columns, rows and nonzeros are the cheap fingerprint; `--check` compares
-    objectives on top and is run by hand. A floor that quietly dropped a term
-    would post an unbeatable time for a model nobody built.
+    Columns, rows and nonzeros are the cheap fingerprint; the objectives are
+    compared by the test below. A floor that quietly dropped a term would post
+    an unbeatable time for a model nobody built.
     """
     import lpspec as lps
 
@@ -261,4 +261,20 @@ def test_the_splice_shifts_a_later_declarations_rows() -> None:
     )
     assert list(warm_payoff.prefixed(previous, 5).row_statuses) == [10, 11, 20, 21, warm_payoff.BASIC], (
         'the prefix carry is the mistake this splice exists to avoid; it must stay measurably different'
+    )
+
+
+def test_the_floor_and_lpspec_agree_on_the_answer() -> None:
+    """`check()` runs, and the two models solve to one objective.
+
+    The counts above are a fingerprint, not the answer — they match for a floor
+    that permuted a coefficient. This calls what `--check` calls, which is also
+    the only thing that reaches `workloads.objective`: the counts test never
+    does, so a signature change there went unnoticed until someone ran the flag
+    by hand.
+    """
+    ours, lpspec = floor.check()
+
+    assert ours == pytest.approx(lpspec, rel=1e-9), (
+        f'the floor solves a different model than lpspec: {ours} against {lpspec}'
     )
