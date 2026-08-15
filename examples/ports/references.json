@@ -77,6 +77,11 @@
       }
     }
   },
+  "osemosys_utopia": {
+    "objective": 29446.86269,
+    "rtol": 1e-09,
+    "provenance": "published by OSeMOSYS: asserted in OSeMOSYS_GNU_MathProg tests/test_gnu_mathprog.py as obj = 2.944686269e+04 for tests/utopia.txt, and reproduced here by running GLPK directly (glpsol 5.0, src/osemosys.txt) — an oracle outside Python entirely"
+  },
   "piecewise": {
     "objective": 3850.0,
     "rtol": 1e-09,

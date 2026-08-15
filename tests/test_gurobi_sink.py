@@ -8,7 +8,10 @@ published optimum, which neither sink can talk the other into.
 
 Every test skips without ``gurobipy``. It ships a size-limited licence in its
 own wheel, which is what makes this runnable in CI at all, so the models here
-stay small enough for it — a few hundred columns, where the limit is 2000.
+stay small enough for it — a few hundred columns, where the limit is 2000. A
+port that outgrows the licence is named in ``OVER_THE_GUROBI_LIMIT`` and
+skipped rather than shrunk: the corpus is checked against somebody else's
+optimum for the whole model, and half of one reaches no published number.
 """
 
 from __future__ import annotations
@@ -122,6 +125,14 @@ def test_gurobi_and_highs_agree(name: str, variable: str, constraint: str, has_d
             assert gb.dual(constraint)['value'].to_list() == pytest.approx(highs.dual(constraint)['value'].to_list())
 
 
+#: `osemosys_utopia` builds 5,733 columns against the bundled licence's 2,000.
+#: Nothing about the model is gurobi-specific and the sink handles it fine: on
+#: an unrestricted licence it reaches 29446.862694340936, against 29446.86269434094
+#: from highs and OSeMOSYS's own 29446.86269. It is skipped for the licence, not
+#: for the answer.
+OVER_THE_GUROBI_LIMIT = {'osemosys_utopia'}
+
+
 def test_every_port_reaches_its_reference_optimum_on_gurobi(port: dict[str, Any]) -> None:
     """``test_ports.py``'s corpus, solved by the other solver.
 
@@ -129,6 +140,8 @@ def test_every_port_reaches_its_reference_optimum_on_gurobi(port: dict[str, Any]
     mis-loads the matrix — a block boundary off by a row, a sense inverted —
     still reaches *a* number; this is what that number is checked against.
     """
+    if port['name'] in OVER_THE_GUROBI_LIMIT:
+        pytest.skip(f'{port["name"]} exceeds the bundled gurobi licence — see OVER_THE_GUROBI_LIMIT')
     with lps.solve(port['model'], port_sources(port['name']), solver_name='gurobi') as solution:
         assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol'])
