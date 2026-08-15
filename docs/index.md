@@ -232,7 +232,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
 <div class="grid cards" markdown>
 
--   :material-school: __Writing a model__
+-   :material-school: __Write a model__
 
     ---
 

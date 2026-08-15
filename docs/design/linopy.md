@@ -108,6 +108,14 @@ and diff — and the third is
 [#106](https://github.com/fluxopt/lpspec/issues/106), where we adopt linopy's
 *design* for declared solver capabilities without adopting its code.
 
+The modeling API is the one a reader arriving from linopy misses first, and
+what replaces it is two notebook pages: [Change a model](../interactive.ipynb)
+for the loops — `rebind` for new numbers, a longer table for more rows, a
+patched `dict` for new math — and [Fix, relax, remove](../lifecycle.ipynb) for
+the verbs, which are the same loops aimed at `fix`, `relax` and
+`remove_constraints`. What neither replaces is the *debugging*: an IIS, and
+printing a built row. Both pages say so.
+
 Where linopy is genuinely ahead, and why none of it is a ceiling question, is the
 honest snapshot in [ROADMAP](../ROADMAP.md#honest-snapshot).
 

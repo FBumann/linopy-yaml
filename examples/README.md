@@ -33,6 +33,14 @@ asserted, so it cannot drift from what the code does:
 python examples/walkthrough.py
 ```
 
+The other direction — not how a model is built but how one is *changed* — is a
+notebook rather than a script, and lives with the docs it is a page of:
+[docs/interactive.ipynb](../docs/interactive.ipynb) runs `dispatch.yaml` through
+the three loops a session has, and [docs/lifecycle.ipynb](../docs/lifecycle.ipynb)
+aims them at linopy's `fix`, `relax` and `remove_constraints`. Both ship with
+their cells cleared and the published pages execute them, so what a reader sees
+rendered is what that build produced.
+
 `ports/` carries three or four files per model — the YAML, the instance, the
 recorded objective with its provenance, and a reference implementation
 importing no lpspec. That last one is absent where the optimum is *published*

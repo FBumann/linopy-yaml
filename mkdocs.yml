@@ -38,7 +38,10 @@ validation:
 
 nav:
   - Home: index.md
-  - Writing a model: guide.md
+  - Write a model: guide.md
+  - Change a model:
+      - The three loops: interactive.ipynb
+      - Fix, relax, remove: lifecycle.ipynb
   - Models:
       - models/index.md
       - Preparing the data: models/data.md
@@ -167,6 +170,19 @@ markdown_extensions:
 plugins:
   - search
   - include-markdown
+  # `docs/interactive.ipynb` ships with its cells cleared (the nbstripout hook
+  # in .pre-commit-config.yaml), so the outputs on the page are this build's:
+  # every number, frame and rendered equation came from the code above it, on
+  # the commit being built. `allow_errors: false` makes a cell that raises fail
+  # the build, which is what stops the page from teaching a call that no longer
+  # works — the same bargain nbsphinx strikes for linopy's tutorials.
+  #
+  # Execution needs the package and a kernel, which is why `.readthedocs.yaml`
+  # installs the project and the `docs` group carries ipykernel.
+  - mkdocs-jupyter:
+      execute: true
+      allow_errors: false
+      include_source: true
 
 extra_css:
   - stylesheets/extra.css

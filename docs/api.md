@@ -24,7 +24,7 @@ result = lps.solve('model.yaml', sources, solver_options={'time_limit': 60})
 result.status, result.termination_condition, result.objective
 result.is_ok  # rolled-up verdict: not an error, abort or refusal
 result.has_primal  # narrower: are there values to read
-result.primal('p')  # tidy frame (dims…, value) — the native shape
+result.primal('p')  # tidy frame (dims…, value) in label order — the native shape
 result.dual('power_balance')  # shadow prices, the same shape and the same join
 result.activity('power_balance')  # each row's left-hand side at the solution — defined for a MILP, unlike dual
 result.to_pandas('p')  # the same, as a DataFrame
@@ -75,7 +75,11 @@ for capacity in search:
 `solve_over` is the other spelling and the one to reach for first — a sweep,
 a rolling horizon or a myopic pathway is a *fold*, and it is written for you.
 `rebind` is the primitive underneath: reach for it when the next set of numbers
-depends on the last answer, which is what a fold cannot express.
+depends on the last answer, which is what a fold cannot express. Where the next
+set of numbers depends on *you* — a notebook — it is
+[Change a model](interactive.ipynb), which runs this loop beside the two
+costlier ones a session also has: growing a coordinate set, and patching the
+declarations.
 
 ### Where a solve starts
 
