@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     import xarray as xr
 
     from lpspec.language.model import Model
+    from lpspec.relational.result import Start
 
 #: Parquet rather than pickle, and not a knob: zstd measured smaller *and*
 #: faster than pickling the frame, on compressible and incompressible data
@@ -590,6 +591,7 @@ def solve_over(
     workers_share_fs: bool | None = None,
     solver_options: Mapping[str, Any] | None = None,
     solver_name: str = 'highs',
+    start: Start = 'loaded',
     **build_kwargs: Any,
 ) -> Runs:
     """Solve *model* once per slice of *axis* and fold the answers together.
@@ -610,15 +612,16 @@ def solve_over(
     there are; what accumulates is the answer, which is what the caller asked
     for.
 
-    **The fold solves with ``start='previous'``**, which
-    :meth:`~lpspec.api.BoundModel.solve` does not default to. Whether
-    continuing from the last answer pays is a question about one model, and a
-    caller solving once cannot be asked it — but a sweep is a walk whose
-    consecutive slices differ by one step, and that is the case the start was
-    written for. A slice whose labels move is loaded again and starts cold,
-    which the fold neither prevents nor needs to know. The pooled branch does
-    not ask for it and could not use it: it builds per slice, so every solve
-    there is a first solve.
+    **``start`` reaches every slice unchanged**, defaulting as
+    :meth:`~lpspec.api.BoundModel.solve` does. A fold is where
+    ``start='previous'`` has something to carry — consecutive slices differ by
+    one step — but whether carrying pays is a question about one *model*, and
+    a driver knows no more about that than a caller does: on a model its
+    solver's preprocessing can crack, carrying is the slower path by a wide
+    margin. So the fold offers the option and picks neither. A slice whose
+    labels move is loaded again and starts cold, which the fold neither
+    prevents nor needs to know; the pooled branch cannot use anything but a
+    cold start, building per slice, and passing one there is not an error.
 
     **A caller's own ``coords`` sit under the axis's**, which owns the dim it
     re-indexed. They are merged into the cuts once, here, so neither of the two
@@ -680,7 +683,7 @@ def solve_over(
     no_expressions: dict[str, str] = {}
 
     answered = (
-        _serially(schema, cuts, build_kwargs, solving, plan)
+        _serially(schema, cuts, build_kwargs, solving, plan, start)
         if executor is None
         else _pooled(executor, workers_share_fs, schema, cuts, build_kwargs, solving)
     )
@@ -712,13 +715,14 @@ def _serially(
     building: Mapping[str, Any],
     solving: Mapping[str, Any],
     plan: Mapping[str, _CarryRule],
+    start: Start,
 ) -> Generator[tuple[Any, _Answer], None, None]:
     """Each slice's answer, off one model rebound in place.
 
     Every slice of a sweep is the same math over different numbers, which is
     what :meth:`~lpspec.api.BoundModel.rebind` is: the YAML is parsed once, the
     plan lowered once, and a slice whose structure matches the last one keeps
-    the loaded solver and re-solves from its basis. A rebuild releases the
+    the loaded solver — carrying its last answer too only where *start* asks. A rebuild releases the
     previous model before it starts, so the fold still holds one slice's model
     however many there are.
 
@@ -752,7 +756,7 @@ def _serially(
                 if bound is not None:
                     bound.close()
                 bound, named = build(schema, sources, coords=cut.coords or None, **building), names
-            answer = _answers(bound.solve(**solving, start='previous'), schema)
+            answer = _answers(bound.solve(**solving, start=start), schema)
             yield cut.key, answer
             if plan and position < len(cuts) - 1:
                 state = {p: rule.value_from(answer.primals, p, cut.key) for p, rule in plan.items()}

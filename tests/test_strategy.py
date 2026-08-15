@@ -255,16 +255,17 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
     assert by_key['low'] < by_key['mid'] < by_key['high'], 'a bigger load is a costlier dispatch'
 
 
-def test_a_serial_fold_asks_every_slice_to_start_from_the_last(monkeypatch):
-    """The fold opts into `start='previous'`; `solve` itself does not.
+def test_a_fold_passes_its_start_to_every_slice_and_chooses_none(monkeypatch):
+    """`start` reaches each slice as asked, and the default is `solve`'s.
 
-    A purpose-built probe, and it says why: the choice is invisible in the
+    A purpose-built probe, and it says why: the request is invisible in the
     answer *and* in `loads`, since keeping the solver and keeping what it
-    reached are separate halves and the fold takes both. Deleting the opt-in
-    leaves every other assertion in this file green, so without this the
-    decision could be reverted by accident and nothing would say so.
+    reached are separate halves and the fold keeps the first either way. So a
+    fold that quietly picked `previous` for the caller — which an earlier
+    draft of this did — would pass every other assertion in this file while
+    taking a bet only the caller can price.
 
-    Read off the call rather than the result because it is the *request* that
+    Read off the call rather than `started`, because it is the *request* that
     is the decision: a slice whose labels moved is loaded again and correctly
     reports `cold`, which would make an assertion on `started` a test of the
     data instead.
@@ -278,10 +279,12 @@ def test_a_serial_fold_asks_every_slice_to_start_from_the_last(monkeypatch):
 
     monkeypatch.setattr(BoundModel, 'solve', recording)
 
-    runs = lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+    lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+    assert asked == ['loaded'] * 3, f'the fold defaulted to {asked}, not solve()s own default'
 
-    assert len(runs) == 3, 'three slices'
-    assert asked == ['previous'] * 3, f'the fold asked for {asked}, not previous at every slice'
+    asked.clear()
+    lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), start='previous')
+    assert asked == ['previous'] * 3, f'the fold asked for {asked}, not what the caller chose'
 
 
 def test_a_serial_fold_builds_once_and_rebinds(builds):

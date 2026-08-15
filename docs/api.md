@@ -102,7 +102,7 @@ baseline.started  # 'cold'
 | | |
 |---|---|
 | `start='loaded'` (default) | the solver already holding the model is reused and the hand-off skipped; what it reached is discarded, so the run begins as if the model had never been solved |
-| `start='previous'` | that answer is kept too. **Faster only where the model is hard**: a solver told where to begin skips the preprocessing it would otherwise do, which is a win on a model that presolve cannot crack and a loss on one it can — so this is opt-in, and `solve_over` opts in because a sweep's consecutive slices differ by one step |
+| `start='previous'` | that answer is kept too — **opt-in, because it swings both ways**. A solver told where to begin skips the presolve it would otherwise run, and which of the two is worth more is a fact about your model. Six rebinds, HiGHS, measured both ways (#815): on a dispatch presolve cracks outright, carrying cost **76.6 s against 4.3 s** — an 18× *loss*; on a storage model with a cyclic recurrence it cannot crack, carrying cost **111.2 s against 213.9 s** — a 1.9× *win*. Same procedure, opposite answers, so nothing here guesses on your behalf — measure it, below |
 | `start='cold'` | held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again |
 
 `result.started` is read off what happened, never off what was asked, so a
@@ -114,6 +114,22 @@ should be: `'cold'` every iteration means the session is being rebuilt away.
 incumbent or a solver's own notion stays the sink's business, so a solver with
 no simplex fits the same words and a word can be added the day something else
 can be started from.
+
+**Which start your model wants is measured, not reasoned about.** Run the loop
+each way and read the clock the package already keeps; `started` confirms the
+request was honoured rather than quietly downgraded to `cold`:
+
+```python
+for start in ('loaded', 'previous'):
+    bound = lps.build('model.yaml', sources)
+    for numbers in walk:
+        assert bound.rebind(numbers).solve(start=start).started in {start, 'cold'}
+    print(start, bound.diagnostics().timings['solve'])
+```
+
+Take the faster one. Nothing about the answer changes either way — across both
+models above the objectives agreed to 2e-15 relative — so this is a timing
+question and only a timing question.
 
 **Carrying a start across a rebuild is not here yet.** The sinks can read one
 out of a session and set it on another, but nothing above them does: the case
@@ -302,6 +318,7 @@ it: `runs.primal('p').partition_by(runs.key_name, as_dict=True)`.
 |---|---|
 | **a partition is a filter on the sources** | not a narrower `coords` — the containment check refuses parameter rows outside the declared coordinates, by design. The axis rewrites the sources and supplies the matching `coords` together |
 | **one model, rebound per slice** | every slice is the same math over different numbers, so a serial sweep builds once and [rebinds](#re-solving-with-new-numbers): the YAML is parsed once, the plan lowered once, and a slice whose structure matches the last keeps the loaded solver. Peak is unchanged, a rebuild releasing the previous model before it starts. A sweep under `executor=` cannot — a built model is the one thing that does not cross a process — so it builds per slice, which is also why `carry` and `executor` are mutually exclusive |
+| **`start` reaches every slice, and the fold chooses none of them** | it defaults exactly as [`solve`](#where-a-solve-starts) does, `'loaded'`. A fold is where `start='previous'` has something to carry, consecutive slices differing by one step — but whether carrying pays is a fact about the *model*, and the driver knows no more about that than you do, so it does not decide for you. Under `executor=` it cannot apply at all: a pooled sweep builds per slice, so every slice is a first solve and reports `'cold'` |
 | **everything a slice produced is kept** | every variable's primals and every constraint's duals, read back through `runs.primal(name)` and `runs.dual(name)`. It is still a fold — each slice's *model* is released as the loop goes, so build peak stays at one slice however many there are, and what accumulates is the answer. Narrowing that is a later addition and an easy one; it is absent because it would need *two* keywords, a constraint being allowed to carry a variable's name |
 | **duals are keyed, never combined** | `runs.dual(name)` is `runs.primal(name)`'s shape. Averaging window prices, taking the last, and reading one slice alone are all defensible, so the reduction is the caller's. A slice whose model had an integer variable contributes none, and `runs.objective` says which |
 | **expressions are evaluated per slice** | every declared `expressions:` name, evaluated at each slice's solution as the fold reads it, back through `runs.expression(name)` in `runs.primal(name)`'s shape. Eager where `Result.expression` defers, because a deferred reader holds its build's frames and the fold releases each slice's model as it goes; per slice it costs what one more variable read does. Over `original_index=True` only the rows each window owns survive, so summing the stitched frame cannot double-count the lookahead — and a quantity *reduced over* the sliced dimension has no way back and is refused there, with the per-slice read named as the alternative |

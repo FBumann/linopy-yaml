@@ -284,6 +284,12 @@ def solve(
     The one-shot spelling: a caller who will solve the same model again with
     new numbers wants :func:`build` and :meth:`BoundModel.rebind`.
 
+    There is no ``start`` here and no room for one — this builds the model it
+    solves, so the solve is the first of that model's life and
+    :attr:`~lpspec.relational.result.Result.started` is always ``cold``.
+    Choosing a start is :meth:`BoundModel.solve`, where a previous solve
+    exists to keep something from.
+
     Args:
         model: A YAML path, a mapping, or a loaded :class:`Model`.
         sources: As :func:`build` takes them.
