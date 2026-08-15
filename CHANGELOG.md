@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.141](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.140...v0.0.1-alpha.141) (2026-08-15)
+
+
+### Features
+
+* **gallery:** a path serves one call and crosses many arcs ([#789](https://github.com/fluxopt/lpspec/issues/789)) ([640558b](https://github.com/fluxopt/lpspec/commit/640558beb202161a529fc3864cd49bd58cdf95d5))
+
 ## [0.0.1-alpha.140](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.139...v0.0.1-alpha.140) (2026-08-15)
 
 
