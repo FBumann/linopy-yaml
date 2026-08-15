@@ -13,12 +13,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-from bench import floor
+from bench import floor, warm_payoff
 from bench.cases import CASES, Shape
 from bench.conftest import _holder_if_alive, pytest_benchmark_update_machine_info, refuse_unless_idle, take_lock
 from bench.workloads import _engine, _tables, split_sources
+from lpspec.relational.engines.polars.engine import _Block
+from lpspec.relational.sinks.solvers.base import WarmStart
 
 
 def test_the_default_arm_clears_the_engine_rather_than_leaving_it() -> None:
@@ -216,3 +219,46 @@ def test_the_floor_builds_the_model_lpspec_builds() -> None:
         assert model.column_count == tables.column_count, 'the floor holds a different number of variables'
         assert model.row_count == tables.row_count, 'the floor holds a different number of constraints'
         assert model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
+
+
+def test_a_spliced_basis_reproduces_the_cold_answer() -> None:
+    """The measurement's own claim, on the smallest instance it can be made on.
+
+    `warm_payoff.sweep` asserts objective equality step by step; running it
+    here is what makes that a gate rather than a claim in a module nothing
+    exercises. A carried basis may move the route and never the optimum, so a
+    splice that indexed rows wrongly would show up as a different answer.
+    """
+    run = warm_payoff.sweep(warm_payoff.SIZES['xs'], n_snap=4, steps=8)
+    assert len(run.steps) > 1, 'a single rebuild carries nothing, so the splice would go unexercised'
+    for i, step in enumerate(run.steps):
+        assert step.warm_objective == pytest.approx(step.cold_objective, rel=1e-9), (
+            f'step {i}: a carried basis moved the answer'
+        )
+
+
+def test_the_splice_shifts_a_later_declarations_rows() -> None:
+    """The whole reason the carry is not a truncation.
+
+    `feasibility_cut` follows `optimality_cut`, so a row gained by the first
+    moves every row of the second. Truncating the previous basis to the new
+    height would leave the second family reading the first's statuses — right
+    only for a model whose growth is all in the last declaration.
+    """
+    was = {'optimality_cut': _Block(0, 2), 'feasibility_cut': _Block(2, 2)}
+    now = {'optimality_cut': _Block(0, 3), 'feasibility_cut': _Block(3, 2)}
+    previous = WarmStart(
+        solver='highs',
+        column_statuses=np.zeros(4, dtype=np.int8),
+        row_statuses=np.array([10, 11, 20, 21], dtype=np.int8),
+        column_values=None,
+    )
+    order = ['optimality_cut', 'feasibility_cut']
+
+    carried = warm_payoff.spliced(previous, was, now, order, 5).row_statuses
+    assert list(carried) == [10, 11, warm_payoff.BASIC, 20, 21], (
+        'the second declaration keeps its own statuses at its new start, and the gained row starts basic'
+    )
+    assert list(warm_payoff.prefixed(previous, 5).row_statuses) == [10, 11, 20, 21, warm_payoff.BASIC], (
+        'the prefix carry is the mistake this splice exists to avoid; it must stay measurably different'
+    )
