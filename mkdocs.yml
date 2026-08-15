@@ -69,6 +69,7 @@ nav:
           - Facility location: models/facility_location.md
           - Routing telephone calls: models/telephone_routing.md
           - Choosing the mode of transport: models/transport_modes.md
+          - OSeMOSYS UTOPIA: models/osemosys_utopia.md
           - Travelling salesman: models/tsp_mtz.md
   - Reference:
       - Language: SPEC.md
