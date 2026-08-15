@@ -77,6 +77,41 @@ a rolling horizon or a myopic pathway is a *fold*, and it is written for you.
 `rebind` is the primitive underneath: reach for it when the next set of numbers
 depends on the last answer, which is what a fold cannot express.
 
+### Where a solve starts
+
+A rebind keeps the solver loaded, so a second solve starts from wherever the
+last one left it. Two things make that visible and refusable:
+
+```python
+result = bound.rebind({'load': load}).solve()
+result.started  # 'session' — the kept solver carried on; 'cold' if it had to load again
+
+baseline = bound.solve(warm=False)  # deliberately cold, whatever the session held
+baseline.started  # 'cold'
+```
+
+| | |
+|---|---|
+| `warm=True` (default) | the session: a kept solver re-solves from wherever its last solve ended, a fresh load starts cold |
+| `warm=False` | deliberately cold, held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again |
+
+`result.started` is read off what happened, never off what was asked, so a
+rebind that had to rebuild reports the cold start it got rather than the warm
+one it hoped for. It is what a benchmark needs — a cold baseline you can prove
+is cold — and what an iterating driver reads when a loop is slower than it
+should be: `'cold'` every iteration means the session is being rebuilt away.
+**Provenance, deliberately, not mechanism**: whether a start is a basis, an
+incumbent or a solver's own notion stays the sink's business, so a solver with
+no simplex fits the same words and a word can be added the day something else
+can be started from.
+
+**Carrying a start across a rebuild is not here yet.** The sinks can read one
+out of a session and set it on another, but nothing above them does: the case
+that wants it most — a cutting-plane master re-solved after gaining a cut — is
+a model that gained a *row*, and a basis spans the model it was read from.
+[#382](https://github.com/fluxopt/lpspec/issues/382) is where that is being
+worked out.
+
 `diagnostics()` is what a build and its solves did that the answer does not
 show: the shape the build produced (`columns`, `rows`, `nonzeros` — what
 `check` cannot answer, needing no data where this needs all of it, and where a

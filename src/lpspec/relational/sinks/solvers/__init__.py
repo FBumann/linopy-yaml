@@ -27,6 +27,9 @@ if TYPE_CHECKING:
 
     from lpspec.relational.sinks.tables import ModelTables
 
+#: ``WarmStart`` is deliberately absent. The carry it describes has no caller
+#: above the family yet (#382), so it stays where the machinery is —
+#: ``solvers.base`` — rather than reading as a surface something may use.
 __all__ = ['SOLVERS', 'Solver', 'ingestible', 'loaded', 'solver']
 
 #: Every solver a caller may name, and **closed** — a dict literal, not a
