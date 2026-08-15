@@ -63,6 +63,8 @@ Dantzig's transportation problem with economies of scale — GAMS model library 
 | $\mathit{economies\_of\_scale\_lam}$ | `economies_of_scale_lam` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
 | $\mathit{economies\_of\_scale\_seg}$ | `economies_of_scale_seg` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ |
 
+$t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
+
 #### Objective
 
 $$\min \sum_{p \in \mathcal{P},\enspace m \in \mathcal{M}} \frac{\mathit{scaled}_{p,m} \cdot \mathit{distance}_{p,m} \cdot \mathit{freight}}{1000}$$
@@ -95,7 +97,7 @@ $$\sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_seg}_{p,m,b} = 1 \qquad
 
 **`economies_of_scale_adjacency`**
 
-$$\mathit{economies\_of\_scale\_lam}_{p,m,b} \le \mathit{economies\_of\_scale\_seg}_{p,m,b} + \mathit{economies\_of\_scale\_seg}_{p,m,b - 1} \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M},\enspace b \in \mathcal{B}$$
+$$\mathit{economies\_of\_scale\_lam}_{p,m,b} \le \mathit{economies\_of\_scale\_seg}_{p,m,b} + \mathit{economies\_of\_scale\_seg}_{p,m,b \boxminus_{0} 1} \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M},\enspace b \in \mathcal{B}$$
 
 #### Variable domains
 
