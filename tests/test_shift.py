@@ -82,7 +82,7 @@ def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inp
     was a constraint the model never wrote: an initial condition invented by
     the language on the modeller's behalf.
 
-    A model that wants one now says so, which is what SPEC §2's storage example
+    A model that wants one now says so, which is what the declaration rules's storage example
     already did with a complementary ``where``. Both lanes are asserted because
     they reach the drop differently — the eager lane from linopy's absence
     propagation, the relational one from the vacated coordinates leaving the
@@ -447,7 +447,7 @@ NESTED_SHIFTS = {
 def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
     """A shift over a shift, in every arrangement of edge and dimension.
 
-    `shift` takes any node of the right dim set (SPEC §7), so nesting is inside
+    `shift` takes any node of the right dim set (the operator rules), so nesting is inside
     what the language accepts — and the eager lane always built it. The
     relational lane raised a raw `polars.ColumnNotFoundError` instead, because
     an acyclic inner shift leaves a presence narrower than the fragment and the

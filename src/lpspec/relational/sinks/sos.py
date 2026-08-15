@@ -17,7 +17,7 @@ block's ``big_m`` and the member's own upper bound:
 
 Everything it adds goes **after** the model, so an appended column moves none
 of the model's own and an appended row renumbers none of its rows — the label
-contract spent (docs/ARCHITECTURE.md), and why a solve reads its answer back by
+contract spent (docs/about/architecture.md), and why a solve reads its answer back by
 the same slice either way.
 
 **Nothing here sorts, groups or joins.** The stream arrives in ``(set, weight)``

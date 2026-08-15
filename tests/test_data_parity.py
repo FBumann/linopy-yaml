@@ -10,7 +10,7 @@ against 16 in `linopy/loader.py`, with only the wording of two of them shared
 - an unknown label was **accepted** by the relational lane, worth two thirds of
   the objective on the model here (#350);
 - a duplicated coordinate row raised `DataError` relationally and a bare
-  `ValueError` eagerly — which SPEC §9 names as the failure mode to avoid, "an
+  `ValueError` eagerly — which the error rules names as the failure mode to avoid, "an
   opaque xarray or solver exception with no pointer back to a YAML
   declaration".
 

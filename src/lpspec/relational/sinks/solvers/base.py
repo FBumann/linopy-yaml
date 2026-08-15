@@ -141,7 +141,7 @@ class Solver(ABC):
     #: (:func:`~lpspec.relational.sinks.sos.reformulated`).
     #:
     #: Declared rather than discovered at the hand-off, which is what the
-    #: capability axis in docs/design/ceiling.md asks for: what a *sink* can
+    #: capability axis in docs/about/ceiling.md asks for: what a *sink* can
     #: ingest is separate from what the language can say, and the two words
     #: here are the first two of that vocabulary. A member states it; the
     #: family acts on it (:func:`~lpspec.relational.sinks.solvers.ingestible`),

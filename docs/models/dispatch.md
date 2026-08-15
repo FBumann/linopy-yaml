@@ -141,7 +141,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 `where: "p_max > 0"` is the one line worth pausing on. A generator with no
 capacity gets **no columns at all** — not a column pinned to zero — so a
 retired unit costs nothing to carry in the data. That is row absence, and it
-is how sparsity is spelled throughout: see [`where`](../SPEC.md) in the
+is how sparsity is spelled throughout: see [`where`](../reference/language/absence.md) in the
 language reference.
 
 ---

@@ -3,7 +3,7 @@
 **Labels are the one place order is load-bearing.** ``var_label`` *is* the
 solver's column index and ``row`` its row index, so a label is the model's
 identity: two builds of one model must agree on it integer for integer
-(docs/ARCHITECTURE.md, "The relational lane").
+(docs/about/architecture.md, "The relational lane").
 
 Variables and constraint rows are the same operation over different frames, so
 :func:`frame` is written once — one rule, sort the survivors into declaration

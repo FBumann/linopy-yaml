@@ -171,7 +171,7 @@ workaround hidden here.
 
 ## What it exercises
 
-`sum(group_by=)` through a coordinate whose target carries a constraint of its
+`sum(by=)` through a lookup whose target carries a constraint of its
 own, and per-label bounds read from data — with the point being what the *label*
 is. Reifying the connection is not a trick: it is what lets two rows describe
 the same pair, and the six nodes the source spends are the price of not having

@@ -55,8 +55,8 @@ CAT_BEGIN, CAT_END = '<!-- catalogue:begin -->', '<!-- catalogue:end -->'
 BEGIN, END = '<!-- constructs:begin -->', '<!-- constructs:end -->'
 REF_BEGIN, REF_END = '<!-- references:begin -->', '<!-- references:end -->'
 
-#: Column order is the order a reader meets these in docs/SPEC.md, not alphabetical
-#: and not by how many models happen to use them.
+#: Column order is the order a reader meets these in docs/reference/language/, not
+#: alphabetical and not by how many models happen to use them.
 COLUMNS = ('sum', 'sum(by=)', 'at()', 'shift', "shift(edge='wrap')", 'where', 'bounds', 'piecewise', 'sos', 'MILP')
 
 

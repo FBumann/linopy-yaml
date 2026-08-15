@@ -1,6 +1,6 @@
 """Lower a parsed YAML schema (typed AST) to the relational logical plan.
 
-The lowering seam (docs/ARCHITECTURE.md, "The relational lane"): it consumes
+The lowering seam (docs/about/architecture.md, "The relational lane"): it consumes
 the same typed AST the eager builder evaluates and emits a
 :class:`~lpspec.relational.plan.Program`. It lives on the language side, so the
 engine subpackage stays free of YAML knowledge and this module never imports
@@ -9,7 +9,7 @@ the eager builder.
 Constructs with no lowering raise :class:`~lpspec.errors.LanguageError` naming
 the construct and its rewrite, never a pointer to another backend: the two
 lanes accept the same language, so a rejection here is a language gap
-(docs/ROADMAP.md) rather than a routing decision.
+(docs/about/roadmap.md) rather than a routing decision.
 
 Semantics mirror the eager builder exactly:
 
@@ -164,7 +164,7 @@ def lower_expression(schema: Model, name: str) -> plan.Expression:
     """Compile the named expression *name* into a plan expression, on demand.
 
     The read-time half of ``expressions:``. :func:`lower_program` lowers none
-    of them — a build pays nothing for a declared expression (SPEC §3) — so a
+    of them — a build pays nothing for a declared expression (the rules for named expressions) — so a
     reader asks here for the one it is reading, when it is read.
 
     Args:
@@ -187,7 +187,7 @@ def expression_thunks(schema: Model) -> dict[str, Callable[[], plan.Expression]]
     """One deferred :func:`lower_expression` per declared named expression.
 
     What a build hands the engine so a solve's result can read them: thunks,
-    never plans, because building the dict is all a build may pay (SPEC §3).
+    never plans, because building the dict is all a build may pay (the rules for named expressions).
     """
     return {name: partial(lower_expression, schema, name) for name in schema.expressions}
 
@@ -227,14 +227,14 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
     if isinstance(node, KeywordNode):
         msg = (
             f'KeywordNode({node.value!r}) reached lowering. A quoted keyword is consumed '
-            f'by its kwarg during resolution (docs/ARCHITECTURE.md hard rule 1).'
+            f'by its kwarg during resolution (docs/about/architecture.md hard rule 1).'
         )
         raise AssertionError(msg)
     if isinstance(node, (NameNode, DimensionNode, LookupNode)):
         msg = (
             f'{type(node).__name__}({node.name!r}) reached lowering. Expressions '
             f'must go through resolution.expression_of() first '
-            f'(docs/ARCHITECTURE.md hard rule 1).'
+            f'(docs/about/architecture.md hard rule 1).'
         )
         raise AssertionError(msg)
 

@@ -1,6 +1,6 @@
 """Label-space lookups: structure on a dimension, never an axis.
 
-SPEC §2's split, pinned: everything under ``dimensions:`` is an axis, and a
+The declaration rules' split, pinned: everything under ``dimensions:`` is an axis, and a
 label a dimension's members carry is a lookup — *groupable* when it targets a
 dimension something aggregates into, *label-space* when it owns its values and
 is only ever selected on. What these tests hold still: the schema tells the
@@ -517,7 +517,7 @@ def test_a_declared_map_fills_an_index_that_does_not_carry_it():
 
 
 def test_a_supplied_lookup_column_outranks_the_declared_map():
-    """A caller's column outranks the file, as it does for a dimension's own values (SPEC §8).
+    """A caller's column outranks the file, as it does for a dimension's own values.
 
     The swap costs 14 rather than 13 — north's load is served by the dearer
     generator, which is only true if the column the caller passed won.

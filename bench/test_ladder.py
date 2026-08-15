@@ -15,7 +15,7 @@ property of a *process*: a second arm in the same interpreter inherits the
 first's high-water mark and its warm allocator. `isolate=True` is what gives a
 fresh process per pass, and with it the whole-process `rss` beside the memray
 peak — the two measure different things and both are recorded, because
-`docs/benchmarks.md` publishes a cross-library claim and only `rss` is honest
+`docs/about/benchmarks.md` publishes a cross-library claim and only `rss` is honest
 across libraries. memray counts polars' reserved arenas as allocated and does
 not count the interpreter at all, so the same pair of runs is 0.51x by RSS and
 0.07x by memray. Within one lane that bias cancels; across two it does not.

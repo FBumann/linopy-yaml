@@ -1,10 +1,10 @@
 # Architecture
 
 Brief, current, precise. A PR that changes the structure described here updates
-this file in the same PR. The language is [docs/SPEC.md](SPEC.md); what may
-enter it is [docs/design/ceiling.md](design/ceiling.md); plans and refusals
-are [docs/ROADMAP.md](ROADMAP.md); measured results are
-[docs/benchmarks.md](benchmarks.md), produced by the harness in
+this file in the same PR. The language is [the language reference](../reference/language/index.md); what may
+enter it is [the ceiling](ceiling.md); plans and refusals
+are [the roadmap](roadmap.md); measured results are
+[the benchmarks](benchmarks.md), produced by the harness in
 [bench/](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — which is
 also how a claim here gets falsified.
 
@@ -22,7 +22,7 @@ property makes everything else legal: the whole model can be compiled — to eag
 xarray/linopy calls, or to a logical plan executed relationally and streamed to a
 sink — with both paths provably meaning the same thing. Every rule below protects
 it. (A *declared* memory ceiling is not something we have; see
-[the memory axis](ROADMAP.md#where-it-is-going).)
+[the memory axis](roadmap.md#where-it-is-going).)
 
 **Four directories, four fences.** One produces the AST; three consume it and
 know nothing of each other. Each box below is a directory, and its subtitle is
@@ -189,9 +189,9 @@ like the other three fences, plus a check on the **transitive** closure. Two
 properties carry the rest — **data enters at exactly one place**, which is why
 checking a model costs seconds and needs nothing but the file, and the waist is
 **closed**, which is what the ceiling in
-[docs/design/ceiling.md](design/ceiling.md) protects: a new consumer is free, a
+[the ceiling](ceiling.md) protects: a new consumer is free, a
 new primitive is taxed. What is planned, and why, is
-[docs/ROADMAP.md](ROADMAP.md).
+[the roadmap](roadmap.md).
 
 ### The Python surface
 
@@ -199,7 +199,7 @@ new primitive is taxed. What is planned, and why, is
 is how you *run* it — so the whole surface is the diagram above written out,
 with nothing that constructs math and nothing that reaches the plan. Names are
 `lpspec.` unless shown otherwise, and what each one *does* is
-[docs/api.md](api.md). **Data?** is the column that matters: a verb
+[the Python API](../reference/api.md). **Data?** is the column that matters: a verb
 that says *no* needs nothing but the file, which is what makes it a CI verb.
 *Italic rows are the ones the shape makes cheap and nobody has built.*
 
@@ -236,7 +236,7 @@ for.
 `Result` and `solve_over` a `Runs`, and none is exported — you reach them by
 calling, and import them from their module only to write an annotation. What
 the objects themselves carry (`Result` alone has twelve readers) is documented
-in [docs/api.md](api.md) rather than counted here, which is why capability grows
+in [the Python API](../reference/api.md) rather than counted here, which is why capability grows
 much faster than this table does.
 
 The discipline that keeps that from being a way to dodge the count: **a handle's
@@ -246,7 +246,7 @@ a language feature wearing a method, and hard rule 5 refuses it wherever it is
 spelled. It is also why these are named for what they *are* rather than for what
 built them — a second engine must not change a top-level verb's return type.
 
-**What the data arrow carries** is [SPEC §8](SPEC.md#8-data-binding) and is not
+**What the data arrow carries** is [data binding](../reference/language/data.md) and is not
 restated here. The one structural fact: **binding is by name at both levels** —
 a mapping keyed by declared parameter, and inside each table, columns named for
 that parameter's declared dims. The single positional fallback (an *unnamed*
@@ -271,8 +271,8 @@ static checks and CI's bare-install job proves the dependency claims.*
 
 **These rules constrain the language.** What a construct may say, which layer
 may know what, and what a file means on its own — each survives any engine, and
-each decides what can enter `docs/SPEC.md`. How much a build *costs* is a
-property of the engine, measured in [docs/benchmarks.md](benchmarks.md), and
+each decides what can enter the language reference. How much a build *costs* is a
+property of the engine, measured in [the benchmarks](benchmarks.md), and
 deliberately not a rule: a cost phrased as a rule makes one implementation's
 choice load-bearing in the language's rulebook.
 
@@ -590,8 +590,8 @@ a consumer, and the ceiling doc is the conversation to have first.
 signature in `operators.BUILTINS` (arity and which arguments name dimensions —
 resolution, validation and lowering all read it from there, so the shape is
 declared once) → eager implementation → plan node + locality class → engine →
-lowering case → differential test through a solver *and* the LP writer → SPEC
-§5/§7, and this file if structural.
+lowering case → differential test through a solver *and* the LP writer → the
+language reference (expressions, operators), and this file if structural.
 
 Three things are deliberately *not* per-operator work, because they are one
 implementation each: an operator's dim rule lives only in `language/dimensions.py` —

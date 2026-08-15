@@ -45,7 +45,7 @@ The same idea runs through data binding, with one distinction worth learning
 early: a **variable** the mask removed is *absent*, and a term carrying it takes
 its whole row with it — while a **parameter** row that is simply missing is a
 zero coefficient, and the row survives without it. Absence is a property of
-variables. → [dispatch](models/dispatch.md), [SPEC §6](SPEC.md#6-absence)
+variables. → [dispatch](models/dispatch.md), [absence](reference/language/absence.md)
 
 ## 3. A lookup maps one dimension onto another, and that is your topology
 
@@ -102,7 +102,7 @@ constraints:
 Get it wrong and you are told at load time, not at solve time. A stray dim
 would multiply rows and an unused `foreach` dim would repeat one row across
 them; either way you would build a different model than the file reads as.
-→ [SPEC §5.2](SPEC.md#52-dim-algebra)
+→ [the dim algebra](reference/language/expressions.md#dim-algebra)
 
 ## Then: check, build, solve
 
@@ -124,7 +124,7 @@ without shipping the data.
 Sources accept polars, pandas, pyarrow, or parquet paths — anything exposing
 the Arrow PyCapsule protocol, and the recogniser imports none of them.
 Results come back as frames; `to_pandas`, `to_dataarray` and `to_parquet` are
-the bridges out. → [SPEC §8](SPEC.md#8-data-binding), [Python API](api.md)
+the bridges out. → [data binding](reference/language/data.md), [Python API](reference/api.md)
 
 ## What it will not do
 
@@ -137,15 +137,16 @@ Worth knowing before you start, rather than after:
 - **Every expression is affine in the variables.** Degree 1, always: no
   variable times variable. That is the ceiling the whole design is built
   around, not an unimplemented feature. →
-  [The ceiling](design/ceiling.md#two-tiers-and-the-ceiling)
+  [The ceiling](about/ceiling.md#two-tiers-and-the-ceiling)
 - **Several plausible features are refused on purpose**, with reasons.
-  → [ROADMAP](ROADMAP.md)
+  → [the roadmap](about/roadmap.md)
 
 ## Where next
 
 | | |
 |---|---|
 | [Models](models/index.md) | every model in the repo, and which constructs each exercises |
-| [SPEC](SPEC.md) | the reference — what a file may contain, exactly |
-| [Benchmarks](benchmarks.md) | what it costs, measured against linopy |
-| [ARCHITECTURE](ARCHITECTURE.md) | why it is shaped this way |
+| [Language reference](reference/language/index.md) | what a file may contain, exactly |
+| [Python API](reference/api.md) | building, solving, and reading an answer back |
+| [Typeset the math](reference/typeset.md) | the same file as LaTeX, Typst or Markdown |
+| [About](about/index.md) | why it is shaped this way, what it costs, where it is going |

@@ -1,7 +1,7 @@
 """Logical plan → polars. Lazy: nothing is read, nothing is executed.
 
 `lowering.py` compiles the AST to a plan; this compiles the plan to a query, so
-docs/ARCHITECTURE.md's admissibility test is a ``.explain()`` away. An identifier is
+docs/about/architecture.md's admissibility test is a ``.explain()`` away. An identifier is
 a value here, never syntax.
 
 Column conventions, relied on by the engine:
@@ -63,7 +63,7 @@ class Presence:
     Not which rows the fragment's frame has. A fragment loses rows for two
     unrelated reasons and a constraint row reacts to only one: a **masked
     variable** is genuinely absent, a **sparse parameter** is a compressed
-    dense array whose missing rows mean a zero coefficient (SPEC §8).
+    dense array whose missing rows mean a zero coefficient (the data-binding rules).
     Multiplied together the frame cannot tell them apart, so the variable's
     coordinates ride alongside.
 
@@ -91,7 +91,7 @@ class Presence:
         key, its presence being at most one row saying only whether it
         exists, so the question becomes a cross join: every row survives a
         present scalar and none survives an absent one — absence spreading
-        through arithmetic (SPEC §7) at no dimension.
+        through arithmetic (the operator rules) at no dimension.
         """
         if on:
             return frame.join(self.frame.select(list(on)), on=list(on), how='semi')
@@ -715,7 +715,7 @@ class PolarsCompiler:
         arithmetic is unchanged, but the slot now has a value, so asking for
         zero stops being indistinguishable from having nothing. Over a *term*
         there is nothing to write — ``edge=0`` on a variable means the vacated
-        slot contributes no term at all (SPEC §7), where a zero-coefficient
+        slot contributes no term at all (the operator rules), where a zero-coefficient
         entry would be a matrix nonzero standing for a term that is not there.
         Lowering refuses every other numeric edge over a variable.
         """
@@ -984,8 +984,8 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     but a **reduction** consumes the expression before any row exists. That is
     the difference between ``sum(x + size, over=f)``, which sums where the
     summand exists, and ``sum(x, over=f) + sum(size, over=f)``, which sums each
-    operand over its own domain and reads the absent ``size`` as a zero (SPEC
-    §6, §7).
+    operand over its own domain and reads the absent ``size`` as a zero (the
+    absence and operator rules).
 
     Applied only where the key columns are dims the fragment carries: a
     restriction naming a dim a fragment lacks cannot speak about it.

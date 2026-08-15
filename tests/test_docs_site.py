@@ -154,62 +154,69 @@ def test_the_home_page_still_carries_its_math_block():
 
 
 # --------------------------------------------------------------------------
-# SPEC §0 — the laws
+# the ten rules, and the pages that elaborate them
 # --------------------------------------------------------------------------
 
-SPEC = DOCS / 'SPEC.md'
+LANGUAGE = DOCS / 'reference' / 'language'
+RULES = LANGUAGE / 'index.md'
 
-#: A `## 0. The laws` row: `| 7 | text | [§6](#6-absence) |`
-_LAW_ROW = re.compile(r'^\|\s*(\d+)\s*\|(.+?)\|([^|]*)\|\s*$', re.MULTILINE)
-
-
-def _laws() -> list[tuple[str, str, str]]:
-    text = SPEC.read_text()
-    start = text.index('## 0. The laws')
-    return _LAW_ROW.findall(text[start : text.index('\n## 1. ', start)])
+#: A rule row: `| 7 | text | [Absence](absence.md#how-absence-travels) |`
+_RULE_ROW = re.compile(r'^\|\s*(\d+)\s*\|(.+?)\|([^|]*)\|\s*$', re.MULTILINE)
 
 
-def _headings() -> set[str]:
-    """Every heading in SPEC.md as GitHub would slug it."""
+def _rules() -> list[tuple[str, str, str]]:
+    text = RULES.read_text()
+    start = text.index('## Ten rules the language reduces to')
+    return _RULE_ROW.findall(text[start : text.index('\n## The pages', start)])
+
+
+def _headings(page: Path) -> set[str]:
+    """Every heading in *page* as GitHub would slug it."""
     slugs = set()
-    for line in SPEC.read_text().splitlines():
+    for line in page.read_text().splitlines():
         if line.startswith('#'):
             title = line.lstrip('#').strip()
             slugs.add(re.sub(r'[^a-z0-9 -]', '', title.lower()).replace(' ', '-'))
     return slugs
 
 
-def test_every_law_cites_the_section_that_elaborates_it():
-    """A law is the canonical statement and the section below is the detail.
+def test_every_rule_cites_the_page_that_elaborates_it():
+    """A rule is the canonical statement and a page below is the detail.
 
-    An unlinked law is the failure that would otherwise pass silently: mkdocs
+    An unlinked rule is the failure that would otherwise pass silently: mkdocs
     fails the build on a *dead* anchor, but a row that cites nothing at all
     resolves fine and quietly becomes a second, drifting home for the rule.
+    Splitting the reference across pages adds the other half — a citation whose
+    *page* moved — so both are checked here.
     """
-    laws = _laws()
-    assert len(laws) >= 10, f'expected the law block to be found and populated; got {len(laws)} rows'
+    rules = _rules()
+    assert len(rules) >= 10, f'expected the rule block to be found and populated; got {len(rules)} rows'
 
-    slugs = _headings()
     broken = []
-    for number, _, citation in laws:
-        targets = re.findall(r'\]\(#([a-z0-9-]+)\)', citation)
+    for number, _, citation in rules:
+        targets = re.findall(r'\]\(([a-z0-9_.-]+\.md)(?:#([a-z0-9-]+))?\)', citation)
         if not targets:
-            broken.append(f'law {number} cites no section')
-        broken += [f'law {number} -> #{t}' for t in targets if t not in slugs]
-    assert not broken, f'laws whose citation does not resolve in SPEC.md: {broken}'
+            broken.append(f'rule {number} cites no page')
+        for page, anchor in targets:
+            target = LANGUAGE / page
+            if not target.is_file():
+                broken.append(f'rule {number} -> {page} (no such page)')
+            elif anchor and anchor not in _headings(target):
+                broken.append(f'rule {number} -> {page}#{anchor}')
+    assert not broken, f'rules whose citation does not resolve under {LANGUAGE.relative_to(REPO)}: {broken}'
 
 
 # --------------------------------------------------------------------------
-# SPEC §7.1 — the operators as math
+# the operators as math
 
 
-def test_the_spec_operator_math_is_current():
-    """§7.1 equals what the probe models render.
+def test_the_operator_math_is_current():
+    """The generated block equals what the probe models render.
 
     The same bargain the gallery makes: a page showing a model is a copy, and a
     copy rots unless something asserts it. Here the copy is one equation per
-    operator, and what it would rot into is a spec that describes an operator
-    the language stopped having.
+    operator, and what it would rot into is a reference page describing an
+    operator the language stopped having.
     """
     from tools import spec_math
 
@@ -217,25 +224,25 @@ def test_the_spec_operator_math_is_current():
 
 
 def test_every_operator_in_the_table_has_a_probe():
-    """§7's table and §7.1's are the same list of operators, in the same order.
+    """The operator table and the math block are the same list, in the same order.
 
-    The block above §7.1 says it shows *each row above*, and nothing else makes
-    that true: an operator added to the language and to the table, but given no
+    "As math" says it shows *each row above*, and nothing else makes that
+    true: an operator added to the language and to the table, but given no
     probe, would leave a section quietly claiming to be all of them. The order
-    is asserted too — §7's is the order a reader meets them, and two tables
-    that disagree about it are read as two different sets.
+    is asserted too — the prose table is the order a reader meets them, and two
+    tables that disagree about it are read as two different sets.
     """
     from tools import spec_math
 
     assert spec_math.table_operators() == list(spec_math.OPERATORS), (
-        'docs/SPEC.md §7 and tools/spec_math.OPERATORS name different operators, '
-        'or name them in a different order — every row of §7 needs a probe in '
-        'examples/operators/, and every probe needs its row'
+        f'{spec_math.PAGE.name} and tools/spec_math.OPERATORS name different operators, '
+        'or name them in a different order — every row of the operator table needs '
+        'a probe in examples/operators/, and every probe needs its row'
     )
 
 
 def test_no_probe_without_a_row():
-    """The reverse: a model in `examples/operators/` that §7.1 never shows."""
+    """The reverse: a model in `examples/operators/` that the page never shows."""
     from tools import spec_math
 
     orphans = sorted(p.stem for p in spec_math.PROBES.glob('*.yaml') if p.stem not in set(spec_math.OPERATORS.values()))

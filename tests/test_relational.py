@@ -1114,7 +1114,7 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
     """A tidy parameter table is a compressed dense array — where it can be.
 
     Supplying rows only where a *coefficient* is nonzero stays the language's
-    sparsity idiom (SPEC §8). The uncovered coordinate contributes no term, the
+    sparsity idiom (the data-binding rules). The uncovered coordinate contributes no term, the
     row survives, and both lanes agree about it: nothing was invented, the term
     simply is not there.
 
@@ -1258,7 +1258,7 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
 
     That is correct and it is the documented reading of a sparse coefficient
     table, but it is the same silently-wrong shape the v1 convention removed
-    from the variable side, so SPEC §6 now names it and this pins the behaviour
+    from the variable side, so the absence rules now names it and this pins the behaviour
     the prose describes. The benign case is
     ``test_a_parameter_covering_a_subset_of_its_dims_means_zero_on_both_lanes``:
     there the zero lands on a coefficient *and* a right-hand side, so the row
@@ -1301,9 +1301,9 @@ def _reindexed_parameter_model(op: str) -> dict:
     ],
 )
 def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expected):
-    """``array`` in §7 is any node, so these operators read a parameter.
+    """``array`` is any node, so these operators read a parameter.
 
-    Worth its own test because every example in SPEC took a variable, and a
+    Worth its own test because every documented example took a variable, and a
     downstream consumer built and shipped a hand-shifted copy of a parameter
     table before probing revealed this works.
 
@@ -1356,7 +1356,7 @@ def test_equal_bounds_pin_a_variable_so_one_equation_covers_both_regimes():
     pre-multiplied coefficients — ``rate_max_at_size``, ``rate_max_when_on`` —
     whose names encode which regime they belong to rather than what quantity
     they are. Pinning with equal bounds writes the row form once and lets
-    presolve substitute the fixed column, so SPEC §2 documents it and this shows
+    presolve substitute the fixed column, so the declaration rules documents it and this shows
     both regimes coming out of the single equation.
     """
     data = {

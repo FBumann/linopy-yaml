@@ -6,7 +6,7 @@ questions it asks on the way: what the data is
 (:mod:`lpspec.relational.engines.polars.binding`), what a query over it looks like
 (:mod:`lpspec.relational.engines.polars.compiler`), which coordinate gets which solver index
 (:mod:`lpspec.relational.engines.polars.labels`). The lane is described in
-docs/ARCHITECTURE.md.
+docs/about/architecture.md.
 
 The two registries it does own are the ones that fill *during* assembly — the
 variable and constraint frames — because a declaration built later has to see
@@ -145,7 +145,7 @@ class PolarsEngine:
         self._bound: BoundSources | None = None
         #: ``name -> deferred plan expression``, one per declared named
         #: expression. Thunks, never plans: a build lowers none of them
-        #: (SPEC §3), and a solve turns each into a reader that lowers on its
+        #: (the rules for named expressions), and a solve turns each into a reader that lowers on its
         #: first call (:meth:`_expression_readers`).
         self._expression_thunks: dict[str, Callable[[], plan.Expression]] = {}
         self._variables: dict[str, pl.LazyFrame] = {}
@@ -225,7 +225,7 @@ class PolarsEngine:
 
         *expressions* maps each declared named expression to a thunk producing
         its plan expression. None is called here — a build pays nothing for a
-        declared expression (SPEC §3) — they become the deferred readers a
+        declared expression (the rules for named expressions) — they become the deferred readers a
         solve's result hands out (:meth:`_expression_readers`).
         """
         self._reset()
@@ -820,7 +820,7 @@ class PolarsEngine:
     def _expression_readers(self, primal: pl.Series | None) -> dict[str, Callable[[], pl.DataFrame]]:
         """One deferred reader per declared named expression — nothing compiled yet.
 
-        Deferral is the contract (SPEC §3): a closure lowers and compiles its
+        Deferral is the contract (the rules for named expressions): a closure lowers and compiles its
         expression when it is first called, so a solve over fifty declared
         expressions that reads none pays for a dict of closures. Each captures
         a snapshot the result *owns* — the program, the bound data, a copy of
@@ -964,8 +964,8 @@ def _expression_frame(name: str, expr: plan.Expression, compiler: PolarsCompiler
     right-hand side.
 
     The frame answers the way a constraint over the same expression would:
-    a coordinate a parameter does not cover contributes zero (SPEC §8), a
-    coordinate where a term's variable is absent has no row (SPEC §7), and a
+    a coordinate a parameter does not cover contributes zero (the data-binding rules), a
+    coordinate where a term's variable is absent has no row (the operator rules), and a
     variable-free expression is one row of ``value``. Dims come back in
     declaration order — an expression has no ``foreach`` to order them — and
     rows in label order over those dims, :meth:`Result.primal`'s promise.
@@ -1033,7 +1033,7 @@ def _without_zeros(matrix: pl.DataFrame) -> pl.DataFrame:
     A coefficient of exactly zero states that a variable is not in a row, which
     is what an absent row already states — so the two say the same thing and
     only one of them costs the solver a nonzero to load and presolve away. A
-    sparse parameter reaches here as absence and never builds a term (SPEC §8);
+    sparse parameter reaches here as absence and never builds a term (the data-binding rules);
     a parameter that spells its zeros out reaches here as this, and on a table
     that is mostly zeros it is most of the matrix.
 
@@ -1117,7 +1117,7 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[Presence]:
     ``x >= 10``, it is no constraint at all.
 
     Only *variable* absence counts — a sparse parameter's missing rows mean a
-    zero coefficient (SPEC §8) — which is why the fragment carries
+    zero coefficient (the data-binding rules) — which is why the fragment carries
     :attr:`TermFragment.presence` separately from its frame, and why this reads
     that. A fragment with nothing to restrict is skipped, an unmasked variable
     existing at every coordinate of its foreach.

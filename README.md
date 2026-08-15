@@ -11,7 +11,7 @@ The consequence worth the headline is **cost to a loaded solver** — YAML and
 data in, a populated solver out, no LP file anywhere in between. Measured
 against linopy's own best path to the same place, on the top rung of
 each of five benchmark cases — 1M to 12M variables
-([benchmarks](docs/benchmarks.md)):
+([benchmarks](docs/about/benchmarks.md)):
 
 - **2–4x faster on four of the five**, and 1.13x slower on the fifth, which is
   in the ladder to be lost — its parameters are dense over the whole variable
@@ -27,7 +27,7 @@ A third property is architectural rather than measured, and named here as such:
 **nothing accumulates between builds** — no process-wide state, no lifetime to
 leak — so the hundredth rolling-horizon window should cost what the first did.
 No benchmark pins that yet; it is [on the
-list](docs/benchmarks.md#not-measured-yet).
+list](docs/about/benchmarks.md#not-measured-yet).
 
 And because the math is a closed spec known before any data is touched, every
 name, dimension and expression is checked at load time — `check()` compiles a
@@ -149,16 +149,18 @@ constraints:
 [linopy](https://github.com/PyPSA/linopy) is **not a runtime dependency**. The
 shim above is opt-in, and the same install doubles as the **oracle** every
 language feature is differentially tested against — all three relationships are
-[one page](docs/design/linopy.md). There is no routing and no fallback: a
+[one page](docs/about/linopy.md). There is no routing and no fallback: a
 construct outside the language is a load error naming its rewrite.
 
 ## Docs
 
 Start with [**writing a model**](docs/guide.md) — five ideas, each shown in a
-model that runs. Then [the models](docs/models/index.md) to browse,
-[SPEC](docs/SPEC.md) for the exact rule, [ARCHITECTURE](docs/ARCHITECTURE.md)
-for why it is shaped this way and [ROADMAP](docs/ROADMAP.md) for what is
-refused. All of it is indexed in [docs/](docs/README.md); to work on it,
+model that runs. Then [the models](docs/models/index.md) to browse, the
+[language reference](docs/reference/language/index.md) for the exact rule, and
+the [Python API](docs/reference/api.md) for running one. Why it is shaped this
+way, what it costs and what is refused are together under
+[about](docs/about/index.md). All of it is indexed in [docs/](docs/README.md);
+to work on it,
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 To see it rather than read it, `python examples/walkthrough.py` runs one small model through every stage — YAML → schema → core AST → logical plan → model frames → LP text → solution — printing the artifact each stage produces, plus two models the language refuses and why. Its output is committed as [examples/walkthrough.out](examples/walkthrough.out) if you would rather just read that.
@@ -179,7 +181,7 @@ The surface — YAML math, a block per component, `foreach:`, a `where:` string 
 comes from [Calliope](https://github.com/calliope-project/calliope);
 [linopy](https://github.com/PyPSA/linopy) supplies the shared vocabulary, the
 oracle and every benchmark denominator. What was taken from each, and how to
-cite them: [prior art and credit](docs/design/prior-art.md).
+cite them: [prior art and credit](docs/about/prior-art.md).
 
 ## Status
 

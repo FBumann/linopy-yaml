@@ -287,7 +287,7 @@ def _build_objective(ctx: EvaluationContext) -> None:
 def _objective_expression(node: ArithmeticNode, ctx: EvaluationContext) -> Any:
     """*node* as a scalar: each additive term summed over the dims it carries.
 
-    An objective has no ``foreach``, so every dim it names is summed (SPEC §2)
+    An objective has no ``foreach``, so every dim it names is summed (the declaration rules)
     — but *which* dims, per term rather than per objective. In
     ``x[i] * a[i] + y[j] * b[j]`` the first term has ``|i|`` summands and the
     second ``|j|``. Adding the operands first, as linopy's ``+`` does,
@@ -381,7 +381,7 @@ def _eval_ast(
         msg = (
             f'{type(node).__name__}({node.name!r}) reached the evaluator. '
             f'Expressions must go through resolution.expression_of() first '
-            f'(docs/ARCHITECTURE.md hard rule 1).'
+            f'(docs/about/architecture.md hard rule 1).'
         )
         raise AssertionError(msg)
 
@@ -733,7 +733,7 @@ def _coefficient(parameter: Any) -> Any:
     ``load_parameters`` that would be wrong for the other two. A tidy
     parameter table is a compressed dense array, not a record of absence:
     rows only for the live coordinates says the coefficient is zero elsewhere
-    (SPEC §8). ``load_parameters`` reindexes to the master coordinates, so an
+    (the data-binding rules). ``load_parameters`` reindexes to the master coordinates, so an
     uncovered slot arrives as NaN — and v1 §5 refuses a NaN in a
     user-supplied constant. Correct under the legacy convention too, so not
     conditional on ``linopy.options['semantics']``.
@@ -746,7 +746,7 @@ def _vacated(expression: Any, fill: float) -> Any:
 
     linopy v1 counts ``.shift()`` among the operations that *create* absence
     (§4), so the edge propagates and drops the row — the language's answer too
-    (SPEC §7, #289). This is the opt-out, reached only from ``shift(...,
+    (the operator rules, #289). This is the opt-out, reached only from ``shift(...,
     fill=0)``, and is the escape v1 itself prescribes rather than a rule of
     ours on top.
 

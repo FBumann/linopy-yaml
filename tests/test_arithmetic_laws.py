@@ -165,7 +165,7 @@ def test_a_reduction_does_not_distribute_over_addition_when_an_operand_is_absent
     """The defect behind #311, pinned as the semantics it turned out to be.
 
     ``y`` is absent at ``f=b``, so the summand ``x + y`` is absent there too
-    (absence propagates, SPEC §6) and the reduction skips that slot — taking the
+    (absence propagates, the absence rules) and the reduction skips that slot — taking the
     perfectly present ``x[b]`` with it. Summing each operand separately keeps
     it, because each is reduced over its own domain.
 
@@ -190,7 +190,7 @@ def test_a_term_whose_variable_is_absent_is_not_a_term_worth_zero():
     """Row absence, the other half of the same rule.
 
     ``x + y >= k`` is *no constraint* where ``y`` is absent — not ``x >= k``.
-    Compared against the spelling SPEC §6 points at for the other reading — two
+    Compared against the spelling the absence rules points at for the other reading — two
     constraints under complementary ``where`` clauses — so the test states the
     *difference between the two intents* rather than the behaviour alone.
     """
@@ -311,7 +311,7 @@ def test_a_broadcast_coefficient_does_not_move_where_the_summand_exists():
     """A sparse *parameter* is not absence, so it must not restrict anything.
 
     `w * x` is a term whose coefficient varies over `f`; multiplying by it
-    changes the arithmetic and nothing about presence (SPEC §6: absence is a
+    changes the arithmetic and nothing about presence (the absence rules: absence is a
     property of variables). The separation here must therefore come from `y`
     alone, exactly as in the un-weighted case.
     """
@@ -355,7 +355,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
 
     A bare `shift` vacates its first coordinate into absence (#289/#291), and
     that absence must behave inside a reduction exactly like a mask's. If it did
-    not, the language would have two kinds of "not here" and SPEC §6 would be
+    not, the language would have two kinds of "not here" and the absence rules would be
     describing only one of them.
 
     The shifted operand is a **separate** variable from the one the objective
@@ -405,7 +405,7 @@ SPARSE_D = {'d': pd.Series([2.0], index=pd.Index(['a'], name='f'))}
 def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
     """The one position with no defensible fill (#312).
 
-    Everywhere else a missing parameter row is a zero coefficient (SPEC §6), and
+    Everywhere else a missing parameter row is a zero coefficient (the absence rules), and
     a zeroed term still leaves a row that says something. A divisor has no such
     identity: 0 divides by zero, 1 silently rescales, and dropping the term
     rewrites what the constraint asserts. Both lanes used to take that last

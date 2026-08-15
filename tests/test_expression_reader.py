@@ -141,7 +141,7 @@ def test_a_masked_coordinate_has_no_row():
     }
     frame = lps.solve(masked, data).expression('scaled')
     assert frame['generator'].unique().to_list() == ['g1'], (
-        'absence propagates into a reader the way it does into a constraint (SPEC §7): the masked-out '
+        'absence propagates into a reader the way it does into a constraint (the operator rules): the masked-out '
         "generator's coordinates have no rows rather than zeros"
     )
     assert frame.height == 3, 'the surviving generator keeps one row per snapshot'

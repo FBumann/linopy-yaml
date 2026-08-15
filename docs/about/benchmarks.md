@@ -1,10 +1,10 @@
 # Measured results
 
 **Cost is a property of the engine, not of the language.** The rules in
-`docs/ARCHITECTURE.md` constrain what a file may say and would survive an engine
+the architecture notes constrain what a file may say and would survive an engine
 swap untouched; what a build *costs* is settled here, by measurement. That
 separation is why this file can be rewritten by a benchmark run without
-anything in `docs/SPEC.md` moving.
+anything in the language reference moving.
 
 Peak RSS and wall time for the same model built two ways — declaratively on the
 relational engine, and eagerly through linopy — from the same parquet files to
@@ -484,11 +484,11 @@ Wall time behaves throughout: our advantage grows as the model thins, 1.0x to
 
 What each sink can ingest, measured against the shipped solvers rather than
 assumed. The architectural reading is in
-[docs/design/ceiling.md](design/ceiling.md#capability-is-not-the-ceiling); the plan is
+[the ceiling](ceiling.md#capability-is-not-the-ceiling); the plan is
 [Track 3](https://github.com/fluxopt/lpspec/issues/472).
 
 The SOS row is the one this table has since been acted on: `sos:`
-([SPEC §4.1](SPEC.md#41-sos)) ships to all three, natively where the row says
+([sos](../reference/language/piecewise.md#sos)) ships to all three, natively where the row says
 so and as binaries plus linking rows where it says *no concept*.
 
 | | `lp_file` | HiGHS direct | Gurobi direct |
@@ -532,7 +532,7 @@ invariant violation. Two caveats:
 ## Not measured yet
 
 This section exists so that a claim with no table under it is visible as one.
-Two of its entries are load-bearing elsewhere — `README.md` and `docs/ROADMAP.md`
+Two of its entries are load-bearing elsewhere — `README.md` and the roadmap
 lead on cost, and until these land they lead on the hand-off numbers above and
 nothing else.
 

@@ -227,7 +227,7 @@ sol.primal('p').join(index, on='snapshot').group_by('month').agg(pl.col('value')
 
 ## Why `month` is a dimension
 
-A `coords:` entry is a **function between two dimensions**, so it needs a
+A lookup is a **function between two dimensions**, so it needs a
 codomain. `month` being one is not ceremony — three things rest on it:
 
 1. **`sum(by=)` lands terms on the dimension the lookup targets.**
@@ -251,7 +251,7 @@ without a word. It is the same check that catches a generator assigned to a bus
 that does not exist.
 
 **Null is still legal.** A snapshot belonging to no month contributes its terms
-nowhere, exactly as a generator on no bus does (SPEC §2). Absent is a claim;
+nowhere, exactly as a generator on no bus does (the declaration rules). Absent is a claim;
 misspelled is a mistake.
 
 ## What this cannot do

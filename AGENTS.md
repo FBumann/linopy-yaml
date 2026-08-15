@@ -93,8 +93,9 @@ moved where.
   above; "previously this used to…", "renamed from…", "as of the polars
   rewrite…" belong in git. Neither belongs in the code.
 - **Docs move with the change.** A construct added, renamed or retired updates
-  [SPEC](docs/SPEC.md) — §0 if it changes a law; structure updates
-  [ARCHITECTURE](docs/ARCHITECTURE.md), diagrams included.
+  the [language reference](docs/reference/language/index.md) — its ten rules if
+  the change moves a law; structure updates
+  [ARCHITECTURE](docs/about/architecture.md), diagrams included.
 - **After a decision in conversation, sweep for what now contradicts it**, stale
   rationale included: a stale sentence outranks correct code in every reader's
   head.
@@ -107,7 +108,7 @@ moved where.
 - The architectural invariants — the engine importing no linopy, load-time
   validation, the dependency set, the git tag as the version — are enforced by
   `tests/test_architecture.py`, the bare-install job and
-  [ARCHITECTURE](docs/ARCHITECTURE.md), so they are not repeated here.
+  [ARCHITECTURE](docs/about/architecture.md), so they are not repeated here.
 
 # Part 2 — Good defaults
 
@@ -271,4 +272,4 @@ skipped. A body invalidated by a rewrite is closed and re-filed, not annotated.
 - **Recommend, do not survey.**
 - **A language feature is triaged first: macro, primitive, or escape** — the
   ceiling is degree 1 ∩ relational ∩ local, and the deliberate non-primitives in
-  [ceiling.md](docs/design/ceiling.md) come first.
+  [ceiling.md](docs/about/ceiling.md) come first.

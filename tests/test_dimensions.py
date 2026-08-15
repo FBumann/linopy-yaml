@@ -83,7 +83,7 @@ def test_dim_inference(expr, expected):
 @pytest.mark.parametrize(
     ('expr', 'match'),
     [
-        # SPEC §7.1 used to return the array unchanged. `sum(p, over=bus)` then
+        # the operator rules used to return the array unchanged. `sum(p, over=bus)` then
         # built and solved a model that silently never summed anything.
         pytest.param(
             'sum(p, over=bus)',
@@ -156,7 +156,7 @@ def test_broadcast_is_legal_when_one_side_contains_the_other():
             r"does not carry \['bus'\]",
             id='foreach-dim-the-equation-never-uses',
         ),
-        # SPEC §6.3 documented an `any()` reduction here — a mask that fails
+        # the absence rules documented an `any()` reduction here — a mask that fails
         # *open*, silently including everything.
         pytest.param(
             {'variables.cap': {'foreach': ['generator'], 'where': 'load > 0'}},

@@ -8,7 +8,7 @@ side), so the AST reaching either backend holds no unresolved names.
 
 Doing this once here is what makes scoping identical across the lanes by
 construction rather than by test: a backend that resolves for itself is one
-that can build a model the other refuses. SPEC §5.3 carries the rules.
+that can build a model the other refuses. The name-resolution rules carries the rules.
 
 The namespace is flat and collisions are load errors; macro formals are the one
 scope, and may not collide with a declared dimension.

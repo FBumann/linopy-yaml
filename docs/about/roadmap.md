@@ -60,7 +60,7 @@ lanes on one language, and a build that streams. Everything else is scheduling.
 
 The specific refusals — data prep, arbitrary array ops, domain helpers,
 normalisation, in-plan conditionals, a Python modeling API — are in
-[the ceiling](design/ceiling.md#deliberate-non-primitives), with the reason and
+[the ceiling](ceiling.md#deliberate-non-primitives), with the reason and
 the rewrite for each. Read them before proposing a feature: parity with another
 tool is not by itself a reason to add anything.
 
@@ -73,7 +73,7 @@ COO matrix is swapping two column names.
 
 **Ahead of comparable declarative layers:** sparse-by-construction build with no
 dense intermediate, and a hand-off straight to the solver rather than through a
-file; parameterised `macros:` ([Calliope](design/prior-art.md)'s sub-expressions
+file; parameterised `macros:` ([Calliope](prior-art.md)'s sub-expressions
 take no arguments);
 binary and integer variables; piecewise as N links with per-link signs, convex
 mode and `active` gating; load-time validation of every expression, `where`
