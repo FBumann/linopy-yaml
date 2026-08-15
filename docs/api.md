@@ -104,7 +104,7 @@ baseline.kept  # 'nothing'
 |---|---|
 | `keep='solver'` (default) | the solver already holding the model is reused and the hand-off skipped; the work it did is discarded, so the run begins as if the model had never been solved |
 | `keep='progress'` | that work is kept too — **opt-in, because it swings both ways**. A solver told where to begin skips the presolve it would otherwise run, and which of the two is worth more is a fact about your model. Six rebinds, HiGHS, measured both ways (#815): on a dispatch presolve cracks outright, carrying cost **76.6 s against 4.3 s** — an 18× *loss*; on a storage model with a cyclic recurrence it cannot crack, carrying cost **111.2 s against 213.9 s** — a 1.9× *win*. Same procedure, opposite answers, so nothing here guesses on your behalf — measure it, below |
-| `keep='nothing'` | held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again |
+| `keep='nothing'` | held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again. **The baseline, never the fast path**: a fresh solver does the same work as a reused one — same iterations, solve for solve — and the hand-off is paid on top of that (#815) |
 
 `result.kept` is read off what happened, never off what was asked, so a rebind
 that had to rebuild reports the `'nothing'` it got rather than the `'progress'`
