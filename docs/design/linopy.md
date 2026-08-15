@@ -110,7 +110,7 @@ and diff — and the third is
 
 The modeling API is the one a reader arriving from linopy misses first, and
 what replaces it in a notebook is
-[Changing a model](../interactive.ipynb):
+[Change a model](../interactive.ipynb):
 `rebind` for new numbers, a longer table for more rows, a patched `dict` for new
 math. What it cannot replace is the *lifecycle* — mutating a built model,
 `fix`, `relax`, an IIS — and the notebook says so in its own last cell.

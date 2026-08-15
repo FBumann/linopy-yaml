@@ -38,8 +38,8 @@ validation:
 
 nav:
   - Home: index.md
-  - Writing a model: guide.md
-  - Change a Model: interactive.ipynb
+  - Write a model: guide.md
+  - Change a model: interactive.ipynb
   - Models:
       - models/index.md
       - Preparing the data: models/data.md
