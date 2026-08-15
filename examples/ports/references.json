@@ -756,6 +756,11 @@
       }
     }
   },
+  "transport_modes": {
+    "objective": 1715.0,
+    "rtol": 1e-09,
+    "provenance": "published by Gueret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP (Dash Optimization, 2002) SS10.2.3 p. 143 — \"The minimum cost is EUR 1,715k\"; problem and data in SS10.2, p. 142"
+  },
   "transport_pwl": {
     "objective": 8.786852757777865,
     "rtol": 1e-09,
