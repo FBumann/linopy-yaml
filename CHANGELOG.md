@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.1-alpha.138](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.137...v0.0.1-alpha.138) (2026-08-15)
+
+
+### Features
+
+* **api:** a named expression is readable after a solve ([#726](https://github.com/fluxopt/lpspec/issues/726)) ([e41fbe1](https://github.com/fluxopt/lpspec/commit/e41fbe10f8870bd20e8d879b6c0cd33188629579))
+* **gallery:** a generator sits on a bus and burns a carrier ([#783](https://github.com/fluxopt/lpspec/issues/783)) ([5334608](https://github.com/fluxopt/lpspec/commit/53346088f9ed48ce6deddc9ca1b12d65d28a071e))
+* **strategy:** a sweep reads the quantity its model names ([#748](https://github.com/fluxopt/lpspec/issues/748)) ([1268fb5](https://github.com/fluxopt/lpspec/commit/1268fb5d57dcdca98ef617498d4c7c0913db3053))
+
 ## [0.0.1-alpha.137](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.136...v0.0.1-alpha.137) (2026-08-15)
 
 
