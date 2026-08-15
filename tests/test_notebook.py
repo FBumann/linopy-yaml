@@ -89,6 +89,13 @@ def test_the_added_constraint_changes_the_answer(session: tuple[dict[str, Any], 
     )
 
 
+def test_pinning_a_variable_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
+    """The claim that makes a fix worth spelling as bounds rather than as a row."""
+    namespace, _ = session
+    assert namespace['pinning'].loads == 1, 'a pin writes bounds, so the solver keeps the model it has loaded'
+    assert namespace['held'] > namespace['unpinned'], 'holding gas at 60 has to cost something, or it pins nothing'
+
+
 def test_a_refused_edit_says_what_is_wrong(session: tuple[dict[str, Any], str]) -> None:
     _, printed = session
     assert 'does not name a declared dimension' in printed, 'the load-time error is the notebook error message'
