@@ -261,9 +261,8 @@ def test_a_fold_passes_its_keep_to_every_slice_and_chooses_none(monkeypatch):
     A purpose-built probe, and it says why: the request is invisible in the
     answer *and* in `loads`, since keeping the solver and keeping its progress
     are separate halves and the fold keeps the first either way. So a fold that
-    quietly picked `progress` for the caller — which an earlier draft of this
-    did — would pass every other assertion in this file while taking a bet only
-    the caller can price.
+    quietly picked `progress` for the caller would pass every other assertion in
+    this file while taking a bet only the caller can price.
 
     Read off the call rather than `kept`, because it is the *request* that is
     the decision: a slice whose labels moved is loaded again and correctly
