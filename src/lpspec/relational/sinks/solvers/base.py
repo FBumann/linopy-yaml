@@ -309,10 +309,11 @@ class Solver(ABC):
         The middle rung of :data:`~lpspec.relational.result.KEEPS`: the matrix
         stays handed over, and the next run begins as if it had never been
         solved. Separate from :meth:`close` because the two costs are not the
-        same one — keeping the *solver* skips the hand-off, while keeping its
-        *progress* skips whatever preprocessing that progress made
-        unnecessary, and the second is the one that can lose. A member with
-        nothing to discard implements this as a no-op.
+        same one — keeping the *solver* skips the hand-off, which is this
+        package's to save, while keeping its *progress* trades against
+        whatever the member would have prepared for a run starting from
+        nothing, which is the member's own and can go either way. A member
+        with nothing to discard implements this as a no-op.
         """
 
     @abstractmethod

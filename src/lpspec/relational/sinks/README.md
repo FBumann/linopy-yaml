@@ -58,9 +58,10 @@ as a no-op.
 
 `forget()` rather than a reload because the two costs are different ones. A
 caller keeping the *solver* skips the hand-off, which nothing pays for; one
-keeping its *progress* skips the preprocessing that progress made unnecessary,
-which a presolve-friendly model pays for dearly. Splitting them is what lets a
-caller take the first without the second.
+keeping its *progress* trades against whatever the member prepares for a run
+that starts from nothing — on both sinks here that trade has gone both ways by
+a wide margin, and a third member is free to make it differently. Splitting
+them is what lets a caller take the first without the second.
 
 A **genuine rebuild** gets no carry at all: the new session holds a fresh model
 and starts cold, and `PolarsEngine.solve(keep='nothing')` is how a caller asks

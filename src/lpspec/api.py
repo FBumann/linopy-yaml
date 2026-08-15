@@ -168,10 +168,10 @@ class BoundModel:
         A solver that can stay loaded is kept between calls, so a rebound
         model skips the hand-off and only its numbers are pushed. Whether the
         *work* that solver did is kept too is *keep*, and it is off by
-        default: carrying it forward suppresses the preprocessing a solver
-        would otherwise do, which is a win where the model is hard and a loss
-        where it is not, and only a caller knows which. How much this solve
-        actually kept is its
+        default: a solver given a run to resume may forgo preparation it would
+        otherwise do, which on the sinks that ship has been worth a large
+        multiple in both directions (#815), and only a caller knows which way
+        their model goes. How much this solve actually kept is its
         :attr:`~lpspec.relational.result.Result.kept`.
 
         Args:
