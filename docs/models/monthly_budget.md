@@ -8,9 +8,9 @@ a generator on a bus.
 
 ## The problem
 
-$$\sum_{t \thinspace:\thinspace \mathrm{month\_of}(t) = m} p_{t,g} \quad\le\quad \bar E_{m,g}$$
+$$\sum_{t \thinspace:\thinspace \mathrm{month}(t) = m} p_{t,g} \quad\le\quad \bar E_{m,g}$$
 
-$\mathrm{month\_of}$ is a **lookup the model declares over snapshot**, not a
+$\mathrm{month}$ is a **coordinate the snapshot dimension declares**, not a
 calendar the language understands. Its values arrive as a column in the
 snapshot index, so the same model expresses weeks, seasons, fiscal quarters,
 peak/off-peak blocks or representative days by changing that one column and
@@ -27,6 +27,8 @@ same construct** — `sum(by=)` — and time is not a special axis.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+A cap on what each technology may generate per calendar month — an aggregate over a coarser grouping of time than the model is dispatched on.
+
 #### Sets
 
 | Symbol | Meaning |
@@ -39,16 +41,16 @@ same construct** — `sum(by=)` — and time is not a special axis.
 
 | Symbol | Meaning |
 |---|---|
-| $\bar p$ | `p_max` over $\mathcal{G}$ |
-| $c$ | `cost` over $\mathcal{G}$ |
-| $\ell$ | `load` over $\mathcal{T}$ |
-| $\bar E$ | `monthly_cap` over $\mathcal{M} \times \mathcal{G}$ |
+| $\bar p$ | `p_max` over $\mathcal{G}$ --- installed capacity |
+| $c$ | `cost` over $\mathcal{G}$ --- marginal cost |
+| $\ell$ | `load` over $\mathcal{T}$ --- demand to be met |
+| $\bar E$ | `monthly_cap` over $\mathcal{M} \times \mathcal{G}$ --- the budget the group sum is checked against, one per month and technology |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
 
 #### Objective
 
@@ -78,6 +80,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
+    description: >-
+      A cap on what each technology may generate per calendar month — an aggregate
+      over a coarser grouping of time than the model is dispatched on.
+
     dimensions:
       snapshot:
         description: dispatch periods, each falling in one month
@@ -90,22 +96,28 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         dtype: str
 
     lookups:
-      # every snapshot falls in a month, exactly as a generator sits on a bus
-      month_of: {over: snapshot, into: month}
+      month_of:
+        description: the month a snapshot falls in
+        over: snapshot
+        into: month
 
     parameters:
       p_max:
+        description: installed capacity
         dims: [generator]
       cost:
+        description: marginal cost
         dims: [generator]
       load:
+        description: demand to be met
         dims: [snapshot]
-      # the budget the group sum is checked against, one per month and technology
       monthly_cap:
+        description: the budget the group sum is checked against, one per month and technology
         dims: [month, generator]
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         bounds:
           lower: 0
@@ -113,14 +125,17 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       balance:
+        description: the fleet meets the load exactly in every snapshot
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
       monthly_budget:
+        description: what a generator produces across a month stays inside that month's budget
         foreach: [month, generator]
         expression: sum(p, by=month_of) <= monthly_cap
 
     objective:
       sense: minimize
+      description: total cost of generation over the horizon
       expression: sum(p * cost, over=generator)
     ```
 
@@ -157,10 +172,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
 ## The grouping is data
 
-The `month_of` column is produced before the model, by whatever rule you want:
+The `month` column is produced before the model, by whatever rule you want:
 
 ```python
-index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month_of'))
+index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
 ```
 
 What that produces is the snapshot index the model binds against — a second
@@ -207,25 +222,25 @@ Per-month *results* need no language support at all — a primal is a tidy frame
 so it is a join and a `group_by`:
 
 ```python
-sol.primal('p').join(index, on='snapshot').group_by('month_of').agg(pl.col('value').sum())
+sol.primal('p').join(index, on='snapshot').group_by('month').agg(pl.col('value').sum())
 ```
 
 ## Why `month` is a dimension
 
-A lookup with `into:` is a **function between two dimensions**, so it needs a
+A `coords:` entry is a **function between two dimensions**, so it needs a
 codomain. `month` being one is not ceremony — three things rest on it:
 
 1. **`sum(by=)` lands terms on the dimension the lookup targets.**
    The expression's dims are therefore `[month, generator]`, and a `foreach:`
    can only name declared dimensions.
 2. **`monthly_cap` is indexed *by* month.** A parameter carries values *at*
-   labels; it cannot be the thing a `foreach` ranges over. So month could
+   coordinates; it cannot be the thing a `foreach` ranges over. So month could
    not be a parameter even if the grouping did not need it.
 3. **It is what makes a typo an error.** A value in the snapshot index that is
-   not a label of `month` is rejected at bind time:
+   not a coordinate of `month` is rejected at bind time:
 
 ```text
-DataError: dimension 'snapshot' lookup 'month_of' has value(s) that are
+DataError: dimension 'snapshot' coordinate 'month' has value(s) that are
            not 'month' coordinates: '2030-3'
 ```
 
@@ -244,7 +259,7 @@ misspelled is a mistake.
 `sum(by=)` takes a **partition**: `month_of` is a function from snapshot to
 month, so a snapshot with a month belongs to exactly one group. Unequal groups
 are fine, and a group with no members contributes nothing — as does a snapshot
-whose `month_of` is null, which belongs to no group and lands nowhere.
+whose coordinate is null, which belongs to no group and lands nowhere.
 
 What it cannot express is an **overlapping** aggregate — *"trailing twelve
 months, at every month"* — because each snapshot would belong to twelve groups

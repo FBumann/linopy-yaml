@@ -25,33 +25,35 @@ the whole difference between a line and a link.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's voltage law, rather than links whose flow is chosen. Optimum 17000.0, from PyPSA itself.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` |
-| $\mathcal{B}$ | index $b$ --- `bus` |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ |
-| $\mathcal{C}$ | index $c$ --- `cycle` |
+| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
+| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
+| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
+| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
+| $\mathcal{C}$ | index $c$ --- `cycle` --- one independent loop of the network |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ |
-| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ |
-| $\mathit{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ |
-| $\mathit{cycle}^{\mathrm{incidence}}$ | `cycle_incidence` over $\mathcal{C} \times \mathcal{L}$ |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
+| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- most a line may carry towards its `to` bus |
+| $\mathit{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ --- most a line may carry the other way, negative by convention |
+| $\mathit{cycle}^{\mathrm{incidence}}$ | `cycle_incidence` over $\mathcal{C} \times \mathcal{L}$ --- the cycle basis, as a sparse table of reactance times direction — a line may belong to several cycles, so this is a parameter over both dimensions rather than a coordinate, and rows are absent where a line is in no cycle |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `to` bus — not chosen, but whatever the voltage law leaves |
 
 #### Objective
 
@@ -85,53 +87,76 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's
-    # voltage law, rather than links whose flow is chosen.
-    # Optimum 17000.0, from PyPSA itself.
+    description: >-
+      PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's
+      voltage law, rather than links whose flow is chosen. Optimum 17000.0, from
+      PyPSA itself.
 
     dimensions:
       snapshot:
+        description: dispatch periods
         dtype: int
       bus:
+        description: network nodes
         dtype: str
       generator:
+        description: generating units, each sitting on one bus
         dtype: str
       line:
+        description: passive AC lines, each joining two buses
         dtype: str
       cycle:
-        dtype: str  # one independent loop of the network
+        description: one independent loop of the network
+        dtype: str
 
     lookups:
-      gen_bus: {over: generator, into: bus}  # every generator sits on a bus
-      from: {over: line, into: bus}  # both endpoints are buses
-      to: {over: line, into: bus}
+      gen_bus:
+        description: the bus a generator sits on
+        over: generator
+        into: bus
+      from:
+        description: the bus a line leaves
+        over: line
+        into: bus
+      to:
+        description: the bus a line arrives at
+        over: line
+        into: bus
 
     parameters:
       p_nom:
+        description: installed capacity of a generator
         dims: [generator]
       marginal_cost:
+        description: cost of one unit of output
         dims: [generator]
       s_nom:
+        description: most a line may carry towards its `to` bus
         dims: [line]
       neg_s_nom:
+        description: most a line may carry the other way, negative by convention
         dims: [line]
-      # The cycle basis, as a sparse (cycle, line) table of reactance x direction.
-      # A line may belong to several cycles, so this cannot be a lookup over
-      # `line` — a lookup is single-valued per label. It is a parameter over
-      # both dims, and rows are absent where a line is not in a cycle.
       cycle_incidence:
+        description: >-
+          the cycle basis, as a sparse table of reactance times direction — a line
+          may belong to several cycles, so this is a parameter over both dimensions
+          rather than a coordinate, and rows are absent where a line is in no cycle
         dims: [cycle, line]
       load:
+        description: demand at each bus in each snapshot
         dims: [snapshot, bus]
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         bounds:
           lower: 0
           upper: p_nom
-      # A line's flow is not chosen: it is whatever the voltage law leaves.
       f:
+        description: >-
+          flow on a line, signed towards its `to` bus — not chosen, but whatever
+          the voltage law leaves
         foreach: [snapshot, line]
         bounds:
           lower: neg_s_nom
@@ -139,6 +164,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       nodal_balance:
+        description: what is generated at a bus plus what arrives over the lines meets the load there
         foreach: [snapshot, bus]
         expression: >-
           sum(p, by=gen_bus)
@@ -146,16 +172,19 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           - sum(f, by=from)
           == load
 
-      # Kirchhoff's voltage law: around each independent cycle, the
-      # reactance-weighted flows sum to zero. The incidence table carries both
-      # which lines are in the cycle and which way round they run, so this is one
-      # equation rather than a case analysis over the topology.
       kirchhoff_voltage_law:
+        description: >-
+          around each independent cycle the reactance-weighted flows sum to zero.
+          The incidence table carries both which lines are in the cycle and which
+          way round they run, so this is one equation rather than a case analysis
+          over the topology — and a coordinate could not hold it, being
+          single-valued per label.
         foreach: [snapshot, cycle]
         expression: sum(f * cycle_incidence, over=line) == 0
 
     objective:
       sense: minimize
+      description: total cost of generation; the lines carry power for nothing
       expression: p * marginal_cost
     ```
 
@@ -210,9 +239,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         return n
     ```
 
-**The cycle basis is a parameter, not a lookup.** This is the one shape
+**The cycle basis is a parameter, not a coordinate.** This is the one shape
 decision worth reading twice. A line may belong to *several* cycles, and a
-declared lookup is single-valued per label — so `cycle_incidence` is a
+declared coordinate is single-valued per label — so `cycle_incidence` is a
 parameter over `(cycle, line)` carrying reactance × direction, with rows simply
 absent where a line is not in a cycle. Row absence is how this language spells
 sparsity everywhere else, and a cycle-line incidence matrix is exactly the

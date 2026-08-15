@@ -49,27 +49,29 @@ Inside the language, and it always was.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit every city once and come home as cheaply as possible. TSPLIB instance gr17 — 17 cities, explicit distance matrix, published optimum 2085.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{C}$ | index $c$ --- `city` with $\mathrm{as\_from}: \mathcal{C} \to \mathcal{F},\enspace \mathrm{as\_to}: \mathcal{C} \to \mathcal{T}$ |
-| $\mathcal{F}$ | index $f$ --- `from_city` |
-| $\mathcal{T}$ | index $t$ --- `to_city` |
+| $\mathcal{C}$ | index $c$ --- `city` with $\mathrm{as\_from}: \mathcal{C} \to \mathcal{F},\enspace \mathrm{as\_to}: \mathcal{C} \to \mathcal{T}$ --- the cities of the tour, each also read as an arc endpoint |
+| $\mathcal{F}$ | index $f$ --- `from_city` --- the city an arc leaves |
+| $\mathcal{T}$ | index $t$ --- `to_city` --- the city an arc arrives at |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{distance}$ | `distance` over $\mathcal{F} \times \mathcal{T}$ |
-| $n$ | `n` (scalar) |
+| $\mathit{distance}$ | `distance` over $\mathcal{F} \times \mathcal{T}$ --- distance along an arc, with no row on the diagonal — a city has no distance to itself, so no arc variable exists there |
+| $n$ | `n` (scalar) --- the number of cities, which is the big-M the ordering rows need |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{travel}$ | `travel` over $\mathcal{F} \times \mathcal{T}$ |
-| $u$ | `u` over $\mathcal{C}$ |
+| $\mathit{travel}$ | `travel` over $\mathcal{F} \times \mathcal{T}$ --- is this arc on the tour? |
+| $u$ | `u` over $\mathcal{C}$ --- position of a city in the tour — continuous, because the formulation needs only that the positions be orderable |
 
 #### Objective
 
@@ -103,15 +105,20 @@ $$1 \le u_{c} \le 17 \qquad \forall\thinspace c \in \mathcal{C}$$
 <!-- math:end -->
 
 ```yaml
-# The travelling salesman problem, MTZ formulation. TSPLIB instance `gr17`:
-# 17 cities, explicit distance matrix, published optimum 2085.
+description: >-
+  The travelling salesman problem in the Miller-Tucker-Zemlin formulation:
+  visit every city once and come home as cheaply as possible. TSPLIB instance
+  gr17 — 17 cities, explicit distance matrix, published optimum 2085.
 
 dimensions:
   city:
+    description: the cities of the tour, each also read as an arc endpoint
     dtype: str
   from_city:
+    description: the city an arc leaves
     dtype: str
   to_city:
+    description: the city an arc arrives at
     dtype: str
 
 lookups:
@@ -119,21 +126,25 @@ lookups:
   as_to: {over: city, into: to_city}
 
 parameters:
-  # No row on the diagonal: a city has no distance to itself, so no arc
-  # variable exists there and every row mentioning one drops out.
   distance:
+    description: >-
+      distance along an arc, with no row on the diagonal — a city has no
+      distance to itself, so no arc variable exists there
     dims: [from_city, to_city]
   n:
+    description: the number of cities, which is the big-M the ordering rows need
     dims: []
 
 variables:
   travel:
+    description: is this arc on the tour?
     foreach: [from_city, to_city]
     where: distance
     domain: binary
-  # Position of each city in the tour. Continuous — MTZ needs only that the
-  # positions be orderable, not that they be whole numbers.
   u:
+    description: >-
+      position of a city in the tour — continuous, because the formulation
+      needs only that the positions be orderable
     foreach: [city]
     bounds:
       lower: 1
@@ -141,18 +152,21 @@ variables:
 
 constraints:
   leave_each_city_once:
+    description: exactly one arc of the tour leaves each city
     foreach: [from_city]
     expression: sum(travel, over=to_city) == 1
 
   enter_each_city_once:
+    description: exactly one arc of the tour arrives at each city
     foreach: [to_city]
     expression: sum(travel, over=from_city) == 1
 
-  # Miller-Tucker-Zemlin: if the tour goes i -> j then j is later than i, and
-  # the big-M is slack enough to say nothing when it does not. Written for
-  # every ordered pair except those touching the depot, which anchors the
-  # numbering.
   ordering:
+    description: >-
+      no subtours — if the tour goes from one city to another then the second
+      is later in the numbering, and the big-M leaves the row saying nothing
+      when it does not. Written for every ordered pair except those touching
+      the depot, which anchors the numbering.
     foreach: [from_city, to_city]
     where: "from_city != c01 AND to_city != c01"
     expression: >-
@@ -163,6 +177,7 @@ constraints:
 
 objective:
   sense: minimize
+  description: the length of the tour
   expression: travel * distance
 ```
 

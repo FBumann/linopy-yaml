@@ -22,26 +22,28 @@ opening a warehouse costs money whether or not it ends up busy.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Uncapacitated facility location, OR-Library instance cap71: 16 possible warehouses, 50 customers. Open a set of warehouses and assign every customer to one, trading fixed opening costs against the cost of serving from further away. Optimum 932615.750, published by OR-Library.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{W}$ | index $w$ --- `warehouse` |
-| $\mathcal{C}$ | index $c$ --- `customer` |
+| $\mathcal{W}$ | index $w$ --- `warehouse` --- sites a warehouse may be opened on |
+| $\mathcal{C}$ | index $c$ --- `customer` --- customers, each served in full from one warehouse |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{fixed\_cost}$ | `fixed_cost` over $\mathcal{W}$ |
-| $\mathit{serve}^{\mathrm{cost}}$ | `serve_cost` over $\mathcal{W} \times \mathcal{C}$ |
+| $\mathit{fixed\_cost}$ | `fixed_cost` over $\mathcal{W}$ --- what opening a warehouse costs, whoever it ends up serving |
+| $\mathit{serve}^{\mathrm{cost}}$ | `serve_cost` over $\mathcal{W} \times \mathcal{C}$ --- what it costs to serve all of this customer's demand from this warehouse |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{is\_open}$ | `is_open` over $\mathcal{W}$ |
-| $\mathit{serve}$ | `serve` over $\mathcal{W} \times \mathcal{C}$ |
+| $\mathit{is\_open}$ | `is_open` over $\mathcal{W}$ --- is this warehouse open? The only integrality in the model |
+| $\mathit{serve}$ | `serve` over $\mathcal{W} \times \mathcal{C}$ --- the share of a customer's demand served from a warehouse |
 
 #### Objective
 
@@ -71,32 +73,35 @@ $$0 \le \mathit{serve}_{w,c} \le 1 \qquad \forall\thinspace w \in \mathcal{W},\e
 <!-- math:end -->
 
 ```yaml
-# Uncapacitated facility location, OR-Library instance `cap71`: 16 possible
-# warehouses, 50 customers. Open a set of warehouses and assign every customer
-# to one, trading fixed opening costs against the cost of serving from further
-# away. Optimum 932615.750, published by OR-Library.
+description: >-
+  Uncapacitated facility location, OR-Library instance cap71: 16 possible
+  warehouses, 50 customers. Open a set of warehouses and assign every customer
+  to one, trading fixed opening costs against the cost of serving from further
+  away. Optimum 932615.750, published by OR-Library.
 
 dimensions:
   warehouse:
+    description: sites a warehouse may be opened on
     dtype: str
   customer:
+    description: customers, each served in full from one warehouse
     dtype: str
 
 parameters:
   fixed_cost:
+    description: what opening a warehouse costs, whoever it ends up serving
     dims: [warehouse]
-  # what it costs to serve all of this customer's demand from this warehouse
   serve_cost:
+    description: what it costs to serve all of this customer's demand from this warehouse
     dims: [warehouse, customer]
 
 variables:
-  # is this warehouse open? The only integrality in the model — `serve` comes
-  # out integral on its own, which is the point of writing the linking
-  # constraint per (warehouse, customer) rather than aggregated.
   is_open:
+    description: is this warehouse open? The only integrality in the model
     foreach: [warehouse]
     domain: binary
   serve:
+    description: the share of a customer's demand served from a warehouse
     foreach: [warehouse, customer]
     bounds:
       lower: 0
@@ -104,19 +109,23 @@ variables:
 
 constraints:
   every_customer_served:
+    description: a customer's demand is met in full, from one warehouse or several
     foreach: [customer]
     expression: sum(serve, over=warehouse) == 1
 
-  # A closed warehouse serves nobody. Written per pair — the "strong"
-  # formulation — because summing it over customers instead would give a valid
-  # but much weaker relaxation, and the LP bound is what makes this instance
-  # solve at all.
   only_from_open_warehouses:
+    description: >-
+      a closed warehouse serves nobody, written per pair — the strong
+      formulation, because summing it over customers instead would give a valid
+      but much weaker relaxation, and the LP bound is what makes this instance
+      solve at all. It is also why serve comes out integral on its own, with no
+      integrality declared on it.
     foreach: [warehouse, customer]
     expression: serve - is_open <= 0
 
 objective:
   sense: minimize
+  description: what the open warehouses cost, plus what serving from them costs
   expression: is_open * fixed_cost + serve * serve_cost
 ```
 

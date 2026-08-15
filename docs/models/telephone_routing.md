@@ -21,27 +21,29 @@ it crosses, which is why the network is undirected and the flow carries no sign.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Routing telephone calls over a five-city network: how many of the 425 requested circuits can be carried at once. A path serves exactly one city pair — a coordinate — and traverses several arcs — an incidence parameter; both relations, each said the way it is. Guéret, Prins, Sevaux and Heipcke, Applications of Optimization with Xpress-MP, section 12.3. Optimum 380 circuits, published in section 12.3.3.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{A}$ | index $a$ --- `arc` |
-| $\mathcal{C}$ | index $c$ --- `call` |
-| $\mathcal{P}$ | index $p$ --- `path` with $\mathrm{call\_of}: \mathcal{P} \to \mathcal{C}$ |
+| $\mathcal{A}$ | index $a$ --- `arc` --- an undirected link between two cities, with capacity in circuits |
+| $\mathcal{C}$ | index $c$ --- `call` --- a city pair with circuits to place |
+| $\mathcal{P}$ | index $p$ --- `path` with $\mathrm{call\_of}: \mathcal{P} \to \mathcal{C}$ --- a route end to end, serving one city pair |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{capacity}$ | `capacity` over $\mathcal{A}$ |
-| $\mathit{demand}$ | `demand` over $\mathcal{C}$ |
-| $\mathit{uses}$ | `uses` over $\mathcal{P} \times \mathcal{A}$ |
+| $\mathit{capacity}$ | `capacity` over $\mathcal{A}$ --- circuits an arc can carry |
+| $\mathit{demand}$ | `demand` over $\mathcal{C}$ --- circuits a city pair asked for |
+| $\mathit{uses}$ | `uses` over $\mathcal{P} \times \mathcal{A}$ --- which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{flow}$ | `flow` over $\mathcal{P}$ |
+| $\mathit{flow}$ | `flow` over $\mathcal{P}$ --- circuits carried on a path — integral because a multi-commodity flow is not integral by nature, even though this instance's relaxation happens to be |
 
 #### Objective
 
@@ -71,20 +73,23 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # Routing telephone calls over a five-city network: how many of the 425
-    # requested circuits can be carried at once. Guéret, Prins, Sevaux & Heipcke,
-    # Applications of Optimization with Xpress-MP, §12.3.
-    # Optimum 380 circuits, published in §12.3.3.
-    #
-    # A path serves exactly one city pair — a coordinate — and traverses several
-    # arcs — an incidence parameter. Both relations, each said the way it is.
+    description: >-
+      Routing telephone calls over a five-city network: how many of the 425
+      requested circuits can be carried at once. A path serves exactly one city
+      pair — a coordinate — and traverses several arcs — an incidence parameter;
+      both relations, each said the way it is. Guéret, Prins, Sevaux and Heipcke,
+      Applications of Optimization with Xpress-MP, section 12.3. Optimum 380
+      circuits, published in section 12.3.3.
 
     dimensions:
       arc:
-        dtype: str  # an undirected link, capacity in circuits
+        description: an undirected link between two cities, with capacity in circuits
+        dtype: str
       call:
-        dtype: str  # a city pair with circuits to place
+        description: a city pair with circuits to place
+        dtype: str
       path:
+        description: a route end to end, serving one city pair
         dtype: str
 
     lookups:
@@ -95,38 +100,45 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     parameters:
       capacity:
+        description: circuits an arc can carry
         dims: [arc]
       demand:
+        description: circuits a city pair asked for
         dims: [call]
-      # Which arcs a path traverses: many-to-many, so rows and not a coordinate.
-      # A path uses an arc or it does not, so the value is 1 and absence is 0.
       uses:
+        description: >-
+          which arcs a path traverses — a path uses an arc or it does not, so the
+          value is 1 and absence is 0
         dims: [path, arc]
 
     variables:
-      # Circuits carried on a path. A circuit reserves both directions of every arc
-      # it crosses, which is why the network is undirected and the flow is not
-      # signed. Integral because a multi-commodity flow is not integral by nature,
-      # even though this instance's relaxation happens to be.
       flow:
+        description: >-
+          circuits carried on a path — integral because a multi-commodity flow is
+          not integral by nature, even though this instance's relaxation happens to
+          be
         foreach: [path]
         domain: integer
         bounds:
           lower: 0
 
     constraints:
-      # A pair cannot be carried more than it asked for, however many paths serve it.
       within_demand:
+        description: a pair cannot be carried more than it asked for, however many paths serve it
         foreach: [call]
         expression: sum(flow, by=call_of) <= demand
 
-      # An arc carries every path that traverses it, and no more than its capacity.
       within_capacity:
+        description: >-
+          an arc carries every path that traverses it, and no more than its
+          capacity. A circuit reserves both directions of every arc it crosses,
+          which is why the network is undirected and the flow is not signed.
         foreach: [arc]
         expression: sum(flow * uses, over=path) <= capacity
 
     objective:
       sense: maximize
+      description: circuits carried, summed over every path
       expression: sum(flow, over=path)
     ```
 

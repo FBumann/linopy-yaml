@@ -32,41 +32,43 @@ say and no lookup needs to.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Energy and reserve co-optimization on a two-bus grid: an offer is a generator, market and tranche together, reserve zones overlap, and one line dangles. The model exists to prove a claim — every many-to-many shape the language covers, in one instance, each one load-bearing.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{B}$ | index $b$ --- `bus` |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ |
-| $\mathcal{M}$ | index $m$ --- `market` |
-| $\mathcal{T}$ | index $t$ --- `tranche` |
-| $\mathcal{Z}$ | index $z$ --- `zone` |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ |
-| $\mathcal{O}$ | index $o$ --- `offer` with $\mathrm{gen\_of}: \mathcal{O} \to \mathcal{G},\enspace \mathrm{market\_of}: \mathcal{O} \to \mathcal{M},\enspace \mathrm{tranche\_of}: \mathcal{O} \to \mathcal{T}$ |
+| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
+| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
+| $\mathcal{M}$ | index $m$ --- `market` --- reserve markets, each with a requirement to fill |
+| $\mathcal{T}$ | index $t$ --- `tranche` --- how fast a reserve has to be deliverable |
+| $\mathcal{Z}$ | index $z$ --- `zone` --- reserve zones, which overlap |
+| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, which may have an open end |
+| $\mathcal{O}$ | index $o$ --- `offer` with $\mathrm{gen\_of}: \mathcal{O} \to \mathcal{G},\enspace \mathrm{market\_of}: \mathcal{O} \to \mathcal{M},\enspace \mathrm{tranche\_of}: \mathcal{O} \to \mathcal{T}$ --- one generator's bid into one market at one tranche |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ |
-| $\mathit{energy\_cost}$ | `energy_cost` over $\mathcal{G}$ |
-| $\mathit{load}$ | `load` over $\mathcal{B}$ |
-| $\mathit{cap}$ | `cap` over $\mathcal{L}$ |
-| $\mathit{neg\_cap}$ | `neg_cap` over $\mathcal{L}$ |
-| $\mathit{bus}^{\mathrm{cap}}$ | `bus_cap` over $\mathcal{B}$ |
-| $\mathit{offer}^{\mathrm{cost}}$ | `offer_cost` over $\mathcal{O}$ |
-| $\mathit{req}$ | `req` over $\mathcal{M}$ |
-| $\mathit{tranche}^{\mathrm{frac}}$ | `tranche_frac` over $\mathcal{T}$ |
-| $\mathit{zone}^{\mathrm{share}}$ | `zone_share` over $\mathcal{G} \times \mathcal{Z}$ |
-| $\mathit{zone}^{\mathrm{req}}$ | `zone_req` over $\mathcal{Z}$ |
+| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ --- installed capacity |
+| $\mathit{energy\_cost}$ | `energy_cost` over $\mathcal{G}$ --- cost of one unit of output |
+| $\mathit{load}$ | `load` over $\mathcal{B}$ --- demand at each bus |
+| $\mathit{cap}$ | `cap` over $\mathcal{L}$ --- forward transmission limit |
+| $\mathit{neg\_cap}$ | `neg_cap` over $\mathcal{L}$ --- reverse transmission limit |
+| $\mathit{bus}^{\mathrm{cap}}$ | `bus_cap` over $\mathcal{B}$ --- most a bus may export over any one line |
+| $\mathit{offer}^{\mathrm{cost}}$ | `offer_cost` over $\mathcal{O}$ --- cost of holding one unit of reserve on an offer |
+| $\mathit{req}$ | `req` over $\mathcal{M}$ --- reserve a market has to be filled with |
+| $\mathit{tranche}^{\mathrm{frac}}$ | `tranche_frac` over $\mathcal{T}$ --- share of capacity a generator may offer at a tranche |
+| $\mathit{zone}^{\mathrm{share}}$ | `zone_share` over $\mathcal{G} \times \mathcal{Z}$ --- how much of a generator's reserve counts towards a zone — a generator may back several zones at a per-zone weight, so this cannot be a lookup over the generator, which is single-valued per label; rows are absent where a generator backs no part of a zone |
+| $\mathit{zone}^{\mathrm{req}}$ | `zone_req` over $\mathcal{Z}$ --- reserve a zone has to be covered by |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{G}$ |
-| $f$ | `f` over $\mathcal{L}$ |
-| $r$ | `r` over $\mathcal{O}$ |
+| $p$ | `p` over $\mathcal{G}$ --- output of a generator |
+| $f$ | `f` over $\mathcal{L}$ --- flow on a line, signed towards its `to` bus |
+| $r$ | `r` over $\mathcal{O}$ --- reserve held against an offer |
 
 #### Objective
 
@@ -120,82 +122,112 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 === "lpspec"
 
     ```yaml
+    description: >-
+      Energy and reserve co-optimization on a two-bus grid: an offer is a
+      generator, market and tranche together, reserve zones overlap, and one line
+      dangles. The model exists to prove a claim — every many-to-many shape the
+      language covers, in one instance, each one load-bearing.
+
     dimensions:
       bus:
+        description: network nodes
         dtype: str
         values: [b1, b2]
       generator:
+        description: generating units, each sitting on one bus
         dtype: str
       market:
+        description: reserve markets, each with a requirement to fill
         dtype: str
         values: [m1, m2]
       tranche:
+        description: how fast a reserve has to be deliverable
         dtype: str
         values: [fast, slow]
       zone:
+        description: reserve zones, which overlap
         dtype: str
         values: [z1, z2]
       line:
+        description: transmission lines, which may have an open end
         dtype: str
       offer:
+        description: one generator's bid into one market at one tranche
         dtype: str
 
     lookups:
-      gen_bus: {over: generator, into: bus}  # every generator sits on a bus
-      from: {over: line, into: bus}  # both endpoints are buses; an open end is null
-      to: {over: line, into: bus}
-      gen_of: {over: offer, into: generator}  # an offer is one (generator, market, tranche) edge
-      market_of: {over: offer, into: market}
-      tranche_of: {over: offer, into: tranche}
+      gen_bus: {over: generator, into: bus, description: "the bus a generator sits on"}
+      from: {over: line, into: bus, description: "the bus a line leaves, null where the end is open"}
+      to: {over: line, into: bus, description: "the bus a line arrives at, null where the end is open"}
+      gen_of: {over: offer, into: generator, description: "the generator behind an offer"}
+      market_of: {over: offer, into: market, description: "the market an offer is made into"}
+      tranche_of: {over: offer, into: tranche, description: "the tranche an offer is made at"}
 
     parameters:
       p_max:
+        description: installed capacity
         dims: [generator]
       energy_cost:
+        description: cost of one unit of output
         dims: [generator]
       load:
+        description: demand at each bus
         dims: [bus]
       cap:
+        description: forward transmission limit
         dims: [line]
       neg_cap:
+        description: reverse transmission limit
         dims: [line]
       bus_cap:
+        description: most a bus may export over any one line
         dims: [bus]
       offer_cost:
+        description: cost of holding one unit of reserve on an offer
         dims: [offer]
       req:
+        description: reserve a market has to be filled with
         dims: [market]
       tranche_frac:
+        description: share of capacity a generator may offer at a tranche
         dims: [tranche]
-      # Overlapping reserve zones: a generator may back several zones, at a
-      # per-zone weight, so this cannot be a lookup over `generator` — a lookup is
-      # single-valued per label. It is a parameter over both dims, and rows are
-      # absent where a generator backs no part of a zone.
       zone_share:
+        description: >-
+          how much of a generator's reserve counts towards a zone — a generator may
+          back several zones at a per-zone weight, so this cannot be a lookup over
+          the generator, which is single-valued per label; rows are absent where a
+          generator backs no part of a zone
         dims: [generator, zone]
       zone_req:
+        description: reserve a zone has to be covered by
         dims: [zone]
 
     variables:
       p:
+        description: output of a generator
         foreach: [generator]
         bounds:
           lower: 0
       f:
+        description: flow on a line, signed towards its `to` bus
         foreach: [line]
         bounds:
           lower: neg_cap
           upper: cap
       r:
+        description: reserve held against an offer
         foreach: [offer]
         bounds:
           lower: 0
 
     expressions:
-      reserve_of: sum(r, by=gen_of)
+      reserve_of:
+        expression: sum(r, by=gen_of)
+        description: all the reserve a generator holds, across every offer it made
 
     constraints:
       balance:
+        description: what is generated at a bus plus what arrives over the lines meets the load there
         foreach: [bus]
         expression: >-
           sum(p, by=gen_bus)
@@ -203,23 +235,32 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           - sum(f, by=from)
           == load
       export_cap:
+        description: a line carries no more than the bus it leaves is allowed to export
         foreach: [line]
         expression: f <= at(bus_cap, by=from)
       requirement:
+        description: the offers made into a market fill its requirement
         foreach: [market]
         expression: sum(r, by=market_of) >= req
       headroom:
+        description: a generator's output plus the reserve it holds stays inside its capacity
         foreach: [generator]
         expression: p + reserve_of <= p_max
       offer_cap:
+        description: >-
+          an offer is capped by its tranche's share of its generator's capacity —
+          two other dimensions' parameters pulled back through two legs of one edge
+          set
         foreach: [offer]
         expression: r <= at(tranche_frac, by=tranche_of) * at(p_max, by=gen_of)
       zone_cover:
+        description: the weighted reserve of the generators backing a zone covers its requirement
         foreach: [zone]
         expression: sum(zone_share * reserve_of, over=generator) >= zone_req
 
     objective:
       sense: minimize
+      description: what the energy costs to generate, plus what the reserve costs to hold
       expression: p * energy_cost + r * offer_cost
     ```
 

@@ -19,7 +19,6 @@ charging one arm for the other's work.
 
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -77,29 +76,8 @@ def _tables(handle: Any) -> Any:
     return getattr(handle, '_engine', handle)._tables()
 
 
-def _engine(engine: str | None) -> None:
-    """Select the engine the way a caller does, in this process.
-
-    ``LPSPEC_ENGINE`` is the switch lpspec ships; setting it here rather than
-    reaching for a private selector is what makes a second engine's arm a
-    measurement of the shipped mechanism.
-
-    **The default arm clears it rather than leaving it alone.** Under the old
-    runner each measurement owned its process and there was nothing to reset —
-    the sentence that said so outlived the runner it described. One pytest
-    session is one interpreter, so a set-only version leaks: the first arm that
-    names an engine selects it for every arm after it, and a two-engine
-    comparison measures one engine against itself at ratios near 1.00 that look
-    like a result.
-    """
-    if engine is None:
-        os.environ.pop('LPSPEC_ENGINE', None)
-    else:
-        os.environ['LPSPEC_ENGINE'] = engine
-
-
 def lpspec_build_and_emit(
-    case_name: str, size: str, sink: str, sources: dict[str, str], coords: dict[str, str], engine: str | None = None
+    case_name: str, size: str, sink: str, sources: dict[str, str], coords: dict[str, str]
 ) -> Counts:
     """Build relationally and hand the model over — an LP file, or a solver.
 
@@ -113,7 +91,6 @@ def lpspec_build_and_emit(
     not the engine's. ``matrix`` is this engine's frame and an older checkout
     exposes its own shape, so the nonzero count stays optional.
     """
-    _engine(engine)
     import lpspec as lps
 
     case = CASES[case_name]
@@ -172,7 +149,7 @@ def linopy_build_and_emit(
         return {'columns': int(m.nvars), 'rows': int(m.ncons), 'nonzeros': None}
 
 
-def build_only(arm: str, case_name: str, size: str, paths: dict[str, str], engine: str | None = None) -> Counts:
+def build_only(arm: str, case_name: str, size: str, paths: dict[str, str]) -> Counts:
     """Just the build — no sink, nothing to release.
 
     The verb behind the *first vs steady* question: what a caller pays who
@@ -189,7 +166,6 @@ def build_only(arm: str, case_name: str, size: str, paths: dict[str, str], engin
         m = lpspec_linopy.build(model, data=data, coords=coords)
         return {'columns': int(m.nvars), 'rows': int(m.ncons), 'nonzeros': None}
 
-    _engine(engine)
     import lpspec as lps
 
     sources, coords_ = split_sources(case, size, paths)
@@ -198,7 +174,7 @@ def build_only(arm: str, case_name: str, size: str, paths: dict[str, str], engin
         return {'columns': tables.column_count, 'rows': tables.row_count, 'nonzeros': None}
 
 
-def objective(arm: str, case_name: str, size: str, paths: dict[str, str], engine: str | None = None) -> float:
+def objective(arm: str, case_name: str, size: str, paths: dict[str, str]) -> float:
     """Solve, and return the objective the parity gate compares.
 
     Not a measurement — the one thing the harness does that is allowed to be
@@ -222,7 +198,6 @@ def objective(arm: str, case_name: str, size: str, paths: dict[str, str], engine
             raise RuntimeError(f'linopy solve finished {m.status!r}, not ok')
         return float(m.objective.value)
 
-    _engine(engine)
     import lpspec as lps
 
     sources, coords_ = split_sources(case, size, paths)

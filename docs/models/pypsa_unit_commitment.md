@@ -20,32 +20,34 @@ commitment at all — see [the ledger](index.md#ledger--what-a-port-could-not-sa
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+PyPSA unit commitment: which generators are on, not just how much they produce — a binary status per generator per snapshot, with start-up and shut-down charges. Optimum 24900.0, from PyPSA itself.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` |
-| $\mathcal{G}$ | index $g$ --- `generator` |
+| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
+| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, each either committed or off |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ |
-| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ |
-| $\mathit{start\_up\_cost}$ | `start_up_cost` over $\mathcal{G}$ |
-| $\mathit{shut\_down\_cost}$ | `shut_down_cost` over $\mathcal{G}$ |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
+| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ --- share of capacity a committed unit must produce at least |
+| $\mathit{start\_up\_cost}$ | `start_up_cost` over $\mathcal{G}$ --- what bringing a unit up costs, once per start |
+| $\mathit{shut\_down\_cost}$ | `shut_down_cost` over $\mathcal{G}$ --- what taking a unit down costs, once per stop |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ |
-| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ |
-| $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ |
-| $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
+| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ --- is this unit committed in this snapshot? |
+| $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ --- does this unit come up entering this snapshot? |
+| $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ --- does this unit go down entering this snapshot? |
 
 #### Objective
 
@@ -107,89 +109,112 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # PyPSA unit commitment: binary status per generator per snapshot, with
-    # start-up and shut-down charges. Optimum 24900.0, from PyPSA itself.
+    description: >-
+      PyPSA unit commitment: which generators are on, not just how much they
+      produce — a binary status per generator per snapshot, with start-up and
+      shut-down charges. Optimum 24900.0, from PyPSA itself.
 
     dimensions:
       snapshot:
+        description: dispatch periods
         dtype: int
       generator:
+        description: generating units, each either committed or off
         dtype: str
 
     parameters:
       p_nom:
+        description: installed capacity of a generator
         dims: [generator]
       marginal_cost:
+        description: cost of one unit of output
         dims: [generator]
       p_min_pu:
+        description: share of capacity a committed unit must produce at least
         dims: [generator]
       start_up_cost:
+        description: what bringing a unit up costs, once per start
         dims: [generator]
       shut_down_cost:
+        description: what taking a unit down costs, once per stop
         dims: [generator]
       load:
+        description: demand to be met
         dims: [snapshot]
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         bounds:
           lower: 0
-      # All three are binary in PyPSA. start_up and shut_down are implied by the
-      # transitions below, but PyPSA declares them integral rather than leaving it
-      # to the status variables, and the port matches that.
       status:
+        description: is this unit committed in this snapshot?
         foreach: [snapshot, generator]
         domain: binary
       start_up:
+        description: does this unit come up entering this snapshot?
         foreach: [snapshot, generator]
         domain: binary
       shut_down:
+        description: does this unit go down entering this snapshot?
         foreach: [snapshot, generator]
         domain: binary
 
     constraints:
       power_balance:
+        description: the fleet meets the load exactly in every snapshot
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
 
-      # A committed unit runs between p_min_pu * p_nom and p_nom; an uncommitted
-      # one is pinned to zero from both sides. `p_nom * status` is a parameter
-      # against a variable, so the product stays degree 1.
       commitment_max:
+        description: >-
+          a committed unit runs at no more than its capacity and an uncommitted one
+          is pinned to zero — capacity times status is a parameter against a
+          variable, so the product stays degree 1
         foreach: [snapshot, generator]
         expression: p - p_nom * status <= 0
 
       commitment_min:
+        description: a committed unit runs at no less than its minimum, an uncommitted one at zero
         foreach: [snapshot, generator]
         expression: p - p_min_pu * p_nom * status >= 0
 
-      # start_up must be 1 on a snapshot where status rises, shut_down where it
-      # falls. The first snapshot has no predecessor, and PyPSA's default is that
-      # the unit was already up before the horizon — so the start-up row is
-      # slackened to -1 there (never binding) while the shut-down row still
-      # charges a unit that begins the horizon off. That asymmetry is PyPSA's, and
-      # it is worth 50 on this instance.
       start_up_initial:
+        description: >-
+          the first snapshot has no predecessor, and PyPSA's default is that the
+          unit was already up before the horizon — so the start-up row is slackened
+          here and never binds
         foreach: [snapshot, generator]
         where: "snapshot == 0"
         expression: start_up - status >= -1
 
       start_up:
+        description: >-
+          a unit whose status rises entering this snapshot pays for a start. The
+          start-up and shut-down variables are implied by these transitions, but
+          PyPSA declares them binary rather than leaving it to the status, and the
+          port matches that.
         foreach: [snapshot, generator]
         expression: start_up - status + shift(status, over=snapshot, by=1) >= 0
 
       shut_down_initial:
+        description: >-
+          the mirror of the start-up row, and not slackened: a unit that begins the
+          horizon off is charged for the shut-down, which is PyPSA's asymmetry and
+          worth 50 on this instance
         foreach: [snapshot, generator]
         where: "snapshot == 0"
         expression: shut_down + status >= 1
 
       shut_down:
+        description: a unit whose status falls entering this snapshot pays for a stop
         foreach: [snapshot, generator]
         expression: shut_down + status - shift(status, over=snapshot, by=1) >= 0
 
     objective:
       sense: minimize
+      description: what the fleet costs to run, plus what its starts and stops cost
       expression: p * marginal_cost + start_up * start_up_cost + shut_down * shut_down_cost
     ```
 

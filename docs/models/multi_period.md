@@ -7,26 +7,25 @@ it — and the periods need not be the same size.
 
 ## The problem
 
-$$p_{t,g} \quad\le\quad \hat p_{\thinspace\mathrm{period\_of}(t),\thinspace g}$$
+$$p_{t,g} \quad\le\quad \hat p_{\thinspace\mathrm{period}(t),\thinspace g}$$
 
 Two dimensions cannot state this at the resolution a real study wants.
 `period × snapshot` is a **rectangle**, so every period gets the same number of
 snapshots — and a study that models 2030 hourly and 2050 in four-hour blocks is
 asking for exactly the opposite.
 
-So `snapshot` is one flat dimension mapped onto `period` by a
-[lookup](../SPEC.md#2-declarations), $\mathrm{period\_of}$, the same way
-`generator` carries $\mathrm{gen\_bus}$ in [transport](transport.md). Ragged
-periods then cost nothing: a lookup is a per-row column, and four snapshots in
-2030 beside two in 2050 is just a column with four of one value and two of
-another.
+So `snapshot` is one flat dimension carrying $\mathrm{period}$ as a
+[coordinate](../SPEC.md#2-declarations), the same way `generator` carries
+$\mathrm{bus}$ in [transport](transport.md). Ragged periods then cost nothing:
+a coordinate is a per-row column, and four snapshots in 2030 beside two in 2050
+is just a column with four of one value and two of another.
 
 ## Both directions of one mapping
 
 Grouping reads the lookup one way:
 `sum(p, by=period_of)` is a per-period CO₂ budget, and
 [monthly_budget](monthly_budget.md) is the same construct on a different
-lookup.
+coordinate.
 
 `within_cap` reads it the other way. Capacity lives on `period` and binds at
 each `snapshot`, so a coarse quantity is pulled onto a fine one:
@@ -49,29 +48,31 @@ the pullback is a construct in the language rather than a step before it.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Least-cost investment and dispatch together: capacity is decided once per period and binds at every snapshot inside it, and a snapshot's weight says how much time it stands for, so periods of different size are comparable.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ |
-| $\mathcal{E}$ | index $e$ --- `period` |
-| $\mathcal{G}$ | index $g$ --- `generator` |
+| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ --- dispatch periods, each falling in one investment period |
+| $\mathcal{E}$ | index $e$ --- `period` --- investment periods, the grouping capacity is decided over |
+| $\mathcal{G}$ | index $g$ --- `generator` --- generating units |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{load}$ | `load` over $\mathcal{T}$ |
-| $\mathit{weight}$ | `weight` over $\mathcal{T}$ |
-| $\mathit{opex}$ | `opex` over $\mathcal{G}$ |
-| $\mathit{capex}$ | `capex` over $\mathcal{G} \times \mathcal{E}$ |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
+| $\mathit{weight}$ | `weight` over $\mathcal{T}$ --- what one snapshot stands for — a 2050 snapshot represents four hours, so the operating cost of a coarse period is not understated against a fine one |
+| $\mathit{opex}$ | `opex` over $\mathcal{G}$ --- cost of running a generator for one snapshot-hour |
+| $\mathit{capex}$ | `capex` over $\mathcal{G} \times \mathcal{E}$ --- cost of holding a unit of capacity through a period |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E} \times \mathcal{G}$ |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E} \times \mathcal{G}$ --- capacity a generator holds for the whole of a period |
 
 #### Objective
 
@@ -105,12 +106,20 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
+    description: >-
+      Least-cost investment and dispatch together: capacity is decided once per
+      period and binds at every snapshot inside it, and a snapshot's weight says
+      how much time it stands for, so periods of different size are comparable.
+
     dimensions:
       snapshot:
+        description: dispatch periods, each falling in one investment period
         dtype: int
       period:
+        description: investment periods, the grouping capacity is decided over
         dtype: int
       generator:
+        description: generating units
         dtype: str
 
     lookups:
@@ -118,22 +127,29 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     parameters:
       load:
+        description: demand to be met
         dims: [snapshot]
-      # what one snapshot stands for: a 2050 snapshot represents four hours, so the
-      # operating cost of a coarse period is not understated against a fine one
       weight:
+        description: >-
+          what one snapshot stands for — a 2050 snapshot represents four hours, so
+          the operating cost of a coarse period is not understated against a fine
+          one
         dims: [snapshot]
       opex:
+        description: cost of running a generator for one snapshot-hour
         dims: [generator]
       capex:
+        description: cost of holding a unit of capacity through a period
         dims: [generator, period]
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         bounds:
           lower: 0
       p_nom:
+        description: capacity a generator holds for the whole of a period
         foreach: [period, generator]
         bounds:
           lower: 0
@@ -141,14 +157,17 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       within_cap:
+        description: output in a snapshot is capped by the capacity of the period it falls in
         foreach: [snapshot, generator]
         expression: p <= at(p_nom, by=period_of)
       balance:
+        description: the fleet meets the load exactly in every snapshot
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
 
     objective:
       sense: minimize
+      description: weighted operating cost over the horizon, plus what the capacity costs to hold
       expression: p * opex * weight + p_nom * capex
     ```
 

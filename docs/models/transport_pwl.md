@@ -33,31 +33,33 @@ The [instance](https://github.com/fluxopt/lpspec/blob/main/examples/ports/data/t
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Dantzig's transportation problem with economies of scale — GAMS model library trnspwl. Shipping cost grows as the square root of the consignment rather than linearly, so a big consignment is cheaper per unit. Optimum 8.786852757777865, from linopy's own piecewise formulation.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{P}$ | index $p$ --- `plant` |
-| $\mathcal{M}$ | index $m$ --- `market` |
-| $\mathcal{B}$ | index $b$ --- `bp` |
+| $\mathcal{P}$ | index $p$ --- `plant` --- canning plants, with limited capacity |
+| $\mathcal{M}$ | index $m$ --- `market` --- markets, with demand to be met |
+| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints of the discretised square-root curve |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{capacity}$ | `capacity` over $\mathcal{P}$ |
-| $\mathit{demand}$ | `demand` over $\mathcal{M}$ |
-| $\mathit{distance}$ | `distance` over $\mathcal{P} \times \mathcal{M}$ |
-| $\mathit{freight}$ | `freight` (scalar) |
-| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{B}$ |
-| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{B}$ |
+| $\mathit{capacity}$ | `capacity` over $\mathcal{P}$ --- capacity of each plant |
+| $\mathit{demand}$ | `demand` over $\mathcal{M}$ --- demand at each market |
+| $\mathit{distance}$ | `distance` over $\mathcal{P} \times \mathcal{M}$ --- distance from plant to market |
+| $\mathit{freight}$ | `freight` (scalar) --- freight rate per case per unit distance |
+| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{B}$ --- breakpoint shipment levels — one curve, the same on every route, so it carries the breakpoint dimension alone and broadcasts across the pairs |
+| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{B}$ --- the curve's value at each breakpoint |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{shipment}$ | `shipment` over $\mathcal{P} \times \mathcal{M}$ |
-| $\mathit{scaled}$ | `scaled` over $\mathcal{P} \times \mathcal{M}$ |
+| $\mathit{shipment}$ | `shipment` over $\mathcal{P} \times \mathcal{M}$ --- cases shipped from a plant to a market |
+| $\mathit{scaled}$ | `scaled` over $\mathcal{P} \times \mathcal{M}$ --- what the objective is charged on — the square root of the shipment, read off the curve rather than computed |
 | $\mathit{economies\_of\_scale\_lam}$ | `economies_of_scale_lam` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
 | $\mathit{economies\_of\_scale\_seg}$ | `economies_of_scale_seg` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ |
 
@@ -121,69 +123,87 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # Dantzig's transportation problem with economies of scale — GAMS model
-    # library `trnspwl`. Shipping cost grows as sqrt(x) rather than linearly, so a
-    # big consignment is cheaper per unit. Optimum 8.786852757777865, from linopy's
-    # own piecewise formulation.
+    description: >-
+      Dantzig's transportation problem with economies of scale — GAMS model library
+      trnspwl. Shipping cost grows as the square root of the consignment rather
+      than linearly, so a big consignment is cheaper per unit. Optimum
+      8.786852757777865, from linopy's own piecewise formulation.
 
     dimensions:
       plant:
+        description: canning plants, with limited capacity
         values: [seattle, san-diego]
       market:
+        description: markets, with demand to be met
         values: [new-york, chicago, topeka]
       bp:
-        dtype: int  # breakpoints of the discretised sqrt curve
+        description: breakpoints of the discretised square-root curve
+        dtype: int
 
     parameters:
       capacity:
+        description: capacity of each plant
         dims: [plant]
       demand:
+        description: demand at each market
         dims: [market]
       distance:
+        description: distance from plant to market
         dims: [plant, market]
       freight:
+        description: freight rate per case per unit distance
         dims: []
-      # The curve is the same on every route, so it carries `bp` alone and
-      # broadcasts across (plant, market).
       bp_x:
+        description: >-
+          breakpoint shipment levels — one curve, the same on every route, so it
+          carries the breakpoint dimension alone and broadcasts across the pairs
         dims: [bp]
       bp_y:
+        description: the curve's value at each breakpoint
         dims: [bp]
 
     variables:
       shipment:
+        description: cases shipped from a plant to a market
         foreach: [plant, market]
         bounds:
           lower: 0
-      # What the objective is charged on: sqrt(shipment), read off the curve
-      # rather than computed — the discretisation is the model GAMS publishes.
       scaled:
+        description: >-
+          what the objective is charged on — the square root of the shipment, read
+          off the curve rather than computed
         foreach: [plant, market]
         bounds:
           lower: 0
 
     piecewise:
       economies_of_scale:
+        description: >-
+          the shipment priced through the discretisation GAMS publishes, on segment
+          binaries and deliberately not the convex method: the curve is concave and
+          this is a
+          minimisation, so the convex-hull relaxation would let the solver ride the
+          chord underneath the true curve and buy transport cheaper than the model
+          allows. The binaries are what make the answer right — and what make this
+          port a MILP.
         over: bp
         links:
           - [shipment, bp_x]
           - [scaled, bp_y]
-        # Deliberately *not* `method: convex`. sqrt is concave and this is a
-        # minimisation, so the convex-hull relaxation would let the solver ride the
-        # chord underneath the true curve and buy transport cheaper than the model
-        # allows. Segment binaries are what make the answer right — and what make
-        # this port a MILP.
 
     constraints:
       within_capacity:
+        description: a plant cannot ship more than it can can
         foreach: [plant]
         expression: sum(shipment, over=market) <= capacity
       meet_demand:
+        description: every market receives at least what it asked for
         foreach: [market]
         expression: sum(shipment, over=plant) >= demand
 
     objective:
       sense: minimize
+      description: total freight, charged on the scaled consignment rather than on the shipment
       expression: scaled * distance * freight / 1000
     ```
 

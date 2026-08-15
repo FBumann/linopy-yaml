@@ -1,28 +1,34 @@
-# The true problem, with no unserved-energy escape. This is the oracle the
-# decomposition must reach, and it is a harder one than `monolith.yaml`: a
-# capacity that cannot serve the load is infeasible rather than expensive.
+description: >-
+  Capacity and dispatch in one problem, with no unserved-energy escape: a
+  capacity that cannot serve the load is infeasible rather than expensive. This
+  is the oracle the decomposition has to reach.
 dimensions:
-  snapshot: {dtype: int}
-  generator: {values: [wind, gas]}
+  snapshot: {dtype: int, description: "dispatch periods"}
+  generator: {values: [wind, gas], description: "generating units"}
 parameters:
-  invest: {dims: [generator]}
-  cost: {dims: [generator]}
-  load: {dims: [snapshot]}
-  avail: {dims: [snapshot, generator]}
+  invest: {dims: [generator], description: "cost of a unit of capacity"}
+  cost: {dims: [generator], description: "marginal cost"}
+  load: {dims: [snapshot], description: "demand to be met"}
+  avail: {dims: [snapshot, generator], description: "capacity factor"}
 variables:
   cap:
+    description: capacity to build
     foreach: [generator]
     bounds: {lower: 0, upper: 100}
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     bounds: {lower: 0}
 constraints:
   capacity:
+    description: output is capped by the capacity built, derated by availability
     foreach: [snapshot, generator]
     expression: p <= cap * avail
   balance:
+    description: the fleet covers the load in every snapshot
     foreach: [snapshot]
     expression: sum(p, over=generator) >= load
 objective:
   sense: minimize
+  description: what the capacity costs to build, plus what running it costs
   expression: cap * invest + p * cost

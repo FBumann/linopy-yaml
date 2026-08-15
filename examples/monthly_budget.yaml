@@ -1,3 +1,7 @@
+description: >-
+  A cap on what each technology may generate per calendar month — an aggregate
+  over a coarser grouping of time than the model is dispatched on.
+
 dimensions:
   snapshot:
     description: dispatch periods, each falling in one month
@@ -10,22 +14,28 @@ dimensions:
     dtype: str
 
 lookups:
-  # every snapshot falls in a month, exactly as a generator sits on a bus
-  month_of: {over: snapshot, into: month}
+  month_of:
+    description: the month a snapshot falls in
+    over: snapshot
+    into: month
 
 parameters:
   p_max:
+    description: installed capacity
     dims: [generator]
   cost:
+    description: marginal cost
     dims: [generator]
   load:
+    description: demand to be met
     dims: [snapshot]
-  # the budget the group sum is checked against, one per month and technology
   monthly_cap:
+    description: the budget the group sum is checked against, one per month and technology
     dims: [month, generator]
 
 variables:
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     bounds:
       lower: 0
@@ -33,12 +43,15 @@ variables:
 
 constraints:
   balance:
+    description: the fleet meets the load exactly in every snapshot
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
   monthly_budget:
+    description: what a generator produces across a month stays inside that month's budget
     foreach: [month, generator]
     expression: sum(p, by=month_of) <= monthly_cap
 
 objective:
   sense: minimize
+  description: total cost of generation over the horizon
   expression: sum(p * cost, over=generator)

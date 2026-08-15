@@ -30,31 +30,9 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
-from bench.workloads import _engine, _tables, split_sources
+from bench.workloads import _tables, split_sources
 from lpspec.relational.engines.polars.engine import _Block
 from lpspec.relational.sinks.solvers.base import WarmStart
-
-
-def test_the_default_arm_clears_the_engine_rather_than_leaving_it() -> None:
-    """A set-only switch leaks, and a leak here is a confident wrong number.
-
-    One pytest session is one interpreter, so `LPSPEC_ENGINE` set by an arm
-    that names an engine outlives that arm. The default arm has to clear it —
-    otherwise the first named engine selects itself for every arm after it and
-    a two-engine comparison measures one engine against itself, at ratios near
-    1.00 that look like a result.
-
-    The old runner spawned a process per measurement and could not have this
-    bug; the docstring saying so outlived the runner it described.
-    """
-    _engine('duckdb')
-    assert os.environ.get('LPSPEC_ENGINE') == 'duckdb'
-
-    _engine(None)
-    assert 'LPSPEC_ENGINE' not in os.environ, (
-        'the default arm left the previous engine selected, so every arm after it measures that one'
-    )
-
 
 # ---------------------------------------------------------------------------
 # the machine interlock (#705)
@@ -158,6 +136,77 @@ def _timing(arm: str, **over: Any) -> dict[str, Any]:
 
 def _rendered(**over: Any) -> str:
     return report.table('dispatch', report.best([_timing('lpspec', **over), _timing('linopy')]), 'lp')
+
+
+def _loop(case: str, arm: str, width: int) -> dict[str, Any]:
+    """One `loop` record — the first-vs-steady pair the marginal table reads."""
+    return {
+        'record': 'loop',
+        'case': case,
+        'size': 'm',
+        'arm': arm,
+        'nominal_variables': width,
+        'first_build_seconds': 0.1,
+        'steady_build_seconds': 0.05,
+        'counts': {'columns': width, 'rows': 10, 'nonzeros': width},
+    }
+
+
+#: Renders the marginal table for three cases of identical width. Run twice
+#: under different hash seeds, it is the whole of the determinism check below.
+_RENDER_TIED = """
+import sys
+sys.path.insert(0, %r)
+from bench import report
+rows = [
+    dict(record='loop', case=c, size='m', arm=a, nominal_variables=1200,
+         first_build_seconds=0.1, steady_build_seconds=0.05,
+         counts={'columns': 1200, 'rows': 10, 'nonzeros': 1200})
+    for c in ('fleet', 'nodal', 'profiled') for a in ('lpspec', 'linopy')
+]
+print(report.marginal(rows))
+"""
+
+
+def test_the_marginal_table_does_not_reshuffle_between_processes() -> None:
+    """A published table a re-render reshuffles has a diff that means nothing.
+
+    Ladders tie by construction — `_ladder` grows every case by the same two
+    factors, so `fleet`, `nodal` and `profiled` share all six widths — and the
+    rows come out of a set, whose iteration order depends on the interpreter's
+    hash seed. Sorting on width alone left those ties in whatever order the set
+    produced: four renders of `latest.json` gave three different orderings.
+
+    Two *processes* under different `PYTHONHASHSEED`, because that is what
+    varies. One process renders the same bytes however wrong the sort is — its
+    seed is fixed at startup — so a same-process check would pass on the bug.
+    """
+    root = str(Path(__file__).resolve().parent.parent)
+    out = []
+    for seed in ('0', '1'):
+        child = subprocess.run(
+            [sys.executable, '-c', _RENDER_TIED % root],
+            capture_output=True,
+            text=True,
+            env=os.environ | {'PYTHONHASHSEED': seed},
+            check=True,
+        )
+        out.append(child.stdout)
+    assert out[0] == out[1], 'two hash seeds rendered two row orders — a refresh diff would be noise'
+    names = [line.split('|')[1].strip() for line in out[0].splitlines() if line.startswith('| ')]
+    assert names[1:] == ['fleet', 'nodal', 'profiled'], (
+        'tied widths break by name, so the order is stated rather than inherited from a hash'
+    )
+
+
+def test_the_marginal_table_survives_a_file_that_never_measured_lpspec() -> None:
+    """`--arms linopy` is a legitimate run, and reporting one used to raise.
+
+    The width was read off `best[(case, size, 'lpspec')]` directly, so a file
+    with no lpspec arm in it died with a `KeyError` inside a sort key — before
+    printing any of the tables that did carry both arms.
+    """
+    assert report.marginal([_loop('dispatch', 'linopy', 1200)]) is not None
 
 
 @pytest.mark.parametrize(

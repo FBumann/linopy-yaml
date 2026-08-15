@@ -1,3 +1,7 @@
+description: >-
+  Least-cost dispatch where each generator's cost curve is piecewise-linear in
+  its output, expanded into a lambda formulation.
+
 dimensions:
   snapshot:
     description: dispatch periods
@@ -17,11 +21,11 @@ parameters:
     description: demand to be met
     dims: [snapshot]
   bp_x:
-    description: breakpoint dispatch levels
-    dims: [generator, bp]  # per-generator breakpoint positions
+    description: breakpoint dispatch levels, one curve per generator
+    dims: [generator, bp]
   bp_y:
-    description: cost at each breakpoint
-    dims: [generator, bp]  # per-generator cost at each breakpoint
+    description: cost at each breakpoint, one curve per generator
+    dims: [generator, bp]
 
 variables:
   p:
@@ -38,6 +42,9 @@ variables:
 
 piecewise:
   cost_curve:
+    description: >-
+      cost read off the generator's curve — convex, so the weights need no
+      binaries to keep them on one segment
     over: bp
     links:
       - [p, bp_x]
@@ -46,9 +53,11 @@ piecewise:
 
 constraints:
   balance:
+    description: the fleet meets the load exactly in every snapshot
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
 
 objective:
   sense: minimize
+  description: total operating cost, taken off the curves rather than from a marginal rate
   expression: op_cost

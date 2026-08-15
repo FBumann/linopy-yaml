@@ -1,9 +1,17 @@
+description: >-
+  Least-cost investment and dispatch together: capacity is decided once per
+  period and binds at every snapshot inside it, and a snapshot's weight says
+  how much time it stands for, so periods of different size are comparable.
+
 dimensions:
   snapshot:
+    description: dispatch periods, each falling in one investment period
     dtype: int
   period:
+    description: investment periods, the grouping capacity is decided over
     dtype: int
   generator:
+    description: generating units
     dtype: str
 
 lookups:
@@ -11,22 +19,29 @@ lookups:
 
 parameters:
   load:
+    description: demand to be met
     dims: [snapshot]
-  # what one snapshot stands for: a 2050 snapshot represents four hours, so the
-  # operating cost of a coarse period is not understated against a fine one
   weight:
+    description: >-
+      what one snapshot stands for — a 2050 snapshot represents four hours, so
+      the operating cost of a coarse period is not understated against a fine
+      one
     dims: [snapshot]
   opex:
+    description: cost of running a generator for one snapshot-hour
     dims: [generator]
   capex:
+    description: cost of holding a unit of capacity through a period
     dims: [generator, period]
 
 variables:
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     bounds:
       lower: 0
   p_nom:
+    description: capacity a generator holds for the whole of a period
     foreach: [period, generator]
     bounds:
       lower: 0
@@ -34,12 +49,15 @@ variables:
 
 constraints:
   within_cap:
+    description: output in a snapshot is capped by the capacity of the period it falls in
     foreach: [snapshot, generator]
     expression: p <= at(p_nom, by=period_of)
   balance:
+    description: the fleet meets the load exactly in every snapshot
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
 
 objective:
   sense: minimize
+  description: weighted operating cost over the horizon, plus what the capacity costs to hold
   expression: p * opex * weight + p_nom * capex

@@ -1,0 +1,273 @@
+description: >-
+  GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants
+  and a wind farm under a net-zero carbon cap, where the gas plant's fuel use
+  is a piecewise-linear function of its output. A plant burns one fuel and the
+  fuel's price moves hour by hour, so the price a plant pays is its fuel's
+  price — a table with a dimension left over after the plant has chosen its
+  fuel. Optimum 2341.82308, from GenX itself.
+
+dimensions:
+  plant:
+    description: the units dispatched over the day
+    dtype: str
+  hour:
+    description: hours of a representative day that repeats
+    dtype: int
+  segment:
+    description: a piece of the fuel curve
+    dtype: int
+  step:
+    description: a block of demand that may be shed, each dearer than the last
+    dtype: int
+
+parameters:
+  unit_size:
+    description: capacity of one unit of a plant
+    dims: [plant]
+  units_available:
+    description: how many units of a plant may be committed
+    dims: [plant]
+  availability:
+    description: share of its capacity a plant can offer in an hour
+    dims: [plant, hour]
+  min_output:
+    description: share of unit size a committed unit must produce
+    dims: [plant]
+  ramp:
+    description: share of unit size output may change by from one hour to the next
+    dims: [plant]
+  start_headroom:
+    description: share of unit size a unit may reach in the hour it starts
+    dims: [plant, hour]
+  is_thermal:
+    description: 1 where a plant is committed unit by unit rather than dispatched freely
+    dims: [plant]
+  uses_curve:
+    description: 1 where a plant's fuel use is read off the piecewise curve
+    dims: [plant]
+
+  fuel_slope:
+    description: fuel per unit of output on one piece of the curve
+    dims: [plant, segment]
+  fuel_intercept:
+    description: no-load fuel of one piece, charged per committed unit
+    dims: [plant, segment]
+  heat_rate:
+    description: fuel per unit of output for a plant with no curve
+    dims: [plant]
+  start_fuel:
+    description: fuel burned per unit of capacity started
+    dims: [plant]
+  fuel_price:
+    description: what a unit of the plant's fuel costs in that hour
+    dims: [plant, hour]
+
+  run_cost:
+    description: variable cost of one unit of output, fuel aside
+    dims: [plant]
+  start_cost:
+    description: what starting one unit of capacity costs
+    dims: [plant]
+  weight:
+    description: how many real hours an hour of the representative day stands for
+    dims: [hour]
+
+  emitted:
+    description: net CO2 per unit of fuel burned after capture, negative where the fuel took it up
+    dims: [plant]
+  emitted_start:
+    description: net CO2 per unit of start-up fuel burned
+    dims: [plant]
+  captured:
+    description: what capturing the CO2 from a unit of fuel costs
+    dims: [plant]
+  captured_start:
+    description: what capturing the CO2 from a unit of start-up fuel costs
+    dims: [plant]
+  carbon_cap:
+    description: emissions the day is allowed, net of uptake
+    dims: []
+
+  demand:
+    description: demand to be met in an hour
+    dims: [hour]
+  shed_cost:
+    description: what shedding a unit of demand in this block costs
+    dims: [step]
+  shed_limit:
+    description: share of the hour's demand this block may shed
+    dims: [step]
+
+variables:
+  output:
+    description: what a plant produces in an hour
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  burned:
+    description: fuel a plant burns running in an hour
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  burned_starting:
+    description: fuel a plant burns starting units in an hour
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  committed:
+    description: >-
+      how many units of a plant are committed in an hour — counted in units and
+      relaxed to a continuous variable, which is what GenX's UCommit=2 does
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  starting:
+    description: units of a plant brought up entering an hour
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  shutting:
+    description: units of a plant taken down entering an hour
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  shed:
+    description: demand shed out of a block in an hour
+    foreach: [step, hour]
+    bounds:
+      lower: 0
+  units:
+    description: how many units of a plant stand available all day
+    foreach: [plant]
+    bounds:
+      lower: 0
+      upper: units_available
+
+expressions:
+  started_recently:
+    expression: >-
+      starting + shift(starting, over=hour, by=1, edge='wrap')
+      + shift(starting, over=hour, by=2, edge='wrap') + shift(starting, over=hour, by=3, edge='wrap')
+      + shift(starting, over=hour, by=4, edge='wrap') + shift(starting, over=hour, by=5, edge='wrap')
+    description: >-
+      units started in this hour or the five before it — the day is a
+      representative period that repeats, so the first hour follows the last
+  shut_recently:
+    expression: >-
+      shutting + shift(shutting, over=hour, by=1, edge='wrap')
+      + shift(shutting, over=hour, by=2, edge='wrap') + shift(shutting, over=hour, by=3, edge='wrap')
+      + shift(shutting, over=hour, by=4, edge='wrap') + shift(shutting, over=hour, by=5, edge='wrap')
+    description: units shut in this hour or the five before it
+
+constraints:
+  meet_demand:
+    description: what is produced plus what is shed meets the demand of the hour
+    foreach: [hour]
+    expression: sum(output, over=plant) + sum(shed, over=step) == demand
+
+  shed_within_step:
+    description: a block sheds no more than its share of the hour's demand
+    foreach: [step, hour]
+    expression: shed <= shed_limit * demand
+
+  committed_units_exist:
+    description: no more units may be committed than the plant has
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: committed <= units
+
+  thermal_ceiling:
+    description: a committed unit produces no more than its available capacity
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: output <= committed * unit_size * availability
+
+  thermal_floor:
+    description: a committed unit produces no less than its minimum
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: output >= committed * unit_size * min_output
+
+  variable_ceiling:
+    description: a plant with no commitment produces no more than its available capacity
+    foreach: [plant, hour]
+    where: "is_thermal == 0"
+    expression: output <= units * unit_size * availability
+
+  commitment_tracks_starts:
+    description: what is committed changes only by what starts and what shuts
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: committed - shift(committed, over=hour, by=1, edge='wrap') == starting - shutting
+
+  stay_up_once_started:
+    description: a unit that started within the last six hours is still committed
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: committed >= started_recently
+
+  stay_down_once_shut:
+    description: a unit that shut within the last six hours is still down
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: units - committed >= shut_recently
+
+  ramp_up:
+    description: output rises no faster than the ramp allows, with extra room in the hour a unit starts
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: >-
+      output - shift(output, over=hour, by=1, edge='wrap')
+      <= ramp * unit_size * (committed - starting)
+      + start_headroom * unit_size * starting
+      - min_output * unit_size * shutting
+
+  ramp_down:
+    description: output falls no faster than the ramp allows
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: >-
+      shift(output, over=hour, by=1, edge='wrap') - output
+      <= ramp * unit_size * (committed - starting)
+      - min_output * unit_size * starting
+      + start_headroom * unit_size * shutting
+
+  fuel_above_each_piece:
+    description: >-
+      fuel use is above every piece of the curve, so at the optimum it sits on
+      the binding one, and the no-load intercept is charged per committed unit
+    foreach: [plant, segment, hour]
+    where: "uses_curve > 0"
+    expression: burned >= fuel_slope * output + fuel_intercept * committed
+
+  fuel_at_the_heat_rate:
+    description: a plant with no curve burns fuel at a flat heat rate
+    foreach: [plant, hour]
+    where: "uses_curve == 0"
+    expression: burned == heat_rate * output
+
+  fuel_to_start:
+    description: starting a unit burns its own fuel, on top of what running it burns
+    foreach: [plant, hour]
+    expression: burned_starting == unit_size * starting * start_fuel
+
+  carbon_budget:
+    description: a net-zero cap — what escapes capture, less what the biomass took up
+    foreach: []
+    expression: >-
+      sum(sum(burned * emitted * weight + burned_starting * emitted_start * weight, over=hour), over=plant)
+      <= carbon_cap
+
+objective:
+  sense: minimize
+  description: >-
+    the day's cost, scaled to the year — running, fuel, starts, shed demand and
+    the capture the carbon-capture plants pay for
+  expression: >-
+    output * run_cost * weight
+    + burned * fuel_price * weight
+    + burned_starting * fuel_price * weight
+    + starting * start_cost * weight
+    + shed * shed_cost * weight
+    + burned * captured * weight
+    + burned_starting * captured_start * weight

@@ -32,29 +32,31 @@ is no `piecewise:` declaration to emit it.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+A piecewise-linear cost curve stated as a special-ordered set, so the solver is handed the adjacency restriction rather than binaries that encode it.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` |
-| $\mathcal{G}$ | index $g$ --- `generator` |
-| $\mathcal{B}$ | index $b$ --- `bp` |
+| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
+| $\mathcal{G}$ | index $g$ --- `generator` --- dispatchable units |
+| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints of the cost curve |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ |
-| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{G} \times \mathcal{B}$ |
-| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{G} \times \mathcal{B}$ |
+| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ --- maximum dispatch |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
+| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{G} \times \mathcal{B}$ --- breakpoint dispatch levels, one curve per generator |
+| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{G} \times \mathcal{B}$ --- cost at each breakpoint, one curve per generator |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ |
-| $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- dispatched power |
+| $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ --- operating cost, piecewise-linear in dispatch |
 | $\mathit{cost\_curve\_lam}$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
 
 #### Objective
@@ -101,50 +103,69 @@ $$\left( \mathit{cost\_curve\_lam}_{t,g,b} \right)_{b \in \mathcal{B}} \in \math
 <!-- math:end -->
 
 ```yaml
+description: >-
+  A piecewise-linear cost curve stated as a special-ordered set, so the solver
+  is handed the adjacency restriction rather than binaries that encode it.
+
 dimensions:
   snapshot:
+    description: dispatch periods
     dtype: int
   generator:
+    description: dispatchable units
     dtype: str
   bp:
+    description: breakpoints of the cost curve
     dtype: int
 
 parameters:
   p_max:
+    description: maximum dispatch
     dims: [generator]
   load:
+    description: demand to be met
     dims: [snapshot]
   bp_x:
-    dims: [generator, bp]  # per-generator breakpoint positions
+    description: breakpoint dispatch levels, one curve per generator
+    dims: [generator, bp]
   bp_y:
-    dims: [generator, bp]  # per-generator cost at each breakpoint
+    description: cost at each breakpoint, one curve per generator
+    dims: [generator, bp]
 
 variables:
   p:
+    description: dispatched power
     foreach: [snapshot, generator]
     bounds:
       lower: 0
       upper: p_max
   op_cost:
+    description: operating cost, piecewise-linear in dispatch
     foreach: [snapshot, generator]
     bounds:
       lower: 0
 
 piecewise:
   cost_curve:
+    description: >-
+      cost read off the generator's curve, with at most two adjacent weights
+      non-zero — the restriction the default method builds out of binaries,
+      declared as a set instead
     over: bp
     links:
       - [p, bp_x]
       - [op_cost, bp_y]
-    method: sos2  # the restriction the default builds from binaries, declared as a set
+    method: sos2
 
 constraints:
   balance:
+    description: the fleet meets the load exactly in every snapshot
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
 
 objective:
   sense: minimize
+  description: total operating cost, taken off the curves rather than from a marginal rate
   expression: op_cost
 ```
 
