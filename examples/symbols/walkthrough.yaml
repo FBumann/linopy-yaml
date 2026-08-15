@@ -20,11 +20,3 @@ names:
   cost: "c"
   load: "\\ell"
   p_max: "\\bar p"
-
-descriptions:
-  snapshot: dispatch periods
-  generator: generating units, including the retired one
-  p: output of generator $g$ in snapshot $s$
-  cost: marginal cost
-  load: demand to be met
-  p_max: installed capacity, zero for a retired unit

@@ -23,12 +23,3 @@ names:
   # pretending to be a `c` the model does not declare.
   distance: "d"
   freight: "f"
-
-descriptions:
-  plant: canning plants, with limited capacity
-  market: markets, with demand to be met
-  shipment: cases shipped from plant $i$ to market $j$
-  capacity: capacity of each plant
-  demand: demand at each market
-  distance: distance from plant to market
-  freight: freight rate per case per unit distance

@@ -42,7 +42,7 @@ $$p_g = \sum_k \lambda_{g,k}\, x_{g,k}, \quad
 |---|---|
 | $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- dispatched power |
 | $\mathrm{cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ --- operating cost, piecewise-linear in dispatch |
-| $\lambda$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{K}$ --- convex-combination weight on breakpoint $k$ |
+| $\lambda$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{K}$ --- convex-combination weight on a breakpoint |
 
 #### Objective
 
@@ -90,29 +90,38 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     ```yaml
     dimensions:
       snapshot:
+        description: dispatch periods
         dtype: int
       generator:
+        description: dispatchable units
         dtype: str
       bp:
+        description: breakpoints of the cost curve
         dtype: int
 
     parameters:
       p_max:
+        description: maximum dispatch
         dims: [generator]
       load:
+        description: demand to be met
         dims: [snapshot]
       bp_x:
+        description: breakpoint dispatch levels
         dims: [generator, bp]  # per-generator breakpoint positions
       bp_y:
+        description: cost at each breakpoint
         dims: [generator, bp]  # per-generator cost at each breakpoint
 
     variables:
       p:
+        description: dispatched power
         foreach: [snapshot, generator]
         bounds:
           lower: 0
           upper: p_max
       op_cost:
+        description: operating cost, piecewise-linear in dispatch
         foreach: [snapshot, generator]
         bounds:
           lower: 0

@@ -55,7 +55,7 @@ is no `piecewise:` declaration to emit it.
 |---|---|
 | $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ |
 | $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ |
-| $\mathit{cost\_curve\_lam}$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{B}$ |
+| $\mathit{cost\_curve\_lam}$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
 
 #### Objective
 

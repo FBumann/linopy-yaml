@@ -38,7 +38,7 @@ $$\min \sum_{s,g} c_g \thinspace p_{s,g}
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of generator $g$ in snapshot $s$ |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
 
 #### Objective
 
@@ -66,20 +66,26 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     ```yaml
     dimensions:
       snapshot:
+        description: dispatch periods
         dtype: int
       generator:
+        description: generating units
         values: [wind, solar, gas]
 
     parameters:
       p_max:
+        description: installed capacity
         dims: [generator]
       load:
+        description: demand to be met
         dims: [snapshot]
       cost:
+        description: marginal cost
         dims: [generator]
 
     variables:
       p:
+        description: output of a generator in a snapshot
         foreach: [snapshot, generator]
         where: "p_max > 0"
         bounds:
