@@ -1,13 +1,16 @@
-"""How a solve starts: the session's warmth, and how to refuse it.
+"""How a solve starts: the three starts, and the machinery under them.
 
 Two levels, and the split is the point.
 
-**The public half** is `solve(warm=...)` and `result.started`. A kept solver
-re-solves from wherever its last solve left it (`'session'`); `warm=False`
-refuses that **structurally** — the held solver is discarded, so the fresh one
-has nothing to start from whatever a member squirrels away — and the answer
-says which happened. The observable that makes "cold" more than a claim is the
-iteration count: a deliberately cold solve repeats the first solve exactly.
+**The public half** is `solve(start=...)` and `result.started`. A solve may
+keep two things — the loaded model and the answer the last solve reached — and
+it keeps them in that order, which is why one word says it rather than two
+flags: `'cold'` keeps neither, `'loaded'` keeps the model, `'previous'` keeps
+both. The two observables are independent and both are checked: `loads` says
+whether the model was handed over again, and the iteration count says whether
+the answer survived. `'cold'` refuses **structurally** — the held solver is
+discarded, so the fresh one has nothing to start from whatever a member
+squirrels away.
 
 **The sink half** is `Solver.warm_start()` / `warm()`, machinery with no
 caller above the family yet (#382). It is tested here because it exists: a
@@ -31,6 +34,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from lpspec.relational.result import STARTS
 from lpspec.relational.sinks import SOLVERS
 
 # ---------------------------------------------------------------------------
@@ -188,36 +192,70 @@ def test_a_carried_basis_answers_what_the_cold_session_answered(solver_name):
 
 
 # ---------------------------------------------------------------------------
-# warm=False: deliberately cold, held to structurally
+# the three starts, told apart by what each keeps
 # ---------------------------------------------------------------------------
 
 
-def test_warm_false_after_a_warm_session_solves_cold_by_construction(solver_name):
-    """`warm=False` discards the held solver, so nothing *can* carry over.
+def test_the_three_starts_keep_the_two_things_independently(solver_name):
+    """Each start keeps one more than the last, and both halves are observed.
 
-    Structural rather than scrubbed: the object holding the basis and any
-    solver-internal state is destroyed, which is why the cold solve repeats
-    the first solve's iteration count exactly — and why `loads` ticks, the
-    whole model having been transferred again.
+    The model kept shows up as `loads`, the answer kept as the iteration
+    count, and the point of three words rather than one flag is that the
+    middle row exists: `loaded` skips the hand-off *and* begins from nothing,
+    which no boolean over one axis can say.
     """
     with lps.build(DISPATCH, dispatch_sources(), coords={'snapshot': SNAPSHOTS}) as bound:
         first = bound.solve(solver_name=solver_name)
-        iterations = SIMPLEX_ITERATIONS[solver_name](bound._engine._solver)
+        scratch = SIMPLEX_ITERATIONS[solver_name](bound._engine._solver)
         assert first.started == 'cold', 'a first solve has nothing to start from'
+        assert scratch > 0, 'the model must make the simplex work, or none of this is observable'
 
-        again = bound.solve(solver_name=solver_name)
-        assert again.started == 'session', 'a kept solver re-solves from wherever it left off'
-
-        cold = bound.solve(solver_name=solver_name, warm=False)
-        assert cold.started == 'cold', 'warm=False is a cold start however warm the session was'
-        assert cold.objective == pytest.approx(first.objective), 'cold moves the start, never the answer'
-        assert SIMPLEX_ITERATIONS[solver_name](bound._engine._solver) == iterations, (
-            'a deliberately cold solve repeats the first solve, iteration for iteration'
+        carried = bound.solve(solver_name=solver_name, start='previous')
+        assert carried.started == 'previous', 'a kept solver asked to carry on reports that it did'
+        assert bound.diagnostics().loads == 1, 'previous keeps the loaded model'
+        assert SIMPLEX_ITERATIONS[solver_name](bound._engine._solver) < scratch, (
+            'carrying on from the last answer must cost less work than starting over, or it buys nothing'
         )
-        assert bound.diagnostics().loads == 2, 'warm=False discards the held solver, so the model loads again'
+
+        loaded = bound.solve(solver_name=solver_name, start='loaded')
+        assert loaded.started == 'loaded', 'the default keeps the solver and drops what it reached'
+        assert bound.diagnostics().loads == 1, 'loaded keeps the loaded model too — that is the half it shares'
+        assert SIMPLEX_ITERATIONS[solver_name](bound._engine._solver) == scratch, (
+            'loaded begins from nothing, so it repeats the first solve iteration for iteration'
+        )
+
+        cold = bound.solve(solver_name=solver_name, start='cold')
+        assert cold.started == 'cold', 'cold is a cold start however much the session held'
+        assert bound.diagnostics().loads == 2, 'cold discards the held solver, so the model loads again'
+
+        assert loaded.objective == pytest.approx(first.objective), 'a start moves the route, never the answer'
+        assert carried.objective == pytest.approx(first.objective)
+        assert cold.objective == pytest.approx(first.objective)
 
 
-def test_warm_false_after_a_mip_solve_is_cold_too(solver_name):
+def test_loaded_is_the_default(solver_name):
+    """Not `previous`: continuing from the last answer is opt-in.
+
+    A solve that skips preprocessing it would otherwise do is faster only on
+    a model that preprocessing cannot crack, and nothing at this call site
+    knows which kind it has — so the default takes the half that always pays
+    (the hand-off) and leaves the bet to a caller who can make it.
+    """
+    with lps.build(DISPATCH, dispatch_sources(), coords={'snapshot': SNAPSHOTS}) as bound:
+        bound.solve(solver_name=solver_name)
+        assert bound.solve(solver_name=solver_name).started == 'loaded'
+
+
+def test_an_unknown_start_names_the_three(solver_name):
+    with (
+        lps.build(DISPATCH, dispatch_sources(), coords={'snapshot': SNAPSHOTS}) as bound,
+        pytest.raises(lps.LpspecError, match='unknown start') as raised,
+    ):
+        bound.solve(solver_name=solver_name, start='warm')
+    assert all(word in str(raised.value) for word in STARTS), 'the refusal has to say what the three are'
+
+
+def test_a_cold_start_after_a_mip_solve_is_cold_too(solver_name):
     """The structural guarantee covers the MIP state no basis carries.
 
     An incumbent, a MIP start, cut pools — whatever the member squirrels away
@@ -225,7 +263,7 @@ def test_warm_false_after_a_mip_solve_is_cold_too(solver_name):
     """
     with lps.build(KNAPSACK, knapsack_sources()) as bound:
         first = bound.solve(solver_name=solver_name)
-        cold = bound.solve(solver_name=solver_name, warm=False)
+        cold = bound.solve(solver_name=solver_name, start='cold')
 
         assert cold.started == 'cold'
         assert cold.objective == pytest.approx(first.objective)

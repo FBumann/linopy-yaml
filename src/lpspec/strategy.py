@@ -610,6 +610,16 @@ def solve_over(
     there are; what accumulates is the answer, which is what the caller asked
     for.
 
+    **The fold solves with ``start='previous'``**, which
+    :meth:`~lpspec.api.BoundModel.solve` does not default to. Whether
+    continuing from the last answer pays is a question about one model, and a
+    caller solving once cannot be asked it — but a sweep is a walk whose
+    consecutive slices differ by one step, and that is the case the start was
+    written for. A slice whose labels move is loaded again and starts cold,
+    which the fold neither prevents nor needs to know. The pooled branch does
+    not ask for it and could not use it: it builds per slice, so every solve
+    there is a first solve.
+
     **A caller's own ``coords`` sit under the axis's**, which owns the dim it
     re-indexed. They are merged into the cuts once, here, so neither of the two
     ways a slice can be solved has to know the rule.
@@ -742,7 +752,7 @@ def _serially(
                 if bound is not None:
                     bound.close()
                 bound, named = build(schema, sources, coords=cut.coords or None, **building), names
-            answer = _answers(bound.solve(**solving), schema)
+            answer = _answers(bound.solve(**solving, start='previous'), schema)
             yield cut.key, answer
             if plan and position < len(cuts) - 1:
                 state = {p: rule.value_from(answer.primals, p, cut.key) for p, rule in plan.items()}

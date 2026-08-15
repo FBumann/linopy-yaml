@@ -31,6 +31,30 @@ if TYPE_CHECKING:
     from lpspec.relational.status import SolveStatus
 
 
+#: Where a solve begins, as a request to :meth:`lpspec.api.BoundModel.solve`
+#: and as the report in :attr:`Result.started`. One word rather than a pair of
+#: flags because the two things a solve may keep — the loaded model and the
+#: answer it reached — are kept in that order and never the other way: there
+#: is no continuing from a solver that was closed.
+Start = Literal['cold', 'loaded', 'previous']
+
+#: What each start keeps, in the order of how much that is. Deliberately
+#: about provenance and not mechanism: whether *previous* means a basis, an
+#: incumbent or a sink's own notion is the sink's business, so a solver with
+#: no simplex fits these words unchanged.
+STARTS: Mapping[Start, str] = {
+    'cold': 'the model is loaded into a fresh solver, which has nothing to begin from',
+    'loaded': 'the solver already holding the model is reused, and what the last solve reached is discarded',
+    'previous': 'the solver is reused and continues from what the last solve reached',
+}
+
+
+def unknown_start_message(start: object) -> str:
+    """Why *start* is not one, and what the three are."""
+    options = '\n'.join(f'  {name}: {what}' for name, what in STARTS.items())
+    return f'unknown start {start!r}. A solve may begin from:\n{options}'
+
+
 def tidy_to_pandas(frame: pl.DataFrame) -> pd.DataFrame:
     """A tidy polars frame as pandas, column by column.
 
@@ -108,7 +132,7 @@ class Diagnostics:
     #: path — the first solve had nothing to keep — and ``loads == solves`` on
     #: an iterating driver is the difference between "lpspec is slow" and
     #: "this model masks on a parameter that varies", unless the driver asked
-    #: for ``warm=False``, which loads by construction.
+    #: for ``start='cold'``, which loads by construction.
     solves: int
     loads: int
 
@@ -162,7 +186,7 @@ class Result:
     _activities: Mapping[str, pl.LazyFrame] | None
     #: Where this solve started, read off what actually ran — never off what
     #: was asked for.
-    _started: Literal['cold', 'session']
+    _started: Start
     #: One deferred reader per declared named expression. A callable rather
     #: than a frame because deferral is the contract (SPEC §3): nothing about
     #: an expression is lowered or compiled until its reader is called, so a
@@ -203,17 +227,15 @@ class Result:
         return self._objective
 
     @property
-    def started(self) -> Literal['cold', 'session']:
-        """Where this solve started: ``cold`` or ``session``.
+    def started(self) -> Start:
+        """Where this solve began — one of :data:`STARTS`.
 
-        ``cold`` is a solver loaded fresh with nothing to start from — a
-        first solve, a structure that moved, or ``warm=False``; ``session``
-        is the kept solver re-solving from wherever its last solve left it.
-        Provenance, deliberately, not mechanism — whether a start is a basis,
-        an incumbent or a solver's own notion stays the sink's business, so a
-        solver with no simplex fits the same words, and a word can be added
-        the day something else can be started from. Advisory, like
-        :class:`Diagnostics`: no answer depends on it.
+        What *happened*, not what was asked: ``start=`` is a preference, and
+        a first solve or a structure that moved is ``cold`` whatever it
+        requested, the solver having been loaded again and holding nothing.
+        So a driver that asked for ``previous`` and reads ``cold`` back is
+        being told its labels moved. Advisory, like :class:`Diagnostics`: no
+        answer depends on it.
         """
         return self._started
 

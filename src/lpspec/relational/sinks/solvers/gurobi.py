@@ -210,6 +210,15 @@ class Gurobi(Solver):
             status, self._m.ObjVal, solver_vector(self._x.X), _duals(self._blocks), _activity(self._blocks)
         )
 
+    def forget(self) -> None:
+        """``Model.reset``: the solution and the basis go, the model stays.
+
+        The default depth, which discards the solution without touching the
+        parameters the caller set through ``solver_options`` — those are the
+        model's configuration and outlive any one run.
+        """
+        self._m.reset()
+
     def close(self) -> None:
         """Release the model and the licence its environment holds.
 

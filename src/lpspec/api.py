@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from lpspec.language.model import Model
-    from lpspec.relational.result import Diagnostics, Result
+    from lpspec.relational.result import Diagnostics, Result, Start
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a
 #: consumer that binds no data (``typeset``) must be able to reach it without
@@ -161,14 +161,17 @@ class BoundModel:
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, Any] | None = None,
-        warm: bool = True,
+        start: Start = 'loaded',
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
         A solver that can stay loaded is kept between calls, so a rebound
-        model re-solves from wherever the last solve ended, and one whose
-        structure moved is loaded again and starts cold. Where the answer's
-        solve actually started is its
+        model skips the hand-off and only its numbers are pushed. Whether the
+        *answer* the last solve reached is kept too is *start*, and it is off
+        by default: continuing from it suppresses the preprocessing a solver
+        would otherwise do, which is a win where the model is hard and a loss
+        where it is not, and only a caller knows which. Where this solve
+        actually began is its
         :attr:`~lpspec.relational.result.Result.started`.
 
         Args:
@@ -176,21 +179,25 @@ class BoundModel:
                 ``gurobi``, which needs the ``[gurobi]`` extra.
             solver_options: Forwarded to the solver verbatim, in its own
                 vocabulary (``{'time_limit': 60}``).
-            warm: Whether this solve may start from what the session holds.
-                ``True``, the default, keeps it. ``False`` is deliberately
-                cold, held to structurally: the held solver is discarded
-                first, so the fresh one has nothing to start from — what a
-                caller timing a build or comparing against a cold baseline
-                needs, and what no option on the solver can promise.
+            start: What this solve may begin from — one of
+                :data:`~lpspec.relational.result.STARTS`. ``loaded``, the
+                default, reuses the solver and discards what it reached;
+                ``previous`` keeps that too, which is what an iterating
+                driver moving one step at a time wants; ``cold`` keeps
+                neither, which is what timing a build or comparing against a
+                cold baseline needs and what no solver option can promise.
+                A preference: a model whose structure moved is loaded again
+                whatever was asked.
 
         Returns:
             The solution, holding this model.
 
         Raises:
-            LpspecError: A solver name nothing serves, or one this
-                environment cannot run.
+            LpspecError: A solver name nothing serves, one this environment
+                cannot run, or a *start* outside
+                :data:`~lpspec.relational.result.STARTS`.
         """
-        return self._engine.solve(solver_name, solver_options=solver_options, warm=warm)
+        return self._engine.solve(solver_name, solver_options=solver_options, start=start)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.

@@ -68,7 +68,7 @@ for capacity in search:
 | **it names what changed** | everything else keeps what `build` bound. A parameter, or a dimension index — a coordinate set grows by handing over a longer table and the `coords=` to match, which is how a Benders cut family is *data* |
 | **the answer is the reference build's** | `bound.rebind(x)` solves what `build(model, sources \| x)` solves, always. That is an equality a test asserts, not a promise — it is also the oracle to reach for when a loop looks wrong |
 | **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
-| **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model HiGHS already holds, and the next solve starts from the basis the last one ended on. A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, and that model is loaded again and solved cold |
+| **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model HiGHS already holds, so the matrix is not handed over twice; whether the next solve also continues from the last answer is `start=`, below. A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, and that model is loaded again and solved cold |
 | **which one ran is `bound.diagnostics()`** | `loads` counts the solves that had to load the model from scratch, against `solves` as its denominator. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies". Advisory — nothing about the answer depends on it |
 | **earlier results keep reading** | a `Result` owns its values and a reference to the label frames of the build it answered; a rebind builds new frames without touching those, so an old answer stays an answer over its own coordinates. What retaining one costs is those frames staying alive until it is dropped or `close()`d |
 | **a rebind that raises releases the model** | the same rule as `build`: half a model would answer the next `solve` with a mixture of two |
@@ -84,25 +84,30 @@ declarations.
 
 ### Where a solve starts
 
-A rebind keeps the solver loaded, so a second solve starts from wherever the
-last one left it. Two things make that visible and refusable:
+A rebind keeps the solver loaded, so a second solve never hands the matrix
+over again. Whether it also continues from the *answer* the last solve reached
+is a separate question, and `start=` is where it is asked:
 
 ```python
 result = bound.rebind({'load': load}).solve()
-result.started  # 'session' — the kept solver carried on; 'cold' if it had to load again
+result.started  # 'loaded' — the solver was kept, its last answer discarded
 
-baseline = bound.solve(warm=False)  # deliberately cold, whatever the session held
+again = bound.rebind({'load': more}).solve(start='previous')
+again.started  # 'previous' — it carried on from where the last solve ended
+
+baseline = bound.solve(start='cold')  # whatever the session held, gone
 baseline.started  # 'cold'
 ```
 
 | | |
 |---|---|
-| `warm=True` (default) | the session: a kept solver re-solves from wherever its last solve ended, a fresh load starts cold |
-| `warm=False` | deliberately cold, held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again |
+| `start='loaded'` (default) | the solver already holding the model is reused and the hand-off skipped; what it reached is discarded, so the run begins as if the model had never been solved |
+| `start='previous'` | that answer is kept too. **Faster only where the model is hard**: a solver told where to begin skips the preprocessing it would otherwise do, which is a win on a model that presolve cannot crack and a loss on one it can — so this is opt-in, and `solve_over` opts in because a sweep's consecutive slices differ by one step |
+| `start='cold'` | held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again |
 
 `result.started` is read off what happened, never off what was asked, so a
-rebind that had to rebuild reports the cold start it got rather than the warm
-one it hoped for. It is what a benchmark needs — a cold baseline you can prove
+rebind that had to rebuild reports the cold start it got rather than the one it
+hoped for. It is what a benchmark needs — a cold baseline you can prove
 is cold — and what an iterating driver reads when a loop is slower than it
 should be: `'cold'` every iteration means the session is being rebuilt away.
 **Provenance, deliberately, not mechanism**: whether a start is a basis, an

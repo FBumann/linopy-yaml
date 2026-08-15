@@ -41,22 +41,31 @@ that evidence at the load; a subclass owns **the hand-off**:
 | `_run(tables)` | solve what is loaded, and read it back |
 | `warm_start()` | the basis the last solve left — the incumbent, after a MIP — or `None` |
 | `_warm(ws)` | set it on the loaded model, spans already checked |
+| `forget()` | discard what the last solve reached, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
 
-The first three are the family's and identical for everyone; the last six are a
+The first three are the family's and identical for everyone; the last seven are a
 member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over tables
 and is given an answer.
 
 So a model rebuilt with new numbers (`bound.rebind`) has them pushed onto what
-the solver already holds and solves from the basis the last one ended on. Both
-sinks do this; a solver that could not would be slower to re-solve and nothing
-else.
+the solver already holds. Whether it also solves from the basis the last one
+ended on is the caller's `start=`: `'previous'` keeps it, and `'loaded'` — the
+default — calls `forget()` so the run begins as if the model were new. Both
+sinks implement both; a solver with nothing to discard implements `forget()`
+as a no-op.
 
-A **genuine rebuild** gets no such carry: the new session holds a fresh model
-and starts cold, and `PolarsEngine.solve(warm=False)` is how a caller asks for
-that on purpose — the held solver is discarded, so cold is structural rather
-than scrubbed.
+`forget()` rather than a reload because the two costs are different ones. A
+solver keeping its *model* skips the hand-off, which nothing pays for; one
+keeping its *answer* skips the preprocessing that answer made unnecessary,
+which a presolve-friendly model pays for dearly. Splitting them is what lets a
+caller take the first without the second.
+
+A **genuine rebuild** gets no carry at all: the new session holds a fresh model
+and starts cold, and `PolarsEngine.solve(start='cold')` is how a caller asks
+for that on purpose — the held solver is discarded, so cold is structural
+rather than scrubbed.
 
 `warm_start()` / `warm(ws)` are the machinery for carrying one anyway:
 `warm_start()` reads the basis — or, after a mixed-integer solve, the
