@@ -100,18 +100,35 @@ baseline = bound.solve(keep='nothing')  # whatever the session held, gone
 baseline.kept  # 'nothing'
 ```
 
-| | |
-|---|---|
-| `keep='solver'` (default) | the solver already holding the model is reused and the hand-off skipped; the work it did is discarded, so the run begins as if the model had never been solved |
-| `keep='progress'` | that work is kept too — **opt-in, because it swings both ways**. A solver told where to begin skips the presolve it would otherwise run, and which of the two is worth more is a fact about your model. Six rebinds, HiGHS, measured both ways (#815): on a dispatch presolve cracks outright, carrying cost **76.6 s against 4.3 s** — an 18× *loss*; on a storage model with a cyclic recurrence it cannot crack, carrying cost **111.2 s against 213.9 s** — a 1.9× *win*. Same procedure, opposite answers, so nothing here guesses on your behalf — measure it, below |
-| `keep='nothing'` | held to **structurally**: the held solver is discarded before the load, so the fresh one *has* nothing to start from — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to scrub. `diagnostics().loads` ticks, the whole model having been transferred again. **The baseline, never the fast path**: a fresh solver does the same work as a reused one — same iterations, solve for solve — and the hand-off is paid on top of that (#815) |
+A solve pays for three things: the **hand-off** of the matrix into the solver,
+the **presolve** that simplifies it, and the **search** itself. Each word drops
+one more of them — and only the last drop is a bet.
+
+| | pays for | ask for it when |
+|---|---|---|
+| `keep='nothing'` | the hand-off, the presolve and the whole search, on every solve. `diagnostics().loads` ticks with it, the model having been transferred again | you are **measuring**. The held solver is discarded *before* the load, so cold is structural rather than scrubbed — no basis, no incumbent, no solver-internal state, and nothing a member has to remember to clear. That is what a benchmark needs, and what comparing two sets of `solver_options` needs so the first run cannot flatter the second |
+| `keep='solver'` (default) | the presolve and the whole search. The matrix crosses once however often you rebind, its new numbers pushed onto what the solver holds | **always, until you have measured otherwise.** It does the same search as a fresh solver — same iterations, solve for solve — and skips the hand-off, so it cannot be slower than starting over (#815). Every ordinary rebind loop wants this and nothing else |
+| `keep='progress'` | a shortened search: the solver resumes where it left off, which is also why it **skips the presolve** it would otherwise run | the model is **hard for presolve** *and* consecutive solves differ by a small step — a rolling horizon, a myopic pathway, a search that inches. Opt-in because it swings both ways, and the two ways are far apart |
+
+**What it costs when it is wrong.** Six rebinds, HiGHS, measured both ways
+(#815): on a dispatch presolve cracks outright, carrying the solver's work cost
+**76.6 s against 4.3 s** — an 18× *loss*; on a storage model whose cyclic
+recurrence it cannot crack, carrying cost **111.2 s against 213.9 s** — a 1.9×
+*win*. Same procedure, opposite answers. Note the asymmetry before betting on an
+unmeasured model: the downside was an order of magnitude, the upside a factor of
+two.
+
+Nothing here is `warm=True` by another name, and the two knobs that would
+overlap it stay where they belong. Keeping the *solver* is not a bet and needs
+no switch; keeping a basis **and** still running presolve is a solver option
+(`solver_options={'presolve': 'on'}`), in the solver's own vocabulary rather
+than this one.
 
 `result.kept` is read off what happened, never off what was asked, so a rebind
 that had to rebuild reports the `'nothing'` it got rather than the `'progress'`
-it hoped for. It is what a benchmark needs — a cold baseline you can prove
-is cold — and what an iterating driver reads when a loop is slower than it
-should be: `'nothing'` every iteration means the session is being rebuilt away,
-and `loads` ticks on exactly those solves.
+it hoped for — which is what an iterating driver reads when a loop is slower
+than it should be: `'nothing'` every iteration means the session is being
+rebuilt away, and `loads` ticks on exactly those solves.
 **Provenance, deliberately, not mechanism**: whether progress is a basis, an
 incumbent or a solver's own notion stays the sink's business, so a solver with
 no simplex fits the same words and a word can be added the day something else
