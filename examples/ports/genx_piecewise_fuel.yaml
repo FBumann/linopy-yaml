@@ -1,0 +1,216 @@
+# GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants
+# and a wind farm under a net-zero carbon cap, where the gas plant's fuel use
+# is a piecewise-linear function of its output.
+# Optimum 2341.82308, from GenX itself.
+#
+# A plant burns one fuel and the fuel's price moves hour by hour, so the price
+# a plant pays is its fuel's price — a table with a dimension left over after
+# the plant has chosen its fuel.
+
+dimensions:
+  plant:
+    dtype: str
+  hour:
+    dtype: int
+  segment:
+    dtype: int  # a piece of the fuel curve
+  step:
+    dtype: int  # a block of demand that may be shed, each dearer than the last
+
+parameters:
+  unit_size:
+    dims: [plant]
+  units_available:
+    dims: [plant]
+  availability:
+    dims: [plant, hour]
+  min_output:
+    dims: [plant]
+  ramp:
+    dims: [plant]
+  start_headroom:
+    dims: [plant, hour]
+  is_thermal:
+    dims: [plant]
+  uses_curve:
+    dims: [plant]
+
+  fuel_slope:
+    dims: [plant, segment]
+  fuel_intercept:
+    dims: [plant, segment]
+  heat_rate:
+    dims: [plant]
+  start_fuel:
+    dims: [plant]
+  fuel_price:
+    dims: [plant, hour]
+
+  run_cost:
+    dims: [plant]
+  start_cost:
+    dims: [plant]
+  weight:
+    dims: [hour]
+
+  emitted:
+    dims: [plant]
+  emitted_start:
+    dims: [plant]
+  captured:
+    dims: [plant]
+  captured_start:
+    dims: [plant]
+  carbon_cap:
+    dims: []
+
+  demand:
+    dims: [hour]
+  shed_cost:
+    dims: [step]
+  shed_limit:
+    dims: [step]
+
+variables:
+  output:
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  burned:
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  burned_starting:
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  # Commitment is counted in units and relaxed to a continuous variable, which
+  # is what GenX's UCommit=2 does.
+  committed:
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  starting:
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  shutting:
+    foreach: [plant, hour]
+    bounds:
+      lower: 0
+  shed:
+    foreach: [step, hour]
+    bounds:
+      lower: 0
+  units:
+    foreach: [plant]
+    bounds:
+      lower: 0
+      upper: units_available
+
+expressions:
+  # The day is a representative period that repeats, so hour 1 follows hour 24.
+  started_recently: >-
+    starting + shift(starting, over=hour, by=1, edge='wrap')
+    + shift(starting, over=hour, by=2, edge='wrap') + shift(starting, over=hour, by=3, edge='wrap')
+    + shift(starting, over=hour, by=4, edge='wrap') + shift(starting, over=hour, by=5, edge='wrap')
+  shut_recently: >-
+    shutting + shift(shutting, over=hour, by=1, edge='wrap')
+    + shift(shutting, over=hour, by=2, edge='wrap') + shift(shutting, over=hour, by=3, edge='wrap')
+    + shift(shutting, over=hour, by=4, edge='wrap') + shift(shutting, over=hour, by=5, edge='wrap')
+
+constraints:
+  meet_demand:
+    foreach: [hour]
+    expression: sum(output, over=plant) + sum(shed, over=step) == demand
+
+  shed_within_step:
+    foreach: [step, hour]
+    expression: shed <= shed_limit * demand
+
+  committed_units_exist:
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: committed <= units
+
+  thermal_ceiling:
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: output <= committed * unit_size * availability
+
+  thermal_floor:
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: output >= committed * unit_size * min_output
+
+  variable_ceiling:
+    foreach: [plant, hour]
+    where: "is_thermal == 0"
+    expression: output <= units * unit_size * availability
+
+  commitment_tracks_starts:
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: committed - shift(committed, over=hour, by=1, edge='wrap') == starting - shutting
+
+  stay_up_once_started:
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: committed >= started_recently
+
+  stay_down_once_shut:
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: units - committed >= shut_recently
+
+  ramp_up:
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: >-
+      output - shift(output, over=hour, by=1, edge='wrap')
+      <= ramp * unit_size * (committed - starting)
+      + start_headroom * unit_size * starting
+      - min_output * unit_size * shutting
+
+  ramp_down:
+    foreach: [plant, hour]
+    where: "is_thermal > 0"
+    expression: >-
+      shift(output, over=hour, by=1, edge='wrap') - output
+      <= ramp * unit_size * (committed - starting)
+      - min_output * unit_size * starting
+      + start_headroom * unit_size * shutting
+
+  # Fuel use is above every piece of the curve, so at the optimum it sits on
+  # the binding one. The no-load intercept is charged per committed unit.
+  fuel_above_each_piece:
+    foreach: [plant, segment, hour]
+    where: "uses_curve > 0"
+    expression: burned >= fuel_slope * output + fuel_intercept * committed
+
+  fuel_at_the_heat_rate:
+    foreach: [plant, hour]
+    where: "uses_curve == 0"
+    expression: burned == heat_rate * output
+
+  fuel_to_start:
+    foreach: [plant, hour]
+    expression: burned_starting == unit_size * starting * start_fuel
+
+  # A net-zero cap: what escapes capture, less what the biomass took up.
+  carbon_budget:
+    foreach: []
+    expression: >-
+      sum(sum(burned * emitted * weight + burned_starting * emitted_start * weight, over=hour), over=plant)
+      <= carbon_cap
+
+objective:
+  sense: minimize
+  expression: >-
+    output * run_cost * weight
+    + burned * fuel_price * weight
+    + burned_starting * fuel_price * weight
+    + starting * start_cost * weight
+    + shed * shed_cost * weight
+    + burned * captured * weight
+    + burned_starting * captured_start * weight

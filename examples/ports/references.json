@@ -1,764 +1,769 @@
 {
-  "dispatch": {
-    "objective": 10500.0,
-    "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/dispatch.py — agreement, not a published figure",
-    "duals": {
-      "power_balance": {
-        "snapshot": [
-          0,
-          1,
-          2,
-          3
-        ],
-        "value": [
-          10.0,
-          50.0,
-          50.0,
-          50.0
-        ]
-      }
-    }
-  },
-  "facility_location": {
-    "objective": 932615.75,
-    "rtol": 1e-09,
-    "provenance": "published by OR-Library (Beasley) for instance cap71 of the uncapacitated warehouse location set, in the file uncapopt: http://people.brunel.ac.uk/~mastjjb/jeb/orlib/uncapinfo.html"
-  },
-  "monthly_budget": {
-    "objective": 9500.0,
-    "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure",
-    "duals": {
-      "monthly_budget": {
-        "month": [
-          "feb",
-          "feb",
-          "jan",
-          "jan"
-        ],
-        "generator": [
-          "gas",
-          "hydro",
-          "gas",
-          "hydro"
-        ],
-        "value": [
-          0.0,
-          -45.0,
-          0.0,
-          -45.0
-        ]
-      }
-    }
-  },
-  "multi_period": {
-    "objective": 10020.0,
-    "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure",
-    "duals": {
-      "balance": {
-        "snapshot": [
-          0,
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "value": [
-          5.0,
-          60.0,
-          10.0,
-          5.0,
-          55.0,
-          10.0
-        ]
-      }
-    }
-  },
-  "piecewise": {
-    "objective": 3850.0,
-    "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure",
-    "duals": {
-      "balance": {
-        "snapshot": [
-          0,
-          1,
-          2
-        ],
-        "value": [
-          15.0,
-          25.0,
-          15.0
-        ]
-      }
-    }
-  },
-  "pypsa_ac_dc": {
-    "objective": 18441021.477729216,
-    "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ac_dc.py — n.objective + n.objective_constant, the system cost",
-    "duals": {
-      "nodal_balance": {
-        "snapshot": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          1,
-          1,
-          1,
-          1,
-          1,
-          1,
-          1,
-          1,
-          1,
-          2,
-          2,
-          2,
-          2,
-          2,
-          2,
-          2,
-          2,
-          2,
-          3,
-          3,
-          3,
-          3,
-          3,
-          3,
-          3,
-          3,
-          3,
-          4,
-          4,
-          4,
-          4,
-          4,
-          4,
-          4,
-          4,
-          4,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          6,
-          6,
-          6,
-          6,
-          6,
-          6,
-          6,
-          6,
-          6,
-          7,
-          7,
-          7,
-          7,
-          7,
-          7,
-          7,
-          7,
-          7,
-          8,
-          8,
-          8,
-          8,
-          8,
-          8,
-          8,
-          8,
-          8,
-          9,
-          9,
-          9,
-          9,
-          9,
-          9,
-          9,
-          9,
-          9
-        ],
-        "bus": [
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc",
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc",
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc",
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc",
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc",
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc",
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc",
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc",
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc",
-          "london",
-          "norwich",
-          "norwich_dc",
-          "manchester",
-          "bremen",
-          "bremen_dc",
-          "frankfurt",
-          "norway",
-          "norway_dc"
-        ],
-        "value": [
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.10336990586935164,
-          0.10336990586935164,
-          0.10336990586935164,
-          0.09,
-          0.09,
-          1421.9447875117296,
-          1421.9265913323525,
-          1421.9265913323525,
-          1421.9325865069438,
-          1421.9265913323534,
-          1421.9265913323534,
-          1421.9265913323534,
-          1421.926591332353,
-          1421.926591332353,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11000000000000004,
-          0.11000000000000004,
-          0.11000000000000004,
-          0.11000000000000003,
-          0.11000000000000003,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11000000000000004,
-          0.11000000000000004,
-          0.11000000000000004,
-          0.11000000000000003,
-          0.11000000000000003,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11000000000000004,
-          0.11000000000000004,
-          0.11000000000000004,
-          0.11000000000000003,
-          0.11000000000000003,
-          1593.5734405882922,
-          1593.5734405882922,
-          1593.5734405882922,
-          1593.5734405882922,
-          1593.5734405882922,
-          1593.5734405882922,
-          1593.3734405882922,
-          1593.5734405882922,
-          1593.5734405882922,
-          0.11,
-          0.11000000000000001,
-          0.3433333333333333,
-          0.11,
-          0.35037126766419774,
-          0.35037126766419774,
-          0.35037126766419774,
-          0.34707322233969734,
-          0.34707322233969734,
-          1007.0899544696111,
-          1007.0899544696111,
-          1007.0899544696111,
-          1007.0899544696111,
-          1007.0722361188705,
-          1007.0722361188705,
-          1007.0722361188705,
-          1006.814283984388,
-          1007.0365062066102,
-          0.2449156376762593,
-          0.2443761968087841,
-          0.2443761968087841,
-          0.11,
-          0.4672592958416346,
-          0.25614818473052353,
-          0.4672592958416346,
-          0.2174570955200712,
-          0.2174570955200712,
-          1490.6964875806925,
-          1490.6964875806925,
-          1490.6964875806925,
-          1490.6964875806925,
-          1490.6964875806923,
-          1490.6964875806923,
-          1490.6964875806923,
-          1490.6964875806925,
-          1490.6964875806925
-        ]
-      }
-    }
-  },
-  "pypsa_cyclic_storage": {
-    "objective": 17228.77962151063,
-    "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py",
-    "duals": {
-      "nodal_balance": {
-        "snapshot": [
-          0,
-          0,
-          0,
-          1,
-          1,
-          1,
-          2,
-          2,
-          2,
-          3,
-          3,
-          3
-        ],
-        "bus": [
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south"
-        ],
-        "value": [
-          44.503024585160105,
-          44.503024585160105,
-          44.503024585160105,
-          55.496975414839895,
-          55.496975414839895,
-          55.496975414839895,
-          55.94200566069149,
-          55.94200566069149,
-          55.94200566069149,
-          44.05799433930851,
-          44.05799433930851,
-          44.05799433930851
-        ]
-      }
-    }
-  },
-  "pypsa_kvl": {
-    "objective": 17000.0,
-    "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py",
-    "duals": {
-      "nodal_balance": {
-        "snapshot": [
-          0,
-          0,
-          0,
-          1,
-          1,
-          1,
-          2,
-          2,
-          2,
-          3,
-          3,
-          3
-        ],
-        "bus": [
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south"
-        ],
-        "value": [
-          50.0,
-          50.0,
-          50.0,
-          50.0,
-          50.0,
-          50.0,
-          50.0,
-          50.0,
-          50.0,
-          50.0,
-          50.0,
-          50.0
-        ]
-      }
-    }
-  },
-  "pypsa_ramp": {
-    "objective": 18200.0,
-    "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py",
-    "duals": {
-      "nodal_balance": {
-        "snapshot": [
-          0,
-          0,
-          0,
-          1,
-          1,
-          1,
-          2,
-          2,
-          2,
-          3,
-          3,
-          3
-        ],
-        "bus": [
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south"
-        ],
-        "value": [
-          20.0,
-          20.0,
-          20.0,
-          80.0,
-          80.0,
-          80.0,
-          80.0,
-          80.0,
-          80.0,
-          20.0,
-          20.0,
-          20.0
-        ]
-      }
-    }
-  },
-  "pypsa_storage": {
-    "objective": 15253.178322993519,
-    "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_storage.py",
-    "duals": {
-      "nodal_balance": {
-        "snapshot": [
-          0,
-          0,
-          0,
-          1,
-          1,
-          1,
-          2,
-          2,
-          2,
-          3,
-          3,
-          3
-        ],
-        "bus": [
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south"
-        ],
-        "value": [
-          44.503024585160105,
-          44.503024585160105,
-          44.503024585160105,
-          55.496975414839895,
-          55.496975414839895,
-          55.496975414839895,
-          56.05755092408071,
-          56.05755092408071,
-          56.05755092408071,
-          43.94244907591929,
-          43.94244907591929,
-          43.94244907591929
-        ]
-      }
-    }
-  },
-  "pypsa_transport": {
-    "objective": 22000.0,
-    "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_transport.py",
-    "duals": {
-      "nodal_balance": {
-        "snapshot": [
-          0,
-          0,
-          0,
-          1,
-          1,
-          1,
-          2,
-          2,
-          2,
-          3,
-          3,
-          3
-        ],
-        "bus": [
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south",
-          "north",
-          "mid",
-          "south"
-        ],
-        "value": [
-          -0.0,
-          50.0,
-          80.0,
-          -0.0,
-          50.0,
-          80.0,
-          -0.0,
-          50.0,
-          80.0,
-          -0.0,
-          50.0,
-          80.0
-        ]
-      }
-    }
-  },
-  "pypsa_unit_commitment": {
-    "objective": 24900.0,
-    "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py"
-  },
-  "stigler_diet": {
-    "objective": 0.10866227820675685,
-    "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year",
-    "corroborated_by": "Laderman (1947) at the National Bureau of Standards published $39.69/year for this data, the first serious test of the simplex method. This LP's exact optimum is 0.08% under it — his rounding, not a different model — and both select the same five foods: wheat flour, liver, cabbage, spinach, navy beans.",
-    "duals": {
-      "meet_requirement": {
-        "nutrient": [
-          "calories_kcal",
-          "protein_g",
-          "calcium_g",
-          "iron_mg",
-          "vitamin_a_kiu",
-          "vitamin_b1_mg",
-          "vitamin_b2_mg",
-          "niacin_mg",
-          "vitamin_c_mg"
-        ],
-        "value": [
-          0.008765147298049494,
-          -0.0,
-          0.03173771344563702,
-          -0.0,
-          0.0004002327217253815,
-          -0.0,
-          0.016358032699276687,
-          -0.0,
-          0.00014411751545899708
-        ]
-      }
-    }
-  },
-  "storage": {
-    "objective": 5650.0,
-    "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure",
-    "duals": {
-      "power_balance": {
-        "snapshot": [
-          0,
-          1,
-          2,
-          3
-        ],
-        "value": [
-          45.0,
-          50.0,
-          10.0,
-          50.0
-        ]
-      }
-    }
-  },
-  "transport": {
-    "objective": 4400.0,
-    "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/transport.py — agreement, not a published figure",
-    "duals": {
-      "balance": {
-        "snapshot": [
-          0,
-          0,
-          1,
-          1
-        ],
-        "bus": [
-          "north",
-          "south",
-          "north",
-          "south"
-        ],
-        "value": [
-          40.0,
-          40.0,
-          40.0,
-          40.0
-        ]
-      }
-    }
-  },
-  "transport_dantzig": {
-    "objective": 153.675,
-    "rtol": 1e-09,
-    "provenance": "published with GAMS model library #1 (trnsport), after Dantzig, Linear Programming and Extensions (1963) ch. 3.3",
-    "corroborated_by": "examples/ports/references/linopy/transport_dantzig.py — the same LP hand-written in linopy 0.9.0, which reaches 153.675 independently. Secondary: the published figure is what verifies the port.",
-    "duals": {
-      "within_capacity": {
-        "plant": [
-          "seattle",
-          "san-diego"
-        ],
-        "value": [
-          -0.0,
-          -0.0
-        ]
-      },
-      "meet_demand": {
-        "market": [
-          "new-york",
-          "chicago",
-          "topeka"
-        ],
-        "value": [
-          0.225,
-          0.153,
-          0.12599999999999997
-        ]
-      }
-    }
-  },
-  "transport_pwl": {
-    "objective": 8.786852757777865,
-    "rtol": 1e-09,
-    "provenance": "linopy 0.9.0's own add_piecewise_formulation, via examples/ports/references/linopy/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective"
-  },
-  "tsp_mtz": {
-    "objective": 2085.0,
-    "rtol": 1e-09,
-    "provenance": "published by TSPLIB for instance gr17 (Groetschel, 17 cities, EXPLICIT lower-diagonal distance matrix); optimum 2085 as listed in the TSPLIB solutions file"
+ "dispatch": {
+  "objective": 10500.0,
+  "rtol": 1e-09,
+  "provenance": "linopy 0.9.0, via examples/ports/references/linopy/dispatch.py \u2014 agreement, not a published figure",
+  "duals": {
+   "power_balance": {
+    "snapshot": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "value": [
+     10.0,
+     50.0,
+     50.0,
+     50.0
+    ]
+   }
   }
+ },
+ "facility_location": {
+  "objective": 932615.75,
+  "rtol": 1e-09,
+  "provenance": "published by OR-Library (Beasley) for instance cap71 of the uncapacitated warehouse location set, in the file uncapopt: http://people.brunel.ac.uk/~mastjjb/jeb/orlib/uncapinfo.html"
+ },
+ "genx_piecewise_fuel": {
+  "objective": 2341.8230753008093,
+  "rtol": 1e-09,
+  "provenance": "published by GenX: asserted in test/test_piecewisefuel.jl as obj_true = 2341.82308 under genx_setup UCommit=2, CO2Cap=1, ParameterScale=1, and reproduced here by running GenX itself (julia 1.12.6, HiGHS) which reports 2341.8230753008093"
+ },
+ "monthly_budget": {
+  "objective": 9500.0,
+  "rtol": 1e-09,
+  "provenance": "linopy 0.9.0, via examples/ports/references/linopy/monthly_budget.py \u2014 agreement, not a published figure",
+  "duals": {
+   "monthly_budget": {
+    "month": [
+     "feb",
+     "feb",
+     "jan",
+     "jan"
+    ],
+    "generator": [
+     "gas",
+     "hydro",
+     "gas",
+     "hydro"
+    ],
+    "value": [
+     0.0,
+     -45.0,
+     0.0,
+     -45.0
+    ]
+   }
+  }
+ },
+ "multi_period": {
+  "objective": 10020.0,
+  "rtol": 1e-09,
+  "provenance": "linopy 0.9.0, via examples/ports/references/linopy/multi_period.py \u2014 agreement, not a published figure",
+  "duals": {
+   "balance": {
+    "snapshot": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "value": [
+     5.0,
+     60.0,
+     10.0,
+     5.0,
+     55.0,
+     10.0
+    ]
+   }
+  }
+ },
+ "piecewise": {
+  "objective": 3850.0,
+  "rtol": 1e-09,
+  "provenance": "linopy 0.9.0, via examples/ports/references/linopy/piecewise.py \u2014 agreement, not a published figure",
+  "duals": {
+   "balance": {
+    "snapshot": [
+     0,
+     1,
+     2
+    ],
+    "value": [
+     15.0,
+     25.0,
+     15.0
+    ]
+   }
+  }
+ },
+ "pypsa_ac_dc": {
+  "objective": 18441021.477729216,
+  "rtol": 1e-09,
+  "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ac_dc.py \u2014 n.objective + n.objective_constant, the system cost",
+  "duals": {
+   "nodal_balance": {
+    "snapshot": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     5,
+     5,
+     5,
+     5,
+     5,
+     5,
+     5,
+     5,
+     5,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     7,
+     7,
+     7,
+     7,
+     7,
+     7,
+     7,
+     7,
+     7,
+     8,
+     8,
+     8,
+     8,
+     8,
+     8,
+     8,
+     8,
+     8,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ],
+    "bus": [
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc",
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc",
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc",
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc",
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc",
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc",
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc",
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc",
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc",
+     "london",
+     "norwich",
+     "norwich_dc",
+     "manchester",
+     "bremen",
+     "bremen_dc",
+     "frankfurt",
+     "norway",
+     "norway_dc"
+    ],
+    "value": [
+     0.11,
+     0.11,
+     0.11,
+     0.11,
+     0.10336990586935164,
+     0.10336990586935164,
+     0.10336990586935164,
+     0.09,
+     0.09,
+     1421.9447875117296,
+     1421.9265913323525,
+     1421.9265913323525,
+     1421.9325865069438,
+     1421.9265913323534,
+     1421.9265913323534,
+     1421.9265913323534,
+     1421.926591332353,
+     1421.926591332353,
+     0.11,
+     0.11,
+     0.11,
+     0.11,
+     0.11000000000000004,
+     0.11000000000000004,
+     0.11000000000000004,
+     0.11000000000000003,
+     0.11000000000000003,
+     0.11,
+     0.11,
+     0.11,
+     0.11,
+     0.11000000000000004,
+     0.11000000000000004,
+     0.11000000000000004,
+     0.11000000000000003,
+     0.11000000000000003,
+     0.11,
+     0.11,
+     0.11,
+     0.11,
+     0.11000000000000004,
+     0.11000000000000004,
+     0.11000000000000004,
+     0.11000000000000003,
+     0.11000000000000003,
+     1593.5734405882922,
+     1593.5734405882922,
+     1593.5734405882922,
+     1593.5734405882922,
+     1593.5734405882922,
+     1593.5734405882922,
+     1593.3734405882922,
+     1593.5734405882922,
+     1593.5734405882922,
+     0.11,
+     0.11000000000000001,
+     0.3433333333333333,
+     0.11,
+     0.35037126766419774,
+     0.35037126766419774,
+     0.35037126766419774,
+     0.34707322233969734,
+     0.34707322233969734,
+     1007.0899544696111,
+     1007.0899544696111,
+     1007.0899544696111,
+     1007.0899544696111,
+     1007.0722361188705,
+     1007.0722361188705,
+     1007.0722361188705,
+     1006.814283984388,
+     1007.0365062066102,
+     0.2449156376762593,
+     0.2443761968087841,
+     0.2443761968087841,
+     0.11,
+     0.4672592958416346,
+     0.25614818473052353,
+     0.4672592958416346,
+     0.2174570955200712,
+     0.2174570955200712,
+     1490.6964875806925,
+     1490.6964875806925,
+     1490.6964875806925,
+     1490.6964875806925,
+     1490.6964875806923,
+     1490.6964875806923,
+     1490.6964875806923,
+     1490.6964875806925,
+     1490.6964875806925
+    ]
+   }
+  }
+ },
+ "pypsa_cyclic_storage": {
+  "objective": 17228.77962151063,
+  "rtol": 1e-09,
+  "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py",
+  "duals": {
+   "nodal_balance": {
+    "snapshot": [
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3
+    ],
+    "bus": [
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south"
+    ],
+    "value": [
+     44.503024585160105,
+     44.503024585160105,
+     44.503024585160105,
+     55.496975414839895,
+     55.496975414839895,
+     55.496975414839895,
+     55.94200566069149,
+     55.94200566069149,
+     55.94200566069149,
+     44.05799433930851,
+     44.05799433930851,
+     44.05799433930851
+    ]
+   }
+  }
+ },
+ "pypsa_kvl": {
+  "objective": 17000.0,
+  "rtol": 1e-09,
+  "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py",
+  "duals": {
+   "nodal_balance": {
+    "snapshot": [
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3
+    ],
+    "bus": [
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south"
+    ],
+    "value": [
+     50.0,
+     50.0,
+     50.0,
+     50.0,
+     50.0,
+     50.0,
+     50.0,
+     50.0,
+     50.0,
+     50.0,
+     50.0,
+     50.0
+    ]
+   }
+  }
+ },
+ "pypsa_ramp": {
+  "objective": 18200.0,
+  "rtol": 1e-09,
+  "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py",
+  "duals": {
+   "nodal_balance": {
+    "snapshot": [
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3
+    ],
+    "bus": [
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south"
+    ],
+    "value": [
+     20.0,
+     20.0,
+     20.0,
+     80.0,
+     80.0,
+     80.0,
+     80.0,
+     80.0,
+     80.0,
+     20.0,
+     20.0,
+     20.0
+    ]
+   }
+  }
+ },
+ "pypsa_storage": {
+  "objective": 15253.178322993519,
+  "rtol": 1e-09,
+  "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_storage.py",
+  "duals": {
+   "nodal_balance": {
+    "snapshot": [
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3
+    ],
+    "bus": [
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south"
+    ],
+    "value": [
+     44.503024585160105,
+     44.503024585160105,
+     44.503024585160105,
+     55.496975414839895,
+     55.496975414839895,
+     55.496975414839895,
+     56.05755092408071,
+     56.05755092408071,
+     56.05755092408071,
+     43.94244907591929,
+     43.94244907591929,
+     43.94244907591929
+    ]
+   }
+  }
+ },
+ "pypsa_transport": {
+  "objective": 22000.0,
+  "rtol": 1e-09,
+  "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_transport.py",
+  "duals": {
+   "nodal_balance": {
+    "snapshot": [
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3
+    ],
+    "bus": [
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south",
+     "north",
+     "mid",
+     "south"
+    ],
+    "value": [
+     -0.0,
+     50.0,
+     80.0,
+     -0.0,
+     50.0,
+     80.0,
+     -0.0,
+     50.0,
+     80.0,
+     -0.0,
+     50.0,
+     80.0
+    ]
+   }
+  }
+ },
+ "pypsa_unit_commitment": {
+  "objective": 24900.0,
+  "rtol": 1e-09,
+  "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py"
+ },
+ "stigler_diet": {
+  "objective": 0.10866227820675685,
+  "rtol": 1e-09,
+  "provenance": "linopy 0.9.0, via examples/ports/references/linopy/stigler_diet.py \u2014 dollars per day; x365 = $39.6617/year",
+  "corroborated_by": "Laderman (1947) at the National Bureau of Standards published $39.69/year for this data, the first serious test of the simplex method. This LP's exact optimum is 0.08% under it \u2014 his rounding, not a different model \u2014 and both select the same five foods: wheat flour, liver, cabbage, spinach, navy beans.",
+  "duals": {
+   "meet_requirement": {
+    "nutrient": [
+     "calories_kcal",
+     "protein_g",
+     "calcium_g",
+     "iron_mg",
+     "vitamin_a_kiu",
+     "vitamin_b1_mg",
+     "vitamin_b2_mg",
+     "niacin_mg",
+     "vitamin_c_mg"
+    ],
+    "value": [
+     0.008765147298049494,
+     -0.0,
+     0.03173771344563702,
+     -0.0,
+     0.0004002327217253815,
+     -0.0,
+     0.016358032699276687,
+     -0.0,
+     0.00014411751545899708
+    ]
+   }
+  }
+ },
+ "storage": {
+  "objective": 5650.0,
+  "rtol": 1e-09,
+  "provenance": "linopy 0.9.0, via examples/ports/references/linopy/storage.py \u2014 agreement, not a published figure",
+  "duals": {
+   "power_balance": {
+    "snapshot": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "value": [
+     45.0,
+     50.0,
+     10.0,
+     50.0
+    ]
+   }
+  }
+ },
+ "transport": {
+  "objective": 4400.0,
+  "rtol": 1e-09,
+  "provenance": "linopy 0.9.0, via examples/ports/references/linopy/transport.py \u2014 agreement, not a published figure",
+  "duals": {
+   "balance": {
+    "snapshot": [
+     0,
+     0,
+     1,
+     1
+    ],
+    "bus": [
+     "north",
+     "south",
+     "north",
+     "south"
+    ],
+    "value": [
+     40.0,
+     40.0,
+     40.0,
+     40.0
+    ]
+   }
+  }
+ },
+ "transport_dantzig": {
+  "objective": 153.675,
+  "rtol": 1e-09,
+  "provenance": "published with GAMS model library #1 (trnsport), after Dantzig, Linear Programming and Extensions (1963) ch. 3.3",
+  "corroborated_by": "examples/ports/references/linopy/transport_dantzig.py \u2014 the same LP hand-written in linopy 0.9.0, which reaches 153.675 independently. Secondary: the published figure is what verifies the port.",
+  "duals": {
+   "within_capacity": {
+    "plant": [
+     "seattle",
+     "san-diego"
+    ],
+    "value": [
+     -0.0,
+     -0.0
+    ]
+   },
+   "meet_demand": {
+    "market": [
+     "new-york",
+     "chicago",
+     "topeka"
+    ],
+    "value": [
+     0.225,
+     0.153,
+     0.12599999999999997
+    ]
+   }
+  }
+ },
+ "transport_pwl": {
+  "objective": 8.786852757777865,
+  "rtol": 1e-09,
+  "provenance": "linopy 0.9.0's own add_piecewise_formulation, via examples/ports/references/linopy/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective"
+ },
+ "tsp_mtz": {
+  "objective": 2085.0,
+  "rtol": 1e-09,
+  "provenance": "published by TSPLIB for instance gr17 (Groetschel, 17 cities, EXPLICIT lower-diagonal distance matrix); optimum 2085 as listed in the TSPLIB solutions file"
+ }
 }
