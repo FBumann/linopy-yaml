@@ -72,12 +72,12 @@ def test_the_rebind_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], s
 def test_growing_a_coordinate_set_loads_again(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
     assert namespace['grown'].loads == 2, 'the notebook says new coordinates cost a reload, and why that is fine'
-    assert namespace['answer'].primal('p').height == 36, 'twelve snapshots against three generators'
+    assert namespace['schedule'].height == 36, 'twelve snapshots against three generators'
 
 
 def test_a_rebind_answers_what_a_fresh_build_answers(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
-    assert namespace['sweep'][90.0] == pytest.approx(namespace['fresh']), (
+    assert namespace['rebound'] == pytest.approx(namespace['fresh']), (
         'the equality the notebook offers as the oracle for a loop that looks wrong'
     )
 
