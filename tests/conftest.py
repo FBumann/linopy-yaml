@@ -34,6 +34,7 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
+from lpspec.language._yaml import parse_yaml, read_yaml
 from lpspec.language.validation import load_model
 from tools import constructs
 
@@ -154,8 +155,7 @@ def raw_of(source: str | Path | dict[str, Any]) -> dict[str, Any]:
     """The parsed mapping behind a path / YAML text / dict, unvalidated."""
     if isinstance(source, dict):
         return source
-    text = source.read_text() if isinstance(source, Path) else source
-    return pyyaml.safe_load(text)
+    return read_yaml(source) if isinstance(source, Path) else parse_yaml(source)
 
 
 def solve_lp_file(path: Path | str) -> float:
