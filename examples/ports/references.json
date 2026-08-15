@@ -694,6 +694,11 @@
       }
     }
   },
+  "telephone_routing": {
+    "objective": 380.0,
+    "rtol": 1e-09,
+    "provenance": "published by Gueret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP (Dash Optimization, 2002) SS12.3.3 p. 182 — \"380 out of the required 425 calls are routed\"; problem and data in SS12.3, pp. 180-182"
+  },
   "transport": {
     "objective": 4400.0,
     "rtol": 1e-09,

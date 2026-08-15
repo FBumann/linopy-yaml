@@ -58,6 +58,7 @@ drift from what the engine builds.
 | [pypsa_transport](pypsa_transport.md) | **✔** 22000 | · | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | **✔** 24900 | **✓** | · | **✓** | · | **✓** | **✓** | · | · | **✓** |
 | [stigler_diet](stigler_diet.md) | **✔** 0.108662 | **✓** | · | · | · | · | **✓** | · | · | · |
+| [telephone_routing](telephone_routing.md) | **✔** 380 | **✓** | **✓** | · | · | · | **✓** | · | · | **✓** |
 | [transport_dantzig](transport_dantzig.md) | **✔** 153.675 | **✓** | · | · | · | · | **✓** | · | · | · |
 | [transport_pwl](transport_pwl.md) | **✔** 8.78685 | **✓** | · | **✓** | · | · | **✓** | **✓** | · | **✓** |
 | [tsp_mtz](tsp_mtz.md) | **✔** 2085 | **✓** | **✓** | · | · | **✓** | **✓** | · | · | **✓** |
@@ -109,6 +110,7 @@ that class, and the evidence behind
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | 24900.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py |
 | [stigler_diet](stigler_diet.md) | 0.10866227820675685 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year[^stigler_diet] |
 | [storage](storage.md) | 5650.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure |
+| [telephone_routing](telephone_routing.md) | 380.0 | 1e-09 | · | published by Gueret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP (Dash Optimization, 2002) SS12.3.3 p. 182 — "380 out of the required 425 calls are routed"; problem and data in SS12.3, pp. 180-182 |
 | [transport](transport.md) | 4400.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/transport.py — agreement, not a published figure |
 | [transport_dantzig](transport_dantzig.md) | 153.675 | 1e-09 | **✔** | published with GAMS model library #1 (trnsport), after Dantzig, Linear Programming and Extensions (1963) ch. 3.3[^transport_dantzig] |
 | [transport_pwl](transport_pwl.md) | 8.786852757777865 | 1e-09 | · | linopy 0.9.0's own add_piecewise_formulation, via examples/ports/references/linopy/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective |
@@ -207,7 +209,7 @@ is refused by design rather than unimplemented. The two halves of that answer
 are worth keeping apart: one is a macro nobody has written, the other is the
 ceiling doing its job.
 
-Three rows from twelve ports — a rate worth watching once the corpus has hit
+Three rows from thirteen ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 **The TSP row is the one to read**, and it is narrower than it first looked.

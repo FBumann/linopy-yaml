@@ -67,6 +67,7 @@ nav:
           - Dantzig, economies of scale: models/transport_pwl.md
           - Stigler's diet: models/stigler_diet.md
           - Facility location: models/facility_location.md
+          - Routing telephone calls: models/telephone_routing.md
           - Travelling salesman: models/tsp_mtz.md
   - Reference:
       - Language: SPEC.md
