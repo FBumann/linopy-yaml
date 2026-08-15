@@ -39,7 +39,9 @@ validation:
 nav:
   - Home: index.md
   - Write a model: guide.md
-  - Change a model: interactive.ipynb
+  - Change a model:
+      - The three loops: interactive.ipynb
+      - Fix, relax, remove: lifecycle.ipynb
   - Models:
       - models/index.md
       - Preparing the data: models/data.md
