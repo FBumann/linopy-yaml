@@ -1,42 +1,63 @@
-# PyPSA linear optimal power flow, rung 1: transport model, linear marginal
-# cost, no KVL. Optimum 22000.0, from PyPSA itself.
+description: >-
+  PyPSA linear optimal power flow, rung 1: a transport model — linear marginal
+  cost, controllable links, no voltage law. Optimum 22000.0, from PyPSA itself.
 
 dimensions:
   snapshot:
+    description: dispatch periods
     dtype: int
   bus:
+    description: network nodes
     dtype: str
   generator:
+    description: generating units, each sitting on one bus
     dtype: str
   link:
+    description: controllable connections, each joining two buses
     dtype: str
 
 lookups:
-  gen_bus: {over: generator, into: bus}  # every generator sits on a bus
-  from: {over: link, into: bus}  # both endpoints are buses
-  to: {over: link, into: bus}
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  from:
+    description: the bus a link leaves
+    over: link
+    into: bus
+  to:
+    description: the bus a link arrives at
+    over: link
+    into: bus
 
 parameters:
   p_nom:
+    description: installed capacity of a generator
     dims: [generator]
   marginal_cost:
+    description: cost of one unit of output
     dims: [generator]
   rating:
+    description: most a link may carry towards its `to` bus
     dims: [link]
   neg_rating:
+    description: most a link may carry the other way, negative by convention
     dims: [link]
   load:
+    description: demand at each bus in each snapshot
     dims: [snapshot, bus]
 
 variables:
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     bounds:
       lower: 0
       upper: p_nom
-  # PyPSA's `p0`: flow measured at the link's `from` end, so a positive value
-  # withdraws there and injects at `to`. `p_min_pu = -1` makes it bidirectional.
   f:
+    description: >-
+      PyPSA's p0 — flow measured at the link's `from` end, so a positive value
+      withdraws there and injects at `to`
     foreach: [snapshot, link]
     bounds:
       lower: neg_rating
@@ -44,6 +65,7 @@ variables:
 
 constraints:
   nodal_balance:
+    description: what is generated at a bus plus what arrives over the links meets the load there
     foreach: [snapshot, bus]
     expression: >-
       sum(p, over=generator, group_by=gen_bus)
@@ -53,4 +75,5 @@ constraints:
 
 objective:
   sense: minimize
+  description: total cost of generation; moving power over a link is free here
   expression: p * marginal_cost

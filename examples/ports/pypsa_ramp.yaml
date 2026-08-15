@@ -1,44 +1,68 @@
-# PyPSA linear optimal power flow, rung 2: rung 1 plus generator ramp limits.
-# Optimum 18200.0, from PyPSA itself.
+description: >-
+  PyPSA linear optimal power flow, rung 2: rung 1 plus a limit on how fast a
+  generator may change output between snapshots. Optimum 18200.0, from PyPSA
+  itself.
 
 dimensions:
   snapshot:
+    description: dispatch periods
     dtype: int
   bus:
+    description: network nodes
     dtype: str
   generator:
+    description: generating units, each sitting on one bus
     dtype: str
   link:
+    description: controllable connections, each joining two buses
     dtype: str
 
 lookups:
-  gen_bus: {over: generator, into: bus}  # every generator sits on a bus
-  from: {over: link, into: bus}  # both endpoints are buses
-  to: {over: link, into: bus}
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  from:
+    description: the bus a link leaves
+    over: link
+    into: bus
+  to:
+    description: the bus a link arrives at
+    over: link
+    into: bus
 
 parameters:
   p_nom:
+    description: installed capacity of a generator
     dims: [generator]
   marginal_cost:
+    description: cost of one unit of output
     dims: [generator]
   ramp_limit_up:
+    description: share of capacity output may rise by from one snapshot to the next
     dims: [generator]
   ramp_limit_down:
+    description: share of capacity output may fall by from one snapshot to the next
     dims: [generator]
   rating:
+    description: most a link may carry towards its `to` bus
     dims: [link]
   neg_rating:
+    description: most a link may carry the other way, negative by convention
     dims: [link]
   load:
+    description: demand at each bus in each snapshot
     dims: [snapshot, bus]
 
 variables:
   p:
+    description: output of a generator in a snapshot
     foreach: [snapshot, generator]
     bounds:
       lower: 0
       upper: p_nom
   f:
+    description: flow on a link, signed towards its `to` bus
     foreach: [snapshot, link]
     bounds:
       lower: neg_rating
@@ -46,6 +70,7 @@ variables:
 
 constraints:
   nodal_balance:
+    description: what is generated at a bus plus what arrives over the links meets the load there
     foreach: [snapshot, bus]
     expression: >-
       sum(p, over=generator, group_by=gen_bus)
@@ -54,13 +79,16 @@ constraints:
       == load
 
   ramp_up:
+    description: output rises no faster than the ramp limit allows
     foreach: [snapshot, generator]
     expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
 
   ramp_down:
+    description: output falls no faster than the ramp limit allows
     foreach: [snapshot, generator]
     expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
 
 objective:
   sense: minimize
+  description: total cost of generation; moving power over a link is free here
   expression: p * marginal_cost

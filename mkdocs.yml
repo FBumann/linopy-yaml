@@ -67,6 +67,7 @@ nav:
           - Dantzig, economies of scale: models/transport_pwl.md
           - Stigler's diet: models/stigler_diet.md
           - Facility location: models/facility_location.md
+          - GenX piecewise fuel: models/genx_piecewise_fuel.md
           - Routing telephone calls: models/telephone_routing.md
           - Choosing the mode of transport: models/transport_modes.md
           - OSeMOSYS UTOPIA: models/osemosys_utopia.md

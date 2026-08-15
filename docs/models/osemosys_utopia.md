@@ -16,45 +16,47 @@ the strongest independence a port can have.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet three end-use demands at least discounted cost. The reference system bundled with MARKAL. Discounting, the annuity, salvage value and the operational-life window are arithmetic over years, so they are folded into coefficients before the model is built; what is left is the decision. Optimum 29446.86269, from OSeMOSYS itself under GLPK.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `technology` |
-| $\mathcal{F}$ | index $f$ --- `fuel` |
-| $\mathcal{I}$ | index $i$ --- `timeslice` |
-| $\mathcal{M}$ | index $m$ --- `mode` |
-| $\mathcal{Y}$ | index $y$ --- `year` |
-| $\mathcal{V}$ | index $v$ --- `vintage` |
+| $\mathcal{T}$ | index $t$ --- `technology` --- the plants and processes that may be built and run |
+| $\mathcal{F}$ | index $f$ --- `fuel` --- energy carriers, produced by one technology and consumed by another |
+| $\mathcal{I}$ | index $i$ --- `timeslice` --- the slices a year is dispatched over |
+| $\mathcal{M}$ | index $m$ --- `mode` --- the way a technology is being operated |
+| $\mathcal{Y}$ | index $y$ --- `year` --- the years the pathway covers |
+| $\mathcal{V}$ | index $v$ --- `vintage` --- a second axis over the same years — capacity standing in a year was built in some vintage |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{still\_live}$ | `still_live` over $\mathcal{T} \times \mathcal{Y} \times \mathcal{V}$ |
-| $\mathit{residual\_capacity}$ | `residual_capacity` over $\mathcal{T} \times \mathcal{Y}$ |
-| $\mathit{build}^{\mathrm{cost}}$ | `build_cost` over $\mathcal{T} \times \mathcal{V}$ |
-| $\mathit{holding\_cost}$ | `holding_cost` over $\mathcal{T} \times \mathcal{Y}$ |
-| $\mathit{running\_cost}$ | `running_cost` over $\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}$ |
-| $\mathit{year}^{\mathrm{split}}$ | `year_split` over $\mathcal{I} \times \mathcal{Y}$ |
-| $\mathit{capacity\_available}$ | `capacity_available` over $\mathcal{T} \times \mathcal{I} \times \mathcal{Y}$ |
-| $\mathit{input\_ratio}$ | `input_ratio` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ |
-| $\mathit{output\_ratio}$ | `output_ratio` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ |
-| $\mathit{sliced\_demand}$ | `sliced_demand` over $\mathcal{F} \times \mathcal{I} \times \mathcal{Y}$ |
-| $\mathit{annual\_demand}$ | `annual_demand` over $\mathcal{F} \times \mathcal{Y}$ |
-| $\mathit{max\_capacity}$ | `max_capacity` over $\mathcal{T} \times \mathcal{Y}$ |
-| $\mathit{min\_capacity}$ | `min_capacity` over $\mathcal{T} \times \mathcal{Y}$ |
-| $\mathit{reserve\_margin}$ | `reserve_margin` over $\mathcal{Y}$ |
-| $\mathit{reserve\_tagged}$ | `reserve_tagged` over $\mathcal{T} \times \mathcal{Y}$ |
-| $\mathit{reserve\_demand}$ | `reserve_demand` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ |
-| $\mathit{residual\_holding}$ | `residual_holding` (scalar) |
+| $\mathit{still\_live}$ | `still_live` over $\mathcal{T} \times \mathcal{Y} \times \mathcal{V}$ --- 1 where a vintage is still inside its technology's operational life in that year |
+| $\mathit{residual\_capacity}$ | `residual_capacity` over $\mathcal{T} \times \mathcal{Y}$ --- capacity that already stood in 1990 and has not yet retired |
+| $\mathit{build}^{\mathrm{cost}}$ | `build_cost` over $\mathcal{T} \times \mathcal{V}$ --- discounted cost of building a unit of capacity in a vintage |
+| $\mathit{holding\_cost}$ | `holding_cost` over $\mathcal{T} \times \mathcal{Y}$ --- discounted fixed cost of holding a unit of capacity through a year |
+| $\mathit{running\_cost}$ | `running_cost` over $\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}$ --- discounted variable cost of a unit of activity |
+| $\mathit{year}^{\mathrm{split}}$ | `year_split` over $\mathcal{I} \times \mathcal{Y}$ --- share of the year a timeslice stands for |
+| $\mathit{capacity\_available}$ | `capacity_available` over $\mathcal{T} \times \mathcal{I} \times \mathcal{Y}$ --- share of its capacity a technology can offer in a timeslice |
+| $\mathit{input\_ratio}$ | `input_ratio` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ --- fuel a technology consumes per unit of activity |
+| $\mathit{output\_ratio}$ | `output_ratio` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ --- fuel a technology produces per unit of activity |
+| $\mathit{sliced\_demand}$ | `sliced_demand` over $\mathcal{F} \times \mathcal{I} \times \mathcal{Y}$ --- demand for a fuel placed on one timeslice |
+| $\mathit{annual\_demand}$ | `annual_demand` over $\mathcal{F} \times \mathcal{Y}$ --- demand for a fuel placed on the year as a whole |
+| $\mathit{max\_capacity}$ | `max_capacity` over $\mathcal{T} \times \mathcal{Y}$ --- most capacity a technology may stand at |
+| $\mathit{min\_capacity}$ | `min_capacity` over $\mathcal{T} \times \mathcal{Y}$ --- least capacity a technology must stand at |
+| $\mathit{reserve\_margin}$ | `reserve_margin` over $\mathcal{Y}$ --- how far firm capacity must exceed the demand of the moment |
+| $\mathit{reserve\_tagged}$ | `reserve_tagged` over $\mathcal{T} \times \mathcal{Y}$ --- 1 where a technology's capacity counts towards the reserve |
+| $\mathit{reserve\_demand}$ | `reserve_demand` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ --- the activity the reserve margin is measured against |
+| $\mathit{residual\_holding}$ | `residual_holding` (scalar) --- fixed operating cost owed on the capacity that already stood in 1990 |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{activity}$ | `activity` over $\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}$ |
-| $\mathit{build}$ | `build` over $\mathcal{T} \times \mathcal{V}$ |
+| $\mathit{activity}$ | `activity` over $\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}$ --- how hard a technology runs, per timeslice and mode |
+| $\mathit{build}$ | `build` over $\mathcal{T} \times \mathcal{V}$ --- how much capacity is built, and when |
 
 #### Objective
 
@@ -104,113 +106,137 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # OSeMOSYS's UTOPIA: what to build and run, 1990-2010, to meet three end-use
-    # demands at least discounted cost. The reference system bundled with MARKAL.
-    # Optimum 29446.86269, from OSeMOSYS itself under GLPK.
-    #
-    # Discounting, the annuity, salvage value and the operational-life window are
-    # arithmetic over years, so they are folded into coefficients before the model
-    # is built. What is left is the decision: how much to build, and how hard to
-    # run it.
+    description: >-
+      OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet
+      three end-use demands at least discounted cost. The reference system bundled
+      with MARKAL. Discounting, the annuity, salvage value and the operational-life
+      window are arithmetic over years, so they are folded into coefficients before
+      the model is built; what is left is the decision. Optimum 29446.86269, from
+      OSeMOSYS itself under GLPK.
 
     dimensions:
       technology:
+        description: the plants and processes that may be built and run
         dtype: str
       fuel:
+        description: energy carriers, produced by one technology and consumed by another
         dtype: str
       timeslice:
+        description: the slices a year is dispatched over
         dtype: str
       mode:
+        description: the way a technology is being operated
         dtype: int
       year:
+        description: the years the pathway covers
         dtype: int
-      # A second axis over the same years: capacity standing in `year` was built
-      # in some `vintage`, and the two are joined by `still_live`.
       vintage:
+        description: >-
+          a second axis over the same years — capacity standing in a year was built
+          in some vintage
         dtype: int
 
     parameters:
-      # 1 where a vintage is still inside its technology's operational life in
-      # that year. A plant's life is read from data and differs by technology, so
-      # the window cannot be a fixed shift — it is an incidence table, the shape
-      # `pypsa_kvl` uses for a cycle basis.
       still_live:
+        description: 1 where a vintage is still inside its technology's operational life in that year
         dims: [technology, year, vintage]
       residual_capacity:
+        description: capacity that already stood in 1990 and has not yet retired
         dims: [technology, year]
 
       build_cost:
+        description: discounted cost of building a unit of capacity in a vintage
         dims: [technology, vintage]
       holding_cost:
+        description: discounted fixed cost of holding a unit of capacity through a year
         dims: [technology, year]
       running_cost:
+        description: discounted variable cost of a unit of activity
         dims: [timeslice, technology, mode, year]
 
       year_split:
+        description: share of the year a timeslice stands for
         dims: [timeslice, year]
       capacity_available:
+        description: share of its capacity a technology can offer in a timeslice
         dims: [technology, timeslice, year]
       input_ratio:
+        description: fuel a technology consumes per unit of activity
         dims: [technology, fuel, mode, year]
       output_ratio:
+        description: fuel a technology produces per unit of activity
         dims: [technology, fuel, mode, year]
 
       sliced_demand:
+        description: demand for a fuel placed on one timeslice
         dims: [fuel, timeslice, year]
       annual_demand:
+        description: demand for a fuel placed on the year as a whole
         dims: [fuel, year]
 
       max_capacity:
+        description: most capacity a technology may stand at
         dims: [technology, year]
       min_capacity:
+        description: least capacity a technology must stand at
         dims: [technology, year]
 
       reserve_margin:
+        description: how far firm capacity must exceed the demand of the moment
         dims: [year]
       reserve_tagged:
+        description: 1 where a technology's capacity counts towards the reserve
         dims: [technology, year]
       reserve_demand:
+        description: the activity the reserve margin is measured against
         dims: [technology, fuel, mode, year]
 
-      # Fixed O&M owed on the capacity that already stood in 1990.
       residual_holding:
+        description: fixed operating cost owed on the capacity that already stood in 1990
         dims: []
 
     variables:
-      # How hard a technology runs, per timeslice and mode.
       activity:
+        description: how hard a technology runs, per timeslice and mode
         foreach: [timeslice, technology, mode, year]
         bounds:
           lower: 0
-      # How much capacity is built, and when.
       build:
+        description: how much capacity is built, and when
         foreach: [technology, vintage]
         bounds:
           lower: 0
 
     expressions:
-      # Capacity standing in a year: every vintage still inside its life, plus
-      # what was already there in 1990.
-      built_capacity: sum(build * still_live, over=vintage)
-      capacity: built_capacity + residual_capacity
+      built_capacity:
+        expression: sum(build * still_live, over=vintage)
+        description: >-
+          capacity standing in a year from every vintage still inside its life. A
+          plant's life is read from data and differs by technology, so the window
+          cannot be a fixed shift — it is an incidence table, the shape the KVL port
+          uses for a cycle basis.
+      capacity:
+        expression: built_capacity + residual_capacity
+        description: all the capacity standing in a year, including what was already there in 1990
 
     constraints:
-      # A technology cannot run beyond the capacity standing that year.
       within_capacity:
+        description: a technology cannot run beyond the capacity standing that year
         foreach: [timeslice, technology, year]
         expression: sum(activity, over=mode) <= capacity * capacity_available
 
-      # Every fuel balances in every timeslice: what is produced covers the demand
-      # placed on it plus what other technologies consume.
       fuel_balance:
+        description: >-
+          every fuel balances in every timeslice — what is produced covers the
+          demand placed on it plus what other technologies consume
         foreach: [timeslice, fuel, year]
         expression: >-
           sum(sum(activity * output_ratio, over=mode), over=technology) * year_split
           >= sliced_demand
           + sum(sum(activity * input_ratio, over=mode), over=technology) * year_split
 
-      # And balances again over the year, for demands that are not sliced.
       annual_balance:
+        description: and balances again over the year, for demands that are not sliced
         foreach: [fuel, year]
         expression: >-
           sum(sum(sum(activity * output_ratio * year_split, over=mode), over=technology), over=timeslice)
@@ -218,16 +244,17 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           + sum(sum(sum(activity * input_ratio * year_split, over=mode), over=technology), over=timeslice)
 
       capacity_ceiling:
+        description: a technology stands at no more capacity than it is allowed
         foreach: [technology, year]
         expression: capacity <= max_capacity
 
       capacity_floor:
+        description: a technology stands at no less capacity than it is required to
         foreach: [technology, year]
         expression: capacity >= min_capacity
 
-      # Firm capacity must exceed the electricity demand of the moment by the
-      # reserve margin.
       reserve:
+        description: firm capacity exceeds the electricity demand of the moment by the reserve margin
         foreach: [timeslice, year]
         expression: >-
           sum(sum(sum(activity * reserve_demand, over=mode), over=fuel), over=technology) * reserve_margin
@@ -235,6 +262,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     objective:
       sense: minimize
+      description: discounted cost of building, holding and running the system over the pathway
       expression: >-
         build * build_cost
         + built_capacity * holding_cost
