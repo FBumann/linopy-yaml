@@ -164,33 +164,11 @@ def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, sweep: re.Pat
     return sorted(seen, key=lambda s: seen[s])
 
 
-#: The figures `bench.plot` writes, in the order the page reads them. Paired
-#: light/dark because mkdocs-material's toggle stamps the *host* page and an
-#: `<img>`-referenced SVG cannot see it; GitHub takes the first of the pair.
-FIGURES = (
-    ('wall', 'Wall time to a loaded solver, by model size'),
-    ('peak', 'Peak resident memory, by model size'),
-    ('cases', 'Every model in the corpus, through the highs sink'),
-    ('sinks', 'The l rung through every sink, both arms'),
-)
-
-
-def figures() -> str:
-    """The figure embeds, as markdown that renders in both places.
-
-    One pointer at the interactive page for the whole set rather than one per
-    figure: these are pictures, and reading a value off one is what that page
-    is for.
-    """
-    out = []
-    for name, alt in FIGURES:
-        out.append(f'![{alt}](charts/{name}-light.svg#only-light)')
-        out.append(f'![{alt}](charts/{name}-dark.svg#only-dark)')
-        out.append('')
-    out.append(
-        '*Static, so they render anywhere. The same data with a cursor: [the chart page](benchmarks-scaling.html).*'
-    )
-    return '\n'.join(out)
+#: Where a reader goes to trace a curve, which is the one thing the tables
+#: below cannot do. It is a link rather than an embed because a static figure
+#: has to be regenerated in lockstep with the numbers beside it to stay true,
+#: and one that is not is worse than no figure at all.
+_CHART_PAGE = '*The same runs with a cursor: [the chart page](benchmarks-scaling.html).*'
 
 
 #: How each arm reaches each sink, said once so a table can name its own seam.
@@ -510,7 +488,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print('Parity gate: enforced at measurement time — every arm below built the same model.')
     print()
-    print(figures())
+    print(_CHART_PAGE)
     for case in sorted({c for c, _, _, _ in rows}):
         sinks = [k for k in sorted({k for c, _, k, _ in rows if c == case}) if sizes_of(case, rows, k)]
         if not sinks:

@@ -77,19 +77,7 @@ re-run is a claim with a shelf life.*
 
 ## Results
 
-![Wall time to a loaded solver, by model size](charts/wall-light.svg#only-light)
-![Wall time to a loaded solver, by model size](charts/wall-dark.svg#only-dark)
-
-![Peak resident memory, by model size](charts/peak-light.svg#only-light)
-![Peak resident memory, by model size](charts/peak-dark.svg#only-dark)
-
-![Every model in the corpus, through the highs sink](charts/cases-light.svg#only-light)
-![Every model in the corpus, through the highs sink](charts/cases-dark.svg#only-dark)
-
-![The l rung through every sink, both arms](charts/sinks-light.svg#only-light)
-![The l rung through every sink, both arms](charts/sinks-dark.svg#only-dark)
-
-*Static, so they render anywhere. The same data with a cursor: [the chart page](benchmarks-scaling.html).*
+*The same runs with a cursor: [the chart page](benchmarks-scaling.html).*
 
 <details markdown="1">
 <summary><b>dispatch</b> — every rung, every sink</summary>

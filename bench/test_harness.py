@@ -30,31 +30,9 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
-from bench.workloads import _engine, _tables, split_sources
+from bench.workloads import _tables, split_sources
 from lpspec.relational.engines.polars.engine import _Block
 from lpspec.relational.sinks.solvers.base import WarmStart
-
-
-def test_the_default_arm_clears_the_engine_rather_than_leaving_it() -> None:
-    """A set-only switch leaks, and a leak here is a confident wrong number.
-
-    One pytest session is one interpreter, so `LPSPEC_ENGINE` set by an arm
-    that names an engine outlives that arm. The default arm has to clear it —
-    otherwise the first named engine selects itself for every arm after it and
-    a two-engine comparison measures one engine against itself, at ratios near
-    1.00 that look like a result.
-
-    The old runner spawned a process per measurement and could not have this
-    bug; the docstring saying so outlived the runner it described.
-    """
-    _engine('duckdb')
-    assert os.environ.get('LPSPEC_ENGINE') == 'duckdb'
-
-    _engine(None)
-    assert 'LPSPEC_ENGINE' not in os.environ, (
-        'the default arm left the previous engine selected, so every arm after it measures that one'
-    )
-
 
 # ---------------------------------------------------------------------------
 # the machine interlock (#705)

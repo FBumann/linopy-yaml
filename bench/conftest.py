@@ -41,18 +41,12 @@ if TYPE_CHECKING:
 #: The relative gap two arms' objectives may differ by and still be one model.
 GATE_RTOL = 1e-9
 
-#: How `--arms` names map to what actually runs. `duckdb` is not a third lane:
-#: it is the lpspec arm with the engine switch a caller has, which is why the
-#: harness sets `LPSPEC_ENGINE` in the measured process rather than reaching
-#: for a selector only it knows about.
-ENGINE = {'lpspec': None, 'duckdb': 'duckdb'}
-
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     g = parser.getgroup('ladder', 'the lpspec benchmark ladder')
     g.addoption('--cases', nargs='+', default=sorted(CASES), choices=sorted(CASES))
     g.addoption('--sizes', nargs='+', default=['xs', 's', 'm'], help="rung labels, or 'all' for every rung a case has")
-    g.addoption('--arms', nargs='+', default=['lpspec', 'linopy'], choices=('lpspec', 'linopy', 'duckdb'))
+    g.addoption('--arms', nargs='+', default=['lpspec', 'linopy'], choices=('lpspec', 'linopy'))
     g.addoption(
         '--sinks',
         nargs='+',
@@ -332,8 +326,8 @@ def gate(request: pytest.FixtureRequest) -> Any:
 
     Gating *the arms being measured* rather than a fixed pair: an arm that is
     fast because it built a different model is the one result this harness must
-    never publish, and a third arm would otherwise be exempt from the check the
-    first two answer to.
+    never publish, so an arm added later answers to the check from its first
+    run rather than from whenever someone remembers to widen this.
     """
     checked: dict[str, None] = {}
     skip = request.config.getoption('--skip-gate')
@@ -345,7 +339,7 @@ def gate(request: pytest.FixtureRequest) -> Any:
         checked[case_name] = None
         smallest = CASES[case_name].ladder[0].label
         paths_ = resolve(case_name, smallest)
-        objectives = {a: objective(a, case_name, smallest, paths_, ENGINE.get(a)) for a in arms}
+        objectives = {a: objective(a, case_name, smallest, paths_) for a in arms}
         lo, hi = min(objectives.values()), max(objectives.values())
         if abs(hi - lo) / max(abs(lo), 1e-12) > GATE_RTOL:
             raise AssertionError(f'{case_name}/{smallest}: arms disagree on the objective — {objectives}')
