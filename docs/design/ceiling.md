@@ -17,9 +17,16 @@ language could not state becomes a ledger row in
 **Primitives** (operators, `sum`, `sum(group_by=)`, `shift`, `where`
 predicates) set the expressive ceiling, and each costs the full two-backend tax:
 eager implementation, plan node + locality class, engine case, lowering case,
-differential tests, SPEC entry. **`macros:` / `expressions:`** are pure AST
-substitution — every composition of primitives at zero marginal cost and zero
-divergence risk. **Formulations** (`piecewise:`) are taxed like a primitive but
+differential tests, SPEC entry. **`macros:`** are pure AST substitution — every
+composition of primitives at zero marginal cost and zero divergence risk.
+**`expressions:`** substitute the same way where referenced and still cost
+nothing at build, but they are a tier apart from macros
+([SPEC §3](../SPEC.md#3-expressions-and-macros)): a named expression has fixed
+dims and an observable identity — readable after a solve via
+`result.expression(name)`, lowered on demand at the read through the same
+compiler the constraints use, which is what keeps the divergence risk at zero.
+A macro is parameterised, has no dims until called, and is never readable.
+**Formulations** (`piecewise:`) are taxed like a primitive but
 compose like a macro: they emit *new declarations* before dispatch and never
 enter as plan expression nodes.
 

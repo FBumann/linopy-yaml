@@ -35,12 +35,15 @@ that evidence at the load; a subclass owns **the hand-off**:
 |---|---|
 | `solvers.loaded(held, name, …)` | reuse or load again — the whole of that decision |
 | `Solver.run(tables)` | `_run`, plus the refusal of a vector that does not span the model |
+| `Solver.warm(ws)` | `_warm`, plus the refusal of a `WarmStart` from another solver or another shape |
 | `_load(tables, batch_rows)` | hand the model over and hold what reads it back |
 | `push(tables)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
 | `_run(tables)` | solve what is loaded, and read it back |
+| `warm_start()` | the basis the last solve left — the incumbent, after a MIP — or `None` |
+| `_warm(ws)` | set it on the loaded model, spans already checked |
 | `close()` | drop the handle, and any licence with it |
 
-The first two are the family's and identical for everyone; the last four are a
+The first three are the family's and identical for everyone; the last six are a
 member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over tables
 and is given an answer.
@@ -49,6 +52,22 @@ So a model rebuilt with new numbers (`bound.rebind`) has them pushed onto what
 the solver already holds and solves from the basis the last one ended on. Both
 sinks do this; a solver that could not would be slower to re-solve and nothing
 else.
+
+A **genuine rebuild** gets no such carry: the new session holds a fresh model
+and starts cold, and `PolarsEngine.solve(warm=False)` is how a caller asks for
+that on purpose — the held solver is discarded, so cold is structural rather
+than scrubbed.
+
+`warm_start()` / `warm(ws)` are the machinery for carrying one anyway:
+`warm_start()` reads the basis — or, after a mixed-integer solve, the
+incumbent, no solver leaving a valid basis behind one — out of a session as an
+opaque `WarmStart`, and `warm(ws)` sets it on the next, refusing a start from
+another solver or one whose spans do not match the ingested model. **Nothing
+above the family calls either**, and `WarmStart` is deliberately not
+re-exported: the case that wants a carry most, a cutting-plane master
+re-solved after gaining a cut, gains a *row*, so the span check refuses it by
+construction. [#382](https://github.com/fluxopt/lpspec/issues/382) holds what
+has to be answered before this reaches a caller.
 
 The guard is `ModelTables.structure` — a digest of everything a re-solve may
 not change, recorded by the solver at its load and cached on the tables. **Values are re-pushed, not diffed**: linopy's persistent layer

@@ -1,32 +1,62 @@
 # Models
 
 Every model in the repo, what it says, and what it exercises. Three questions,
-in the order you probably have them: **can it say my model?** · **is it
-readable?** · **does it get the right answer?**
+in the order you probably have them: **[can it say my model?](#can-it-say-my-model)**
+· **[is it readable?](#every-model)** · **[does it get the right
+answer?](#does-it-get-the-right-answer)** The first and the third are the two
+tables on this page; the second is each model page itself, where the file sits
+beside the same model written on another stack.
+
+Every page starts from data in the shape the call wants, and
+[Preparing the data](data.md) is where that shape comes from.
+
+## Every model
+
+<!-- catalogue:begin -->
+### Teaching models
 
 | | |
 |---|---|
-| [dispatch](dispatch.md) | least-cost generation against a load profile |
-| [storage](storage.md) | dispatch plus a cyclic battery |
-| [transport](transport.md) | a network — generators on buses, lines between them |
-| [piecewise](piecewise.md) | per-generator convex cost curves |
-| [walkthrough](walkthrough.md) | the model behind every pipeline stage, printed |
-| [Dantzig transport](transport_dantzig.md) ✔ | GAMS model library #1 |
-| [PyPSA LOPF rung 1](pypsa_transport.md) ✔ | PyPSA's own transport model |
-| [PyPSA LOPF rung 2](pypsa_ramp.md) ✔ | rung 1 plus generator ramp limits |
-| [PyPSA LOPF rung 3](pypsa_storage.md) ✔ | rung 2 plus storage carrying energy in time |
-| [PyPSA LOPF rung 4](pypsa_cyclic_storage.md) ✔ | rung 3 with the horizon closed on itself |
-| [PyPSA LOPF rung 5](pypsa_kvl.md) ✔ | passive AC lines under Kirchhoff's voltage law |
-| [PyPSA unit commitment](pypsa_unit_commitment.md) ✔ | which units are *on* — the corpus's MILP |
-| [Dantzig, economies of scale](transport_pwl.md) ✔ | GAMS `trnspwl` — piecewise `sqrt` shipping cost |
-| [Stigler's diet](stigler_diet.md) ✔ | the cheapest year of food — where LP started |
-| [Facility location](facility_location.md) ✔ | OR-Library `cap71` — which warehouses to open |
-| [Travelling salesman](tsp_mtz.md) ✔ | TSPLIB `gr17`, MTZ — yes, it fits |
+| [dispatch](dispatch.md) | Least-cost generation against a load profile — the smallest model that is still a model. |
+| [storage](storage.md) | Dispatch plus a battery, and the only construct in the language whose cost is not obviously linear. |
+| [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
+| [piecewise](piecewise.md) | Per-generator convex cost curves, expanded into a λ-formulation. |
+| [special-ordered sets](sos.md) | A piecewise-linear cost curve stated as a **special-ordered set** — [piecewise](piecewise.md) with one line changed, handed to the solver as a set it branches on itself. |
+| [monthly budget](monthly_budget.md) | A cap on what each technology may generate per calendar month — an aggregate over a *coarser grouping of time*, written with the same operator that places a generator on a bus. |
+| [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
+| [walkthrough](walkthrough.md) | The dispatch model plus a macro and a named expression — the one used to print every pipeline stage. |
 
-Both tables below are **generated** — the constructs matrix off each model's
-resolved plan, the reference table off `examples/ports/references.json`, which
-is the same file the tests assert against. Regenerate with
-`uv run python -m tools.constructs`; a test fails if either is stale.
+### The PyPSA ladder
+
+| | |
+|---|---|
+| [rung 1 — transport](pypsa_transport.md) | PyPSA linear optimal power flow, first rung: transport model, linear marginal cost, no KVL. |
+| [rung 2 — ramp limits](pypsa_ramp.md) | [Rung 1](pypsa_transport.md) plus a limit on how fast each generator may change output between snapshots. |
+| [rung 3 — storage](pypsa_storage.md) | [Rung 2](pypsa_ramp.md) plus a `StorageUnit` carrying energy between snapshots. |
+| [rung 4 — cyclic storage](pypsa_cyclic_storage.md) | [Rung 3](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*. |
+| [rung 5 — KVL](pypsa_kvl.md) | Passive AC lines: flow is decided by physics, not chosen. **The last rung of the ladder.** |
+| [rung 6 — AC-DC, two coordinates](pypsa_ac_dc.md) | A meshed AC–DC network under a CO₂ budget. **PyPSA's own `ac-dc-meshed` example.** |
+| [unit commitment](pypsa_unit_commitment.md) | Which generators are *on*, not just how much they produce — a binary per generator per snapshot, with start-up and shut-down charges. |
+
+### Published optima
+
+| | |
+|---|---|
+| [Dantzig transport](transport_dantzig.md) | Dantzig's transportation problem — GAMS model library #1, and the oldest LP in the corpus. |
+| [Dantzig, economies of scale](transport_pwl.md) | GAMS model library `trnspwl`: the same shipping problem, but a big consignment is cheaper per unit — cost grows as `sqrt(x)`, not linearly. |
+| [Stigler's diet](stigler_diet.md) | The cheapest way to eat for a year and stay alive. 77 foods, 9 nutrients, 1939 prices. |
+| [Facility location](facility_location.md) | Where do you put the warehouses? Open a set of them, assign every customer to one, and trade the fixed cost of opening against the cost of serving from further away. |
+| [Routing telephone calls](telephone_routing.md) | How many of 425 requested circuits a five-city network can carry at once — and by which routes. |
+| [Choosing the mode of transport](transport_modes.md) | Moving 180 tonnes of chemicals out of four depots, where a depot may reach a centre by rail *or* by road at different cost. |
+| [OSeMOSYS UTOPIA](osemosys_utopia.md) | What to build and how hard to run it, 1990–2010, to meet three end-use demands at least discounted cost. |
+| [Travelling salesman](tsp_mtz.md) | Visit every city once and come home, as cheaply as possible. The most famous problem in combinatorial optimisation, and the one most often assumed to be out of reach here. |
+<!-- catalogue:end -->
+
+Everything on this page is **generated** — the catalogue off the site nav and
+each page's own opening line, the constructs matrix off each model's resolved
+plan, the reference table off `examples/ports/references.json`, which is the
+same file the tests assert against. Regenerate with
+`uv run python -m tools.constructs`; a test fails if any of the three is stale.
 
 Every page also carries the model **as math**, typeset from the same file the
 engine builds (`uv run python -m tools.gallery_math`, likewise gated). Where a
@@ -50,6 +80,8 @@ drift from what the engine builds.
 | [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | **✓** | · | · | · |
 | [walkthrough](walkthrough.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [facility_location](facility_location.md) | **✔** 932616 | **✓** | · | · | · | · | **✓** | · | · | **✓** |
+| [osemosys_utopia](osemosys_utopia.md) | **✔** 29446.9 | **✓** | · | · | · | · | **✓** | · | · | · |
+| [pypsa_ac_dc](pypsa_ac_dc.md) | **✔** 1.8441e+07 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | **✔** 17228.8 | · | **✓** | **✓** | **✓** | · | **✓** | · | · | · |
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_ramp](pypsa_ramp.md) | **✔** 18200 | · | **✓** | **✓** | · | · | **✓** | · | · | · |
@@ -57,7 +89,9 @@ drift from what the engine builds.
 | [pypsa_transport](pypsa_transport.md) | **✔** 22000 | · | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | **✔** 24900 | **✓** | · | **✓** | · | **✓** | **✓** | · | · | **✓** |
 | [stigler_diet](stigler_diet.md) | **✔** 0.108662 | **✓** | · | · | · | · | **✓** | · | · | · |
+| [telephone_routing](telephone_routing.md) | **✔** 380 | **✓** | **✓** | · | · | · | **✓** | · | · | **✓** |
 | [transport_dantzig](transport_dantzig.md) | **✔** 153.675 | **✓** | · | · | · | · | **✓** | · | · | · |
+| [transport_modes](transport_modes.md) | **✔** 1715 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [transport_pwl](transport_pwl.md) | **✔** 8.78685 | **✓** | · | **✓** | · | · | **✓** | **✓** | · | **✓** |
 | [tsp_mtz](tsp_mtz.md) | **✔** 2085 | **✓** | **✓** | · | · | **✓** | **✓** | · | · | **✓** |
 <!-- constructs:end -->
@@ -98,7 +132,9 @@ that class, and the evidence behind
 | [facility_location](facility_location.md) | 932615.75 | 1e-09 | · | published by OR-Library (Beasley) for instance cap71 of the uncapacitated warehouse location set, in the file uncapopt: http://people.brunel.ac.uk/~mastjjb/jeb/orlib/uncapinfo.html |
 | [monthly_budget](monthly_budget.md) | 9500.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure |
 | [multi_period](multi_period.md) | 10020.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure |
+| [osemosys_utopia](osemosys_utopia.md) | 29446.86269 | 1e-09 | · | published by OSeMOSYS: asserted in OSeMOSYS_GNU_MathProg tests/test_gnu_mathprog.py as obj = 2.944686269e+04 for tests/utopia.txt, and reproduced here by running GLPK directly (glpsol 5.0, src/osemosys.txt) — an oracle outside Python entirely |
 | [piecewise](piecewise.md) | 3850.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
+| [pypsa_ac_dc](pypsa_ac_dc.md) | 18441021.477729216 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ac_dc.py — n.objective + n.objective_constant, the system cost |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | 17228.77962151063 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py |
 | [pypsa_kvl](pypsa_kvl.md) | 17000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py |
 | [pypsa_ramp](pypsa_ramp.md) | 18200.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py |
@@ -107,8 +143,10 @@ that class, and the evidence behind
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | 24900.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py |
 | [stigler_diet](stigler_diet.md) | 0.10866227820675685 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year[^stigler_diet] |
 | [storage](storage.md) | 5650.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure |
+| [telephone_routing](telephone_routing.md) | 380.0 | 1e-09 | · | published by Gueret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP (Dash Optimization, 2002) SS12.3.3 p. 182 — "380 out of the required 425 calls are routed"; problem and data in SS12.3, pp. 180-182 |
 | [transport](transport.md) | 4400.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/transport.py — agreement, not a published figure |
 | [transport_dantzig](transport_dantzig.md) | 153.675 | 1e-09 | **✔** | published with GAMS model library #1 (trnsport), after Dantzig, Linear Programming and Extensions (1963) ch. 3.3[^transport_dantzig] |
+| [transport_modes](transport_modes.md) | 1715.0 | 1e-09 | · | published by Gueret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP (Dash Optimization, 2002) SS10.2.3 p. 143 — "The minimum cost is EUR 1,715k"; problem and data in SS10.2, p. 142 |
 | [transport_pwl](transport_pwl.md) | 8.786852757777865 | 1e-09 | · | linopy 0.9.0's own add_piecewise_formulation, via examples/ports/references/linopy/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective |
 | [tsp_mtz](tsp_mtz.md) | 2085.0 | 1e-09 | · | published by TSPLIB for instance gr17 (Groetschel, 17 cities, EXPLICIT lower-diagonal distance matrix); optimum 2085 as listed in the TSPLIB solutions file |
 
@@ -140,8 +178,12 @@ cost, ramp limits, storage cycling and KVL at once, and a mismatch then
 implicates five features instead of one. So each network is a ladder, one
 feature per rung, each switched off in PyPSA and reproduced here:
 **1 transport model** ✔ · **2 ramp limits** ✔ · **3 storage with state of
-charge** ✔ · **4 cyclic boundary condition** ✔ · **5 KVL** ✔ — the ladder is
-complete. [Unit commitment](pypsa_unit_commitment.md) sits beside the ladder
+charge** ✔ · **4 cyclic boundary condition** ✔ · **5 KVL** ✔ · **6 a meshed
+AC-DC network under a CO₂ budget** ✔. Rungs 1–5 are one feature at a time on a
+three-bus network; rung 6 is the first that puts several of them on a network
+somebody else designed, which is a different question — not *can it say this
+feature* but *does the whole thing still read*.
+[Unit commitment](pypsa_unit_commitment.md) sits beside the ladder
 rather than on it — one bus, no network, because the feature under test is
 integrality.
 
@@ -153,7 +195,13 @@ saturated, which fixes every generator's output exactly, so a ramp limit on that
 network can only make it infeasible — never change the answer. A rung that
 cannot bind is not evidence that it works.
 
-**The ladder finished without a new primitive.** Rung 5 is Kirchhoff's voltage
+**Rung 6 is where a second coordinate first earns its keep.** A generator
+sits on a bus *and* burns a carrier, and both maps are load-bearing — the
+balance groups through one, the CO₂ budget reads an emission rate back down
+through the other. It also carries passive lines and controllable links at
+once, so both branch kinds group onto the same bus dimension in one equation.
+
+**The ladder reached rung 5 without a new primitive.** Rung 5 is Kirchhoff's voltage
 law, and it needed nothing added to the language: a cycle basis is a sparse
 `(cycle, line)` incidence *parameter*, and the constraint is one
 `sum(f * cycle_incidence, over=line) == 0`. A line can belong to several
@@ -195,7 +243,7 @@ is refused by design rather than unimplemented. The two halves of that answer
 are worth keeping apart: one is a macro nobody has written, the other is the
 ceiling doing its job.
 
-Three rows from eleven ports — a rate worth watching once the corpus has hit
+Three rows from fifteen ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 **The TSP row is the one to read**, and it is narrower than it first looked.

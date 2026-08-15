@@ -42,7 +42,7 @@ from lpspec.relational.result import Diagnostics, Result
 from lpspec.relational.sinks.tables import SENSE
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
 
     from polars._typing import MaintainOrderJoin
 
@@ -143,6 +143,11 @@ class PolarsEngine:
         self._program: plan.Program | None = None
         self._compiler: PolarsCompiler | None = None
         self._bound: BoundSources | None = None
+        #: ``name -> deferred plan expression``, one per declared named
+        #: expression. Thunks, never plans: a build lowers none of them
+        #: (SPEC §3), and a solve turns each into a reader that lowers on its
+        #: first call (:meth:`_expression_readers`).
+        self._expression_thunks: dict[str, Callable[[], plan.Expression]] = {}
         self._variables: dict[str, pl.LazyFrame] = {}
         self._constraints: dict[str, pl.LazyFrame] = {}
         #: ``name -> rows not built``, because every term they had vanished.
@@ -177,7 +182,12 @@ class PolarsEngine:
     # build
     # ------------------------------------------------------------------
 
-    def build(self, program: plan.Program, sources: Mapping[str, Any]) -> None:
+    def build(
+        self,
+        program: plan.Program,
+        sources: Mapping[str, Any],
+        expressions: Mapping[str, Callable[[], plan.Expression]] | None = None,
+    ) -> None:
         """Bind *sources*, then build every declaration into the model frames.
 
         The compiler comes after binding, two of its answers being read off the
@@ -212,8 +222,14 @@ class PolarsEngine:
         ``rebind`` is. The previous build is released *before* this one starts,
         so a driver that re-solves in a loop stays at one model's peak; what
         the loaded solver holds survives as the digest it recorded at its load.
+
+        *expressions* maps each declared named expression to a thunk producing
+        its plan expression. None is called here — a build pays nothing for a
+        declared expression (SPEC §3) — they become the deferred readers a
+        solve's result hands out (:meth:`_expression_readers`).
         """
         self._reset()
+        self._expression_thunks = dict(expressions or {})
 
         self._program = program
         with _clocked(self._timings, 'bind'):
@@ -651,6 +667,7 @@ class PolarsEngine:
         *,
         solver_options: Mapping[str, Any] | None = None,
         batch_rows: int | None = None,
+        warm: bool = True,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -678,6 +695,13 @@ class PolarsEngine:
                 (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
                 This method's parameter alone, kept off the public handle:
                 nothing outside the chunking tests sets it.
+            warm: Whether this solve may start from what the session holds.
+                ``True``, the default, keeps it — warm on a kept session, cold
+                on a fresh load. ``False`` is deliberately cold, held to
+                structurally: the held solver is closed before the load
+                decision, so the fresh one has nothing to start from, whatever
+                a member squirrels away. :attr:`~lpspec.relational.result.Diagnostics.loads`
+                ticks with it, the whole model having been transferred again.
 
         Returns:
             The solution, holding this engine and the build it answered.
@@ -687,8 +711,12 @@ class PolarsEngine:
             tables = sinks.ingestible(solver_name, built)
             self._sink_columns = tables.column_count - built.column_count
             self._sink_rows = tables.row_count - built.row_count
+            if not warm and self._solver is not None:
+                self._solver.close()
+                self._solver = None
             held = self._solver
             self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
+            started: Literal['cold', 'session'] = 'session' if self._solver is held else 'cold'
         self._solves += 1
         if self._solver is not held:
             self._loads += 1
@@ -707,6 +735,8 @@ class PolarsEngine:
             _primals=primals,
             _duals=duals,
             _activities=activities,
+            _started=started,
+            _expressions=self._expression_readers(answer.primal),
             _no_duals=None
             if answer.dual is not None
             else no_duals_message(
@@ -777,6 +807,30 @@ class PolarsEngine:
             rows(dual),
             rows(activity),
         )
+
+    def _expression_readers(self, primal: pl.Series | None) -> dict[str, Callable[[], pl.DataFrame]]:
+        """One deferred reader per declared named expression — nothing compiled yet.
+
+        Deferral is the contract (SPEC §3): a closure lowers and compiles its
+        expression when it is first called, so a solve over fifty declared
+        expressions that reads none pays for a dict of closures. Each captures
+        a snapshot the result *owns* — the program, the bound data, a copy of
+        this build's variable-frame registry and the solver's primal vector —
+        so it keeps answering after a rebind or ``close()`` the way every
+        other reader does, at the cost of keeping those frames alive.
+        """
+        if primal is None:
+            return {}
+        assert self._program is not None and self._bound is not None
+        compiler = PolarsCompiler(self._program, self._bound, dict(self._variables))
+        values = pl.DataFrame(
+            {'var_label': pl.int_range(primal.len(), dtype=pl.Int64, eager=True), _SOLUTION: primal}
+        ).lazy()
+
+        def reader(name: str, thunk: Callable[[], plan.Expression]) -> Callable[[], pl.DataFrame]:
+            return lambda: _expression_frame(name, thunk(), compiler, values)
+
+        return {name: reader(name, thunk) for name, thunk in self._expression_thunks.items()}
 
     def _laid_out(
         self,
@@ -855,6 +909,7 @@ class PolarsEngine:
         self._constraint_blocks.clear()
         self._bound = None
         self._compiler = None
+        self._expression_thunks = {}
 
     def __enter__(self) -> PolarsEngine:
         return self
@@ -878,6 +933,74 @@ def _clocked(timings: dict[str, float], phase: str) -> Iterator[None]:
         yield
     finally:
         timings[phase] = timings.get(phase, 0.0) + perf_counter() - started
+
+
+#: Scratch columns of the expression reader. The spaces make them
+#: unrepresentable as declared names, the same trick the compiler's own
+#: scratch columns use.
+_SOLUTION = '__solution value__'
+_EXPRESSION_ROW = '__expression row__'
+
+
+def _expression_frame(name: str, expr: plan.Expression, compiler: PolarsCompiler, values: pl.LazyFrame) -> pl.DataFrame:
+    """Named expression *expr* evaluated at the primal *values* — ``(dims…, value)``.
+
+    The tier is affine by construction, so a value is ``sum(coeff · value)``
+    over the expression's term stream plus its constant part — the existing
+    compiler reused wholesale, no second evaluation machinery. Each fragment
+    from :meth:`PolarsCompiler.expression` is joined to the solver's primal
+    vector (a term) or taken as it is (a constant part), aggregated to its own
+    dims, and accumulated over the expression's coordinate product by the same
+    carrier-and-left-join shape :meth:`PolarsEngine._build_constraint` gives a
+    right-hand side.
+
+    The frame answers the way a constraint over the same expression would:
+    a coordinate a parameter does not cover contributes zero (SPEC §8), a
+    coordinate where a term's variable is absent has no row (SPEC §7), and a
+    variable-free expression is one row of ``value``. Dims come back in
+    declaration order — an expression has no ``foreach`` to order them — and
+    rows in label order over those dims, :meth:`Result.primal`'s promise.
+
+    Raises:
+        DataError: A divisor with no value where the expression divides —
+            checked before any sum can read the null as zero.
+    """
+    context = f"named expression '{name}'"
+    compiled = compiler.expression(expr, context)
+    fragments = (*compiled.terms, *compiled.consts)
+    union = {d for p in fragments for d in p.dims}
+    dims = tuple(d.name for d in compiler.program.dimensions if d.name in union)
+
+    divisors = sorted(plan.divisor_parameters(expr))
+    if divisors:
+        counts = pl.collect_all([p.frame.select(pl.col(p.value_column).null_count()) for p in fragments])
+        undefined = sum(count.item() for count in counts)
+        if undefined:
+            raise DataError(f'{context}: {sparse_divisor_message(", ".join(divisors), undefined)}')
+
+    restrictions = _absence_restrictions(list(compiled.terms))
+    carrier = labels.frame(compiler, dims, None, _EXPRESSION_ROW, 0, restrictions).lazy()
+
+    total = pl.lit(0.0, dtype=pl.Float64)
+    for i, p in enumerate(fragments):
+        column = f'__piece {i}__'
+        if p.is_term:
+            valued = p.frame.join(values, on='var_label', how='left').select(
+                *p.dims, (pl.col('coeff') * pl.col(_SOLUTION)).alias(column)
+            )
+        else:
+            valued = p.frame.select(*p.dims, pl.col('cval').alias(column))
+        aggregated = (
+            valued.group_by(p.dims).agg(pl.col(column).sum()) if p.dims else valued.select(pl.col(column).sum())
+        )
+        carrier = (
+            carrier.join(aggregated, on=list(p.dims), how='left') if p.dims else carrier.join(aggregated, how='cross')
+        )
+        total = total + pl.col(column).fill_null(0.0)
+
+    laid_out = carrier.select(_EXPRESSION_ROW, *dims, total.alias('value')).collect(engine='streaming')
+    ordered = labels.in_position_order(laid_out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
+    return ordered.with_columns(pl.col(d).cast(pl.String) for d in dims if compiler.data.is_enum_encoded(d))
 
 
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:

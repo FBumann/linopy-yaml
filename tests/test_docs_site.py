@@ -19,6 +19,7 @@ GitHub renders, and its relative links out of the tree are correct there.
 from __future__ import annotations
 
 import functools
+import json
 import re
 from pathlib import Path
 
@@ -36,8 +37,14 @@ _ABSOLUTE = re.compile(r'^([a-z][a-z0-9+.-]*:|//|#|/)', re.IGNORECASE)
 
 @functools.cache
 def _pages() -> tuple[Path, ...]:
-    """Every page mkdocs builds — so, not `docs/README.md`."""
-    return tuple(p for p in sorted(DOCS.rglob('*.md')) if p.relative_to(DOCS).as_posix() != 'README.md')
+    """Every page mkdocs builds — so, not `docs/README.md`.
+
+    A notebook is one of them: mkdocs-jupyter renders it into the site and
+    GitHub renders it in the tree, so a link in a markdown cell is read in both
+    places and lives under exactly the convention above.
+    """
+    pages = (*DOCS.rglob('*.md'), *DOCS.rglob('*.ipynb'))
+    return tuple(p for p in sorted(pages) if p.relative_to(DOCS).as_posix() != 'README.md')
 
 
 def _all_pages() -> tuple[Path, ...]:
@@ -45,8 +52,16 @@ def _all_pages() -> tuple[Path, ...]:
     return (*_pages(), DOCS / 'README.md')
 
 
+def _prose(page: Path) -> str:
+    """What a reader sees: the whole file, or a notebook's markdown cells."""
+    if page.suffix != '.ipynb':
+        return page.read_text()
+    cells = json.loads(page.read_text())['cells']
+    return '\n'.join(''.join(cell['source']) for cell in cells if cell['cell_type'] == 'markdown')
+
+
 def _targets(page: Path) -> list[str]:
-    return [inline or reference for inline, reference in _TARGETS.findall(page.read_text())]
+    return [inline or reference for inline, reference in _TARGETS.findall(_prose(page))]
 
 
 def test_no_relative_link_escapes_the_docs_tree():

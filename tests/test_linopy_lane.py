@@ -568,3 +568,74 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
     )
     built = lpspec_linopy.build(masked, data=data)
     assert 'x' in built.variables
+
+
+# ---------------------------------------------------------------------------
+# named expressions: one reader per lane, one answer (#562)
+# ---------------------------------------------------------------------------
+
+EXPRESSION_YAML = """
+dimensions:
+  snapshot: {dtype: int, values: [0, 1, 2]}
+  generator: {dtype: str, values: [g1, g2]}
+parameters:
+  p_max: {dims: [generator]}
+  cost: {dims: [generator]}
+  load: {dims: [snapshot]}
+variables:
+  p:
+    foreach: [snapshot, generator]
+    bounds: {lower: 0, upper: p_max}
+expressions:
+  total_gen: sum(p, over=generator)
+  spend: sum(p * cost, over=generator)
+constraints:
+  balance:
+    foreach: [snapshot]
+    expression: total_gen == load
+objective:
+  sense: minimize
+  expression: sum(sum(p * cost, over=generator), over=snapshot)
+"""
+
+#: Distinct costs and a load exceeding the cheap generator's capacity make the
+#: dispatch unique, so the two lanes' expression values are comparable exactly
+#: rather than up to an alternative optimum.
+EXPRESSION_DATA = {
+    'p_max': pd.Series({'g1': 100.0, 'g2': 100.0}),
+    'cost': pd.Series({'g1': 10.0, 'g2': 20.0}),
+    'load': pd.Series({0: 50.0, 1: 120.0, 2: 80.0}),
+}
+
+
+@pytest.mark.parametrize(
+    'name',
+    [
+        pytest.param('total_gen', id='referenced-by-a-constraint'),
+        pytest.param('spend', id='declared-but-never-referenced'),
+    ],
+)
+def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
+    """`result.expression(name)` and the shim's `expression` read one value.
+
+    Including the standalone case: SPEC §3 guarantees a never-referenced
+    expression is parsed and name-checked, and #562 makes it readable — on
+    the eager lane by building the declared expression on the solved model and
+    taking linopy's native `.solution`.
+    """
+    from tests.differential import differential
+
+    path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
+    with differential(path, EXPRESSION_DATA) as run:
+        tidy = run.result.expression(name)
+        eager = lpspec_linopy.expression(run.model, path, name, data=dict(EXPRESSION_DATA))
+        got = {int(k): v for k, v in zip(tidy['snapshot'], tidy['value'], strict=True)}
+        want = {int(k): float(v) for k, v in eager.to_series().items()}
+        assert got == pytest.approx(want), f"the two lanes disagree about named expression '{name}'"
+
+
+def test_the_shim_refuses_an_unknown_expression_name(yaml_file):
+    path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
+    m = lpspec_linopy.build(path, data=dict(EXPRESSION_DATA))
+    with pytest.raises(KeyError, match='never an expression string'):
+        lpspec_linopy.expression(m, path, 'sum(p, over=generator)', data=dict(EXPRESSION_DATA))

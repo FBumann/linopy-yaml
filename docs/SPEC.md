@@ -16,7 +16,7 @@ applied in a different position.
 
 | # | Law | § |
 |---|---|---|
-| 1 | Ten top-level keys, and the schema is **closed at every level** — an unknown key is an error naming the near miss. Booleans are YAML 1.2, so `no` / `on` / `off` stay labels. | [§1](#1-file-shape) |
+| 1 | Ten declaration keys plus `version` and `description`, and the schema is **closed at every level** — an unknown key is an error naming the near miss. Booleans are YAML 1.2, so `no` / `on` / `off` stay labels. | [§1](#1-file-shape) |
 | 2 | Everything decidable without data is **decided without data**. | [§9](#9-errors) |
 | 3 | **One flat namespace, no shadowing** — a collision is a load error naming both declarations. | [§5.1](#51-name-resolution) |
 | 4 | **Position decides which kinds of name are legal**, and a name's kind is fixed at load time. A dimension is never legal in a value position: it is a coordinate space, not data. | [§5.1](#51-name-resolution) |
@@ -29,10 +29,24 @@ applied in a different position.
 
 ## 1. File shape
 
-Ten top-level keys: `dimensions`, `lookups`, `parameters`, `variables`,
+Ten declaration keys: `dimensions`, `lookups`, `parameters`, `variables`,
 `constraints`, `objective` (§2), `expressions`, `macros` (§3), `piecewise`
-(§4), `sos` (§4.1), plus `version` (below). The schema accepts any subset, but `check`, `solve` and
-`write` require an objective — there is nothing to optimise without one.
+(§4), `sos` (§4.1), plus `version` and `description` (both below). The schema
+accepts any subset, but `check`, `solve` and `write` require an objective —
+there is nothing to optimise without one.
+
+**`description` says what the file as a whole is** — the same plain prose a
+declaration's `description:` takes (§2), and the typeset document opens with
+it. Optional, never parsed, default `null`:
+
+<!-- doctest: skip -->
+```yaml
+description: Least-cost dispatch of a generator fleet against an hourly load.
+dimensions: ...
+```
+
+A `#` comment above the file says this too, and is thrown away by the parser. A
+description is the version a reader who never opens the YAML still gets.
 
 **`version` declares which surface the file is written against.** It is
 optional, and absent means `0`:
@@ -87,6 +101,19 @@ a special case, so a dummy dimension of size 1 is never how a scalar is written.
 One gap: a scalar **variable** may not carry a `where`
 ([#340](https://github.com/fluxopt/lpspec/issues/340)) — put the condition on
 the constraints that use it.
+
+**Every declaration block takes an optional `description:`** — free text, never
+parsed, no length limit, default `null`. Unlike a `#` comment it is part of the
+loaded model, so it reaches AST consumers: the typeset legend prints the one on
+a dimension, parameter or variable. That is every block in this section plus
+`expressions`, `macros` (§3), `piecewise` (§4) and `sos` (§4.1) — a named
+expression is written as a bare string until it carries one (§3).
+
+It is **plain prose, in no notation**. The same words are set by every format
+and nothing translates between them, so a `$\ell$` that reads correctly in LaTeX
+is broken Typst. Write the thing rather than its symbol — "flow on a line", not
+"flow on line $\ell$". This is not checked: a `$` is as likely to be a currency
+as a math span.
 
 **`dimensions`** — the master coordinate index. Every dimension named anywhere
 must be declared. `dtype` ∈ {`float`, `int`, `str`, `datetime`}, default `str`.
@@ -171,6 +198,7 @@ default `float`.
 | `where` | str or null | `null` — §6; variables exist only where true |
 | `bounds.lower` / `.upper` | number or parameter name | `-inf` / `inf` |
 | `domain` | str | `continuous`; or `integer`, or `binary` — which carries fixed 0/1 bounds |
+| `description` | str or null | `null` — free text, never parsed |
 
 Omitting a bound means unbounded on that side — non-negativity is written, not
 assumed. Bounds are
@@ -231,20 +259,37 @@ own shape.
 
 ## 3. `expressions` and `macros`
 
-Pure AST substitution: they are expanded away before anything consumes the
-model, so they cost nothing at build time. A named expression is a macro with no
-formals.
+Two tiers of composition, one substitution engine. Where a constraint or an
+objective references either, it is expanded away before anything consumes the
+model — substitution, so a reference costs nothing at build time and both
+lanes see the same core AST. The two blocks are not one thing, though:
+
+- A **named expression** has fixed dims — they fall out of its body, no
+  `foreach` needed — and an **observable identity**: after a solve it is
+  readable by name, `result.expression(name)` ([§10](#10-python-api)), lowered
+  on demand at the read and never at build, so a model that reads none pays
+  for none. That is the point of naming a quantity: the CO₂ a constraint
+  bounds and the CO₂ a summary reports are one definition, validated once.
+- A **macro** is parameterised: it has no dims until called and each call site
+  may give it different ones, so it has no value a solve could report and is
+  never readable. A macro is pure AST substitution and nothing else.
 
 ```yaml
 dimensions:
   generator:
     dtype: str
+parameters:
+  rate:
+    dims: [generator]
 variables:
   p:
     foreach: [generator]
 
 expressions:
   total_generation: sum(p, over=generator)
+  emissions:
+    expression: sum(p * rate, over=generator)
+    description: CO2 released, the quantity a cap would bound
 macros:
   weighted_sum:
     args: [array, weights]  # positional formals, default []

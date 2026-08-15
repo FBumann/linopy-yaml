@@ -51,10 +51,18 @@ def measurements(name: str) -> Path:
 
 
 def best(path: Path, sink: str) -> dict[str, dict[Any, Any]]:
-    """``(case, size, arm) -> fastest repeat``. Minimum, because noise only adds."""
+    """``(case, size, arm) -> fastest repeat``. Minimum, because noise only adds.
+
+    A measurement taken without `benchmem(isolate=True)` has no peak, and both
+    figures plot one — so such a record is dropped here rather than divided by
+    a billion halfway through the render. What the reader then gets is `_at`
+    naming the point the run is missing, which says what to re-measure.
+    """
     out: dict[str, dict[Any, Any]] = {'wall': {}, 'peak': {}, 'cols': {}}
     for r in bench_results.records(path):
         if r.get('record') != 'timing' or 'error' in r or r.get('sink') != sink:
+            continue
+        if r.get('peak_rss_bytes') is None:
             continue
         k = (r['case'], r['size'], r['arm'])
         out['wall'][k] = min(out['wall'].get(k, 9e99), r['wall_seconds'])

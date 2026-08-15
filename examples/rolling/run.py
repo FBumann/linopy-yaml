@@ -100,13 +100,14 @@ def rolling(length: int, step: int) -> lps.Runs:
 
 
 def cost_of(runs: lps.Runs) -> float:
-    """What the schedule cost, summed over the windows that own it.
+    """What the schedule cost, summed over the snapshots each window owns.
 
     A window objective covers its lookahead too, so summing them double-counts.
-    The stitched dispatch is what each window *keeps*, so it is priced instead.
+    `spend` is the model's own per-snapshot definition, and the stitched read
+    keeps only the rows a window owns — the same quantity the objective
+    minimises, never restated in a second language.
     """
-    priced = runs.primal('p', original_index=True).join(SOURCES['cost'].rename({'value': 'cost'}), on='generator')
-    return float(priced.select((pl.col('value') * pl.col('cost')).sum()).item())
+    return float(runs.expression('spend', original_index=True)['value'].sum())
 
 
 def main() -> None:

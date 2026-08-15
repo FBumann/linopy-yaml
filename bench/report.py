@@ -7,6 +7,11 @@ which is the usual choice for a benchmark because noise only ever adds. The
 point of this module existing at all is that the published table has one
 provenance — a file — instead of being retyped by hand and then outliving the
 harness that produced it.
+
+What it does add is a doubt. A minimum whose rounds all ran slow looks exactly
+like a clean one, and one such cell was 2.33x wrong before anyone noticed
+(#797) — so a cell whose spread exceeds `SPREAD_BUDGET` is marked. The number
+printed is still the minimum; the mark is what says not to quote it.
 """
 
 from __future__ import annotations
@@ -25,6 +30,27 @@ ARMS = ('lpspec', 'linopy')
 #: The ratio columns are lpspec ÷ linopy: the eager lane is what this one is
 #: judged against, and the only arm still measured.
 _RATIO_AGAINST = 'linopy'
+
+#: How far a cell's IQR may reach, as a fraction of its own median, before the
+#: number is marked rather than published. Measured on a full ladder at
+#: `3f0dfac`, 192 measurements: iqr/median is p50 5.8%, p75 10.1%, p90 16.0%,
+#: p95 24.1%, max 53.8%. 0.25 sits just above p95, marks 9 of the 192, and
+#: catches the one cell independently verified as contaminated — 53.8% spread,
+#: minimum inflated 2.33x against a clean re-run (#797).
+SPREAD_BUDGET = 0.25
+
+#: Appended to a marked number. A trailing character rather than a superscript
+#: or a footnote reference: it survives markdown in both renderers the page is
+#: read in, and does not read as a link to something.
+MARK = '~'
+
+_SPREAD_NOTE = (
+    f'`{MARK}` marks a measurement whose rounds spread wider than '
+    f'{SPREAD_BUDGET:.0%} of their own median. Every round was slow, so the '
+    'minimum printed for it has no clean round behind it and may be '
+    'contaminated: **do not quote a marked number, or a ratio drawn from one** '
+    '— re-take the cell on an idle machine.'
+)
 
 
 def load(
@@ -76,6 +102,41 @@ def _gb(n: float) -> str:
 
 def _ratio(a: float | None, b: float | None) -> str:
     return f'{a / b:.2f}x' if a and b else '—'
+
+
+def suspect(row: Row | None) -> bool:
+    """Whether *row*'s minimum spread too wide over its rounds to be quoted.
+
+    IQR over median, not stddev over min, because the two disagree on exactly
+    the cases that matter. A single wild round inflates stddev while the bulk
+    of the distribution — and with it the minimum — stays tight:
+    `nodal-s-linopy-highs` read stddev/min 243% at iqr/median 3%, and its
+    minimum landed within 1% of a clean re-take, so stddev would have marked a
+    sound number. Interference sustained across *every* round is what `min`
+    cannot survive, and it spreads the whole distribution instead:
+    `transport-m-lpspec-highs` read iqr/median 54% on a minimum inflated 2.33x
+    against a clean re-take. pytest-benchmark's own outlier counters miss that
+    cell (`2;0`, `iqr_outliers 0`) for the reason that makes it dangerous —
+    when every round is slow, none of them is an outlier.
+
+    A record written before the spread was carried has no `iqr` and is never
+    marked. An absent signal is not a clean one, but a mark on every old cell
+    would say nothing about any of them.
+    """
+    if not row:
+        return False
+    iqr, median = row.get('iqr'), row.get('median')
+    return iqr is not None and bool(median) and iqr / median > SPREAD_BUDGET
+
+
+def _marked(cell: str, *, noisy: bool) -> str:
+    """The cell with the noise mark, unless there is no number there to doubt."""
+    return cell + MARK if noisy and cell != '—' else cell
+
+
+def _note(lines: list[str], *, marked: bool) -> list[str]:
+    """The rendered table, with the note under it when it marked at least one cell."""
+    return [*lines, '', _SPREAD_NOTE] if marked else lines
 
 
 _DENSITY_RUNG = re.compile(r'd\d+$')
@@ -157,6 +218,13 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
     The caption is bold rather than a heading: these live inside a collapsed
     ``<details>``, and a heading in there still lands in the table of contents
     — a rail full of entries for tables the page has just called the appendix.
+
+    A wall cell whose rounds spread past `SPREAD_BUDGET` carries `MARK`, and so
+    does the ratio beside it: a ratio is only as quotable as the two minima it
+    divides, and a flipped ratio is the harm this exists to prevent. The peak
+    columns are never marked — pytest-benchmem records a series per repeat, not
+    a distribution over rounds, so there is no equivalent signal to mark them
+    with.
     """
     cols = ARMS
     head = (
@@ -164,7 +232,7 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
         + [f'wall: {a}' for a in cols]
         + ['wall']
         + [f'peak: {a}' for a in cols]
-        + ['peak', 'LP']
+        + ['peak']
     )
     lines = [
         f'**{case} — {sink} sink**',
@@ -174,6 +242,7 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
         '| ' + ' | '.join(head) + ' |',
         '|' + '---|' * len(head),
     ]
+    marked = False
     for size in sizes_of(case, rows, sink):
         arms = {a: rows.get((case, size, sink, a)) for a in cols}
         ref = next((r for r in arms.values() if r), None)
@@ -181,18 +250,19 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
             continue
         wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
         peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
+        noisy = {a: suspect(r) for a, r in arms.items()}
         cells = [
             _si(ref['counts']['columns']),
             _live(ref),
             _si(ref['counts']['rows']),
-            *(f'{wall[a]:.2f} s' if wall[a] else '—' for a in cols),
-            _ratio(wall['lpspec'], wall[_RATIO_AGAINST]),
+            *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in cols),
+            _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
             *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
             _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
-            f'{ref["lp_bytes"] / 1e6:.0f} MB' if ref.get('lp_bytes') else '—',
         ]
+        marked = marked or any(noisy.values())
         lines.append('| ' + ' | '.join(cells) + ' |')
-    return '\n'.join(lines)
+    return '\n'.join(_note(lines, marked=marked))
 
 
 def _live(r: Row) -> str:
@@ -317,6 +387,7 @@ def density(rows: dict[Key, Row]) -> str:
         '| ' + ' | '.join(head) + ' |',
         '|' + '---|' * len(head),
     ]
+    marked = False
     for case in cases:
         for size in reversed(sizes_of(case, rows, 'lp', sweep=_DENSITY_RUNG)):
             arms = {a: rows.get((case, size, 'lp', a)) for a in cols}
@@ -325,17 +396,19 @@ def density(rows: dict[Key, Row]) -> str:
                 continue
             wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
             peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
+            noisy = {a: suspect(r) for a, r in arms.items()}
             cells = [
                 case,
                 _live(ref),
                 _si(ref['counts']['columns']),
-                *(f'{wall[a]:.2f} s' if wall[a] else '—' for a in cols),
-                _ratio(wall['lpspec'], wall[_RATIO_AGAINST]),
+                *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in cols),
+                _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
                 *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
                 _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
             ]
+            marked = marked or any(noisy.values())
             lines.append('| ' + ' | '.join(cells) + ' |')
-    return '\n'.join(lines)
+    return '\n'.join(_note(lines, marked=marked))
 
 
 def declarations(rows: dict[Key, Row]) -> str:
@@ -366,6 +439,7 @@ def declarations(rows: dict[Key, Row]) -> str:
         '| ' + ' | '.join(head) + ' |',
         '|' + '---|' * len(head),
     ]
+    marked = False
     for case in cases:
         for size in sorted(sizes_of(case, rows, 'lp', sweep=_DECLARATION_RUNG)):
             arms = {a: rows.get((case, size, 'lp', a)) for a in cols}
@@ -374,17 +448,19 @@ def declarations(rows: dict[Key, Row]) -> str:
                 continue
             wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
             peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
+            noisy = {a: suspect(r) for a, r in arms.items()}
             cells = [
                 case,
                 str(int(size[1:])),
                 _si(ref['counts']['columns']),
-                *(f'{wall[a]:.2f} s' if wall[a] else '—' for a in cols),
-                _ratio(wall['lpspec'], wall[_RATIO_AGAINST]),
+                *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in cols),
+                _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
                 *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in cols),
                 _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
             ]
+            marked = marked or any(noisy.values())
             lines.append('| ' + ' | '.join(cells) + ' |')
-    return '\n'.join(lines)
+    return '\n'.join(_note(lines, marked=marked))
 
 
 def main(argv: list[str] | None = None) -> int:

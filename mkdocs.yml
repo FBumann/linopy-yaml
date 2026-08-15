@@ -38,7 +38,10 @@ validation:
 
 nav:
   - Home: index.md
-  - Writing a model: guide.md
+  - Write a model: guide.md
+  - Change a model:
+      - The three loops: interactive.ipynb
+      - Fix, relax, remove: lifecycle.ipynb
   - Models:
       - models/index.md
       - Preparing the data: models/data.md
@@ -57,12 +60,16 @@ nav:
           - rung 3 — storage: models/pypsa_storage.md
           - rung 4 — cyclic storage: models/pypsa_cyclic_storage.md
           - rung 5 — KVL: models/pypsa_kvl.md
+          - rung 6 — AC-DC, two coordinates: models/pypsa_ac_dc.md
           - unit commitment: models/pypsa_unit_commitment.md
       - Published optima:
           - Dantzig transport: models/transport_dantzig.md
           - Dantzig, economies of scale: models/transport_pwl.md
           - Stigler's diet: models/stigler_diet.md
           - Facility location: models/facility_location.md
+          - Routing telephone calls: models/telephone_routing.md
+          - Choosing the mode of transport: models/transport_modes.md
+          - OSeMOSYS UTOPIA: models/osemosys_utopia.md
           - Travelling salesman: models/tsp_mtz.md
   - Reference:
       - Language: SPEC.md
@@ -167,6 +174,19 @@ markdown_extensions:
 plugins:
   - search
   - include-markdown
+  # `docs/interactive.ipynb` ships with its cells cleared (the nbstripout hook
+  # in .pre-commit-config.yaml), so the outputs on the page are this build's:
+  # every number, frame and rendered equation came from the code above it, on
+  # the commit being built. `allow_errors: false` makes a cell that raises fail
+  # the build, which is what stops the page from teaching a call that no longer
+  # works — the same bargain nbsphinx strikes for linopy's tutorials.
+  #
+  # Execution needs the package and a kernel, which is why `.readthedocs.yaml`
+  # installs the project and the `docs` group carries ipykernel.
+  - mkdocs-jupyter:
+      execute: true
+      allow_errors: false
+      include_source: true
 
 extra_css:
   - stylesheets/extra.css
