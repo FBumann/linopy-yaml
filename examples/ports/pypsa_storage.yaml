@@ -47,9 +47,9 @@ parameters:
     dims: [storage]
   soc_max:
     description: >-
-      how much energy a storage unit holds when full — PyPSA's capacity times
-      max_hours, carried as a column because a bound takes a name or a number,
-      never arithmetic (#31)
+      how much energy a storage unit holds when full — PyPSA's capacity times its
+      hours of storage, carried as a column because a bound takes a name or a
+      number, never arithmetic (issue 31)
     dims: [storage]
   soc_initial:
     description: energy in the store before the first snapshot

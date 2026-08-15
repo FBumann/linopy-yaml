@@ -61,7 +61,7 @@ PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose generators
 | $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ --- generator capacity to hold, built on top of what already stands |
 | $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `to` bus — not chosen, but whatever the voltage law leaves |
 | $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- line capacity to build |
-| $g$ | `g` over $\mathcal{T} \times \mathcal{I}$ --- flow on a link, signed towards its `link_to` bus — chosen, which is what makes it a link and not a line |
+| $g$ | `g` over $\mathcal{T} \times \mathcal{I}$ --- flow on a link, signed towards the bus it delivers at — chosen, which is what makes it a link and not a line |
 | $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{I}$ --- link capacity to build |
 
 #### Objective
@@ -238,8 +238,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           lower: 0
       g:
         description: >-
-          flow on a link, signed towards its `link_to` bus — chosen, which is what
-          makes it a link and not a line
+          flow on a link, signed towards the bus it delivers at — chosen, which is
+          what makes it a link and not a line
         foreach: [snapshot, link]
       link_p_nom:
         description: link capacity to build
@@ -288,7 +288,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
       co2_budget:
         description: >-
-          PyPSA's primary_energy constraint — a generator's emissions are its
+          PyPSA's primary-energy constraint — a generator's emissions are its
           output divided by its efficiency, priced at its carrier's rate, and the
           horizon's total stays inside the budget
         foreach: []

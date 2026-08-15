@@ -41,7 +41,7 @@ PyPSA linear optimal power flow, rung 3: rung 2 plus a storage unit carrying ene
 | $\mathit{rating}$ | `rating` over $\mathcal{L}$ --- most a link may carry towards its `to` bus |
 | $\mathit{neg\_rating}$ | `neg_rating` over $\mathcal{L}$ --- most a link may carry the other way, negative by convention |
 | $\mathit{storage}^{\mathrm{p,nom}}$ | `storage_p_nom` over $\mathcal{S}$ --- most a storage unit may charge or discharge in one snapshot |
-| $\mathit{soc}^{\mathrm{max}}$ | `soc_max` over $\mathcal{S}$ --- how much energy a storage unit holds when full — PyPSA's capacity times max_hours, carried as a column because a bound takes a name or a number, never arithmetic (#31) |
+| $\mathit{soc}^{\mathrm{max}}$ | `soc_max` over $\mathcal{S}$ --- how much energy a storage unit holds when full — PyPSA's capacity times its hours of storage, carried as a column because a bound takes a name or a number, never arithmetic (issue 31) |
 | $\mathit{soc}^{\mathrm{initial}}$ | `soc_initial` over $\mathcal{S}$ --- energy in the store before the first snapshot |
 | $\mathit{efficiency\_store}$ | `efficiency_store` over $\mathcal{S}$ --- share of charging energy that reaches the store |
 | $\mathit{efficiency\_dispatch}$ | `efficiency_dispatch` over $\mathcal{S}$ --- share of stored energy that reaches the bus on the way out |
@@ -163,9 +163,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         dims: [storage]
       soc_max:
         description: >-
-          how much energy a storage unit holds when full — PyPSA's capacity times
-          max_hours, carried as a column because a bound takes a name or a number,
-          never arithmetic (#31)
+          how much energy a storage unit holds when full — PyPSA's capacity times its
+          hours of storage, carried as a column because a bound takes a name or a
+          number, never arithmetic (issue 31)
         dims: [storage]
       soc_initial:
         description: energy in the store before the first snapshot

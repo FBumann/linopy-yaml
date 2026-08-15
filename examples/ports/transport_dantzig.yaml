@@ -1,7 +1,7 @@
 description: >-
-  Dantzig's transportation problem, GAMS model library #1: ship canned goods
-  from plants to markets at least freight cost. Optimum 153.675, published
-  with the model.
+  Dantzig's transportation problem, the first model of the GAMS library: ship
+  canned goods from plants to markets at least freight cost. Optimum 153.675,
+  published with the model.
 
 dimensions:
   plant:

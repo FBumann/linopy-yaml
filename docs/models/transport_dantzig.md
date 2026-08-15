@@ -17,7 +17,7 @@ $$\min \sum_{i,j} c_{ij} x_{ij}
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-Dantzig's transportation problem, GAMS model library #1: ship canned goods from plants to markets at least freight cost. Optimum 153.675, published with the model.
+Dantzig's transportation problem, the first model of the GAMS library: ship canned goods from plants to markets at least freight cost. Optimum 153.675, published with the model.
 
 #### Sets
 
@@ -70,9 +70,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     ```yaml
     description: >-
-      Dantzig's transportation problem, GAMS model library #1: ship canned goods
-      from plants to markets at least freight cost. Optimum 153.675, published
-      with the model.
+      Dantzig's transportation problem, the first model of the GAMS library: ship
+      canned goods from plants to markets at least freight cost. Optimum 153.675,
+      published with the model.
 
     dimensions:
       plant:

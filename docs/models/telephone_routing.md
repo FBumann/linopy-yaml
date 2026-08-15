@@ -21,7 +21,7 @@ it crosses, which is why the network is undirected and the flow carries no sign.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-Routing telephone calls over a five-city network: how many of the 425 requested circuits can be carried at once. A path serves exactly one city pair — a coordinate — and traverses several arcs — an incidence parameter; both relations, each said the way it is. Guéret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP, §12.3. Optimum 380 circuits, published in §12.3.3.
+Routing telephone calls over a five-city network: how many of the 425 requested circuits can be carried at once. A path serves exactly one city pair — a coordinate — and traverses several arcs — an incidence parameter; both relations, each said the way it is. Guéret, Prins, Sevaux and Heipcke, Applications of Optimization with Xpress-MP, section 12.3. Optimum 380 circuits, published in section 12.3.3.
 
 #### Sets
 
@@ -77,9 +77,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       Routing telephone calls over a five-city network: how many of the 425
       requested circuits can be carried at once. A path serves exactly one city
       pair — a coordinate — and traverses several arcs — an incidence parameter;
-      both relations, each said the way it is. Guéret, Prins, Sevaux & Heipcke,
-      Applications of Optimization with Xpress-MP, §12.3. Optimum 380 circuits,
-      published in §12.3.3.
+      both relations, each said the way it is. Guéret, Prins, Sevaux and Heipcke,
+      Applications of Optimization with Xpress-MP, section 12.3. Optimum 380
+      circuits, published in section 12.3.3.
 
     dimensions:
       arc:

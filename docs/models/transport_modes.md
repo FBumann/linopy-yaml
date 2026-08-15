@@ -24,7 +24,7 @@ four.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-Moving 180 tonnes of chemicals out of four depots to three recycling centres, where a depot may reach a centre by rail or by road at different cost. The connection is a thing with a name, so two of them may join the same depot and centre and keep their own cost and their own band; a cost matrix indexed by depot and centre has one cell for the pair and cannot. The rail and road links between the same depot and centre disagree on all three numbers. Guéret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP, §10.2. Optimum 1715, published in §10.2.3.
+Moving 180 tonnes of chemicals out of four depots to three recycling centres, where a depot may reach a centre by rail or by road at different cost. The connection is a thing with a name, so two of them may join the same depot and centre and keep their own cost and their own band; a cost matrix indexed by depot and centre has one cell for the pair and cannot. The rail and road links between the same depot and centre disagree on all three numbers. Guéret, Prins, Sevaux and Heipcke, Applications of Optimization with Xpress-MP, section 10.2. Optimum 1715, published in section 10.2.3.
 
 #### Sets
 
@@ -83,9 +83,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       connection is a thing with a name, so two of them may join the same depot and
       centre and keep their own cost and their own band; a cost matrix indexed by
       depot and centre has one cell for the pair and cannot. The rail and road
-      links between the same depot and centre disagree on all three numbers. Guéret, Prins, Sevaux
-      & Heipcke, Applications of Optimization with Xpress-MP, §10.2. Optimum 1715,
-      published in §10.2.3.
+      links between the same depot and centre disagree on all three numbers.
+      Guéret, Prins, Sevaux and Heipcke, Applications of Optimization with
+      Xpress-MP, section 10.2. Optimum 1715, published in section 10.2.3.
 
     dimensions:
       depot:

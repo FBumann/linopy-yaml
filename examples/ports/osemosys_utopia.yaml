@@ -105,7 +105,7 @@ expressions:
     description: >-
       capacity standing in a year from every vintage still inside its life. A
       plant's life is read from data and differs by technology, so the window
-      cannot be a fixed shift — it is an incidence table, the shape pypsa_kvl
+      cannot be a fixed shift — it is an incidence table, the shape the KVL port
       uses for a cycle basis.
   capacity:
     expression: built_capacity + residual_capacity
