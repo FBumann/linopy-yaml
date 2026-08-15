@@ -31,7 +31,7 @@ from typing import Any
 import pytest
 
 from bench.cases import CASES
-from bench.conftest import ENGINE, shape_of
+from bench.conftest import shape_of
 from bench.workloads import build_only, linopy_build_and_emit, lpspec_build_and_emit, split_sources
 
 
@@ -80,8 +80,6 @@ def test_emit(
     """
     if sink == 'gurobi':
         pytest.importorskip('gurobipy')
-    if arm == 'duckdb':
-        pytest.importorskip('duckdb')
     gate(case_name, paths)
 
     case_paths = paths(case_name, size)
@@ -89,7 +87,7 @@ def test_emit(
         counts = benchmark(linopy_build_and_emit, case_name, size, sink, case_paths, io_api)
     else:
         sources, coords = split_sources(CASES[case_name], size, case_paths)
-        counts = benchmark(lpspec_build_and_emit, case_name, size, sink, sources, coords, ENGINE[arm])
+        counts = benchmark(lpspec_build_and_emit, case_name, size, sink, sources, coords)
     _record(benchmark, counts, case_name, size)
 
 
@@ -111,8 +109,6 @@ def test_rebuild(benchmark: Any, gate: Any, paths: Any, builds: int, case_name: 
     Not run under CodSpeed at all — its instruments ignore `rounds`, so there is
     no second build to compare the first against. `conftest.py` deselects it.
     """
-    if arm == 'duckdb':
-        pytest.importorskip('duckdb')
     gate(case_name, paths)
 
     if builds < 1:
@@ -120,7 +116,7 @@ def test_rebuild(benchmark: Any, gate: Any, paths: Any, builds: int, case_name: 
     case_paths = paths(case_name, size)
     counts = benchmark.pedantic(
         build_only,
-        args=(arm, case_name, size, case_paths, ENGINE.get(arm)),
+        args=(arm, case_name, size, case_paths),
         rounds=builds,
         iterations=1,
         warmup_rounds=0,

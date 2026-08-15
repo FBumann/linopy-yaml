@@ -6,11 +6,11 @@ A network: generators sit on buses, lines connect buses, and power balances at e
 
 ## The problem
 
-$$\sum_{g \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{s,g} \quad+\quad \sum_{\ell \thinspace:\thinspace \mathrm{to}(\ell) = b} f_{s,\ell} \quad-\quad \sum_{\ell \thinspace:\thinspace \mathrm{from}(\ell) = b} f_{s,\ell} \quad=\quad d_{s,b}$$
+$$\sum_{g \thinspace:\thinspace \mathrm{bus}(g) = b} p_{s,g} \quad+\quad \sum_{\ell \thinspace:\thinspace \mathrm{to}(\ell) = b} f_{s,\ell} \quad-\quad \sum_{\ell \thinspace:\thinspace \mathrm{from}(\ell) = b} f_{s,\ell} \quad=\quad d_{s,b}$$
 
-Each sum is over the lines or generators a *lookup* sends to bus $b$ —
-$\mathrm{gen\_bus}$, $\mathrm{to}$ and $\mathrm{from}$ are the lookups the
-model declares, not sets in their own right. Load is $d$ here, because
+Each sum is over the lines or generators a *coordinate map* sends to bus $b$ —
+$\mathrm{bus}$, $\mathrm{to}$ and $\mathrm{from}$ are the coordinates the
+dimensions declare, not sets in their own right. Load is $d$ here, because
 $\ell$ is already the line index.
 
 ## The model
@@ -19,12 +19,14 @@ $\ell$ is already the line index.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Least-cost dispatch over a network, where a generator sits on a bus, a line joins two of them, and what is generated has to reach the load over the lines.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
 | $\mathcal{S}$ | index $s$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units |
+| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
 | $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
 | $\mathcal{L}$ | index $\ell$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, each joining two buses |
 
@@ -73,12 +75,17 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
+    description: >-
+      Least-cost dispatch over a network, where a generator sits on a bus, a line
+      joins two of them, and what is generated has to reach the load over the
+      lines.
+
     dimensions:
       snapshot:
         description: dispatch periods
         dtype: int
       generator:
-        description: generating units
+        description: generating units, each sitting on one bus
         dtype: str
       bus:
         description: network nodes
@@ -133,18 +140,22 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           upper: cap
 
     expressions:
-      gen_at_bus: sum(p, over=generator, group_by=gen_bus)
+      gen_at_bus:
+        expression: sum(p, over=generator, group_by=gen_bus)
+        description: what the generators sitting on a bus produce there
       net_inflow:
         expression: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
         description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
     constraints:
       balance:
+        description: what is generated at a bus plus what arrives over the lines meets the load there
         foreach: [snapshot, bus]
         expression: gen_at_bus + net_inflow == load
 
     objective:
       sense: minimize
+      description: total cost of generation; moving power over a line is free here
       expression: p * cost
     ```
 
@@ -194,10 +205,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 ## What it exercises
 
 Three `sum(group_by=)` calls, and they are what a network *is* in this language.
-A model can declare **lookups** — `gen_bus` maps `generator` onto `bus`, `from`
-and `to` map `line` — and `sum(f, over=line, group_by=to)` sums along a
-line's `to` lookup, landing the result on `bus`. The same `f` is summed
-twice through two different lookups, once as an inflow and once as an
+A dimension can carry **coordinates** — `generator` carries `bus`, `line`
+carries `from` and `to` — and `sum(f, over=line, group_by=to)` sums along a
+line's `to` coordinate, landing the result on `bus`. The same `f` is summed
+twice through two different coordinates, once as an inflow and once as an
 outflow.
 
 No adjacency matrix, and no join written by the modeller: the topology is

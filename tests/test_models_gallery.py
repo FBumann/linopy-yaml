@@ -9,7 +9,9 @@ the page to become a lie:
   quietly — the reader who never scrolls to the construct matrix never sees it;
 - a page shows YAML that no longer matches the file CI runs;
 - a page shows a reference implementation that no longer matches the script;
-- the construct matrix says a model exercises something it does not.
+- the construct matrix says a model exercises something it does not;
+- a model, or a declaration in one, says nothing about what it is, so the
+  generated legend has an empty `Meaning` column where the reader needs one.
 
 The same trade the linopy lane's v1-absence helpers already make: copying is fine when a
 test asserts it, and rots when nothing does.
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
 
 import pytest
 
+from lpspec import load_model
 from tools import constructs, gallery_math
 
 GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'models'
@@ -67,6 +70,41 @@ def test_the_page_shows_the_model_that_runs(model: tuple[str, Path]) -> None:
     name, path = model
     fences = _fences((GALLERY / f'{name}.md').read_text(), 'yaml')
     assert path.read_text().rstrip() + '\n' in fences, f'docs/models/{name}.md has drifted from {path}'
+
+
+def test_the_model_says_what_it_is(model: tuple[str, Path]) -> None:
+    """Every gallery model carries a file `description:`.
+
+    The legend a page generates opens with it, so a model without one opens
+    with nothing — and the sentence is the only part of the page a reader who
+    never opens the YAML is certain to read.
+    """
+    _, path = model
+    assert load_model(path).description, (
+        f'{path} has no top-level `description:` — the generated legend on its page opens with it'
+    )
+
+
+def test_every_declaration_says_what_it_is(model: tuple[str, Path]) -> None:
+    """And so does every block inside it.
+
+    The legend prints the description of a dimension, parameter or variable in
+    its `Meaning` column; the rest are read in the file. A `#` comment says the
+    same thing to a reader of the file alone and is thrown away by the parser,
+    which is why the gallery corpus writes none.
+    """
+    _, path = model
+    schema = load_model(path)
+    sections = ('dimensions', 'parameters', 'variables', 'constraints', 'expressions', 'macros', 'piecewise', 'sos')
+    undescribed = [
+        f'{section}.{name}'
+        for section in sections
+        for name, block in getattr(schema, section).items()
+        if block.description is None
+    ]
+    if schema.objective is not None and schema.objective.description is None:
+        undescribed.append('objective')
+    assert not undescribed, f'{path} declares these without saying what they are: {undescribed}'
 
 
 def test_no_page_without_a_model() -> None:

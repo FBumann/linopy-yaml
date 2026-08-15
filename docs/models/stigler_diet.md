@@ -22,25 +22,27 @@ the same engine.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+Stigler's diet problem (1945): the cheapest set of foods meeting a year's nutritional minimums. Stigler's table is normalised per dollar spent, so a variable is money on a food per day rather than a quantity, and the objective is simply the total. The table is sparse on purpose — a food supplying none of a nutrient has no row, which is how this language spells absence everywhere, and 570 of the 693 cells are non-zero.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{F}$ | index $f$ --- `food` |
-| $\mathcal{N}$ | index $n$ --- `nutrient` |
+| $\mathcal{F}$ | index $f$ --- `food` --- the 77 foods Stigler priced, at 1939 prices |
+| $\mathcal{N}$ | index $n$ --- `nutrient` --- the nine nutrients a year's diet has to supply |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{nutrient}^{\mathrm{per,dollar}}$ | `nutrient_per_dollar` over $\mathcal{F} \times \mathcal{N}$ |
-| $\mathit{daily\_minimum}$ | `daily_minimum` over $\mathcal{N}$ |
+| $\mathit{nutrient}^{\mathrm{per,dollar}}$ | `nutrient_per_dollar` over $\mathcal{F} \times \mathcal{N}$ --- how much of each nutrient a dollar of each food buys |
+| $\mathit{daily\_minimum}$ | `daily_minimum` over $\mathcal{N}$ --- how much of a nutrient a day has to supply |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{spend}$ | `spend` over $\mathcal{F}$ |
+| $\mathit{spend}$ | `spend` over $\mathcal{F}$ --- dollars per day spent on this food |
 
 #### Objective
 
@@ -66,41 +68,46 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # Stigler's diet problem (1945): the cheapest set of foods meeting a year's
-    # nutritional minimums.
-    #
-    # Stigler's table is normalised per dollar spent, so a variable is *money on a
-    # food per day* rather than a quantity, and the objective is simply the total.
+    description: >-
+      Stigler's diet problem (1945): the cheapest set of foods meeting a year's
+      nutritional minimums. Stigler's table is normalised per dollar spent, so a
+      variable is money on a food per day rather than a quantity, and the objective
+      is simply the total. The table is sparse on purpose — a food supplying none
+      of a nutrient has no row, which is how this language spells absence
+      everywhere, and 570 of the 693 cells are non-zero.
 
     dimensions:
       food:
+        description: the 77 foods Stigler priced, at 1939 prices
         dtype: str
       nutrient:
+        description: the nine nutrients a year's diet has to supply
         dtype: str
 
     parameters:
-      # How much of each nutrient a dollar of each food buys. Sparse on purpose:
-      # a food supplying none of a nutrient has no row, which is how this language
-      # spells absence everywhere. 570 of the 693 cells are non-zero.
       nutrient_per_dollar:
+        description: how much of each nutrient a dollar of each food buys
         dims: [food, nutrient]
       daily_minimum:
+        description: how much of a nutrient a day has to supply
         dims: [nutrient]
 
     variables:
-      # dollars per day spent on this food
       spend:
+        description: dollars per day spent on this food
         foreach: [food]
         bounds:
           lower: 0
 
     constraints:
       meet_requirement:
+        description: what the basket buys of a nutrient covers the daily minimum
         foreach: [nutrient]
         expression: sum(spend * nutrient_per_dollar, over=food) >= daily_minimum
 
     objective:
       sense: minimize
+      description: dollars a day, which is what the variables already are
       expression: spend
     ```
 

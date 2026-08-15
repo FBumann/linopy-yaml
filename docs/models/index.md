@@ -48,6 +48,7 @@ Every page starts from data in the shape the call wants, and
 | [Dantzig, economies of scale](transport_pwl.md) | GAMS model library `trnspwl`: the same shipping problem, but a big consignment is cheaper per unit — cost grows as `sqrt(x)`, not linearly. |
 | [Stigler's diet](stigler_diet.md) | The cheapest way to eat for a year and stay alive. 77 foods, 9 nutrients, 1939 prices. |
 | [Facility location](facility_location.md) | Where do you put the warehouses? Open a set of them, assign every customer to one, and trade the fixed cost of opening against the cost of serving from further away. |
+| [GenX piecewise fuel](genx_piecewise_fuel.md) | A day of dispatch for two carbon-capture plants and a wind farm under a net-zero carbon cap, where the gas plant's fuel use bends with its output. |
 | [Routing telephone calls](telephone_routing.md) | How many of 425 requested circuits a five-city network can carry at once — and by which routes. |
 | [Choosing the mode of transport](transport_modes.md) | Moving 180 tonnes of chemicals out of four depots, where a depot may reach a centre by rail *or* by road at different cost. |
 | [OSeMOSYS UTOPIA](osemosys_utopia.md) | What to build and how hard to run it, 1990–2010, to meet three end-use demands at least discounted cost. |
@@ -83,6 +84,7 @@ drift from what the engine builds.
 | [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | **✓** | · | · | · |
 | [walkthrough](walkthrough.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [facility_location](facility_location.md) | **✔** 932616 | **✓** | · | · | · | · | **✓** | · | · | **✓** |
+| [genx_piecewise_fuel](genx_piecewise_fuel.md) | **✔** 2341.82 | **✓** | · | · | **✓** | **✓** | **✓** | · | · | · |
 | [osemosys_utopia](osemosys_utopia.md) | **✔** 29446.9 | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_ac_dc](pypsa_ac_dc.md) | **✔** 1.8441e+07 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | **✔** 17228.8 | · | **✓** | **✓** | **✓** | · | **✓** | · | · | · |
@@ -134,6 +136,7 @@ that class, and the evidence behind
 |---|---|---|---|---|
 | [dispatch](dispatch.md) | 10500.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/dispatch.py — agreement, not a published figure |
 | [facility_location](facility_location.md) | 932615.75 | 1e-09 | · | published by OR-Library (Beasley) for instance cap71 of the uncapacitated warehouse location set, in the file uncapopt: http://people.brunel.ac.uk/~mastjjb/jeb/orlib/uncapinfo.html |
+| [genx_piecewise_fuel](genx_piecewise_fuel.md) | 2341.8230753008093 | 1e-09 | · | published by GenX: asserted in test/test_piecewisefuel.jl as obj_true = 2341.82308 under genx_setup UCommit=2, CO2Cap=1, ParameterScale=1, and reproduced here by running GenX itself (julia 1.12.6, HiGHS) which reports 2341.8230753008093 |
 | [monthly_budget](monthly_budget.md) | 9500.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure |
 | [multi_period](multi_period.md) | 10020.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure |
 | [osemosys_utopia](osemosys_utopia.md) | 29446.86269 | 1e-09 | · | published by OSeMOSYS: asserted in OSeMOSYS_GNU_MathProg tests/test_gnu_mathprog.py as obj = 2.944686269e+04 for tests/utopia.txt, and reproduced here by running GLPK directly (glpsol 5.0, src/osemosys.txt) — an oracle outside Python entirely |
@@ -249,7 +252,7 @@ is refused by design rather than unimplemented. The two halves of that answer
 are worth keeping apart: one is a macro nobody has written, the other is the
 ceiling doing its job.
 
-Three rows from sixteen ports — a rate worth watching once the corpus has hit
+Three rows from seventeen ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 **The TSP row is the one to read**, and it is narrower than it first looked.
