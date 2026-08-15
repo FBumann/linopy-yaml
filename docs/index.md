@@ -72,9 +72,9 @@ Write the math in YAML, bind data at runtime, solve.
 
     ---
 
-    Eleven models in the gallery match an optimum this project did not compute —
-    GAMS, PyPSA, OR-Library, TSPLIB — objectives *and* shadow prices.
-    [The corpus](models/index.md)
+    Every ported model matches an optimum this project did not compute — GAMS,
+    PyPSA, OSeMOSYS, OR-Library, TSPLIB — objectives *and*, where the reference
+    records them, shadow prices. [The corpus](models/index.md)
 
 </div>
 

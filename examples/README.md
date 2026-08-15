@@ -1,6 +1,6 @@
 # Examples
 
-**These are fixtures, not samples.** Eleven test modules load them by path, and
+**These are fixtures, not samples.** The test suite loads them by path and
 `docs/models/` embeds them, so the file you read here is the file CI runs.
 Renaming one breaks tests; changing one changes what the docs claim, and a test
 will say so.

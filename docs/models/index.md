@@ -1,32 +1,62 @@
 # Models
 
 Every model in the repo, what it says, and what it exercises. Three questions,
-in the order you probably have them: **can it say my model?** · **is it
-readable?** · **does it get the right answer?**
+in the order you probably have them: **[can it say my model?](#can-it-say-my-model)**
+· **[is it readable?](#every-model)** · **[does it get the right
+answer?](#does-it-get-the-right-answer)** The first and the third are the two
+tables on this page; the second is each model page itself, where the file sits
+beside the same model written on another stack.
+
+Every page starts from data in the shape the call wants, and
+[Preparing the data](data.md) is where that shape comes from.
+
+## Every model
+
+<!-- catalogue:begin -->
+### Teaching models
 
 | | |
 |---|---|
-| [dispatch](dispatch.md) | least-cost generation against a load profile |
-| [storage](storage.md) | dispatch plus a cyclic battery |
-| [transport](transport.md) | a network — generators on buses, lines between them |
-| [piecewise](piecewise.md) | per-generator convex cost curves |
-| [walkthrough](walkthrough.md) | the model behind every pipeline stage, printed |
-| [Dantzig transport](transport_dantzig.md) ✔ | GAMS model library #1 |
-| [PyPSA LOPF rung 1](pypsa_transport.md) ✔ | PyPSA's own transport model |
-| [PyPSA LOPF rung 2](pypsa_ramp.md) ✔ | rung 1 plus generator ramp limits |
-| [PyPSA LOPF rung 3](pypsa_storage.md) ✔ | rung 2 plus storage carrying energy in time |
-| [PyPSA LOPF rung 4](pypsa_cyclic_storage.md) ✔ | rung 3 with the horizon closed on itself |
-| [PyPSA LOPF rung 5](pypsa_kvl.md) ✔ | passive AC lines under Kirchhoff's voltage law |
-| [PyPSA unit commitment](pypsa_unit_commitment.md) ✔ | which units are *on* — the corpus's MILP |
-| [Dantzig, economies of scale](transport_pwl.md) ✔ | GAMS `trnspwl` — piecewise `sqrt` shipping cost |
-| [Stigler's diet](stigler_diet.md) ✔ | the cheapest year of food — where LP started |
-| [Facility location](facility_location.md) ✔ | OR-Library `cap71` — which warehouses to open |
-| [Travelling salesman](tsp_mtz.md) ✔ | TSPLIB `gr17`, MTZ — yes, it fits |
+| [dispatch](dispatch.md) | Least-cost generation against a load profile — the smallest model that is still a model. |
+| [storage](storage.md) | Dispatch plus a battery, and the only construct in the language whose cost is not obviously linear. |
+| [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
+| [piecewise](piecewise.md) | Per-generator convex cost curves, expanded into a λ-formulation. |
+| [special-ordered sets](sos.md) | A piecewise-linear cost curve stated as a **special-ordered set** — [piecewise](piecewise.md) with one line changed, handed to the solver as a set it branches on itself. |
+| [monthly budget](monthly_budget.md) | A cap on what each technology may generate per calendar month — an aggregate over a *coarser grouping of time*, written with the same operator that places a generator on a bus. |
+| [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
+| [walkthrough](walkthrough.md) | The dispatch model plus a macro and a named expression — the one used to print every pipeline stage. |
 
-Both tables below are **generated** — the constructs matrix off each model's
-resolved plan, the reference table off `examples/ports/references.json`, which
-is the same file the tests assert against. Regenerate with
-`uv run python -m tools.constructs`; a test fails if either is stale.
+### The PyPSA ladder
+
+| | |
+|---|---|
+| [rung 1 — transport](pypsa_transport.md) | PyPSA linear optimal power flow, first rung: transport model, linear marginal cost, no KVL. |
+| [rung 2 — ramp limits](pypsa_ramp.md) | [Rung 1](pypsa_transport.md) plus a limit on how fast each generator may change output between snapshots. |
+| [rung 3 — storage](pypsa_storage.md) | [Rung 2](pypsa_ramp.md) plus a `StorageUnit` carrying energy between snapshots. |
+| [rung 4 — cyclic storage](pypsa_cyclic_storage.md) | [Rung 3](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*. |
+| [rung 5 — KVL](pypsa_kvl.md) | Passive AC lines: flow is decided by physics, not chosen. **The last rung of the ladder.** |
+| [rung 6 — AC-DC, two coordinates](pypsa_ac_dc.md) | A meshed AC–DC network under a CO₂ budget. **PyPSA's own `ac-dc-meshed` example.** |
+| [unit commitment](pypsa_unit_commitment.md) | Which generators are *on*, not just how much they produce — a binary per generator per snapshot, with start-up and shut-down charges. |
+
+### Published optima
+
+| | |
+|---|---|
+| [Dantzig transport](transport_dantzig.md) | Dantzig's transportation problem — GAMS model library #1, and the oldest LP in the corpus. |
+| [Dantzig, economies of scale](transport_pwl.md) | GAMS model library `trnspwl`: the same shipping problem, but a big consignment is cheaper per unit — cost grows as `sqrt(x)`, not linearly. |
+| [Stigler's diet](stigler_diet.md) | The cheapest way to eat for a year and stay alive. 77 foods, 9 nutrients, 1939 prices. |
+| [Facility location](facility_location.md) | Where do you put the warehouses? Open a set of them, assign every customer to one, and trade the fixed cost of opening against the cost of serving from further away. |
+| [Routing telephone calls](telephone_routing.md) | How many of 425 requested circuits a five-city network can carry at once — and by which routes. |
+| [Choosing the mode of transport](transport_modes.md) | Moving 180 tonnes of chemicals out of four depots, where a depot may reach a centre by rail *or* by road at different cost. |
+| [OSeMOSYS UTOPIA](osemosys_utopia.md) | What to build and how hard to run it, 1990–2010, to meet three end-use demands at least discounted cost. |
+| [Travelling salesman](tsp_mtz.md) | Visit every city once and come home, as cheaply as possible. The most famous problem in combinatorial optimisation, and the one most often assumed to be out of reach here. |
+<!-- catalogue:end -->
+
+Everything on this page is **generated** — the catalogue off the site nav and
+each page's own opening line, the constructs matrix off each model's resolved
+plan, the reference table off `examples/ports/references.json`, which is the
+same file the tests assert against. Regenerate with
+`uv run python -m tools.constructs`; a test fails if any of the three is stale.
 
 Every page also carries the model **as math**, typeset from the same file the
 engine builds (`uv run python -m tools.gallery_math`, likewise gated). Where a

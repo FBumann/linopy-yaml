@@ -11,19 +11,24 @@ Two link rules make one set of files serve both places, and
 repo and 404s on the site, silently. The rest is in *the docs* in
 [CONTRIBUTING.md](../CONTRIBUTING.md#the-docs).
 
-**Generated, so do not hand-edit:** the construct matrix and the reference
-table in [models/index.md](models/index.md) (`tools/constructs.py`), the *"the
-same model, as math"* block on each model page (`tools/gallery_math.py`), and
-the tables in [benchmarks.md](benchmarks.md) (`bench.report`, `bench.plot`).
+**Generated, so do not hand-edit:** the catalogue, the construct matrix and the
+reference table in [models/index.md](models/index.md) (`tools/constructs.py`),
+the *"the same model, as math"* block on each model page
+(`tools/gallery_math.py`), and the tables in [benchmarks.md](benchmarks.md)
+(`bench.report`, `bench.plot`). The catalogue is read off `mkdocs.yml`'s nav,
+so a model is added to the gallery list by adding it to the sidebar — one list,
+not two.
 The YAML and Python shown on the model pages and in the guide is asserted
 against the files that run, so a page cannot quietly drift from what it
 describes.
 
 **What stays hand-written, and what checks it.** A model page opens with a
 summary — a sentence and, on six pages, the math stated the way that problem is
-usually written. That is allowed to be loose in a way the generated block
-beneath it is not: it is read at a glance, and three summaries had drifted far
-enough to be wrong before the block existed to check them against. So the
+usually written. The sentence is the model's one description anywhere: the
+gallery catalogue quotes it rather than keeping a second one. It is allowed to
+be loose in a way the generated block beneath it is not: it is read at a
+glance, and three summaries had drifted far enough to be wrong before the block
+existed to check them against. So the
 looseness is bounded rather than assumed. `tests/test_typeset.py` requires each
 of those six to **either** use only symbols the generator can reach — the
 hand-written notation is then an oracle *for* the typesetter, since the point

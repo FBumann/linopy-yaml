@@ -5,6 +5,8 @@ unless something asserts it. Three things are checked, each a different way for
 the page to become a lie:
 
 - a model exists with no page, so the gallery quietly under-sells the language;
+- a model has a page the catalogue does not list, which under-sells it just as
+  quietly — the reader who never scrolls to the construct matrix never sees it;
 - a page shows YAML that no longer matches the file CI runs;
 - a page shows a reference implementation that no longer matches the script;
 - the construct matrix says a model exercises something it does not.
@@ -116,19 +118,37 @@ def test_every_math_block_opts_into_markdown_inside_html(model: tuple[str, Path]
     )
 
 
-def test_the_generated_evidence_tables_are_current() -> None:
-    """Both of the gallery's tables, which is the whole point of generating them.
+def test_the_catalogue_lists_every_model(model: tuple[str, Path]) -> None:
+    """The section head says *every* model, and the nav is what makes that true.
 
-    The construct matrix comes from the resolved plan, so a model that gains a
-    construct and a table that does not mention it cannot both be committed.
-    The reference table comes from ``references.json``, the same file
-    ``test_ports.py`` asserts against — so the *published* optimum and the
-    *asserted* one cannot disagree. They used to be able to: the table was
-    hand-written, and hand-written twice, once here and once in the old
-    ``docs/ports.md``.
+    ``strict: true`` fails the build on a page missing from the nav, and the
+    catalogue is generated from the nav — but only from the *groups* under
+    Models. A page filed anywhere else, or as a loose entry beside the data
+    page, still builds and still disappears from the list.
+    """
+    name, _ = model
+    listed = {name for _, pages in constructs.nav_groups() for _, name in pages}
+    assert name in listed, (
+        f'{name} is in no group under `Models:` in mkdocs.yml, so the gallery catalogue omits it — '
+        f'a reader deciding whether the language can say their model never sees it'
+    )
+
+
+def test_the_generated_blocks_are_current() -> None:
+    """All three of the gallery's blocks, which is the whole point of generating them.
+
+    The catalogue comes from the nav and from each page's opening line, so a
+    model cannot be renamed, regrouped or re-described into a list that still
+    claims to be every model. The construct matrix comes from the resolved
+    plan, so a model that gains a construct and a table that does not mention
+    it cannot both be committed. The reference table comes from
+    ``references.json``, the same file ``test_ports.py`` asserts against — so
+    the *published* optimum and the *asserted* one cannot disagree. They used
+    to be able to: the table was hand-written, and hand-written twice, once
+    here and once in the old ``docs/ports.md``.
     """
     page = constructs.PAGE.read_text()
-    assert constructs.rendered(page) == page, 'the gallery tables are stale — run `uv run python -m tools.constructs`'
+    assert constructs.rendered(page) == page, 'the gallery page is stale — run `uv run python -m tools.constructs`'
 
 
 @pytest.fixture(scope='module')
