@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.136](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.135...v0.0.1-alpha.136) (2026-08-15)
+
+
+### Features
+
+* **api:** a solve says what it started from, and can be forced cold ([#728](https://github.com/fluxopt/lpspec/issues/728)) ([dcf760e](https://github.com/fluxopt/lpspec/commit/dcf760eaca984455987735c59850c0c0528424ce))
+
 ## [0.0.1-alpha.135](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.134...v0.0.1-alpha.135) (2026-08-15)
 
 
