@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.1-alpha.144](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.143...v0.0.1-alpha.144) (2026-08-15)
+
+
+### Features
+
+* **language:** a declaration says what it is, and the legend reads it ([#812](https://github.com/fluxopt/lpspec/issues/812)) ([6b31278](https://github.com/fluxopt/lpspec/commit/6b3127863818da8c6653e4821e7b7444f13b2402))
+* **language:** a file says what model it is ([#813](https://github.com/fluxopt/lpspec/issues/813)) ([6c081e1](https://github.com/fluxopt/lpspec/commit/6c081e1f08257e497cae399175d806cde7209b86))
+* **language:** a named expression can say what it counts ([#814](https://github.com/fluxopt/lpspec/issues/814)) ([d57aad1](https://github.com/fluxopt/lpspec/commit/d57aad1935a9dff843263b63136685cdfe137ad2))
+
 ## [0.0.1-alpha.143](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.142...v0.0.1-alpha.143) (2026-08-15)
 
 
