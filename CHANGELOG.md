@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.135](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.134...v0.0.1-alpha.135) (2026-08-15)
+
+
+### Documentation
+
+* **agents:** a bug fix has to prove the bug was there ([#784](https://github.com/fluxopt/lpspec/issues/784)) ([5de3b49](https://github.com/fluxopt/lpspec/commit/5de3b496f64c4a0ec1de9763b369895887818767))
+
 ## [0.0.1-alpha.134](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.133...v0.0.1-alpha.134) (2026-08-15)
 
 
