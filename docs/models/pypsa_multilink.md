@@ -36,30 +36,32 @@ CHP runs at its cap of 50 and the others top up: flows `(50, 20, 40)`, gas
 <details markdown="1">
 <summary>The same model, as math</summary>
 
+PyPSA multi-link: one Link, one input bus, several output buses, each output derated by its own efficiency. PyPSA spells the relation wide — bus0, bus1, bus2, efficiency, efficiency2, an empty bus2 where a link has no third terminal — and grows a column pair per arity. Here the relation is one incidence parameter over link and bus, so arity is the number of rows that name the link. Optimum 1100.0, from PyPSA itself.
+
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{B}$ | index $b$ --- `bus` |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ |
-| $\mathcal{L}$ | index $l$ --- `link` |
+| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
+| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
+| $\mathcal{L}$ | index $l$ --- `link` --- conversions, each drawing at one bus and delivering at several |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{gen}^{\mathrm{p,nom}}$ | `gen_p_nom` over $\mathcal{G}$ |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{L}$ |
-| $\mathit{incidence}$ | `incidence` over $\mathcal{L} \times \mathcal{B}$ |
-| $\mathit{load}$ | `load` over $\mathcal{B}$ |
+| $\mathit{gen}^{\mathrm{p,nom}}$ | `gen_p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{L}$ --- the link's own capacity — a cap on what it draws at its input, p0 in PyPSA |
+| $\mathit{incidence}$ | `incidence` over $\mathcal{L} \times \mathcal{B}$ --- each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
+| $\mathit{load}$ | `load` over $\mathcal{B}$ --- demand at each bus |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{gen}$ | `gen` over $\mathcal{G}$ |
-| $p$ | `p` over $\mathcal{L}$ |
+| $\mathit{gen}$ | `gen` over $\mathcal{G}$ --- output of a generator |
+| $p$ | `p` over $\mathcal{L}$ --- the one decision per link, PyPSA's p — what it draws at its input. Every other end's flow is that draw scaled by its incidence entry, so it needs no variable of its own. |
 
 #### Objective
 
@@ -89,59 +91,71 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 === "lpspec"
 
     ```yaml
-    # PyPSA multi-link: one Link, one input bus, several output buses, each output
-    # derated by its own efficiency. PyPSA spells the relation wide — bus0, bus1,
-    # bus2, efficiency, efficiency2, an empty bus2 where a link has no third
-    # terminal — and grows a column pair per arity. Here the relation is one
-    # incidence parameter over (link, bus): -1 at the input, +efficiency at each
-    # output, rows absent elsewhere, so arity is the number of rows that name the
-    # link. Optimum 1100.0, from PyPSA itself.
+    description: >-
+      PyPSA multi-link: one Link, one input bus, several output buses, each output
+      derated by its own efficiency. PyPSA spells the relation wide — bus0, bus1,
+      bus2, efficiency, efficiency2, an empty bus2 where a link has no third
+      terminal — and grows a column pair per arity. Here the relation is one
+      incidence parameter over link and bus, so arity is the number of rows that
+      name the link. Optimum 1100.0, from PyPSA itself.
 
     dimensions:
       bus:
+        description: network nodes
         dtype: str
       generator:
+        description: generating units, each sitting on one bus
         dtype: str
       link:
+        description: conversions, each drawing at one bus and delivering at several
         dtype: str
 
     lookups:
-      gen_bus: {over: generator, into: bus}  # every generator sits on a bus
+      gen_bus: {over: generator, into: bus, description: "the bus a generator sits on"}
 
     parameters:
       gen_p_nom:
+        description: installed capacity of a generator
         dims: [generator]
       marginal_cost:
+        description: cost of one unit of output
         dims: [generator]
-      # The Link's own p_nom: a cap on what it draws at its input, p0 in PyPSA.
       p_nom:
+        description: the link's own capacity — a cap on what it draws at its input, p0 in PyPSA
         dims: [link]
-      # Each bus's share of the link's draw — PyPSA's efficiency, efficiency2, …
-      # columns and the input's fixed -1, tidied into rows.
       incidence:
+        description: >-
+          each bus's share of the link's draw — minus one at the input and plus the
+          efficiency at each output, with rows absent elsewhere; PyPSA's efficiency
+          columns and the input's fixed minus one, tidied into rows
         dims: [link, bus]
       load:
+        description: demand at each bus
         dims: [bus]
 
     variables:
       gen:
+        description: output of a generator
         foreach: [generator]
         bounds:
           lower: 0
           upper: gen_p_nom
-      # The one decision per link, PyPSA's p: what it draws at its input. Every
-      # other end's flow is that draw scaled by its incidence entry, so it needs
-      # no variable of its own.
       p:
+        description: >-
+          the one decision per link, PyPSA's p — what it draws at its input. Every
+          other end's flow is that draw scaled by its incidence entry, so it needs
+          no variable of its own.
         foreach: [link]
         bounds:
           lower: 0
           upper: p_nom
 
     constraints:
-      # The contraction lands p on every bus its link's incidence rows name —
-      # three ends or two, the expression never says.
       nodal_balance:
+        description: >-
+          what is generated at a bus plus what the links deliver there meets the
+          load. The contraction lands the draw on every bus its link's incidence
+          rows name — three ends or two, the expression never says.
         foreach: [bus]
         expression: >-
           sum(gen, over=generator, group_by=gen_bus)
@@ -150,6 +164,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     objective:
       sense: minimize
+      description: total cost of generation; the conversions themselves are free here
       expression: gen * marginal_cost
     ```
 
