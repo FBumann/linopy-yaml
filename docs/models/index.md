@@ -50,6 +50,7 @@ drift from what the engine builds.
 | [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | **✓** | · | · | · |
 | [walkthrough](walkthrough.md) | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [facility_location](facility_location.md) | **✔** 932616 | **✓** | · | · | · | · | **✓** | · | · | **✓** |
+| [pypsa_ac_dc](pypsa_ac_dc.md) | **✔** 1.8441e+07 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | **✔** 17228.8 | · | **✓** | **✓** | **✓** | · | **✓** | · | · | · |
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_ramp](pypsa_ramp.md) | **✔** 18200 | · | **✓** | **✓** | · | · | **✓** | · | · | · |
@@ -99,6 +100,7 @@ that class, and the evidence behind
 | [monthly_budget](monthly_budget.md) | 9500.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure |
 | [multi_period](multi_period.md) | 10020.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure |
 | [piecewise](piecewise.md) | 3850.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
+| [pypsa_ac_dc](pypsa_ac_dc.md) | 18441021.477729216 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ac_dc.py — n.objective + n.objective_constant, the system cost |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | 17228.77962151063 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py |
 | [pypsa_kvl](pypsa_kvl.md) | 17000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py |
 | [pypsa_ramp](pypsa_ramp.md) | 18200.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py |
@@ -140,8 +142,12 @@ cost, ramp limits, storage cycling and KVL at once, and a mismatch then
 implicates five features instead of one. So each network is a ladder, one
 feature per rung, each switched off in PyPSA and reproduced here:
 **1 transport model** ✔ · **2 ramp limits** ✔ · **3 storage with state of
-charge** ✔ · **4 cyclic boundary condition** ✔ · **5 KVL** ✔ — the ladder is
-complete. [Unit commitment](pypsa_unit_commitment.md) sits beside the ladder
+charge** ✔ · **4 cyclic boundary condition** ✔ · **5 KVL** ✔ · **6 a meshed
+AC-DC network under a CO₂ budget** ✔. Rungs 1–5 are one feature at a time on a
+three-bus network; rung 6 is the first that puts several of them on a network
+somebody else designed, which is a different question — not *can it say this
+feature* but *does the whole thing still read*.
+[Unit commitment](pypsa_unit_commitment.md) sits beside the ladder
 rather than on it — one bus, no network, because the feature under test is
 integrality.
 
@@ -153,7 +159,13 @@ saturated, which fixes every generator's output exactly, so a ramp limit on that
 network can only make it infeasible — never change the answer. A rung that
 cannot bind is not evidence that it works.
 
-**The ladder finished without a new primitive.** Rung 5 is Kirchhoff's voltage
+**Rung 6 is where a second coordinate first earns its keep.** A generator
+sits on a bus *and* burns a carrier, and both maps are load-bearing — the
+balance groups through one, the CO₂ budget reads an emission rate back down
+through the other. It also carries passive lines and controllable links at
+once, so both branch kinds group onto the same bus dimension in one equation.
+
+**The ladder reached rung 5 without a new primitive.** Rung 5 is Kirchhoff's voltage
 law, and it needed nothing added to the language: a cycle basis is a sparse
 `(cycle, line)` incidence *parameter*, and the constraint is one
 `sum(f * cycle_incidence, over=line) == 0`. A line can belong to several
@@ -195,7 +207,7 @@ is refused by design rather than unimplemented. The two halves of that answer
 are worth keeping apart: one is a macro nobody has written, the other is the
 ceiling doing its job.
 
-Three rows from eleven ports — a rate worth watching once the corpus has hit
+Three rows from twelve ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 **The TSP row is the one to read**, and it is narrower than it first looked.

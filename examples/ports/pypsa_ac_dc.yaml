@@ -1,0 +1,129 @@
+# PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose
+# generators sit on a bus *and* burn a carrier, with a CO2 budget priced
+# through the second map. PyPSA's own `ac-dc-meshed` example.
+# Optimum 18441021.477729216, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    dtype: int
+  bus:
+    dtype: str
+  carrier:
+    dtype: str
+  # A generator sits on a bus and burns a carrier: two coordinates on one
+  # dimension, landing on two different axes. The balance groups through the
+  # first; the CO2 budget reads a price back down through the second.
+  generator:
+    dtype: str
+    coords: [bus, carrier]
+  # Passive lines and controllable links are separate axes with separate
+  # physics, and both have two ends on the same bus dimension.
+  line:
+    dtype: str
+    coords: {from: bus, to: bus}
+  link:
+    dtype: str
+    coords: {link_from: bus, link_to: bus}
+  cycle:
+    dtype: str  # one independent loop per meshed sub-network
+
+parameters:
+  load:
+    dims: [snapshot, bus]
+  p_max_pu:
+    dims: [snapshot, generator]
+  p_nom_min:
+    dims: [generator]
+  marginal_cost:
+    dims: [generator]
+  gen_capital_cost:
+    dims: [generator]
+  efficiency:
+    dims: [generator]
+  # Emissions are a property of the carrier, not of the generator burning it.
+  co2_per_mwh:
+    dims: [carrier]
+  line_capital_cost:
+    dims: [line]
+  link_capital_cost:
+    dims: [link]
+  link_p_max_pu:
+    dims: [link]
+  link_p_min_pu:
+    dims: [link]
+  # The cycle basis, as a sparse (cycle, line) table of impedance x direction.
+  # A line may belong to several cycles, so this cannot be a coordinate.
+  cycle_incidence:
+    dims: [cycle, line]
+  co2_limit:
+    dims: []
+
+variables:
+  p:
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  p_nom:
+    foreach: [generator]
+    bounds:
+      lower: p_nom_min
+  # A line's flow is not chosen: it is whatever the voltage law leaves.
+  f:
+    foreach: [snapshot, line]
+  s_nom:
+    foreach: [line]
+    bounds:
+      lower: 0
+  # A link's flow is chosen — that is what makes it a link and not a line.
+  g:
+    foreach: [snapshot, link]
+  link_p_nom:
+    foreach: [link]
+    bounds:
+      lower: 0
+
+constraints:
+  within_capacity:
+    foreach: [snapshot, generator]
+    expression: p <= p_nom * p_max_pu
+
+  line_upper:
+    foreach: [snapshot, line]
+    expression: f <= s_nom
+  line_lower:
+    foreach: [snapshot, line]
+    expression: f >= -s_nom
+  link_upper:
+    foreach: [snapshot, link]
+    expression: g <= link_p_nom * link_p_max_pu
+  link_lower:
+    foreach: [snapshot, link]
+    expression: g >= link_p_nom * link_p_min_pu
+
+  nodal_balance:
+    foreach: [snapshot, bus]
+    expression: >-
+      sum(p, over=generator, group_by=bus)
+      + sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+      + sum(g, over=link, group_by=link_to) - sum(g, over=link, group_by=link_from)
+      == load
+
+  kirchhoff_voltage_law:
+    foreach: [snapshot, cycle]
+    expression: sum(f * cycle_incidence, over=line) == 0
+
+  # PyPSA's primary_energy constraint: a generator's emissions are its output
+  # divided by its efficiency, priced at its carrier's rate.
+  co2_budget:
+    foreach: []
+    expression: >-
+      sum(sum(p * at(co2_per_mwh, onto=generator, by=carrier) / efficiency, over=generator), over=snapshot)
+      <= co2_limit
+
+objective:
+  sense: minimize
+  expression: >-
+    p * marginal_cost
+    + p_nom * gen_capital_cost
+    + s_nom * line_capital_cost
+    + link_p_nom * link_capital_cost
