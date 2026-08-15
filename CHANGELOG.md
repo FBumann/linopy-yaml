@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.143](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.142...v0.0.1-alpha.143) (2026-08-15)
+
+
+### Features
+
+* **gallery:** an operational life is a window read from data ([#805](https://github.com/fluxopt/lpspec/issues/805)) ([7071fc0](https://github.com/fluxopt/lpspec/commit/7071fc009d59b142f67a293efb86b060a6777988))
+
 ## [0.0.1-alpha.142](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.141...v0.0.1-alpha.142) (2026-08-15)
 
 
