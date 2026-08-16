@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.1-alpha.151](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.150...v0.0.1-alpha.151) (2026-08-16)
+
+
+### Features
+
+* **language:** a small relation is declared, not supplied ([#771](https://github.com/fluxopt/lpspec/issues/771)) ([3be93de](https://github.com/fluxopt/lpspec/commit/3be93de50882bb766424e9da97b32b3e254734f0))
+* **language:** a where reads a lookup ([#768](https://github.com/fluxopt/lpspec/issues/768)) ([ab584f2](https://github.com/fluxopt/lpspec/commit/ab584f25eab0aac7c5eac4f9740f00017a3975e4))
+
+
+### Bug Fixes
+
+* **language:** a declared lookup map holds labels of the declared dtype ([#781](https://github.com/fluxopt/lpspec/issues/781)) ([5ec2c2f](https://github.com/fluxopt/lpspec/commit/5ec2c2fa5c12c87b41e0c4cf464094da951952a9))
+* **language:** two lookups are comparable only where their labels are ([#780](https://github.com/fluxopt/lpspec/issues/780)) ([b2e2742](https://github.com/fluxopt/lpspec/commit/b2e274240147ed519866f03e0fab39f424b9c201))
+
 ## [0.0.1-alpha.150](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.149...v0.0.1-alpha.150) (2026-08-16)
 
 
