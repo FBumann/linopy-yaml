@@ -17,6 +17,7 @@ the module that already knows what shape a caller's table is in.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,8 +27,6 @@ from lpspec.errors import DataError, PiecewiseExpansionError, dense_array_messag
 from lpspec.relational.frames import as_frame, is_dense_array, labels_frame
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from lpspec.language.model import Model
 
 
@@ -47,6 +46,10 @@ def tidy_sources(
     curvature guard see every in-memory shape alike (:mod:`relational.frames`
     is where the shapes are recognised).
 
+    **Dimensions are resolved first**, because the plain-Python parameter
+    shapes :func:`_spread` accepts — a sequence, one number for every
+    coordinate — are meaningless without the labels they are spread over.
+
     Whether a source carries the columns its declaration needs is *not* asked
     here. Binding asks it of every source, path or frame, so a copy of the
     question on this side would answer only for the in-memory half — a second
@@ -54,27 +57,9 @@ def tidy_sources(
 
     Raises:
         DataError: A declared parameter with no data, or one bound to
-            something no tidy table can be made of.
+            something neither a tidy table nor :func:`_spread` can read.
     """
     sources: dict[str, object] = {}
-    for pname, pdef in schema.parameters.items():
-        if pname not in data:
-            raise DataError(f"no data provided for parameter '{pname}'")
-        obj = data[pname]
-        if isinstance(obj, (str, Path)):
-            sources[pname] = obj
-            continue
-        if is_dense_array(obj):
-            raise DataError(dense_array_message(pname))
-        table = as_frame(obj, pdef.dims)
-        if table is None:
-            raise DataError(
-                f"parameter '{pname}': cannot adapt {type(obj).__name__} to a tidy "
-                f'table — pass any table polars can read with columns '
-                f'{[*pdef.dims, "value"]} (polars, pyarrow, pandas), or a parquet path'
-            )
-        sources[pname] = table
-
     for dname, ddef in schema.dimensions.items():
         declared = schema.declared_index(dname)
         if dname in data:
@@ -95,9 +80,109 @@ def tidy_sources(
         table = table if table is not None else labels_frame(dname, src, ddef.dtype)
         sources[dname] = _filled_from_declaration(table, dname, declared)
 
+    for pname, pdef in schema.parameters.items():
+        if pname not in data:
+            raise DataError(f"no data provided for parameter '{pname}'")
+        obj = data[pname]
+        if isinstance(obj, (str, Path)):
+            sources[pname] = obj
+            continue
+        if is_dense_array(obj):
+            raise DataError(dense_array_message(pname))
+        table = as_frame(obj, pdef.dims)
+        sources[pname] = table if table is not None else _spread(pname, obj, pdef.dims, sources)
+
     validate_piecewise_data(schema, sources)
 
     return sources
+
+
+def _spread(name: str, obj: object, dims: list[str], sources: Mapping[str, object]) -> pl.LazyFrame:
+    """A parameter written as plain Python, spread over the dims it declares.
+
+    Three shapes a hand-written model reaches for and no table library
+    produces: a ``{label: value}`` map, a sequence in the dimension's own label
+    order, and one number standing for every coordinate. Each is dense by
+    construction, so each is materialised here — which is the cost of writing a
+    parameter out in Python rather than handing over a table, and the reason a
+    value that really is constant is better declared ``dims: []``.
+
+    Raises:
+        DataError: A shape that does not fit the declared dims, a sequence
+            whose length does not match, or a dimension whose labels nothing
+            supplies — a positional shape cannot be placed without them.
+    """
+    if isinstance(obj, Mapping):
+        if len(dims) != 1:
+            raise DataError(_wrong_rank(name, 'a dict maps one label to one value', dims))
+        return pl.LazyFrame({dims[0]: list(obj.keys()), 'value': list(obj.values())})
+
+    if isinstance(obj, bool):
+        return _broadcast(name, pl.lit(obj, dtype=pl.Boolean), dims, sources)
+    if isinstance(obj, (int, float)):
+        return _broadcast(name, pl.lit(float(obj), dtype=pl.Float64), dims, sources)
+
+    if hasattr(obj, '__len__') and not isinstance(obj, (str, bytes)):
+        if len(dims) != 1:
+            raise DataError(_wrong_rank(name, 'a sequence runs along one dimension', dims))
+        labels = _labels(name, dims[0], sources)
+        values = list(obj)  # pyrefly: ignore[bad-argument-type]  — narrowed by the __len__ test
+        if len(values) != len(labels):
+            raise DataError(
+                f"parameter '{name}': {len(values)} values against {len(labels)} "
+                f"'{dims[0]}' labels. A sequence is positional, so it must have "
+                f'one entry per label, in the order the index declares them.'
+            )
+        return pl.LazyFrame({dims[0]: labels, 'value': values})
+
+    raise DataError(
+        f"parameter '{name}': cannot adapt {type(obj).__name__} to a tidy "
+        f'table — pass any table polars can read with columns '
+        f'{[*dims, "value"]} (polars, pyarrow, pandas), a parquet path, or the '
+        f'plain-Python shapes: a dict, a sequence, or one number.'
+    )
+
+
+def _wrong_rank(name: str, said: str, dims: list[str]) -> str:
+    """One wording for a plain-Python shape against the dims it cannot cover."""
+    return (
+        f"parameter '{name}': {said}, and '{name}' is over {dims}. Pass a table "
+        f'with columns {[*dims, "value"]} instead.'
+    )
+
+
+def _broadcast(name: str, value: pl.Expr, dims: list[str], sources: Mapping[str, object]) -> pl.LazyFrame:
+    """One number over every coordinate of *dims*.
+
+    The cross join is what makes it a table; nothing downstream can broadcast,
+    a parameter frame carrying one row per coordinate by contract.
+    """
+    frame = pl.LazyFrame({'__one__': [0]})
+    for dim in dims:
+        frame = frame.join(pl.LazyFrame({dim: _labels(name, dim, sources)}), how='cross')
+    return frame.drop('__one__').with_columns(value.alias('value'))
+
+
+def _labels(name: str, dim: str, sources: Mapping[str, object]) -> list[Any]:
+    """*dim*'s labels, in index order, for a shape that has none of its own.
+
+    Read back off the dimension source this call already built, which is why
+    the dimensions are resolved first.
+
+    Raises:
+        DataError: Nothing supplies the labels — they would have been inferred
+            from the parameter tables, and this is one of them.
+    """
+    source = sources.get(dim)
+    if source is None:
+        raise DataError(
+            f"parameter '{name}' is written positionally over '{dim}', whose labels "
+            f'nothing supplies: they would be inferred from the parameter tables, and '
+            f"this is one of them. Declare dimensions.{dim}.values, pass coords={{'{dim}': [...]}}, "
+            f"or pass '{name}' as a table carrying its own '{dim}' column."
+        )
+    frame = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
+    return frame.select(dim).unique(maintain_order=True).collect()[dim].to_list()  # pyrefly: ignore[missing-attribute]
 
 
 def _filled_from_declaration(

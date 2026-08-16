@@ -22,7 +22,14 @@ import pytest
 
 import lpspec as lps
 from lpspec.language.model import Model
-from tests.conftest import schema_of, solve_lp_file
+from tests.conftest import (
+    DISPATCH_COST,
+    DISPATCH_GENERATORS,
+    DISPATCH_P_MAX,
+    _dispatch_load,
+    schema_of,
+    solve_lp_file,
+)
 
 
 @pytest.fixture
@@ -66,6 +73,101 @@ def test_parquet_path_sources(dispatch_yaml, dispatch_frame_inputs, tmp_path):
 
     with lps.solve(dispatch_yaml, sources, coords=coords) as ref:
         assert objective == pytest.approx(ref.objective, rel=1e-9)
+
+
+#: ``examples/dispatch.yaml``'s numbers written out in Python rather than
+#: handed over as tables — the shapes a hand-written model reaches for.
+_PLAIN = {
+    'dict': {
+        'p_max': dict(zip(DISPATCH_GENERATORS, DISPATCH_P_MAX, strict=True)),
+        'cost': dict(zip(DISPATCH_GENERATORS, DISPATCH_COST, strict=True)),
+        'load': dict(enumerate(_dispatch_load())),
+    },
+    'sequence': {
+        'p_max': list(DISPATCH_P_MAX),
+        'cost': list(DISPATCH_COST),
+        'load': _dispatch_load(),
+    },
+}
+
+
+@pytest.mark.parametrize('shape', sorted(_PLAIN), ids=sorted(_PLAIN))
+def test_plain_python_sources_reach_the_same_answer_as_tables(dispatch_yaml, dispatch_frame_inputs, shape):
+    """A dict and a sequence are sources, and mean what the tables mean.
+
+    A dict carries its own labels; a sequence is positional against the index,
+    which is why the dimensions are resolved before any parameter is read.
+    """
+    _frames, coords = dispatch_frame_inputs
+    with lps.solve(dispatch_yaml, _frames, coords=coords) as tables:
+        expected = tables.objective
+
+    with lps.solve(dispatch_yaml, _PLAIN[shape], coords=coords) as plain:
+        assert plain.objective == pytest.approx(expected, rel=1e-9)
+
+
+def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_frame_inputs):
+    """A scalar covers the dims the parameter declares, not just a 0-D one.
+
+    Dense by construction, and materialised here — which is the cost of saying
+    it this way rather than declaring the parameter ``dims: []``.
+    """
+    frames, coords = dispatch_frame_inputs
+    flat = {**frames, 'cost': 7.0}
+    spelled = {**frames, 'cost': pl.DataFrame({'generator': list(DISPATCH_GENERATORS), 'value': [7.0] * 3})}
+
+    with (
+        lps.solve(dispatch_yaml, flat, coords=coords) as broadcast,
+        lps.solve(dispatch_yaml, spelled, coords=coords) as written,
+    ):
+        assert broadcast.objective == pytest.approx(written.objective, rel=1e-9)
+
+
+@pytest.mark.parametrize(
+    ('sources', 'match'),
+    [
+        pytest.param({'p_max': [100.0, 60.0]}, 'one entry per label', id='a-sequence-of-the-wrong-length'),
+        pytest.param({'p_max': object()}, 'cannot adapt', id='nothing-table-shaped-at-all'),
+    ],
+)
+def test_a_plain_python_source_that_does_not_fit_is_refused(dispatch_yaml, dispatch_frame_inputs, sources, match):
+    frames, coords = dispatch_frame_inputs
+    with pytest.raises(lps.DataError, match=match):
+        lps.build(dispatch_yaml, {**frames, **sources}, coords=coords).close()
+
+
+#: One parameter over two dims — what a dict and a sequence cannot cover.
+_TWO_DIMS = {
+    'dimensions': {'g': {'values': ['wind', 'gas']}, 't': {'dtype': 'int', 'values': [0, 1]}},
+    'parameters': {'cap': {'dims': ['g', 't']}},
+    'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'objective': {'sense': 'maximize', 'expression': 'x'},
+}
+
+
+@pytest.mark.parametrize(
+    ('source', 'match'),
+    [
+        pytest.param({('wind', 0): 1.0}, 'a dict maps one label to one value', id='a-dict'),
+        pytest.param([1.0, 2.0, 3.0, 4.0], 'a sequence runs along one dimension', id='a-sequence'),
+    ],
+)
+def test_a_flat_shape_cannot_cover_two_dimensions(source, match):
+    """Both carry one axis, and the rewrite is the table that carries both."""
+    with pytest.raises(lps.DataError, match=match):
+        lps.build(_TWO_DIMS, {'cap': source}).close()
+
+
+def test_a_positional_source_needs_the_labels_it_is_written_against():
+    """Nothing supplies them, and inferring them from this very table is circular."""
+    model = {
+        'dimensions': {'g': {}},
+        'parameters': {'cap': {'dims': ['g']}},
+        'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
+    }
+    with pytest.raises(lps.DataError, match='whose labels nothing supplies'):
+        lps.build(model, {'cap': [1.0, 2.0]}).close()
 
 
 def test_runtime_is_linopy_free(dispatch_yaml):
