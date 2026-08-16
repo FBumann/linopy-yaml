@@ -1,0 +1,81 @@
+description: >-
+  PyPSA modular capacity expansion: a technology bought in whole units. The
+  capacity variable survives, but an integer module count decides it, so the
+  optimum may only land on a multiple of the module size. Optimum 56700.0, from
+  PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  bus:
+    description: network nodes
+    dtype: str
+  generator:
+    description: generating units, each sitting on one bus
+    dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+
+parameters:
+  p_nom_mod:
+    description: capacity of one module — what a single unit of this technology adds
+    dims: [generator]
+  p_nom_max:
+    description: most capacity that may stand at a generator once built
+    dims: [generator]
+  capital_cost:
+    description: cost of holding one unit of capacity over the horizon
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  load:
+    description: demand at each bus in each snapshot
+    dims: [snapshot, bus]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  p_nom:
+    description: capacity built at a generator
+    foreach: [generator]
+    bounds:
+      lower: 0
+      upper: p_nom_max
+  n_mod:
+    description: how many whole modules are built
+    foreach: [generator]
+    domain: integer
+    bounds:
+      lower: 0
+
+constraints:
+  within_capacity:
+    description: a generator produces no more than the capacity built for it
+    foreach: [snapshot, generator]
+    expression: p <= p_nom
+
+  modularity:
+    description: >-
+      capacity is the module count times the module size, which is what makes
+      the count rather than the capacity the decision
+    foreach: [generator]
+    expression: p_nom == n_mod * p_nom_mod
+
+  nodal_balance:
+    description: what is generated at a bus meets the load there
+    foreach: [snapshot, bus]
+    expression: sum(p, by=gen_bus) == load
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run, plus what its capacity costs to build
+  expression: p * marginal_cost + p_nom * capital_cost
