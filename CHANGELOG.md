@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.153](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.152...v0.0.1-alpha.153) (2026-08-16)
+
+
+### Documentation
+
+* the reference speaks to a caller, and the internals sit under about ([#831](https://github.com/fluxopt/lpspec/issues/831)) ([a105582](https://github.com/fluxopt/lpspec/commit/a1055829d48a643e64ac42e47a738cce10d9df65))
+
 ## [0.0.1-alpha.152](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.151...v0.0.1-alpha.152) (2026-08-16)
 
 
