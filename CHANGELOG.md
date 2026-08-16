@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.160](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.159...v0.0.1-alpha.160) (2026-08-16)
+
+
+### Features
+
+* **compat:** a dimension the parameters already span needs no second declaration ([#869](https://github.com/fluxopt/lpspec/issues/869)) ([cf02ffa](https://github.com/fluxopt/lpspec/commit/cf02ffab30764bc4f3612b8af4289d24bc4d4ec3))
+
 ## [0.0.1-alpha.159](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.158...v0.0.1-alpha.159) (2026-08-16)
 
 
