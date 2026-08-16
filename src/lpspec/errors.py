@@ -398,9 +398,11 @@ def nonconvex_objective_message() -> str:
         'property of the coefficients rather than of the model, so nothing could refuse it '
         "before the data was bound — the sink's other quadratic refusal, a Hessian standing "
         'beside integrality, is declared and caught before the build.\n'
-        'Write the model to an .lp file for a solver that takes one, or state the curve as a '
-        'piecewise: block with method: convex instead — a convex reformulation keeps the LP, '
-        'and with it the duals and the warm start a quadratic objective gives up.'
+        'Solve with gurobi, which reaches a nonconvex quadratic objective by spatial '
+        'branch-and-bound at its default parameters, or write the model to an .lp file for a '
+        'solver that takes one. A convex reformulation — the curve as a piecewise: block with '
+        'method: convex — keeps the LP, and with it the duals and the warm start a quadratic '
+        'objective gives up.'
     )
 
 

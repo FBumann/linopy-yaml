@@ -130,13 +130,22 @@ class Gurobi(Solver):
     #: Gurobi branches on a set itself, which is the whole reason to declare
     #: one: no binaries, no big-M, and no bound a member has to have.
     #:
-    #: **The quadratic entries say what this sink does, not what gurobipy
-    #: could.** The library takes a Hessian, nonconvex included, and
-    #: ``tests/test_gurobi_capability_probes.py`` measures that — but nothing
-    #: here passes one yet, and a descriptor claiming otherwise would drop the
-    #: quadratic part of an objective and answer a different model's optimum.
-    #: A capability describes the sink as shipped.
-    capabilities = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
+    #: The only sink with no quadratic exclusion: a Hessian stands beside
+    #: integrality, and a nonconvex one reaches spatial branch-and-bound at
+    #: default parameters, both measured in
+    #: ``tests/test_gurobi_capability_probes.py``.
+    #:
+    #: ``quadratic_constraint`` stays out although gurobipy takes one — a
+    #: capability describes the sink **as shipped**, and no stream carries a
+    #: quadratic row to it.
+    capabilities = Capabilities(
+        supports={
+            'integrality': 'native',
+            'sos': 'native',
+            'quadratic_objective': 'native',
+            'nonconvex_quadratic_objective': 'native',
+        }
+    )
 
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._m, self._x, self._blocks, self._env = _built(model, batch_rows, self._options)
@@ -158,6 +167,7 @@ class Gurobi(Solver):
             block.RHS = rhs[at : at + block.shape[0]]
             at += block.shape[0]
         self._m.ObjCon = model.objective_constant
+        _set_quadratic(self._m, self._x, model, cols.cost)
         self._m.update()
 
     def warm_start(self) -> WarmStart | None:
@@ -291,8 +301,37 @@ def _built(
     if model.objective_sense == 'max':
         m.ModelSense = gurobipy.GRB.MAXIMIZE
     m.ObjCon = model.objective_constant
+    _set_quadratic(m, x, model, cols.cost)
     m.update()
     return m, x, blocks, environment
+
+
+def _set_quadratic(m: Any, x: Any, model: ModelTables, cost: Any) -> None:
+    r"""The objective's quadratic part, as the matrix Gurobi reads.
+
+    ``setMObjective`` takes :math:`Q` in :math:`x^\top Q x` — **no halving** —
+    so the unordered-pair form the engine hands over goes in as it stands, one
+    entry per pair in the upper triangle. Third of three conventions for one
+    form: HiGHS halves and doubles its diagonal, the LP section doubles
+    everything, and this one does neither.
+
+    It sets the *whole* objective, so the cost vector already on the columns is
+    passed again rather than overwritten with zeros — and that replacement is
+    what makes a push safe, where accumulating would answer twice the curvature
+    on the second solve. Nothing is called at all for an affine model.
+    """
+    import scipy.sparse
+
+    if not model.quad.height:
+        return
+    pairs = scipy.sparse.csr_matrix(
+        (
+            model.quad['coeff'].to_numpy(),
+            (model.quad['col_l'].to_numpy(), model.quad['col_r'].to_numpy()),
+        ),
+        shape=(model.column_count, model.column_count),
+    )
+    m.setMObjective(pairs, cost, model.objective_constant, x, x, x)
 
 
 def _add_sets(m: Any, x: Any, model: ModelTables, gurobipy: Any) -> None:
