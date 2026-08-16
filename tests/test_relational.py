@@ -24,9 +24,9 @@ from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.plan import (
     Constant,
     ConstraintDeclaration,
-    CoordinateTarget,
     DimensionDeclaration,
     GroupSum,
+    LookupDeclaration,
     ObjectiveDeclaration,
     Parameter,
     ParameterComparison,
@@ -159,9 +159,9 @@ def test_dispatch_roundtrip(dispatch_data, tmp_path):
 
 def transport_program() -> Program:
     injection = (
-        GroupSum(Variable('p'), over='generator', coordinate='gen_bus', into='bus')
-        + GroupSum(Variable('f'), over='line', coordinate='to', into='bus')
-        - GroupSum(Variable('f'), over='line', coordinate='from', into='bus')
+        GroupSum(Variable('p'), over='generator', lookup='gen_bus', into='bus')
+        + GroupSum(Variable('f'), over='line', lookup='to', into='bus')
+        - GroupSum(Variable('f'), over='line', lookup='from', into='bus')
     )
     return Program(
         parameters=(
@@ -195,8 +195,8 @@ def transport_program() -> Program:
         ),
         objective=ObjectiveDeclaration('min', Sum(Variable('p') * Parameter('cost'), over=('generator', 'snapshot'))),
         dimensions=(
-            DimensionDeclaration('generator', (CoordinateTarget('gen_bus', 'bus'),)),
-            DimensionDeclaration('line', (CoordinateTarget('from', 'bus'), CoordinateTarget('to', 'bus'))),
+            DimensionDeclaration('generator', (LookupDeclaration('gen_bus', 'bus'),)),
+            DimensionDeclaration('line', (LookupDeclaration('from', 'bus'), LookupDeclaration('to', 'bus'))),
         ),
     )
 

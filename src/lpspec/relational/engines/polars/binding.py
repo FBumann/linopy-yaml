@@ -45,7 +45,7 @@ class BoundSources:
     """The data a program is built against, after binding.
 
     ``parameters`` are tidy ``(dims…, value)``; ``dimensions`` are
-    ``(val, ord, coordinates…)``. The other two are answers *read off* the data
+    ``(val, ord, lookups…)``. The other two are answers *read off* the data
     that the query needs and cannot re-derive cheaply: ``sum`` over an absent
     dim scales by that dim's size, and ``defined`` on a boolean parameter tests
     the value rather than its finiteness.
@@ -166,13 +166,13 @@ class _Binder:
     def sourced_dimensions(self) -> None:
         """Every dimension carrying its own index, before any parameter binds.
 
-        Coordinate targets are included beyond the axis dims: a coordinate may
+        Lookup targets are included beyond the axis dims: a lookup may
         target a dimension nothing spans yet — the incremental multi-period
-        shape, where the flat index declares every coordinate before the
+        shape, where the flat index declares every label before the
         constraints that group by them exist — and its supplied index is what
         the containment check runs against (#488).
         """
-        for d in sorted(self._declared_dims() | self._coordinate_targets()):
+        for d in sorted(self._declared_dims() | self._lookup_targets()):
             if d in self.sources:
                 self._register(d, self._explicit_frame(d, self.sources[d], self.program.dimension(d).carried))
 
@@ -181,7 +181,7 @@ class _Binder:
 
         Every dimension needs one: :meth:`sourced_dimensions` registered those
         that have it, so anything left here has none. Containment runs once
-        every frame exists — it stops a mistyped coordinate from vanishing in
+        every frame exists — it stops a mistyped lookup value from vanishing in
         the join that places its terms, leaving a model that builds and solves
         without them.
         """
@@ -195,19 +195,19 @@ class _Binder:
             raise DataError(no_index_source_message(d))
 
         for d in sorted(dims):
-            for c in sorted(self.program.dimension(d).coordinates):
-                if c.target not in self.dimensions:
+            for lk in sorted(self.program.dimension(d).lookups):
+                if lk.target not in self.dimensions:
                     raise DataError(
-                        f"dimension '{d}' lookup '{c.name}' targets '{c.target}', which "
+                        f"dimension '{d}' lookup '{lk.name}' targets '{lk.target}', which "
                         f'nothing in this model spans and which has no index of its own, so '
                         f"the lookup's values have no label set to be checked against. "
-                        f"Pass an index for '{c.target}' (under key '{c.target}' in data or "
+                        f"Pass an index for '{lk.target}' (under key '{lk.target}' in data or "
                         f'coords, or as values on its declaration), or remove the lookup.'
                     )
-                data_validation.check_coordinate_containment(d, c.name, c.target, self.dimensions)
+                data_validation.check_lookup_containment(d, lk.name, lk.target, self.dimensions)
 
     def _explicit_frame(self, d: str, source: Any, names: list[str]) -> pl.LazyFrame:
-        """A dimension's ``(val, ord, coordinates…)`` from a caller's index.
+        """A dimension's ``(val, ord, lookups…)`` from a caller's index.
 
         Ordinals follow the source's own order — a label's position is the row
         it first appears at — so a translation moves by position exactly as the
@@ -232,7 +232,7 @@ class _Binder:
         if missing:
             raise DataError(missing_lookup_columns_message(d, missing, available))
         labelled = frame.select(d, *names).with_row_index(_ROW_POSITION).collect().lazy()
-        data_validation.check_coordinates_single_valued(d, names, labelled)
+        data_validation.check_lookups_single_valued(d, names, labelled)
         return (
             labelled.group_by(d)
             .agg(pl.col(_ROW_POSITION).min(), *(pl.col(c).first() for c in names))
@@ -266,7 +266,7 @@ class _Binder:
         for d, frame in materialised.items():
             casts = [pl.col('val').cast(enums[d])] if d in enums else []
             casts += [
-                pl.col(c.name).cast(enums[c.target]) for c in self.program.dimension(d).coordinates if c.target in enums
+                pl.col(lk.name).cast(enums[lk.target]) for lk in self.program.dimension(d).lookups if lk.target in enums
             ]
             if casts:
                 self.dimensions[d] = frame.with_columns(casts).lazy()
@@ -285,8 +285,8 @@ class _Binder:
             dims.update(p.dims)
         return dims
 
-    def _coordinate_targets(self) -> set[str]:
-        return {c.target for d in self.program.dimensions for c in d.coordinates}
+    def _lookup_targets(self) -> set[str]:
+        return {lk.target for d in self.program.dimensions for lk in d.lookups}
 
 
 def _plain_strings(frame: pl.LazyFrame, dims: tuple[str, ...]) -> pl.LazyFrame:

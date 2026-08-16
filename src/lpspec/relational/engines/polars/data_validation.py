@@ -92,10 +92,10 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
     raise DataError(duplicate_coordinate_message(p.name, shown, list(p.dims)))
 
 
-def check_coordinates_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -> None:
-    """One label, one coordinate value — two rows disagreeing is a data bug.
+def check_lookups_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -> None:
+    """One label, one lookup value — two rows disagreeing is a data bug.
 
-    It names *every* offending coordinate in one pass, rather than raising on
+    It names *every* offending lookup in one pass, rather than raising on
     the first and leaving the rest to be found one build at a time.
     """
     if not names:
@@ -112,30 +112,30 @@ def check_coordinates_single_valued(d: str, names: list[str], frame: pl.LazyFram
     )
 
 
-def check_coordinate_containment(d: str, cname: str, target: str, dimensions: Dimensions) -> None:
-    """Every coordinate value must be a label of the dimension it targets.
+def check_lookup_containment(d: str, lookup: str, target: str, dimensions: Dimensions) -> None:
+    """Every lookup value must be a label of the dimension it targets.
 
     A *null* is not a violation — the label belongs to no group, the same
     row-absence idiom the rest of the engine uses. Only a value that is present
     and unknown is a typo, and that one drops terms silently.
     """
-    known = dimensions[target].select(pl.col('val').alias(cname))
+    known = dimensions[target].select(pl.col('val').alias(lookup))
     bad = (
         dimensions[d]
-        .select(cname)
-        .filter(pl.col(cname).is_not_null())
-        .join(known, on=cname, how='anti')
+        .select(lookup)
+        .filter(pl.col(lookup).is_not_null())
+        .join(known, on=lookup, how='anti')
         .unique()
         .head(5)
         .collect()
     )
     if bad.height == 0:
         return
-    shown = ', '.join(repr(v) for v in bad[cname].to_list())
+    shown = ', '.join(repr(v) for v in bad[lookup].to_list())
     raise DataError(
-        f"dimension '{d}' lookup '{cname}' has value(s) that are not "
+        f"dimension '{d}' lookup '{lookup}' has value(s) that are not "
         f"'{target}' labels: {shown}. Every value must be a declared "
-        f"'{target}' label — otherwise sum(by={cname}) drops "
+        f"'{target}' label — otherwise sum(by={lookup}) drops "
         f'those terms in the join that places them, and the model builds and '
         f'solves without them.'
     )

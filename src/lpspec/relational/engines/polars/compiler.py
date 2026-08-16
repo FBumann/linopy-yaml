@@ -9,7 +9,7 @@ Column conventions, relied on by the engine:
 ===================  ==========================================
 frame                columns
 ===================  ==========================================
-dimension table      ``val``, ``ord``, plus declared coordinates
+dimension table      ``val``, ``ord``, plus declared lookups
 parameter table      ``dims…``, ``value``
 variable frame       ``dims…``, ``var_label``
 term fragment        ``dims…``, ``var_label``, ``coeff``
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 
 #: Scratch columns. The spaces make them unrepresentable as declared names, so
-#: they cannot collide with a dimension or coordinate the model already has.
+#: they cannot collide with a dimension or lookup the model already has.
 _RHS = '__rhs value__'
 #: The per-entity offset, joined in beside the ordinal it moves.
 _OFFSET = '__offset'
@@ -660,10 +660,10 @@ class PolarsCompiler:
         return TermFragment(keep, frame, p.is_term)
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
-        """Relabel dim ``over`` to ``into`` through a declared coordinate.
+        """Relabel dim ``over`` to ``into`` through a declared lookup.
 
         No aggregate either: the dim table holds one row per label and its
-        coordinate was checked for containment at build time, so the join
+        lookup was checked for containment at build time, so the join
         neither duplicates nor drops a term, and rows landing on one ``into``
         are added by the terminal aggregate as ``Sum``'s are. A group is a sum,
         so v1 §13 applies and this constructs rather than ``replace``s — see
@@ -692,10 +692,10 @@ class PolarsCompiler:
     def _remap_fragment(
         self, p: TermFragment, node: plan.GroupSum | plan.At, *, consumed: str, produced: str
     ) -> TermFragment:
-        """Trade dim *consumed* for *produced* through *node*'s coordinate.
+        """Trade dim *consumed* for *produced* through *node*'s lookup.
 
-        The mapping table is the declared coordinate read as two columns —
-        ``val`` as ``over``, the coordinate as ``into`` — and the rewrite is a
+        The mapping table is the declared lookup read as two columns —
+        ``val`` as ``over``, the lookup as ``into`` — and the rewrite is a
         single inner equi-join on *consumed*. A group consumes ``over``
         (:meth:`_group_fragment`); an ``At`` reads the same table backwards
         (:meth:`_at_fragment`). Written once so the adjoints cannot drift: a
@@ -703,7 +703,7 @@ class PolarsCompiler:
         """
         keep = tuple(x for x in p.dims if x != consumed)
         mapping = self.data.dimensions[node.over].select(
-            pl.col('val').alias(node.over), pl.col(node.coordinate).alias(node.into)
+            pl.col('val').alias(node.over), pl.col(node.lookup).alias(node.into)
         )
         frame = p.frame.join(mapping, on=consumed, how='inner').select(*keep, produced, *p.carried)
         return TermFragment((*keep, produced), frame, p.is_term)

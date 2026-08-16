@@ -141,7 +141,7 @@ def lower_program(schema: Model) -> plan.Program:
     dimensions = tuple(
         plan.DimensionDeclaration(
             dname,
-            tuple(plan.CoordinateTarget(cname, target) for cname, target in schema.targeted_of(dname).items()),
+            tuple(plan.LookupDeclaration(cname, target) for cname, target in schema.targeted_of(dname).items()),
             tuple(schema.labels_of(dname)),
         )
         for dname in schema.dimensions
@@ -205,7 +205,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
     dim rules (``dimensions.dims_of``) and degree (``language/degree.py``).
 
     What stays is about the plan: which node a call becomes, and the shapes a
-    node cannot represent — a ``GroupSum`` groups by a declared coordinate, a
+    node cannot represent — a ``GroupSum`` groups by a declared lookup, a
     ``Translate`` distance is an integer literal. ``Sum`` and ``GroupSum`` stay
     two nodes under one surface verb, reducing a dim away and reducing it into
     another being different relational shapes.
@@ -276,7 +276,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             return plan.GroupSum(
                 operand,
                 over=by_node.dimension,
-                coordinate=by_node.name,
+                lookup=by_node.name,
                 into=by_node.into,
             )
 
@@ -288,7 +288,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             return plan.At(
                 _lower_expr(node.args[0], schema, context),
                 over=by_node.dimension,
-                coordinate=by_node.name,
+                lookup=by_node.name,
                 into=by_node.into,
             )
 
@@ -631,7 +631,7 @@ def advice(program: plan.Program) -> list[str]:
     for e in expressions:
         axes |= _produced_axes(e)
 
-    targeted = {c.target: (d.name, c.name) for d in program.dimensions for c in d.coordinates}
+    targeted = {lk.target: (d.name, lk.name) for d in program.dimensions for lk in d.lookups}
     notes: list[str] = []
     for d in program.dimensions:
         if d.name in axes:

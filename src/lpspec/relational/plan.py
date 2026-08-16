@@ -12,7 +12,7 @@ tables; actual data is bound at execution time via a source registry.
 
 Expressions support operator sugar so plans read naturally in Python:
 
-    balance = GroupSum(Variable("p"), over="generator", coordinate="bus", into="bus") - Parameter("load")
+    balance = GroupSum(Variable("p"), over="generator", lookup="bus", into="bus") - Parameter("load")
 """
 
 from __future__ import annotations
@@ -116,23 +116,23 @@ class Sum(Expression):
 
 @dataclass(frozen=True)
 class GroupSum(Expression):
-    """Sum ``operand`` through a coordinate declared on dim ``over``.
+    """Sum ``operand`` through a lookup declared on dim ``over``.
 
-    ``coordinate`` names a coordinate carried by dim ``over`` whose values are
-    labels of dim ``into``; the result replaces ``over`` with ``into``. All
-    three are resolved before lowering, so the engine needs no schema lookup
-    to place the terms.
+    ``lookup`` names a lookup carried by dim ``over`` whose values are labels
+    of dim ``into``; the result replaces ``over`` with ``into``. All three are
+    resolved before lowering, so the engine needs no schema lookup to place
+    the terms.
     """
 
     operand: Expression
     over: str
-    coordinate: str
+    lookup: str
     into: str
 
 
 @dataclass(frozen=True)
 class At(Expression):
-    """Read ``operand`` through a coordinate — the adjoint of :class:`GroupSum`.
+    """Read ``operand`` through a lookup — the adjoint of :class:`GroupSum`.
 
     Same mapping table, walked the other way: ``GroupSum`` consumes ``over``
     and produces ``into``, this consumes ``into`` and produces ``over``. The
@@ -146,7 +146,7 @@ class At(Expression):
 
     operand: Expression
     over: str
-    coordinate: str
+    lookup: str
     into: str
 
 
@@ -335,8 +335,8 @@ class Not(Predicate):
 # --------------------------------------------------------------------------
 
 
-class CoordinateTarget(NamedTuple):
-    """One declared coordinate and the dimension its values are labels of."""
+class LookupDeclaration(NamedTuple):
+    """One declared lookup and the dimension its values are labels of."""
 
     name: str
     target: str
@@ -344,27 +344,26 @@ class CoordinateTarget(NamedTuple):
 
 @dataclass(frozen=True)
 class DimensionDeclaration:
-    """A dimension and the coordinates its labels carry.
+    """A dimension and the lookups its labels carry.
 
-    ``coordinates`` names each coordinate and the dimension its values are
-    labels of, checked for containment once the dim tables exist — which keeps
-    a mistyped label from silently dropping its terms in the join that places
-    them.
+    ``lookups`` names each lookup and the dimension its values are labels of,
+    checked for containment once the dim tables exist — which keeps a mistyped
+    label from silently dropping its terms in the join that places them.
 
-    ``labels`` are the inline label spaces: index columns the dimension owns
+    ``label_spaces`` are the inline kind: index columns the dimension owns
     outright, with no target and so nothing to check. They ride the dim table
     for selection and rendering, and resolution refuses to group into one, so
     no expression node reaches them.
     """
 
     name: str
-    coordinates: tuple[CoordinateTarget, ...] = ()
-    labels: tuple[str, ...] = ()
+    lookups: tuple[LookupDeclaration, ...] = ()
+    label_spaces: tuple[str, ...] = ()
 
     @property
     def carried(self) -> list[str]:
-        """Every coordinate column the dimension's index source must supply."""
-        return sorted([*(c.name for c in self.coordinates), *self.labels])
+        """Every lookup column the dimension's index source must supply."""
+        return sorted([*(lk.name for lk in self.lookups), *self.label_spaces])
 
 
 @dataclass(frozen=True)
@@ -458,7 +457,7 @@ class Program:
     def dimension(self, name: str) -> DimensionDeclaration:
         """The dimension called *name*.
 
-        Undeclared is not an error here: a dimension with no coordinates has
+        Undeclared is not an error here: a dimension with no lookups has
         nothing to declare.
         """
         for d in self.dimensions:
