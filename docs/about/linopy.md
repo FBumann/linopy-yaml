@@ -90,13 +90,18 @@ The shim accepts **exactly the same language** — that equality is what makes t
 oracle an oracle, and a construct outside the language is a load error naming
 the rewrite, never a redirection to the other path.
 
-What differs is what each will take as *data*, which is a wart rather than a
-design ([#60](https://github.com/fluxopt/lpspec/issues/60)):
+A parameter takes the same shapes on both — a parquet path, any table exporting
+the Arrow PyCapsule protocol, a `pd.Series` carrying its dims in an index, a
+`dict` or a sequence over one dimension, or one number spread over the
+coordinates it covers. Neither reads an `xr.DataArray`: this package reads
+tables and hands arrays back.
+
+What still differs is narrower, and is the remainder of
+[#60](https://github.com/fluxopt/lpspec/issues/60):
 
 | | product path (`sources=`) | shim (`data=` / `coords=`) |
 |---|---|---|
 | dimension labels | `sources`, then `coords=`, then `values:`, then **derived from the parameter tables** | `coords=`, then `values:`, then error — no derivation |
-| a parameter | parquet path, or any table exporting the Arrow PyCapsule protocol; `int`/`float` for 0-D | `int`/`float` (broadcasts freely), `dict` or a sequence for 1-D, `pd.Series` / tidy `pd.DataFrame` for any rank |
 | unnamed index levels | — | bind positionally to the declared dims; named levels bind by name |
 
 The derivation row is the one that bites: on the product path a dimension some
