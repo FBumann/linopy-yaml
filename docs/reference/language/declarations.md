@@ -103,9 +103,10 @@ constraints:
 | `where` | which rows are built ([absence](absence.md)) | default `null` |
 | `description` | free text | default `null` |
 
-The left-hand side must involve at least one decision variable, and the
-expression's dims must **equal** `foreach`
-([dim algebra](expressions.md#dim-algebra)).
+The expression's dims must **equal** `foreach`
+([dim algebra](expressions.md#dim-algebra)). Either side may carry the
+variables; a row that ends up with none on either side is not a constraint and
+is not built ([absence](absence.md#a-row-with-no-variable-terms-is-not-built)).
 
 **`foreach: []` is one scalar row** — a single system-wide budget, where the
 expression reduces every dim away. Nothing special: `sum(x, over=f) <= 120` has

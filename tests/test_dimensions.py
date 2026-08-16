@@ -156,7 +156,7 @@ def test_broadcast_is_legal_when_one_side_contains_the_other():
             r"does not carry \['bus'\]",
             id='foreach-dim-the-equation-never-uses',
         ),
-        # the absence rules documented an `any()` reduction here — a mask that fails
+        # the absence rules once documented an `any()` reduction here — a mask that fails
         # *open*, silently including everything.
         pytest.param(
             {'variables.cap': {'foreach': ['generator'], 'where': 'load > 0'}},

@@ -745,7 +745,7 @@ def _vacated(expression: Any, fill: float) -> Any:
     """A shifted expression with its vacated edge positions filled.
 
     linopy v1 counts ``.shift()`` among the operations that *create* absence
-    (§4), so the edge propagates and drops the row — the language's answer too
+    (v1 §4), so the edge propagates and drops the row — the language's answer too
     (the operator rules, #289). This is the opt-out, reached only from ``shift(...,
     fill=0)``, and is the escape v1 itself prescribes rather than a rule of
     ours on top.

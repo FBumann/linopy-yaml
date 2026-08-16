@@ -49,7 +49,7 @@ fixed when the file loads:
 | expression (`p * cost`) | variable, parameter |
 | dimension argument (`over=`) | dimension |
 | lookup argument (`by=` on `sum` / `at`) | lookup — never a dimension |
-| `where` string | parameter, dimension, lookup |
+| `where` string | parameter, variable, dimension, lookup ([where strings](absence.md#where-strings)) |
 | `bounds.lower` / `bounds.upper` | parameter name, or a number |
 | the `edge` key of `shift` | `'wrap'` **quoted**, or a bare number; never a dimension |
 

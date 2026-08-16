@@ -37,7 +37,7 @@ For models declared entirely in YAML, use the native API — it streams::
 **Importing this module sets** ``linopy.options['semantics'] = 'v1'``. This
 lane speaks v1 and the option is global, so importing is what sets it.
 linopy's ``legacy`` default fills every absent slot with 0, where the
-relational lane drops the row (the absence rules, §7) — left alone the two lanes answer
+relational lane drops the row (the absence rules) — left alone the two lanes answer
 the same YAML 25.0 against 125.0 on a masked-variable model, a wrong answer
 rather than a wrong error.
 

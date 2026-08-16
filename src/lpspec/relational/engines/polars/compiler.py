@@ -637,7 +637,7 @@ class PolarsCompiler:
 
         The rows that carried them stay and collapse in the terminal
         ``sum(coeff)`` at assembly. Constructed rather than ``replace``d so
-        ``presence`` is *dropped*: §13 reads a reduction as skipping absent
+        ``presence`` is *dropped*: v1 §13 reads a reduction as skipping absent
         slots, so summing over a partly-masked dim reports nothing.
         """
         missing = [d for d in over if d not in p.dims]
@@ -660,7 +660,7 @@ class PolarsCompiler:
         coordinate was checked for containment at build time, so the join
         neither duplicates nor drops a term, and rows landing on one ``into``
         are added by the terminal aggregate as ``Sum``'s are. A group is a sum,
-        so §13 applies and this constructs rather than ``replace``s — see
+        so v1 §13 applies and this constructs rather than ``replace``s — see
         :meth:`_sum_fragment`.
         """
         if g.over not in p.dims:
@@ -938,7 +938,8 @@ def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.
     """The column a where-comparison on *dimension* reads.
 
     A string label is compared in ``String`` space, undoing binding's ``Enum``:
-    §6.1 orders labels bytewise and reads an unknown label as matching nothing,
+    The where-string rules order labels bytewise and read an unknown label as
+    matching nothing,
     where an ``Enum`` orders by declaration and refuses strangers.
     """
     column = pl.col(dimension)

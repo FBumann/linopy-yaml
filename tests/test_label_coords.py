@@ -436,7 +436,8 @@ def test_a_lookup_comparison_is_checked_against_its_dtype():
 def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():
     """A stranger label masks everything out; it does not raise.
 
-    §6.1's reading for every other comparison, and the reason the lookup
+    The where-string rules' reading for every other comparison, and the reason
+    the lookup
     column is compared as a string: binding casts it to the target's `Enum`,
     which orders by declaration and *refuses* a label outside it — so without
     the cast back this is a polars error rather than an empty mask.
@@ -448,7 +449,7 @@ def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():
 
 
 def test_a_targeted_lookup_orders_bytewise_not_by_declaration():
-    """§6.1: labels order bytewise, whatever order the dimension declared them.
+    """Labels order bytewise, whatever order the dimension declared them.
 
     Binding casts a lookup column to the target's `Enum`, which orders by
     *declaration*, so an ordering comparison read off it would answer a

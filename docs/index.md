@@ -250,7 +250,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     ---
 
-    What a YAML file may contain, and what it means — ten rules, nine
+    What a YAML file may contain, and what it means — ten rules, ten
     declaration keys, one closed set of operators.
 
     [:octicons-arrow-right-24: The language](reference/language/index.md)

@@ -10,7 +10,7 @@ against 16 in `linopy/loader.py`, with only the wording of two of them shared
 - an unknown label was **accepted** by the relational lane, worth two thirds of
   the objective on the model here (#350);
 - a duplicated coordinate row raised `DataError` relationally and a bare
-  `ValueError` eagerly — which the error rules names as the failure mode to avoid, "an
+  `ValueError` eagerly — which the error rules name as the failure mode to avoid, "an
   opaque xarray or solver exception with no pointer back to a YAML
   declaration".
 
@@ -90,7 +90,7 @@ def _cases() -> list[Case]:
             'coefficient sparse',
             {**good_r, 'cost': _tidy(f=['a'], value=[1.0])},
             {**good_e, 'cost': pd.Series({'a': 1.0})},
-            # The ordinary case: a missing row is a zero coefficient (§8).
+            # The ordinary case: a missing row is a zero coefficient (the data-binding rules).
             ACCEPTED,
         ),
         Case(

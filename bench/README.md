@@ -42,7 +42,7 @@ A bare `pytest bench` is **not** the committed ladder: `--sizes` defaults to
 Narrowing the run and then committing the file leaves the published tables with
 no provenance, and nothing about the file looks wrong afterwards.
 
-**`bench.plot` rewrites one line of `docs/benchmarks-scaling.html`** — the
+**`bench.plot` rewrites one line of `docs/about/benchmarks-scaling.html`** — the
 `const DATA = {...};` literal — and nothing else. The page is a tracked source
 file, so its markup and prose are reviewed in the diff like any other code and
 only the measurements inside it are mechanical.

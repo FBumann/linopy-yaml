@@ -136,6 +136,7 @@ where_expr ::= atom | "NOT" where_expr | where_expr ("AND"|"OR") where_expr
 atom       ::= NAME | NAME COMPARATOR value | "True" | "False"
 COMPARATOR ::= "<=" | ">=" | "==" | "!=" | "<" | ">"
 value      ::= NUMBER | QUOTED | NAME_OR_STRING
+QUOTED     ::= "'" chars "'" | '"' chars '"'
 ```
 
 | Surface | Names a… | Meaning |

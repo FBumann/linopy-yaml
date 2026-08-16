@@ -90,7 +90,7 @@ def main() -> int:
         'rungs': list(LADDER),
     }
 
-    page = Path('docs/benchmarks-scaling.html')
+    page = Path('docs/about/benchmarks-scaling.html')
     text = page.read_text()
     if not _DATA.search(text):
         raise SystemExit(f'{page} has no `const DATA = ...;` line — keep the literal on one line of its own')

@@ -135,7 +135,7 @@ RAMP_BLOCK = {
     ],
 )
 def test_reading_back_an_unknown_name_says_what_was_built(asked, expected):
-    """the error rules asks a message to name the fix, and this is where it matters most.
+    """The error rules ask a message to name the fix, and this is where it matters most.
 
     One name can expand into several — a `piecewise:` block becomes a handful of
     constraints, and a rule split by regime is conventionally ``x`` and

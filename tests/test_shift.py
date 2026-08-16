@@ -82,7 +82,8 @@ def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inp
     was a constraint the model never wrote: an initial condition invented by
     the language on the modeller's behalf.
 
-    A model that wants one now says so, which is what the declaration rules's storage example
+    A model that wants one now says so, which is what the declaration rules'
+    storage example
     already did with a complementary ``where``. Both lanes are asserted because
     they reach the drop differently — the eager lane from linopy's absence
     propagation, the relational one from the vacated coordinates leaving the
