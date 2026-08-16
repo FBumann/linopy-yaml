@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.157](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.156...v0.0.1-alpha.157) (2026-08-16)
+
+
+### Features
+
+* **language:** a file with no objective is a feasibility problem ([#859](https://github.com/fluxopt/lpspec/issues/859)) ([6ddfb5b](https://github.com/fluxopt/lpspec/commit/6ddfb5b2e3196caa71b0f1ec18e2d0dc06dd2c8b))
+
 ## [0.0.1-alpha.156](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.155...v0.0.1-alpha.156) (2026-08-16)
 
 
