@@ -279,10 +279,12 @@ def _column_names(source: Any, dim: str) -> frozenset[str]:
 
 
 def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
-    """Data-time guard for ``method: convex`` blocks (the piecewise rules).
+    """Data-time guard for the methods a curve's shape can make wrong.
 
-    The hull relaxation is silently wrong for mixed curvature and ill-defined
-    when the x-breakpoints are not strictly monotone; both are checkable once
+    ``convex``'s hull relaxation is wrong for mixed curvature and ``lp``'s
+    segment lines for the bend opposite their bounded link — see
+    :attr:`PiecewiseBlock.curvature_required` — and both are ill-defined when
+    the x-breakpoints are not strictly monotone. All of it is checkable once
     the breakpoint values are in hand, which the schema never has. *values*
     maps parameter names to whatever its lane holds — :func:`tidy_sources`'
     frames and paths, or the linopy lane's ``xr.Dataset`` — and blocks whose
@@ -290,17 +292,17 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     lanes, which is why it sits beside ``tidy_sources``.
 
     Only the curvature check needs xarray, for the broadcast over dims, so the
-    import waits until a ``method: convex`` block is found. Such a block
-    carries exactly two links, which the pair unpack relies on.
+    import waits until a block that needs it is found.
 
     Raises:
         PiecewiseExpansionError: Breakpoints that are not strictly increasing,
-            or a curve of the curvature the hull is not exact for.
+            or a curve of the curvature the method is not exact for.
     """
     import numpy as np
 
     for name, pw in schema.piecewise.items():
-        if not pw.convex:
+        required = pw.curvature_required
+        if required is None:
             continue
         try:
             import xarray as xr
@@ -312,7 +314,7 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
             )
             raise ModuleNotFoundError(msg) from exc
         ctx = f"piecewise '{name}'"
-        (x_link, y_link) = pw.links
+        x_link, y_link = pw.curve
         try:
             xa = _as_dataarray(schema, x_link.values, values)
             ya = _as_dataarray(schema, y_link.values, values)
@@ -326,16 +328,21 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
             dx = np.diff(xs)
             if not (dx > 0).all():
                 raise PiecewiseExpansionError(
-                    f'{ctx}: method: convex requires strictly increasing breakpoints in '
+                    f'{ctx}: method: {pw.method} requires strictly increasing breakpoints in '
                     f"'{x_link.values}' (got {xs.tolist()})"
                 )
             curvature = np.diff(np.diff(ys) / dx)
             tol = 1e-9 * max(1.0, float(np.abs(ys).max()))
-            if (curvature > tol).any() and (curvature < -tol).any():
+            rises, falls = bool((curvature > tol).any()), bool((curvature < -tol).any())
+            wrong_bend = (rises and falls) if required == 'either' else (falls if required == 'convex' else rises)
+            if wrong_bend:
+                shape = 'mixed-curvature' if required == 'either' else f'not {required}'
                 raise PiecewiseExpansionError(
-                    f'{ctx}: method: convex is not exact for the mixed-curvature '
-                    f"curve in '{y_link.values}' — the hull relaxation would silently "
-                    f'cut corners; use method: adjacency or method: sos2 for the exact form'
+                    f'{ctx}: method: {pw.method} is exact only for a '
+                    f'{"single-curvature" if required == "either" else required} curve, and '
+                    f"'{y_link.values}' is {shape} ({ys.tolist()}) — the relaxation would cut "
+                    f'the curve with no sign of it in the answer. Use method: adjacency or '
+                    f'method: sos2 for the exact form.'
                 )
 
 

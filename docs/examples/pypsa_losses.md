@@ -375,7 +375,8 @@ defining it anywhere.
 The tangent slopes and offsets ship as data. `2 · r · p_k` is arithmetic, and a
 coefficient here takes a name or a number, the same reason
 [rung 3](pypsa_storage.md) ships `soc_max` rather than a ratio. That is the
-ergonomics case for [#695](https://github.com/fluxopt/lpspec/issues/695): a
-`piecewise:` method that derives the fan from the curve would carry two columns
-and a segment count instead of six precomputed rows. What it is **not** is a
+ergonomics case for
+[`method: lp`](../reference/language/piecewise.md#lp-the-one-that-declares-nothing),
+which derives the fan from the curve and would carry two columns and a segment
+count instead of six precomputed rows. What it is **not** is a
 capability gap — this port needs no construct the language lacks.
