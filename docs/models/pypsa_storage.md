@@ -248,12 +248,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           == load
 
       ramp_up:
-        description: output rises no faster than the ramp limit allows
         foreach: [snapshot, generator]
         expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
 
       ramp_down:
-        description: output falls no faster than the ramp limit allows
         foreach: [snapshot, generator]
         expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
 

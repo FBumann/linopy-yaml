@@ -160,7 +160,6 @@ piecewise:
 
 constraints:
   balance:
-    description: the fleet meets the load exactly in every snapshot
     foreach: [snapshot]
     expression: sum(p, over=generator) == load
 
