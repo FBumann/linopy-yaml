@@ -159,14 +159,15 @@ def test_a_flat_shape_cannot_cover_two_dimensions(source, match):
 
 
 def test_a_positional_source_needs_the_labels_it_is_written_against():
-    """Nothing supplies them, and inferring them from this very table is circular."""
+    """A sequence says what the values are and not what they are labelled, and no
+    lane reads labels off the parameters."""
     model = {
         'dimensions': {'g': {}},
         'parameters': {'cap': {'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
     }
-    with pytest.raises(lps.DataError, match='whose labels nothing supplies'):
+    with pytest.raises(lps.DataError, match='nothing else supplies an index'):
         lps.build(model, {'cap': [1.0, 2.0]}).close()
 
 

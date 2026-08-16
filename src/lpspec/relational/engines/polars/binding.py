@@ -75,11 +75,11 @@ def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
 
     Four passes, and the order is load-bearing. Dimensions with an index of
     their own come first, so a parameter's labels are checked in the pass that
-    binds it rather than a second one over the same rows. The remaining
-    dimensions are *derived* from those parameters and cannot be built until
-    they exist — and have no strangers to find, their labels being the union of
-    what arrived. Encoding comes last: a dimension's ``Enum`` is built from its
-    labels, which a derived dimension has only once the parameters have bound.
+    binds it rather than a second one over the same rows. Anything still
+    unregistered after that has no index at all, which is what the third pass
+    refuses, along with the lookups whose targets it can now see. Encoding
+    comes last: a dimension's ``Enum`` is built from its labels, and every
+    frame that carries the dimension is re-encoded against it.
 
     Raises:
         DataError: A source missing, unreadable, or not carrying what its
@@ -293,9 +293,9 @@ def _plain_strings(frame: pl.LazyFrame, dims: tuple[str, ...]) -> pl.LazyFrame:
     """Dim columns as plain strings, whatever encoding the source used.
 
     A dictionary-encoded source (pandas ``Categorical``, dictionary parquet)
-    carries a writer's own dictionary, and the label checks and the
-    derived-dimension union need every arrival in one dtype before any
-    dimension's own dictionary exists. So sources are decoded here, and
+    carries a writer's own dictionary, and the label checks need every arrival
+    in one dtype before any dimension's own dictionary exists. So sources are
+    decoded here, and
     :meth:`_Binder.encode_dimensions` re-encodes everything at once into the
     dimension's canonical ``Enum``.
     """

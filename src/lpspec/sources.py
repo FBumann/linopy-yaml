@@ -180,15 +180,15 @@ def _labels(name: str, dim: str, sources: Mapping[str, object]) -> list[Any]:
     the dimensions are resolved first.
 
     Raises:
-        DataError: Nothing supplies the labels — they would have been inferred
-            from the parameter tables, and this is one of them.
+        DataError: Nothing supplies the labels. A positional shape carries
+            none, and no lane reads them off the parameters.
     """
     source = sources.get(dim)
     if source is None:
         raise DataError(
-            f"parameter '{name}' is written positionally over '{dim}', whose labels "
-            f'nothing supplies: they would be inferred from the parameter tables, and '
-            f"this is one of them. Declare dimensions.{dim}.values, pass coords={{'{dim}': [...]}}, "
+            f"parameter '{name}' is written positionally over '{dim}', so it says what the "
+            f'values are but not what they are labelled — and nothing else supplies an index '
+            f"for '{dim}'. Declare dimensions.{dim}.values, pass coords={{'{dim}': [...]}}, "
             f"or pass '{name}' as a table carrying its own '{dim}' column."
         )
     frame = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
