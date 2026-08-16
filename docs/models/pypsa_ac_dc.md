@@ -277,19 +277,15 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         expression: p <= p_nom * p_max_pu
 
       line_upper:
-        description: a line carries no more forwards than its built capacity
         foreach: [snapshot, line]
         expression: f <= s_nom
       line_lower:
-        description: a line carries no more backwards than its built capacity
         foreach: [snapshot, line]
         expression: f >= -s_nom
       link_upper:
-        description: a link carries no more forwards than its share of built capacity
         foreach: [snapshot, link]
         expression: g <= link_p_nom * link_p_max_pu
       link_lower:
-        description: a link carries no more backwards than its share of built capacity
         foreach: [snapshot, link]
         expression: g >= link_p_nom * link_p_min_pu
 

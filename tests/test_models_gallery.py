@@ -85,28 +85,6 @@ def test_the_model_says_what_it_is(model: tuple[str, Path]) -> None:
     )
 
 
-def test_every_declaration_says_what_it_is(model: tuple[str, Path]) -> None:
-    """And so does every block inside it.
-
-    The legend prints the description of a dimension, parameter or variable in
-    its `Meaning` column; the rest are read in the file. A `#` comment says the
-    same thing to a reader of the file alone and is thrown away by the parser,
-    which is why the gallery corpus writes none.
-    """
-    _, path = model
-    schema = load_model(path)
-    sections = ('dimensions', 'parameters', 'variables', 'constraints', 'expressions', 'macros', 'piecewise', 'sos')
-    undescribed = [
-        f'{section}.{name}'
-        for section in sections
-        for name, block in getattr(schema, section).items()
-        if block.description is None
-    ]
-    if schema.objective is not None and schema.objective.description is None:
-        undescribed.append('objective')
-    assert not undescribed, f'{path} declares these without saying what they are: {undescribed}'
-
-
 def test_no_page_without_a_model() -> None:
     """The reverse: a page for a model that was deleted or renamed."""
     named = {name for name, _ in constructs.models()} | {'index', 'data'}

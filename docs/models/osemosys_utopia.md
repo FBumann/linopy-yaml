@@ -244,12 +244,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           + sum(sum(sum(activity * input_ratio * year_split, over=mode), over=technology), over=timeslice)
 
       capacity_ceiling:
-        description: a technology stands at no more capacity than it is allowed
         foreach: [technology, year]
         expression: capacity <= max_capacity
 
       capacity_floor:
-        description: a technology stands at no less capacity than it is required to
         foreach: [technology, year]
         expression: capacity >= min_capacity
 

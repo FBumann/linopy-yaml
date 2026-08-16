@@ -51,12 +51,10 @@ variables:
 
 constraints:
   within_stock:
-    description: a depot cannot send out more than it holds
     foreach: [depot]
     expression: sum(moved, by=origin) <= stock
 
   move_the_lot:
-    description: everything that has to be moved is moved
     foreach: []
     expression: sum(moved, over=connection) == total_to_move
 

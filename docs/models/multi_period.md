@@ -161,7 +161,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, generator]
         expression: p <= at(p_nom, by=period_of)
       balance:
-        description: the fleet meets the load exactly in every snapshot
         foreach: [snapshot]
         expression: sum(p, over=generator) == load
 

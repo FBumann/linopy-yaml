@@ -365,7 +365,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         expression: shed <= shed_limit * demand
 
       committed_units_exist:
-        description: no more units may be committed than the plant has
         foreach: [plant, hour]
         where: "commitment == unit"
         expression: committed <= units
@@ -417,7 +416,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           - min_output * unit_size * shutting
 
       ramp_down:
-        description: output falls no faster than the ramp allows
         foreach: [plant, hour]
         where: "commitment == unit"
         expression: >-

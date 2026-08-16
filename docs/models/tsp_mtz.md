@@ -152,12 +152,10 @@ variables:
 
 constraints:
   leave_each_city_once:
-    description: exactly one arc of the tour leaves each city
     foreach: [from_city]
     expression: sum(travel, over=to_city) == 1
 
   enter_each_city_once:
-    description: exactly one arc of the tour arrives at each city
     foreach: [to_city]
     expression: sum(travel, over=from_city) == 1
 

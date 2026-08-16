@@ -195,11 +195,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     constraints:
       within_capacity:
-        description: a plant cannot ship more than it can can
         foreach: [plant]
         expression: sum(shipment, over=market) <= capacity
       meet_demand:
-        description: every market receives at least what it asked for
         foreach: [market]
         expression: sum(shipment, over=plant) >= demand
 
