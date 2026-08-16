@@ -69,7 +69,7 @@ $$p_{t,g} - p^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} \cdot \mathit{sta
 
 **`start_up_initial`**
 
-$$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} \ge -1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace t = 0$$
+$$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} \ge -1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
 
 **`start_up`**
 
@@ -77,7 +77,7 @@ $$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} + \mathit{status}_{t - 1,g} \
 
 **`shut_down_initial`**
 
-$$\mathit{shut\_down}_{t,g} + \mathit{status}_{t,g} \ge 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace t = 0$$
+$$\mathit{shut\_down}_{t,g} + \mathit{status}_{t,g} \ge 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
 
 **`shut_down`**
 
@@ -185,7 +185,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           unit was already up before the horizon — so the start-up row is slackened
           here and never binds
         foreach: [snapshot, generator]
-        where: "snapshot == 0"
+        where: "snapshot == index(snapshot, 0)"
         expression: start_up - status >= -1
 
       start_up:
@@ -203,7 +203,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           horizon off is charged for the shut-down, which is PyPSA's asymmetry and
           worth 50 on this instance
         foreach: [snapshot, generator]
-        where: "snapshot == 0"
+        where: "snapshot == index(snapshot, 0)"
         expression: shut_down + status >= 1
 
       shut_down:

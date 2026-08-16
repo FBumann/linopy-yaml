@@ -40,6 +40,7 @@ from lpspec.language.where_parser import (
     AndNode,
     BooleanLiteralNode,
     DimensionComparisonNode,
+    DimensionPositionNode,
     LookupComparisonNode,
     LookupDefinedNode,
     LookupPairComparisonNode,
@@ -51,6 +52,7 @@ from lpspec.language.where_parser import (
     UnresolvedNameNode,
     VariableDefinedNode,
     WhereNode,
+    _UnresolvedPositionNode,
 )
 from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover, gaps_under
 
@@ -756,7 +758,7 @@ def _eval_node(
     if isinstance(node, BooleanLiteralNode):
         return xr.DataArray(node.value)
 
-    if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode)):
+    if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, _UnresolvedPositionNode)):
         msg = (
             f'{type(node).__name__} reached the evaluator unresolved. '
             f'Where strings must go through resolution.resolve_where() first.'
@@ -790,6 +792,19 @@ def _eval_node(
 
         result = _PREDICATE_OPS[node.op](arr, node.value)
         return result.fillna(False).astype(bool)
+
+    if isinstance(node, DimensionPositionNode):
+        labels = master_coords[node.name]
+        at = node.position + len(labels) if node.position < 0 else node.position
+        if not 0 <= at < len(labels):
+            msg = (
+                f'where: index({node.name}, {node.position}) names position {at} of '
+                f"'{node.name}', which has {len(labels)} coordinate(s). A boundary that "
+                f'names no coordinate leaves the rows it was to seed unseeded.'
+            )
+            raise DataError(msg)
+        arr = xr.DataArray(np.arange(len(labels)), coords={node.name: labels}, dims=[node.name])
+        return _PREDICATE_OPS[node.op](arr, at).astype(bool)
 
     if isinstance(node, LookupComparisonNode):
         arr = _bound_lookup(node.name, node.over, dim_coords)

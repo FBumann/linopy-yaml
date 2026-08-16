@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import LanguageError, LpspecError
+from lpspec.errors import DataError, LanguageError, LpspecError
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
@@ -344,6 +344,21 @@ class PolarsCompiler:
                 lambda f, alias: self.parameter_join(f, param, dims, alias, f"where-parameter '{param}'", how),
             )
 
+        def join_ordinal(dimension: str) -> str:
+            if dimension not in dims:
+                raise LanguageError(
+                    f"where-comparison on dimension '{dimension}' is outside the foreach dims "
+                    f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
+                )
+            return carrier.once(
+                f'__where ord {dimension}__',
+                lambda f, alias: f.join(
+                    self.data.dimensions[dimension].select(pl.col('val').alias(dimension), pl.col('ord').alias(alias)),
+                    on=dimension,
+                    how='left',
+                ),
+            )
+
         def join_lookup(lookup: str, over: str) -> str:
             if over not in dims:
                 raise LanguageError(
@@ -370,6 +385,9 @@ class PolarsCompiler:
                         f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
                     )
                 return _compare(_dimension_column(p.dimension, p.value), p.op, p.value)
+            if isinstance(p, plan.DimensionPosition):
+                at = _position_ordinal(p, self.data.cardinality[p.dimension])
+                return _COLUMN_COMPARISONS[p.op](pl.col(join_ordinal(p.dimension)), pl.lit(at))
             if isinstance(p, plan.LookupComparison):
                 column = pl.col(join_lookup(p.lookup, p.over))
                 if isinstance(p.value, str):
@@ -974,7 +992,7 @@ def predicate_dims(where: plan.Predicate, name_dims: Mapping[str, tuple[str, ...
     """
     if isinstance(where, plan.BooleanConstant):
         return frozenset()
-    if isinstance(where, plan.DimensionComparison):
+    if isinstance(where, (plan.DimensionComparison, plan.DimensionPosition)):
         return frozenset({where.dimension})
     if isinstance(where, (plan.LookupComparison, plan.LookupPairComparison, plan.LookupDefined)):
         return frozenset({where.over})
@@ -1021,6 +1039,24 @@ def _falsy_if_null(condition: pl.Expr) -> pl.Expr:
     propagate. Masks are row absence.
     """
     return condition.fill_null(value=False)
+
+
+def _position_ordinal(p: plan.DimensionPosition, cardinality: int) -> int:
+    """*p*'s position as an ordinal into a dimension of *cardinality* labels.
+
+    A negative position counts from the end. Out of range is an error rather
+    than a predicate matching nothing: a boundary clause that silently seeds
+    no row leaves the recurrence unanchored, which is the failure this
+    construct exists to make impossible.
+    """
+    at = p.position + cardinality if p.position < 0 else p.position
+    if not 0 <= at < cardinality:
+        raise DataError(
+            f'where: index({p.dimension}, {p.position}) names position {at} of '
+            f"'{p.dimension}', which has {cardinality} coordinate(s). A boundary that "
+            f'names no coordinate leaves the rows it was to seed unseeded.'
+        )
+    return at
 
 
 def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.Expr:

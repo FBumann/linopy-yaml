@@ -252,6 +252,23 @@ class DimensionComparison(Predicate):
 
 
 @dataclass(frozen=True)
+class DimensionPosition(Predicate):
+    """Compare a dimension's coordinates against the one at *position*.
+
+    ``where: "snapshot == index(snapshot, 0)"``. The position is resolved
+    against the *bound* coordinate order rather than lowered to a label, so a
+    relabelled index moves the boundary with it. Negative counts from the end.
+
+    Every consuming lane already holds that order — the dim table's ``ord``
+    here, the master index on the eager side — so this needs no new source.
+    """
+
+    dimension: str
+    op: ComparisonOperator
+    position: int
+
+
+@dataclass(frozen=True)
 class LookupComparison(Predicate):
     """Compare a *lookup's values* to a literal — ``where: "period_of == 2030"``.
 

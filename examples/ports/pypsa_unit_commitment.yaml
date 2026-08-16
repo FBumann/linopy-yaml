@@ -74,7 +74,7 @@ constraints:
       unit was already up before the horizon — so the start-up row is slackened
       here and never binds
     foreach: [snapshot, generator]
-    where: "snapshot == 0"
+    where: "snapshot == index(snapshot, 0)"
     expression: start_up - status >= -1
 
   start_up:
@@ -92,7 +92,7 @@ constraints:
       horizon off is charged for the shut-down, which is PyPSA's asymmetry and
       worth 50 on this instance
     foreach: [snapshot, generator]
-    where: "snapshot == 0"
+    where: "snapshot == index(snapshot, 0)"
     expression: shut_down + status >= 1
 
   shut_down:
