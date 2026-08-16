@@ -292,6 +292,28 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
                 into=by_node.into,
             )
 
+        if node.name == 'sum_back':
+            over_node = node.kwargs['over']
+            if not isinstance(over_node, DimensionNode):
+                raise LanguageError(f'{context}: sum_back(over=...) must name a dimension')
+            within_node = node.kwargs['within']
+            _check_dim_rules(node, schema, context)
+            operand = _lower_expr(node.args[0], schema, context)
+            wrap = _window_edge(node.kwargs.get('edge'), context)
+            width: int | str
+            if isinstance(within_node, ParameterNode):
+                _check_named_width(within_node.name, over_node.name, schema, context)
+                width = within_node.name
+            elif (
+                isinstance(within_node, NumberNode)
+                and within_node.value >= 1
+                and int(within_node.value) == within_node.value
+            ):
+                width = int(within_node.value)
+            else:
+                raise LanguageError(f'{context}: {_window_width_message()}')
+            return plan.Window(operand, over_node.name, width=width, wrap=wrap)
+
         if node.name == 'shift':
             over_node = node.kwargs['over']
             if not isinstance(over_node, DimensionNode):
@@ -397,6 +419,55 @@ def _negated_offset_message(name: str) -> str:
         f"Put the sign in '{name}' itself — a named offset carries its direction "
         f'in the data, where the row that points backwards says so.'
     )
+
+
+def _window_width_message() -> str:
+    return (
+        'sum_back(within=...) needs a whole number of positions of at least 1, or the '
+        'name of an integer parameter when the window differs per entity. A width of 1 '
+        'is the operand itself.'
+    )
+
+
+def _window_edge(edge: ArithmeticNode | None, context: str) -> bool:
+    """Whether the window wraps, refusing a fill.
+
+    A window sums the terms it can see, so a position the axis does not reach
+    contributes nothing — there is no vacated slot to fill, which is what makes
+    this narrower than ``shift(edge=...)``.
+    """
+    if edge is None:
+        return False
+    if isinstance(edge, EdgeNode):
+        return True
+    raise LanguageError(
+        f"{context}: sum_back(edge=...) takes 'wrap' or nothing. A window sums the terms "
+        f'it reaches, so a position before the first contributes nothing rather than a '
+        f'fill value; add the constant to the expression if you want one.'
+    )
+
+
+def _check_named_width(name: str, dimension: str, schema: Model, context: str) -> None:
+    """The two rules that make a per-entity window width mean one thing.
+
+    A width that varies along the dimension being summed over would make the
+    window a different length at every position, which no longer reads as
+    "the last *n*"; and a non-integral width cannot count positions.
+    """
+    declared = schema.parameters[name]
+    if declared.dtype != 'int':
+        raise LanguageError(
+            f"{context}: sum_back(within={name}) needs an integer parameter, and '{name}' is "
+            f"declared '{declared.dtype}'. A width counts positions rather than measuring a "
+            f'distance.'
+        )
+    if dimension in declared.dims:
+        raise LanguageError(
+            f"{context}: sum_back(within={name}) sums over '{dimension}', and '{name}' is "
+            f'declared over it ({sorted(declared.dims)}). A width that changes along '
+            f"'{dimension}' gives a different window at every position, which is not a "
+            f'trailing window. Sum over a width that is constant along it.'
+        )
 
 
 def _check_named_offset(

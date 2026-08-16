@@ -42,6 +42,8 @@ if TYPE_CHECKING:
 _RHS = '__rhs value__'
 #: The per-entity offset, joined in beside the ordinal it moves.
 _OFFSET = '__offset'
+_LAG = '__lag'
+_WIDTH = '__width'
 _ORD_IN = '__ord in__'
 _ORD_OUT = '__ord out__'
 
@@ -584,6 +586,8 @@ class PolarsCompiler:
                 return _map_fragments(ev(e.operand), lambda p: self._at_fragment(p, e, context))
             if isinstance(e, plan.Translate):
                 return _map_fragments(ev(e.operand), lambda p: self._translate_fragment(p, e, context))
+            if isinstance(e, plan.Window):
+                return _map_fragments(ev(e.operand), lambda p: self._window_fragment(p, e, context))
             raise LanguageError(f'unsupported expression node {type(e).__name__} in {context}')
 
         return ev(expr)
@@ -703,6 +707,72 @@ class PolarsCompiler:
         )
         frame = p.frame.join(mapping, on=consumed, how='inner').select(*keep, produced, *p.carried)
         return TermFragment((*keep, produced), frame, p.is_term)
+
+    def _window_fragment(self, p: TermFragment, s: plan.Window, context: str) -> TermFragment:
+        """A one-to-many remap of the dim through its ord.
+
+        A row at *o* contributes at every ``o + lag`` for ``lag`` inside the
+        window, so the terms land on each output position that can see them and
+        the terminal ``sum(coeff)`` at assembly adds them up — the same trick
+        :meth:`_sum_fragment` relies on, which is why this needs no aggregate.
+
+        The lag table is built to the widest window the data asks for; a named
+        width then keeps only the lags that entity reaches. Every join is still
+        on a dim-table key or the width's own dims, so the reach stays a lookup
+        and the locality class is the one :meth:`_translate_fragment` has.
+
+        Unlike a shift this vacates nothing: the window at the first position
+        is short rather than empty, since it always contains that position
+        itself. So an operand with no presence gains none.
+        """
+        if s.dimension not in p.dims:
+            raise LanguageError(
+                f"in {context}: a window along '{s.dimension}' but the expression has dims {list(p.dims)}"
+            )
+        card = self.data.cardinality[s.dimension]
+        table = self.data.dimensions[s.dimension]
+        incoming = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_IN))
+        outgoing = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_OUT))
+
+        width_name = s.width if isinstance(s.width, str) else None
+        width_dims: tuple[str, ...] = ()
+        if width_name is not None:
+            width_dims = tuple(self.program.parameter(width_name).dims)
+            widest = int(self.data.parameters[width_name].select(pl.col('value').max()).collect().item() or 0)
+        else:
+            assert not isinstance(s.width, str)
+            widest = s.width
+        lags = pl.LazyFrame({_LAG: pl.Series(range(min(widest, card)), dtype=pl.Int64)})
+
+        moved = pl.col(_ORD_IN) + pl.col(_LAG)
+        if s.wrap:
+            moved = moved % card
+
+        def remap(source: pl.LazyFrame, carried: list[str], source_dims: tuple[str, ...] | None = None) -> pl.LazyFrame:
+            kept = [d for d in (source_dims if source_dims is not None else p.dims) if d != s.dimension]
+            walked = source.join(incoming, on=s.dimension, how='inner').drop(s.dimension).join(lags, how='cross')
+            if width_name is not None:
+                walked = walked.join(
+                    self.data.parameters[width_name].select(*width_dims, pl.col('value').cast(pl.Int64).alias(_WIDTH)),
+                    on=list(width_dims),
+                    how='inner',
+                ).filter(pl.col(_LAG) < pl.col(_WIDTH))
+            return (
+                walked.with_columns(moved.alias(_ORD_OUT))
+                .join(outgoing, on=_ORD_OUT, how='inner')
+                .select(*kept, s.dimension, *carried)
+            )
+
+        carried = ['var_label', 'coeff'] if p.is_term else ['cval']
+        frame = remap(p.frame, carried)
+        presence = p.presence
+        if presence is not None:
+            keyed_by = presence.keyed_by
+            source = presence.frame
+            if keyed_by is not None and s.dimension not in keyed_by:
+                source, keyed_by = self._widen(source, keyed_by, p.dims), None
+            presence = Presence(remap(source, [], keyed_by).unique(), keyed_by)
+        return TermFragment(p.dims, frame, p.is_term, presence=presence)
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
         """A pointwise remap of the dim through its ord.
