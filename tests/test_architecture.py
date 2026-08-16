@@ -400,8 +400,8 @@ PUBLIC_API = {
     },
 }
 
-#: The opt-in shim, which is a surface of its own — deliberately three verbs:
-#: two producers, and the named-expression reader both lanes owe (#562).
+#: The opt-in lane, which is a surface of its own — deliberately two verbs:
+#: the producer, and the named-expression reader both lanes owe (#562).
 PUBLIC_API_LINOPY = {'build', 'expression'}
 
 
@@ -460,7 +460,7 @@ def test_the_linopy_lane_stays_two_verbs():
         for node in tree.body
         if isinstance(node, ast.Assign) and any(ast.unparse(t) == '__all__' for t in node.targets)
     )
-    assert set(declared) == PUBLIC_API_LINOPY, f'the linopy shim exports {sorted(declared)}'
+    assert set(declared) == PUBLIC_API_LINOPY, f'the linopy lane exports {sorted(declared)}'
 
 
 def test_expansion_has_no_mutable_module_state():

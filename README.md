@@ -41,7 +41,7 @@ flowchart LR
     R -->|"yes"| S["relational engine<br/>polars"]
     S --> OUT["solver (batched) / LP file"]
     R -->|"no"| ERR["load error<br/>naming the construct + rewrite"]
-    AST -.->|"opt-in shim: same language,<br/>for models already in memory"| E["lpspec.linopy"]
+    AST -.->|"opt-in lane: same language,<br/>same data, built eagerly"| E["lpspec.linopy"]
     E --> LS["linopy.Model → solve"]
 
     classDef stream fill:#f0f7f0,stroke:#3a7d44,stroke-width:2px,color:#111
@@ -154,7 +154,7 @@ To see it rather than read it, `python examples/walkthrough.py` runs one small m
 
 ```bash
 pip install lpspec  # the relational engine (polars, highspy)
-pip install "lpspec[linopy]"  # adds linopy + xarray + pandas: the shim, the
+pip install "lpspec[linopy]"  # adds linopy + xarray + pandas: the lane, the
                               # oracle, and to_pandas / to_dataarray
 pip install "lpspec[gurobi]"  # adds the gurobi sink: solver_name='gurobi'
 ```

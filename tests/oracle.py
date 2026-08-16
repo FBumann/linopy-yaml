@@ -29,7 +29,7 @@ than skipping — a skip would be the worst outcome available, the suite going
 green having quietly stopped checking the lanes against each other on precisely
 the cases the convention changed.
 
-The shim is imported under its own name rather than something shorter, because
+The lane is imported under its own name rather than something shorter, because
 this module re-exports the *real* ``linopy`` too: ``lpspec_linopy`` names the
 module it actually is, and cannot be confused with it.
 """

@@ -38,7 +38,7 @@ RESERVES_YAML = Path('examples/reserves.yaml')
 OPTIMUM = 915.0
 
 
-def _shim_inputs() -> tuple[dict, dict]:
+def _both_lane_inputs() -> tuple[dict, dict]:
     """The port tables in the shapes both lanes accept in one call.
 
     1-D parameters travel as ``pd.Series``, the 2-D ``zone_share`` as one with
@@ -74,7 +74,7 @@ def _shim_inputs() -> tuple[dict, dict]:
 
 
 def test_both_lanes_and_the_lp_file_reach_the_hand_derived_optimum():
-    data, coords = _shim_inputs()
+    data, coords = _both_lane_inputs()
     with differential(RESERVES_YAML, data, coords, lp=True) as run:
         assert run.oracle == pytest.approx(OPTIMUM, rel=RTOL), 'the eager lane disagrees with the hand derivation'
 
@@ -150,7 +150,7 @@ def test_the_offer_cap_is_two_pullbacks_through_two_legs():
     """A per-offer number assembled from two other dimensions' parameters —
     ``at()`` through ``tranche_of`` times ``at()`` through ``gen_of`` — priced
     into the eager lane's own solution: o4 sits exactly at 0.25 * 80."""
-    data, coords = _shim_inputs()
+    data, coords = _both_lane_inputs()
     with differential(RESERVES_YAML, data, coords) as run:
         r = run.result.primal('r')
         assert r.filter(pl.col('offer') == 'o4')['value'][0] == pytest.approx(20.0, rel=RTOL), (

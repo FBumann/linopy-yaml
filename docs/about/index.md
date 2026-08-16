@@ -10,7 +10,7 @@ where it is going. Nothing here is needed to write or run a model — that is
 | [The ceiling](ceiling.md) | what the language deliberately cannot say, and what that buys |
 | [Decomposition](decomposition.md) | Benders as evidence: an algorithm the language does not contain, written as a loop over models it does |
 | [Benchmarks](benchmarks.md) | measured build and solve cost against linopy, with the method and how to reproduce it |
-| [Relationship to linopy](linopy.md) | not a runtime dependency, the differential oracle, and the shim |
+| [Relationship to linopy](linopy.md) | not a runtime dependency, the differential oracle, and the second lane |
 | [Prior art and credit](prior-art.md) | the work this is derived from, and how to cite it |
 | [Roadmap](roadmap.md) | where it is going, and what it will not become |
 | [Changelog](changelog.md) | every release |

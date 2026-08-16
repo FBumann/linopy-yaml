@@ -13,8 +13,8 @@ the same destination. `wall` and `peak` columns are **lpspec ÷ linopy: below
 run.
 
 **The eager arm is `lpspec.linopy.build`, not hand-written linopy** — our own
-YAML→`linopy.Model` shim, so it carries our loader on top of linopy's work.
-Against hand-written linopy on the same model the shim costs a constant
+YAML→`linopy.Model` lane, so it carries our loader on top of linopy's work.
+Against hand-written linopy on the same model that lane costs a constant
 **~2.3 ms**: a fixed offset, nowhere near enough to move a conclusion.
 
 **Two sinks, and they are not the same comparison.** The LP file is the artifact

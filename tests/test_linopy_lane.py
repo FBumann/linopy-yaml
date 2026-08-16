@@ -1,8 +1,8 @@
-"""The opt-in linopy lane: the shim, its loader, its where evaluator, its notes.
+"""The opt-in linopy lane: its verbs, its loader, its where evaluator, its notes.
 
 Everything here needs the ``[linopy]`` extra and nothing here is reachable
 from the native lane, so it is one module rather than four: the guard and the
-"write a YAML file, feed it to the shim" idiom were being restated in each of
+"write a YAML file, feed it to the lane" idiom were being restated in each of
 them.
 
 The lane *constructs*, so it holds no state to begin with: one call, one
@@ -41,7 +41,7 @@ def yaml_file(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# the shim is a pure producer
+# the lane is a pure producer
 # ---------------------------------------------------------------------------
 
 
@@ -78,9 +78,23 @@ class TestBuildMasterCoords:
         mc = loader.build_master_coords(_schema(dims={'x': dim}), coords)
         assert list(mc['x']) == expected
 
-    def test_missing_raises(self):
-        with pytest.raises(ValueError, match="Dimension 'x' has no values"):
-            loader.build_master_coords(_schema(dims={'x': {}}), None)
+    def test_labels_are_derived_from_the_parameters_that_span_the_dimension(self):
+        """Third in the precedence, and sorted: a derived dim has no declared order.
+
+        The union across every parameter carrying it, which is the rule the
+        relational lane reaches from tidy frames — so a file that binds there
+        on derivation alone binds here too (#60).
+        """
+        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}, 'b': {'dims': ['x']}})
+        sources = {'a': {'wind': 1.0, 'gas': 2.0}, 'b': {'solar': 3.0, 'gas': 4.0}}
+
+        mc = loader.build_master_coords(schema, None, sources)
+
+        assert list(mc['x']) == ['gas', 'solar', 'wind'], 'the union of both, sorted'
+
+    def test_a_dimension_no_parameter_carries_has_no_source(self):
+        with pytest.raises(ValueError, match='no parameter carries it'):
+            loader.build_master_coords(_schema(dims={'x': {}}), None, {})
 
 
 class TestLoadParameters:
@@ -444,7 +458,7 @@ EXPRESSION_DATA = {
     ],
 )
 def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
-    """`result.expression(name)` and the shim's `expression` read one value.
+    """`result.expression(name)` and the lane's `expression` read one value.
 
     Including the standalone case: the rules for named expressions guarantees a never-referenced
     expression is parsed and name-checked, and #562 makes it readable — on
@@ -462,7 +476,7 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
         assert got == pytest.approx(want), f"the two lanes disagree about named expression '{name}'"
 
 
-def test_the_shim_refuses_an_unknown_expression_name(yaml_file):
+def test_the_lane_refuses_an_unknown_expression_name(yaml_file):
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
     m = lpspec_linopy.build(path, dict(EXPRESSION_DATA))
     with pytest.raises(KeyError, match='never an expression string'):
@@ -545,3 +559,28 @@ def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
         lpspec_linopy.build(_BARE_SHIFT, {'eff': {0: 1.0, 1: 2.0, 2: 3.0}})
 
     assert str(native.value) == str(eager.value), 'one refusal, one wording, whichever lane was asked'
+
+
+def test_a_file_that_declares_no_labels_at_all_binds_on_both_lanes():
+    """The last row of #60: derivation was the product path's alone.
+
+    Neither `values:` nor `coords=` says what `g` holds — only the parameter
+    tables do — and a file relying on that used to bind relationally and fail
+    here with "Dimension 'g' has no values", which is the divergence the lane
+    choice is not supposed to have.
+    """
+    from tests.differential import differential
+
+    model = {
+        'dimensions': {'g': {}},
+        'parameters': {'cap': {'dims': ['g']}, 'cost': {'dims': ['g']}},
+        'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'objective': {'sense': 'maximize', 'expression': 'x * cost'},
+    }
+    sources = {
+        'cap': pd.Series({'wind': 40.0, 'gas': 100.0}).rename_axis('g'),
+        'cost': pd.Series({'wind': 3.0, 'gas': 1.0}).rename_axis('g'),
+    }
+
+    with differential(model, sources) as run:
+        assert sorted(run.result.primal('x')['g']) == ['gas', 'wind'], 'both lanes derived the same labels'

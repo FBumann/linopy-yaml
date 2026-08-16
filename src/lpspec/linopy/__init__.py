@@ -115,7 +115,7 @@ def build(
         schema = expand_piecewise(original)
         lower_program(original)
 
-        master_coords = build_master_coords(schema, coords)
+        master_coords = build_master_coords(schema, coords, sources)
         dim_coords = build_dim_coords(schema, coords, master_coords)
         dataset = load_parameters(schema, dict(sources), master_coords)
         validate_piecewise_data(original, dataset)
@@ -171,7 +171,7 @@ def expression(
             )
         lower_program(original)
         lower_expression(schema, name)
-        master_coords = build_master_coords(schema, coords)
+        master_coords = build_master_coords(schema, coords, sources)
         dim_coords = build_dim_coords(schema, coords, master_coords)
         dataset = load_parameters(schema, dict(sources), master_coords)
         ns = Namespace.of(schema)
