@@ -223,8 +223,9 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 
 **Flat, and a namespace marks a lane rather than a topic.** `lpspec.linopy` is
 the only one, and it earns it by being a different lane — its own dependencies,
-its own oracle, its own three-verb surface with its own test. `strategy.py` is not
-a lane, so `solve_over` and its axes sit at the top level beside `solve`.
+its own oracle, its own surface of `build` and `expression` with its own test.
+`strategy.py` is not a lane, so `solve_over` and its axes sit at the top level
+beside `solve`.
 
 That is a rule with teeth rather than a taste: the surface test exempts
 submodules (`not inspect.ismodule`), so moving names under `lpspec.something`
