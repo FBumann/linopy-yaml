@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.150](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.149...v0.0.1-alpha.150) (2026-08-16)
+
+
+### Bug Fixes
+
+* **typeset:** every operator renders, and SPEC §7 proves it ([#837](https://github.com/fluxopt/lpspec/issues/837)) ([6454f72](https://github.com/fluxopt/lpspec/commit/6454f7277bd64b76528dd7dc4398eb18183912ac))
+
 ## [0.0.1-alpha.149](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.148...v0.0.1-alpha.149) (2026-08-16)
 
 
