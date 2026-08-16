@@ -57,16 +57,20 @@ Solved as it stands, the answer is a bare 'unbounded' that names nothing.
 ```
 
 The refusal needs all three of: the variable is **in the objective with a
-coefficient of known sign**, it is **unbounded on the side that improves it**,
-and **no constraint and no set names it**. Each alone is an ordinary model — a
-free variable held by a constraint is how a dual is read, a bounded one in no
-constraint is how a cost is declared — so only the conjunction is refused.
+coefficient signable from literals alone**, it is **unbounded on the side that
+improves it**, and **no constraint and no set names it**. Each alone is an
+ordinary model — a free variable held by a constraint is how a dual is read, a
+bounded one in no constraint is how a cost is declared — so only the
+conjunction is refused.
 
-A coefficient reached through a **parameter** has no sign until that parameter
-is bound, so those are left to the solver: this runs before any data exists,
-and guessing would refuse models that solve. The per-coordinate case, where a
-`where` rather than the schema leaves one slice of a variable undefined, is not
-answered here either — it needs the built rows.
+Signable means signable *everywhere the variable appears*. A coefficient a
+**parameter** reaches has no sign until that parameter is bound, and one such
+term leaves the whole sum unsigned: `sum(slack + slack * price, over=t)` is
+left to the solver however `price` looks, because the data decides which way
+`slack` improves. This runs before any data exists, and a guess here would
+refuse models that solve. The per-coordinate case, where a `where` rather than
+the schema leaves one slice of a variable undefined, is not answered here
+either — it needs the built rows.
 
 ## What the language will not say
 

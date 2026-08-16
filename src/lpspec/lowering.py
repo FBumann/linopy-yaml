@@ -165,19 +165,18 @@ def _refuse_provably_unbounded(program: plan.Program) -> None:
     """Refuse a variable nothing can stop the objective from running away with.
 
     The conjunction, and only the conjunction: a variable **in the objective
-    with a coefficient of known sign**, **unbounded on the side that improves
-    it**, and **named by no constraint and no set**. Each alone is ordinary —
-    a free variable held by a constraint is fine, a bounded one in no
-    constraint is fine — so all three are required before this speaks.
+    with a coefficient signable from literals alone**, **unbounded on the side
+    that improves it**, and **named by no constraint and no set**. Each alone
+    is ordinary — a free variable held by a constraint is fine, a bounded one
+    in no constraint is fine — so all three are required before this speaks.
 
     A ``binary`` needs no case of its own: it lowers with 0/1 bounds, so it
     is bounded on both sides before this reads it.
 
-    Provable without data, which is why it lives here rather than after a
-    build: a coefficient reached through a parameter has no sign until the
-    parameter is bound, and that case is left alone. The per-coordinate
-    variant, where the mask rather than the schema leaves a slice undefined,
-    needs the built rows and is not answered here.
+    Silent on any coefficient a parameter reaches, since it runs before one is
+    bound and a sign guessed there refuses models that solve. The
+    per-coordinate variant, where the mask rather than the schema leaves a
+    slice undefined, needs the built rows and is not answered here.
 
     Raises:
         LanguageError: Naming the variable, the bound that is missing, and the
@@ -226,48 +225,68 @@ def _is_unbounded(bound: plan.Expression, *, toward_minus: bool) -> bool:
     return bound.value == (float('-inf') if toward_minus else float('inf'))
 
 
-def _objective_sign(e: plan.Expression, variable: str) -> int:
-    """The sign of *variable*'s coefficient in *e*: ``+1``, ``-1``, or ``0``.
+def _objective_sign(e: plan.Expression, variable: str) -> int | None:
+    """The sign of *variable*'s coefficient in *e*: ``+1``, ``-1``, ``0``, ``None``.
 
-    ``0`` is "absent, or present with a coefficient this cannot sign" — the two
-    cases the caller treats alike, since neither proves anything. A coefficient
-    is signed only through literal constants: one reached through a parameter
-    has no sign until data arrives, and a sum of parameters may be empty, so
-    both stop the walk.
+    ``0`` is *absent*, ``None`` is *there and unsignable*, and keeping them
+    apart is the whole correctness of this walk. Absent is an identity — a term
+    without the variable leaves a sum's sign alone — while unsignable is
+    absorbing: one term whose sign arrives with the data leaves the sum
+    unsignable however many literal terms sit beside it. Collapsing the two
+    signs ``slack + slack * cap`` from its literal term alone, which refuses a
+    model that solves wherever ``cap`` outweighs it.
+
+    Signable therefore means signable *everywhere the variable appears*: a
+    literal coefficient, negated or scaled by further literals. Anything
+    reached through a parameter, and any node this does not know, is ``None``.
     """
     if isinstance(e, plan.Variable):
         return 1 if e.name == variable else 0
     if isinstance(e, (plan.Constant, plan.Parameter)):
         return 0
     if isinstance(e, plan.Negate):
-        return -_objective_sign(e.operand, variable)
+        return _flip(_objective_sign(e.operand, variable))
     if isinstance(e, plan.Add):
         left = _objective_sign(e.left, variable)
         right = _objective_sign(e.right, variable)
+        if left is None or right is None:
+            return None
         if left and right and left != right:
-            return 0
+            return None
         return left or right
     if isinstance(e, plan.Multiply):
         for this, other in ((e.left, e.right), (e.right, e.left)):
             if variable in _variables_in(this):
-                return _objective_sign(this, variable) * _constant_sign(other)
+                return _product(_objective_sign(this, variable), _constant_sign(other))
         return 0
     if isinstance(e, plan.Divide):
-        return _objective_sign(e.numerator, variable) * _constant_sign(e.divisor)
+        return _product(_objective_sign(e.numerator, variable), _constant_sign(e.divisor))
     if isinstance(e, (plan.Sum, plan.GroupSum, plan.At, plan.Translate, plan.Window)):
         return _objective_sign(e.operand, variable)
-    return 0
+    return 0 if variable not in _variables_in(e) else None
 
 
-def _constant_sign(e: plan.Expression) -> int:
-    """The sign of a variable-free *e*, or ``0`` where it is not provable."""
+def _constant_sign(e: plan.Expression) -> int | None:
+    """The sign of a variable-free *e*, or ``None`` where it is not provable.
+
+    Only a literal is provable. A parameter has no sign until it is bound, and
+    a product reached through one inherits that.
+    """
     if isinstance(e, plan.Constant):
         return (e.value > 0) - (e.value < 0)
     if isinstance(e, plan.Negate):
-        return -_constant_sign(e.operand)
-    if isinstance(e, plan.Multiply):
-        return _constant_sign(e.left) * _constant_sign(e.right)
-    return 0
+        return _flip(_constant_sign(e.operand))
+    return None
+
+
+def _flip(sign: int | None) -> int | None:
+    """*sign* negated, leaving *unsignable* unsignable."""
+    return None if sign is None else -sign
+
+
+def _product(left: int | None, right: int | None) -> int | None:
+    """The sign of a product, unsignable if either factor is."""
+    return None if left is None or right is None else left * right
 
 
 def lower_expression(schema: Model, name: str) -> plan.Expression:
