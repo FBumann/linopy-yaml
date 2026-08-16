@@ -300,8 +300,10 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             sign = 1
             if isinstance(by_node, UnaryOperatorNode) and by_node.op == '-':
                 sign, by_node = -1, by_node.operand
-            if not isinstance(by_node, NumberNode) or int(by_node.value) != by_node.value:
-                raise LanguageError(f'{context}: shift(by=...) must be an integer literal')
+            if not isinstance(by_node, ParameterNode) and (
+                not isinstance(by_node, NumberNode) or int(by_node.value) != by_node.value
+            ):
+                raise LanguageError(f'{context}: {_shift_by_message()}')
             _check_dim_rules(node, schema, context)
             operand = _lower_expr(node.args[0], schema, context)
             has_var = degree.carries_variable(node.args[0])
@@ -310,13 +312,16 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             fill = None if wrap else _translate_fill(edge, context, has_var=has_var)
             if not wrap and fill is None and not has_var:
                 raise LanguageError(_shift_over_data_message(context))
-            return plan.Translate(
-                operand,
-                over_node.name,
-                by=sign * int(by_node.value),
-                wrap=wrap,
-                fill=fill,
-            )
+            by: int | str
+            if isinstance(by_node, ParameterNode):
+                _check_named_offset(by_node.name, node, over_node.name, schema, context, wrap=wrap, fill=fill)
+                if sign < 0:
+                    raise LanguageError(f'{context}: {_negated_offset_message(by_node.name)}')
+                by = by_node.name
+            else:
+                assert isinstance(by_node, NumberNode)
+                by = sign * int(by_node.value)
+            return plan.Translate(operand, over_node.name, by=by, wrap=wrap, fill=fill)
 
         raise LanguageError(f"{context}: built-in '{node.name}' declares no lowering case")
 
@@ -368,6 +373,76 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
             f'expression instead.'
         )
     return fill
+
+
+def _shift_by_message() -> str:
+    """What a ``by=`` may be, now that it may be two things."""
+    return (
+        'shift(by=...) must be a whole number, or the name of an integer '
+        'parameter when the offset differs per entity — a lead time, a transit '
+        'time, a minimum up time.'
+    )
+
+
+def _negated_offset_message(name: str) -> str:
+    """Why ``by=-lead`` is refused rather than negated.
+
+    A literal offset is written with its sign in the call; a named one carries
+    it in the values, where the reader of the data can see which way each row
+    points. Allowing both spellings would let one model say ``by=-lead`` and
+    another ``by=lead`` with negative values and mean the same thing.
+    """
+    return (
+        f'shift(by=-{name}) negates a named offset, which the language does not do.\n'
+        f"Put the sign in '{name}' itself — a named offset carries its direction "
+        f'in the data, where the row that points backwards says so.'
+    )
+
+
+def _check_named_offset(
+    name: str,
+    node: FunctionCallNode,
+    dimension: str,
+    schema: Model,
+    context: str,
+    *,
+    wrap: bool,
+    fill: float | None,
+) -> None:
+    """The three rules that make a per-entity offset mean one thing.
+
+    An offset that depends on the dimension it translates would move each
+    position by a different amount *along that axis*, which is a permutation
+    rather than a translation and has no reading as a lag. An offset that is
+    not integral cannot land on a coordinate. And a named offset must say what
+    the vacated positions contribute: the absent edge propagates through a
+    presence frame keyed by the dimension alone, which a per-entity edge is
+    not — refused here rather than answered wrongly (#850).
+    """
+    # An undeclared name never reaches here: resolution refuses it first, and
+    # names the parameters that do exist, which is the better message.
+    declared = schema.parameters[name]
+    if declared.dtype != 'int':
+        raise LanguageError(
+            f"{context}: shift(by={name}) needs an integer parameter, and '{name}' is "
+            f"declared '{declared.dtype}'. An offset lands on a coordinate, so it counts "
+            f'positions rather than measuring a distance.'
+        )
+    if dimension in declared.dims:
+        raise LanguageError(
+            f'{context}: shift(by={name}) is offset by a parameter that itself spans '
+            f"'{dimension}', the dimension being translated. That moves each position by "
+            f'a different amount along the axis it is moving, which is a permutation and '
+            f'not a lag — drop the dimension from the parameter, or state the map you mean '
+            f'as a lookup.'
+        )
+    if not wrap and fill is None:
+        raise LanguageError(
+            f'{context}: shift(by={name}) leaves the vacated positions absent, which a '
+            f'per-entity offset cannot say yet.\n'
+            f"Add edge='wrap' for a cyclic translation, or edge=<number> for what the "
+            f'vacated positions contribute.'
+        )
 
 
 def _shift_over_data_message(context: str) -> str:

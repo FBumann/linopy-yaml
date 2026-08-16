@@ -40,6 +40,8 @@ if TYPE_CHECKING:
 #: Scratch columns. The spaces make them unrepresentable as declared names, so
 #: they cannot collide with a dimension or coordinate the model already has.
 _RHS = '__rhs value__'
+#: The per-entity offset, joined in beside the ordinal it moves.
+_OFFSET = '__offset'
 _ORD_IN = '__ord in__'
 _ORD_OUT = '__ord out__'
 
@@ -729,7 +731,14 @@ class PolarsCompiler:
         incoming = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_IN))
         outgoing = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_OUT))
 
-        moved = pl.col(_ORD_IN) + s.by
+        offset_name = s.by if isinstance(s.by, str) else None
+        offset_dims: tuple[str, ...] = ()
+        if offset_name is not None:
+            offset_dims = tuple(self.program.parameter(offset_name).dims)
+            moved = pl.col(_ORD_IN) + pl.col(_OFFSET)
+        else:
+            assert not isinstance(s.by, str)
+            moved = pl.col(_ORD_IN) + s.by
         if s.wrap:
             moved = (moved % card + card) % card
 
@@ -742,10 +751,20 @@ class PolarsCompiler:
             for columns it never had.
             """
             kept = [d for d in (source_dims if source_dims is not None else p.dims) if d != s.dimension]
+            walked = source.join(incoming, on=s.dimension, how='inner').drop(s.dimension)
+            if offset_name is not None:
+                # A per-entity offset is one more equi-join, on dims the frame
+                # already carries — the same locality class as a literal one,
+                # since the reach is still a lookup on the dim table.
+                walked = walked.join(
+                    self.data.parameters[offset_name].select(
+                        *offset_dims, pl.col('value').cast(pl.Int64).alias(_OFFSET)
+                    ),
+                    on=list(offset_dims),
+                    how='inner',
+                )
             return (
-                source.join(incoming, on=s.dimension, how='inner')
-                .drop(s.dimension)
-                .with_columns(moved.alias(_ORD_OUT))
+                walked.with_columns(moved.alias(_ORD_OUT))
                 .join(outgoing, on=_ORD_OUT, how='inner')
                 .select(*kept, s.dimension, *carried)
             )

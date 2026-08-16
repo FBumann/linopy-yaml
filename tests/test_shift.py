@@ -469,3 +469,123 @@ def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
     with differential(model, data) as run:
         primal = run.result.primal('p')['value'].to_numpy()
         assert not np.allclose(primal, 5.0), 'nothing binds, so the lanes would agree on an unconstrained model'
+
+
+@pytest.mark.parametrize('edge', ["'wrap'", '0'], ids=['wrap', 'fill'])
+def test_an_offset_may_differ_per_entity(edge: str):
+    """`by=` names a parameter: each entity is translated by its own amount.
+
+    A lead time, a transit time, a minimum up time — every one of them is a
+    column in the source data, and writing one `shift` per distinct value with
+    a mask selecting the rows that carry it is what this replaces.
+
+    The instance discriminates: an order placed at *t* arrives at *t + lead*,
+    demand falls only in the last period, and the two units have different
+    leads. If the offset were read once for both, one of them would order in
+    the wrong period and the primal would say so.
+    """
+    lead = {'slow': 1, 'fast': 2}
+    units, periods = list(lead), [0, 1, 2, 3]
+    model = {
+        'dimensions': {
+            'g': {'dtype': 'str', 'values': list(lead)},
+            't': {'dtype': 'int', 'values': [0, 1, 2, 3]},
+        },
+        'parameters': {
+            'lead': {'dims': ['g'], 'dtype': 'int'},
+            'c': {'dims': ['g']},
+            'demand': {'dims': ['g', 't']},
+        },
+        'variables': {'order': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 9}}},
+        'constraints': {
+            'arrive': {
+                'foreach': ['g', 't'],
+                'expression': f'shift(order, over=t, by=lead, edge={edge}) >= demand',
+            }
+        },
+        'objective': {'sense': 'minimize', 'expression': 'order * c'},
+    }
+    data = {
+        'lead': pd.Series([lead[u] for u in units], index=pd.Index(units, name='g')),
+        'c': pd.Series([1.0, 1.0], index=pd.Index(units, name='g')),
+        'demand': pd.DataFrame(
+            {
+                'g': [u for u in units for _ in periods],
+                't': periods * len(units),
+                'value': [0.0, 0.0, 0.0, 5.0] * len(units),
+            }
+        ),
+    }
+    with differential(model, data) as run:
+        assert run.result.objective == pytest.approx(10.0)
+        placed = run.result.primal('order').filter(pl.col('value') > 1e-9)
+        assert dict(zip(placed['g'].to_list(), placed['t'].to_list(), strict=True)) == {'slow': 2, 'fast': 1}, (
+            'each unit orders one of its own lead times before the demand, not a shared one'
+        )
+
+
+NAMED_OFFSET_REFUSALS = {
+    'not-a-parameter': ('missing', "'missing' not found"),
+    'not-an-integer': ('rate', 'needs an integer parameter'),
+    'along-the-shifted-dim': ('drift', 'the dimension being translated'),
+}
+
+
+@pytest.mark.parametrize(('offset', 'match'), list(NAMED_OFFSET_REFUSALS.values()), ids=list(NAMED_OFFSET_REFUSALS))
+def test_a_named_offset_that_cannot_mean_a_lag_is_refused(offset: str, match: str):
+    """The three ways a per-entity offset stops being a translation.
+
+    An undeclared name is a typo, and resolution refuses it before lowering
+    sees it — pinned here so the better message stays the one that prints. A
+    non-integral offset cannot land on a coordinate: it counts positions rather
+    than measuring a distance.
+    And one that spans the dimension it translates moves each position by a
+    different amount *along the axis it is moving*, which is a permutation with
+    no reading as a lag.
+    """
+    model = {
+        'dimensions': {'g': {'dtype': 'str', 'values': ['a']}, 't': {'dtype': 'int', 'values': [0, 1]}},
+        'parameters': {
+            'lead': {'dims': ['g'], 'dtype': 'int'},
+            'rate': {'dims': ['g']},
+            'drift': {'dims': ['g', 't'], 'dtype': 'int'},
+        },
+        'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'k': {'foreach': ['g', 't'], 'expression': f"x >= shift(x, over=t, by={offset}, edge='wrap')"}},
+        'objective': {'sense': 'minimize', 'expression': 'x * 1.0'},
+    }
+    with pytest.raises(LanguageError, match=match):
+        lps.check(model)
+
+
+def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
+    """The absent edge is refused for a named offset, deliberately and for now.
+
+    A bare `shift` leaves the vacated positions absent, and absence is carried
+    by a presence frame keyed by the translated dimension alone. A per-entity
+    offset vacates a *different* slot for each entity, which that frame cannot
+    say — so the case is refused rather than answered wrongly, and the two
+    edges that write their own answer are allowed.
+    """
+    model = {
+        'dimensions': {'g': {'dtype': 'str', 'values': ['a']}, 't': {'dtype': 'int', 'values': [0, 1]}},
+        'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
+        'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'k': {'foreach': ['g', 't'], 'expression': 'x >= shift(x, over=t, by=lead)'}},
+        'objective': {'sense': 'minimize', 'expression': 'x * 1.0'},
+    }
+    with pytest.raises(LanguageError, match='vacated positions absent'):
+        lps.check(model)
+
+
+def test_a_named_offset_carries_its_sign_in_the_data():
+    """`by=-lead` is refused rather than negated, so one spelling means one thing."""
+    model = {
+        'dimensions': {'g': {'dtype': 'str', 'values': ['a']}, 't': {'dtype': 'int', 'values': [0, 1]}},
+        'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
+        'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'k': {'foreach': ['g', 't'], 'expression': "x >= shift(x, over=t, by=-lead, edge='wrap')"}},
+        'objective': {'sense': 'minimize', 'expression': 'x * 1.0'},
+    }
+    with pytest.raises(LanguageError, match='negates a named offset'):
+        lps.check(model)
