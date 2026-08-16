@@ -26,6 +26,7 @@ import polars as pl
 from lpspec.errors import (
     DataError,
     PiecewiseExpansionError,
+    declared_index_also_supplied_message,
     dense_array_message,
     unknown_source_keys_message,
 )
@@ -44,8 +45,9 @@ def tidy_sources(
 
     Every in-memory source becomes a tidy :class:`polars.LazyFrame` with columns
     ``(dims…, value)``; parquet paths pass through untouched for the engine to
-    scan directly. Dimension indexes come from ``data``, ``coords``, declared YAML
-    values, or fall back to the engine's inference from parameter tables.
+    scan directly. A dimension index comes from ``data``, from ``coords``, or
+    from what the YAML declares — exactly one of them, which
+    :func:`check_index_ownership` settles before anything is read.
 
     Normalising here rather than at the engine is what lets the piecewise
     curvature guard see every in-memory shape alike (:mod:`frames`
@@ -68,15 +70,15 @@ def tidy_sources(
     known = {**schema.parameters, **schema.dimensions}
     if unknown := set(data) - set(known):
         raise DataError(unknown_source_keys_message(unknown, known))
+    check_index_ownership(schema, data, coords)
 
     sources: dict[str, object] = {}
     for dname, ddef in schema.dimensions.items():
-        declared = schema.declared_index(dname)
         if dname in data:
             src = data[dname]
         elif coords and dname in coords:
             src = coords[dname]
-        elif declared is not None:
+        elif (declared := schema.declared_index(dname)) is not None:
             sources[dname] = pl.LazyFrame(declared)
             continue
         elif ddef.values is not None:
@@ -87,8 +89,7 @@ def tidy_sources(
             sources[dname] = src
             continue
         table = as_frame(src, (dname,))
-        table = table if table is not None else labels_frame(dname, src, ddef.dtype)
-        sources[dname] = _filled_from_declaration(table, dname, declared)
+        sources[dname] = table if table is not None else labels_frame(dname, src, ddef.dtype)
 
     for pname, pdef in schema.parameters.items():
         if pname not in data:
@@ -195,24 +196,40 @@ def _labels(name: str, dim: str, sources: Mapping[str, object]) -> list[Any]:
     return frame.select(dim).unique(maintain_order=True).collect()[dim].to_list()  # pyrefly: ignore[missing-attribute]
 
 
-def _filled_from_declaration(
-    table: pl.LazyFrame, dimension: str, declared: dict[str, list[Any]] | None
-) -> pl.LazyFrame:
-    """*table* plus the declared lookup columns it does not already carry.
+def check_index_ownership(schema: Model, data: Mapping[str, object], coords: Mapping[str, Any] | None) -> None:
+    """Refuse a dimension whose index the file declares and the caller also supplies.
 
-    A supplied index outranks the file, so a column the caller passes is left
-    alone and only the absent ones are joined — the rule that makes a declared
-    map a default rather than a lock (the data-binding rules). Labels the caller's index does
-    not hold drop out of the join, and a label the map omits stays null, which
-    is the partial case either way.
+    One dimension, one home. A dimension's ``values:`` and the ``values:`` of any
+    lookup over it are the file claiming to own which labels exist and how they
+    map; a caller passing the same dimension is claiming the same thing from the
+    other side. Resolving that by precedence would let the file describe a model
+    the caller does not build, so it is refused at bind, before either lane
+    reads a table.
+
+    The unit is the dimension rather than the column, because the two halves are
+    not independent: labels are derived from the maps where the dimension
+    declares none, so taking half a declaration changes what the other half
+    means.
+
+    Raises:
+        DataError: Naming the dimension, the declaration, and the key that
+            collided with it.
     """
-    if declared is None:
-        return table
-    absent = {name: values for name, values in declared.items() if name != dimension}
-    absent = {k: v for k, v in absent.items() if k not in table.collect_schema().names()}
-    if not absent:
-        return table
-    return table.join(pl.LazyFrame({dimension: declared[dimension], **absent}), on=dimension, how='left')
+    for dim, ddef in schema.dimensions.items():
+        declares = _declaring_index(schema, dim, ddef)
+        if declares is None:
+            continue
+        for where, supplied in ((f"sources['{dim}']", data), (f"coords['{dim}']", coords or {})):
+            if dim in supplied:
+                raise DataError(declared_index_also_supplied_message(dim, declares, where))
+
+
+def _declaring_index(schema: Model, dim: str, ddef: Any) -> str | None:
+    """How the file claims *dim*'s index, spelled as the keys to delete, or ``None``."""
+    if ddef.values is not None:
+        return f'dimensions.{dim}.values'
+    declared = [f'lookups.{n}.values' for n, lk in schema.lookups.items() if lk.over == dim and lk.values is not None]
+    return ' and '.join(declared) if declared else None
 
 
 def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:

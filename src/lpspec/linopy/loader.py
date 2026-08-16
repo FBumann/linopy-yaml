@@ -31,6 +31,7 @@ from lpspec.language.expression_parser import (
     VariableNode,
     children,
 )
+from lpspec.sources import check_index_ownership
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -46,18 +47,21 @@ def build_master_coords(
 ) -> dict[str, pd.Index]:
     """Assemble master coordinate indices for every declared dimension.
 
-    The precedence of the data-binding rules: a key in ``sources``, then
-    ``coords``, then the ``values:`` the YAML declares. There is no fourth
-    step: a dimension without an index has no way to tell a mistyped label from
-    a new one.
+    Where the index comes from, per the data-binding rules: a key in
+    ``sources``, then ``coords``, then the ``values:`` the YAML declares — and
+    never two of them, which :func:`~lpspec.sources.check_index_ownership`
+    refuses first. There is no fourth step: a dimension without an index has no
+    way to tell a mistyped label from a new one.
 
     Raises:
-        DataError: A dimension with no index.
+        DataError: A dimension with no index, or one the file and the caller
+            both claim.
     """
     coords = coords or {}
     master: dict[str, pd.Index] = {}
 
     sources = sources or {}
+    check_index_ownership(schema, sources, coords)
     for dim_name, dim_def in schema.dimensions.items():
         supplied = supplied_index(schema, coords, dim_name, sources)
         if supplied is not None:
