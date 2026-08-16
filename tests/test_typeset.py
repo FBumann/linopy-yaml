@@ -160,27 +160,28 @@ def test_a_translation_under_a_pullback_survives_it(fmt: Format):
     """``at`` and ``shift`` both re-index at the leaf, and the leaf has one subscript.
 
     Whoever wrote it last used to win: ``at(shift(cap, over=period, by=1,
-    edge=0), onto=snapshot, by=period)`` printed `cap_{period(t)}`, dropping a
+    edge=0), by=period_of)`` printed `cap_{period_of(t)}`, dropping a
     translation the plan builds. The subscript is a composition, so it renders
     as one.
     """
     model = {
         'dimensions': {
-            'snapshot': {'dtype': 'int', 'coords': ['period']},
+            'snapshot': {'dtype': 'int'},
             'period': {'dtype': 'int'},
         },
+        'lookups': {'period_of': {'over': 'snapshot', 'into': 'period'}},
         'parameters': {'cap': {'dims': ['period']}},
         'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0}}},
         'constraints': {
             'within': {
                 'foreach': ['snapshot'],
-                'expression': 'p <= at(shift(cap, over=period, by=1, edge=0), onto=snapshot, by=period)',
+                'expression': 'p <= at(shift(cap, over=period, by=1, edge=0), by=period_of)',
             }
         },
     }
     text = typeset(model, fmt, legend=False)
     assert fmt.operators['edge_minus'] in text, 'the shift under the at was dropped from the subscript'
-    assert fmt.apply(fmt.upright('period'), 't') in text, 'the pullback itself was dropped'
+    assert fmt.apply(fmt.upright('period_of'), 't') in text, 'the pullback itself was dropped'
 
 
 @EVERY_FORMAT
