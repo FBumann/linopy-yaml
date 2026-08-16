@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import operator
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
@@ -39,6 +40,9 @@ from lpspec.language.where_parser import (
     AndNode,
     BooleanLiteralNode,
     DimensionComparisonNode,
+    LookupComparisonNode,
+    LookupDefinedNode,
+    LookupPairComparisonNode,
     NotNode,
     OrNode,
     ParameterComparisonNode,
@@ -136,7 +140,7 @@ def _build_variables(ctx: EvaluationContext) -> None:
             upper = _resolve_bound(vdef.bounds.upper, ctx.dataset)
 
             where = where_of(vdef.where, ctx.ns, f"variable '{vname}'", self_variable=vname)
-            mask = evaluate_where(where, ctx.dataset, ctx.master_coords, ctx.model)
+            mask = evaluate_where(where, ctx.dataset, ctx.master_coords, ctx.model, ctx.dim_coords)
 
             _check_bounds_are_defined(vname, vdef, ctx.dataset, mask)
 
@@ -234,7 +238,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
     for cname, cdef in ctx.schema.constraints.items():
         with note(f"while building constraint '{cname}'"):
             c_where = where_of(cdef.where, ctx.ns, f"constraint '{cname}'")
-            mask = evaluate_where(c_where, ctx.dataset, ctx.master_coords, ctx.model)
+            mask = evaluate_where(c_where, ctx.dataset, ctx.master_coords, ctx.model, ctx.dim_coords)
 
             ast = expression_of(cdef.expression, ctx.schema, ctx.ns, f"constraint '{cname}'")
             if not isinstance(ast, ComparisonNode):
@@ -514,6 +518,28 @@ def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:
     raise _unsupported('at()', array)
 
 
+def _bound_lookup(
+    name: str,
+    over: str,
+    dim_coords: Mapping[str, Mapping[str, xr.DataArray]],
+) -> xr.DataArray:
+    """A lookup's bound values as an array over the dim it is over.
+
+    The where counterpart of :func:`_lookup_array`, which reads the same store
+    for a grouped sum. Kept separate because the failure differs: a predicate
+    can be evaluated before any variable exists, so the message names ``coords=``
+    rather than the helper call that wanted it.
+    """
+    try:
+        return dim_coords[over][name]
+    except KeyError:
+        msg = (
+            f"where reads lookup '{name}' over dimension '{over}', which has no bound "
+            f"values. Pass coords={{'{over}': <DataFrame with '{over}' and '{name}' columns>}}."
+        )
+        raise DataError(msg) from None
+
+
 def _unsupported(call: str, array: Any) -> TypeError:
     """One wording for an operand shape an operator cannot take.
 
@@ -585,6 +611,7 @@ def evaluate_where(
     dataset: xr.Dataset,
     master_coords: dict[str, pd.Index],
     model: linopy.Model | None = None,
+    dim_coords: Mapping[str, Mapping[str, xr.DataArray]] | None = None,
 ) -> xr.DataArray:
     """Evaluate a **resolved** where AST against a parameter dataset.
 
@@ -593,13 +620,17 @@ def evaluate_where(
     about scoping. It lives here rather than in ``where_parser.py`` because it
     is xarray-only.
 
+    ``dim_coords`` carries the bound lookup columns, which a predicate on a
+    lookup reads instead of the parameter dataset — the same store the grouped
+    sum reads its mapping from.
+
     Always a boolean DataArray. The no-mask case comes back 0-dimensional, so
     callers combine with ``&``/``|`` without case analysis.
     """
     if node is None:
         return xr.DataArray(True)
 
-    return _eval_node(node, dataset, master_coords, model)
+    return _eval_node(node, dataset, master_coords, model, dim_coords or {})
 
 
 def _eval_node(
@@ -607,6 +638,7 @@ def _eval_node(
     dataset: xr.Dataset,
     master_coords: dict[str, pd.Index],
     model: linopy.Model | None = None,
+    dim_coords: Mapping[str, Mapping[str, xr.DataArray]] = MappingProxyType({}),
 ) -> xr.DataArray:
     """One resolved where node as a boolean DataArray.
 
@@ -614,12 +646,19 @@ def _eval_node(
     masked-out coordinate carries label ``-1`` — linopy's own marker for an
     absent slot, which is exactly the question ``defined(v)`` asks — and a
     comparison over NaN comes back false. Comparison right-hand sides are
-    literals; resolution rejected a parameter or variable there.
+    literals except between two lookups, which resolution admits only over one
+    dimension; every other declared name there it rejects.
+
+    **A null lookup value is excluded explicitly rather than by ``fillna``.** A
+    partial lookup arrives as an object array holding ``None``, and numpy
+    answers ``None != 'north'`` with *True* rather than with null — so a ``!=``
+    would keep exactly the labels that map nowhere, which is the reading law 8
+    forbids and the relational lane does not give.
     """
 
     def evaluate(child: WhereNode) -> xr.DataArray:
         """Recurse carrying this call's bindings — what the connectives need."""
-        return _eval_node(child, dataset, master_coords, model)
+        return _eval_node(child, dataset, master_coords, model, dim_coords)
 
     if isinstance(node, BooleanLiteralNode):
         return xr.DataArray(node.value)
@@ -658,6 +697,19 @@ def _eval_node(
 
         result = _PREDICATE_OPS[node.op](arr, node.value)
         return result.fillna(False).astype(bool)
+
+    if isinstance(node, LookupComparisonNode):
+        arr = _bound_lookup(node.name, node.over, dim_coords)
+        return (_PREDICATE_OPS[node.op](arr, node.value) & arr.notnull()).fillna(value=False).astype(bool)
+
+    if isinstance(node, LookupPairComparisonNode):
+        left = _bound_lookup(node.name, node.over, dim_coords)
+        right = _bound_lookup(node.other, node.over, dim_coords)
+        defined = left.notnull() & right.notnull()
+        return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
+
+    if isinstance(node, LookupDefinedNode):
+        return _bound_lookup(node.name, node.over, dim_coords).notnull()
 
     if isinstance(node, NotNode):
         return ~evaluate(node.operand)

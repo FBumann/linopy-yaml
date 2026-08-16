@@ -222,6 +222,43 @@ class DimensionComparison(Predicate):
 
 
 @dataclass(frozen=True)
+class LookupComparison(Predicate):
+    """Compare a *lookup's values* to a literal — ``where: "period_of == 2030"``.
+
+    Read off the ``over`` dimension's own table, one column beside the labels,
+    so this is the same pointwise filter :class:`DimensionComparison` is —
+    one join against a small table rather than a data join.
+    """
+
+    lookup: str
+    over: str
+    op: ComparisonOperator
+    value: float | str | datetime.date
+
+
+@dataclass(frozen=True)
+class LookupPairComparison(Predicate):
+    """Compare two lookups over one dimension — ``where: "from != to"``.
+
+    Both columns sit on the same dim table, so this is one filter on two of
+    its columns and never a join between them.
+    """
+
+    lookup: str
+    other: str
+    over: str
+    op: ComparisonOperator
+
+
+@dataclass(frozen=True)
+class LookupDefined(Predicate):
+    """True where a partial lookup has a value — a label that maps somewhere."""
+
+    lookup: str
+    over: str
+
+
+@dataclass(frozen=True)
 class ParameterDefined(Predicate):
     """True where the parameter has a non-null, finite value."""
 
