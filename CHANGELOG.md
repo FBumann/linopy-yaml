@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.168](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.167...v0.0.1-alpha.168) (2026-08-16)
+
+
+### Bug Fixes
+
+* **compat:** a grouped sum lands on the dimension it declares ([#900](https://github.com/fluxopt/lpspec/issues/900)) ([f104206](https://github.com/fluxopt/lpspec/commit/f104206ca836038c8d39c35fee77a0a18c94089d)), closes [#756](https://github.com/fluxopt/lpspec/issues/756)
+
 ## [0.0.1-alpha.167](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.166...v0.0.1-alpha.167) (2026-08-16)
 
 
