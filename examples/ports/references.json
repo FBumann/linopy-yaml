@@ -780,5 +780,41 @@
     "objective": 2085.0,
     "rtol": 1e-09,
     "provenance": "published by TSPLIB for instance gr17 (Groetschel, 17 cities, EXPLICIT lower-diagonal distance matrix); optimum 2085 as listed in the TSPLIB solutions file"
+  },
+  "reserves": {
+    "objective": 915.0,
+    "rtol": 1e-09,
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/reserves.py — agreement, not a published figure",
+    "duals": {
+      "balance": {
+        "bus": [
+          "b1",
+          "b2"
+        ],
+        "value": [
+          10.0,
+          5.0
+        ]
+      }
+    }
+  },
+  "pypsa_multilink": {
+    "objective": 1100.0,
+    "rtol": 1e-09,
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_multilink.py",
+    "duals": {
+      "nodal_balance": {
+        "bus": [
+          "gas",
+          "elec",
+          "heat"
+        ],
+        "value": [
+          10.0,
+          20.0,
+          12.5
+        ]
+      }
+    }
   }
 }

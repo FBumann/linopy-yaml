@@ -1,0 +1,29 @@
+{
+  "generator": {"generator": ["g1", "g2", "g3"], "gen_bus": ["b1", "b2", "b2"]},
+  "line": {
+    "line": ["l1", "l2", "l3", "l4"],
+    "from": ["b2", "b2", "b1", "b2"],
+    "to": ["b1", "b1", "b2", null]
+  },
+  "offer": {
+    "offer": ["o1", "o2", "o3", "o4", "o5"],
+    "gen_of": ["g1", "g1", "g2", "g2", "g3"],
+    "market_of": ["m1", "m1", "m1", "m2", "m2"],
+    "tranche_of": ["fast", "fast", "slow", "fast", "slow"]
+  },
+  "p_max": {"generator": ["g1", "g2", "g3"], "value": [100.0, 80.0, 70.0]},
+  "energy_cost": {"generator": ["g1", "g2", "g3"], "value": [10.0, 30.0, 5.0]},
+  "load": {"bus": ["b1", "b2"], "value": [70.0, 40.0]},
+  "cap": {"line": ["l1", "l2", "l3", "l4"], "value": [20.0, 8.0, 25.0, 10.0]},
+  "neg_cap": {"line": ["l1", "l2", "l3", "l4"], "value": [0.0, 0.0, 0.0, 0.0]},
+  "bus_cap": {"bus": ["b1", "b2"], "value": [100.0, 15.0]},
+  "offer_cost": {"offer": ["o1", "o2", "o3", "o4", "o5"], "value": [2.0, 1.0, 3.0, 2.0, 4.0]},
+  "req": {"market": ["m1", "m2"], "value": [55.0, 20.0]},
+  "tranche_frac": {"tranche": ["fast", "slow"], "value": [0.25, 0.5]},
+  "zone_share": {
+    "generator": ["g1", "g2", "g2", "g3"],
+    "zone": ["z1", "z1", "z2", "z2"],
+    "value": [1.0, 0.5, 1.0, 1.0]
+  },
+  "zone_req": {"zone": ["z1", "z2"], "value": [25.0, 25.0]}
+}

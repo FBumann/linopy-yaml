@@ -24,6 +24,7 @@ Every page starts from data in the shape the call wants, and
 | [special-ordered sets](sos.md) | A piecewise-linear cost curve stated as a **special-ordered set** — [piecewise](piecewise.md) with one line changed, handed to the solver as a set it branches on itself. |
 | [monthly budget](monthly_budget.md) | A cap on what each technology may generate per calendar month — an aggregate over a *coarser grouping of time*, written with the same operator that places a generator on a bus. |
 | [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
+| [reserves](reserves.md) | Energy and reserve co-optimization on a two-bus grid: offers are (generator, market, tranche) triples, reserve zones overlap, and one line dangles. The model exists to prove a claim — every many-to-many shape the language covers, in one instance, each one load-bearing. |
 | [walkthrough](walkthrough.md) | The dispatch model plus a macro and a named expression — the one used to print every pipeline stage. |
 
 ### The PyPSA ladder
@@ -37,6 +38,7 @@ Every page starts from data in the shape the call wants, and
 | [rung 5 — KVL](pypsa_kvl.md) | Passive AC lines: flow is decided by physics, not chosen. **The last rung of the ladder.** |
 | [rung 6 — AC-DC, two coordinates](pypsa_ac_dc.md) | A meshed AC–DC network under a CO₂ budget. **PyPSA's own `ac-dc-meshed` example.** |
 | [unit commitment](pypsa_unit_commitment.md) | Which generators are *on*, not just how much they produce — a binary per generator per snapshot, with start-up and shut-down charges. |
+| [multi-link](pypsa_multilink.md) | One `Link`, one input bus, several output buses, each output derated by its own efficiency — PyPSA's spelling for a CHP plant, an electrolyser with waste heat, any conversion with more than one product. |
 
 ### Published optima
 
@@ -76,6 +78,7 @@ drift from what the engine builds.
 | [monthly_budget](monthly_budget.md) | **✔** 9500 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [multi_period](multi_period.md) | **✔** 10020 | **✓** | · | · | · | · | **✓** | · | · | · |
 | [piecewise](piecewise.md) | **✔** 3850 | **✓** | · | · | · | · | **✓** | **✓** | · | · |
+| [reserves](reserves.md) | **✔** 915 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [sos](sos.md) | · | **✓** | · | · | · | · | **✓** | **✓** | **✓** | · |
 | [storage](storage.md) | **✔** 5650 | **✓** | · | · | **✓** | · | **✓** | · | · | · |
 | [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | **✓** | · | · | · |
@@ -86,6 +89,7 @@ drift from what the engine builds.
 | [pypsa_ac_dc](pypsa_ac_dc.md) | **✔** 1.8441e+07 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | **✔** 17228.8 | · | **✓** | **✓** | **✓** | · | **✓** | · | · | · |
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
+| [pypsa_multilink](pypsa_multilink.md) | **✔** 1100 | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_ramp](pypsa_ramp.md) | **✔** 18200 | · | **✓** | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_storage](pypsa_storage.md) | **✔** 15253.2 | · | **✓** | **✓** | · | **✓** | **✓** | · | · | · |
 | [pypsa_transport](pypsa_transport.md) | **✔** 22000 | · | **✓** | · | · | · | **✓** | · | · | · |
@@ -140,10 +144,12 @@ that class, and the evidence behind
 | [pypsa_ac_dc](pypsa_ac_dc.md) | 18441021.477729216 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ac_dc.py — n.objective + n.objective_constant, the system cost |
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | 17228.77962151063 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py |
 | [pypsa_kvl](pypsa_kvl.md) | 17000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py |
+| [pypsa_multilink](pypsa_multilink.md) | 1100.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_multilink.py |
 | [pypsa_ramp](pypsa_ramp.md) | 18200.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py |
 | [pypsa_storage](pypsa_storage.md) | 15253.178322993519 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_storage.py |
 | [pypsa_transport](pypsa_transport.md) | 22000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_transport.py |
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | 24900.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py |
+| [reserves](reserves.md) | 915.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/reserves.py — agreement, not a published figure |
 | [stigler_diet](stigler_diet.md) | 0.10866227820675685 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year[^stigler_diet] |
 | [storage](storage.md) | 5650.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure |
 | [telephone_routing](telephone_routing.md) | 380.0 | 1e-09 | · | published by Gueret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP (Dash Optimization, 2002) SS12.3.3 p. 182 — "380 out of the required 425 calls are routed"; problem and data in SS12.3, pp. 180-182 |
@@ -246,7 +252,7 @@ is refused by design rather than unimplemented. The two halves of that answer
 are worth keeping apart: one is a macro nobody has written, the other is the
 ceiling doing its job.
 
-Three rows from sixteen ports — a rate worth watching once the corpus has hit
+Three rows from seventeen ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 **The TSP row is the one to read**, and it is narrower than it first looked.

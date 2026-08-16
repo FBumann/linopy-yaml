@@ -53,6 +53,7 @@ nav:
           - special-ordered sets: models/sos.md
           - monthly budget: models/monthly_budget.md
           - multi-period: models/multi_period.md
+          - reserves: models/reserves.md
           - walkthrough: models/walkthrough.md
       - The PyPSA ladder:
           - rung 1 — transport: models/pypsa_transport.md
@@ -62,6 +63,7 @@ nav:
           - rung 5 — KVL: models/pypsa_kvl.md
           - rung 6 — AC-DC, two coordinates: models/pypsa_ac_dc.md
           - unit commitment: models/pypsa_unit_commitment.md
+          - multi-link: models/pypsa_multilink.md
       - Published optima:
           - Dantzig transport: models/transport_dantzig.md
           - Dantzig, economies of scale: models/transport_pwl.md
