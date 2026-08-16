@@ -68,8 +68,13 @@ Signable means signable *everywhere the variable appears*. A coefficient a
 term leaves the whole sum unsigned: `sum(slack + slack * price, over=t)` is
 left to the solver however `price` looks, because the data decides which way
 `slack` improves. This runs before any data exists, and a guess here would
-refuse models that solve. The per-coordinate case, where a `where` rather than
-the schema leaves one slice of a variable undefined, is not answered here
+refuse models that solve.
+
+A variable carrying a `where` is left alone for the same reason from the other
+end: every leg above is fixed by the schema, so what is refused is unbounded
+under *any* data that gives the variable a column, and a mask is the one thing
+that can leave it with none. The per-coordinate case, where a `where` leaves
+one slice of a variable undefined rather than all of them, is not answered here
 either — it needs the built rows.
 
 ## What the language will not say

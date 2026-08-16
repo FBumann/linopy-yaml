@@ -23,6 +23,12 @@ variable is, since the term that needs data can outweigh the ones that do not
 and reverse the direction the variable improves in — which is a bound on the
 other side, or none. `test_a_literal_term_does_not_sign_a_sum_a_parameter_is_in`
 is that model, and it solves.
+
+A `where` on the variable is left alone for the same reason, from the other
+end. Every leg of the conjunction is fixed by the schema, so what is left is
+unbounded under any data that gives the variable a column: the only reading
+data can still change is whether it has one, and a mask is where that is
+decided.
 """
 
 from __future__ import annotations
@@ -30,6 +36,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 
+import polars as pl
 import pytest
 
 import lpspec as lps
@@ -165,6 +172,27 @@ def test_a_literal_term_does_not_sign_a_sum_a_parameter_is_in():
     result = lps.solve(model, {'t': [0, 1], 'cap': [-3.0, -3.0]})
     assert result.status == 'ok', 'a model the walk must not refuse'
     assert result.objective == -20.0, 'slack sits at its upper bound of 5, twice, at a net -2 each'
+
+
+def test_a_masked_variable_is_left_to_the_data_that_decides_it_exists():
+    """A `where` decides whether the variable has a column at all, and data owns that.
+
+    Every other leg of the conjunction is fixed by the schema, so the refused
+    shape is unbounded under *any* data that gives the variable a column. A
+    mask is the one thing that can leave it with none — and then the term is
+    inert and the model solves, as it does here.
+    """
+    model = _with(**{'variables.slack.where': 'live'})
+    model['parameters']['live'] = {'dims': ['t']}
+    defined_nowhere = {
+        't': [0, 1],
+        'cap': pl.DataFrame({'t': [0, 1], 'value': [1.0, 1.0]}),
+        'live': pl.DataFrame(schema={'t': pl.Int64, 'value': pl.Float64}),
+    }
+
+    result = lps.solve(model, defined_nowhere)
+    assert result.status == 'ok', 'no column of slack exists, so nothing runs away'
+    assert result.objective == 0.0, 'x is the only variable left and its cost floor is 0'
 
 
 def test_maximising_toward_an_open_upper_bound_is_the_mirror():

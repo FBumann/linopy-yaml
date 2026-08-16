@@ -174,9 +174,12 @@ def _refuse_provably_unbounded(program: plan.Program) -> None:
     is bounded on both sides before this reads it.
 
     Silent on any coefficient a parameter reaches, since it runs before one is
-    bound and a sign guessed there refuses models that solve. The
-    per-coordinate variant, where the mask rather than the schema leaves a
-    slice undefined, needs the built rows and is not answered here.
+    bound and a sign guessed there refuses models that solve. Silent too on a
+    variable carrying a ``where``: what is left is unbounded for every data
+    that gives the variable a column, so the only reading data can change is
+    whether it has one, and a mask is how that is decided. The per-coordinate
+    variant, where the mask leaves one slice rather than all of them undefined,
+    needs the built rows and is not answered here.
 
     Raises:
         LanguageError: Naming the variable, the bound that is missing, and the
@@ -187,7 +190,7 @@ def _refuse_provably_unbounded(program: plan.Program) -> None:
     held = {v for c in program.constraints for side in (c.lhs, c.rhs) for v in _variables_in(side)}
     held |= {s.variable for s in program.sos}
     for declaration in program.variables:
-        if declaration.name in held:
+        if declaration.name in held or declaration.where is not None:
             continue
         sign = _objective_sign(program.objective.expression, declaration.name)
         if not sign:
