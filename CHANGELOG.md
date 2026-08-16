@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.154](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.153...v0.0.1-alpha.154) (2026-08-16)
+
+
+### Bug Fixes
+
+* **typeset:** a boolean mask says which rows are true, not which exist ([#848](https://github.com/fluxopt/lpspec/issues/848)) ([85feab0](https://github.com/fluxopt/lpspec/commit/85feab0aa1ed9fb547656c989ab310487b485109))
+
+
+### Documentation
+
+* **ledger:** a per-generator minimum up time is sayable ([#844](https://github.com/fluxopt/lpspec/issues/844)) ([0cc51da](https://github.com/fluxopt/lpspec/commit/0cc51da435dc1dee951b0046fccab111a19ccab1))
+
 ## [0.0.1-alpha.153](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.152...v0.0.1-alpha.153) (2026-08-16)
 
 
