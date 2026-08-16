@@ -584,7 +584,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
     path = tmp_path / 'stray_dim.yaml'
     path.write_text(pyyaml.safe_dump(raw))
     with pytest.raises(DimensionError, match=stray):
-        lpspec_linopy.build(path)
+        lpspec_linopy.build(path, {})
 
 
 # ---------------------------------------------------------------------------

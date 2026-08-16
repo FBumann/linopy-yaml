@@ -109,7 +109,7 @@ def test_a_model_with_no_objective_is_a_feasibility_problem(tmp_path):
 
     path = tmp_path / 'feasibility.yaml'
     path.write_text(pyyaml.safe_dump(FEASIBILITY_MODEL))
-    eager = lpspec_linopy.build(path, data=sources)
+    eager = lpspec_linopy.build(path, sources)
     assert 'meet' in eager.constraints, 'the eager lane built the same file'
 
     with lps.solve(FEASIBILITY_MODEL, sources) as result:

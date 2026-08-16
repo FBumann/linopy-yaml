@@ -170,7 +170,7 @@ def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
     with pytest.raises(DataError, match="not 'bus' labels"):
         _relationally(data, coords)
     with pytest.raises(DataError, match="not 'bus' labels"):
-        lpspec_linopy.build(TRANSPORT_YAML, data=data, coords=coords)
+        lpspec_linopy.build(TRANSPORT_YAML, data, coords=coords)
 
 
 def test_a_coordinate_must_be_single_valued(transport_data):
@@ -277,7 +277,7 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
             'the orphan is still a variable; it just carries no group obligation'
         )
 
-    model = lpspec_linopy.build(path, data=data, coords=coords)
+    model = lpspec_linopy.build(path, data, coords=coords)
     model.solve(solver_name='highs', output_flag=False)
     assert float(model.objective.value) == pytest.approx(3.0)
 

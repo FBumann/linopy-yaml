@@ -100,7 +100,7 @@ def differential(
         work = Path(tmp)
         path = model if isinstance(model, Path) else _write(work / 'model.yaml', model)
 
-        m = lpspec_linopy.build(path, data=dict(data), coords=dict(coords) if coords else None)
+        m = lpspec_linopy.build(path, dict(data), coords=dict(coords) if coords else None)
         m.solve(solver_name='highs', output_flag=False, reformulate_sos='auto')
         oracle = float(m.objective.value)
         assert np.isfinite(oracle), 'the eager oracle is infeasible or unbounded — fix the data, not the tolerance'

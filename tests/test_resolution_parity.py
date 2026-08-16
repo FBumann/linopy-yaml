@@ -35,7 +35,7 @@ def test_both_lanes_refuse_the_same_where(tmp_path, dispatch_model_inputs, where
     path = dispatch_model_path(tmp_path, **{'variables.p.where': where})
 
     with pytest.raises(ValueError, match=match):
-        lpspec_linopy.build(path, data=data, coords=coords)
+        lpspec_linopy.build(path, data, coords=coords)
 
     with pytest.raises(ValueError, match=match):
         lps.check(path)
@@ -84,7 +84,7 @@ def test_both_lanes_build_the_same_model(tmp_path, dispatch_model_inputs, where)
     data, coords = dispatch_model_inputs
     path = dispatch_model_path(tmp_path, **{'variables.p.where': where})
 
-    m = lpspec_linopy.build(path, data=data, coords=coords)
+    m = lpspec_linopy.build(path, data, coords=coords)
     eager_rows = int((m.variables['p'].labels != -1).sum())
     eager_status = m.solve(solver_name='highs')[1]
 
@@ -153,7 +153,7 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_model_inputs
     data, coords = dispatch_model_inputs
     path = dispatch_model_path(tmp_path, **{'variables.p.where': 'snapshot > 0'})
 
-    m = lpspec_linopy.build(path, data=data, coords=coords)
+    m = lpspec_linopy.build(path, data, coords=coords)
     eager_status = m.solve(solver_name='highs')[1]
 
     with lps.build(path, data, coords=coords) as bound:
@@ -295,7 +295,7 @@ def test_a_datetime_boundary_is_sayable_on_both_lanes(tmp_path):
     }
     coords = {'snapshot': pd.Index(days, name='snapshot'), 'generator': pd.Index(['wind', 'gas'], name='generator')}
 
-    m = lpspec_linopy.build(path, data=eager_data, coords=coords)
+    m = lpspec_linopy.build(path, eager_data, coords=coords)
     m.solve(solver_name='highs')
     eager = float(m.objective.value)
 

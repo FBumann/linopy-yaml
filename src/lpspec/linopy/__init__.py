@@ -13,14 +13,14 @@ a model or a value comes out, and nothing is retained. No accessor on the
 model, no session, no state. A file's meaning never depends on what was loaded
 before it (docs/about/architecture.md, hard rule 5), so every file declares the
 parameters it uses and the caller supplies their data per call — the reader
-included, which is why :func:`expression` takes ``data=`` again rather than
+included, which is why :func:`expression` takes ``sources`` again rather than
 remembering what :func:`build` saw::
 
     from lpspec import linopy as lpspec_linopy
 
-    m = lpspec_linopy.build('model.yaml', data={...})
+    m = lpspec_linopy.build('model.yaml', {...})
     m.solve(...)
-    lpspec_linopy.expression(m, 'model.yaml', 'co2', data={...})
+    lpspec_linopy.expression(m, 'model.yaml', 'co2', {...})
 
 The same model on the other lane, which streams::
 
@@ -53,7 +53,7 @@ has the option.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
     import linopy
@@ -73,72 +73,78 @@ from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
 from lpspec.linopy.loader import build_dim_coords, build_master_coords, load_parameters
 from lpspec.sources import validate_piecewise_data
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from lpspec.language.model import Model
+
 linopy.options['semantics'] = 'v1'
 
 __all__ = ['build', 'expression']
 
 
 def build(
-    path: str | Path,
+    model: str | Path | dict[str, Any] | Model,
+    sources: Mapping[str, Any],
     *,
-    data: dict[str, Any] | None = None,
     coords: dict[str, Any] | None = None,
 ) -> linopy.Model:
-    """Build a ``linopy.Model`` from a YAML math definition.
+    """Bind *sources* to *model* and build it as a ``linopy.Model``.
+
+    :func:`lpspec.build`'s signature, and deliberately: which lane builds a
+    file is the caller's choice, so the call cannot differ.
 
     Args:
-        path: Path to the YAML file.
-        data: Parameter data, keyed by the names the YAML declares.
-        coords: Dimension coordinate values. Overrides ``values:`` declared
-            in the YAML.
+        model: A YAML path, a mapping, or a loaded :class:`~lpspec.language.model.Model`.
+        sources: Parameter names to parquet paths or in-memory tables, and
+            optionally dimension names to index tables.
+        coords: Dimension labels neither *sources* nor the YAML carries.
 
     Returns:
         A model carrying every declaration the file makes.
 
     Raises:
-        LanguageError: A file the language does not accept — its structure,
-            its declarations or its expressions.
-        DataError: A file that is fine, and data that does not fit it.
+        LanguageError: A construct the language does not accept.
+        DataError: A source that is missing, unreadable, or the wrong shape.
     """
-    path = Path(path)
-    with note(f"while loading YAML '{path}'"):
-        original = load_model(path)
+    with note(f'while loading {_named(model)}'):
+        original = load_model(model)
         schema = expand_piecewise(original)
 
         master_coords = build_master_coords(schema, coords)
         dim_coords = build_dim_coords(schema, coords, master_coords)
-        dataset = load_parameters(schema, data, master_coords)
+        dataset = load_parameters(schema, dict(sources), master_coords)
         validate_piecewise_data(original, dataset)
 
-        model = linopy.Model()
-        build_model(model, schema, dataset, master_coords, dim_coords)
+        built = linopy.Model()
+        build_model(built, schema, dataset, master_coords, dim_coords)
 
-    return model
+    return built
 
 
 def expression(
-    model: linopy.Model,
-    path: str | Path,
+    built: linopy.Model,
+    model: str | Path | dict[str, Any] | Model,
     name: str,
+    sources: Mapping[str, Any],
     *,
-    data: dict[str, Any] | None = None,
     coords: dict[str, Any] | None = None,
 ) -> xarray.DataArray:
-    """Evaluate named expression *name* of *path* at *model*'s solution.
+    """Evaluate named expression *name* of *model* at *built*'s solution.
 
     The eager lane's half of readable expressions — the streaming lane spells
     it ``result.expression(name)``. Pure like :func:`build`: nothing was
-    retained there, so the same *data* and *coords* the model was
-    built with are passed again, the declared expression is evaluated on the
-    model, and linopy's native ``.solution`` is the answer.
+    retained there, so the same *sources* and *coords* the model was built with
+    are passed again, the declared expression is evaluated on the model, and
+    linopy's native ``.solution`` is the answer.
 
     Args:
-        model: A solved model carrying this file's variables.
-        path: Path to the YAML file declaring the expression.
+        built: A solved model carrying this file's variables.
+        model: The file declaring the expression, as :func:`build` takes it.
         name: A name declared under ``expressions:`` — never an expression
             string.
-        data: Parameter data, as :func:`build` takes it.
-        coords: Dimension coordinate values, as :func:`build` takes them.
+        sources: As :func:`build` takes them.
+        coords: As :func:`build` takes them.
 
     Returns:
         The expression's value over its own dims, as an ``xarray.DataArray``
@@ -146,12 +152,11 @@ def expression(
 
     Raises:
         KeyError: No named expression called *name*.
-        LanguageError: A file the language does not accept.
-        DataError: Data that does not fit the file.
+        LanguageError: A construct the language does not accept.
+        DataError: A source that does not fit the file.
     """
-    path = Path(path)
-    with note(f"while reading named expression '{name}' from YAML '{path}'"):
-        schema = expand_piecewise(load_model(path))
+    with note(f"while reading named expression '{name}' from {_named(model)}"):
+        schema = expand_piecewise(load_model(model))
         if name not in schema.expressions:
             raise KeyError(
                 unknown_name_message('named expression', name, schema.expressions)
@@ -159,13 +164,22 @@ def expression(
             )
         master_coords = build_master_coords(schema, coords)
         dim_coords = build_dim_coords(schema, coords, master_coords)
-        dataset = load_parameters(schema, data, master_coords)
+        dataset = load_parameters(schema, dict(sources), master_coords)
         ns = Namespace.of(schema)
         ast = expression_of(schema.expressions[name].expression, schema, ns, f"named expression '{name}'")
         assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
-        value = _eval_ast(ast, EvaluationContext(model, dataset, master_coords, schema, ns, dim_coords))
+        value = _eval_ast(ast, EvaluationContext(built, dataset, master_coords, schema, ns, dim_coords))
         if hasattr(value, 'solution'):
             return value.solution
         if isinstance(value, xarray.DataArray):
             return value
         return xarray.DataArray(float(value))
+
+
+def _named(model: str | Path | dict[str, Any] | Model) -> str:
+    """What to call *model* in an error note.
+
+    A path names itself; a mapping or an already-loaded schema has no name, and
+    saying so beats printing a dict into a traceback.
+    """
+    return f"YAML '{model}'" if isinstance(model, (str, Path)) else 'the model passed in'

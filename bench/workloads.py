@@ -139,7 +139,7 @@ def linopy_build_and_emit(
     case = CASES[case_name]
     with tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp:
         data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(case.model_path(case.shape(size)), data=data, coords=coords)
+        m = lpspec_linopy.build(case.model_path(case.shape(size)), data, coords=coords)
         if sink == 'lp':
             m.to_file(Path(tmp) / 'model.lp', io_api=io_api, progress=False)
         elif sink == 'gurobi':
@@ -163,7 +163,7 @@ def build_only(arm: str, case_name: str, size: str, paths: dict[str, str]) -> Co
         from lpspec import linopy as lpspec_linopy
 
         data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(model, data=data, coords=coords)
+        m = lpspec_linopy.build(model, data, coords=coords)
         return {'columns': int(m.nvars), 'rows': int(m.ncons), 'nonzeros': None}
 
     import lpspec as lps
@@ -192,7 +192,7 @@ def objective(arm: str, case_name: str, size: str, paths: dict[str, str]) -> flo
         from lpspec import linopy as lpspec_linopy
 
         data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(model, data=data, coords=coords)
+        m = lpspec_linopy.build(model, data, coords=coords)
         m.solve(solver_name='highs', output_flag=False)
         if m.status != 'ok':
             raise RuntimeError(f'linopy solve finished {m.status!r}, not ok')
