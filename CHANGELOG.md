@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.161](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.160...v0.0.1-alpha.161) (2026-08-16)
+
+
+### Bug Fixes
+
+* **bench:** the eager arm hands over tables the lane still reads ([#872](https://github.com/fluxopt/lpspec/issues/872)) ([97ab607](https://github.com/fluxopt/lpspec/commit/97ab607d7be378bebbade0eb2bbb2d1b4ecf03e5))
+
 ## [0.0.1-alpha.160](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.159...v0.0.1-alpha.160) (2026-08-16)
 
 
