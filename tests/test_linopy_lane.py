@@ -153,13 +153,6 @@ class TestLoadParameters:
                 id='missing-required',
             ),
             pytest.param(
-                {'x': {'values': [1], 'dtype': 'int'}},
-                None,
-                {'extra': 1},
-                'neither a parameter nor a dimension',
-                id='unknown-key',
-            ),
-            pytest.param(
                 {'x': {'values': [1], 'dtype': 'int'}, 'y': {'values': [2], 'dtype': 'int'}},
                 {'a': {'dims': ['x']}},
                 {'a': pd.DataFrame({'x': [1], 'y': [2], 'value': [1.0]}).set_index(['x', 'y'])['value']},

@@ -218,3 +218,55 @@ def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
         assert relational.is_ok
     built = lpspec_linopy.build(path, sources)
     assert set(built.variables['x'].coords['g'].to_numpy()) == {'w', 's'}, 'the eager lane read the same index'
+
+
+def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_path):
+    """Ignoring it is a silent fallback, which is the one thing we do not do.
+
+    `rebind` settled this first — a name it does not recognise is a typo, and
+    ignoring one there is a silent re-solve — and binding owes the same answer.
+    It is also what catches a misspelled *index* key, whose labels would
+    otherwise fall back to derivation and change only their order.
+
+    The cost is that a driver binding one bag of data to several models says
+    which slice each takes; `examples/benders/run.py` is that, in one line.
+    """
+    path = tmp_path / 'extra.yaml'
+    path.write_text(pyyaml.safe_dump(MODEL))
+    good = {'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+    typo = {**good, 'csot': good['cost']}
+
+    with pytest.raises(DataError, match="Did you mean 'cost'") as relational:
+        lps.build(path, typo).close()
+    with pytest.raises(DataError, match="Did you mean 'cost'") as eager:
+        lpspec_linopy.build(path, typo)
+
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+
+
+def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
+    """Why an undeclared *column* is ignored where an undeclared *key* is not.
+
+    The columns a table must carry are exact and total — every dim, plus
+    `value` — so a misspelled one is a missing one and is refused. Nothing can
+    hide in the extras, and the extras are the point: a framework hands over
+    `generators` with its index, its lookups and its attributes in one table.
+    """
+    model = {
+        'dimensions': {'g': {}, 'b': {'values': ['n', 'e']}},
+        'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}},
+        'parameters': {'cap': {'dims': ['g']}},
+        'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 100'}},
+        'objective': {'sense': 'maximize', 'expression': 'x'},
+    }
+    path = tmp_path / 'entity.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    generators = _tidy(g=['w', 's'], gen_bus=['n', 'e'], cap=[10.0, 20.0], note=['a', 'b'])
+    sources = {'g': generators, 'cap': _tidy(g=['w', 's'], value=[10.0, 20.0])}
+
+    with lps.solve(path, sources) as result:
+        assert result.objective == pytest.approx(30.0)
+
+    with pytest.raises(DataError, match=r"missing columns \['g'\]"):
+        lps.build(path, {**sources, 'cap': _tidy(gg=['w', 's'], value=[10.0, 20.0])}).close()

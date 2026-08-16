@@ -66,9 +66,20 @@ def bindable_on_this_install(name: str) -> None:
 
 
 def port_sources(name: str) -> dict[str, Any]:
-    """One JSON per port: a column-oriented table per name, scalars inline."""
+    """One JSON per port, filtered to what its model declares.
+
+    The file carries what the upstream framework dumped — `pypsa_kvl` ships a
+    `reactance` the ported model reads through `cycle_incidence` instead, and
+    `pypsa_ac_dc` six more of that kind. Keeping them is the point: they are the
+    provenance of the instance. Binding refuses a name the model does not
+    declare, so the filter belongs here, where a dump becomes a call.
+    """
     data = json.loads((PORTS_DIR / 'data' / f'{name}.json').read_text())
-    return {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
+    tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
+    model = PORTS_DIR / f'{name}.yaml'
+    schema = load_model(model if model.exists() else EXAMPLES_DIR / f'{name}.yaml')
+    known = {**schema.parameters, **schema.dimensions}
+    return {k: v for k, v in tables.items() if k in known}
 
 
 @pytest.fixture(params=sorted(PORT_REFERENCES), ids=str)

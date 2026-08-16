@@ -21,6 +21,7 @@ from lpspec.errors import (
     no_index_source_message,
     sparse_divisor_message,
     uncovered_constant_message,
+    unknown_source_keys_message,
 )
 from lpspec.frames import as_frame
 from lpspec.language.expression_parser import (
@@ -280,7 +281,8 @@ def load_parameters(
     A key naming a *dimension* is a dimension index, read by
     :func:`build_master_coords` and :func:`build_dim_coords` rather than here,
     and passes through untouched — one ``sources`` mapping carries both, as it
-    does on the relational lane.
+    does on the relational lane. A key naming neither is refused there and here
+    alike.
 
     Returns:
         One DataArray per parameter, aligned to the master coordinates.
@@ -292,19 +294,14 @@ def load_parameters(
     data = data or {}
     arrays: dict[str, xr.DataArray] = {}
 
+    known = {**schema.parameters, **schema.dimensions}
+    if unknown := set(data) - set(known):
+        raise DataError(unknown_source_keys_message(unknown, known))
+
     for pname in schema.parameters:
         if pname not in data:
             msg = f"Parameter '{pname}' is required but was not provided in data.\nAdd '{pname}' to the data= argument."
             raise DataError(msg)
-
-    unknown = set(data) - set(schema.parameters) - set(schema.dimensions)
-    if unknown:
-        msg = (
-            f'The following source keys name neither a parameter nor a dimension: '
-            f'{sorted(unknown)}.\n'
-            f"Declare them under 'parameters:' in the YAML, or remove them."
-        )
-        raise DataError(msg)
 
     for pname, pdef in schema.parameters.items():
         raw = data[pname]
