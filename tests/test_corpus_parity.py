@@ -27,25 +27,10 @@ from lpspec.errors import DataError
 from tests.conftest import PORT_REFERENCES, port_model, port_sources
 from tests.differential import differential
 
-_GROUPED_SUM = ('#756 — a grouped sum keeps its groupby index instead of the target dimension', ValueError)
-
 #: What the eager lane cannot build yet, keyed by model, valued by the issue
 #: that owns it and the error it raises today. Strict, so the day a fix lands
 #: these XPASS, the suite goes red, and the entry comes out in the same PR.
-LANE_BUGS: dict[str, tuple[str, type[Exception]]] = dict.fromkeys(
-    (
-        'monthly_budget',
-        'pypsa_ac_dc',
-        'pypsa_cyclic_storage',
-        'pypsa_kvl',
-        'pypsa_multilink',
-        'pypsa_ramp',
-        'pypsa_storage',
-        'pypsa_transport',
-        'transport',
-    ),
-    _GROUPED_SUM,
-) | {
+LANE_BUGS: dict[str, tuple[str, type[Exception]]] = {
     'genx_piecewise_fuel': ('#895 — a supplied index discards the declared lookup map', DataError),
     'osemosys_utopia': ('#894 — linopy has no objective-constant slot', ValueError),
 }

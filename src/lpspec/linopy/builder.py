@@ -408,7 +408,9 @@ def _eval_ast(
             return _operator_at(args[0], _lookup_array(by, ctx), into=by.into)
         if node.name == 'sum' and (by := node.kwargs.get('by')) is not None:
             assert isinstance(by, LookupNode)
-            return _operator_grouped_sum(args[0], _lookup_array(by, ctx), into=by.into)
+            return _operator_grouped_sum(
+                args[0], _lookup_array(by, ctx), into=by.into, labels=ctx.master_coords[by.into]
+            )
         kwargs: dict[str, Any] = {}
         for k, v in node.kwargs.items():
             if isinstance(v, DimensionNode):
@@ -457,7 +459,7 @@ def _operator_sum(array: Any, *, over: str) -> Any:
     return array
 
 
-def _operator_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
+def _operator_grouped_sum(array: Any, mapping: Any, *, into: str, labels: pd.Index) -> Any:
     """Sum *array* through a declared lookup, producing dimension *into*.
 
     YAML: ``sum(p, by=gen_bus)``. *mapping* is the lookup's values as a
@@ -468,6 +470,15 @@ def _operator_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
     A null lookup value says the label belongs to no group, so its terms
     contribute nowhere. linopy refuses to group by NaN at all, so those members
     are dropped before grouping rather than after.
+
+    *labels* is ``into``'s declared index, and the result is reindexed onto it:
+    a groupby yields only the labels some member actually points at, in xarray's
+    sort order, so without this a label no member reaches is missing and a
+    declared order that is not sorted is lost. Either one makes linopy v1 refuse
+    the next combination with a coordinate mismatch, since it aligns on
+    membership *and* order. Lookup values are validated against ``into``'s
+    labels when they are loaded, so this only ever adds a label, never drops a
+    term.
     """
     if not isinstance(mapping, xr.DataArray):
         msg = f'sum(by=) lookup must be an array (got {type(mapping).__name__}). Usage: sum(expr, by=lookup)'
@@ -483,8 +494,20 @@ def _operator_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
         group = group.isel({dim: present.to_numpy()})
         array = array.isel({dim: present.to_numpy()})
     if isinstance(array, xr.DataArray) or hasattr(array, 'groupby'):
-        return array.groupby(group).sum()
+        return _reindexed(array.groupby(group).sum(), into=into, labels=labels)
     raise _unsupported('sum(by=)', array)
+
+
+def _reindexed(summed: Any, *, into: str, labels: pd.Index) -> Any:
+    """*summed* over exactly *labels*, empty groups filled with an empty sum.
+
+    A grouped parameter is a plain ``DataArray``, where the empty sum is 0. A
+    grouped expression is a ``LinearExpression``, whose empty term is spelled
+    per-variable — linopy's own ``_fill_value`` cannot be used, its ``const:
+    nan`` propagates through the arithmetic that follows and poisons the row.
+    """
+    fill = {'vars': -1, 'coeffs': 0.0, 'const': 0.0} if hasattr(summed, 'const') else 0
+    return summed.reindex({into: labels}, fill_value=fill)
 
 
 def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:

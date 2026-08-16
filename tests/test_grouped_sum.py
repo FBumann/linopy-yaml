@@ -282,6 +282,50 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
     assert float(model.objective.value) == pytest.approx(3.0)
 
 
+GROUPED_ONTO_BUS = {
+    'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
+    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
+    'parameters': {'p_max': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
+    'variables': {'p': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
+    'constraints': {'balance': {'foreach': ['bus'], 'expression': 'sum(p, by=gen_bus) >= load'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p, over=generator)'},
+}
+
+#: The two ways a grouped sum's own index departs from the dimension it
+#: produces. Both instances carry 10 of load in total, so landing the group on
+#: the declared index is the only thing between them and the same optimum.
+GROUPED_ONTO_BUS_SOURCES = {
+    'a label no member reaches': {
+        'bus': pl.DataFrame({'bus': ['north', 'south', 'east']}),
+        'generator': pl.DataFrame({'generator': ['g1', 'g2'], 'gen_bus': ['north', 'south']}),
+        'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [10.0, 10.0]}),
+        'load': pl.DataFrame({'bus': ['north', 'south', 'east'], 'value': [4.0, 6.0, 0.0]}),
+    },
+    'a declared order that is not sorted': {
+        'bus': pl.DataFrame({'bus': ['south', 'north']}),
+        'generator': pl.DataFrame({'generator': ['g1', 'g2'], 'gen_bus': ['north', 'south']}),
+        'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [10.0, 10.0]}),
+        'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [4.0, 6.0]}),
+    },
+}
+
+
+@pytest.mark.parametrize('sources', GROUPED_ONTO_BUS_SOURCES.values(), ids=GROUPED_ONTO_BUS_SOURCES.keys())
+def test_a_grouped_sum_lands_on_the_dimension_it_declares(sources):
+    """The result spans ``bus``'s declared index, not the labels the lookup reaches.
+
+    A groupby yields only the labels some member points at, and in sorted
+    order. Either departure — a bus no generator sits on, or a declared order
+    that is not alphabetical — leaves the eager lane holding a ``bus`` that is
+    not the model's ``bus``, and linopy v1 refuses the next combination, since
+    it aligns on membership and order alike. The relational lane never faces
+    the question: it joins on the label and takes its rows from the foreach
+    product, not from whatever the group produced.
+    """
+    with differential(GROUPED_ONTO_BUS, sources) as run:
+        assert run.oracle == pytest.approx(10.0, rel=RTOL), 'every bus must be served, including one with no generator'
+
+
 BROADCAST_GROUP_SUM = {
     'dimensions': {
         'snapshot': {'dtype': 'int', 'values': [0, 1]},
