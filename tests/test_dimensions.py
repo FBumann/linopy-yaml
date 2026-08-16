@@ -6,6 +6,7 @@ the file reads as. None of them needs data to be caught.
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 import pytest
@@ -193,3 +194,30 @@ def test_checking_needs_no_data():
 @pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)
 def test_shipped_examples_typecheck(path):
     check_schema(schema_of(path))
+
+
+@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)
+def test_no_shipped_model_declares_something_nothing_reads(path):
+    """`check` warns about a dead declaration, and nothing was reading the warning.
+
+    A corpus model is read as an example of how to say something, and a ported
+    one is a claim that a construct is load-bearing. A declaration no
+    constraint consumes refutes both quietly: the page teaches a spelling
+    nobody needs, and the port proves less than its issue says. Every other
+    property of these models is asserted — the optimum, the duals, the page
+    matching the file — and this was the hole.
+
+    It is not hypothetical. `pypsa_ac_dc` was drafted with a `country`
+    coordinate on `bus` because the claim it was written for named a
+    generator -> bus -> country chain; nothing in that network constrains a
+    country, so the coordinate read nothing. `check` said so and only a
+    hand-run caught it.
+    """
+    import lpspec as lps
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        lps.check(path)
+    assert not caught, f'{path.name} declares something no constraint reads:\n  ' + '\n  '.join(
+        str(w.message).splitlines()[0] for w in caught
+    )
