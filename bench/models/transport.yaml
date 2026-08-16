@@ -6,12 +6,15 @@ dimensions:
     dtype: int
   generator:
     dtype: str
-    coords: [bus]           # every generator sits on a bus
   bus:
     dtype: str
   line:
     dtype: str
-    coords: {from: bus, to: bus}   # both endpoints are buses
+
+lookups:
+  gen_bus: {over: generator, into: bus}  # every generator sits on a bus
+  from: {over: line, into: bus}  # both endpoints are buses
+  to: {over: line, into: bus}
 
 parameters:
   p_max:
@@ -40,7 +43,7 @@ variables:
 constraints:
   balance:
     foreach: [snapshot, bus]
-    expression: sum(p, over=generator, group_by=bus) + sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from) == load
+    expression: sum(p, over=generator, group_by=gen_bus) + sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from) == load
 
 objective:
   sense: minimize

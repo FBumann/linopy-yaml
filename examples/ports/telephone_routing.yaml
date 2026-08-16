@@ -16,7 +16,12 @@ dimensions:
   path:
     description: a route end to end, serving one city pair
     dtype: str
-    coords: {call_of: call}
+
+lookups:
+  call_of:
+    description: the city pair a path serves, end to end
+    over: path
+    into: call
 
 parameters:
   capacity:

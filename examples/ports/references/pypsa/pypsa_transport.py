@@ -63,7 +63,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Generator',
         generators.index,
-        bus=generators['bus'],
+        bus=generators['gen_bus'],
         p_nom=tables['p_nom'].set_index('generator')['value'],
         marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
     )

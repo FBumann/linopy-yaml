@@ -47,25 +47,26 @@ its whole row with it — while a **parameter** row that is simply missing is a
 zero coefficient, and the row survives without it. Absence is a property of
 variables. → [dispatch](models/dispatch.md), [SPEC §6](SPEC.md#6-absence)
 
-## 3. A dimension can carry coordinates, and that is your topology
+## 3. A lookup maps one dimension onto another, and that is your topology
 
 ```yaml
-dimensions:
-  generator: {dtype: str, coords: [bus]}  # each generator sits on a bus
-  line: {dtype: str, coords: {from: bus, to: bus}}  # both endpoints are buses
+lookups:
+  gen_bus: {over: generator, into: bus}  # each generator sits on a bus
+  from: {over: line, into: bus}  # both endpoints are buses
+  to: {over: line, into: bus}
 ```
 
 ```yaml
 - expression: >-
-    sum(p, over=generator, group_by=bus)
+    sum(p, over=generator, group_by=gen_bus)
     + sum(f, over=line, group_by=to)
     - sum(f, over=line, group_by=from)
     == load
 ```
 
-`sum(group_by=)` sums along a coordinate, landing the result on the dimension that
-coordinate points at. The same `f` is summed twice through two different
-coordinates — once as inflow, once as outflow.
+`sum(group_by=)` sums along a lookup, landing the result on the dimension the
+lookup points at. The same `f` is summed twice through two different lookups —
+once as inflow, once as outflow.
 
 No adjacency matrix and no join written by hand: the network is data on the
 dimension. → [transport](models/transport.md)

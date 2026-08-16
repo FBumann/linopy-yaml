@@ -41,7 +41,7 @@
    "frankfurt_wind",
    "frankfurt_gas"
   ],
-  "bus": [
+  "gen_bus": [
    "manchester",
    "manchester",
    "norway",
@@ -49,7 +49,7 @@
    "frankfurt",
    "frankfurt"
   ],
-  "carrier": [
+  "gen_carrier": [
    "wind",
    "gas",
    "wind",

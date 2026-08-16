@@ -33,7 +33,7 @@ A cap on what each technology may generate per calendar month — an aggregate o
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{month}: \mathcal{T} \to \mathcal{M}$ --- dispatch periods, each falling in one month |
+| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}$ --- dispatch periods, each falling in one month |
 | $\mathcal{M}$ | index $m$ --- `month` --- the grouping the budget is stated over |
 | $\mathcal{G}$ | index $g$ --- `generator` --- generating units |
 
@@ -64,7 +64,7 @@ $$\sum_{g \in \mathcal{G}} p_{t,g} = \ell_{t} \qquad \forall\thinspace t \in \ma
 
 **`monthly_budget`**
 
-$$\sum_{t \in \mathcal{T} \thinspace:\thinspace \mathrm{month}(t) = m} p_{t,g} \le \bar E_{m,g} \qquad \forall\thinspace m \in \mathcal{M},\enspace g \in \mathcal{G}$$
+$$\sum_{t \in \mathcal{T} \thinspace:\thinspace \mathrm{month\_of}(t) = m} p_{t,g} \le \bar E_{m,g} \qquad \forall\thinspace m \in \mathcal{M},\enspace g \in \mathcal{G}$$
 
 #### Variable domains
 
@@ -88,13 +88,18 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       snapshot:
         description: dispatch periods, each falling in one month
         dtype: datetime
-        coords: [month]
       month:
         description: the grouping the budget is stated over
         dtype: str
       generator:
         description: generating units
         dtype: str
+
+    lookups:
+      month_of:
+        description: the month a snapshot falls in
+        over: snapshot
+        into: month
 
     parameters:
       p_max:
@@ -126,7 +131,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       monthly_budget:
         description: what a generator produces across a month stays inside that month's budget
         foreach: [month, generator]
-        expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
+        expression: sum(p, over=snapshot, group_by=month_of) <= monthly_cap
 
     objective:
       sense: minimize
@@ -155,7 +160,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         cost: pd.Series = tables['cost'].set_index('generator')['value']
         load: pd.Series = tables['load'].set_index('snapshot')['value']
         cap = xr.DataArray(tables['monthly_cap'].pivot(index='month', columns='generator', values='value'))
-        month = xr.DataArray(tables['snapshot'].set_index('snapshot')['month'])
+        month = xr.DataArray(tables['snapshot'].set_index('snapshot')['month_of'].rename('month'))
 
         m = linopy.Model()
         p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')
@@ -178,18 +183,18 @@ column beside the timestamps, and nothing else:
 
 ```text
 shape: (6, 2)
-┌─────────────────────┬─────────┐
-│ snapshot            ┆ month   │
-│ ---                 ┆ ---     │
-│ datetime[μs]        ┆ str     │
-╞═════════════════════╪═════════╡
-│ 2030-01-01 00:00:00 ┆ 2030-01 │
-│ 2030-01-16 00:00:00 ┆ 2030-01 │
-│ 2030-01-31 00:00:00 ┆ 2030-01 │
-│ 2030-02-15 00:00:00 ┆ 2030-02 │
-│ 2030-03-02 00:00:00 ┆ 2030-03 │
-│ 2030-03-17 00:00:00 ┆ 2030-03 │
-└─────────────────────┴─────────┘
+┌─────────────────────┬──────────┐
+│ snapshot            ┆ month_of │
+│ ---                 ┆ ---      │
+│ datetime[μs]        ┆ str      │
+╞═════════════════════╪══════════╡
+│ 2030-01-01 00:00:00 ┆ 2030-01  │
+│ 2030-01-16 00:00:00 ┆ 2030-01  │
+│ 2030-01-31 00:00:00 ┆ 2030-01  │
+│ 2030-02-15 00:00:00 ┆ 2030-02  │
+│ 2030-03-02 00:00:00 ┆ 2030-03  │
+│ 2030-03-17 00:00:00 ┆ 2030-03  │
+└─────────────────────┴──────────┘
 ```
 
 Three snapshots in January, one in February, two in March: `sum(group_by=)` needs a

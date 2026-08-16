@@ -13,15 +13,30 @@ dimensions:
   generator:
     description: generating units, each sitting on one bus
     dtype: str
-    coords: [bus]
   link:
     description: controllable connections, each joining two buses
     dtype: str
-    coords: {from: bus, to: bus}
   storage:
     description: storage units, each sitting on one bus
     dtype: str
-    coords: [bus]
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  from:
+    description: the bus a link leaves
+    over: link
+    into: bus
+  to:
+    description: the bus a link arrives at
+    over: link
+    into: bus
+  storage_bus:
+    description: the bus a storage unit sits on
+    over: storage
+    into: bus
 
 parameters:
   p_nom:
@@ -100,11 +115,11 @@ constraints:
       the stores, meets the load there
     foreach: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, group_by=bus)
+      sum(p, over=generator, group_by=gen_bus)
       + sum(f, over=link, group_by=to)
       - sum(f, over=link, group_by=from)
-      + sum(p_dispatch, over=storage, group_by=bus)
-      - sum(p_store, over=storage, group_by=bus)
+      + sum(p_dispatch, over=storage, group_by=storage_bus)
+      - sum(p_store, over=storage, group_by=storage_bus)
       == load
 
   ramp_up:

@@ -343,7 +343,7 @@ def test_latex_binary_and_integer_variables_state_their_domain():
 
 def test_latex_sum_renders_the_coordinate_map_as_a_set_condition():
     tex = to_latex('examples/transport.yaml', legend=False)
-    assert r'\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g}' in tex
+    assert r'\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g}' in tex
     assert r'\sum_{l \in \mathcal{L} \,:\, \mathrm{to}(l) = b} f_{t,l}' in tex
 
 
@@ -379,7 +379,7 @@ def test_typst_uses_its_own_grouping_and_set_notation():
 
 def test_typst_sum_renders_the_coordinate_map():
     typ = to_typst('examples/transport.yaml', legend=False)
-    assert 'sum_(g in cal(G) colon upright("bus")(g) = b) p_(t,g)' in typ
+    assert 'sum_(g in cal(G) colon upright("gen_bus")(g) = b) p_(t,g)' in typ
 
 
 # ---------------------------------------------------------------------------

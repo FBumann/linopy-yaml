@@ -91,7 +91,12 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       path:
         description: a route end to end, serving one city pair
         dtype: str
-        coords: {call_of: call}
+
+    lookups:
+      call_of:
+        description: the city pair a path serves, end to end
+        over: path
+        into: call
 
     parameters:
       capacity:

@@ -102,7 +102,7 @@ design ([#60](https://github.com/fluxopt/lpspec/issues/60)):
 The derivation row is the one that bites: on the product path a dimension some
 parameter already spans needs no second declaration, but it costs the *declared
 order*, which `shift` reads positionally — so pass an explicit index whenever
-order matters. A dimension declaring `coords` cannot be derived at all, since
+order matters. A dimension carrying lookups cannot be derived at all, since
 derivation reads index columns only.
 
 ## What we deliberately do not take

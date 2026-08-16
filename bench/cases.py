@@ -513,7 +513,7 @@ def _transport_data(shape: Shape, dest: Path) -> dict[str, str]:
             'cap': pd.DataFrame({'line': lines, 'value': rng.uniform(20.0, 80.0, n_line)}),
             'neg_cap': pd.DataFrame({'line': lines, 'value': -rng.uniform(20.0, 80.0, n_line)}),
             'load': pd.DataFrame({'snapshot': snaps, 'bus': buses * n_snap, 'value': load.ravel()}),
-            'generator': pd.DataFrame({'generator': gens, 'bus': gen_bus}),
+            'generator': pd.DataFrame({'generator': gens, 'gen_bus': gen_bus}),
             'line': pd.DataFrame({'line': lines, 'from': frm, 'to': to}),
             'bus': pd.DataFrame({'bus': buses}),
             'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),

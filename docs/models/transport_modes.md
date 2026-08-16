@@ -94,7 +94,12 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       connection:
         description: one way of reaching one centre from one depot, by rail or by road
         dtype: str
-        coords: {origin: depot}
+
+    lookups:
+      origin:
+        description: the depot a connection leaves
+        over: connection
+        into: depot
 
     parameters:
       stock:

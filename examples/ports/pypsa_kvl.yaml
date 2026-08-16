@@ -13,14 +13,26 @@ dimensions:
   generator:
     description: generating units, each sitting on one bus
     dtype: str
-    coords: [bus]
   line:
     description: passive AC lines, each joining two buses
     dtype: str
-    coords: {from: bus, to: bus}
   cycle:
     description: one independent loop of the network
     dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  from:
+    description: the bus a line leaves
+    over: line
+    into: bus
+  to:
+    description: the bus a line arrives at
+    over: line
+    into: bus
 
 parameters:
   p_nom:
@@ -66,7 +78,7 @@ constraints:
     description: what is generated at a bus plus what arrives over the lines meets the load there
     foreach: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, group_by=bus)
+      sum(p, over=generator, group_by=gen_bus)
       + sum(f, over=line, group_by=to)
       - sum(f, over=line, group_by=from)
       == load

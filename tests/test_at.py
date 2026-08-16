@@ -42,7 +42,7 @@ GENERATORS = ['wind', 'gas']
 
 def _sources(capex_2050_wind: float = 8.0):
     return {
-        'snapshot': pl.DataFrame({'snapshot': SNAPSHOTS, 'period': PERIOD_OF}),
+        'snapshot': pl.DataFrame({'snapshot': SNAPSHOTS, 'period_of': PERIOD_OF}),
         'period': pl.DataFrame({'period': [2030, 2050]}),
         'generator': pl.DataFrame({'generator': GENERATORS}),
         'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 20.0, 40.0, 60.0]}),
@@ -96,17 +96,18 @@ def test_a_period_bound_actually_binds():
 
 COMPONENT_GATE = {
     'dimensions': {
-        'flow': {'dtype': 'str', 'coords': ['component']},
+        'flow': {'dtype': 'str'},
         'component': {'dtype': 'str'},
         't': {'dtype': 'int', 'values': [0, 1]},
     },
+    'lookups': {'component_of': {'over': 'flow', 'into': 'component'}},
     'parameters': {'cost': {'dims': ['flow']}, 'oncost': {'dims': ['component']}},
     'variables': {
         'rate': {'foreach': ['flow', 't'], 'bounds': {'lower': 0, 'upper': 10}},
         'on': {'foreach': ['component', 't'], 'domain': 'binary'},
     },
     'constraints': {
-        'gate': {'foreach': ['flow', 't'], 'expression': 'rate <= at(on, onto=flow, by=component) * 10'},
+        'gate': {'foreach': ['flow', 't'], 'expression': 'rate <= at(on, onto=flow, by=component_of) * 10'},
         'need': {'foreach': ['t'], 'expression': 'sum(rate, over=flow) >= 12'},
     },
     'objective': {'sense': 'minimize', 'expression': 'rate * cost + on * oncost'},
@@ -123,7 +124,7 @@ def test_one_binary_gates_every_flow_of_its_component():
     """
     flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
     sources = {
-        'flow': pl.DataFrame({'flow': flows, 'component': ['c1', 'c1', 'c2']}),
+        'flow': pl.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c2']}),
         'component': pl.DataFrame({'component': components}),
         'cost': pl.DataFrame({'flow': flows, 'value': [1.0, 2.0, 1.5]}),
         'oncost': pl.DataFrame({'component': components, 'value': [5.0, 7.0]}),
@@ -162,9 +163,10 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
 
     model = {
         'dimensions': {
-            'flow': {'dtype': 'str', 'coords': ['component']},
+            'flow': {'dtype': 'str'},
             'component': {'dtype': 'str'},
         },
+        'lookups': {'component_of': {'over': 'flow', 'into': 'component'}},
         'parameters': {'cost': {'dims': ['flow']}, 'share': {'dims': ['flow']}},
         'variables': {
             'level': {'foreach': ['component'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -172,8 +174,8 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         },
         'constraints': {
             # summed, so one `level` label lands in this row once per flow of its component
-            'draw': {'foreach': [], 'expression': 'sum(at(level, onto=flow, by=component) * share, over=flow) >= 9'},
-            'link': {'foreach': ['flow'], 'expression': 'take <= at(level, onto=flow, by=component)'},
+            'draw': {'foreach': [], 'expression': 'sum(at(level, onto=flow, by=component_of) * share, over=flow) >= 9'},
+            'link': {'foreach': ['flow'], 'expression': 'take <= at(level, onto=flow, by=component_of)'},
         },
         'objective': {'sense': 'minimize', 'expression': 'level * 1.0 + take * cost'},
     }
@@ -183,7 +185,7 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'share': pd.Series([1.0, 2.0, 3.0], index=flows),
     }
     coords = {
-        'flow': pd.DataFrame({'flow': flows, 'component': ['c1', 'c1', 'c2']}),
+        'flow': pd.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c2']}),
         'component': pd.Index(components, name='component'),
     }
     with differential(model, data, coords) as run:

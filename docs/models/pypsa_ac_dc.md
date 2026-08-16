@@ -30,7 +30,7 @@ PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose generators
 | $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
 | $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
 | $\mathcal{C}$ | index $c$ --- `carrier` --- what a generator burns, and what its emissions are a property of |
-| $\mathcal{E}$ | index $e$ --- `generator` with $\mathrm{bus}: \mathcal{E} \to \mathcal{B},\enspace \mathrm{carrier}: \mathcal{E} \to \mathcal{C}$ --- generating units, each sitting on a bus and burning a carrier — two coordinates on one dimension, landing on two different axes |
+| $\mathcal{E}$ | index $e$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\enspace \mathrm{gen\_carrier}: \mathcal{E} \to \mathcal{C}$ --- generating units, each sitting on a bus and burning a carrier — two coordinates on one dimension, landing on two different axes |
 | $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
 | $\mathcal{I}$ | index $i$ --- `link` with $\mathrm{link\_from}: \mathcal{I} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{I} \to \mathcal{B}$ --- controllable connections, each joining two buses |
 | $\mathcal{Y}$ | index $y$ --- `cycle` --- one independent loop per meshed sub-network |
@@ -92,7 +92,7 @@ $$g_{t,i} \ge \mathit{link}^{\mathrm{p,nom}}_{i} \cdot \mathit{link}^{\mathrm{p,
 
 **`nodal_balance`**
 
-$$\sum_{e \in \mathcal{E} \thinspace:\thinspace \mathrm{bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) + \sum_{i \in \mathcal{I} \thinspace:\thinspace \mathrm{link\_to}(i) = b} g_{t,i} - \left( \sum_{i \in \mathcal{I} \thinspace:\thinspace \mathrm{link\_from}(i) = b} g_{t,i} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{e \in \mathcal{E} \thinspace:\thinspace \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) + \sum_{i \in \mathcal{I} \thinspace:\thinspace \mathrm{link\_to}(i) = b} g_{t,i} - \left( \sum_{i \in \mathcal{I} \thinspace:\thinspace \mathrm{link\_from}(i) = b} g_{t,i} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 **`kirchhoff_voltage_law`**
 
@@ -100,7 +100,7 @@ $$\sum_{l \in \mathcal{L}} f_{t,l} \cdot \mathit{cycle}^{\mathrm{incidence}}_{y,
 
 **`co2_budget`**
 
-$$\sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E}} \frac{p_{t,e} \cdot \mathit{co2\_per\_mwh}_{\mathrm{carrier}(e)}}{\mathit{efficiency}_{e}} \le \mathit{co2\_limit}$$
+$$\sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E}} \frac{p_{t,e} \cdot \mathit{co2\_per\_mwh}_{\mathrm{gen\_carrier}(e)}}{\mathit{efficiency}_{e}} \le \mathit{co2\_limit}$$
 
 #### Variable domains
 
@@ -159,18 +159,41 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           generating units, each sitting on a bus and burning a carrier — two
           coordinates on one dimension, landing on two different axes
         dtype: str
-        coords: [bus, carrier]
       line:
         description: passive AC lines, each joining two buses
         dtype: str
-        coords: {from: bus, to: bus}
       link:
         description: controllable connections, each joining two buses
         dtype: str
-        coords: {link_from: bus, link_to: bus}
       cycle:
         description: one independent loop per meshed sub-network
         dtype: str
+
+    lookups:
+      gen_bus:
+        description: the bus a generator sits on
+        over: generator
+        into: bus
+      gen_carrier:
+        description: the carrier a generator burns
+        over: generator
+        into: carrier
+      from:
+        description: the bus a line leaves
+        over: line
+        into: bus
+      to:
+        description: the bus a line arrives at
+        over: line
+        into: bus
+      link_from:
+        description: the bus a link leaves
+        over: link
+        into: bus
+      link_to:
+        description: the bus a link arrives at
+        over: link
+        into: bus
 
     parameters:
       load:
@@ -276,7 +299,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           meets the load there
         foreach: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, group_by=bus)
+          sum(p, over=generator, group_by=gen_bus)
           + sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
           + sum(g, over=link, group_by=link_to) - sum(g, over=link, group_by=link_from)
           == load
@@ -293,7 +316,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           horizon's total stays inside the budget
         foreach: []
         expression: >-
-          sum(sum(p * at(co2_per_mwh, onto=generator, by=carrier) / efficiency, over=generator), over=snapshot)
+          sum(sum(p * at(co2_per_mwh, onto=generator, by=gen_carrier) / efficiency, over=generator), over=snapshot)
           <= co2_limit
 
     objective:

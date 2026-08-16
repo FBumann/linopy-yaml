@@ -33,7 +33,7 @@ PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's volt
 |---|---|
 | $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
 | $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
+| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
 | $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
 | $\mathcal{C}$ | index $c$ --- `cycle` --- one independent loop of the network |
 
@@ -63,7 +63,7 @@ $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit
 
 **`nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 **`kirchhoff_voltage_law`**
 
@@ -102,14 +102,26 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       generator:
         description: generating units, each sitting on one bus
         dtype: str
-        coords: [bus]
       line:
         description: passive AC lines, each joining two buses
         dtype: str
-        coords: {from: bus, to: bus}
       cycle:
         description: one independent loop of the network
         dtype: str
+
+    lookups:
+      gen_bus:
+        description: the bus a generator sits on
+        over: generator
+        into: bus
+      from:
+        description: the bus a line leaves
+        over: line
+        into: bus
+      to:
+        description: the bus a line arrives at
+        over: line
+        into: bus
 
     parameters:
       p_nom:
@@ -155,7 +167,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: what is generated at a bus plus what arrives over the lines meets the load there
         foreach: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, group_by=bus)
+          sum(p, over=generator, group_by=gen_bus)
           + sum(f, over=line, group_by=to)
           - sum(f, over=line, group_by=from)
           == load
@@ -207,7 +219,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         n.add(
             'Generator',
             generators.index,
-            bus=generators['bus'],
+            bus=generators['gen_bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )

@@ -224,7 +224,7 @@ class TestDimensionKwargs:
 
     @staticmethod
     def _schema(expression: str, foreach: list[str] | None = None) -> Model:
-        """A model over (snapshot, generator), with `zone` a coordinate of `bus`.
+        """A model over (snapshot, generator), with `zone` a lookup into `bus`.
 
         `zone` deliberately targets a dim `p` does *not* carry: grouping into
         one it already has needs that dim twice, which is its own error.
@@ -235,8 +235,9 @@ class TestDimensionKwargs:
                 'dimensions': {
                     'snapshot': {'dtype': 'int'},
                     'bus': {'values': ['n']},
-                    'generator': {'values': ['wind'], 'coords': {'zone': 'bus'}},
+                    'generator': {'values': ['wind']},
                 },
+                'lookups': {'zone': {'over': 'generator', 'into': 'bus'}},
                 'parameters': {'load': {'dims': ['snapshot']}},
                 'variables': {'p': {'foreach': ['snapshot', 'generator']}},
                 'constraints': {'c': {'foreach': foreach, 'expression': expression}},
@@ -254,8 +255,8 @@ class TestDimensionKwargs:
             ),
             pytest.param(
                 'sum(p, over=generator, group_by=zne) == load',
-                ("does not name a coordinate of 'generator'",),
-                id='group-by-coordinate-typo',
+                ("does not name a lookup over 'generator'",),
+                id='group-by-lookup-typo',
             ),
             pytest.param(
                 'shift(p, over=snapshto, by=1) == load',
@@ -408,10 +409,11 @@ def test_the_retired_group_sum_names_its_rewrite():
     """
     with pytest.raises(ValueError) as exc:
         _schema(
-            dimensions={'g': {'dtype': 'str', 'coords': ['bus']}, 'bus': {'dtype': 'str'}},
+            dimensions={'g': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
+            lookups={'g_bus': {'over': 'g', 'into': 'bus'}},
             parameters={'c': {'dims': ['g']}, 'cap': {'dims': ['bus']}},
             variables={'p': {'foreach': ['g']}},
-            constraints={'x': {'foreach': ['bus'], 'expression': 'group_sum(p, over=g, by=bus) <= cap'}},
+            constraints={'x': {'foreach': ['bus'], 'expression': 'group_sum(p, over=g, by=g_bus) <= cap'}},
             objective={'sense': 'minimize', 'expression': 'p * c'},
         )
 

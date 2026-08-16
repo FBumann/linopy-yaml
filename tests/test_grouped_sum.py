@@ -7,7 +7,7 @@ Three-way differential on examples/transport.yaml:
      involves no sum at all)
 
 Plus ``examples/monthly_budget.yaml``, which is the same primitive over *time*:
-a coordinate on ``snapshot`` groups it into months exactly as a coordinate on
+a lookup over ``snapshot`` groups it into months exactly as a lookup over
 ``generator`` groups onto buses. The gallery page quotes its dual and prints
 its snapshot index, so a test has to hold both.
 """
@@ -49,7 +49,7 @@ def _inputs(gens, lines, load):
     }
     coords = {
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),
-        'generator': gens[['generator', 'bus']],
+        'generator': gens[['generator', 'bus']].rename(columns={'bus': 'gen_bus'}),
         'bus': pd.Index(sorted(load['bus'].unique()), name='bus'),
         'line': lines[['line', 'from_bus', 'to_bus']].rename(columns={'from_bus': 'from', 'to_bus': 'to'}),
     }
@@ -86,7 +86,7 @@ def test_sum_lowers_to_one_node_per_injection_term():
     (c,) = program.constraints
     assert c.dims == ('snapshot', 'bus')
     terms = _flatten(c.lhs)
-    assert GroupSum(Variable('p'), over='generator', coordinate='bus', into='bus') in terms
+    assert GroupSum(Variable('p'), over='generator', coordinate='gen_bus', into='bus') in terms
     assert GroupSum(Variable('f'), over='line', coordinate='to', into='bus') in terms
 
 
@@ -94,19 +94,19 @@ def test_sum_lowers_to_one_node_per_injection_term():
     ('expression', 'match'),
     [
         pytest.param(
-            'sum(p, over=nope, group_by=bus)',
+            'sum(p, over=nope, group_by=gen_bus)',
             r'over=nope\) does not name a declared dimension',
             id='an-undeclared-dim',
         ),
         pytest.param(
             'sum(p, over=generator, group_by=nope)',
-            r"group_by=nope\) does not name a coordinate of 'generator'",
-            id='a-coordinate-the-dim-does-not-declare',
+            r"group_by=nope\) does not name a lookup over 'generator'",
+            id='a-lookup-nothing-declares',
         ),
         pytest.param(
             'sum(p, over=generator, group_by=to)',
-            r"group_by=to\) does not name a coordinate of 'generator'",
-            id='a-coordinate-declared-on-a-different-dim',
+            r"group_by=to\) does not name a lookup over 'generator'",
+            id='a-lookup-over-a-different-dim',
         ),
     ],
 )
@@ -121,7 +121,7 @@ def test_grouping_an_expression_that_lacks_the_dim_is_refused():
     lowering raises it by asking `dimensions`, not by restating it."""
     schema = schema_of(TRANSPORT_YAML)
     with pytest.raises(LanguageError, match='but the expression'):
-        _lower_expr(resolved('sum(f, over=generator, group_by=bus)', schema), schema, 't')
+        _lower_expr(resolved('sum(f, over=generator, group_by=gen_bus)', schema), schema, 't')
 
 
 # ---------------------------------------------------------------------------
@@ -144,9 +144,9 @@ def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
     bad.loc[bad.index[0], 'bus'] = 'nowhere'  # a bus that does not exist
     data, coords = _inputs(bad, lines, load)
 
-    with pytest.raises(DataError, match="not 'bus' coordinates"):
+    with pytest.raises(DataError, match="not 'bus' labels"):
         _relationally(data, coords)
-    with pytest.raises(DataError, match="not 'bus' coordinates"):
+    with pytest.raises(DataError, match="not 'bus' labels"):
         lpspec_linopy.build(TRANSPORT_YAML, data=data, coords=coords)
 
 
@@ -162,7 +162,7 @@ def test_a_coordinate_must_be_single_valued(transport_data):
     gens, lines, load = transport_data
     other = 's' if gens['bus'].iloc[0] != 's' else 'n'
     data, coords = _inputs(gens, lines, load)
-    coords['generator'] = pd.concat([coords['generator'], coords['generator'].head(1).assign(bus=other)])
+    coords['generator'] = pd.concat([coords['generator'], coords['generator'].head(1).assign(gen_bus=other)])
 
     with pytest.raises(DataError, match='more than one value'):
         _relationally(data, coords)
@@ -196,9 +196,9 @@ def test_a_coordinate_bearing_dim_needs_an_index_source(transport_data):
 PARTIAL_YAML = """
 dimensions:
   g: {dtype: str}
-  item:
-    dtype: str
-    coords: {grp: g}
+  item: {dtype: str}
+lookups:
+  grp: {over: item, into: g}
 parameters:
   cap: {dims: [item]}
   target: {dims: [g]}
@@ -217,7 +217,7 @@ objective:
 
 
 def _partial_inputs():
-    """`item` carries coordinate `grp`: i0 and i1 in group g0, i2 in none."""
+    """`item` carries lookup `grp`: i0 and i1 in group g0, i2 in none."""
     items = ['i0', 'i1', 'i2']
     index = pd.DataFrame({'item': items, 'grp': ['g0', 'g0', None]})
     return (
@@ -262,15 +262,16 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
 BROADCAST_GROUP_SUM = {
     'dimensions': {
         'snapshot': {'dtype': 'int', 'values': [0, 1]},
-        'generator': {'dtype': 'str', 'coords': ['bus']},
+        'generator': {'dtype': 'str'},
         'bus': {'dtype': 'str'},
     },
+    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
     'parameters': {'w': {'dims': ['generator']}, 'limit': {'dims': ['snapshot', 'bus']}},
     'variables': {'x': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {
         'cap': {
             'foreach': ['snapshot', 'bus'],
-            'expression': 'sum(x * w, over=generator, group_by=bus) <= limit',
+            'expression': 'sum(x * w, over=generator, group_by=gen_bus) <= limit',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'x'},
@@ -282,7 +283,7 @@ BROADCAST_GROUP_SUM = {
 BROADCAST_SOURCES = {
     'w': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'value': [1.0, 2.0, 5.0]}),
     'limit': pl.DataFrame({'snapshot': [0, 0, 1, 1], 'bus': ['b1', 'b2'] * 2, 'value': [9.0, 100.0, 9.0, 100.0]}),
-    'generator': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
+    'generator': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['b1', 'b1', 'b2']}),
     'bus': pl.DataFrame({'bus': ['b1', 'b2']}),
 }
 
@@ -314,7 +315,7 @@ def test_sum_over_a_foreach_dim_needs_no_such_collapse():
         BROADCAST_GROUP_SUM,
         **{
             'variables.x.foreach': ['snapshot', 'generator'],
-            'constraints.cap.expression': 'sum(x * w, over=generator, group_by=bus) <= limit',
+            'constraints.cap.expression': 'sum(x * w, over=generator, group_by=gen_bus) <= limit',
         },
     )
     with lps.build(model, BROADCAST_SOURCES) as bound:
@@ -404,14 +405,14 @@ def monthly():
     """The snapshot index and sources: six snapshots over three calendar months,
     wind capped in the first.
 
-    The `month` column is data prep — one polars expression — which is the
+    The `month_of` column is data prep — one polars expression — which is the
     page's whole point: the language never learns what a calendar is.
     """
     import datetime as dt
 
     hours = [dt.datetime(2030, 1, 1) + dt.timedelta(days=15 * i) for i in range(6)]
-    index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
-    months = sorted(set(index['month']))
+    index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month_of'))
+    months = sorted(set(index['month_of']))
     gens = ['wind', 'gas']
     return (
         index,
@@ -447,9 +448,9 @@ def test_a_monthly_budget_binds_and_prices_itself(monthly):
             result.primal('p')
             .filter(pl.col('generator') == 'wind')
             .join(index, on='snapshot')
-            .group_by('month')
+            .group_by('month_of')
             .agg(pl.col('value').sum())
-            .sort('month')
+            .sort('month_of')
         )
         assert wind['value'].to_list() == pytest.approx([5.0, 10.0, 20.0]), (
             '3 snapshots in Jan (capped at 5), 1 in Feb, 2 in Mar — unequal groups'
@@ -467,7 +468,7 @@ def test_the_monthly_grouping_is_a_column_and_nothing_else(monthly):
     page makes about weeks, seasons and representative periods, checked once.
     """
     index, sources = monthly
-    quarters = index.with_columns(pl.lit('2030-Q1').alias('month')).select('snapshot', 'month')
+    quarters = index.with_columns(pl.lit('2030-Q1').alias('month_of')).select('snapshot', 'month_of')
     regrouped = {
         **sources,
         'snapshot': quarters,
@@ -491,9 +492,9 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
     """
     index, sources = monthly
     typo = index.with_columns(
-        pl.when(pl.col('month') == '2030-03').then(pl.lit('2030-3')).otherwise(pl.col('month')).alias('month')
+        pl.when(pl.col('month_of') == '2030-03').then(pl.lit('2030-3')).otherwise(pl.col('month_of')).alias('month_of')
     )
-    with pytest.raises(DataError, match=r"coordinate 'month' has value\(s\) that are not 'month' coordinates"):
+    with pytest.raises(DataError, match=r"lookup 'month_of' has value\(s\) that are not 'month' labels"):
         lps.solve(MONTHLY_YAML, {**sources, 'snapshot': typo})
 
 

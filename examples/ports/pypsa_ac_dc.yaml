@@ -21,18 +21,41 @@ dimensions:
       generating units, each sitting on a bus and burning a carrier — two
       coordinates on one dimension, landing on two different axes
     dtype: str
-    coords: [bus, carrier]
   line:
     description: passive AC lines, each joining two buses
     dtype: str
-    coords: {from: bus, to: bus}
   link:
     description: controllable connections, each joining two buses
     dtype: str
-    coords: {link_from: bus, link_to: bus}
   cycle:
     description: one independent loop per meshed sub-network
     dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  gen_carrier:
+    description: the carrier a generator burns
+    over: generator
+    into: carrier
+  from:
+    description: the bus a line leaves
+    over: line
+    into: bus
+  to:
+    description: the bus a line arrives at
+    over: line
+    into: bus
+  link_from:
+    description: the bus a link leaves
+    over: link
+    into: bus
+  link_to:
+    description: the bus a link arrives at
+    over: link
+    into: bus
 
 parameters:
   load:
@@ -138,7 +161,7 @@ constraints:
       meets the load there
     foreach: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, group_by=bus)
+      sum(p, over=generator, group_by=gen_bus)
       + sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
       + sum(g, over=link, group_by=link_to) - sum(g, over=link, group_by=link_from)
       == load
@@ -155,7 +178,7 @@ constraints:
       horizon's total stays inside the budget
     foreach: []
     expression: >-
-      sum(sum(p * at(co2_per_mwh, onto=generator, by=carrier) / efficiency, over=generator), over=snapshot)
+      sum(sum(p * at(co2_per_mwh, onto=generator, by=gen_carrier) / efficiency, over=generator), over=snapshot)
       <= co2_limit
 
 objective:

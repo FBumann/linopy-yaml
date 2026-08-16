@@ -79,54 +79,55 @@ def build_dim_coords(
     coords: dict[str, Any] | None,
     master_coords: dict[str, pd.Index],
 ) -> dict[str, dict[str, xr.DataArray]]:
-    """Assemble declared coordinates, checked against the dimension they target.
+    """Assemble declared lookups, checked against the dimension they target.
 
-    A coordinate is a column of the dimension's index source, so it arrives
-    through ``coords=`` as a DataFrame carrying the label column plus one
-    column per declared coordinate. The containment check mirrors the
-    relational lane's: a value that is not a label of the target dimension
-    would otherwise be dropped by xarray's inner-join alignment, silently
-    losing the term it carries. A null value passes the check: it means "this
-    label belongs to no group" — row absence, not a typo.
+    A lookup is a column of its ``over`` dimension's index source, so it
+    arrives through ``coords=`` as a DataFrame carrying the label column plus
+    one column per lookup. The containment check mirrors the relational
+    lane's: a value that is not a label of the target dimension would
+    otherwise be dropped by xarray's inner-join alignment, silently losing
+    the term it carries. A null value passes the check: it means "this label
+    belongs to no group" — row absence, not a typo.
 
-    Only a *targeted* coordinate is checked. An inline label coordinate
-    declares its own label space, so there is no dimension for its values to
-    be contained in and nothing the check could ask.
+    Only a *targeted* lookup is checked. A label-space lookup owns its
+    values, so there is no dimension for them to be contained in and nothing
+    the check could ask.
     """
     coords = coords or {}
     out: dict[str, dict[str, xr.DataArray]] = {}
 
-    for dim_name, dim_def in schema.dimensions.items():
-        if not dim_def.coords:
+    for dim_name in schema.dimensions:
+        declared = {**schema.targeted_of(dim_name), **schema.labels_of(dim_name)}
+        if not declared:
             continue
         source = coords.get(dim_name)
         if not isinstance(source, pd.DataFrame):
             got = type(source).__name__ if source is not None else 'nothing'
             msg = (
-                f"Dimension '{dim_name}' declares coordinates {sorted(dim_def.coords)}, "
+                f"Dimension '{dim_name}' carries lookups {sorted(declared)}, "
                 f"so coords['{dim_name}'] must be a DataFrame with a '{dim_name}' column "
-                f'plus one column per coordinate (got {got}).'
+                f'plus one column per lookup (got {got}).'
             )
             raise DataError(msg)
-        missing = [c for c in sorted(dim_def.coords) if c not in source.columns]
+        missing = [c for c in sorted(declared) if c not in source.columns]
         if missing:
             msg = (
-                f"Dimension '{dim_name}' index is missing declared coordinate column(s) "
+                f"Dimension '{dim_name}' index is missing declared lookup column(s) "
                 f'{missing} (has {list(source.columns)}).'
             )
             raise DataError(msg)
 
         labels = master_coords[dim_name]
         first = source.drop_duplicates(subset=[dim_name]).set_index(dim_name)
-        counts = source.groupby(dim_name, sort=False)[sorted(dim_def.coords)].nunique()
+        counts = source.groupby(dim_name, sort=False)[sorted(declared)].nunique()
         out[dim_name] = {}
-        targeted = dim_def.targeted
-        for cname in dim_def.coords:
+        targeted = schema.targeted_of(dim_name)
+        for cname in declared:
             if (counts[cname] > 1).any():
                 offending = sorted(counts.index[counts[cname] > 1].astype(str))[:5]
                 msg = (
                     f"Dimension '{dim_name}': label(s) {offending} carry more than one "
-                    f"value for coordinate '{cname}'. A coordinate is single-valued per "
+                    f"value for lookup '{cname}'. A lookup is single-valued per "
                     f'label.'
                 )
                 raise DataError(msg)
@@ -137,8 +138,8 @@ def build_dim_coords(
                 unknown = sorted({str(v) for v in series if not pd.isna(v) and v not in known})[:5]
                 if unknown:
                     msg = (
-                        f"Dimension '{dim_name}' coordinate '{cname}' has value(s) that are "
-                        f"not '{target}' coordinates: {', '.join(unknown)}. Every value must "
+                        f"Dimension '{dim_name}' lookup '{cname}' has value(s) that are "
+                        f"not '{target}' labels: {', '.join(unknown)}. Every value must "
                         f"be a declared '{target}' label — otherwise "
                         f'sum(over={dim_name}, group_by={cname}) drops those terms and the '
                         f'model builds and solves without them.'

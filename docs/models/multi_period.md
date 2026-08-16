@@ -54,7 +54,7 @@ Least-cost investment and dispatch together: capacity is decided once per period
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{period}: \mathcal{T} \to \mathcal{E}$ --- dispatch periods, each falling in one investment period |
+| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ --- dispatch periods, each falling in one investment period |
 | $\mathcal{E}$ | index $e$ --- `period` --- investment periods, the grouping capacity is decided over |
 | $\mathcal{G}$ | index $g$ --- `generator` --- generating units |
 
@@ -82,7 +82,7 @@ $$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E},\enspace g \in \mathca
 
 **`within_cap`**
 
-$$p_{t,g} \le p^{\mathrm{nom}}_{\mathrm{period}(t),g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$p_{t,g} \le p^{\mathrm{nom}}_{\mathrm{period\_of}(t),g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 **`balance`**
 
@@ -115,13 +115,15 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       snapshot:
         description: dispatch periods, each falling in one investment period
         dtype: int
-        coords: [period]
       period:
         description: investment periods, the grouping capacity is decided over
         dtype: int
       generator:
         description: generating units
         dtype: str
+
+    lookups:
+      period_of: {over: snapshot, into: period}
 
     parameters:
       load:
@@ -157,7 +159,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       within_cap:
         description: output in a snapshot is capped by the capacity of the period it falls in
         foreach: [snapshot, generator]
-        expression: p <= at(p_nom, onto=snapshot, by=period)
+        expression: p <= at(p_nom, onto=snapshot, by=period_of)
       balance:
         description: the fleet meets the load exactly in every snapshot
         foreach: [snapshot]
@@ -190,7 +192,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         weight: pd.Series = tables['weight'].set_index('snapshot')['value']
         opex: pd.Series = tables['opex'].set_index('generator')['value']
         capex = xr.DataArray(tables['capex'].pivot(index='period', columns='generator', values='value'))
-        period = xr.DataArray(tables['snapshot'].set_index('snapshot')['period'])
+        period = xr.DataArray(tables['snapshot'].set_index('snapshot')['period_of'].rename('period'))
 
         m = linopy.Model()
         p = m.add_variables(lower=0, coords=[load.index, opex.index], name='p')

@@ -6,13 +6,18 @@ dimensions:
   snapshot:
     description: dispatch periods, each falling in one month
     dtype: datetime
-    coords: [month]
   month:
     description: the grouping the budget is stated over
     dtype: str
   generator:
     description: generating units
     dtype: str
+
+lookups:
+  month_of:
+    description: the month a snapshot falls in
+    over: snapshot
+    into: month
 
 parameters:
   p_max:
@@ -44,7 +49,7 @@ constraints:
   monthly_budget:
     description: what a generator produces across a month stays inside that month's budget
     foreach: [month, generator]
-    expression: sum(p, over=snapshot, group_by=month) <= monthly_cap
+    expression: sum(p, over=snapshot, group_by=month_of) <= monthly_cap
 
 objective:
   sense: minimize

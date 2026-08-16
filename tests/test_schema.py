@@ -200,56 +200,77 @@ def test_a_near_miss_is_named_and_anything_else_lists_the_valid_keys(block, matc
 
 
 # ---------------------------------------------------------------------------
-# dimension coordinates
+# lookups
 # ---------------------------------------------------------------------------
 
 
-def test_coords_list_is_shorthand_for_a_self_named_mapping():
-    s = Model.model_validate(
-        {'dimensions': {'bus': {'values': ['n']}, 'generator': {'values': ['w'], 'coords': ['bus']}}}
+def test_coords_under_a_dimension_is_refused_with_the_lookup_rewrite():
+    """`coords:` is gone, and the refusal names the top-level `lookups:` rewrite
+    — the dedicated message, not the generic unknown-key near miss."""
+    with pytest.raises(SchemaError, match="'coords:' under a dimension was removed") as caught:
+        Model.model_validate(
+            {'dimensions': {'bus': {'values': ['n']}, 'generator': {'values': ['w'], 'coords': ['bus']}}}
+        )
+    assert 'bus_of: {over: generator, into: bus}' in str(caught.value), (
+        'the refusal has to show the lookups: block a coords: file rewrites into'
     )
-    assert s.dimensions['generator'].coords == {'bus': 'bus'}
 
 
-def test_coords_mapping_allows_two_coordinates_onto_one_dimension():
+def test_two_lookups_may_map_one_dimension_onto_one_target():
     s = Model.model_validate(
         {
-            'dimensions': {
-                'bus': {'values': ['n']},
-                'line': {'values': ['l1'], 'coords': {'from': 'bus', 'to': 'bus'}},
-            }
+            'dimensions': {'bus': {'values': ['n']}, 'line': {'values': ['l1']}},
+            'lookups': {'from': {'over': 'line', 'into': 'bus'}, 'to': {'over': 'line', 'into': 'bus'}},
         }
     )
-    assert s.dimensions['line'].coords == {'from': 'bus', 'to': 'bus'}
+    assert s.targeted_of('line') == {'from': 'bus', 'to': 'bus'}
 
 
 @pytest.mark.parametrize(
-    ('dimensions', 'match'),
+    ('lookups', 'match'),
     [
         pytest.param(
-            {'generator': {'values': ['w'], 'coords': ['bus']}},
+            {'gen_bus': {'over': 'generator', 'into': 'bus'}},
             "targets undeclared dimension 'bus'",
             id='target-undeclared',
         ),
         pytest.param(
-            {'generator': {'values': ['w'], 'coords': {'g': 'generator'}}},
-            "targets 'generator' itself",
+            {'gen_bus': {'over': 'plant', 'into': 'generator'}},
+            "is over undeclared dimension 'plant'",
+            id='over-undeclared',
+        ),
+        pytest.param(
+            {'gen_gen': {'over': 'generator', 'into': 'generator'}},
+            "maps 'generator' into itself",
             id='target-self',
         ),
         pytest.param(
-            {
-                'bus': {'values': ['n']},
-                'zone': {'values': ['z']},
-                'generator': {'values': ['w'], 'coords': {'bus': 'zone'}},
-            },
-            'shadows the dimension of the same name',
-            id='shadows-a-dimension-so-a-bus-coordinate-would-read-as-a-zone-one',
+            {'generator': {'over': 'generator', 'into': 'zone'}},
+            "Lookup 'generator' collides with the dimension of the same name",
+            id='a-lookup-may-not-take-a-dimensions-name-its-own-dim-included',
+        ),
+        pytest.param(
+            {'zone': {'over': 'generator', 'into': 'zone'}},
+            "Lookup 'zone' collides with the dimension of the same name",
+            id='a-lookup-may-not-take-its-targets-name',
+        ),
+        pytest.param(
+            {'gen_bus': {'over': 'generator'}},
+            "exactly one of 'into:'",
+            id='neither-kind',
+        ),
+        pytest.param(
+            {'gen_bus': {'over': 'generator', 'into': 'zone', 'dtype': 'str'}},
+            "exactly one of 'into:'",
+            id='both-kinds',
         ),
     ],
 )
-def test_a_coordinate_that_does_not_name_a_target_is_rejected(dimensions, match):
+def test_an_ill_formed_lookup_is_rejected(lookups, match):
     with pytest.raises(SchemaError, match=match):
-        Model.model_validate({'dimensions': dimensions})
+        Model.model_validate(
+            {'dimensions': {'generator': {'values': ['w']}, 'zone': {'values': ['z']}}, 'lookups': lookups}
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +282,9 @@ DESCRIBED = {
     'dimensions': {
         'snapshot': {'dtype': 'int', 'values': [0, 1], 'description': 'the operational hours'},
         'bp': {'dtype': 'int', 'values': [0, 1]},
+    },
+    'lookups': {
+        'period': {'over': 'snapshot', 'dtype': 'int', 'description': 'the month a snapshot falls in'},
     },
     'parameters': {
         'load': {'dims': ['snapshot'], 'description': 'demand per hour'},
@@ -291,6 +315,7 @@ DESCRIBED = {
 
 DECLARATION_KINDS = [
     pytest.param('dimensions', 'snapshot', id='dimension'),
+    pytest.param('lookups', 'period', id='lookup'),
     pytest.param('parameters', 'load', id='parameter'),
     pytest.param('variables', 'p', id='variable'),
     pytest.param('constraints', 'balance', id='constraint'),
@@ -334,9 +359,17 @@ def test_an_undescribed_declaration_carries_none():
             id='bounds',
         ),
         pytest.param(
-            {'dimensions': {'x': {'values': [1], 'coords': {'period': {'dtype': 'int', 'description': 'era'}}}}},
-            "unknown key 'description' in a coordinate declaration",
-            id='coordinate-spec',
+            {
+                **DESCRIBED,
+                'piecewise': {
+                    'cost_curve': {
+                        'over': 'bp',
+                        'links': [{'expression': 'p', 'values': 'bp_x', 'description': 'the x axis'}],
+                    }
+                },
+            },
+            "unknown key 'description' in a piecewise link",
+            id='piecewise-link',
         ),
     ],
 )

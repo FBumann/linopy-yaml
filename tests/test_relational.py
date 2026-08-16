@@ -158,7 +158,7 @@ def test_dispatch_roundtrip(dispatch_data, tmp_path):
 
 def transport_program() -> Program:
     injection = (
-        GroupSum(Variable('p'), over='generator', coordinate='bus', into='bus')
+        GroupSum(Variable('p'), over='generator', coordinate='gen_bus', into='bus')
         + GroupSum(Variable('f'), over='line', coordinate='to', into='bus')
         - GroupSum(Variable('f'), over='line', coordinate='from', into='bus')
     )
@@ -194,7 +194,7 @@ def transport_program() -> Program:
         ),
         objective=ObjectiveDeclaration('min', Sum(Variable('p') * Parameter('cost'), over=('generator', 'snapshot'))),
         dimensions=(
-            DimensionDeclaration('generator', (CoordinateTarget('bus', 'bus'),)),
+            DimensionDeclaration('generator', (CoordinateTarget('gen_bus', 'bus'),)),
             DimensionDeclaration('line', (CoordinateTarget('from', 'bus'), CoordinateTarget('to', 'bus'))),
         ),
     )
@@ -203,7 +203,7 @@ def transport_program() -> Program:
 def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
-    A dim carrying declared coordinates needs an index source that has them,
+    A dim carrying declared lookups needs an index source that has them,
     which is why `generator` and `line` ship their mapping columns.
     """
     return {
@@ -213,7 +213,7 @@ def transport_sources(gens, lines, load) -> dict:
         'load': load,
         'snapshot': load[['snapshot']],
         'bus': load[['bus']],
-        'generator': gens[['generator', 'bus']],
+        'generator': gens[['generator', 'bus']].rename(columns={'bus': 'gen_bus'}),
         'line': lines[['line', 'from_bus', 'to_bus']].rename(columns={'from_bus': 'from', 'to_bus': 'to'}),
     }
 
@@ -737,8 +737,9 @@ def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
         'dimensions': {
             'snapshot': {'dtype': 'int', 'values': [0, 1]},
             'bus': {'values': ['b0', 'b1']},
-            'line': {'coords': {'from': 'bus', 'to': 'bus'}},
+            'line': {},
         },
+        'lookups': {'from': {'over': 'line', 'into': 'bus'}, 'to': {'over': 'line', 'into': 'bus'}},
         'parameters': {'cap': {'dims': ['line']}, 'load': {'dims': ['snapshot', 'bus']}},
         'variables': {'f': {'foreach': ['snapshot', 'line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'constraints': {
@@ -1511,7 +1512,8 @@ def test_a_derived_dimension_cannot_have_a_stranger():
 #: A `line` whose two endpoints are *both* multi-valued for one label — the case
 #: that used to be reported one coordinate at a time.
 TWO_BAD_COORDS_MODEL = {
-    'dimensions': {'bus': {'values': ['b1', 'b2']}, 'line': {'coords': {'from': 'bus', 'to': 'bus'}}},
+    'dimensions': {'bus': {'values': ['b1', 'b2']}, 'line': {}},
+    'lookups': {'from': {'over': 'line', 'into': 'bus'}, 'to': {'over': 'line', 'into': 'bus'}},
     'parameters': {'cap': {'dims': ['line']}},
     'variables': {'f': {'foreach': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'foreach': ['line'], 'expression': 'f <= cap'}},

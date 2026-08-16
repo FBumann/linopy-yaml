@@ -7,13 +7,16 @@ dimensions:
   city:
     description: the cities of the tour, each also read as an arc endpoint
     dtype: str
-    coords: {as_from: from_city, as_to: to_city}
   from_city:
     description: the city an arc leaves
     dtype: str
   to_city:
     description: the city an arc arrives at
     dtype: str
+
+lookups:
+  as_from: {over: city, into: from_city}
+  as_to: {over: city, into: to_city}
 
 parameters:
   distance:

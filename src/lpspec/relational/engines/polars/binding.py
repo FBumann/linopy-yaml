@@ -189,9 +189,9 @@ class _Binder:
             carried = self.program.dimension(d).carried
             if carried:
                 raise DataError(
-                    f"dimension '{d}' declares coordinates {carried} but has "
+                    f"dimension '{d}' carries lookups {carried} but has "
                     f"no index source. Pass one under key '{d}' (a parquet path or frame "
-                    f'carrying columns {[d, *carried]}) — a coordinate cannot '
+                    f'carrying columns {[d, *carried]}) — a lookup cannot '
                     f'be inferred from the parameters that happen to use the dimension.'
                 )
             params = [p for p in self.program.parameters if d in p.dims]
@@ -208,11 +208,11 @@ class _Binder:
             for c in sorted(self.program.dimension(d).coordinates):
                 if c.target not in self.dimensions:
                     raise DataError(
-                        f"dimension '{d}' coordinate '{c.name}' targets '{c.target}', which "
+                        f"dimension '{d}' lookup '{c.name}' targets '{c.target}', which "
                         f'nothing in this model spans and which has no index of its own, so '
-                        f"the coordinate's values have no label set to be checked against. "
+                        f"the lookup's values have no label set to be checked against. "
                         f"Pass an index for '{c.target}' (under key '{c.target}' in data or "
-                        f'coords, or as values on its declaration), or remove the coordinate.'
+                        f'coords, or as values on its declaration), or remove the lookup.'
                     )
                 data_validation.check_coordinate_containment(d, c.name, c.target, self.dimensions)
 
@@ -241,7 +241,7 @@ class _Binder:
         missing = [c for c in names if c not in available]
         if missing:
             raise DataError(
-                f"index for dimension '{d}' is missing declared coordinate column(s) {missing} (has {available})"
+                f"index for dimension '{d}' is missing declared lookup column(s) {missing} (has {available})"
             )
         labelled = frame.select(d, *names).with_row_index(_ROW_POSITION).collect().lazy()
         data_validation.check_coordinates_single_valued(d, names, labelled)

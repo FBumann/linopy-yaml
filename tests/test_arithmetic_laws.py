@@ -249,16 +249,15 @@ PLAIN_COORDS = {'f': pd.Index(['a', 'b', 'c', 'd'], name='f'), 't': pd.Index([0,
 def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
     """The wide fixture solved through both lanes, for one expression.
 
-    ``g`` and the coordinate that reaches it exist only for the grouped cases:
+    ``g`` and the lookup that reaches it exist only for the grouped cases:
     the plain fixture passes no ``g`` index, and a target with no index of its
-    own is refused rather than carried as a dangling coordinate (#488).
+    own is refused rather than carried as a dangling lookup (#488).
     """
     grouped = 'g' in foreach
-    dims = (
-        {'g': {}, 'f': {'coords': {'grp': 'g'}}, 't': {'dtype': 'int'}} if grouped else {'f': {}, 't': {'dtype': 'int'}}
-    )
+    dims = {'g': {}, 'f': {}, 't': {'dtype': 'int'}} if grouped else {'f': {}, 't': {'dtype': 'int'}}
     model = {
         'dimensions': dims,
+        **({'lookups': {'grp': {'over': 'f', 'into': 'g'}}} if grouped else {}),
         'parameters': {
             'gate': {'dims': ['f'], 'dtype': 'bool'},
             'gate2': {'dims': ['f'], 'dtype': 'bool'},

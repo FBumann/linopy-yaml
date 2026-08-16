@@ -10,14 +10,26 @@ dimensions:
   generator:
     description: generating units, each sitting on one bus
     dtype: str
-    coords: [bus]
   bus:
     description: network nodes
     dtype: str
   line:
     description: transmission lines, each joining two buses
     dtype: str
-    coords: {from: bus, to: bus}
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  from:
+    description: the bus a line leaves
+    over: line
+    into: bus
+  to:
+    description: the bus a line arrives at
+    over: line
+    into: bus
 
 parameters:
   p_max:
@@ -52,7 +64,7 @@ variables:
 
 expressions:
   gen_at_bus:
-    expression: sum(p, over=generator, group_by=bus)
+    expression: sum(p, over=generator, group_by=gen_bus)
     description: what the generators sitting on a bus produce there
   net_inflow:
     expression: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
