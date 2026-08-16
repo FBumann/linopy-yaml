@@ -390,6 +390,37 @@ def test_two_lookups_over_different_dims_cannot_be_compared():
         load_model(model)
 
 
+@pytest.mark.parametrize(
+    ('extra', 'where'),
+    [
+        pytest.param(
+            {'area': {'over': 'line', 'into': 'zone'}}, 'send != area', id='two-targets-that-are-different-dimensions'
+        ),
+        pytest.param({}, 'send != voltage', id='a-label-space-against-a-targeted-lookup'),
+        pytest.param(
+            {'grid': {'over': 'line', 'dtype': 'int'}}, 'voltage != grid', id='two-label-spaces-of-the-same-dtype'
+        ),
+    ],
+)
+def test_two_lookups_into_different_label_sets_cannot_be_compared(extra, where):
+    """One dimension is necessary but not sufficient — the label sets must match too.
+
+    A bus label is never a zone label and a label space owns its values, so
+    the predicate could only mask everything out. It does not even do that
+    consistently: the eager lane answers `!=` True at every row while polars
+    refuses the Enum mismatch, so both lanes accepted the model and then
+    disagreed about it.
+    """
+    model = {
+        **NETWORK,
+        'dimensions': {**NETWORK['dimensions'], 'zone': {'dtype': 'str'}},
+        'lookups': {**NETWORK['lookups'], **extra},
+        'variables': {'f': {**NETWORK['variables']['f'], 'where': where}},
+    }
+    with pytest.raises(LpspecError, match='map into the same dimension'):
+        load_model(model)
+
+
 def test_a_lookup_comparison_is_checked_against_its_dtype():
     """The same dtype check every other where-comparison gets (#460).
 
