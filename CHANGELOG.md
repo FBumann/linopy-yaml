@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.165](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.164...v0.0.1-alpha.165) (2026-08-16)
+
+
+### Refactoring
+
+* **gallery:** a description is written when it says something ([#889](https://github.com/fluxopt/lpspec/issues/889)) ([2792313](https://github.com/fluxopt/lpspec/commit/2792313b08f816b53d012830ca4406d96b55797f))
+
 ## [0.0.1-alpha.164](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.163...v0.0.1-alpha.164) (2026-08-16)
 
 
