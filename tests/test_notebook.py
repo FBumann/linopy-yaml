@@ -77,8 +77,8 @@ def test_the_tree_copy_has_no_outputs(notebook: Path) -> None:
 
 def test_the_rebind_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
-    warm = namespace['warm']
-    assert (warm.loads, warm.solves) == (1, 3), 'the notebook says three answers came off one loaded model'
+    reused = namespace['reused']
+    assert (reused.loads, reused.solves) == (1, 3), 'the notebook says three answers came off one loaded model'
 
 
 def test_growing_a_coordinate_set_loads_again(session: tuple[dict[str, Any], str]) -> None:

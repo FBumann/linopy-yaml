@@ -249,6 +249,16 @@ class Highs(Solver):
         activity = solver_vector(solution.row_value)
         return SolveAnswer(status, objective, primal, dual, activity)
 
+    def forget(self) -> None:
+        """``clearSolver``: the basis and the solution go, the model stays.
+
+        What this buys back is presolve. HiGHS skips it for a run that starts
+        from a basis, so a model presolve can crack is one where keeping the
+        answer is the slower path — and that is decided per model, which is
+        why it is the caller's word and not a rule here.
+        """
+        self._handle.clearSolver()
+
     def close(self) -> None:
         """Release the loaded model. Idempotent."""
         if self._handle is not None:

@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from lpspec.language.model import Model
-    from lpspec.relational.result import Diagnostics, Result
+    from lpspec.relational.result import Diagnostics, Keep, Result
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a
 #: consumer that binds no data (``typeset``) must be able to reach it without
@@ -161,36 +161,43 @@ class BoundModel:
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, Any] | None = None,
-        warm: bool = True,
+        keep: Keep = 'solver',
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
         A solver that can stay loaded is kept between calls, so a rebound
-        model re-solves from wherever the last solve ended, and one whose
-        structure moved is loaded again and starts cold. Where the answer's
-        solve actually started is its
-        :attr:`~lpspec.relational.result.Result.started`.
+        model skips the hand-off and only its numbers are pushed. Whether the
+        *work* that solver did is kept too is *keep*, and it is off by
+        default: a solver given a run to resume may forgo preparation it would
+        otherwise do, which on the sinks that ship has been worth a large
+        multiple in both directions (#815), and only a caller knows which way
+        their model goes. How much this solve actually kept is its
+        :attr:`~lpspec.relational.result.Result.kept`.
 
         Args:
             solver_name: ``highs``, which ships with the package, or
                 ``gurobi``, which needs the ``[gurobi]`` extra.
             solver_options: Forwarded to the solver verbatim, in its own
                 vocabulary (``{'time_limit': 60}``).
-            warm: Whether this solve may start from what the session holds.
-                ``True``, the default, keeps it. ``False`` is deliberately
-                cold, held to structurally: the held solver is discarded
-                first, so the fresh one has nothing to start from — what a
-                caller timing a build or comparing against a cold baseline
-                needs, and what no option on the solver can promise.
+            keep: How much of the session this solve may keep — one of
+                :data:`~lpspec.relational.result.KEEPS`. ``solver``, the
+                default, reuses the solver holding the model and discards the
+                work it did; ``progress`` keeps that work too, which is what
+                an iterating driver moving one step at a time wants;
+                ``nothing`` keeps neither, which is what timing a build or
+                comparing against a cold baseline needs and what no solver
+                option can promise. A preference: a model whose structure
+                moved is loaded again whatever was asked.
 
         Returns:
             The solution, holding this model.
 
         Raises:
-            LpspecError: A solver name nothing serves, or one this
-                environment cannot run.
+            LpspecError: A solver name nothing serves, one this environment
+                cannot run, or a *keep* outside
+                :data:`~lpspec.relational.result.KEEPS`.
         """
-        return self._engine.solve(solver_name, solver_options=solver_options, warm=warm)
+        return self._engine.solve(solver_name, solver_options=solver_options, keep=keep)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
@@ -276,6 +283,12 @@ def solve(
 
     The one-shot spelling: a caller who will solve the same model again with
     new numbers wants :func:`build` and :meth:`BoundModel.rebind`.
+
+    There is no ``keep`` here and no room for one — this builds the model it
+    solves, so the solve is the first of that model's life and
+    :attr:`~lpspec.relational.result.Result.kept` is always ``nothing``.
+    Choosing what to keep is :meth:`BoundModel.solve`, where a previous solve
+    exists to keep something of.
 
     Args:
         model: A YAML path, a mapping, or a loaded :class:`Model`.

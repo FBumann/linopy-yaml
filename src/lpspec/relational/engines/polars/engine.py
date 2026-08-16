@@ -38,7 +38,7 @@ from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler, Presence, TermFragment
-from lpspec.relational.result import Diagnostics, Result
+from lpspec.relational.result import KEEPS, Diagnostics, Keep, Result, unknown_keep_message
 from lpspec.relational.sinks.tables import SENSE
 
 if TYPE_CHECKING:
@@ -667,7 +667,7 @@ class PolarsEngine:
         *,
         solver_options: Mapping[str, Any] | None = None,
         batch_rows: int | None = None,
-        warm: bool = True,
+        keep: Keep = 'solver',
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -695,28 +695,37 @@ class PolarsEngine:
                 (:data:`~lpspec.relational.sinks.solvers.highs.HANDOFF_BUDGET`).
                 This method's parameter alone, kept off the public handle:
                 nothing outside the chunking tests sets it.
-            warm: Whether this solve may start from what the session holds.
-                ``True``, the default, keeps it — warm on a kept session, cold
-                on a fresh load. ``False`` is deliberately cold, held to
-                structurally: the held solver is closed before the load
-                decision, so the fresh one has nothing to start from, whatever
-                a member squirrels away. :attr:`~lpspec.relational.result.Diagnostics.loads`
-                ticks with it, the whole model having been transferred again.
+            keep: How much of the session this solve may keep — one of
+                :data:`~lpspec.relational.result.KEEPS`. A preference, not a
+                guarantee: a model whose structure moved is loaded again
+                whatever was asked, and
+                :attr:`~lpspec.relational.result.Result.kept` reports what
+                happened. ``nothing`` is held to structurally, the held solver
+                being closed before the load decision, so the fresh one has
+                nothing to begin from whatever a member squirrels away.
 
         Returns:
             The solution, holding this engine and the build it answered.
+
+        Raises:
+            LpspecError: A *keep* outside
+                :data:`~lpspec.relational.result.KEEPS`.
         """
+        if keep not in KEEPS:
+            raise LpspecError(unknown_keep_message(keep))
         built = self._tables()
         with _clocked(self._timings, 'handoff'):
             tables = sinks.ingestible(solver_name, built)
             self._sink_columns = tables.column_count - built.column_count
             self._sink_rows = tables.row_count - built.row_count
-            if not warm and self._solver is not None:
+            if keep == 'nothing' and self._solver is not None:
                 self._solver.close()
                 self._solver = None
             held = self._solver
             self._solver = sinks.loaded(held, solver_name, tables, batch_rows, solver_options)
-            started: Literal['cold', 'session'] = 'session' if self._solver is held else 'cold'
+            kept: Keep = keep if self._solver is held else 'nothing'
+            if kept == 'solver':
+                self._solver.forget()
         self._solves += 1
         if self._solver is not held:
             self._loads += 1
@@ -735,7 +744,7 @@ class PolarsEngine:
             _primals=primals,
             _duals=duals,
             _activities=activities,
-            _started=started,
+            _kept=kept,
             _expressions=self._expression_readers(answer.primal),
             _no_duals=None
             if answer.dual is not None

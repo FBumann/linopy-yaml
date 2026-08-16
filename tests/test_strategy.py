@@ -19,6 +19,7 @@ import pytest
 
 import lpspec as lps
 from lpspec import strategy
+from lpspec.api import BoundModel
 from tests.conftest import DISPATCH_MODEL, override
 
 # ---------------------------------------------------------------------------
@@ -252,6 +253,37 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
 
     by_key = dict(zip(runs.objective['scenario'], runs.objective['objective'], strict=True))
     assert by_key['low'] < by_key['mid'] < by_key['high'], 'a bigger load is a costlier dispatch'
+
+
+def test_a_fold_passes_its_keep_to_every_slice_and_chooses_none(monkeypatch):
+    """`keep` reaches each slice as asked, and the default is `solve`'s.
+
+    A purpose-built probe, and it says why: the request is invisible in the
+    answer *and* in `loads`, since keeping the solver and keeping its progress
+    are separate halves and the fold keeps the first either way. So a fold that
+    quietly picked `progress` for the caller would pass every other assertion in
+    this file while taking a bet only the caller can price.
+
+    Read off the call rather than `kept`, because it is the *request* that is
+    the decision: a slice whose labels moved is loaded again and correctly
+    keeps `nothing`, which would make an assertion on `kept` a test of the
+    data instead.
+    """
+    asked: list[object] = []
+    original = BoundModel.solve
+
+    def recording(self, *args, **kwargs):
+        asked.append(kwargs.get('keep'))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(BoundModel, 'solve', recording)
+
+    lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'))
+    assert asked == ['solver'] * 3, f'the fold defaulted to {asked}, not solve()s own default'
+
+    asked.clear()
+    lps.solve_over(DISPATCH, scenario_sources(), lps.EachCoordinate('scenario'), keep='progress')
+    assert asked == ['progress'] * 3, f'the fold asked for {asked}, not what the caller chose'
 
 
 def test_a_serial_fold_builds_once_and_rebinds(builds):
