@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.166](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.165...v0.0.1-alpha.166) (2026-08-16)
+
+
+### Documentation
+
+* **nav:** the gallery section says it holds examples ([#890](https://github.com/fluxopt/lpspec/issues/890)) ([a4bf53b](https://github.com/fluxopt/lpspec/commit/a4bf53b8d56b888edb468bc9b555e8fb6149daae))
+
 ## [0.0.1-alpha.165](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.164...v0.0.1-alpha.165) (2026-08-16)
 
 
