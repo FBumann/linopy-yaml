@@ -176,3 +176,46 @@ def test_the_window_typesets_as_the_condition_on_its_index(edge: str | None, dif
     assert rf"\sum_{{t' \in \mathcal{{T}} \,:\, 0 \le {difference}' < \mathit{{min\_up}}}}" in line, (
         'the summation names the window rather than the whole dimension'
     )
+
+
+def test_a_window_at_the_first_position_is_short_not_empty():
+    """The row at the start of the axis survives, holding what it can see.
+
+    The lags that reach past the start contribute a zero rather than an
+    absence. Absence propagates in the eager lane, so an unreachable lag added
+    to a reachable one would annihilate the whole row and leave the first
+    positions unconstrained — silently, and only near the edge.
+    """
+    model = up_time_model(None)
+    data = dict(UP_TIME_DATA)
+    data['must_start'] = pd.DataFrame(
+        {
+            'g': [u for u in UNITS for _ in PERIODS],
+            't': PERIODS * len(UNITS),
+            'value': [1.0, 0.0, 0.0, 0.0, 0.0] * len(UNITS),
+        }
+    )
+    with differential(model, data) as run:
+        held = run.result.primal('on').filter(pl.col('value') > 0.5)
+        assert set(zip(held['g'].to_list(), held['t'].to_list(), strict=True)) == {
+            ('slow', 0),
+            ('slow', 1),
+            ('slow', 2),
+            ('fast', 0),
+        }, 'a start at the first position is held for its window, and the row that says so exists'
+
+
+def test_a_window_wider_than_the_axis_counts_each_position_once():
+    """A cyclic window is capped at the dimension, not wrapped around twice.
+
+    Nothing else pins the cap: acyclically the lags past the end contribute
+    zeros and the answer survives them, so only the cyclic case can tell a
+    capped window from one that reads some positions twice.
+    """
+    model = up_time_model('wrap')
+    data = dict(UP_TIME_DATA)
+    data['min_up'] = pd.Series([len(PERIODS) + 2] * len(UNITS), index=pd.Index(UNITS, name='g'))
+    with differential(model, data) as run:
+        assert run.result.objective == pytest.approx(float(len(UNITS) * len(PERIODS))), (
+            'a window at least as wide as the axis holds every position on, once'
+        )
