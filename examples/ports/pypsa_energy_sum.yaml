@@ -1,0 +1,79 @@
+description: >-
+  PyPSA energy-total bounds: a generator's dispatch reduced over the whole
+  horizon and bounded — a contracted delivery on one, a reservoir's season on
+  another, and a third free to balance. Optimum 21400.0, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  bus:
+    description: network nodes
+    dtype: str
+  generator:
+    description: generating units, each sitting on one bus
+    dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+
+parameters:
+  weighting:
+    description: hours a snapshot stands for — what turns a power into an energy
+    dims: [snapshot]
+  p_nom:
+    description: installed capacity of a generator
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  e_sum_max:
+    description: >-
+      most energy a generator may deliver over the whole horizon, for the
+      generators that have such a limit
+    dims: [generator]
+  e_sum_min:
+    description: >-
+      least energy a generator must deliver over the whole horizon, for the
+      generators that owe one
+    dims: [generator]
+  load:
+    description: demand at each bus in each snapshot
+    dims: [snapshot, bus]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_nom
+
+constraints:
+  nodal_balance:
+    description: what is generated at a bus meets the load there
+    foreach: [snapshot, bus]
+    expression: sum(p, by=gen_bus) == load
+
+  energy_cap:
+    description: >-
+      a generator with a ceiling on total energy delivers no more than it over
+      the horizon — the weighting is what makes the sum an energy rather than a
+      count of snapshots
+    foreach: [generator]
+    where: e_sum_max
+    expression: sum(p * weighting, over=snapshot) <= e_sum_max
+
+  energy_floor:
+    description: a generator that owes a total delivers at least it over the horizon
+    foreach: [generator]
+    where: e_sum_min
+    expression: sum(p * weighting, over=snapshot) >= e_sum_min
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run, each snapshot weighted by the hours it stands for
+  expression: p * marginal_cost * weighting
