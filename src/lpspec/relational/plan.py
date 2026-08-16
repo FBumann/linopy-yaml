@@ -419,7 +419,9 @@ class Program:
     parameters: tuple[ParameterDeclaration, ...]
     variables: tuple[VariableDeclaration, ...]
     constraints: tuple[ConstraintDeclaration, ...]
-    objective: ObjectiveDeclaration
+    #: ``None`` where the file declares no objective — a feasibility problem,
+    #: whose answer is whether the constraints can be met at all.
+    objective: ObjectiveDeclaration | None
     dimensions: tuple[DimensionDeclaration, ...] = ()
     sos: tuple[SosDeclaration, ...] = ()
 
