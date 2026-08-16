@@ -67,6 +67,7 @@ nav:
           - multi-link: examples/pypsa_multilink.md
           - modular capacity: examples/pypsa_modular.md
           - energy totals: examples/pypsa_energy_sum.md
+          - fixed by data: examples/pypsa_fixed.md
       - Published optima:
           - Dantzig transport: examples/transport_dantzig.md
           - Dantzig, economies of scale: examples/transport_pwl.md
