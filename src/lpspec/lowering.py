@@ -156,13 +156,11 @@ def lower_program(schema: Model) -> plan.Program:
         )
         for sname, sdef in schema.sos.items()
     )
-    program = plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos)
-    _refuse_provably_unbounded(program)
-    return program
+    return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos)
 
 
-def _refuse_provably_unbounded(program: plan.Program) -> None:
-    """Refuse a variable nothing can stop the objective from running away with.
+def _provably_unbounded(program: plan.Program) -> list[str]:
+    """A variable nothing can stop the objective from running away with.
 
     The conjunction, and only the conjunction: a variable **in the objective
     with a coefficient signable from literals alone**, **unbounded on the side
@@ -174,21 +172,18 @@ def _refuse_provably_unbounded(program: plan.Program) -> None:
     is bounded on both sides before this reads it.
 
     Silent on any coefficient a parameter reaches, since it runs before one is
-    bound and a sign guessed there refuses models that solve. Silent too on a
+    bound and a sign guessed there names the wrong bound. Silent too on a
     variable carrying a ``where``: what is left is unbounded for every data
     that gives the variable a column, so the only reading data can change is
     whether it has one, and a mask is how that is decided. The per-coordinate
     variant, where the mask leaves one slice rather than all of them undefined,
     needs the built rows and is not answered here.
-
-    Raises:
-        LanguageError: Naming the variable, the bound that is missing, and the
-            reason the solver would otherwise return a bare ``unbounded``.
     """
     if program.objective is None:
-        return
+        return []
     held = {v for c in program.constraints for side in (c.lhs, c.rhs) for v in _variables_in(side)}
     held |= {s.variable for s in program.sos}
+    notes = []
     for declaration in program.variables:
         if declaration.name in held or declaration.where is not None:
             continue
@@ -199,14 +194,15 @@ def _refuse_provably_unbounded(program: plan.Program) -> None:
         bound = declaration.lower if toward_minus else declaration.upper
         if not _is_unbounded(bound, toward_minus=toward_minus):
             continue
-        raise LanguageError(
+        notes.append(
             f"variable '{declaration.name}' is unbounded {'below' if toward_minus else 'above'} "
-            f'and appears in no constraint, so the objective can improve without limit — the '
+            f'and appears in no constraint, so the objective can improve without limit — this '
             f'model has no optimum to find.\n'
             f'Give it a finite {"lower" if toward_minus else "upper"} bound, constrain it, or '
             f'drop it from the objective. Solved as it stands, the answer is a bare '
             f"'unbounded' that names nothing."
         )
+    return notes
 
 
 def _variables_in(e: plan.Expression) -> set[str]:
@@ -749,12 +745,18 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
 def advice(program: plan.Program) -> list[str]:
     """Modeling advice ``check`` surfaces as warnings — never errors.
 
-    One rule today: **everything under ``dimensions:`` should be an axis** —
+    Two rules today. **Everything under ``dimensions:`` should be an axis** —
     indexed by something, or aggregated into. A declared dimension with neither
-    is a label space wearing a dimension's clothes, or dead weight. Advice
-    rather than an error because it reads intent: a dimension declared ahead of
-    the declarations that will use it is a model part-written, not a wrong one,
-    and ``check`` is the door that says so without refusing to build.
+    is a label space wearing a dimension's clothes, or dead weight. And **a
+    costed variable should have something holding it**, or the objective can
+    improve without limit and there is no optimum to find.
+
+    Advice rather than errors because both read intent, and the second is the
+    reason this door stays advisory even where it is proving rather than
+    guessing: a model part-written declares a variable before the constraint
+    that will hold it, and refusing to build it would be refusing a draft.
+    ``check`` says so; the solver still says ``unbounded`` for anyone who does
+    not ask.
     """
     axes: set[str] = set()
     for declaration in (*program.parameters, *program.variables, *program.constraints):
@@ -785,7 +787,7 @@ def advice(program: plan.Program) -> list[str]:
                 f'aggregates into it, and no lookup targets it. Remove it — or keep it '
                 f'knowingly, if the declarations that use it are still to be written.'
             )
-    return notes
+    return notes + _provably_unbounded(program)
 
 
 def _produced_axes(e: plan.Expression) -> set[str]:

@@ -1,22 +1,29 @@
-"""A variable the objective can run away with is refused before any data binds.
+"""A variable the objective can run away with is named by `check`, before data.
 
 `unbounded` from a solver is one of the least actionable answers a modeller
-gets: it says the model is wrong and not where. A subset of it is provable from
-the schema alone, and this is that subset — a variable **in the objective with
-a coefficient signable from literals alone**, **unbounded on the side that
-improves it**, and **named by no constraint and no set**.
+gets: it says the model is wrong and not where, and once one integer variable
+is in the model HiGHS says `infeasible_or_unbounded` instead, which does not
+even say which. A subset of it is provable from the schema alone, and this is
+that subset — a variable **in the objective with a coefficient signable from
+literals alone**, **unbounded on the side that improves it**, and **named by no
+constraint and no set**.
 
-The conjunction is the whole design, and the accepted cases below are what
-makes it one. Each half alone describes ordinary models: a free variable held
-by a constraint is how a dual is read, and a bounded variable in no constraint
-is how a cost is declared. Only both together are provably unbounded, and a
-check that took either half on its own would refuse models that solve.
+It is advice, not a refusal. `check` warns and every door still builds, because
+a model part-written declares a variable before the constraint that will hold
+it, and a draft is not a wrong model. So the tests below assert a note, and the
+accepted cases assert silence rather than the absence of an exception.
 
-What is deliberately *not* refused is the case whose sign needs data. A
+The conjunction is the whole design, and the accepted cases are what makes it
+one. Each half alone describes ordinary models: a free variable held by a
+constraint is how a dual is read, and a bounded variable in no constraint is
+how a cost is declared. Only both together are provably unbounded, and a check
+that took either half on its own would speak about models that solve.
+
+What is deliberately *not* read is the case whose sign needs data. A
 coefficient reached through a parameter has no sign until that parameter is
 bound, so `sum(x * price, over=t)` is left alone however `price` looks — this
-runs before any data exists, and a check that guessed would refuse a model
-whose prices are all positive.
+runs before any data exists, and a check that guessed would name the wrong
+bound on a model whose prices are all positive.
 
 One such term is enough. A sum is signable only where *every* term carrying the
 variable is, since the term that needs data can outweigh the ones that do not
@@ -35,13 +42,14 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import warnings
 
 import polars as pl
 import pytest
 
 import lpspec as lps
 from lpspec import lowering
-from lpspec.errors import LanguageError
+from lpspec.errors import LpspecWarning
 from lpspec.relational import plan
 
 #: The issue's own reproducer: `slack` is free, costed, and in no constraint.
@@ -73,30 +81,42 @@ def _with(**overrides):
     return model
 
 
-def test_the_reproducer_is_refused_by_check_naming_the_variable():
+def _notes(model) -> list[str]:
+    """The unbounded advice `check` warns with, and nothing else it has to say."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        lps.check(model)
+    return [str(w.message) for w in caught if 'unbounded' in str(w.message)]
+
+
+def test_the_reproducer_is_named_by_check():
     """`check()` binds no data, so this costs nothing and runs before a solve.
 
-    The message has to carry all three parts of the finding, because the
+    The note has to carry all three parts of the finding, because the
     modeller's next question after "which variable" is "and what do I do".
     """
-    with pytest.raises(LanguageError) as caught:
-        lps.check(UNBOUNDED)
+    (note,) = _notes(UNBOUNDED)
 
-    message = str(caught.value)
-    assert "variable 'slack'" in message, 'names the variable'
-    assert 'unbounded below' in message, 'names the side, which is the one to bound'
-    assert 'appears in no constraint' in message, 'names the other half of the conjunction'
-    assert 'finite lower bound' in message, 'names a fix'
+    assert "variable 'slack'" in note, 'names the variable'
+    assert 'unbounded below' in note, 'names the side, which is the one to bound'
+    assert 'appears in no constraint' in note, 'names the other half of the conjunction'
+    assert 'finite lower bound' in note, 'names a fix'
 
 
-def test_it_is_refused_at_build_too_and_not_only_at_check():
-    """A caller who never calls `check()` gets the same answer from `build()`.
+def test_the_advice_closes_no_door():
+    """Advice, so the model a caller who never runs `check()` has still builds.
 
-    Both doors go through `lower_program`, which is where this lives — so the
-    refusal is a property of the model rather than of which verb was called.
+    The whole reason this is a warning: a variable declared before the
+    constraint that will hold it is a model part-written, and refusing to build
+    a draft would cost more than the bare `unbounded` this saves. Which is what
+    that caller still gets, from the solver, unnamed.
     """
-    with pytest.raises(LanguageError, match="variable 'slack'"):
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', LpspecWarning)
         lps.build(UNBOUNDED, {'cap': [1.0], 't': [0]})
+
+    result = lps.solve(UNBOUNDED, {'cap': [1.0], 't': [0]})
+    assert result.termination_condition == 'unbounded', 'the answer check offered to name in advance'
 
 
 @pytest.mark.parametrize(
@@ -143,13 +163,14 @@ def test_it_is_refused_at_build_too_and_not_only_at_check():
         ),
     ],
 )
-def test_what_the_conjunction_deliberately_accepts(overrides, why):
-    """Each of these breaks one leg of the conjunction and must build.
+def test_what_the_conjunction_deliberately_says_nothing_about(overrides, why):
+    """Each of these breaks one leg of the conjunction and must go unremarked.
 
     They are the reason the check is three conditions rather than one: every
-    line here is an ordinary model that a looser rule would refuse.
+    line here is an ordinary model that a looser rule would speak about, and a
+    warning nobody can act on is what teaches a modeller to filter this one.
     """
-    assert lps.check(_with(**overrides)) is not None, why
+    assert _notes(_with(**overrides)) == [], why
 
 
 def test_a_literal_term_does_not_sign_a_sum_a_parameter_is_in():
@@ -158,8 +179,8 @@ def test_a_literal_term_does_not_sign_a_sum_a_parameter_is_in():
     A sum of a literal term and a parameter one is signable from neither: here
     `1 + cap` is negative in this data, so `slack` improves *upward* and stops
     at its finite upper bound. Signing it from the literal `+slack` alone reads
-    the lower bound instead, finds `-inf`, and refuses a model whose answer is
-    an ordinary `-20`.
+    the lower bound instead, finds `-inf`, and warns about a model whose answer
+    is an ordinary `-20`.
     """
     model = _with(
         **{
@@ -170,14 +191,14 @@ def test_a_literal_term_does_not_sign_a_sum_a_parameter_is_in():
         }
     )
     result = lps.solve(model, {'t': [0, 1], 'cap': [-3.0, -3.0]})
-    assert result.status == 'ok', 'a model the walk must not refuse'
+    assert result.status == 'ok', 'a model the walk must not speak about'
     assert result.objective == -20.0, 'slack sits at its upper bound of 5, twice, at a net -2 each'
 
 
 def test_a_masked_variable_is_left_to_the_data_that_decides_it_exists():
     """A `where` decides whether the variable has a column at all, and data owns that.
 
-    Every other leg of the conjunction is fixed by the schema, so the refused
+    Every other leg of the conjunction is fixed by the schema, so the reported
     shape is unbounded under *any* data that gives the variable a column. A
     mask is the one thing that can leave it with none — and then the term is
     inert and the model solves, as it does here.
@@ -198,8 +219,7 @@ def test_a_masked_variable_is_left_to_the_data_that_decides_it_exists():
 def test_maximising_toward_an_open_upper_bound_is_the_mirror():
     """The same finding on the other side, so the sense is read and not assumed."""
     model = _with(**{'objective.sense': 'maximize', 'variables.slack.bounds': {'lower': 0}})
-    with pytest.raises(LanguageError, match='unbounded above'):
-        lps.check(model)
+    assert 'unbounded above' in _notes(model)[0], 'maximising reads the upper bound'
 
 
 def test_a_negative_coefficient_reads_the_other_bound():
@@ -210,17 +230,16 @@ def test_a_negative_coefficient_reads_the_other_bound():
     right for a subtraction.
     """
     model = _with(**{'objective.expression': 'sum(x - slack, over=t)', 'variables.slack.bounds': {'lower': 0}})
-    with pytest.raises(LanguageError, match='unbounded above'):
-        lps.check(model)
+    assert 'unbounded above' in _notes(model)[0], 'the coefficient decides the side, not the sense'
 
 
 def test_a_variable_in_a_set_is_held_by_it():
     """An `sos:` names its variable, and naming is as far as this check reasons.
 
     A set does not bound a member's magnitude, so this is deliberately
-    conservative — refusing a model a set touches would be a false positive on
-    the one construct whose whole point is restricting which members are
-    nonzero.
+    conservative — speaking about a model a set touches would be a false
+    positive on the one construct whose whole point is restricting which
+    members are nonzero.
     """
     model = _with(
         **{
@@ -228,7 +247,7 @@ def test_a_variable_in_a_set_is_held_by_it():
             'sos.pick': {'variable': 'slack', 'over': 't', 'type': 1},
         }
     )
-    assert lps.check(model) is not None
+    assert _notes(model) == [], 'a set names it, and naming is enough to stay quiet'
 
 
 def test_a_node_the_walk_does_not_know_reads_as_unsignable_not_absent(monkeypatch):

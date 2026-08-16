@@ -46,36 +46,43 @@ come from.
 
 ## One wrong *answer* is decidable without data too
 
-Almost everything above is the file being malformed. One thing is not: a model
-that parses, composes and builds, and has **no optimum to find**.
+Everything above is the file being wrong. One thing is not: a model that
+parses, composes and builds, and has **no optimum to find**. `check` names it
+rather than refusing it, because the same shape is what a half-written model
+looks like — a variable declared before the constraint that will hold it.
 
 ```text
 variable 'slack' is unbounded below and appears in no constraint, so the
-objective can improve without limit — the model has no optimum to find.
+objective can improve without limit — this model has no optimum to find.
 Give it a finite lower bound, constrain it, or drop it from the objective.
 Solved as it stands, the answer is a bare 'unbounded' that names nothing.
 ```
 
-The refusal needs all three of: the variable is **in the objective with a
+The advice needs all three of: the variable is **in the objective with a
 coefficient signable from literals alone**, it is **unbounded on the side that
 improves it**, and **no constraint and no set names it**. Each alone is an
 ordinary model — a free variable held by a constraint is how a dual is read, a
 bounded one in no constraint is how a cost is declared — so only the
-conjunction is refused.
+conjunction is remarked on.
 
 Signable means signable *everywhere the variable appears*. A coefficient a
 **parameter** reaches has no sign until that parameter is bound, and one such
-term leaves the whole sum unsigned: `sum(slack + slack * price, over=t)` is
-left to the solver however `price` looks, because the data decides which way
-`slack` improves. This runs before any data exists, and a guess here would
-refuse models that solve.
+term leaves the whole sum unsigned: `sum(slack + slack * price, over=t)` says
+nothing however `price` looks, because the data decides which way `slack`
+improves. This runs before any data exists, and a guess here would name the
+wrong bound on a model that solves.
 
 A variable carrying a `where` is left alone for the same reason from the other
-end: every leg above is fixed by the schema, so what is refused is unbounded
+end: every leg above is fixed by the schema, so what is reported is unbounded
 under *any* data that gives the variable a column, and a mask is the one thing
 that can leave it with none. The per-coordinate case, where a `where` leaves
 one slice of a variable undefined rather than all of them, is not answered here
 either — it needs the built rows.
+
+Skip `check` and nothing changes about the model: it builds, and the solver
+answers as it always did — `unbounded` for an LP, and `infeasible_or_unbounded`
+once one integer variable is in it, which is the answer this advice exists to
+get ahead of.
 
 ## What the language will not say
 
