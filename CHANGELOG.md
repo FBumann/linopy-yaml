@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.169](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.168...v0.0.1-alpha.169) (2026-08-16)
+
+
+### Refactoring
+
+* **plan:** the relational lane spells a lookup the way the language does ([#903](https://github.com/fluxopt/lpspec/issues/903)) ([f1a4b76](https://github.com/fluxopt/lpspec/commit/f1a4b76dca70467ec8747a8c6e70d71ef7a24128))
+
+
+### Documentation
+
+* **data:** the precedence list and its closing line agree on how many steps there are ([#902](https://github.com/fluxopt/lpspec/issues/902)) ([2c801e0](https://github.com/fluxopt/lpspec/commit/2c801e0dbd31b57737000ebd8285f3bf68ead39a))
+
 ## [0.0.1-alpha.168](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.167...v0.0.1-alpha.168) (2026-08-16)
 
 
