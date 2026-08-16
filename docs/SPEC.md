@@ -183,13 +183,31 @@ fields it carries says which of two kinds it is:
   `period_of: {over: snapshot, into: period}`) — a promotion made the day the
   model genuinely gains the axis.
 
+**`values:` puts the map in the file**, keyed by the labels of `over` — what a
+dimension's own `values:` does for its labels, for a relation small enough to
+read:
+
+```yaml
+dimensions:
+  generator: {values: [g1, g2]}
+  bus: {values: [north, south]}
+lookups:
+  gen_bus: {over: generator, into: bus, values: {g1: north, g2: south}}
+```
+
+A label it omits maps to null, which is the partial case above. Where both the
+lookup and its target declare their values the containment check is decided at
+**load** (law 2) rather than at bind, which is the reason to prefer declaring a
+small map over supplying it. `coords=` still outranks it, as it outranks a
+dimension's `values:` (§8), so a declared map is a default and not a lock.
+
 Every lookup name joins the flat namespace (law 3) — a lookup shadowing a
 dimension, its own target included, is a load error, so `generator`'s map onto
 `bus` is `gen_bus`, never a second `bus`. Either kind is single-valued per
-label, and a dimension carrying lookups needs an index source with one column
-per lookup, named after it; values are never inferred from the parameters that
-use the dimension, since inferring would let a mistyped label extend the label
-space instead of being rejected.
+label, and a dimension carrying lookups whose maps it does not declare needs an
+index source with one column per lookup, named after it; values are never
+inferred from the parameters that use the dimension, since inferring would let
+a mistyped label extend the label space instead of being rejected.
 
 **`parameters`** — declared shape only; data binds by name at run time (§8).
 `dims` required (`[]` is a scalar); `dtype` ∈ {`float`, `int`, `bool`, `str`},
@@ -727,12 +745,13 @@ highest precedence first:
    path; first occurrence of each value is its position
 2. `coords=` — anything `pd.Index()` accepts, or a table carrying the label
    column plus one column per lookup over the dimension (§2)
-3. `values:` in the YAML
+3. `values:` in the YAML — the dimension's own, plus any lookup over it that
+   declares one, assembled into the index a caller would otherwise pass
 4. derived from the parameter tables that carry the dim, as **sorted** distinct
    values
 
-Step 4 is unavailable to a dimension carrying lookups: it reads index columns
-only, so it cannot supply a lookup column. Otherwise it exists because a dim some
+Step 4 is unavailable to a dimension carrying lookups whose maps the file does
+not declare: it reads index columns only, so it cannot supply a lookup column. Otherwise it exists because a dim some
 parameter already spans needs no second declaration — but it costs the *declared
 order*, which `shift` reads positionally, so pass an explicit index whenever
 order matters. It also costs a full pass — a scan plus a dedup — over *every*
