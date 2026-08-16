@@ -19,7 +19,7 @@ result.dual('power_balance')
 
 | | |
 |---|---|
-| `lps.check(model)` | parse, expand, validate and lower; bind no data. Returns the validated `Model` |
+| `lps.check(model, sink=None)` | parse, expand, validate and lower; bind no data. With a `sink`, also whether that sink will take it. Returns the validated `Model` |
 | `lps.load_model(model)` | the same parse, without the lowering pass and its warnings |
 | `lps.build(model, sources)` | bind data and build it — returns a `BoundModel` |
 | `lps.solve(model, sources, solver_name='highs', solver_options=None)` | build and solve in one call — returns a `Result` |
@@ -36,6 +36,34 @@ Errors are one tree: `LpspecError` at the root, `LanguageError` (with
 **`check` is the CI verb.** It parses, expands, resolves and lowers without
 binding anything, so a model repository can be validated on every commit
 without shipping the data.
+
+### `sink=`, the second question
+
+Whether a model is *sayable* is solver-independent. Where it can *land* is a
+separate axis — [what a sink can
+ingest](../about/ceiling.md#capability-is-not-the-ceiling) — and `sink=` is how
+you ask about it:
+
+```python
+lps.check('model.yaml')  # sayable?
+lps.check('model.yaml', sink='highs')  # ...and will HiGHS take it?
+lps.check('model.yaml', sink='.lp')  # ...will the LP writer?
+```
+
+A solver name (`highs`, `gurobi`) or an output suffix (`.lp`). It is **optional
+and silent by default** — most models never leave the common subset, so warning
+about a sink nobody named would be noise on every one of them. You get back:
+
+- **A refusal** (`LpspecError`) if the sink has no such concept, or refuses the
+  combination — naming the construct, the sink, *and* the sinks that do take
+  it. Nothing in the language can trigger one today.
+- **A warning** if the sink takes it only by rewriting. `sos:` on HiGHS is the
+  one that exists: it arrives as binaries, so a model that declared no
+  integrality comes back mixed-integer and without duals — better read before
+  the solve than inferred from an empty `dual()`.
+
+Answered off a declared table with **no data and no installed solver**, so
+`check(m, sink='gurobi')` answers on a machine that has never had gurobipy.
 
 ## Sources
 

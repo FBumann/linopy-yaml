@@ -29,6 +29,8 @@ from typing import TYPE_CHECKING, Literal, get_args
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
 
+    from lpspec.relational import plan
+
 #: What a model may need a sink to have. ``indicator`` and ``semi-continuous``
 #: are absent deliberately: they have rows in the benchmarks table and no
 #: spelling in the language (#220, #383), so an entry would be a fact nothing
@@ -101,3 +103,24 @@ class Capabilities:
             if combination <= set(required):
                 return combination
         return None
+
+
+def required(program: plan.Program, sink: Capabilities) -> frozenset[Capability]:
+    """What *program* needs a sink to have, decided with no data bound.
+
+    *sink* is read as well as the program because **how a sink satisfies a
+    capability can require another one**: a set reaches a member without the
+    concept as binaries, so that model requires integrality *of that sink* and
+    not of one that branches natively. Without it, HiGHS would discover the
+    exclusion at ``run()``.
+
+    Only what rule 2 can decide appears here, so convexity never does.
+    """
+    needed: set[Capability] = set()
+    if any(v.variable_type != 'continuous' for v in program.variables):
+        needed.add('integrality')
+    if program.sos:
+        needed.add('sos')
+        if sink.support('sos') == 'reformulated':
+            needed.add('integrality')
+    return frozenset(needed)
