@@ -196,6 +196,28 @@ is generated from `examples/ports/references.json` — the same file the tests
 assert against. Each port's page there shows the model and a side-by-side
 against its reference.
 
+**Check the claim against the shipped instance before writing a file.** A model
+is picked because its structure exercises something; twelve candidates chosen
+that way produced six whose structure was not in the data they ship. Three
+checks, in the order they catch things:
+
+1. **Count the rows.** A map into a one-member dimension cannot change an
+   answer, and a table with no rows is not structure. An empty `zone` table and
+   a one-member `DAYTYPE` both read as topology until counted.
+2. **Quote the source's own constraint that reads the map** — not its schema,
+   not its prose. A source that models the same problem over three separate
+   sets needs no map at all, whatever its data dictionary suggests.
+3. **Run the reference and read the *solution*.** The first two are about the
+   model; this one is about the instance. A constraint that holds at zero
+   reads nothing, and a scenario parameter can switch one off — OSeMOSYS's
+   UTOPIA passes 1 and 2 and still fails, because its season and day-type maps
+   feed only storage constraints and the instance builds no storage.
+
+Running the reference costs minutes and settles what a port otherwise
+discovers after days of transcription. It is also what tells you the published
+figure is still the model's answer: one candidate's asserted optimum had drifted
+from what its own code computes, hidden by a loose tolerance.
+
 Four files per port:
 
 ```
