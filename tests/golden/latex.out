@@ -53,7 +53,7 @@
 
 \paragraph{Variable domains}
 \begin{align}
-\text{p} && p^{\mathrm{min}}_{g} \le p_{t,g} & \le p^{\mathrm{max}}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \left( p^{\mathrm{max}}_{g} > 0 \wedge \neg \mathit{is\_flexible}_{g} \text{ is defined} \vee p^{\mathrm{min}}_{g} > 0 \right) \\
+\text{p} && p^{\mathrm{min}}_{g} \le p_{t,g} & \le p^{\mathrm{max}}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \left( p^{\mathrm{max}}_{g} > 0 \wedge \neg \mathit{is\_flexible}_{g} \vee p^{\mathrm{min}}_{g} > 0 \right) \\
 \text{spill} && \mathit{spill}_{t} & \ge 0 && \forall\, t \in \mathcal{T} \\
 \text{slack} && \mathit{slack}_{t} & \le 100 && \forall\, t \in \mathcal{T} \\
 \text{theta} && \mathit{theta}_{b} & \in \mathbb{R} && \forall\, b \in \mathcal{B} \\

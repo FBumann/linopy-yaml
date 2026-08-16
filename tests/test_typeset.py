@@ -103,6 +103,56 @@ def test_a_where_lands_on_the_quantifier_not_in_the_equation(fmt: Format):
     assert fmt.operators['such_that'] in text
 
 
+def _masked(dtype: str) -> dict[str, object]:
+    """One model per mask dtype: a bare parameter atom is the whole `where`."""
+    return {
+        'dimensions': {'g': {'values': ['a', 'b']}},
+        'parameters': {'flag': {'dims': ['g'], 'dtype': dtype}},
+        'variables': {
+            'keep': {'foreach': ['g'], 'where': 'flag', 'bounds': {'lower': 0, 'upper': 1}},
+            'drop': {'foreach': ['g'], 'where': 'NOT flag', 'bounds': {'lower': 0, 'upper': 1}},
+        },
+        'objective': {'sense': 'minimize', 'expression': 'sum(keep, over=g)'},
+    }
+
+
+@EVERY_FORMAT
+def test_a_boolean_mask_renders_as_the_predicate_not_as_definedness(fmt: Format):
+    """`where: flag` on a bool keeps the true rows, not the present ones (#834).
+
+    A bool that is present and false is excluded, so "is defined" describes a
+    different model than the one that solves, and a reader deriving from the
+    page cannot tell. Absence reads as false here anyway (law 8), so the
+    predicate alone is the whole condition.
+    """
+    text = typeset(_masked('bool'), fmt, legend=False)
+    assert fmt.prose(' is defined') not in text, 'a boolean mask filters on truth, not on presence'
+
+
+@EVERY_FORMAT
+def test_a_non_boolean_mask_still_reads_as_definedness(fmt: Format):
+    """The wording is right for every other dtype — `tsp_mtz`'s `where: distance`
+    genuinely does mean "wherever a distance exists"."""
+    text = typeset(_masked('float'), fmt, legend=False)
+    assert fmt.prose(' is defined') in text
+
+
+@EVERY_FORMAT
+def test_a_negated_boolean_mask_negates_the_predicate_alone(fmt: Format):
+    """`NOT flag` means false, and must not read as "not defined".
+
+    `¬` takes no bracket here, so before #834 the prose sat outside it and the
+    line printed `¬ flag is defined` — read as "flag is missing", the opposite
+    grouping to the one the model builds.
+    """
+    text = typeset(_masked('bool'), fmt, legend=False)
+    negated = f'{fmt.operators["not"]} {fmt.subscript(fmt.italic("flag"), ["g"])}'
+    assert negated in text, 'the negation has to land on the predicate itself'
+    assert f'{negated} {fmt.prose(" is defined")}' not in text, (
+        'the negation must not scope over prose it cannot bracket'
+    )
+
+
 @EVERY_FORMAT
 def test_translation_distinguishes_a_wrapping_edge_from_a_dropping_one(fmt: Format):
     """``edge='wrap'`` wraps and a bare shift does not — one symbol each, since a

@@ -65,7 +65,7 @@ $$\sum_{g \in \mathcal{G}} \left( \frac{p_{t,g}}{2} + -\mathit{cost}_{g} \right)
 
 **`p`**
 
-$$p^{\mathrm{min}}_{g} \le p_{t,g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \left( p^{\mathrm{max}}_{g} > 0 \wedge \neg \mathit{is\_flexible}_{g} \text{ is defined} \vee p^{\mathrm{min}}_{g} > 0 \right)$$
+$$p^{\mathrm{min}}_{g} \le p_{t,g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \left( p^{\mathrm{max}}_{g} > 0 \wedge \neg \mathit{is\_flexible}_{g} \vee p^{\mathrm{min}}_{g} > 0 \right)$$
 
 **`spill`**
 
