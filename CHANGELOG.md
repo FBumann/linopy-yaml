@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.148](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.147...v0.0.1-alpha.148) (2026-08-16)
+
+
+### Features
+
+* **api:** a solve says how much of the session it keeps ([#815](https://github.com/fluxopt/lpspec/issues/815)) ([4cd43f5](https://github.com/fluxopt/lpspec/commit/4cd43f503de0f28b63e8e194bd623cfdb99f7550))
+
+
+### Bug Fixes
+
+* **typeset:** a translated index shows every operator that moved it ([#830](https://github.com/fluxopt/lpspec/issues/830)) ([4c45e6b](https://github.com/fluxopt/lpspec/commit/4c45e6bad586f50f99b0a95a6e94e8acefca396b))
+
 ## [0.0.1-alpha.147](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.146...v0.0.1-alpha.147) (2026-08-15)
 
 
