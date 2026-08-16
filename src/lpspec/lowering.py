@@ -474,9 +474,9 @@ def advice(program: plan.Program) -> list[str]:
     One rule today: **everything under ``dimensions:`` should be an axis** —
     indexed by something, or aggregated into. A declared dimension with neither
     is a label space wearing a dimension's clothes, or dead weight. Advice
-    rather than an error because ``extend()`` legitimately splits one model
-    across files, and a base file's label space may become a real axis in an
-    extension this check never sees.
+    rather than an error because it reads intent: a dimension declared ahead of
+    the declarations that will use it is a model part-written, not a wrong one,
+    and ``check`` is the door that says so without refusing to build.
     """
     axes: set[str] = set()
     for declaration in (*program.parameters, *program.variables, *program.constraints):
@@ -505,7 +505,7 @@ def advice(program: plan.Program) -> list[str]:
             notes.append(
                 f"dimension '{d.name}' is never used: nothing is indexed by it, nothing "
                 f'aggregates into it, and no lookup targets it. Remove it — or keep it '
-                f'knowingly, if an extension file supplies the use.'
+                f'knowingly, if the declarations that use it are still to be written.'
             )
     return notes
 

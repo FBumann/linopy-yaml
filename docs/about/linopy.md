@@ -53,36 +53,33 @@ that rots.
 
 ## 3. The shim
 
-For math that belongs on a `linopy.Model` **already in memory** — a PyPSA
-network, say, where the model is built by something else and you want to add
-declared constraints to it.
+The same file, built as a `linopy.Model` instead of bound relationally — the
+caller picks the lane, and nothing else differs.
 
 ```python
 from lpspec import linopy as lpspec_linopy
 
 m = lpspec_linopy.build('model.yaml', data={...}, coords={...})  # -> linopy.Model
-lpspec_linopy.extend(m, 'ramp.yaml', data={...})  # mutates m in place
 m.solve(...)
 lpspec_linopy.expression(m, 'model.yaml', 'co2', data={...})  # a named quantity, read back
 ```
 
-All three are *pure*: YAML in, a model or a value out, nothing retained.
-`build` returns a plain `linopy.Model` — no accessor, no attached schema, no
-patched attributes — so nothing is lost across `pickle`, `deepcopy` or
-`to_netcdf`. To inspect the math, re-read the file with `lps.load_model`.
+Both are *pure*: YAML in, a model or a value out, nothing retained. `build`
+returns a plain `linopy.Model` — no accessor, no attached schema, no patched
+attributes — so nothing is lost across `pickle`, `deepcopy` or `to_netcdf`. To
+inspect the math, re-read the file with `lps.load_model`.
 `expression` is the reader the same purity forces to take `data=` again: it
 evaluates a declared named expression ([named expressions](../reference/language/expressions.md#named-expressions))
 on the solved model and hands back linopy's native `.solution` — the eager
 half of `result.expression(name)`, so the differential suite can hold the two
 lanes to one answer.
 
-`extend` may reference variables already on the model (they come from the model
-argument, not from Python-side history), while the YAML must still declare every
-parameter *and dimension* it uses — the declaration is required, the `values:`
-are not, since they can come from the model. Coords precedence for `extend`: the
-`coords=` kwarg, then coords inferred from the model's variables, then `values:`
-in the YAML, then error. A `values:` contradicting the model's existing
-coordinate is an error, not a silent override.
+**This lane constructs; it does not attach.** Math for a `linopy.Model`
+something else built — a PyPSA network, say — had a verb here and no longer
+does ([#845](https://github.com/fluxopt/lpspec/issues/845)): it was the one
+file allowed to reference names it did not declare, and paying for that
+exception across the whole language layer bought one use case. Build a second
+model and merge it.
 
 ### The same language, different data inputs
 

@@ -398,7 +398,7 @@ PUBLIC_API = {
 
 #: The opt-in shim, which is a surface of its own — deliberately three verbs:
 #: two producers, and the named-expression reader both lanes owe (#562).
-PUBLIC_API_LINOPY = {'build', 'expression', 'extend'}
+PUBLIC_API_LINOPY = {'build', 'expression'}
 
 
 def test_the_public_surface_is_exactly_what_is_declared():
@@ -439,15 +439,16 @@ def test_the_public_surface_is_exactly_what_is_declared():
     )
 
 
-def test_the_linopy_shim_stays_three_verbs():
-    """The shim attaches YAML math to a model, and reads back what it named.
+def test_the_linopy_lane_stays_two_verbs():
+    """The lane constructs a model, and reads back what the file named.
 
-    ``build`` makes a model, ``extend`` adds to one, ``expression`` evaluates
-    a declared named quantity at its solution — the eager half of a reader
-    both lanes owe (hard rule 3), pure like the producers. A fourth verb would
-    mean the shim had started being a lane of its own, which hard rule 3
-    spends its length refusing. Read statically: the module imports linopy,
-    and this must run on a bare install.
+    ``build`` makes a model and ``expression`` evaluates a declared named
+    quantity at its solution — the eager half of a reader both lanes owe
+    (hard rule 3), pure like the producer. What is refused here is a verb that
+    *attaches* to a model something else built: a file references only what it
+    declares (hard rule 5), and the verb that made an exception of that is
+    gone (#845). Read statically: the module imports linopy, and this must run
+    on a bare install.
     """
     tree = ast.parse((PKG / 'linopy' / '__init__.py').read_text())
     declared = next(

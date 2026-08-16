@@ -117,7 +117,7 @@ def build_model(
         dataset,
         master_coords,
         schema,
-        Namespace.of(schema, list(model.variables)),
+        Namespace.of(schema),
         dim_coords or {},
     )
     _build_variables(ctx)

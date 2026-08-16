@@ -30,9 +30,8 @@ class LpspecError(ValueError):
 class LpspecWarning(UserWarning):
     """Advice from ``check``: the model loads and solves, and reads wrong.
 
-    A warning rather than an error because the reading may be deliberate —
-    ``extend()`` splits one model across files, and what looks unused in the
-    base file may be an axis in an extension this check never sees.
+    A warning rather than an error because the reading may be deliberate — a
+    model part-written declares what its expressions have not reached yet.
     """
 
 
