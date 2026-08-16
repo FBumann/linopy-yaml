@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.158](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.157...v0.0.1-alpha.158) (2026-08-16)
+
+
+### Refactoring
+
+* **package:** the table boundary is not the engine's, and stops living under it ([#860](https://github.com/fluxopt/lpspec/issues/860)) ([a5fc98f](https://github.com/fluxopt/lpspec/commit/a5fc98fbc13e1de9b447d56f450ba0648e20baf6))
+
 ## [0.0.1-alpha.157](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.156...v0.0.1-alpha.157) (2026-08-16)
 
 
