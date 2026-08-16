@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.167](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.166...v0.0.1-alpha.167) (2026-08-16)
+
+
+### Bug Fixes
+
+* **typeset:** a description sets as text, not as markup ([#883](https://github.com/fluxopt/lpspec/issues/883)) ([b7f383b](https://github.com/fluxopt/lpspec/commit/b7f383b01f0569b56592c9b9d90ba0ef91091e9d))
+
 ## [0.0.1-alpha.166](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.165...v0.0.1-alpha.166) (2026-08-16)
 
 
