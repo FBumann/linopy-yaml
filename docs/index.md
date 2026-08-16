@@ -18,7 +18,7 @@ Write the math in YAML, bind data at runtime, solve.
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 [Write a model](guide.md){ .md-button .md-button--primary }
-[Browse the models](models/index.md){ .md-button }
+[Browse the examples](examples/index.md){ .md-button }
 
 </div>
 
@@ -74,7 +74,7 @@ Write the math in YAML, bind data at runtime, solve.
 
     Every ported model matches an optimum this project did not compute — GAMS,
     PyPSA, OSeMOSYS, OR-Library, TSPLIB — objectives *and*, where the reference
-    records them, shadow prices. [The corpus](models/index.md)
+    records them, shadow prices. [The corpus](examples/index.md)
 
 </div>
 
@@ -244,7 +244,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
     Every model in the repo, what each exercises, and which ones are checked
     against an optimum from elsewhere.
 
-    [:octicons-arrow-right-24: The gallery](models/index.md)
+    [:octicons-arrow-right-24: The gallery](examples/index.md)
 
 -   :material-book-open-page-variant: __Language reference__
 

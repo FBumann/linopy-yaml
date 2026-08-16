@@ -42,38 +42,38 @@ nav:
   - Change a model:
       - The three loops: interactive.ipynb
       - Fix, relax, remove: lifecycle.ipynb
-  - Models:
-      - models/index.md
-      - Preparing the data: models/data.md
-      - Teaching models:
-          - dispatch: models/dispatch.md
-          - storage: models/storage.md
-          - transport: models/transport.md
-          - piecewise: models/piecewise.md
-          - special-ordered sets: models/sos.md
-          - monthly budget: models/monthly_budget.md
-          - multi-period: models/multi_period.md
-          - reserves: models/reserves.md
-          - walkthrough: models/walkthrough.md
+  - Examples:
+      - examples/index.md
+      - Preparing the data: examples/data.md
+      - Teaching examples:
+          - dispatch: examples/dispatch.md
+          - storage: examples/storage.md
+          - transport: examples/transport.md
+          - piecewise: examples/piecewise.md
+          - special-ordered sets: examples/sos.md
+          - monthly budget: examples/monthly_budget.md
+          - multi-period: examples/multi_period.md
+          - reserves: examples/reserves.md
+          - walkthrough: examples/walkthrough.md
       - The PyPSA ladder:
-          - rung 1 — transport: models/pypsa_transport.md
-          - rung 2 — ramp limits: models/pypsa_ramp.md
-          - rung 3 — storage: models/pypsa_storage.md
-          - rung 4 — cyclic storage: models/pypsa_cyclic_storage.md
-          - rung 5 — KVL: models/pypsa_kvl.md
-          - rung 6 — AC-DC, two coordinates: models/pypsa_ac_dc.md
-          - unit commitment: models/pypsa_unit_commitment.md
-          - multi-link: models/pypsa_multilink.md
+          - rung 1 — transport: examples/pypsa_transport.md
+          - rung 2 — ramp limits: examples/pypsa_ramp.md
+          - rung 3 — storage: examples/pypsa_storage.md
+          - rung 4 — cyclic storage: examples/pypsa_cyclic_storage.md
+          - rung 5 — KVL: examples/pypsa_kvl.md
+          - rung 6 — AC-DC, two coordinates: examples/pypsa_ac_dc.md
+          - unit commitment: examples/pypsa_unit_commitment.md
+          - multi-link: examples/pypsa_multilink.md
       - Published optima:
-          - Dantzig transport: models/transport_dantzig.md
-          - Dantzig, economies of scale: models/transport_pwl.md
-          - Stigler's diet: models/stigler_diet.md
-          - Facility location: models/facility_location.md
-          - GenX piecewise fuel: models/genx_piecewise_fuel.md
-          - Routing telephone calls: models/telephone_routing.md
-          - Choosing the mode of transport: models/transport_modes.md
-          - OSeMOSYS UTOPIA: models/osemosys_utopia.md
-          - Travelling salesman: models/tsp_mtz.md
+          - Dantzig transport: examples/transport_dantzig.md
+          - Dantzig, economies of scale: examples/transport_pwl.md
+          - Stigler's diet: examples/stigler_diet.md
+          - Facility location: examples/facility_location.md
+          - GenX piecewise fuel: examples/genx_piecewise_fuel.md
+          - Routing telephone calls: examples/telephone_routing.md
+          - Choosing the mode of transport: examples/transport_modes.md
+          - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
+          - Travelling salesman: examples/tsp_mtz.md
   - Reference:
       - Language:
           - reference/language/index.md

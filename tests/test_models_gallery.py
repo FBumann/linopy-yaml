@@ -34,7 +34,7 @@ import pytest
 from lpspec import load_model
 from tools import constructs, gallery_math
 
-GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'models'
+GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'examples'
 
 
 @pytest.fixture(params=constructs.models(), ids=lambda m: m[0])
@@ -69,7 +69,7 @@ def test_the_page_shows_the_model_that_runs(model: tuple[str, Path]) -> None:
     """A YAML fence on the page equals the model file, byte for byte."""
     name, path = model
     fences = _fences((GALLERY / f'{name}.md').read_text(), 'yaml')
-    assert path.read_text().rstrip() + '\n' in fences, f'docs/models/{name}.md has drifted from {path}'
+    assert path.read_text().rstrip() + '\n' in fences, f'docs/examples/{name}.md has drifted from {path}'
 
 
 def test_the_model_says_what_it_is(model: tuple[str, Path]) -> None:
@@ -129,7 +129,7 @@ def test_every_math_block_opts_into_markdown_inside_html(model: tuple[str, Path]
     name, _ = model
     page = (GALLERY / f'{name}.md').read_text()
     assert '<details markdown="1">' in page, (
-        f'docs/models/{name}.md has a math block whose <details> does not carry '
+        f'docs/examples/{name}.md has a math block whose <details> does not carry '
         f'markdown="1" — its tables and $$ blocks will be literal text on the site'
     )
 
@@ -416,7 +416,7 @@ NUMERALS = (
 #: A third one is added here, not asserted separately.
 COUNTED_IN_PROSE = (
     ('examples/README.md', '| `ports/` | {} models somebody else already solved'),
-    ('docs/models/index.md', 'Three rows from {} ports'),
+    ('docs/examples/index.md', 'Three rows from {} ports'),
 )
 
 

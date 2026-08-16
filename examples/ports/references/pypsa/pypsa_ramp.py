@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
-"""Reference for ``pypsa_ramp``: PyPSA's own LOPF. See docs/models/index.md.
+"""Reference for ``pypsa_ramp``: PyPSA's own LOPF. See docs/examples/index.md.
 
     uv run --script examples/ports/references/pypsa/pypsa_ramp.py
 

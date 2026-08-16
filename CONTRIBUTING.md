@@ -72,7 +72,7 @@ uv run mkdocs build --strict  # what CI runs
 ```
 
 **A page states a rule or argues for one, and that decides where it goes.**
-`docs/guide.md`, `docs/models/` and `docs/reference/` are the path a reader
+`docs/guide.md`, `docs/examples/` and `docs/reference/` are the path a reader
 writing or running a model takes; design notes, measured cost, project
 direction and the changelog live under `docs/about/`, reachable and out of the
 way.
@@ -85,7 +85,7 @@ Three rules on top of that, each enforced, so none has to be remembered:
   GitHub renders, and `exclude_docs` keeps it out of the site, where
   `docs/index.md` is the home page.
 - **Inside `docs/`, link relatively.** `../reference/api.md`,
-  `models/index.md`. mkdocs resolves and validates these; a dead one fails the
+  `examples/index.md`. mkdocs resolves and validates these; a dead one fails the
   build.
 - **Outside `docs/`, write the full GitHub URL** —
   `https://github.com/fluxopt/lpspec/blob/main/bench/README.md`, not
@@ -199,7 +199,7 @@ checked against **an optimum that did not come from us**. It is the only test
 class that can catch a *shared misreading* — both lanes agreeing on a meaning
 the modeller did not intend — because every other test compares lpspec against
 lpspec. The corpus, its ladder and the ledger of what a port could *not* say
-are in [docs/models/index.md](docs/models/index.md), where the reference table
+are in [docs/examples/index.md](docs/examples/index.md), where the reference table
 is generated from `examples/ports/references.json` — the same file the tests
 assert against. Each port's page there shows the model and a side-by-side
 against its reference.
@@ -233,7 +233,7 @@ examples/ports/<name>.yaml                  the model
 examples/ports/data/<name>.json             the instance
 examples/ports/references/<arm>/<name>.py   a reference implementation, importing no lpspec
 examples/ports/references.json              the recorded objective and where it came from
-docs/models/<name>.md                       the gallery page — maths, model, side-by-side
+docs/examples/<name>.md                     the gallery page — maths, model, side-by-side
 ```
 
 `<arm>` is the library the reference is written in — `linopy` or `pypsa` today,
@@ -269,7 +269,7 @@ published figure.
   it into the port's entry as a `duals` block. A MILP has no dual solution, so
   it records none and the test skips rather than passing vacuously.
 - **Regenerate the gallery's tables**, don't write them: both the construct
-  matrix and the reference table in `docs/models/index.md` come from
+  matrix and the reference table in `docs/examples/index.md` come from
   `uv run python -m tools.constructs`, and a test fails if either is stale. The
   reference table is rendered straight from `references.json`, so the published
   optimum and the asserted one cannot disagree.

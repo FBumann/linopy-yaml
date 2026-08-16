@@ -11,7 +11,7 @@ passes, because every existing test builds from the original.
 
 So the property is checked against the corpus rather than a fixture: every
 example and every ported model, which between them exercise every construct the
-language has (`docs/models/index.md` generates the coverage table from exactly
+language has (`docs/examples/index.md` generates the coverage table from exactly
 this set).
 """
 

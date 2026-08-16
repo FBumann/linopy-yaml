@@ -420,7 +420,7 @@ def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
 # ---------------------------------------------------------------------------
 
 MONTHLY_YAML = Path('examples/monthly_budget.yaml')
-MONTHLY_PAGE = Path('docs/models/monthly_budget.md')
+MONTHLY_PAGE = Path('docs/examples/monthly_budget.md')
 
 
 @pytest.fixture

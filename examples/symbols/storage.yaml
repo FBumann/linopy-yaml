@@ -1,4 +1,4 @@
-# The notation docs/models/storage.md already uses, written down.
+# The notation docs/examples/storage.md already uses, written down.
 #
 #   python -m lpspec markdown examples/storage.yaml \
 #       --symbols examples/symbols/storage.yaml

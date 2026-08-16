@@ -15,7 +15,7 @@ objective*, which is what the differential case is for.
 four snapshots in 2030 against two in 2050 — which a ``period x snapshot``
 rectangle cannot express at all. Its capacity bound reads a per-period
 *variable* at every snapshot, and a variable cannot be pre-joined in data prep
-the way a parameter can. The number `docs/models/multi_period.md` quotes is
+the way a parameter can. The number `docs/examples/multi_period.md` quotes is
 held by :func:`test_the_multi_period_page_number`.
 """
 
@@ -30,7 +30,7 @@ import lpspec as lps
 from tests.conftest import EXAMPLES_DIR
 
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
-PAGE = Path('docs/models/multi_period.md')
+PAGE = Path('docs/examples/multi_period.md')
 
 #: 2030 is modelled at four snapshots and 2050 at two — the whole reason the
 #: index is flat. `weight` is what keeps them comparable: a 2050 snapshot
@@ -59,7 +59,7 @@ def _sources(capex_2050_wind: float = 8.0):
 
 
 def test_the_multi_period_page_number():
-    """The optimum `docs/models/multi_period.md` quotes, and the build behind it.
+    """The optimum `docs/examples/multi_period.md` quotes, and the build behind it.
 
     Capacity is per period and binds at every snapshot in that period, so the
     two periods must be able to differ — which is the claim the table on the

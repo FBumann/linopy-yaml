@@ -1,4 +1,4 @@
-# The notation docs/models/monthly_budget.md uses, written down.
+# The notation docs/examples/monthly_budget.md uses, written down.
 #
 # `month` gets a set of its own because it is a dimension like any other — the
 # page's whole argument is that grouping time is the same construct as grouping

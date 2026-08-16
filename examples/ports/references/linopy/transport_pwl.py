@@ -4,7 +4,7 @@
 # dependencies = ["linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
 """Reference for ``transport_pwl``: the same model through linopy's own
-piecewise formulation. See docs/models/index.md.
+piecewise formulation. See docs/examples/index.md.
 
     uv run --script examples/ports/references/linopy/transport_pwl.py
 

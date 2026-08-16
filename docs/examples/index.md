@@ -1,4 +1,4 @@
-# Models
+# Examples
 
 Every model in the repo, what it says, and what it exercises. Three questions,
 in the order you probably have them: **[can it say my model?](#can-it-say-my-model)**
@@ -13,7 +13,7 @@ Every page starts from data in the shape the call wants, and
 ## Every model
 
 <!-- catalogue:begin -->
-### Teaching models
+### Teaching examples
 
 | | |
 |---|---|

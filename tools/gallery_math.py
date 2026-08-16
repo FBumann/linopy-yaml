@@ -63,7 +63,7 @@ from lpspec.typeset import to_latex, to_markdown
 from tools.constructs import models
 
 ROOT = Path(__file__).resolve().parent.parent
-GALLERY = ROOT / 'docs' / 'models'
+GALLERY = ROOT / 'docs' / 'examples'
 SYMBOLS = ROOT / 'examples' / 'symbols'
 BEGIN, END = '<!-- math:begin -->', '<!-- math:end -->'
 

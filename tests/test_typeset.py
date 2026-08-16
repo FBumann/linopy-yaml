@@ -524,7 +524,7 @@ def test_markdown_renders_the_legend_as_a_table():
     assert '| `p_max` over' in md.replace('$p^{\\mathrm{max}}$ ', '')
 
 
-GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'models'
+GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'examples'
 
 #: Pages whose hand-written summary states the **model's** math. The notation a
 #: gallery reader expects is the spec and `typeset/` is what is under test — so
@@ -652,7 +652,7 @@ def test_a_reproducible_summary_uses_only_symbols_the_generator_emits(stem: str)
     generated = _generated(stem)
     missing = sorted(_symbols(_summary(stem)) - _symbols(generated))
     assert not missing, (
-        f'docs/models/{stem}.md writes {missing}, which the generated math does not — '
+        f'docs/examples/{stem}.md writes {missing}, which the generated math does not — '
         f'either the summary drifted from the model, or the renderer cannot say what '
         f'the gallery promises it can'
     )

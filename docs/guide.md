@@ -45,7 +45,7 @@ The same idea runs through data binding, with one distinction worth learning
 early: a **variable** the mask removed is *absent*, and a term carrying it takes
 its whole row with it — while a **parameter** row that is simply missing is a
 zero coefficient, and the row survives without it. Absence is a property of
-variables. → [dispatch](models/dispatch.md), [absence](reference/language/absence.md)
+variables. → [dispatch](examples/dispatch.md), [absence](reference/language/absence.md)
 
 ## 3. A lookup maps one dimension onto another, and that is your topology
 
@@ -69,7 +69,7 @@ lookup points at. The same `f` is summed twice through two different lookups —
 once as inflow, once as outflow.
 
 No adjacency matrix and no join written by hand: the network is data on the
-dimension. → [transport](models/transport.md)
+dimension. → [transport](examples/transport.md)
 
 ## 4. `shift` reaches along an axis
 
@@ -84,7 +84,7 @@ translated past the edge are **absent**, so the row they would have fed is not
 built. `edge=0` keeps the row and contributes zero there instead.
 
 This is the only construct whose cost is not obviously linear in model size.
-→ [storage](models/storage.md)
+→ [storage](examples/storage.md)
 
 ## 5. The dims of an equation must equal its `foreach`
 
@@ -145,7 +145,7 @@ Worth knowing before you start, rather than after:
 
 | | |
 |---|---|
-| [Models](models/index.md) | every model in the repo, and which constructs each exercises |
+| [Examples](examples/index.md) | every model in the repo, and which constructs each exercises |
 | [Language reference](reference/language/index.md) | what a file may contain, exactly |
 | [Python API](reference/api.md) | building, solving, and reading an answer back |
 | [Typeset the math](reference/typeset.md) | the same file as LaTeX, Typst or Markdown |
