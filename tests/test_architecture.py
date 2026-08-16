@@ -230,8 +230,12 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 
 #: Package modules the engine may import: dependency-free leaves that carry no
 #: YAML, schema or AST knowledge. ``errors.py`` is one — without it there is no
-#: single exception class a caller can catch across both lanes.
-ENGINE_MAY_IMPORT = {'lpspec.errors'}
+#: single exception class a caller can catch across both lanes. ``frames.py``
+#: is the second and was earned rather than granted: it is the one place that
+#: knows what a caller's table library is, and all three consumers — the front
+#: door, the driver and the linopy lane — read it, so living under the engine
+#: it happens to be nearest was a lie about who owns it.
+ENGINE_MAY_IMPORT = {'lpspec.errors', 'lpspec.frames'}
 
 
 def test_engine_is_isolated():
@@ -537,8 +541,8 @@ def test_the_engine_dtype_table_matches_the_declared_vocabulary():
     added to ``DIMENSION_DTYPES`` without a polars dtype here would fail
     ``labels_frame`` on the empty-index path with a ``KeyError``.
     """
+    from lpspec.frames import _DECLARED
     from lpspec.language.model import DIMENSION_DTYPES
-    from lpspec.relational.frames import _DECLARED
 
     assert set(_DECLARED) == set(DIMENSION_DTYPES), 'the two homes of the dimension dtype vocabulary disagree'
 

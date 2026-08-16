@@ -4,7 +4,7 @@ The language says what a parameter *is* — its dims, its dtype — and never wh
 its values come from. This is the other half: what the caller passed (parquet
 paths, or any table exposing the Arrow PyCapsule protocol) becomes the tidy
 frames the engine reads by name. The shapes themselves are recognised in
-:mod:`lpspec.relational.frames`, so no dataframe library beyond the engine's
+:mod:`lpspec.frames`, so no dataframe library beyond the engine's
 own is a dependency of either lane.
 
 Not lowering, which turns an AST into a plan and touches no data; this touches
@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from lpspec.errors import DataError, PiecewiseExpansionError, dense_array_message
-from lpspec.relational.frames import as_frame, is_dense_array, labels_frame
+from lpspec.frames import as_frame, is_dense_array, labels_frame
 
 if TYPE_CHECKING:
     from lpspec.language.model import Model
@@ -43,7 +43,7 @@ def tidy_sources(
     values, or fall back to the engine's inference from parameter tables.
 
     Normalising here rather than at the engine is what lets the piecewise
-    curvature guard see every in-memory shape alike (:mod:`relational.frames`
+    curvature guard see every in-memory shape alike (:mod:`frames`
     is where the shapes are recognised).
 
     **Dimensions are resolved first**, because the plain-Python parameter

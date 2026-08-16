@@ -297,12 +297,13 @@ choice load-bearing in the language's rulebook.
    rather than code to share; it never sees the schema, the AST, or the eager
    builder. **The engine is a directory, not a convention:** `engines/polars/`
    is one implementation, and everything above it — `plan.py`, `sinks/`,
-   `status.py`, `chunking.py`, `frames.py` — is what any implementation answers
-   to. An engine package is named for its engine; nothing *inside* one is.
+   `status.py`, `chunking.py` — is what any implementation answers to. An
+   engine package is named for its engine; nothing *inside* one is.
    Enforced *more* strictly than stated — it imports nothing from the
-   package at all, bar declared dependency-free leaves (`errors.py`, in
-   `ENGINE_MAY_IMPORT`), because a near-zero import surface is what keeps the
-   subpackage extractable. Widening that list is a decision, not an accident.
+   package at all, bar declared dependency-free leaves (`errors.py` and
+   `frames.py`, in `ENGINE_MAY_IMPORT`), because a near-zero import surface is
+   what keeps the subpackage extractable. Widening that list is a decision, not
+   an accident.
 3. **One language, two lanes — not fast-vs-slow versions of each other.** The
    streaming engine builds models declared in YAML; the linopy lane attaches YAML
    math to a `linopy.Model` already in memory. **Both accept exactly the same
@@ -331,10 +332,12 @@ drains them. Two more sit beside the engine rather than inside it, because
 each answers a question the engine merely *uses*: `labels.py` decides which
 coordinate gets which solver index, and `result.py` is what a caller reads a
 solve back through. The remaining five are not on the spine and the diagram
-does not draw them — `plan.py` is the vocabulary the spine speaks, `frames.py`
-and `status.py` are the two boundaries (a caller's table in, a solver's
-verdict out), and `chunking.py` and `data_validation.py` are single rules
-lifted out of whoever needed them first. The map below is the full list.
+does not draw them — `plan.py` is the vocabulary the spine speaks, `status.py`
+is the boundary a solver's verdict comes back over, and `chunking.py` and
+`data_validation.py` are single rules lifted out of whoever needed them first.
+The other boundary, a caller's table on the way in, is `frames.py` — top level
+rather than in this lane, because all three consumers read it. The map below is
+the full list.
 
 That split is what makes the ceiling's admissibility test something you can
 *perform* rather than reason about: build a `PolarsCompiler`, hand it a node,
@@ -399,7 +402,7 @@ explicitly rejected: that duplicates the library this package consumes. Where
 one is unavoidable — a sink with no SOS at all — it happens at the *sink*
 boundary, on the built tables, and never in the plan.
 
-**A frame is the boundary in both directions.** `relational/frames.py`
+**A frame is the boundary in both directions.** `frames.py`
 recognises a caller's table through the Arrow PyCapsule protocol without
 importing any dataframe library, and `Result.primal` hands back a
 `polars.DataFrame`, which exports the same protocol. That symmetry is what
@@ -462,12 +465,12 @@ must stay off the import path of a caller who does not use it.
 | `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/typeset/README.md)) |
 | `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `method: convex` curvature guard, which is the one check that needs values |
+| `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver, the linopy lane and the engine |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the exception hierarchy; the one module either fenced side may import |
 | `_notes.py` | attach context to an exception on the way out; no package imports, no opinions |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `relational/plan.py` | frozen logical-plan dataclasses — what an engine consumes |
-| `relational/frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol |
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
 | `relational/chunking.py` | how a batched pass sizes its chunk: budget ÷ the width of one unit |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
