@@ -4,9 +4,11 @@ Math is defined in YAML only — there is no Python API for constructing models,
 and the logical plan is internal. Four verbs: ``check``, ``build`` (YAML +
 sources → a :class:`BoundModel`), ``solve`` and ``write``.
 
-This is the product path (docs/about/architecture.md): validated at load time,
-lowered to the plan, executed relationally. linopy exists only in the optional
-compatibility/oracle layer (``import lpspec.linopy``).
+This is the relational lane (docs/about/architecture.md): validated at load
+time, lowered to the plan, executed relationally. The same file builds as a
+``linopy.Model`` through ``lpspec.linopy``, on the same call and the same
+sources — which lane a caller wants is theirs to pick, and this one needs no
+optional extra.
 
 Example::
 

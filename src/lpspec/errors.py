@@ -243,6 +243,18 @@ def dense_array_message(name: str) -> str:
     )
 
 
+def no_index_source_message(dim: str) -> str:
+    """A dimension nothing can supply labels for — one wording, both lanes.
+
+    Labels come from an explicit index or, failing that, from the parameters
+    that span the dimension. A dimension no parameter carries has neither, and
+    both lanes reach that dead end by their own route.
+    """
+    return (
+        f"dimension '{dim}' has no source: no parameter carries it and no explicit index was provided under key '{dim}'"
+    )
+
+
 def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     r"""``unknown <kind> '<name>'``, plus the near miss or the declared set.
 

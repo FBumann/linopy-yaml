@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import DataError
+from lpspec.errors import DataError, no_index_source_message
 from lpspec.frames import as_frame
 from lpspec.relational.engines.polars import data_validation
 
@@ -196,10 +196,7 @@ class _Binder:
                 )
             params = [p for p in self.program.parameters if d in p.dims]
             if not params:
-                raise DataError(
-                    f"dimension '{d}' has no source: no parameter carries it and "
-                    f"no explicit index was provided under key '{d}'"
-                )
+                raise DataError(no_index_source_message(d))
             stacked = pl.concat([self.parameters[p.name].select(pl.col(d).alias('val')) for p in params])
             table = stacked.unique().sort('val').with_row_index('ord').with_columns(pl.col('ord').cast(pl.Int64))
             self._register(d, table)

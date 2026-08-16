@@ -297,4 +297,4 @@ declaration.
 `lpspec.linopy.build` / `.expression` (the `[linopy]` extra) build the same YAML
 as a `linopy.Model` instead of binding it relationally, and read a named
 expression back off a solved one. It is documented with everything else
-about that relationship in [Relationship to linopy](../about/linopy.md#3-the-shim).
+about that relationship in [Relationship to linopy](../about/linopy.md#3-it-is-a-lane).

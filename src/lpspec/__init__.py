@@ -1,9 +1,9 @@
 """Declarative optimisation: YAML math on a streaming engine.
 
 Models build relationally on polars and stream to the solver — see
-docs/about/architecture.md. linopy is not imported at runtime; it serves as the
-differential-test oracle and as an opt-in compatibility shim
-(``from lpspec import linopy as lpspec_linopy``).
+docs/about/architecture.md. linopy is not imported here; with the ``[linopy]``
+extra it is the second lane a file can be built on, and the differential-test
+oracle (``from lpspec import linopy as lpspec_linopy``).
 
 Example::
 

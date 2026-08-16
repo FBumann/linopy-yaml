@@ -279,7 +279,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
 ```bash
 pip install lpspec  # the relational engine (polars, highspy)
-pip install "lpspec[linopy]"  # adds linopy + xarray + pandas: the shim, the
+pip install "lpspec[linopy]"  # adds linopy + xarray + pandas: the lane, the
                               # oracle, and to_pandas / to_dataarray
 pip install "lpspec[gurobi]"  # adds the gurobi sink: solver_name='gurobi'
 ```

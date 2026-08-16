@@ -7,9 +7,9 @@ of the docs noisy:
 
 | | What | Where it matters |
 |---|---|---|
-| **Not a dependency** | the product path never imports it | packaging |
+| **Not a dependency** | solving a model never imports it | packaging |
 | **The oracle** | how we know the answers are right | testing |
-| **The shim** | an opt-in way to put YAML math on a `linopy.Model` | a narrow, real use case |
+| **The lane** | the second thing a file can be built as | what a caller chooses |
 
 ## 1. It is not a runtime dependency
 
@@ -18,10 +18,11 @@ or LP file, and import nothing from linopy, xarray or pandas. CI proves it: the
 bare-install job runs the whole suite with none of them present.
 
 `pip install "lpspec[linopy]"` adds linopy, xarray and pandas, which buys two
-things and nothing else — the shim below, and the `to_pandas` / `to_dataarray`
-bridges out of a result.
+things and nothing else — the lane below, and the `to_pandas` /
+`to_dataarray` bridges out of a result. The lane is a peer, not a fallback:
+nothing routes to it, and a bare install is a complete one.
 
-**Nothing on the product path names linopy, including in a traceback.** The
+**Nothing a bare install can reach names linopy, including in a traceback.** The
 public exception tree is rooted at `LpspecError`, with no alias
 ([#389](https://github.com/fluxopt/lpspec/issues/389)) — a name from this
 extra has no business reaching a caller who never installed it.
@@ -51,7 +52,7 @@ it**: the engine may not import linopy, so the tables live here and a test
 imports linopy to assert the copy still matches. A copy nobody checks is a copy
 that rots.
 
-## 3. The shim
+## 3. It is a lane
 
 The same file, built as a `linopy.Model` instead of bound relationally — the
 caller picks the lane by an import, and the call is the one `lps.build` takes:
@@ -83,31 +84,26 @@ file allowed to reference names it did not declare, and paying for that
 exception across the whole language layer bought one use case. Build a second
 model and merge it.
 
-### The same language, different data inputs
+### The same language, and the same data
 
-The shim accepts **exactly the same language** — that equality is what makes the
-oracle an oracle, and a construct outside the language is a load error naming
-the rewrite, never a redirection to the other path.
+The lane accepts **exactly the same language** — that equality is what makes the
+oracle an oracle, and it is now structural: both run the same `lower_program`
+gate, so a construct one refuses the other refuses in the same sentence, never
+with a redirection to the other lane.
 
-A parameter takes the same shapes on both — a parquet path, any table exporting
-the Arrow PyCapsule protocol, a `pd.Series` carrying its dims in an index, a
-`dict` or a sequence over one dimension, or one number spread over the
-coordinates it covers. Neither reads an `xr.DataArray`: this package reads
-tables and hands arrays back.
+It takes the same *data* too, which it did not always
+([#60](https://github.com/fluxopt/lpspec/issues/60)). A parameter is a parquet
+path, any table exporting the Arrow PyCapsule protocol, a `pd.Series` carrying
+its dims in an index, a `dict` or a sequence over one dimension, or one number
+spread over the coordinates it covers. Neither reads an `xr.DataArray`: this
+package reads tables and hands arrays back. Dimension labels come from
+`sources`, then `coords=`, then `values:`, then the parameters that span the
+dimension — sorted, since a derived dimension has no declared order, which is
+why an explicit index is worth passing whenever order matters. A dimension
+carrying lookups cannot be derived at all, since derivation reads labels only.
 
-What still differs is narrower, and is the remainder of
-[#60](https://github.com/fluxopt/lpspec/issues/60):
-
-| | product path | linopy lane |
-|---|---|---|
-| dimension labels | `sources`, then `coords=`, then `values:`, then **derived from the parameter tables** | `coords=`, then `values:`, then error — no derivation |
-| unnamed index levels | — | bind positionally to the declared dims; named levels bind by name |
-
-The derivation row is the one that bites: on the product path a dimension some
-parameter already spans needs no second declaration, but it costs the *declared
-order*, which `shift` reads positionally — so pass an explicit index whenever
-order matters. A dimension carrying lookups cannot be derived at all, since
-derivation reads index columns only.
+So one `sources` mapping goes to either, and which lane builds a file is
+decided by an import and nothing else.
 
 ## What we deliberately do not take
 
