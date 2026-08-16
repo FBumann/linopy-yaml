@@ -176,6 +176,31 @@ class Translate(Expression):
     fill: float | None = None
 
 
+@dataclass(frozen=True)
+class Window(Expression):
+    """Sum ``operand`` over a trailing window along one dimension.
+
+    The result at *t* is the sum of the operand at every position from
+    *t - width + 1* through *t*, so a width of 1 is the operand itself. The
+    dimension survives: this replicates terms onto the positions that can see
+    them rather than reducing anything away.
+
+    ``width`` is a whole number, or the name of an integer parameter when the
+    window differs per entity — a minimum up time, a rolling budget, a delivery
+    horizon. A named width may not depend on the dimension being summed over.
+
+    One node rather than a sum of ``Translate``s, because the number of terms
+    would then be read from data and the plan's *shape* is fixed before any
+    data is bound. What data supplies is the mask's cardinality, exactly as it
+    supplies how many snapshots there are.
+    """
+
+    operand: Expression
+    dimension: str
+    width: int | str
+    wrap: bool = False
+
+
 def children(expression: Expression) -> tuple[Expression, ...]:
     """The sub-expressions of *expression* — the structural half of any walk.
 
@@ -189,7 +214,7 @@ def children(expression: Expression) -> tuple[Expression, ...]:
         return (expression.left, expression.right)
     if isinstance(expression, Divide):
         return (expression.numerator, expression.divisor)
-    if isinstance(expression, (Sum, GroupSum, At, Translate)):
+    if isinstance(expression, (Sum, GroupSum, At, Translate, Window)):
         return (expression.operand,)
     return ()
 

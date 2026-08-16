@@ -48,10 +48,10 @@ from pathlib import Path
 from typing import Any, NamedTuple, get_args
 
 import pytest
-import yaml
 
 import lpspec as lps
 from lpspec.api import BoundModel
+from lpspec.language._yaml import parse_yaml
 from lpspec.language.model import Model
 from lpspec.language.validation import load_model
 from lpspec.relational.result import Result
@@ -295,7 +295,7 @@ def test_yaml_block_validates(block: Block) -> None:
     if block.note == 'skip':
         pytest.skip('explicitly skipped')
 
-    doc = yaml.safe_load(block.code)
+    doc = parse_yaml(block.code, origin=block.where)
     assert isinstance(doc, dict), f'{block.where} is not a YAML mapping'
 
     if block.note.startswith('wrap='):
@@ -357,7 +357,7 @@ def test_every_block_is_covered() -> None:
             continue
         if block.lang == 'python':
             continue  # parsed and name-checked by test_docstring_example_uses_real_api
-        keys = yaml.safe_load(block.code)
+        keys = parse_yaml(block.code, origin=block.where)
         if not isinstance(keys, dict) or not set(keys) <= set(Model.model_fields):
             unhandled.append(block.where)
     assert not unhandled, (

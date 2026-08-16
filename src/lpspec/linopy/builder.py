@@ -604,6 +604,38 @@ def _labelled(labels: Any, ordinals: Any, over: str) -> Any:
     return xr.DataArray(labels[ordinals.transpose(*ordinals.dims).values], dims=ordinals.dims)
 
 
+def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None = None) -> Any:
+    """Sum *array* over a trailing window along one dimension.
+
+    YAML: ``sum_back(started, over=snapshot, within=min_up)``. The result at
+    *t* is the sum from *t - within + 1* through *t*, so a width of 1 is the
+    operand itself and ``edge='wrap'`` lets the window reach around the axis.
+
+    Written as a sum of scalar gathers, one per position of the widest window
+    the data asks for. That bound is read from data, which is only sound
+    because it decides how many *terms* are added rather than what the plan
+    does — the same reading under which cardinality is data's.
+
+    A position the window cannot reach contributes a **zero**, never an
+    absence. linopy counts absence among the things that propagate, so an
+    unreachable lag added to a reachable one would annihilate the whole row
+    (v1 §4) — which is right for a shift, whose vacated slot really is
+    unknown, and wrong here: a window at the first position is short, not
+    empty. It always contains that position itself, which is why no width
+    reaching 1 can empty a row.
+    """
+    card = int(array.sizes[over])
+    widest = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
+    widest = min(widest, card)
+    total = None
+    for lag in range(widest):
+        term = _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=0.0, card=card)
+        if isinstance(within, xr.DataArray):
+            term = term * (within > lag).astype(float)
+        total = term if total is None else total + term
+    return total
+
+
 def _operator_shift(array: Any, *, over: str, by: float, edge: str | float | None = None) -> Any:
     """Translate *array* along one dimension — the value at *t - by*.
 
@@ -658,6 +690,7 @@ _OPERATORS: dict[str, Callable[..., Any]] = {
     'sum': _operator_sum,
     'at': _operator_at,
     'shift': _operator_shift,
+    'sum_back': _operator_sum_back,
 }
 
 
