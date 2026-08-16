@@ -104,6 +104,24 @@ def did_you_mean(name: str, known: Iterable[str], *, label: str = 'Declared') ->
     return f'{label}: {", ".join(candidates) or "nothing"}.'
 
 
+def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
+    """A source key naming nothing the file declares — one wording, both doors.
+
+    Refused rather than ignored, and ``rebind`` is where the reason was settled
+    first: a name it does not recognise is a typo, and ignoring one there is a
+    silent re-solve of the numbers you meant to replace. Binding owes the same
+    answer — a dump carrying more than a model uses is filtered at the call,
+    where the caller can see what was dropped.
+    """
+    unknown = sorted(keys)
+    lead = f'source key {unknown[0]!r} names' if len(unknown) == 1 else f'source keys {unknown} name'
+    return (
+        f'{lead} neither a parameter nor a dimension this model declares. '
+        f'{did_you_mean(unknown[0], known, label="Declared")} Pass only what the '
+        f'model takes — a table carrying more than that is filtered here, not bound.'
+    )
+
+
 def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
     """Why a constant side may not be sparse — one wording, both lanes.
 

@@ -57,7 +57,20 @@ SOURCES = {
         }
     ),
 }
-DISPATCH = {name: frame for name, frame in SOURCES.items() if name != 'invest'}
+
+
+def slice_for(model, **extra):
+    """The part of ``SOURCES`` *model* declares, plus what this call adds.
+
+    One bag of data and four models, each taking its own slice — `sub` reads a
+    `cost` that `feasibility` does not, and the two are otherwise the same
+    call. Binding refuses a name a model does not declare, so a driver over
+    several models says which slice it means; that refusal is what turns a
+    misspelled key into an error instead of a table nobody read.
+    """
+    known = {**model.parameters, **model.dimensions}
+    return {name: frame for name, frame in {**SOURCES, **extra}.items() if name in known}
+
 
 EMPTY = {
     'cut_const': pl.DataFrame(schema={'cut': pl.Int64, 'value': pl.Float64}),
@@ -120,8 +133,8 @@ def main() -> None:
     empty = {'cut': [], 'fcut': []}
 
     with (
-        lps.build(SUB, {**DISPATCH, 'cap_hat': capacity}) as sub_model,
-        lps.build(FEASIBILITY, {**DISPATCH, 'cap_hat': capacity}) as short_model,
+        lps.build(SUB, slice_for(SUB, cap_hat=capacity)) as sub_model,
+        lps.build(FEASIBILITY, slice_for(FEASIBILITY, cap_hat=capacity)) as short_model,
         lps.build(MASTER, {'invest': SOURCES['invest'], **tables}, coords=empty) as master,
     ):
         for step in range(25):

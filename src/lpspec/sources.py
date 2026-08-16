@@ -23,7 +23,12 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import DataError, PiecewiseExpansionError, dense_array_message
+from lpspec.errors import (
+    DataError,
+    PiecewiseExpansionError,
+    dense_array_message,
+    unknown_source_keys_message,
+)
 from lpspec.frames import as_frame, is_dense_array, labels_frame
 
 if TYPE_CHECKING:
@@ -56,9 +61,14 @@ def tidy_sources(
     wording for one defect, and the narrower one.
 
     Raises:
-        DataError: A declared parameter with no data, or one bound to
-            something neither a tidy table nor :func:`_spread` can read.
+        DataError: A key naming nothing the model declares, a declared parameter
+            with no data, or one bound to something neither a tidy table nor
+            :func:`_spread` can read.
     """
+    known = {**schema.parameters, **schema.dimensions}
+    if unknown := set(data) - set(known):
+        raise DataError(unknown_source_keys_message(unknown, known))
+
     sources: dict[str, object] = {}
     for dname, ddef in schema.dimensions.items():
         declared = schema.declared_index(dname)
