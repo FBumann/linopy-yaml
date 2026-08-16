@@ -208,10 +208,18 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: whether a plant is committed unit by unit or dispatched freely
         over: plant
         dtype: str
+        values:
+          natural_gas_combined_cycle_ccs: unit
+          biomass_ccs: unit
+          onshore_wind: free
       fuel_use:
         description: whether a plant's fuel use is read off the piecewise curve or a flat heat rate
         over: plant
         dtype: str
+        values:
+          natural_gas_combined_cycle_ccs: curve
+          biomass_ccs: flat
+          onshore_wind: flat
 
     parameters:
       unit_size:

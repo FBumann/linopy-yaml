@@ -471,6 +471,32 @@ def test_a_declared_map_needs_no_index_source():
     assert built['g3'] == pytest.approx(0.0), 'a generator on no bus can serve no load, however cheap'
 
 
+def test_a_declared_map_fills_an_index_that_does_not_carry_it():
+    """A supplied index says which labels exist; the file may still say how they map.
+
+    The two arrive by different routes and a model may want one of each — a
+    port whose labels come out of its source data but whose structure is small
+    enough to read. Binding demanded the column regardless, which made a
+    declared map unusable for exactly the models that most wanted it.
+    """
+    model = {**DECLARED, 'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}}}
+    sources = {**DECLARED_SOURCES, 'generator': pl.DataFrame({'generator': ['g1', 'g2', 'g3']})}
+    with lps.solve(model, sources) as result:
+        assert result.objective == pytest.approx(13.0), 'the declared map placed the terms, not the index'
+
+
+def test_a_supplied_lookup_column_outranks_the_declared_map():
+    """A caller's column outranks the file, as it does for a dimension's own values (SPEC §8).
+
+    The swap costs 14 rather than 13 — north's load is served by the dearer
+    generator, which is only true if the column the caller passed won.
+    """
+    model = {**DECLARED, 'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}}}
+    swapped = pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['south', 'north', None]})
+    with lps.solve(model, {**DECLARED_SOURCES, 'generator': swapped}) as result:
+        assert result.objective == pytest.approx(14.0), 'a declared map is a default, not a lock'
+
+
 def test_a_declared_map_agrees_with_the_oracle():
     """Both lanes assemble the same index out of the declaration."""
     from tests.differential import differential

@@ -90,11 +90,32 @@ def tidy_sources(
             sources[dname] = src
             continue
         table = as_frame(src, (dname,))
-        sources[dname] = table if table is not None else labels_frame(dname, src, ddef.dtype)
+        table = table if table is not None else labels_frame(dname, src, ddef.dtype)
+        sources[dname] = _filled_from_declaration(table, dname, declared)
 
     validate_piecewise_data(schema, sources)
 
     return sources
+
+
+def _filled_from_declaration(
+    table: pl.LazyFrame, dimension: str, declared: dict[str, list[Any]] | None
+) -> pl.LazyFrame:
+    """*table* plus the declared lookup columns it does not already carry.
+
+    A supplied index outranks the file, so a column the caller passes is left
+    alone and only the absent ones are joined — the rule that makes a declared
+    map a default rather than a lock (SPEC §8). Labels the caller's index does
+    not hold drop out of the join, and a label the map omits stays null, which
+    is the partial case either way.
+    """
+    if declared is None:
+        return table
+    absent = {name: values for name, values in declared.items() if name != dimension}
+    absent = {k: v for k, v in absent.items() if k not in table.collect_schema().names()}
+    if not absent:
+        return table
+    return table.join(pl.LazyFrame({dimension: declared[dimension], **absent}), on=dimension, how='left')
 
 
 def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
