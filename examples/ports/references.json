@@ -908,5 +908,38 @@
         ]
       }
     }
+  },
+  "pypsa_store": {
+    "objective": 3116.3637500000004,
+    "rtol": 1e-09,
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_store.py",
+    "duals": {
+      "nodal_balance": {
+        "snapshot": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "bus": [
+          "hub",
+          "hub",
+          "hub",
+          "hub",
+          "hub",
+          "hub"
+        ],
+        "value": [
+          68.79306249999999,
+          72.41375,
+          76.225,
+          85.5,
+          90.0,
+          10.0
+        ]
+      }
+    }
   }
 }

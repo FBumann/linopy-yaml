@@ -1,0 +1,109 @@
+description: >-
+  PyPSA's Store component: one signed power at the bus, no efficiencies and no
+  power rating — only the energy level limits how fast it moves. The tank fills
+  early and drains late, losing a share of what it holds every snapshot, and its
+  energy capacity is built rather than given. Optimum 3116.3637500000004, from
+  PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  bus:
+    description: network nodes
+    dtype: str
+  generator:
+    description: generating units, each sitting on one bus
+    dtype: str
+  store:
+    description: energy stores, each sitting on one bus
+    dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  store_bus:
+    description: the bus a store sits on
+    over: store
+    into: bus
+
+parameters:
+  p_nom:
+    description: installed capacity of a generator
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  e_nom_max:
+    description: most energy capacity that may be built at a store
+    dims: [store]
+  e_capital_cost:
+    description: cost of holding one unit of energy capacity over the horizon
+    dims: [store]
+  e_initial:
+    description: energy in the store before the first snapshot
+    dims: [store]
+  standing_loss:
+    description: share of the carried-over level lost between snapshots
+    dims: [store]
+  load:
+    description: demand at each bus in each snapshot
+    dims: [snapshot, bus]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_nom
+  store_p:
+    description: >-
+      power a store puts onto its bus, negative when it takes power off —
+      unbounded, because a Store has no rating of its own
+    foreach: [snapshot, store]
+  e:
+    description: energy in the store at the end of a snapshot
+    foreach: [snapshot, store]
+    bounds:
+      lower: 0
+  e_nom:
+    description: energy capacity built at a store
+    foreach: [store]
+    bounds:
+      lower: 0
+      upper: e_nom_max
+
+constraints:
+  nodal_balance:
+    description: what is generated at a bus, plus what the stores supply, meets the load there
+    foreach: [snapshot, bus]
+    expression: sum(p, by=gen_bus) + sum(store_p, by=store_bus) == load
+
+  within_capacity:
+    description: a store holds no more energy than the capacity built for it
+    foreach: [snapshot, store]
+    expression: e <= e_nom
+
+  energy_balance_initial:
+    description: >-
+      the first snapshot's level starts from the initial energy, which the
+      standing loss does not decay because nothing was carried into it
+    foreach: [snapshot, store]
+    where: "snapshot == 0"
+    expression: e == e_initial - store_p
+
+  energy_balance:
+    description: >-
+      the level carried into a snapshot, decayed by the standing loss, less what
+      the store supplied to its bus
+    foreach: [snapshot, store]
+    expression: >-
+      e == shift(e, over=snapshot, by=1) * (1 - standing_loss) - store_p
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run, plus what the store's energy capacity costs to build
+  expression: p * marginal_cost + e_nom * e_capital_cost
