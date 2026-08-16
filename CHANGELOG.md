@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.0.1-alpha.164](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.163...v0.0.1-alpha.164) (2026-08-16)
+
+
+### Features
+
+* **language:** a dimension takes its labels from an index, never from the data ([#884](https://github.com/fluxopt/lpspec/issues/884)) ([13aa444](https://github.com/fluxopt/lpspec/commit/13aa444d890402d783ca9922b9a66c111899c2e8))
+* **language:** a window's width is a column, not a run of shifts ([#871](https://github.com/fluxopt/lpspec/issues/871)) ([7a90400](https://github.com/fluxopt/lpspec/commit/7a90400233a2346644217a9c8c699e0ddfdd2d73))
+* **language:** an offset that differs per entity is a column, not a literal ([#862](https://github.com/fluxopt/lpspec/issues/862)) ([7a3ba7b](https://github.com/fluxopt/lpspec/commit/7a3ba7b5b11744d300cec05eb2ee738a7e1c8f6e))
+
+
+### Bug Fixes
+
+* **packaging:** the linopy extra installs a linopy that speaks v1 ([#880](https://github.com/fluxopt/lpspec/issues/880)) ([69d95ff](https://github.com/fluxopt/lpspec/commit/69d95ff327829ec7584283f4b9880b44f4189742))
+
+
+### Documentation
+
+* **language:** the data contract says what binding refuses and what it cannot see ([#881](https://github.com/fluxopt/lpspec/issues/881)) ([24926f8](https://github.com/fluxopt/lpspec/commit/24926f8071332285ddddcd31e1eee0914a0b164d))
+
 ## [0.0.1-alpha.163](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.162...v0.0.1-alpha.163) (2026-08-16)
 
 
