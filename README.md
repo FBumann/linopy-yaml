@@ -122,33 +122,20 @@ what it costs.
   (relational ∩ local), not a feature race; genuinely unsayable math
   goes in an `escape:` island, visible in the file and billed before it runs.
 
-The second use case is bolting YAML math onto a Python-built model. Packages
-like PyPSA let users modify their core math through callbacks — maximally
-flexible, but the modification is invisible in the results, the math hides
-inside wiring code, and a Python function is not a sharable artefact. When the
-modification *is just math*, a file fixes all three:
+The second use case is taking the same file to [linopy](https://github.com/PyPSA/linopy)
+instead of solving it here. One import decides which lane builds it; the
+language, the data and the refusals are the same either way:
 
 ```python
 from lpspec import linopy as lpspec_linopy
 
-lpspec_linopy.extend(m, 'ramp.yaml', data={'ramp_max': network.generators['ramp_max']})
-```
-<!-- doctest: extends=p(snapshot,generator) -->
-```yaml
-# ramp.yaml — `p` comes from the model; dims are declared here but their
-# coordinates are inferred from it, so no `values:` is needed
-dimensions: {snapshot: {dtype: int}, generator: {}}
-parameters: {ramp_max: {dims: [generator]}}
-constraints:
-  ramp_up:
-    foreach: [snapshot, generator]
-    where: "ramp_max"
-    expression: p - shift(p, over=snapshot, by=1) <= ramp_max
+m = lpspec_linopy.build('model.yaml', data={...})  # a linopy.Model you own
+m.solve()
 ```
 
-[linopy](https://github.com/PyPSA/linopy) is **not a runtime dependency**. The
-shim above is opt-in, and the same install doubles as the **oracle** every
-language feature is differentially tested against — all three relationships are
+linopy is **not a runtime dependency**. The lane above is opt-in, and the same
+install doubles as the **oracle** every language feature is differentially
+tested against — all three relationships are
 [one page](docs/about/linopy.md). There is no routing and no fallback: a
 construct outside the language is a load error naming its rewrite.
 

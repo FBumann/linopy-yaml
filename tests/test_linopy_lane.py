@@ -1,13 +1,13 @@
 """The opt-in linopy lane: the shim, its loader, its where evaluator, its notes.
 
 Everything here needs the ``[linopy]`` extra and nothing here is reachable
-from the native lane, so it is one module rather than four: the guard, the
-``linopy.Model`` fixtures and the "write a YAML file, feed it to the shim"
-idiom were being restated in each of them.
+from the native lane, so it is one module rather than four: the guard and the
+"write a YAML file, feed it to the shim" idiom were being restated in each of
+them.
 
-The shim itself is a *pure producer* — no accessor, no session, no state on
-the model. A file's meaning must not depend on what was loaded before it
-(docs/about/architecture.md, hard rule 5), which is what the last section pins.
+The lane *constructs*, so it holds no state to begin with: one call, one
+model, nothing retained. What is left to pin is that it puts nothing on
+``linopy.Model`` either — the first test below.
 """
 
 from __future__ import annotations
@@ -39,20 +39,6 @@ def yaml_file(tmp_path):
     return write
 
 
-@pytest.fixture
-def model_with():
-    """A ``linopy.Model`` carrying named variables over the given coords."""
-
-    def build(**variables):
-        m = linopy.Model()
-        for name, labels in variables.items():
-            dim, values = labels
-            m.add_variables(name=name, coords=[pd.Index(values, name=dim)])
-        return m
-
-    return build
-
-
 # ---------------------------------------------------------------------------
 # the shim is a pure producer
 # ---------------------------------------------------------------------------
@@ -62,177 +48,6 @@ def test_nothing_is_patched_onto_linopy_model():
     """Importing lpspec_linopy must not touch linopy.Model."""
     assert not hasattr(linopy.Model, 'from_yaml')
     assert not hasattr(linopy.Model, 'yaml')
-
-
-def test_extend_is_stateless(yaml_file):
-    """A second YAML cannot lean on the first: every file declares what it uses.
-
-    This is hard rule 5 — no Python-side state may change what a file means.
-    ``q`` is a model variable, so the second file may reference it; ``cap`` is
-    not redeclared there and must therefore be unknown.
-    """
-    m = linopy.Model()
-    first = yaml_file(
-        """
-        dimensions:
-          generator: {values: [wind, solar]}
-        parameters:
-          cap: {dims: [generator]}
-        variables:
-          q: {foreach: [generator]}
-        constraints:
-          limit:
-            foreach: [generator]
-            expression: q <= cap
-        """,
-        'first.yaml',
-    )
-    lpspec_linopy.extend(m, first, data={'cap': pd.Series({'wind': 1.0, 'solar': 2.0})})
-
-    second = yaml_file(
-        """
-        dimensions:
-          generator: {}
-        constraints:
-          limit2:
-            foreach: [generator]
-            expression: q <= cap
-        """,
-        'second.yaml',
-    )
-    with pytest.raises(ValueError, match="'cap' not found"):
-        lpspec_linopy.extend(m, second)
-
-
-# ---------------------------------------------------------------------------
-# extend(): reconciling a file's dims with the model's
-# ---------------------------------------------------------------------------
-
-
-def test_infer_coords_unions_across_variables(model_with):
-    """_infer_coords unions per-dim coordinates across all model variables."""
-    m = model_with(a=('generator', ['wind', 'solar']), b=('generator', ['wind', 'gas']))
-
-    inferred = lpspec_linopy._infer_coords(m)
-    assert set(inferred['generator']) == {'wind', 'solar', 'gas'}
-
-
-@pytest.mark.parametrize(
-    ('declared', 'existing', 'accepted'),
-    [
-        pytest.param('[wind, solar]', ['wind', 'solar'], True, id='values-match'),
-        pytest.param('[a, b]', ['wind', 'solar'], False, id='values-differ'),
-        pytest.param('[wind, gas]', ['wind', 'solar'], False, id='values-differ-from-inferred'),
-    ],
-)
-def test_redeclared_dim_values_must_match_the_existing_model(yaml_file, model_with, declared, existing, accepted):
-    """Inference unions across variables, so `values:` must match what was
-    inferred — not merely what some other declaration said."""
-    m = model_with(p=('generator', existing))
-    ext = yaml_file(f'dimensions:\n  generator: {{values: {declared}}}\n')
-
-    if accepted:
-        lpspec_linopy.extend(m, ext)
-    else:
-        with pytest.raises(ValueError, match='differ from the existing model'):
-            lpspec_linopy.extend(m, ext)
-
-
-def test_extend_falls_back_to_inferred_coords(yaml_file, model_with):
-    """Extension YAML may omit values: for dims already on the model."""
-    m = model_with(p=('generator', ['wind', 'solar']))
-    ext = yaml_file(
-        """
-        dimensions:
-          generator: {}
-        parameters:
-          cap: {dims: [generator]}
-        constraints:
-          limit:
-            foreach: [generator]
-            expression: p <= cap
-        """
-    )
-
-    lpspec_linopy.extend(m, ext, data={'cap': pd.Series({'wind': 1.0, 'solar': 2.0})})
-    assert 'limit' in m.constraints
-
-
-def test_the_coords_kwarg_wins_over_inference(yaml_file, model_with):
-    """The override, not inference, defines the dim where both could speak."""
-    m = model_with(p=('generator', ['wind', 'solar']))
-    ext = yaml_file('dimensions:\n  generator: {}\nparameters:\n  cap: {dims: [generator]}\n')
-
-    lpspec_linopy.extend(
-        m,
-        ext,
-        data={'cap': pd.Series({'wind': 1.0, 'gas': 3.0})},
-        coords={'generator': ['wind', 'gas']},
-    )
-
-
-def test_extend_sees_existing_model_variables(yaml_file, model_with):
-    """An extension may reference variables already on the model, and only
-    those — an unknown name is the same load error as anywhere else."""
-    text = """
-        dimensions:
-          g: {values: [wind, solar]}
-        constraints:
-          cap:
-            foreach: [g]
-            expression: p <= 100
-        """
-    lpspec_linopy.extend(model_with(p=('g', ['wind', 'solar'])), yaml_file(text))
-
-    with pytest.raises(ValueError, match="'p' not found"):
-        lpspec_linopy.extend(linopy.Model(), yaml_file(text))
-
-
-@pytest.mark.parametrize(
-    ('extension_variables', 'links'),
-    [
-        pytest.param(
-            'variables:\n  op_cost: {foreach: [g], bounds: {lower: 0}}\n',
-            (('p', 'p_bp'), ('op_cost', 'cost_bp')),
-            id='a-borrowed-and-a-local-variable',
-        ),
-        pytest.param('', (('p', 'p_bp'), ('f', 'f_bp')), id='every-variable-borrowed'),
-    ],
-)
-def test_extend_expands_piecewise_against_the_model_it_joins(yaml_file, model_with, extension_variables, links):
-    """A piecewise link may name variables borrowed from the model.
-
-    The borrowed names have to survive two calls inside ``extend``. Expansion
-    re-validates the expanded file, so ``load_model`` needs them — an expansion
-    that drops them refuses this exact file with "'p' not found". And ``extend``
-    calls ``expand_piecewise`` a second time to build what goes onto the model,
-    resolving link expressions itself to compute the frame the block is emitted
-    over — the gap was between the two calls, which only a caller of ``extend``
-    crosses, so this is held at the lane rather than beside the language.
-    """
-    m = model_with(p=('g', ['wind', 'solar']), f=('g', ['wind', 'solar']))
-    ext = yaml_file(
-        'dimensions:\n'
-        '  g: {values: [wind, solar]}\n'
-        '  bp: {dtype: int}\n'
-        'parameters:\n'
-        + ''.join(f'  {breakpoints}: {{dims: [bp]}}\n' for _, breakpoints in links)
-        + extension_variables
-        + 'piecewise:\n'
-        '  curve:\n'
-        '    over: bp\n'
-        '    links:\n' + ''.join(f'      - [{variable}, {breakpoints}]\n' for variable, breakpoints in links)
-    )
-
-    bp = pd.RangeIndex(3, name='bp')
-    lpspec_linopy.extend(
-        m,
-        ext,
-        data={breakpoints: pd.Series([0.0, 50.0, 100.0], index=bp) for _, breakpoints in links},
-        coords={'bp': bp},
-    )
-    assert 'curve_lam' in m.variables, 'the formulation emitted nothing'
-    assert 'curve_link0' in m.constraints, 'the links did not reach the model'
 
 
 # ---------------------------------------------------------------------------
@@ -392,7 +207,7 @@ def test_a_missing_parameter_is_a_load_error():
 
 
 # ---------------------------------------------------------------------------
-# error notes: the context add_note() carries out of build/extend
+# error notes: the context add_note() carries out of build
 # ---------------------------------------------------------------------------
 
 _MINIMAL = """
@@ -449,16 +264,6 @@ def test_a_failure_names_the_declaration_and_the_file(yaml_file, tail, error, ma
 
     assert context in str(ei.value) or _has_note(ei.value, context)
     assert _has_note(ei.value, f"while loading YAML '{bad}'")
-
-
-def test_a_failure_inside_extend_names_the_extension_file(yaml_file, model_with):
-    m = model_with(p=('time', [0, 1, 2, 3]))
-    ext = yaml_file('dimensions:\n  time: {values: [a, b]}\n', 'ext.yaml')
-
-    with pytest.raises(ValueError) as ei:
-        lpspec_linopy.extend(m, ext)
-
-    assert _has_note(ei.value, f"while extending with YAML '{ext}'")
 
 
 # --------------------------------------------------------------------------

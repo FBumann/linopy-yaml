@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import datetime
+from typing import TYPE_CHECKING
 
 import pytest
 
-from lpspec.language.model import Model
 from lpspec.language.validation import load_model, validate_expressions
+
+if TYPE_CHECKING:
+    from lpspec.language.model import Model
 
 
 def _schema(**overrides) -> Model:
@@ -114,57 +117,6 @@ class TestValidateExpressions:
         assert "'q' not found" in msg
         assert 'exactly one comparison' in msg
 
-    def test_known_names_extend_the_namespace(self):
-        """The same file both ways: undeclared alone, checked as an extension.
-
-        ``extend()`` passes the names its model already carries, so the file
-        is validated against the namespace it runs in.
-        """
-        raw = {
-            'dimensions': {'g': {'values': ['wind', 'solar']}},
-            'parameters': {'p_max': {'dims': ['g']}},
-            'constraints': {'cap': {'foreach': ['g'], 'expression': 'p <= p_max'}},
-        }
-        with pytest.raises(ValueError, match="'p' not found"):
-            load_model(raw)
-        Model.model_validate(raw, context={'known_variables': {'p': ['g']}})
-
-    def test_known_names_reach_a_piecewise_block(self):
-        """A borrowed variable may be what a formulation links.
-
-        Expansion resolves link expressions itself, to compute the frame the
-        block is emitted over, so it needs the widened namespace as much as
-        the checkers downstream do. Without it an extension carrying any
-        ``piecewise:`` block was refused whatever it linked.
-        """
-        raw = {
-            'dimensions': {'bp': {'dtype': 'int', 'values': [0, 1]}},
-            'parameters': {'power_bp': {'dims': ['bp']}, 'fuel_bp': {'dims': ['bp']}},
-            'piecewise': {'curve': {'over': 'bp', 'links': [['p', 'power_bp'], ['f', 'fuel_bp']]}},
-        }
-        with pytest.raises(ValueError, match="'p' not found"):
-            load_model(raw)
-        load_model(raw, known_variables={'p': [], 'f': []})
-
-    def test_known_variable_dims_reach_the_objective(self):
-        """The dim checker needs an external variable's dims wherever it needs
-        the name — the objective included, not just constraints."""
-        Model.model_validate(
-            {
-                'dimensions': {'g': {'values': ['wind', 'solar']}},
-                'parameters': {'cost': {'dims': ['g']}},
-                'objective': {'expression': 'sum(p * cost, over=g)'},
-            },
-            context={'known_variables': {'p': ['g']}},
-        )
-
-
-#: An extension whose only free name is the variable ``p``, so whether it loads
-#: is exactly whether the model it extends already declares one.
-CAP_EXTENSION = (
-    'dimensions:\n  g:\n    values: [wind, solar]\nconstraints:\n  cap:\n    foreach: [g]\n    expression: p <= 100\n'
-)
-
 
 class TestLoadTimeIntegration:
     """The eager lane's entry points, so only this class needs the [linopy] extra.
@@ -192,27 +144,6 @@ class TestLoadTimeIntegration:
         )
         with pytest.raises(ValueError, match="'pp' not found"):
             lpspec_linopy.build(f)
-
-    def test_extend_sees_existing_model_variables(self, tmp_path):
-        """An extension may reference variables already on the model."""
-        from tests.oracle import linopy, lpspec_linopy, pd
-
-        model = linopy.Model()
-        model.add_variables(coords={'g': pd.Index(['wind', 'solar'], name='g')}, name='p')
-
-        f = tmp_path / 'ext.yaml'
-        f.write_text(CAP_EXTENSION)
-        lpspec_linopy.extend(model, f)
-        assert 'cap' in model.constraints
-
-    def test_extend_flags_unknown_variable(self, tmp_path):
-        from tests.oracle import linopy, lpspec_linopy
-
-        model = linopy.Model()
-        f = tmp_path / 'ext.yaml'
-        f.write_text(CAP_EXTENSION)
-        with pytest.raises(ValueError, match="'p' not found"):
-            lpspec_linopy.extend(model, f)
 
 
 class TestDimensionKwargs:

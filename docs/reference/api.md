@@ -292,9 +292,9 @@ bound already means. An empty **list** stays, because a list carries
 cardinality here and zero is one of its values — `foreach: []` is a scalar
 declaration.
 
-## The linopy shim
+## The linopy lane
 
-`lpspec.linopy.build` / `.extend` / `.expression` (the `[linopy]` extra) put the
-same YAML math on a `linopy.Model` that already exists in memory, and read a
-named expression back off a solved one. It is documented with everything else
+`lpspec.linopy.build` / `.expression` (the `[linopy]` extra) build the same YAML
+as a `linopy.Model` instead of binding it relationally, and read a named
+expression back off a solved one. It is documented with everything else
 about that relationship in [Relationship to linopy](../about/linopy.md#3-the-shim).
