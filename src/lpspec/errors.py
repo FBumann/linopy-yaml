@@ -283,14 +283,17 @@ def missing_lookup_columns_message(dim: str, missing: list[str], available: list
 
 
 def no_index_source_message(dim: str) -> str:
-    """A dimension nothing can supply labels for — one wording, both lanes.
+    """A dimension with no index — one wording, both lanes.
 
-    Labels come from an explicit index or, failing that, from the parameters
-    that span the dimension. A dimension no parameter carries has neither, and
-    both lanes reach that dead end by their own route.
+    The index is what says which labels exist, so a parameter carrying a label
+    it does not hold is a typo rather than a definition. Inferring the labels
+    from the parameters instead would make that distinction unavailable, which
+    is why there is no fallback to describe here.
     """
     return (
-        f"dimension '{dim}' has no source: no parameter carries it and no explicit index was provided under key '{dim}'"
+        f"dimension '{dim}' has no index: declare dimensions.{dim}.values in the model, "
+        f"or pass a table of its labels under key '{dim}'. The index is what says which "
+        f'labels exist — without one a mistyped label is indistinguishable from a new one.'
     )
 
 

@@ -41,10 +41,13 @@ import polars as pl
 
 generators = pl.read_csv('examples/ports/data/dispatch/generators.csv')
 
+load = pl.read_csv('examples/ports/data/dispatch/load.csv')
+
 sources = {
+    'snapshot': load.select('snapshot').unique(maintain_order=True),
     'p_max': generators.select('generator', pl.col('p_max').alias('value')),
     'cost': generators.select('generator', pl.col('cost').alias('value')),
-    'load': pl.read_csv('examples/ports/data/dispatch/load.csv'),
+    'load': load,
 }
 ```
 
@@ -90,7 +93,7 @@ p_max = pd.Series({'wind': 80.0, 'solar': 0.0, 'gas': 200.0}).rename_axis('gener
 cost = pd.Series({'wind': 10.0, 'solar': 25.0, 'gas': 50.0}).rename_axis('generator')
 load = pd.Series([60.0, 120.0, 180.0, 90.0]).rename_axis('snapshot')
 
-sources = {'p_max': p_max, 'cost': cost, 'load': load}
+sources = {'snapshot': load.index, 'p_max': p_max, 'cost': cost, 'load': load}
 ```
 
 </details>
@@ -104,10 +107,14 @@ back to tidy — here mapped from load names onto buses on the way, the shape
 [transport](transport.md) binds:
 
 ```python
+load = n.loads_t.p_set.rename(columns=n.loads.bus).rename_axis(index='snapshot', columns='bus').stack()
+
 sources = {
+    'snapshot': load.index.get_level_values('snapshot').unique(),
+    'bus': load.index.get_level_values('bus').unique(),
     'p_max': n.generators['p_nom'].rename_axis('generator'),
     'cost': n.generators['marginal_cost'].rename_axis('generator'),
-    'load': n.loads_t.p_set.rename(columns=n.loads.bus).rename_axis(index='snapshot', columns='bus').stack(),
+    'load': load,
 }
 ```
 

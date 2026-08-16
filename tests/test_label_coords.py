@@ -195,6 +195,7 @@ def _unused_target_sources() -> dict:
         'snapshot': pl.DataFrame(
             {'snapshot': [0, 1, 2], 'period_of': [2030, 2030, 2050], 'month_of': ['jan', 'feb', 'jan']}
         ),
+        'period': pl.DataFrame({'period': [2030, 2050]}),
         'cap': pl.DataFrame({'period': [2030, 2050], 'value': [5.0, 5.0]}),
     }
 

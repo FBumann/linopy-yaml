@@ -152,6 +152,8 @@ def instance(n_gen: int, n_snap: int) -> dict[str, pl.DataFrame]:
     avail = rng.uniform(0.2, 1.0, (n_snap, n_gen))
 
     return {
+        'generator': pl.DataFrame({'generator': gens}),
+        'snapshot': pl.DataFrame({'snapshot': np.arange(n_snap)}),
         'invest': pl.DataFrame({'generator': gens, 'value': invest}),
         'cap_max': pl.DataFrame({'generator': gens, 'value': cap_max}),
         'cost': pl.DataFrame({'generator': gens, 'value': cost}),
@@ -302,7 +304,13 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
     """
     data = instance(n_gen, n_snap)
     gens = data['invest']['generator'].to_list()
-    dispatch = {name: data[name] for name in ('cost', 'load', 'avail')}
+    dispatch = {name: data[name] for name in ('generator', 'snapshot', 'cost', 'load', 'avail')}
+
+    def slice_for(model: Any, **extra: Any) -> dict[str, Any]:
+        """The part of *dispatch* this model declares — `feasibility` reads no cost."""
+        known = lps.load_model(model)
+        names = {**known.parameters, **known.dimensions}
+        return {name: frame for name, frame in {**dispatch, **extra}.items() if name in names}
 
     cuts = _empty_cuts()
     capacity = pl.DataFrame({'generator': gens, 'value': [0.0] * n_gen})
@@ -314,8 +322,8 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
     converged = False
 
     with (
-        lps.build(MODELS / 'sub.yaml', {**dispatch, 'cap_hat': capacity}) as sub_model,
-        lps.build(MODELS / 'feasibility.yaml', {**dispatch, 'cap_hat': capacity}) as short_model,
+        lps.build(MODELS / 'sub.yaml', slice_for(MODELS / 'sub.yaml', cap_hat=capacity)) as sub_model,
+        lps.build(MODELS / 'feasibility.yaml', slice_for(MODELS / 'feasibility.yaml', cap_hat=capacity)) as short_model,
         lps.build(
             MODELS / 'master.yaml',
             {'invest': data['invest'], 'cap_max': data['cap_max'], **cuts},

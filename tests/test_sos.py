@@ -504,6 +504,9 @@ def _curve_sources() -> dict[str, pl.DataFrame]:
     breakpoints = [{'generator': g, 'bp': k, 'value': v} for g, values in CURVE_X.items() for k, v in enumerate(values)]
     costs = [{'generator': g, 'bp': k, 'value': v} for g, values in CURVE_Y.items() for k, v in enumerate(values)]
     return {
+        'generator': pl.DataFrame({'generator': list(CURVE_X)}),
+        'snapshot': pl.DataFrame({'snapshot': range(len(LOADS))}),
+        'bp': pl.DataFrame({'bp': range(len(next(iter(CURVE_X.values()))))}),
         'p_max': pl.DataFrame({'generator': list(CURVE_X), 'value': [xs[-1] for xs in CURVE_X.values()]}),
         'load': pl.DataFrame({'snapshot': range(len(LOADS)), 'value': LOADS}),
         'bp_x': pl.DataFrame(breakpoints),

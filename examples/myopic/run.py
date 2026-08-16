@@ -75,6 +75,9 @@ def sources() -> dict[str, object]:
     nothing else.
     """
     return {
+        'day': pl.DataFrame({'day': DAYS}),
+        'hour': pl.DataFrame({'hour': HOURS}),
+        'generator': pl.DataFrame({'generator': GENERATORS}),
         'weight': pl.DataFrame({'day': DAYS, 'value': [WEIGHT[d] for d in DAYS]}),
         'load': pl.DataFrame(
             [

@@ -78,23 +78,17 @@ class TestBuildMasterCoords:
         mc = loader.build_master_coords(_schema(dims={'x': dim}), coords)
         assert list(mc['x']) == expected
 
-    def test_labels_are_derived_from_the_parameters_that_span_the_dimension(self):
-        """Third in the precedence, and sorted: a derived dim has no declared order.
+    def test_a_dimension_with_no_index_is_refused(self):
+        """Third in the precedence there is not one: the index is the authority.
 
-        The union across every parameter carrying it, which is the rule the
-        relational lane reaches from tidy frames — so a file that binds there
-        on derivation alone binds here too (#60).
+        Labels read out of the parameters would *be* the definition, so a
+        mistyped one could not be told from a new one — and both lanes say so
+        in the same sentence.
         """
-        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}, 'b': {'dims': ['x']}})
-        sources = {'a': {'wind': 1.0, 'gas': 2.0}, 'b': {'solar': 3.0, 'gas': 4.0}}
+        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
 
-        mc = loader.build_master_coords(schema, None, sources)
-
-        assert list(mc['x']) == ['gas', 'solar', 'wind'], 'the union of both, sorted'
-
-    def test_a_dimension_no_parameter_carries_has_no_source(self):
-        with pytest.raises(ValueError, match='no parameter carries it'):
-            loader.build_master_coords(_schema(dims={'x': {}}), None, {})
+        with pytest.raises(ValueError, match="dimension 'x' has no index"):
+            loader.build_master_coords(schema, None, {'a': {'wind': 1.0}})
 
 
 class TestLoadParameters:
@@ -554,15 +548,15 @@ def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
     assert str(native.value) == str(eager.value), 'one refusal, one wording, whichever lane was asked'
 
 
-def test_a_file_that_declares_no_labels_at_all_binds_on_both_lanes():
-    """The last row of #60: derivation was the product path's alone.
+def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
+    """The index is what says which labels exist, on either lane.
 
-    Neither `values:` nor `coords=` says what `g` holds — only the parameter
-    tables do — and a file relying on that used to bind relationally and fail
-    here with "Dimension 'g' has no values", which is the divergence the lane
-    choice is not supposed to have.
+    Neither `values:` nor a table under `g` says what it holds, so a mistyped
+    label in `cost` would define a generator rather than fail. Both lanes
+    refuse, in the same sentence.
     """
-    from tests.differential import differential
+    import lpspec as lps
+    from lpspec.errors import DataError
 
     model = {
         'dimensions': {'g': {}},
@@ -575,5 +569,11 @@ def test_a_file_that_declares_no_labels_at_all_binds_on_both_lanes():
         'cost': pd.Series({'wind': 3.0, 'gas': 1.0}).rename_axis('g'),
     }
 
-    with differential(model, sources) as run:
-        assert sorted(run.result.primal('x')['g']) == ['gas', 'wind'], 'both lanes derived the same labels'
+    with pytest.raises(DataError, match="dimension 'g' has no index") as native:
+        lps.build(model, sources).close()
+    with pytest.raises(DataError, match="dimension 'g' has no index") as eager:
+        lpspec_linopy.build(model, sources)
+    assert str(native.value) == str(eager.value), 'one refusal, one wording'
+
+    indexed = {**sources, 'g': pd.DataFrame({'g': ['wind', 'gas']})}
+    assert 'x' in lpspec_linopy.build(model, indexed).variables

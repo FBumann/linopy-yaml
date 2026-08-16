@@ -26,16 +26,18 @@ from tests.conftest import DISPATCH_MODEL, override
 # models
 # ---------------------------------------------------------------------------
 
+GENERATORS = ['wind', 'gas']
+STORES = ['battery', 'pumped']
+
 #: Dispatch, with a scenario-free declaration — the slice column never appears
 #: in the model, which is what lets `EachCoordinate` need no language support.
-#: The conftest model with the generators coming from data rather than declared.
-DISPATCH = override(DISPATCH_MODEL, **{'dimensions.generator': {'dtype': 'str'}})
+DISPATCH = DISPATCH_MODEL
 
 #: Storage over a *local* index, with the seam split out by a `where` on a dim
 #: literal. `soc_step` carries no `edge=`, so its vacated row drops and the
 #: masked `soc_open` supplies it from a carried parameter.
 WINDOW = {
-    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'values': GENERATORS}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['generator']},
@@ -75,7 +77,7 @@ WINDOW = {
 #: cannot empty itself before the seam; otherwise every window ends at zero and
 #: carrying the state is indistinguishable from not carrying it.
 MULTI_STORE = {
-    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'dtype': 'str'}, 'storage': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'values': GENERATORS}, 'storage': {'values': STORES}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['generator']},
@@ -112,7 +114,7 @@ MULTI_STORE = {
 #: `total` and `existing` are both over `(generator)`, so the carry drops
 #: nothing and the whole vector moves — no index could have said this.
 MYOPIC = {
-    'dimensions': {'generator': {'dtype': 'str'}},
+    'dimensions': {'generator': {'values': GENERATORS}},
     'parameters': {
         'existing': {'dims': ['generator']},
         'cost': {'dims': ['generator']},
@@ -129,8 +131,6 @@ MYOPIC = {
     'objective': {'sense': 'minimize', 'expression': 'sum(build * cost, over=generator)'},
 }
 
-GENERATORS = ['wind', 'gas']
-STORES = ['battery', 'pumped']
 STATIC = {
     'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [10.0, 100.0]}),
     'cost': pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 50.0]}),
@@ -142,7 +142,7 @@ def scenario_sources() -> dict[str, object]:
     rows = []
     for scenario, scale in (('low', 1.0), ('mid', 2.0), ('high', 3.0)):
         rows += [{'scenario': scenario, 'snapshot': t, 'value': 5.0 * scale + t} for t in range(4)]
-    return {**STATIC, 'load': pl.DataFrame(rows)}
+    return {**STATIC, 'snapshot': pl.DataFrame({'snapshot': range(4)}), 'load': pl.DataFrame(rows)}
 
 
 def _draw(base: dict, scenario: str, snapshots: int = 4) -> pl.DataFrame:

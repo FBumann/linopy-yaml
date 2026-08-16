@@ -177,15 +177,13 @@ class _Binder:
                 self._register(d, self._explicit_frame(d, self.sources[d], self.program.dimension(d).carried))
 
     def remaining_dimensions(self) -> None:
-        """Build every dimension's frame, then check its coordinates.
+        """Refuse a dimension with no index, then check every lookup's values.
 
-        A dimension with no explicit index has no declared order, so its labels
-        are sorted — and deriving them costs a full pass, a scan plus a dedup,
-        over every parameter carrying the dimension, where an explicit index is
-        read as one dim-sized table. Dimensions already registered by
-        :meth:`sourced_dimensions` are skipped. Containment runs once every frame exists: it stops a
-        mistyped coordinate from vanishing in the join that places its terms,
-        leaving a model that builds and solves without them.
+        Every dimension needs one: :meth:`sourced_dimensions` registered those
+        that have it, so anything left here has none. Containment runs once
+        every frame exists — it stops a mistyped coordinate from vanishing in
+        the join that places its terms, leaving a model that builds and solves
+        without them.
         """
         dims = self._declared_dims()
         for d in sorted(dims):
@@ -194,12 +192,7 @@ class _Binder:
             carried = self.program.dimension(d).carried
             if carried:
                 raise DataError(lookups_need_an_index_message(d, list(carried), 'nothing'))
-            params = [p for p in self.program.parameters if d in p.dims]
-            if not params:
-                raise DataError(no_index_source_message(d))
-            stacked = pl.concat([self.parameters[p.name].select(pl.col(d).alias('val')) for p in params])
-            table = stacked.unique().sort('val').with_row_index('ord').with_columns(pl.col('ord').cast(pl.Int64))
-            self._register(d, table)
+            raise DataError(no_index_source_message(d))
 
         for d in sorted(dims):
             for c in sorted(self.program.dimension(d).coordinates):

@@ -442,6 +442,7 @@ def monthly():
         {
             'snapshot': index,
             'month': pl.DataFrame({'month': months}),
+            'generator': pl.DataFrame({'generator': gens}),
             'p_max': pl.DataFrame({'generator': gens, 'value': [10.0, 100.0]}),
             'cost': pl.DataFrame({'generator': gens, 'value': [1.0, 50.0]}),
             'load': pl.DataFrame({'snapshot': hours, 'value': [20.0] * 6}),
