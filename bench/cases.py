@@ -170,20 +170,19 @@ def _installed_frame(nodes: list[str], techs: list[str], installed: np.ndarray, 
     )
 
 
-def _dense_pairs(path: str, index: pd.Series, columns: pd.Series) -> pd.DataFrame:
+def _dense_pairs(path: str, index: pd.Series, columns: pd.Series) -> pd.Series:
     """A sparse two-key table reindexed over its full product.
 
     The eager lane has nowhere to put an absent pair, so this is where
     structural sparsity becomes NaN padding. Done in the open, because doing it
     at all is the point of the sparse cases.
+
+    Indexed by the pair rather than laid out wide: both lanes read a table by
+    the names of its dims, and a wide frame says nothing about which axis is
+    which.
     """
-    return (
-        pd.read_parquet(path)
-        .set_index([index.name, columns.name])['value']
-        .unstack()
-        .reindex(index=index, columns=columns)
-        .fillna(0.0)
-    )
+    pairs = pd.MultiIndex.from_product([index, columns], names=[index.name, columns.name])
+    return pd.read_parquet(path).set_index([index.name, columns.name])['value'].reindex(pairs).fillna(0.0)
 
 
 # --------------------------------------------------------------------------
@@ -453,13 +452,7 @@ def _sector_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]
     carriers = pd.read_parquet(paths['carrier'])['carrier']
     demand = pd.read_parquet(paths['demand'])
     installed = _dense_pairs(paths['installed'], nodes, techs)
-    produces = (
-        pd.read_parquet(paths['produces'])
-        .set_index(['tech', 'carrier'])['value']
-        .unstack()
-        .reindex(index=techs, columns=carriers)
-        .fillna(0.0)
-    )
+    produces = _dense_pairs(paths['produces'], techs, carriers)
     data = {
         'installed': installed,
         'produces': produces,
