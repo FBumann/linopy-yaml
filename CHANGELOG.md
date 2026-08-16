@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.170](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.169...v0.0.1-alpha.170) (2026-08-16)
+
+
+### Features
+
+* **language:** a dimension's index has one home, declared or supplied ([#908](https://github.com/fluxopt/lpspec/issues/908)) ([170e58a](https://github.com/fluxopt/lpspec/commit/170e58aae438ece0c206977d7aeedbc69dfc435e)), closes [#907](https://github.com/fluxopt/lpspec/issues/907) [#895](https://github.com/fluxopt/lpspec/issues/895)
+
 ## [0.0.1-alpha.169](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.168...v0.0.1-alpha.169) (2026-08-16)
 
 
