@@ -120,6 +120,96 @@ def test_translation_distinguishes_a_wrapping_edge_from_a_dropping_one(fmt: Form
 
 
 @EVERY_FORMAT
+def test_a_numeric_edge_is_a_third_translation_and_shows_its_fill(fmt: Format):
+    """The three edge policies are three models, so they are three renderings.
+
+    A bare shift drops the row the translation vacates; ``edge=v`` keeps the
+    row and puts *v* there. Rendering both as `t - 1` said the first thing
+    about a model doing the second — and the legend, which calls plain
+    translation "simply absent", said it in words as well.
+
+    The fill rides on the operator because it is per call site: one model may
+    pad a sum with `0` and a product with `1`, and a legend naming both cannot
+    say which term is which.
+    """
+
+    def storage(edge: str) -> dict[str, object]:
+        return {
+            'dimensions': {'snapshot': {'dtype': 'int'}},
+            'parameters': {'load': {'dims': ['snapshot']}},
+            'variables': {'soc': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 100}}},
+            'constraints': {
+                'balance': {
+                    'foreach': ['snapshot'],
+                    'expression': f'soc == shift(soc, over=snapshot, by=1{edge}) + load',
+                }
+            },
+        }
+
+    padded = typeset(storage(', edge=0'), fmt, legend=False)
+    assert fmt.operators['edge_minus'] in padded, 'a numeric edge renders as neither a plain nor a cyclic translation'
+    assert fmt.subscript(fmt.operators['edge_minus'], ['0']) in padded, 'the substituted value is not on the operator'
+    for other in (storage(''), storage(", edge='wrap'")):
+        assert fmt.operators['edge_minus'] not in typeset(other, fmt, legend=False), (
+            'a shift with no numeric edge borrowed the padded spelling'
+        )
+
+
+@EVERY_FORMAT
+def test_a_translation_under_a_pullback_survives_it(fmt: Format):
+    """``at`` and ``shift`` both re-index at the leaf, and the leaf has one subscript.
+
+    Whoever wrote it last used to win: ``at(shift(cap, over=period, by=1,
+    edge=0), onto=snapshot, by=period)`` printed `cap_{period(t)}`, dropping a
+    translation the plan builds. The subscript is a composition, so it renders
+    as one.
+    """
+    model = {
+        'dimensions': {
+            'snapshot': {'dtype': 'int', 'coords': ['period']},
+            'period': {'dtype': 'int'},
+        },
+        'parameters': {'cap': {'dims': ['period']}},
+        'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0}}},
+        'constraints': {
+            'within': {
+                'foreach': ['snapshot'],
+                'expression': 'p <= at(shift(cap, over=period, by=1, edge=0), onto=snapshot, by=period)',
+            }
+        },
+    }
+    text = typeset(model, fmt, legend=False)
+    assert fmt.operators['edge_minus'] in text, 'the shift under the at was dropped from the subscript'
+    assert fmt.apply(fmt.upright('period'), 't') in text, 'the pullback itself was dropped'
+
+
+@EVERY_FORMAT
+def test_translations_that_disagree_at_the_edge_do_not_merge(fmt: Format):
+    """Two shifts on one dim collapse to one offset only when they are the same shift.
+
+    ``shift(shift(x, by=1, edge='wrap'), by=1)`` used to print `t ⊖ 2`, which
+    the legend defines as *both* steps taken modulo the dimension — while the
+    outer one drops its vacated row instead. Composition renders as
+    composition; only identical policies add.
+    """
+    model = {
+        'dimensions': {'snapshot': {'dtype': 'int'}},
+        'variables': {'soc': {'foreach': ['snapshot'], 'bounds': {'lower': 0}}},
+        'constraints': {
+            'b': {
+                'foreach': ['snapshot'],
+                'expression': "soc <= shift(shift(soc, over=snapshot, by=1, edge='wrap'), over=snapshot, by=1)",
+            }
+        },
+    }
+    text = typeset(model, fmt, legend=False)
+    assert f'{fmt.operators["cyclic_minus"]} 2' not in text, 'an acyclic step was absorbed into a cyclic offset'
+    assert fmt.operators['cyclic_minus'] in text and fmt.operators['minus'] in text, (
+        'both translations should still be visible'
+    )
+
+
+@EVERY_FORMAT
 def test_the_legend_explains_wraparound_only_when_it_is_used(fmt: Format):
     rolled = {
         'dimensions': {'snapshot': {'dtype': 'int'}},
