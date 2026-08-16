@@ -495,22 +495,36 @@ so and as binaries plus linking rows where it says *no concept*.
 |---|---|---|---|
 | affine rows, COO, integrality | text | native | native |
 | semi-continuous | text | `kSemiContinuous` | native |
-| SOS1 / SOS2 | text section | **no concept** — `HighsLp` has no SOS field, no `addSos`, and `readModel` refuses a file with the section | `addSOS` |
+| SOS1 / SOS2 | text section | **no concept** — `HighsLp` has no SOS field and no `addSos` | `addSOS` |
 | indicator | text section | **no concept** | `addGenConstrIndicator` |
-| quadratic objective | text section | `passHessian` — but `Hessian + integrality` returns `kError`, so no MIQP | native, incl. MIQP |
+| convex quadratic objective | text section | `passHessian` | `setMObjective` |
+| nonconvex quadratic objective | text section | **refused** — *"Cannot solve non-convex QP problems with HiGHS"* | native, at default parameters |
+| quadratic objective **and** integrality | text section | **refused** — `run()` returns `kError` | native (MIQP) |
+| quadratic constraint | text section | **no concept** — no entry point at all | `addQConstr` / `addMQConstr` |
 
-HiGHS results are measured here; Gurobi's are from the API and linopy's
-`SolverFeature` table, and want a spike before they are relied on. linopy
-declares HiGHS with `INTEGER_VARIABLES` *and* `QUADRATIC_OBJECTIVE` in one flat
-`frozenset`, so its own model reports MIQP as available — the conjunction is
-what a capability descriptor has to express.
+Every cell is probed rather than remembered —
+`tests/test_sink_capability_probes.py` and
+`tests/test_gurobi_capability_probes.py`, each assertion naming this table.
+Capabilities move on somebody else's release, and nothing here calls
+`passHessian` yet, so without the probes a row would go wrong with the suite
+green. Three readings:
+
+- **HiGHS excludes quadratic twice**, by *convexity* and by *conjunction* with
+  integrality — and neither is a set membership. linopy declares HiGHS with
+  `INTEGER_VARIABLES` and `QUADRATIC_OBJECTIVE` in one flat `frozenset`, so its
+  own model reports MIQP as available.
+- **The `lp_file` column says what can be *written*, not what will be read
+  back.** The same HiGHS parser takes the quadratic section and refuses the
+  `sos` one, so only the round trip says which.
+- **Gurobi's column was the unverified one** and is now measured, retiring one
+  piece of folklore: a nonconvex quadratic objective needs no `NonConvex=2`.
 
 ### The quadratic handoff
 
-Neither direct API has an incremental counterpart to batched
-`addCols`/`addRows`: `passHessian` and `setMObjective` take the quadratic part
-whole. Under the aligned-only scope (`variable × variable` at the same
-coordinates) `Q` is **diagonal**, so it costs 16 bytes per quadratic column:
+Neither direct API has a per-coefficient counterpart to `changeCoeff`:
+`passHessian` and `setMObjective` take the quadratic part whole. Under the
+aligned-only scope (`variable × variable` at the same coordinates) `Q` is
+**diagonal**, so it costs 16 bytes per quadratic column:
 
 | quadratic cols | diagonal Hessian |
 |---|---|
@@ -528,6 +542,11 @@ invariant violation. Two caveats:
 - **The diagonal argument dies with the aligned restriction.** General bilinear
   `Q` is not diagonal, and its cost stops tracking the model — a second,
   independent reason that restriction is load-bearing.
+
+**Whole is not the same as reloading.** A second `passHessian` lands on the
+model already loaded, replacing `Q` and leaving the LP standing — so a moved
+quadratic *coefficient* is pushed like a cost, and only the sparsity *pattern*
+is structure.
 
 ## Not measured yet
 
