@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.162](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.161...v0.0.1-alpha.162) (2026-08-16)
+
+
+### Bug Fixes
+
+* **bench:** the floor reads the lookup by the name the model gives it ([#874](https://github.com/fluxopt/lpspec/issues/874)) ([799fa85](https://github.com/fluxopt/lpspec/commit/799fa85f234c8bbdf43c9a15d7c896f934fb476c))
+
 ## [0.0.1-alpha.161](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.160...v0.0.1-alpha.161) (2026-08-16)
 
 
