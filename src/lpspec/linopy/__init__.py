@@ -71,6 +71,7 @@ from lpspec.language.resolution import Namespace, expression_of
 from lpspec.language.validation import load_model
 from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
 from lpspec.linopy.loader import build_dim_coords, build_master_coords, load_parameters
+from lpspec.lowering import lower_expression, lower_program
 from lpspec.sources import validate_piecewise_data
 
 if TYPE_CHECKING:
@@ -104,12 +105,15 @@ def build(
         A model carrying every declaration the file makes.
 
     Raises:
-        LanguageError: A construct the language does not accept.
+        LanguageError: A construct the language does not accept — the same
+            verdict :func:`lpspec.check` gives, reached through the same
+            lowering pass, so neither lane accepts a file the other refuses.
         DataError: A source that is missing, unreadable, or the wrong shape.
     """
     with note(f'while loading {_named(model)}'):
         original = load_model(model)
         schema = expand_piecewise(original)
+        lower_program(original)
 
         master_coords = build_master_coords(schema, coords)
         dim_coords = build_dim_coords(schema, coords, master_coords)
@@ -152,16 +156,21 @@ def expression(
 
     Raises:
         KeyError: No named expression called *name*.
-        LanguageError: A construct the language does not accept.
+        LanguageError: A construct the language does not accept, in the file or
+            in the expression — the latter lowered here rather than at
+            :func:`build`, exactly as ``result.expression`` lowers at the read.
         DataError: A source that does not fit the file.
     """
     with note(f"while reading named expression '{name}' from {_named(model)}"):
-        schema = expand_piecewise(load_model(model))
+        original = load_model(model)
+        schema = expand_piecewise(original)
         if name not in schema.expressions:
             raise KeyError(
                 unknown_name_message('named expression', name, schema.expressions)
                 + ' expression() takes a name declared under expressions:, never an expression string.'
             )
+        lower_program(original)
+        lower_expression(schema, name)
         master_coords = build_master_coords(schema, coords)
         dim_coords = build_dim_coords(schema, coords, master_coords)
         dataset = load_parameters(schema, dict(sources), master_coords)
