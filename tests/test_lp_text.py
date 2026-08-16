@@ -111,6 +111,7 @@ def test_written_bounds_are_bit_exact() -> None:
     data = {
         'p_max': pl.DataFrame({'generator': ['wind', 'gas'], 'value': upper}),
         'cost': pl.DataFrame({'generator': ['wind', 'gas'], 'value': cost}),
+        'snapshot': pl.DataFrame({'snapshot': [0]}),
         'load': pl.DataFrame({'snapshot': [0], 'value': [0.0]}),
     }
     with tempfile.TemporaryDirectory() as tmp:
@@ -140,6 +141,7 @@ def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
     data = {
         'p_max': pl.DataFrame({'generator': generators, 'value': [100.0 + i for i in range(n_generators)]}),
         'cost': pl.DataFrame({'generator': generators, 'value': [1.0 + i / 8 for i in range(n_generators)]}),
+        'snapshot': pl.DataFrame({'snapshot': list(range(n_snapshots))}),
         'load': pl.DataFrame(
             {'snapshot': list(range(n_snapshots)), 'value': [50.0 + t % 7 for t in range(n_snapshots)]}
         ),

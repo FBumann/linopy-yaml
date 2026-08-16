@@ -1,5 +1,50 @@
 {
-  "p_max": {"generator": ["wind", "gas"], "value": [100.0, 100.0]},
-  "cost": {"generator": ["wind", "gas"], "value": [10.0, 50.0]},
-  "load": {"snapshot": [0, 1, 2, 3], "value": [80.0, 150.0, 60.0, 130.0]}
+  "cost": {
+    "generator": [
+      "wind",
+      "gas"
+    ],
+    "value": [
+      10.0,
+      50.0
+    ]
+  },
+  "generator": {
+    "generator": [
+      "wind",
+      "gas"
+    ]
+  },
+  "load": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "value": [
+      80.0,
+      150.0,
+      60.0,
+      130.0
+    ]
+  },
+  "p_max": {
+    "generator": [
+      "wind",
+      "gas"
+    ],
+    "value": [
+      100.0,
+      100.0
+    ]
+  },
+  "snapshot": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3
+    ]
+  }
 }

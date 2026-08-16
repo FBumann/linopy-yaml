@@ -21,8 +21,8 @@ from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
 MODEL = {
     'dimensions': {
-        'snapshot': {'dtype': 'int'},
-        'generator': {'dtype': 'str'},
+        'snapshot': {'dtype': 'int', 'values': [0, 1, 2]},
+        'generator': {'values': ['g1', 'g2']},
     },
     'parameters': {
         'p_max': {'dims': ['generator']},

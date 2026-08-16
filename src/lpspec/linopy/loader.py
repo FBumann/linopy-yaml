@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
@@ -34,7 +33,7 @@ from lpspec.language.expression_parser import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
 
     from lpspec.language.expression_parser import ExpressionNode
     from lpspec.language.model import Model
@@ -47,13 +46,13 @@ def build_master_coords(
 ) -> dict[str, pd.Index]:
     """Assemble master coordinate indices for every declared dimension.
 
-    The precedence of the data-binding rules: ``coords`` first, then the
-    ``values:`` the YAML declares, then **derived from the parameters that span
-    the dimension** — the union of the labels they carry, sorted, which is what
-    a dimension with no declared order gets on either lane.
+    The precedence of the data-binding rules: a key in ``sources``, then
+    ``coords``, then the ``values:`` the YAML declares. There is no fourth
+    step: a dimension without an index has no way to tell a mistyped label from
+    a new one.
 
     Raises:
-        DataError: A dimension no parameter carries and nothing declares.
+        DataError: A dimension with no index.
     """
     coords = coords or {}
     master: dict[str, pd.Index] = {}
@@ -66,64 +65,12 @@ def build_master_coords(
         elif dim_def.values is not None:
             master[dim_name] = pd.Index(dim_def.values, name=dim_name)
         else:
-            master[dim_name] = _derived_index(schema, dim_name, sources or {})
+            carried = sorted({**schema.targeted_of(dim_name), **schema.labels_of(dim_name)})
+            if carried:
+                raise DataError(lookups_need_an_index_message(dim_name, carried, 'nothing'))
+            raise DataError(no_index_source_message(dim_name))
 
     return master
-
-
-def _derived_index(schema: Model, dim: str, sources: Mapping[str, Any]) -> pd.Index:
-    """A dimension's labels, read off the parameters that span it.
-
-    Sorted, and the union across every such parameter: a derived dimension has
-    no declared order to preserve, and sorting is the one rule both lanes can
-    reach independently from data they read differently.
-
-    Nothing is coerced here — a parameter is read for its *labels* only, and
-    the shapes that carry none (a scalar, a positional sequence) are skipped:
-    a sequence is positional against the very index this would be deriving.
-
-    Raises:
-        DataError: No parameter carries the dimension, or the ones that do
-            carry no labels of their own.
-    """
-    labels: set[Any] = set()
-    found = False
-    for pname, pdef in schema.parameters.items():
-        if dim not in pdef.dims or pname not in sources:
-            continue
-        got = _labels_in(sources[pname], dim, pdef.dims)
-        if got is None:
-            continue
-        found = True
-        labels.update(got)
-    if not found:
-        raise DataError(no_index_source_message(dim))
-    return pd.Index(sorted(labels), name=dim)
-
-
-def _labels_in(raw: Any, dim: str, dims: list[str]) -> list[Any] | None:
-    """*dim*'s labels as one source carries them, or ``None`` for a shape with none.
-
-    The index of a pandas object, the keys of a dict, the column of anything
-    tidy. A number stands for every coordinate and a sequence is positional, so
-    neither says what the coordinates *are*.
-    """
-    if isinstance(raw, (str, Path)):
-        raw = pl.scan_parquet(raw)
-    if isinstance(raw, (pd.Series, pd.DataFrame)):
-        if dim in getattr(raw, 'columns', ()):
-            return list(pd.unique(raw[dim]))
-        names = list(raw.index.names)
-        if dim in names:
-            return list(pd.unique(raw.index.get_level_values(dim)))
-        return list(pd.unique(raw.index)) if len(dims) == 1 and names == [None] else None
-    if isinstance(raw, Mapping):
-        return list(raw) if len(dims) == 1 else None
-    table = as_frame(raw, dims)
-    if table is None:
-        return None
-    frame = table.collect() if isinstance(table, pl.LazyFrame) else table
-    return frame[dim].unique().to_list() if dim in frame.columns else None
 
 
 def supplied_index(

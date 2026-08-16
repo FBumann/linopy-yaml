@@ -62,6 +62,7 @@ WIND = [70.0 if night else 0.0 for night in NIGHT]
 STEP = 8
 
 SOURCES = {
+    'generator': pl.DataFrame({'generator': GENERATORS}),
     'p_max': pl.DataFrame(
         {
             'snapshot': [t for t in range(PERIODS) for _ in GENERATORS],

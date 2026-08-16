@@ -107,6 +107,7 @@ def dispatch_sources(gens: pd.DataFrame, load: pd.DataFrame) -> dict:
         'cost': gens[['generator', 'cost']].rename(columns={'cost': 'value'}),
         'load': load,
         'snapshot': load[['snapshot']],
+        'generator': gens[['generator']],
     }
 
 
@@ -810,6 +811,7 @@ def test_the_objective_sums_the_coefficients_that_land_on_one_column(expression,
         'objective': {'sense': 'minimize', 'expression': expression},
     }
     sources = {
+        'i': pl.DataFrame({'i': [0, 1]}),
         'cost': pl.DataFrame({'i': [0, 1], 'value': [2.0, 3.0]}),
         'lb': pl.DataFrame({'i': [0, 1], 'value': [1.0, 1.0]}),
     }
@@ -835,6 +837,8 @@ def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows():
         'objective': {'sense': 'minimize', 'expression': 'sum(q * price, over=generator)'},
     }
     sources = {
+        'snapshot': pl.DataFrame({'snapshot': [0, 1]}),
+        'generator': pl.DataFrame({'generator': ['g0', 'g1', 'g2']}),
         'price': pl.DataFrame(
             {'snapshot': [0, 0, 0, 1, 1, 1], 'generator': ['g0', 'g1', 'g2'] * 2, 'value': [1.0, 2.0, 3.0] * 2}
         ),
@@ -1501,14 +1505,21 @@ def test_a_missing_row_is_still_only_sparse():
     assert lps.solve(LABEL_MODEL, sparse).objective == pytest.approx(5.0)
 
 
-def test_a_derived_dimension_cannot_have_a_stranger():
-    """`values: null` takes the dimension's labels *from* the parameters, so the
-    union of what arrived is the definition and the check has nothing to ask.
-    Running it anyway would refuse every such model.
+def test_a_dimension_with_no_index_is_refused_rather_than_taking_one_from_the_data():
+    """Which is what makes the stranger above a stranger.
+
+    Labels read out of the parameters would *be* the definition, so a mistyped
+    one could not be told from a new one — the check above would have nothing
+    left to ask.
     """
-    derived = override(LABEL_MODEL, **{'dimensions.f.values': None})
+    no_index = override(LABEL_MODEL, **{'dimensions.f.values': None})
     data = {'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'cap': _CAP}
-    assert lps.solve(derived, data).objective == pytest.approx(15.0)
+
+    with pytest.raises(DataError, match="dimension 'f' has no index"):
+        lps.solve(no_index, data)
+
+    supplied = {**data, 'f': pl.DataFrame({'f': ['a', 'b']})}
+    assert lps.solve(no_index, supplied).objective == pytest.approx(15.0)
 
 
 #: A `line` whose two endpoints are *both* multi-valued for one label — the case
@@ -1761,7 +1772,7 @@ def test_two_solutions_over_different_members_concatenate():
     frames = []
     for members in (['a', 'b'], ['a', 'c']):
         cap = pl.DataFrame({'node': members, 'value': [1.0, 2.0]})
-        with lps.build(model, {'cap': cap}) as bound:
+        with lps.build(model, {'node': pl.DataFrame({'node': members}), 'cap': cap}) as bound:
             frames.append(bound.solve().primal('x'))
 
     assert pl.concat(frames).height == 4
@@ -1771,7 +1782,7 @@ def test_two_solutions_over_different_members_concatenate():
 #: what a caller handing over a dense table does. `i=1` is zero throughout, so
 #: that row asserts `0 >= 10` and is infeasible.
 SPELLED_ZEROS_MODEL = {
-    'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
+    'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}, 'j': {'dtype': 'int', 'values': [0, 1, 2, 3]}},
     'parameters': {'a': {'dims': ['i', 'j']}},
     'variables': {'x': {'foreach': ['j'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'c': {'foreach': ['i'], 'expression': 'sum(a * x, over=j) >= 10'}},
