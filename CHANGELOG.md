@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.163](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.162...v0.0.1-alpha.163) (2026-08-16)
+
+
+### Bug Fixes
+
+* **compat:** a dimension index is a table on both lanes, and a defect in one reads the same ([#877](https://github.com/fluxopt/lpspec/issues/877)) ([cb7af0a](https://github.com/fluxopt/lpspec/commit/cb7af0abb633fc439db6107ab166298fe403f3f9))
+
 ## [0.0.1-alpha.162](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.161...v0.0.1-alpha.162) (2026-08-16)
 
 
