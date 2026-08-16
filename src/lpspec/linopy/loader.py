@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,7 @@ import xarray as xr
 
 from lpspec.errors import (
     DataError,
+    dense_array_message,
     duplicate_coordinate_message,
     sparse_divisor_message,
     uncovered_constant_message,
@@ -260,9 +261,18 @@ def _coerce_to_dataarray(
 ) -> xr.DataArray:
     """Coerce a user-provided value into an ``xr.DataArray``.
 
-    In the DataFrame branch the two-dims check guarantees flat columns, so
-    ``stack()`` yields a ``Series`` — which is what the ``cast`` asserts.
+    Tables in: a ``Series`` keeps its dims in an index and a ``DataFrame`` in
+    columns, and each binds **by name**, so a caller hands the same object to
+    either lane. A dense ``xarray.DataArray`` is refused rather than taken —
+    xarray is what this lane *builds*, not what it reads.
+
+    A dict, a sequence and a bare number are the plain-Python shapes, spread
+    over the master coordinates the same way the relational front door spreads
+    them.
     """
+    if isinstance(raw, xr.DataArray):
+        raise DataError(dense_array_message(name))
+
     if isinstance(raw, (int, float, np.integer, np.floating)):
         return xr.DataArray(float(raw))
 
@@ -274,39 +284,24 @@ def _coerce_to_dataarray(
         series.index.name = dims[0]
         raw = series
 
+    if isinstance(raw, pd.DataFrame):
+        raw = _tidy_series(name, raw, dims)
+
     if isinstance(raw, pd.Series):
-        if len(dims) != 1:
+        if raw.index.nlevels != len(dims):
             msg = (
-                f"Parameter '{name}': pd.Series input is only supported for "
-                f'1-D parameters, but declared dims are {dims}.'
+                f"Parameter '{name}' is over {dims}, and its index has "
+                f'{raw.index.nlevels} level(s). Set the index to the dims the '
+                f'parameter declares — set_index({dims}) on a tidy frame.'
             )
             raise DataError(msg)
-        if raw.index.name is None:
+        if any(n is None for n in raw.index.names):
             raw = raw.copy()
-            raw.index.name = dims[0]
+            raw.index.names = dims
         _refuse_duplicate_index(name, raw.index, dims)
         return xr.DataArray.from_series(raw)
 
-    if isinstance(raw, pd.DataFrame):
-        if len(dims) != 2:
-            msg = (
-                f"Parameter '{name}': pd.DataFrame input is only supported for "
-                f'2-D parameters, but declared dims are {dims}.'
-            )
-            raise DataError(msg)
-        if raw.index.name is None:
-            raw = raw.copy()
-            raw.index.name = dims[0]
-        if raw.columns.name is None:
-            raw.columns.name = dims[1]
-        stacked = cast('pd.Series', raw.stack())
-        stacked.name = name
-        return xr.DataArray.from_series(stacked).unstack()
-
-    if isinstance(raw, xr.DataArray):
-        return raw
-
-    if isinstance(raw, (np.ndarray, list)):
+    if isinstance(raw, (np.ndarray, list, tuple)):
         arr_np = np.asarray(raw)
         if arr_np.ndim == 0:
             return xr.DataArray(float(arr_np))
@@ -321,16 +316,39 @@ def _coerce_to_dataarray(
                 raise DataError(msg)
             return xr.DataArray(arr_np, dims=[dim], coords={dim: master_coords[dim]})
         msg = (
-            f"Parameter '{name}': unsupported type ndarray.\n"
-            f'For multi-dimensional arrays without named axes, provide a '
-            f'pandas DataFrame or xr.DataArray with named dimensions.\n'
-            f'Declared dims: {dims}.'
+            f"Parameter '{name}': a sequence is positional along one dimension, and "
+            f"'{name}' is over {dims}. Pass a table carrying {[*dims, 'value']} instead."
         )
         raise DataError(msg)
 
     type_name = type(raw).__name__
     msg = f"Parameter '{name}': unsupported type '{type_name}'."
     raise TypeError(msg)
+
+
+def _tidy_series(name: str, frame: pd.DataFrame, dims: list[str]) -> pd.Series:
+    """A tidy ``(dims…, value)`` frame as the indexed series the rest reads.
+
+    The one reading of a ``DataFrame``, so the same object means the same thing
+    on both lanes. A frame indexed by the dims already — no ``value`` column,
+    one data column — is taken as it stands, which is what ``reset_index()``
+    round-trips to.
+    """
+    if 'value' not in frame.columns:
+        missing = [d for d in dims if d not in frame.columns and d not in (frame.index.names or [])]
+        if missing or frame.shape[1] != 1:
+            raise DataError(
+                f"Parameter '{name}': a frame is read tidy — one row per coordinate, with "
+                f'columns {[*dims, "value"]}. Got columns {list(frame.columns)}.'
+            )
+        return frame.iloc[:, 0].rename('value')
+    named = [d for d in dims if d in frame.columns]
+    if len(named) != len(dims):
+        raise DataError(
+            f"Parameter '{name}': a frame is read tidy — one row per coordinate, with "
+            f'columns {[*dims, "value"]}. Got columns {list(frame.columns)}.'
+        )
+    return frame.set_index(named)['value']
 
 
 def _validate_dims(

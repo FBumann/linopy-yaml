@@ -226,6 +226,24 @@ def unknown_labels_message(name: str, dim: str, strangers: list[object], known: 
     )
 
 
+def dense_array_message(name: str) -> str:
+    """A dense array where a table belongs — one wording, both lanes.
+
+    An ``xarray.DataArray`` is recognisable and has ``__len__``, so left alone
+    it would be read positionally on one lane and directly on the other. Both
+    refuse it: this package reads tables — rows under named columns, an index
+    being a column wearing a hat — and hands arrays back rather than taking
+    them.
+    """
+    return (
+        f"parameter '{name}': an xarray.DataArray is not a source. lpspec reads tables — "
+        f'rows under named columns — and hands arrays back rather than taking them. Pass '
+        f'array.to_series(), whose index binds by name on both lanes, or '
+        f'array.to_series().reset_index() for a tidy frame. Result.to_dataarray() is the '
+        f'way back out.'
+    )
+
+
 def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     r"""``unknown <kind> '<name>'``, plus the near miss or the declared set.
 

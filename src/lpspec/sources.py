@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import DataError, PiecewiseExpansionError
-from lpspec.relational.frames import as_frame, labels_frame
+from lpspec.errors import DataError, PiecewiseExpansionError, dense_array_message
+from lpspec.relational.frames import as_frame, is_dense_array, labels_frame
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -64,6 +64,8 @@ def tidy_sources(
         if isinstance(obj, (str, Path)):
             sources[pname] = obj
             continue
+        if is_dense_array(obj):
+            raise DataError(dense_array_message(pname))
         table = as_frame(obj, pdef.dims)
         if table is None:
             raise DataError(

@@ -78,8 +78,9 @@ the side-by-sides comparable.
 <details markdown="1">
 <summary>From linopy's shapes — pass them as they are</summary>
 
-An indexed pandas Series — or an xarray `DataArray` — *is* a source: index
-levels bind to dims by name, so there is nothing to convert. The
+An indexed pandas Series *is* a source: index levels bind to dims by name,
+so there is nothing to convert. A `DataArray` is one `.to_series()` away —
+lpspec reads tables and hands arrays back, never the other way. The
 [dispatch](dispatch.md) instance, linopy-style:
 
 ```python

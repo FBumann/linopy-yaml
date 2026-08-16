@@ -284,11 +284,12 @@ class TestLoadParameters:
             ),
             pytest.param(
                 [0, 1],
-                xr.DataArray([10, 20], dims=['x'], coords={'x': [0, 1]}),
+                pd.DataFrame({'x': [0, 1], 'value': [10.0, 20.0]}),
                 {'x': 1},
                 20.0,
-                id='dataarray',
+                id='tidy-frame',
             ),
+            pytest.param([0, 1], [10.0, 20.0], {'x': 1}, 20.0, id='sequence'),
         ],
     )
     def test_accepted_shapes(self, values, data, select, expected):
@@ -317,9 +318,16 @@ class TestLoadParameters:
             pytest.param(
                 {'x': {'values': [1], 'dtype': 'int'}, 'y': {'values': [2], 'dtype': 'int'}},
                 {'a': {'dims': ['x']}},
-                {'a': xr.DataArray([[1]], dims=['x', 'y'], coords={'x': [1], 'y': [2]})},
-                'unexpected dimensions',
-                id='unexpected-dims',
+                {'a': pd.DataFrame({'x': [1], 'y': [2], 'value': [1.0]}).set_index(['x', 'y'])['value']},
+                'index has 2 level',
+                id='an-index-deeper-than-the-declared-dims',
+            ),
+            pytest.param(
+                {'x': {'values': [1], 'dtype': 'int'}},
+                {'a': {'dims': ['x']}},
+                {'a': xr.DataArray([1], dims=['x'], coords={'x': [1]})},
+                'not a source',
+                id='a-dense-array',
             ),
             pytest.param(
                 {'g': {'values': ['a', 'b']}},

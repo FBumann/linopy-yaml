@@ -166,11 +166,9 @@ def test_both_lanes_and_the_enumeration_agree(sos_type):
     the capability finding rather than a defect (pinned below).
     """
     from tests.differential import differential
-    from tests.oracle import xr
 
     eager = {
-        name: xr.DataArray.from_series(_table(v).to_pandas().set_index(['site', 'size'])['value'])
-        for name, v in (('value', VALUE), ('cap', CAP))
+        name: _table(v).to_pandas().set_index(['site', 'size'])['value'] for name, v in (('value', VALUE), ('cap', CAP))
     }
     with differential(model(sos_type), eager) as run:
         assert run.result.objective == pytest.approx(best(sos_type)), 'the set does not restrict what it claims to'

@@ -1,9 +1,16 @@
 """The one place that knows what a caller's table library is.
 
 What a caller hands over is learned from the Arrow PyCapsule protocol, not from
-an import, so neither pyarrow nor pandas is a dependency. ``pandas.Series`` and
-``xarray.DataArray`` have no capsule that carries their index, so they are
-unwrapped first — and only when their library is already in ``sys.modules``.
+an import, so neither pyarrow nor pandas is a dependency. ``pandas.Series`` has
+no capsule that carries its index, so it is unwrapped first — and only when
+pandas is already in ``sys.modules``.
+
+**Tables in, arrays out.** What is read here is a table: rows under named
+columns, an index being a column wearing a hat. An ``xarray.DataArray`` is a
+dense n-dimensional array rather than a table, and taking one would be this
+package agreeing that a parameter is a rectangle already materialised. xarray
+is what a result is handed back *as* (``to_dataarray``) and what the linopy
+lane builds internally, never what either lane reads.
 """
 
 from __future__ import annotations
@@ -18,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-__all__ = ['as_frame', 'labels_frame']
+__all__ = ['as_frame', 'is_dense_array', 'labels_frame']
 
 
 def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
@@ -43,9 +50,6 @@ def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
     if isinstance(obj, pl.DataFrame):
         return obj.lazy()
 
-    xr = sys.modules.get('xarray')
-    if xr is not None and isinstance(obj, xr.DataArray):
-        obj = obj.to_series()
     pd = sys.modules.get('pandas')
     if pd is not None and isinstance(obj, pd.Series):
         obj = _series_to_frame(obj, dims)
@@ -58,6 +62,20 @@ def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
         except (TypeError, ValueError, pl.exceptions.PolarsError):
             return None
     return None
+
+
+def is_dense_array(obj: object) -> bool:
+    """Whether *obj* is the one shape recognised and deliberately not read.
+
+    An ``xarray.DataArray`` has ``__len__``, so left unasked it would fall
+    through to a positional read and bind a dense array as a sequence of values
+    in index order. Asked, the caller raises
+    :func:`~lpspec.errors.dense_array_message` and names the rewrite.
+    """
+    import sys
+
+    xr = sys.modules.get('xarray')
+    return xr is not None and isinstance(obj, xr.DataArray)
 
 
 def _series_to_frame(series: Any, dims: Sequence[str]) -> Any:

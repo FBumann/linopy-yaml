@@ -25,7 +25,6 @@ import lpspec as lps
 from lpspec.api import load_model
 from tests.conftest import port_sources
 from tests.differential import RTOL, differential
-from tests.oracle import xr
 
 RESERVES_YAML = Path('examples/reserves.yaml')
 
@@ -42,9 +41,10 @@ OPTIMUM = 915.0
 def _shim_inputs() -> tuple[dict, dict]:
     """The port tables in the shapes both lanes accept in one call.
 
-    1-D parameters travel as ``pd.Series``, the 2-D ``zone_share`` as a dense
-    ``xr.DataArray`` (absent memberships as 0, which is what a missing row
-    means), and each dimension carrying lookups as its index frame.
+    1-D parameters travel as ``pd.Series``, the 2-D ``zone_share`` as one with
+    a two-level index — densified first, absent memberships as 0, which is what
+    a missing row means — and each dimension carrying lookups as its index
+    frame.
     """
     tables = {k: v.to_pandas() if isinstance(v, pl.DataFrame) else v for k, v in port_sources('reserves').items()}
     data = {
@@ -62,8 +62,12 @@ def _shim_inputs() -> tuple[dict, dict]:
             'zone_req',
         )
     }
-    data['zone_share'] = xr.DataArray(
-        tables['zone_share'].pivot(index='generator', columns='zone', values='value').fillna(0.0)
+    data['zone_share'] = (
+        tables['zone_share']
+        .pivot(index='generator', columns='zone', values='value')
+        .fillna(0.0)
+        .stack()
+        .rename_axis(['generator', 'zone'])
     )
     coords = {k: tables[k] for k in ('generator', 'line', 'offer')}
     return data, coords
