@@ -296,6 +296,23 @@ def declared_index_also_supplied_message(dim: str, declares: str, where: str) ->
     )
 
 
+def declared_map_needs_labels_message(dim: str, maps: Iterable[str]) -> str:
+    """A dimension whose maps the file declares and whose labels nothing does — both lanes.
+
+    Its own wording rather than the missing-index one, because the fix is not
+    "pass a table carrying these lookup columns": those columns are the file's,
+    and passing them is refused. Only the labels are wanted.
+    """
+    declared = ', '.join(f'lookups.{n}.values' for n in sorted(maps))
+    return (
+        f"dimension '{dim}' has its maps in the file ({declared}) but nothing says which of its "
+        f'labels exist. A map is a relation over a dimension, not the dimension itself — it may '
+        f'omit members, and its key order is arbitrary. Declare dimensions.{dim}.values, or pass '
+        f"the labels under key '{dim}': the declared maps are read against them, and a label no "
+        f'map mentions gets a null.'
+    )
+
+
 def no_index_source_message(dim: str) -> str:
     """A dimension with no index — one wording, both lanes.
 

@@ -13,6 +13,7 @@ import xarray as xr
 
 from lpspec.errors import (
     DataError,
+    declared_map_needs_labels_message,
     dense_array_message,
     duplicate_coordinate_message,
     lookups_need_an_index_message,
@@ -69,6 +70,9 @@ def build_master_coords(
         elif dim_def.values is not None:
             master[dim_name] = pd.Index(dim_def.values, name=dim_name)
         else:
+            declared = schema.declared_maps(dim_name)
+            if declared:
+                raise DataError(declared_map_needs_labels_message(dim_name, declared))
             carried = sorted({**schema.targeted_of(dim_name), **schema.labels_of(dim_name)})
             if carried:
                 raise DataError(lookups_need_an_index_message(dim_name, carried, 'nothing'))
@@ -82,21 +86,29 @@ def supplied_index(
 ) -> Any:
     """The index for *dim_name* the caller passed, or the one the file declares.
 
-    The data-binding precedence, which is the relational lane's: a key in
-    ``sources``, then ``coords=``, then what the file declares. A lookup
-    carrying ``values:`` puts its map in the file, so the dimension it is over
-    has an index without either — assembled into the same frame a caller would
-    have passed, which is why nothing downstream distinguishes them.
+    Where the labels come from, which is the relational lane's rule: a key in
+    ``sources``, then ``coords=``, then the dimension's own ``values:`` — never
+    two of them, refused before this runs. A lookup's ``values:`` supplies no
+    labels; where the caller brings them, each declared map is read against
+    them here, so nothing downstream distinguishes a map that was declared from
+    one that arrived as a column.
 
     Returns:
         A frame, path or label sequence, or ``None`` where none supplies one.
     """
-    if dim_name in sources:
-        return sources[dim_name]
-    if dim_name in coords:
-        return coords[dim_name]
-    declared = schema.declared_index(dim_name)
-    return None if declared is None else pd.DataFrame(declared)
+    supplied = sources.get(dim_name, coords.get(dim_name))
+    maps = schema.declared_maps(dim_name)
+    if supplied is None:
+        declared = schema.declared_index(dim_name)
+        return None if declared is None else pd.DataFrame(declared)
+    if not maps:
+        return supplied
+    frame = _index_frame(supplied, dim_name)
+    frame = pd.DataFrame({dim_name: list(supplied)}) if frame is None else frame
+    for name, values in maps.items():
+        right = pd.DataFrame({dim_name: list(values), name: list(values.values())})
+        frame = frame.merge(right, on=dim_name, how='left')
+    return frame
 
 
 def dim_index_of(source: Any, dim_name: str) -> pd.Index:

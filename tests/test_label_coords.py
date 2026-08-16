@@ -518,8 +518,8 @@ def test_a_declared_map_agrees_with_the_oracle():
         assert run.result.objective == pytest.approx(13.0)
 
 
-#: A dimension bare but for its declared map, so the refusal below names the
-#: lookup rather than the dimension's own ``values:``.
+#: A dimension bare but for its declared map, so the caller owns its labels and
+#: the file owns the relation over them.
 MAP_ONLY = {**DECLARED, 'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}}}
 
 _LABELS = pl.DataFrame({'generator': ['g1', 'g2', 'g3']})
@@ -530,23 +530,48 @@ _LABELS_AND_MAP = pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['so
     ('model', 'sources', 'coords', 'names'),
     [
         pytest.param(DECLARED, {'generator': _LABELS}, None, 'dimensions.generator.values', id='labels-twice'),
-        pytest.param(MAP_ONLY, {'generator': _LABELS}, None, 'lookups.gen_bus.values', id='labels-against-a-map'),
         pytest.param(MAP_ONLY, {'generator': _LABELS_AND_MAP}, None, 'lookups.gen_bus.values', id='the-map-twice'),
         pytest.param(DECLARED, {}, {'generator': ['g1', 'g2', 'g3']}, "coords['generator']", id='through-coords'),
     ],
 )
 def test_a_declared_index_refuses_a_supplied_one(model, sources, coords, names):
-    """One dimension, one home — the file owns its index or the caller does.
+    """One fact, one home — for the labels, and for each map over them.
 
     A precedence rule instead lets the file describe a model the caller does
     not build: the YAML says ``g1`` sits on north, the passed column says south,
-    and the file a reviewer reads is not the model that solved. Neither half is
-    overridable on its own either, because labels are derived from the maps
-    where the dimension declares none, so taking one changes what the other
-    means.
+    and the file a reviewer reads is not the model that solved.
     """
     with pytest.raises(DataError, match=re.escape(names)):
         lps.solve(model, {**DECLARED_SOURCES, **sources}, coords=coords)
+
+
+def test_a_map_alone_does_not_say_which_labels_exist():
+    """A map is a relation over a dimension, never the dimension.
+
+    It may omit members and its key order is whatever someone typed, so reading
+    the label set out of it would let an added entry create a member and a
+    reordered map re-order the axis that ``shift`` reads positionally. With
+    ``generator`` declaring no ``values:`` and nothing supplying them, the map
+    over it leaves the dimension without an index, and both lanes say so.
+    """
+    with pytest.raises(DataError, match='has its maps in the file'):
+        lps.solve(MAP_ONLY, DECLARED_SOURCES)
+
+
+def test_a_declared_map_is_read_against_the_labels_the_caller_brings():
+    """The two facts have different authors, which is the shape the split buys.
+
+    The caller says which generators exist and in what order; the file says how
+    they sit on buses. ``g3`` is in nobody's map, so it is a generator with a
+    null lookup rather than a generator that does not exist — the partial case,
+    reachable here with a single map. And the labels arrive unsorted, so a
+    result in the caller's order is what proves the map did not impose its own.
+    """
+    unsorted_labels = pl.DataFrame({'generator': ['g3', 'g1', 'g2']})
+    with lps.solve(MAP_ONLY, {**DECLARED_SOURCES, 'generator': unsorted_labels}) as result:
+        assert result.objective == pytest.approx(13.0), 'g1 serves north and g2 south, exactly as the file maps them'
+        built = [row['generator'] for row in result.primal('p').to_dicts()]
+    assert built == ['g3', 'g1', 'g2'], "the label order is the caller's, not the order the map was typed in"
 
 
 def test_a_declared_index_is_refused_the_same_way_on_the_eager_lane():

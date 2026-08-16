@@ -57,17 +57,26 @@ from exactly one of:
 2. **`coords=`** — anything `pd.Index()` accepts, or a table carrying the label
    column plus one column per [lookup](dimensions.md#lookups) over the
    dimension, each named after it;
-3. **`values:` in the YAML** — the dimension's own, plus any
-   [lookup](dimensions.md#values-puts-a-small-map-in-the-file) over it that
-   declares one, assembled into the index a caller would otherwise pass.
+3. **`dimensions.<d>.values` in the YAML** — the labels written out in the file.
 
 **3 is exclusive of 1 and 2 rather than outranked by them.** A dimension the
 file declares and the caller also supplies is refused at bind, naming the
 declaration and the key that collided with it. The file owns that dimension's
-index or the caller does, never both — so there is no precedence to remember,
-and no way for the file a reviewer reads to describe a relation the caller
-quietly replaced. A model whose label set varies from run to run should not
-declare one. Between 1 and 2, both being the caller's, `sources` wins.
+labels or the caller does, never both — so there is no precedence to remember,
+and no way for the file a reviewer reads to describe a model the caller quietly
+replaced. A model whose label set varies from run to run should not declare
+one. Between 1 and 2, both being the caller's, `sources` wins.
+
+**A [declared map](dimensions.md#values-puts-a-small-map-in-the-file) is not on
+that list.** `lookups.<x>.values` says how labels map, never which ones exist: a
+map is a partial relation over the dimension, free to omit members and written
+in whatever key order someone typed, and neither may decide an extent nor an
+order that [`shift`](operators.md#shift) reads positionally. A map is instead
+*read against* whichever of the three supplied the labels, and a label it omits
+gets a null. Each map has one home in the same way the labels do — the file, or
+a column of the caller's index — and claiming both is the same refusal. Which
+leaves exactly one index with two authors, one fact each: **labels from the
+caller, maps from the file.**
 
 There is no fourth step. A dimension none of the three supplies raises, and
 labels are never read out of the parameters: they would *be* the definition,
@@ -93,6 +102,8 @@ Both lanes bind by these rules.
 | a dimension carrying lookups with no index | |
 | a dimension nothing can supply labels for | names both ways to fix it |
 | a dimension the file declares and the caller also supplies | names the declaration and the colliding key |
+| a lookup whose map the file declares and the caller also supplies | names the map and the colliding column |
+| a declared map whose labels nothing supplies | names the map, and asks only for the labels |
 
 ### Accepted
 
