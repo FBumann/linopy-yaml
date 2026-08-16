@@ -20,6 +20,16 @@ dimensions:
     description: a block of demand that may be shed, each dearer than the last
     dtype: int
 
+lookups:
+  commitment:
+    description: whether a plant is committed unit by unit or dispatched freely
+    over: plant
+    dtype: str
+  fuel_use:
+    description: whether a plant's fuel use is read off the piecewise curve or a flat heat rate
+    over: plant
+    dtype: str
+
 parameters:
   unit_size:
     description: capacity of one unit of a plant
@@ -39,13 +49,6 @@ parameters:
   start_headroom:
     description: share of unit size a unit may reach in the hour it starts
     dims: [plant, hour]
-  is_thermal:
-    description: 1 where a plant is committed unit by unit rather than dispatched freely
-    dims: [plant]
-  uses_curve:
-    description: 1 where a plant's fuel use is read off the piecewise curve
-    dims: [plant]
-
   fuel_slope:
     description: fuel per unit of output on one piece of the curve
     dims: [plant, segment]
@@ -173,49 +176,49 @@ constraints:
   committed_units_exist:
     description: no more units may be committed than the plant has
     foreach: [plant, hour]
-    where: "is_thermal > 0"
+    where: "commitment == unit"
     expression: committed <= units
 
   thermal_ceiling:
     description: a committed unit produces no more than its available capacity
     foreach: [plant, hour]
-    where: "is_thermal > 0"
+    where: "commitment == unit"
     expression: output <= committed * unit_size * availability
 
   thermal_floor:
     description: a committed unit produces no less than its minimum
     foreach: [plant, hour]
-    where: "is_thermal > 0"
+    where: "commitment == unit"
     expression: output >= committed * unit_size * min_output
 
   variable_ceiling:
     description: a plant with no commitment produces no more than its available capacity
     foreach: [plant, hour]
-    where: "is_thermal == 0"
+    where: "commitment == free"
     expression: output <= units * unit_size * availability
 
   commitment_tracks_starts:
     description: what is committed changes only by what starts and what shuts
     foreach: [plant, hour]
-    where: "is_thermal > 0"
+    where: "commitment == unit"
     expression: committed - shift(committed, over=hour, by=1, edge='wrap') == starting - shutting
 
   stay_up_once_started:
     description: a unit that started within the last six hours is still committed
     foreach: [plant, hour]
-    where: "is_thermal > 0"
+    where: "commitment == unit"
     expression: committed >= started_recently
 
   stay_down_once_shut:
     description: a unit that shut within the last six hours is still down
     foreach: [plant, hour]
-    where: "is_thermal > 0"
+    where: "commitment == unit"
     expression: units - committed >= shut_recently
 
   ramp_up:
     description: output rises no faster than the ramp allows, with extra room in the hour a unit starts
     foreach: [plant, hour]
-    where: "is_thermal > 0"
+    where: "commitment == unit"
     expression: >-
       output - shift(output, over=hour, by=1, edge='wrap')
       <= ramp * unit_size * (committed - starting)
@@ -225,7 +228,7 @@ constraints:
   ramp_down:
     description: output falls no faster than the ramp allows
     foreach: [plant, hour]
-    where: "is_thermal > 0"
+    where: "commitment == unit"
     expression: >-
       shift(output, over=hour, by=1, edge='wrap') - output
       <= ramp * unit_size * (committed - starting)
@@ -237,13 +240,13 @@ constraints:
       fuel use is above every piece of the curve, so at the optimum it sits on
       the binding one, and the no-load intercept is charged per committed unit
     foreach: [plant, segment, hour]
-    where: "uses_curve > 0"
+    where: "fuel_use == curve"
     expression: burned >= fuel_slope * output + fuel_intercept * committed
 
   fuel_at_the_heat_rate:
     description: a plant with no curve burns fuel at a flat heat rate
     foreach: [plant, hour]
-    where: "uses_curve == 0"
+    where: "fuel_use == flat"
     expression: burned == heat_rate * output
 
   fuel_to_start:

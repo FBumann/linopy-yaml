@@ -26,7 +26,7 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{P}$ | index $p$ --- `plant` --- the units dispatched over the day |
+| $\mathcal{P}$ | index $p$ --- `plant` carrying labels $\mathrm{commitment},\enspace \mathrm{fuel\_use}$ --- the units dispatched over the day |
 | $\mathcal{H}$ | index $h$ --- `hour` --- hours of a representative day that repeats |
 | $\mathcal{S}$ | index $s$ --- `segment` --- a piece of the fuel curve |
 | $\mathcal{T}$ | index $t$ --- `step` --- a block of demand that may be shed, each dearer than the last |
@@ -41,8 +41,6 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 | $\mathit{min\_output}$ | `min_output` over $\mathcal{P}$ --- share of unit size a committed unit must produce |
 | $\mathit{ramp}$ | `ramp` over $\mathcal{P}$ --- share of unit size output may change by from one hour to the next |
 | $\mathit{start\_headroom}$ | `start_headroom` over $\mathcal{P} \times \mathcal{H}$ --- share of unit size a unit may reach in the hour it starts |
-| $\mathit{is\_thermal}$ | `is_thermal` over $\mathcal{P}$ --- 1 where a plant is committed unit by unit rather than dispatched freely |
-| $\mathit{uses\_curve}$ | `uses_curve` over $\mathcal{P}$ --- 1 where a plant's fuel use is read off the piecewise curve |
 | $\mathit{fuel\_slope}$ | `fuel_slope` over $\mathcal{P} \times \mathcal{S}$ --- fuel per unit of output on one piece of the curve |
 | $\mathit{fuel\_intercept}$ | `fuel_intercept` over $\mathcal{P} \times \mathcal{S}$ --- no-load fuel of one piece, charged per committed unit |
 | $\mathit{heat\_rate}$ | `heat_rate` over $\mathcal{P}$ --- fuel per unit of output for a plant with no curve |
@@ -91,47 +89,47 @@ $$\mathit{shed}_{t,h} \le \mathit{shed}^{\mathrm{limit}}_{t} \cdot \mathit{deman
 
 **`committed_units_exist`**
 
-$$\mathit{committed}_{p,h} \le \mathit{units}_{p} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{is\_thermal}_{p} > 0$$
+$$\mathit{committed}_{p,h} \le \mathit{units}_{p} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
 
 **`thermal_ceiling`**
 
-$$\mathit{output}_{p,h} \le \mathit{committed}_{p,h} \cdot \mathit{unit\_size}_{p} \cdot \mathit{availability}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{is\_thermal}_{p} > 0$$
+$$\mathit{output}_{p,h} \le \mathit{committed}_{p,h} \cdot \mathit{unit\_size}_{p} \cdot \mathit{availability}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
 
 **`thermal_floor`**
 
-$$\mathit{output}_{p,h} \ge \mathit{committed}_{p,h} \cdot \mathit{unit\_size}_{p} \cdot \mathit{min\_output}_{p} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{is\_thermal}_{p} > 0$$
+$$\mathit{output}_{p,h} \ge \mathit{committed}_{p,h} \cdot \mathit{unit\_size}_{p} \cdot \mathit{min\_output}_{p} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
 
 **`variable_ceiling`**
 
-$$\mathit{output}_{p,h} \le \mathit{units}_{p} \cdot \mathit{unit\_size}_{p} \cdot \mathit{availability}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{is\_thermal}_{p} = 0$$
+$$\mathit{output}_{p,h} \le \mathit{units}_{p} \cdot \mathit{unit\_size}_{p} \cdot \mathit{availability}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{free}$$
 
 **`commitment_tracks_starts`**
 
-$$\mathit{committed}_{p,h} - \mathit{committed}_{p,h \ominus 1} = \mathit{starting}_{p,h} - \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{is\_thermal}_{p} > 0$$
+$$\mathit{committed}_{p,h} - \mathit{committed}_{p,h \ominus 1} = \mathit{starting}_{p,h} - \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
 
 **`stay_up_once_started`**
 
-$$\mathit{committed}_{p,h} \ge \mathit{starting}_{p,h} + \mathit{starting}_{p,h \ominus 1} + \mathit{starting}_{p,h \ominus 2} + \mathit{starting}_{p,h \ominus 3} + \mathit{starting}_{p,h \ominus 4} + \mathit{starting}_{p,h \ominus 5} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{is\_thermal}_{p} > 0$$
+$$\mathit{committed}_{p,h} \ge \mathit{starting}_{p,h} + \mathit{starting}_{p,h \ominus 1} + \mathit{starting}_{p,h \ominus 2} + \mathit{starting}_{p,h \ominus 3} + \mathit{starting}_{p,h \ominus 4} + \mathit{starting}_{p,h \ominus 5} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
 
 **`stay_down_once_shut`**
 
-$$\mathit{units}_{p} - \mathit{committed}_{p,h} \ge \mathit{shutting}_{p,h} + \mathit{shutting}_{p,h \ominus 1} + \mathit{shutting}_{p,h \ominus 2} + \mathit{shutting}_{p,h \ominus 3} + \mathit{shutting}_{p,h \ominus 4} + \mathit{shutting}_{p,h \ominus 5} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{is\_thermal}_{p} > 0$$
+$$\mathit{units}_{p} - \mathit{committed}_{p,h} \ge \mathit{shutting}_{p,h} + \mathit{shutting}_{p,h \ominus 1} + \mathit{shutting}_{p,h \ominus 2} + \mathit{shutting}_{p,h \ominus 3} + \mathit{shutting}_{p,h \ominus 4} + \mathit{shutting}_{p,h \ominus 5} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
 
 **`ramp_up`**
 
-$$\mathit{output}_{p,h} - \mathit{output}_{p,h \ominus 1} \le \mathit{ramp}_{p} \cdot \mathit{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) + \mathit{start\_headroom}_{p,h} \cdot \mathit{unit\_size}_{p} \cdot \mathit{starting}_{p,h} - \mathit{min\_output}_{p} \cdot \mathit{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{is\_thermal}_{p} > 0$$
+$$\mathit{output}_{p,h} - \mathit{output}_{p,h \ominus 1} \le \mathit{ramp}_{p} \cdot \mathit{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) + \mathit{start\_headroom}_{p,h} \cdot \mathit{unit\_size}_{p} \cdot \mathit{starting}_{p,h} - \mathit{min\_output}_{p} \cdot \mathit{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
 
 **`ramp_down`**
 
-$$\mathit{output}_{p,h \ominus 1} - \mathit{output}_{p,h} \le \mathit{ramp}_{p} \cdot \mathit{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) - \mathit{min\_output}_{p} \cdot \mathit{unit\_size}_{p} \cdot \mathit{starting}_{p,h} + \mathit{start\_headroom}_{p,h} \cdot \mathit{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{is\_thermal}_{p} > 0$$
+$$\mathit{output}_{p,h \ominus 1} - \mathit{output}_{p,h} \le \mathit{ramp}_{p} \cdot \mathit{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) - \mathit{min\_output}_{p} \cdot \mathit{unit\_size}_{p} \cdot \mathit{starting}_{p,h} + \mathit{start\_headroom}_{p,h} \cdot \mathit{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
 
 **`fuel_above_each_piece`**
 
-$$\mathit{burned}_{p,h} \ge \mathit{fuel\_slope}_{p,s} \cdot \mathit{output}_{p,h} + \mathit{fuel\_intercept}_{p,s} \cdot \mathit{committed}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace s \in \mathcal{S},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{uses\_curve}_{p} > 0$$
+$$\mathit{burned}_{p,h} \ge \mathit{fuel\_slope}_{p,s} \cdot \mathit{output}_{p,h} + \mathit{fuel\_intercept}_{p,s} \cdot \mathit{committed}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace s \in \mathcal{S},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{fuel\_use}(p) = \text{curve}$$
 
 **`fuel_at_the_heat_rate`**
 
-$$\mathit{burned}_{p,h} = \mathit{heat\_rate}_{p} \cdot \mathit{output}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathit{uses\_curve}_{p} = 0$$
+$$\mathit{burned}_{p,h} = \mathit{heat\_rate}_{p} \cdot \mathit{output}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{fuel\_use}(p) = \text{flat}$$
 
 **`fuel_to_start`**
 
@@ -205,6 +203,16 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: a block of demand that may be shed, each dearer than the last
         dtype: int
 
+    lookups:
+      commitment:
+        description: whether a plant is committed unit by unit or dispatched freely
+        over: plant
+        dtype: str
+      fuel_use:
+        description: whether a plant's fuel use is read off the piecewise curve or a flat heat rate
+        over: plant
+        dtype: str
+
     parameters:
       unit_size:
         description: capacity of one unit of a plant
@@ -224,13 +232,6 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       start_headroom:
         description: share of unit size a unit may reach in the hour it starts
         dims: [plant, hour]
-      is_thermal:
-        description: 1 where a plant is committed unit by unit rather than dispatched freely
-        dims: [plant]
-      uses_curve:
-        description: 1 where a plant's fuel use is read off the piecewise curve
-        dims: [plant]
-
       fuel_slope:
         description: fuel per unit of output on one piece of the curve
         dims: [plant, segment]
@@ -358,49 +359,49 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       committed_units_exist:
         description: no more units may be committed than the plant has
         foreach: [plant, hour]
-        where: "is_thermal > 0"
+        where: "commitment == unit"
         expression: committed <= units
 
       thermal_ceiling:
         description: a committed unit produces no more than its available capacity
         foreach: [plant, hour]
-        where: "is_thermal > 0"
+        where: "commitment == unit"
         expression: output <= committed * unit_size * availability
 
       thermal_floor:
         description: a committed unit produces no less than its minimum
         foreach: [plant, hour]
-        where: "is_thermal > 0"
+        where: "commitment == unit"
         expression: output >= committed * unit_size * min_output
 
       variable_ceiling:
         description: a plant with no commitment produces no more than its available capacity
         foreach: [plant, hour]
-        where: "is_thermal == 0"
+        where: "commitment == free"
         expression: output <= units * unit_size * availability
 
       commitment_tracks_starts:
         description: what is committed changes only by what starts and what shuts
         foreach: [plant, hour]
-        where: "is_thermal > 0"
+        where: "commitment == unit"
         expression: committed - shift(committed, over=hour, by=1, edge='wrap') == starting - shutting
 
       stay_up_once_started:
         description: a unit that started within the last six hours is still committed
         foreach: [plant, hour]
-        where: "is_thermal > 0"
+        where: "commitment == unit"
         expression: committed >= started_recently
 
       stay_down_once_shut:
         description: a unit that shut within the last six hours is still down
         foreach: [plant, hour]
-        where: "is_thermal > 0"
+        where: "commitment == unit"
         expression: units - committed >= shut_recently
 
       ramp_up:
         description: output rises no faster than the ramp allows, with extra room in the hour a unit starts
         foreach: [plant, hour]
-        where: "is_thermal > 0"
+        where: "commitment == unit"
         expression: >-
           output - shift(output, over=hour, by=1, edge='wrap')
           <= ramp * unit_size * (committed - starting)
@@ -410,7 +411,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       ramp_down:
         description: output falls no faster than the ramp allows
         foreach: [plant, hour]
-        where: "is_thermal > 0"
+        where: "commitment == unit"
         expression: >-
           shift(output, over=hour, by=1, edge='wrap') - output
           <= ramp * unit_size * (committed - starting)
@@ -422,13 +423,13 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           fuel use is above every piece of the curve, so at the optimum it sits on
           the binding one, and the no-load intercept is charged per committed unit
         foreach: [plant, segment, hour]
-        where: "uses_curve > 0"
+        where: "fuel_use == curve"
         expression: burned >= fuel_slope * output + fuel_intercept * committed
 
       fuel_at_the_heat_rate:
         description: a plant with no curve burns fuel at a flat heat rate
         foreach: [plant, hour]
-        where: "uses_curve == 0"
+        where: "fuel_use == flat"
         expression: burned == heat_rate * output
 
       fuel_to_start:
