@@ -1,5 +1,13 @@
 # Every rendering path, in one model. See README.md — this is not meant to be
 # a sensible optimisation problem, only an exhaustive one.
+
+# A description is a rendering path too, and this one carries every character
+# the notations escape: CI's pdflatex run over this file is what proves the
+# LaTeX escapes are *right*, where the .out files only prove they are there.
+description: >-
+  every character a notation escapes, set as text: link_to, 100% & #1 costs
+  $5 {net} ~ ^ \ *star* @ref <label>
+
 dimensions:
   snapshot: {dtype: int}
   generator: {dtype: str}

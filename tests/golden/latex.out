@@ -5,6 +5,8 @@
 \allowdisplaybreaks
 \begin{document}
 
+\noindent every character a notation escapes, set as text: link\_to, 100\% \& \#1 costs \$5 \{net\} \textasciitilde{} \textasciicircum{} \textbackslash{} *star* @ref <label>
+
 \paragraph{Sets}
 \begin{description}
 \item[$\mathcal{T}$] index $t$ --- \texttt{snapshot}
