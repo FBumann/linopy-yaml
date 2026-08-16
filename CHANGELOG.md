@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.152](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.151...v0.0.1-alpha.152) (2026-08-16)
+
+
+### Documentation
+
+* **ports:** a claim is checked against the instance before a file is written ([#841](https://github.com/fluxopt/lpspec/issues/841)) ([7a40f1b](https://github.com/fluxopt/lpspec/commit/7a40f1b61cf55e4596f8e8a8830e4d01e7a758b0))
+
 ## [0.0.1-alpha.151](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.150...v0.0.1-alpha.151) (2026-08-16)
 
 
