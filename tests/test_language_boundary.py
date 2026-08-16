@@ -48,6 +48,7 @@ def test_every_shipped_example_is_inside_the_language(path):
         pytest.param({'variables.p.domain': 'binary', 'variables.p.bounds': {}}, id='binary-variable'),
         pytest.param({'variables.p.where': 'snapshot > 2'}, id='where-on-a-dimension-roadmap-5b'),
         pytest.param(_objective('sum(p * cost)'), id='affine-product'),
+        pytest.param(_objective('sum(p * p)'), id='degree-two-in-the-objective'),
     ],
 )
 def test_inside_the_language(patch):
@@ -63,7 +64,16 @@ def test_inside_the_language(patch):
             r"operator '\*\*'",
             id='power-operator',
         ),
-        pytest.param(_objective('sum(p * p)'), 'degree 2', id='degree-two'),
+        pytest.param(
+            {'constraints.power_balance.expression': 'sum(p * p, over=generator) == load'},
+            'degree 2',
+            id='degree-two-in-a-constraint',
+        ),
+        pytest.param(
+            _objective('sum(p) * sum(p)'),
+            'sums of more than one term',
+            id='two-reductions-multiplied-even-in-the-objective',
+        ),
         pytest.param(_objective('sum(cost / p)'), 'divisor contains variables', id='variable-divisor'),
         pytest.param(
             _objective('sum(p / (1 - cost))'),

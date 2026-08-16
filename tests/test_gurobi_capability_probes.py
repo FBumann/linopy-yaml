@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 gurobipy = pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
 
+from lpspec.relational.sinks import SOLVERS  # noqa: E402 — after the guard, or a bare install fails at import
+
 TABLE = 'docs/about/benchmarks.md, "Sink capabilities"'
 
 #: What these probes measure is acceptance, not precision: a spatial or mixed-integer
@@ -104,15 +106,26 @@ def test_both_quadratic_parts_take_a_matrix_through_their_bulk_entry_point(model
     )
 
 
-def test_the_gurobi_descriptor_says_what_these_probes_measured():
-    """The claim, beside its evidence — `test_sink_capability_probes.py`'s twin.
+def test_the_gurobi_descriptor_says_what_this_sink_does_with_what_it_measured():
+    """The claim beside its evidence — and the gap between them, stated.
 
-    Gurobi is the sink a refusal *names*, so its column being right is what
-    makes "…and these sinks do take it" true rather than encouraging.
+    `test_sink_capability_probes.py`'s twin, with one difference this column
+    has and HiGHS's does not: **a descriptor describes the sink as shipped**,
+    not the library it wraps. Everything above solved, and nothing here passes
+    gurobipy a Hessian yet, so the quadratic entries are `absent` — claiming
+    otherwise would drop the quadratic part of an objective and answer a
+    different model's optimum.
+
+    So this is two assertions, not one: what the sink does today, and that the
+    gap is the hand-off rather than the solver.
     """
-    from lpspec.relational.sinks import SOLVERS
-
     capabilities = SOLVERS['gurobi'].capabilities
-    for capability in ('quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint', 'sos'):
-        assert capabilities.support(capability) == 'native', f'{capability} solved natively above'
+    assert capabilities.support('sos') == 'native', 'a set is loaded natively, and was probed above'
+    assert capabilities.support('integrality') == 'native'
     assert capabilities.excludes == (), 'every combination probed above solved; nothing here is excluded'
+    for capability in ('quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'):
+        assert capabilities.support(capability) == 'absent', (
+            f'gurobipy takes {capability} — the probes above measure it — but this sink does not '
+            f'hand it one. When the hand-off lands, this line moves to native and the refusal '
+            f'contract starts naming gurobi.'
+        )

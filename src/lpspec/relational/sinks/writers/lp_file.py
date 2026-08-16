@@ -81,6 +81,10 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         if model.objective_constant:
             f.write(f'{model.objective_constant:+.17g}\n'.encode())
         sink(objective, f)
+        if model.quad.height:
+            f.write(b'+ [\n')
+            sink(_quadratic_terms(model), f)
+            f.write(b'] / 2\n')
 
         f.write(b'\ns.t.\n\n')
         for block in model.row_blocks(EMIT_BUDGET):
@@ -101,6 +105,36 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
             sink(_set_lines(model), f)
 
         f.write(b'\nend\n')
+
+
+def _quadratic_terms(model: ModelTables) -> pl.LazyFrame:
+    r"""The objective's quadratic part, one ``+2 x3 * x7`` line per pair.
+
+    **The section is divided by two, so every coefficient here is doubled.**
+    The format writes :math:`[\;\cdot\;] / 2`, which is the Hessian convention
+    wearing text: a term the model states as :math:`q\,x_i x_j` is written
+    ``2q``, on the diagonal and off it alike, and the reader halves it back.
+    The uniformity is worth stating because it is *not* the Hessian's own rule
+    — there the diagonal doubles and the off-diagonal does not, since a
+    symmetric matrix holds an off-diagonal pair twice.
+
+    A pair arrives ordered, summed and deduplicated
+    (:meth:`~lpspec.relational.engines.polars.engine.PolarsEngine._objective_quadratic`),
+    so nothing here sorts — the same contract the ``sos`` section reads its
+    groups off. ``x3 ^ 2`` is the format's spelling of a squared column, and no
+    parser accepts ``x3 * x3``.
+    """
+    doubled = pl.col('coeff') * 2
+    return model.quad.lazy().select(
+        pl.concat_str(
+            *_signed(doubled),
+            pl.lit(' x'),
+            digits(pl.col('col_l')),
+            pl.when(pl.col('col_l') == pl.col('col_r'))
+            .then(pl.lit(' ^ 2'))
+            .otherwise(pl.concat_str(pl.lit(' * x'), digits(pl.col('col_r')))),
+        )
+    )
 
 
 def _set_lines(model: ModelTables) -> pl.LazyFrame:

@@ -85,13 +85,20 @@ SENSE = pl.Enum(list(SENSE_CODES))
 
 @dataclass(frozen=True)
 class ModelTables:
-    """The built model, as a sink sees it.
+    r"""The built model, as a sink sees it.
 
     ``cols`` (lb, ub, vtype), ``obj`` (col, coeff), ``rows`` (row, sense, rhs)
     and ``matrix`` in CSR: ``(col, coeff)`` in row-major order, with
     ``row_starts[r] : row_starts[r + 1]`` the half-open span row ``r`` owns.
     The objective constant lives outside the frames, having no column to
     attach to.
+
+    ``quad`` is the objective's quadratic part, in ``(col_l, col_r)`` order,
+    one row per **unordered pair** of columns: the objective contains ``coeff · x[col_l] · x[col_r]``, whole.
+    Three sinks spell that three ways — a Hessian is :math:`\\frac12 x^\\top Q x`,
+    the LP section is divided by two, Gurobi takes :math:`x^\\top Q x` — so what
+    arrives here is the algebra and the conversion belongs to whoever loads it.
+    Empty for every affine model, which is nearly all of them.
 
     ``sos`` is the fifth stream and the one that lands unevenly: ``(set, type,
     col, weight)`` in ``(set, weight)`` order, one row per member, empty for
@@ -116,6 +123,7 @@ class ModelTables:
 
     cols: pl.DataFrame
     obj: pl.DataFrame
+    quad: pl.DataFrame
     rows: pl.DataFrame
     matrix: pl.DataFrame
     sos: pl.DataFrame
@@ -252,6 +260,12 @@ class ModelTables:
         each column's type and every SOS member do not, so a model whose
         digest moved has to be loaded again.
 
+        **The quadratic part contributes its pattern and not its values.** A
+        pair that appeared or moved is a model to load again, no solver taking
+        new Hessian entries by value; a coefficient that merely changed is
+        pushed, both sinks replacing the quadratic part whole. Reading the
+        values in here would reload every rebind that touched one.
+
         **A set is structure even though nothing about it is a coefficient.**
         No solver takes new members by value, and a mask that moved one while
         leaving the matrix alone would otherwise re-solve the old sets under
@@ -284,6 +298,8 @@ class ModelTables:
         digest.update(f'{self.column_count} {self.row_count} {self.objective_sense}'.encode())
         for vector in (
             self.cols['vtype'].to_physical().to_numpy(),
+            self.quad['col_l'].to_numpy(),
+            self.quad['col_r'].to_numpy(),
             self.rows['sense'].to_physical().to_numpy(),
             self.matrix['col'].to_numpy(),
             self.matrix['coeff'].to_numpy(),

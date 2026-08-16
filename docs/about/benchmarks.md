@@ -549,9 +549,13 @@ invariant violation. Two caveats:
 
 - HiGHS accepts `dim_ < num_col` (verified), so ordering quadratic variables
   first bounds the Hessian to that block rather than the whole model.
-- **The diagonal argument dies with the aligned restriction.** General bilinear
-  `Q` is not diagonal, and its cost stops tracking the model — a second,
-  independent reason that restriction is load-bearing.
+- **The diagonal argument dies as soon as the product is not aligned**, and
+  the shipped language does not restrict it to aligned: `x[i] * y[i, j]`
+  broadcasts and `x[i] * y[j] * a[i, j]` joins through a table. The replacement
+  bound is **one entry per pair the expression states** — `nnz` of whatever
+  couples the factors — which is a declared-shape quantity and still tracks the
+  model. What does *not* is the cross join of two reductions, and that is the
+  shape the language refuses (`language/degree.py`).
 
 **Whole is not the same as reloading.** A second `passHessian` lands on the
 model already loaded, replacing `Q` and leaving the LP standing — so a moved

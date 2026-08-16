@@ -151,9 +151,9 @@ def test_a_build_compiles_no_expression_and_a_read_compiles_exactly_one(monkeypa
     compiled = []
     original = PolarsCompiler.expression
 
-    def counting(self, expr, context):
+    def counting(self, expr, context, **kwargs):
         compiled.append(context)
-        return original(self, expr, context)
+        return original(self, expr, context, **kwargs)
 
     monkeypatch.setattr(PolarsCompiler, 'expression', counting)
     with lps.build(MODEL, sources()) as bound:

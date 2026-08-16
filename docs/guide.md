@@ -165,9 +165,10 @@ Worth knowing before you start, rather than after:
   fine; `upper: -rating` is not. This one has bitten a real port —
   [#31](https://github.com/fluxopt/lpspec/issues/31), and the workaround is to
   ship the negated column as data.
-- **Every expression is affine in the variables.** Degree 1, always: no
-  variable times variable. That is the ceiling the whole design is built
-  around, not an unimplemented feature. →
+- **Every expression is affine in the variables — except the objective**,
+  which takes `variable * variable`. Everywhere else a product needs a
+  variable-free factor. That ceiling is what the whole design is built around,
+  and where it sits is a choice with reasons. →
   [The ceiling](about/ceiling.md#two-tiers-and-the-ceiling)
 - **Several plausible features are refused on purpose**, with reasons.
   → [the roadmap](about/roadmap.md)

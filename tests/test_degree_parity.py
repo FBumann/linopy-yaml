@@ -23,23 +23,42 @@ from tests.conftest import dispatch_model_path
 from tests.oracle import lpspec_linopy  # skips the module without the [linopy] extra
 
 
-#: One entry per way an expression leaves the language on a binary node — the
-#: three ways degree 1 is lost, and the divisor that adds, which is affine and
-#: refused all the same because a quotient is built as one reciprocal factor.
+#: One entry per way an expression leaves the language on a binary node. The
+#: first is *positional*: the same product one line up, in the objective, is the
+#: language's quadratic case and is checked by ``test_quadratic_objective.py``.
+#: The divisor that adds is affine and refused all the same, because a quotient
+#: is built as one reciprocal factor.
 @pytest.mark.parametrize(
-    ('expression', 'match'),
+    ('patch', 'match'),
     [
-        pytest.param('sum(p * p)', 'degree 2', id='variable-times-variable'),
-        pytest.param('sum(cost / p)', 'divisor contains variables', id='variable-in-a-divisor'),
-        pytest.param('sum(p ** 2)', r"operator '\*\*'", id='an-operator-outside-the-language'),
         pytest.param(
-            'sum(p / (1 - cost))',
+            {'constraints.balance.expression': 'sum(p * p, over=generator) == load'},
+            'degree 2',
+            id='variable-times-variable-in-a-constraint',
+        ),
+        pytest.param(
+            {'objective.expression': 'sum(p) * sum(p)'},
+            'sums of more than one term',
+            id='two-reductions-multiplied-even-in-the-objective',
+        ),
+        pytest.param(
+            {'objective.expression': 'sum(cost / p)'},
+            'divisor contains variables',
+            id='variable-in-a-divisor',
+        ),
+        pytest.param(
+            {'objective.expression': 'sum(p ** 2)'},
+            r"operator '\*\*'",
+            id='an-operator-outside-the-language',
+        ),
+        pytest.param(
+            {'objective.expression': 'sum(p / (1 - cost))'},
             'must be a single Constant/Parameter factor',
             id='a-divisor-that-adds',
         ),
     ],
 )
-def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, expression, match):
+def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, patch, match):
     """Not just "both raise": both say the same thing.
 
     The relational lane prefixes the declaration it was lowering; the eager lane
@@ -48,7 +67,7 @@ def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, 
     two dialects the way the hand-copied ``**`` message could.
     """
     data = dispatch_model_inputs
-    path = dispatch_model_path(tmp_path, **{'objective.expression': expression})
+    path = dispatch_model_path(tmp_path, **patch)
 
     with pytest.raises(LanguageError, match=match) as eager:
         lpspec_linopy.build(path, data)

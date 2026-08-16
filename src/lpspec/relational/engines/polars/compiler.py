@@ -13,6 +13,7 @@ dimension table      ``val``, ``ord``, plus declared lookups
 parameter table      ``dims…``, ``value``
 variable frame       ``dims…``, ``var_label``
 term fragment        ``dims…``, ``var_label``, ``coeff``
+quad fragment        ``dims…``, ``var_label``, ``var_label_2``, ``coeff``
 const fragment       ``dims…``, ``cval``
 ===================  ==========================================
 """
@@ -21,7 +22,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any, Literal, NoReturn
 
 import polars as pl
 
@@ -110,35 +111,48 @@ class Presence:
         return frame.join(self.frame.select(PRESENT), how='cross').drop(PRESENT)
 
 
+#: What a fragment is a piece *of*. ``term`` and ``quad`` differ only in how
+#: many label columns the coefficient multiplies, which is why the shape
+#: operators read :attr:`TermFragment.carried` rather than branching.
+Kind = Literal['term', 'quad', 'const']
+
+
 @dataclass(frozen=True)
 class TermFragment:
-    """One additive piece of a compiled affine expression.
+    """One additive piece of a compiled expression.
 
-    Terms yield ``(dims…, var_label, coeff)``, const parts ``(dims…, cval)``.
-    An LP row *is* a sum of pieces, so every shape operator rewrites one.
+    Terms yield ``(dims…, var_label, coeff)``, quadratic terms
+    ``(dims…, var_label, var_label_2, coeff)`` and const parts
+    ``(dims…, cval)``. An LP row *is* a sum of pieces, so every shape operator
+    rewrites one.
     """
 
     dims: tuple[str, ...]
     frame: pl.LazyFrame
-    is_term: bool
+    kind: Kind
 
-    presence: Presence | None = None
-    """Where the variable under this fragment exists — see :class:`Presence`.
+    presences: tuple[Presence, ...] = ()
+    """Where the variables under this fragment exist — see :class:`Presence`.
 
-    ``None`` is nothing to report: a constant fragment has no variable, and a
+    Empty is nothing to report: a constant fragment has no variable, and a
     reduction clears it, ``sum`` skipping absent slots rather than propagating
     them (v1 ``convention.rst`` §13).
+
+    A **tuple**, because a quadratic term stands on two variables and is absent
+    where either is. Joining two differently-keyed coordinate sets into one
+    frame would materialise a product to say what both halves already say, so
+    they travel side by side and each consumer applies them in turn.
     """
 
     @property
     def value_column(self) -> str:
-        """``coeff`` for a term, ``cval`` for a constant part."""
-        return value_column(is_term=self.is_term)
+        """``coeff`` where a variable is under it, ``cval`` otherwise."""
+        return value_column(self.kind)
 
     @property
     def carried(self) -> list[str]:
         """The non-dim columns a projection has to keep."""
-        return carried_columns(is_term=self.is_term)
+        return carried_columns(self.kind)
 
 
 def _refuse_a_fragment_without_the_dims(p: TermFragment, dims: list[str], context: str, operator: str) -> NoReturn:
@@ -153,24 +167,28 @@ def _refuse_a_fragment_without_the_dims(p: TermFragment, dims: list[str], contex
     malformed, which is the lane's own business and stays `LanguageError`
     pending #1134.
     """
-    if not p.is_term:
+    if p.kind == 'const':
         raise LaneError(constant_beside_a_term_message(context, operator, dims))
     raise LanguageError(f'in {context}: {operator} along {dims} but the expression has dims {list(p.dims)}')
 
 
-def value_column(*, is_term: bool) -> str:
+#: The label columns each kind carries, in the order a projection keeps them.
+_LABELS: dict[Kind, list[str]] = {'term': ['var_label'], 'quad': ['var_label', 'var_label_2'], 'const': []}
+
+
+def value_column(kind: Kind) -> str:
     """The value column a fragment of this kind carries.
 
     A free function as well as a :class:`TermFragment` property because
     :func:`_join_mul` names the columns of the fragment it is *building*, whose
     kind need not be either operand's.
     """
-    return 'coeff' if is_term else 'cval'
+    return 'cval' if kind == 'const' else 'coeff'
 
 
-def carried_columns(*, is_term: bool) -> list[str]:
+def carried_columns(kind: Kind) -> list[str]:
     """The non-dim columns a projection of this fragment kind has to keep."""
-    return ['var_label', value_column(is_term=is_term)] if is_term else [value_column(is_term=is_term)]
+    return [*_LABELS[kind], value_column(kind)]
 
 
 class _Carrier:
@@ -201,10 +219,17 @@ class _Carrier:
 
 @dataclass(frozen=True)
 class CompiledExpression:
-    """An affine expression as fragments: variable terms and a constant part."""
+    """An expression as fragments: variable terms, quadratic terms, a constant part.
+
+    Three tuples rather than one keyed by kind, because every consumer wants a
+    different subset of them and wants it named: a constraint row takes terms
+    and constants and refuses quadratics outright, the objective takes all
+    three, and the reader of a named expression takes the affine two.
+    """
 
     terms: tuple[TermFragment, ...]
     consts: tuple[TermFragment, ...]
+    quads: tuple[TermFragment, ...] = ()
 
 
 def _defined(col: pl.Expr, dtype: str) -> pl.Expr:
@@ -608,8 +633,15 @@ class PolarsCompiler:
     # expressions → fragments
     # ------------------------------------------------------------------
 
-    def expression(self, expr: plan.Expression, context: str) -> CompiledExpression:
-        """Compile an affine expression into term and const fragments.
+    def expression(self, expr: plan.Expression, context: str, *, quadratic: bool = False) -> CompiledExpression:
+        """Compile an expression into term, quadratic and const fragments.
+
+        *quadratic* is the position's ceiling, passed by the caller that knows
+        it: the objective can hold a product of two variables and a constraint
+        row cannot. The language has already refused what it refuses
+        (``language/degree.py``), so this is the **plan-boundary backstop** —
+        a degree-2 node arriving by any other route dies here rather than
+        becoming a term whose second variable is silently dropped.
 
         No join in the walk maintains order, on evidence rather than by
         omission: the mul join's ``maintain_order`` holds the label order on
@@ -621,14 +653,26 @@ class PolarsCompiler:
         """
 
         def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
-            """``a * b``, with the variable-carrying side normalised to the left."""
-            if a.terms and b.terms:
+            """``a * b``, with the variable-carrying side normalised to the left.
+
+            Four products of fragment lists; the diagonal one is the quadratic
+            case. Degree 3 is refused rather than represented — a quadratic
+            fragment times a term has nowhere to put the third label.
+            """
+            if (a.quads and b.terms) or (b.quads and a.terms) or (a.quads and b.quads):
+                raise LanguageError(
+                    f'in {context}: a product of degree 3 or more. A sink takes a quadratic form; '
+                    f'nothing takes a cubic one.'
+                )
+            if a.terms and b.terms and not quadratic:
                 raise LanguageError(f'nonlinear product in {context}: both factors contain variables')
-            if b.terms:
+            quads = tuple(_join_quad(t, u) for t in a.terms for u in b.terms)
+            if b.terms or b.quads:
                 a, b = b, a
-            terms = tuple(_join_mul(t, c, is_term=True) for t in a.terms for c in b.consts)
-            consts = tuple(_join_mul(x, c, is_term=False) for x in a.consts for c in b.consts)
-            return CompiledExpression(terms, consts)
+            quads += tuple(_join_mul(q, c, 'quad') for q in a.quads for c in b.consts)
+            terms = tuple(_join_mul(t, c, t.kind) for t in a.terms for c in b.consts)
+            consts = tuple(_join_mul(x, c, 'const') for x in a.consts for c in b.consts)
+            return CompiledExpression(terms, consts, quads)
 
         def quotient(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
             """``a / b``, where *b* is one variable-free factor.
@@ -636,18 +680,19 @@ class PolarsCompiler:
             That it is *one* is ``degree.check_binary``'s answer, given at load
             with no data bound, so a divisor that adds never reaches a plan.
             """
-            if b.terms:
+            if b.terms or b.quads:
                 raise LanguageError(f'nonlinear quotient in {context}: the divisor contains variables')
             assert len(b.consts) == 1, 'a divisor that adds is refused at load'
             inv = b.consts[0]
-            terms = tuple(_join_mul(t, inv, is_term=True, divide=True) for t in a.terms)
-            consts = tuple(_join_mul(x, inv, is_term=False, divide=True) for x in a.consts)
-            return CompiledExpression(terms, consts)
+            terms = tuple(_join_mul(t, inv, t.kind, divide=True) for t in a.terms)
+            quads = tuple(_join_mul(q, inv, 'quad', divide=True) for q in a.quads)
+            consts = tuple(_join_mul(x, inv, 'const', divide=True) for x in a.consts)
+            return CompiledExpression(terms, consts, quads)
 
         def ev(e: plan.Expression) -> CompiledExpression:
             if isinstance(e, plan.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
-                return CompiledExpression((), (TermFragment((), frame, False),))
+                return CompiledExpression((), (TermFragment((), frame, 'const'),))
             if isinstance(e, plan.Parameter):
                 return CompiledExpression((), (self._parameter_fragment(e.name),))
             if isinstance(e, plan.Variable):
@@ -656,7 +701,7 @@ class PolarsCompiler:
                 return _map_fragments(ev(e.operand), _negate)
             if isinstance(e, plan.Add):
                 a, b = ev(e.left), ev(e.right)
-                return CompiledExpression(a.terms + b.terms, a.consts + b.consts)
+                return CompiledExpression(a.terms + b.terms, a.consts + b.consts, a.quads + b.quads)
             if isinstance(e, plan.Multiply):
                 return product(ev(e.left), ev(e.right))
             if isinstance(e, plan.Divide):
@@ -686,7 +731,7 @@ class PolarsCompiler:
         """
         dims = self.program.parameter(name).dims
         frame = self.data.parameters[name].select(*dims, pl.col('value').cast(pl.Float64).alias('cval'))
-        return TermFragment(dims, frame, False)
+        return TermFragment(dims, frame, 'const')
 
     def _variable_fragment(self, name: str) -> TermFragment:
         """A variable as a term with unit coefficients.
@@ -708,8 +753,8 @@ class PolarsCompiler:
         dims = declaration.dims
         frame = self.variables[name].select(*dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff'))
         propagates = declaration.where is not None and declaration.absence == 'undefined'
-        presence = Presence(self._presence(name, dims), dims) if propagates else None
-        return TermFragment(dims, frame, True, presence=presence)
+        presences = (Presence(self._presence(name, dims), dims),) if propagates else ()
+        return TermFragment(dims, frame, 'term', presences=presences)
 
     def _presence(self, name: str, dims: tuple[str, ...]) -> pl.LazyFrame:
         """The coordinates a masked variable exists at.
@@ -739,14 +784,14 @@ class PolarsCompiler:
         slots, so summing over a partly-masked dim reports nothing.
         """
         missing = [d for d in over if d not in p.dims]
-        if missing and not p.is_term:
+        if missing and p.kind == 'const':
             _refuse_a_fragment_without_the_dims(p, missing, context, f'sum(over={list(over)})')
         keep = tuple(d for d in p.dims if d not in over)
         scale = math.prod(self.data.cardinality[d] for d in missing)
         frame = p.frame.select(*keep, *p.carried)
         if scale != 1:
             frame = frame.with_columns(pl.col(p.value_column) * scale)
-        return TermFragment(keep, frame, p.is_term)
+        return TermFragment(keep, frame, p.kind)
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
         """Relabel dim ``over`` to ``into`` through declared coordinates.
@@ -765,7 +810,7 @@ class PolarsCompiler:
         if g.over not in p.dims:
             _refuse_a_fragment_without_the_dims(p, [g.over], context, f'sum(by=) over {g.over!r}')
         grouped = self._remap_fragment(p, g, consumed=(g.over,), produced=g.into)
-        if p.is_term:
+        if p.kind != 'const':
             return grouped
         return replace(grouped, frame=pl.concat([grouped.frame, self._empty_groups(grouped, g)]))
 
@@ -819,10 +864,10 @@ class PolarsCompiler:
         if absent:
             raise LanguageError(f'in {context}: At through {absent} but the expression has dims {list(p.dims)}')
         remapped = self._remap_fragment(p, a, consumed=a.into, produced=(a.over,))
-        return replace(remapped, presence=self._pulled_back_presence(p, a))
+        return replace(remapped, presences=self._pulled_back_presences(p, a))
 
-    def _pulled_back_presence(self, p: TermFragment, a: plan.At) -> Presence | None:
-        """Where a pullback's term exists, keyed by the fine dim it now spans.
+    def _pulled_back_presences(self, p: TermFragment, a: plan.At) -> tuple[Presence, ...]:
+        """Where a pullback's variables exist, keyed by the fine dim they now span.
 
         Two absences reach the fine coordinate and :meth:`_remap_fragment`'s
         inner join swallows both — the operand's own, where the variable under
@@ -836,9 +881,11 @@ class PolarsCompiler:
         only where *every* one of them maps: one null anywhere in the tuple
         leaves nothing to read, the same as one null in a single lookup.
 
-        A total lookup over an operand with nothing to report yields ``None``
+        A total lookup over an operand with nothing to report yields nothing
         rather than a restriction admitting everything, so a model with no
-        absence in it does not pay for the machinery that carries one.
+        absence in it does not pay for the machinery that carries one. A
+        quadratic fragment stands on two variables, so each of its presences is
+        pulled back on its own.
 
         The key is stated rather than left implied because a later product
         widens the fragment's dims while this frame keeps the one column that
@@ -849,19 +896,22 @@ class PolarsCompiler:
             *(pl.col(c).alias(i) for c, i in zip(a.coordinate, a.into, strict=True)),
         )
         reachable = mapping.filter(pl.all_horizontal([pl.col(i).is_not_null() for i in a.into]))
-        if p.presence is None:
+        if not p.presences:
             partial = mapping.select(pl.any_horizontal([pl.col(i).is_null() for i in a.into]).any()).collect().item()
-            return Presence(reachable.select(a.over), (a.over,)) if partial else None
+            return (Presence(reachable.select(a.over), (a.over,)),) if partial else ()
 
-        keys = p.presence.keys(p.dims)
-        if not keys:
-            return Presence(p.presence.restrict(reachable.select(a.over), keys), (a.over,))
-        carries_targets = all(i in keys for i in a.into)
-        source, keys = (
-            (p.presence.frame, keys) if carries_targets else (self._widen(p.presence.frame, keys, p.dims), p.dims)
-        )
-        kept = tuple(k for k in keys if k not in a.into)
-        return Presence(source.join(reachable, on=list(a.into), how='inner').select(*kept, a.over), (*kept, a.over))
+        def pulled(presence: Presence) -> Presence:
+            keys = presence.keys(p.dims)
+            if not keys:
+                return Presence(presence.restrict(reachable.select(a.over), keys), (a.over,))
+            carries_targets = all(i in keys for i in a.into)
+            source, keys = (
+                (presence.frame, keys) if carries_targets else (self._widen(presence.frame, keys, p.dims), p.dims)
+            )
+            kept = tuple(k for k in keys if k not in a.into)
+            return Presence(source.join(reachable, on=list(a.into), how='inner').select(*kept, a.over), (*kept, a.over))
+
+        return tuple(pulled(x) for x in p.presences)
 
     def _remap_fragment(
         self, p: TermFragment, node: plan.GroupSum | plan.At, *, consumed: tuple[str, ...], produced: tuple[str, ...]
@@ -886,7 +936,7 @@ class PolarsCompiler:
             *(pl.col(c).alias(i) for c, i in zip(node.coordinate, node.into, strict=True)),
         )
         frame = p.frame.join(mapping, on=list(consumed), how='inner').select(*keep, *produced, *p.carried)
-        return TermFragment((*keep, *produced), frame, p.is_term)
+        return TermFragment((*keep, *produced), frame, p.kind)
 
     def _window_fragment(self, p: TermFragment, s: plan.Window, context: str) -> TermFragment:
         """A one-to-many remap of the dim through its ord.
@@ -941,16 +991,14 @@ class PolarsCompiler:
                 .select(*kept, s.dimension, *carried)
             )
 
-        carried = ['var_label', 'coeff'] if p.is_term else ['cval']
-        frame = remap(p.frame, carried)
-        presence = p.presence
-        if presence is not None:
-            keyed_by = presence.keyed_by
-            source = presence.frame
+        def travelled(presence: Presence) -> Presence:
+            keyed_by, source = presence.keyed_by, presence.frame
             if keyed_by is not None and s.dimension not in keyed_by:
                 source, keyed_by = self._widen(source, keyed_by, p.dims), None
-            presence = Presence(remap(source, [], keyed_by).unique(), keyed_by)
-        return TermFragment(p.dims, frame, p.is_term, presence=presence)
+            return Presence(remap(source, [], keyed_by).unique(), keyed_by)
+
+        frame = remap(p.frame, p.carried)
+        return TermFragment(p.dims, frame, p.kind, presences=tuple(travelled(x) for x in p.presences))
 
     def _translate_fragment(self, p: TermFragment, s: plan.Translate, context: str) -> TermFragment:
         """A pointwise remap of the dim through its ord.
@@ -959,7 +1007,7 @@ class PolarsCompiler:
 
         Both joins are on a dim-table key, so the row count is unchanged and an
         out-of-range ordinal does not join. No window function; bounded-halo
-        locality. The operand's *presence* is :func:`travelled_presence` below.
+        locality. The operand's *presences* are :func:`travelled_presences` below.
 
         Every fill over a *constant* is written, ``0`` included (#551): the
         arithmetic is unchanged, but the slot now has a value, so asking for
@@ -1032,7 +1080,7 @@ class PolarsCompiler:
                 .select(*kept, s.dimension, *carried)
             )
 
-        def travelled_presence() -> Presence | None:
+        def travelled_presences() -> tuple[Presence, ...]:
             """Where the variable exists after the shift, and what keys it.
 
             An existing presence **travels**: the coordinate set goes through
@@ -1053,27 +1101,29 @@ class PolarsCompiler:
             coordinate product to name an edge, which costs a fifth again of
             build on a wide ramp (#520), a shape no case in `bench/` covers.
             """
-            if p.presence is None:
+            if not p.presences:
                 if s.wrap or s.fill is not None:
                     # A policy speaks about a group's edge, and a coordinate in
                     # no group has none — it is absent under every policy, there
                     # being nothing to come round from or to fill from.
-                    return None if s.partition is None else Presence(self._grouped(s), (s.dimension,))
-                return Presence(self._edge(s, card, vacated=False), (s.dimension, *self.offset_dims(s)))
+                    return () if s.partition is None else (Presence(self._grouped(s), (s.dimension,)),)
+                return (Presence(self._edge(s, card, vacated=False), (s.dimension, *self.offset_dims(s))),)
+            return tuple(travelled(x) for x in p.presences)
 
-            source, keyed_by = p.presence.frame, p.presence.keyed_by
+        def travelled(presence: Presence) -> Presence:
+            source, keyed_by = presence.frame, presence.keyed_by
             if keyed_by is not None and not {s.dimension, *self.offset_dims(s)}.issubset(keyed_by):
                 source, keyed_by = self._widen(source, keyed_by, p.dims), None
             moved_presence = remap(source, [], keyed_by)
             if s.wrap or s.fill is None:
                 return Presence(moved_presence, keyed_by)
-            vacated = self._vacated(p, s, card, others)
+            vacated = self._vacated(presence, p.dims, s, card, others)
             return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique())
 
         frame = remap(p.frame, p.carried)
-        if not s.wrap and s.fill is not None and not p.is_term:
+        if not s.wrap and s.fill is not None and p.kind == 'const':
             frame = pl.concat([frame, self._filled_edge(s, card, others, s.fill)], how='vertical_relaxed')
-        return replace(p, frame=frame, presence=travelled_presence())
+        return replace(p, frame=frame, presences=travelled_presences())
 
     def _widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
         """*presence* over every dim in *want*, saying the same thing.
@@ -1209,7 +1259,9 @@ class PolarsCompiler:
             .select(pl.col('val').alias(s.dimension))
         )
 
-    def _vacated(self, p: TermFragment, s: plan.Translate, card: int, others: list[str]) -> pl.LazyFrame:
+    def _vacated(
+        self, presence: Presence, dims: tuple[str, ...], s: plan.Translate, card: int, others: list[str]
+    ) -> pl.LazyFrame:
         """The edge positions ``shift`` leaves with nothing to move in.
 
         Reached only under ``fill=0``, which is the whole of what ``fill`` does
@@ -1227,10 +1279,10 @@ class PolarsCompiler:
         columns this reads and asking for them is #546 all over again.
         """
         edge = self._edge(s, card, vacated=True)
-        if not others or p.presence is None:
+        if not others:
             return edge
-        have = p.presence.keys(p.dims)
-        source = p.presence.frame if all(d in have for d in others) else self._widen(p.presence.frame, have, p.dims)
+        have = presence.keys(dims)
+        source = presence.frame if all(d in have for d in others) else self._widen(presence.frame, have, dims)
         keys = [d for d in self.offset_dims(s) if d in others]
         rows = source.select(*others).unique()
         return rows.join(edge, on=keys, how='inner') if keys else rows.join(edge, how='cross')
@@ -1435,18 +1487,18 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     key occurs, and occurring twice is still occurring, so the distinct changes
     no row and costs a hash pass over every coordinate the variable has.
     """
-    absent = [p for p in (*compiled.terms, *compiled.consts) if p.presence is not None]
+    absent = [(p, x) for p in (*compiled.terms, *compiled.quads, *compiled.consts) for x in p.presences]
     if not absent:
         return compiled
 
     def restrict(p: TermFragment) -> TermFragment:
         frame = p.frame
-        for source in absent:
-            if source is p or source.presence is None:
+        for source, presence in absent:
+            if source is p:
                 continue
-            on = list(source.presence.keys(source.dims))
+            on = list(presence.keys(source.dims))
             if all(d in p.dims for d in on):
-                frame = source.presence.restrict(frame, on)
+                frame = presence.restrict(frame, on)
         return p if frame is p.frame else replace(p, frame=frame)
 
     return _map_fragments(compiled, restrict)
@@ -1456,15 +1508,19 @@ def _map_fragments(
     compiled: CompiledExpression,
     rewrite: Callable[[TermFragment], TermFragment],
 ) -> CompiledExpression:
-    """Apply *rewrite* to every fragment, keeping the term/const split.
+    """Apply *rewrite* to every fragment, keeping the kinds apart.
 
     Rewriting one fragment at a time is what pointwise and bounded-halo
     locality mean; a node needing them together is global, and rejected at
-    lowering.
+    lowering. A quadratic fragment goes through the same rewrites as a linear
+    one and for the same reason — a shape operator moves rows between
+    coordinates and never looks at what the row *carries*, which is why the
+    operators project through ``carried`` rather than naming columns.
     """
     return CompiledExpression(
         tuple(rewrite(p) for p in compiled.terms),
         tuple(rewrite(p) for p in compiled.consts),
+        tuple(rewrite(p) for p in compiled.quads),
     )
 
 
@@ -1472,7 +1528,7 @@ def _negate(p: TermFragment) -> TermFragment:
     return replace(p, frame=p.frame.with_columns(-pl.col(p.value_column)))
 
 
-def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = False) -> TermFragment:
+def _join_mul(a: TermFragment, c: TermFragment, kind: Kind, divide: bool = False) -> TermFragment:
     """``a * c`` (or ``a / c``) where *c* is a const fragment.
 
     Joins on shared dims, broadcasts the rest. The right-hand value is renamed
@@ -1499,9 +1555,34 @@ def _join_mul(a: TermFragment, c: TermFragment, is_term: bool, divide: bool = Fa
 
     value, rhs = pl.col(a.value_column), pl.col(_RHS)
     combined = value / rhs if divide else value * rhs
-    out = value_column(is_term=is_term)
-    frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(is_term=is_term))
-    return replace(a, dims=out_dims, frame=frame, is_term=is_term)
+    out = value_column(kind)
+    frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
+    return replace(a, dims=out_dims, frame=frame, kind=kind)
+
+
+def _join_quad(a: TermFragment, b: TermFragment) -> TermFragment:
+    """``a * b`` where both carry a variable — one quadratic fragment.
+
+    A join on the dims the two share, so a quadratic term costs what a linear
+    one does: aligned is an equi-join, broadcast joins on the coarser side, and
+    the cross join is refused a level up (``language/degree.py``).
+
+    The second label is renamed on the way in, since both sides carry
+    ``var_label`` and a suffix collision would pair a variable with itself —
+    which ``p * p`` makes a *legal* fragment, so no error would catch it.
+
+    Nothing is canonicalised here: which of ``x * y`` and ``y * x`` a pair is
+    depends on column labels, which fragments do not carry until the engine
+    places them (:meth:`PolarsEngine._build_objective`).
+    """
+    shared = [d for d in a.dims if d in b.dims]
+    out_dims = a.dims + tuple(d for d in b.dims if d not in a.dims)
+    right = b.frame.rename({'var_label': 'var_label_2', 'coeff': _RHS})
+    joined = a.frame.join(right, on=shared, how='inner') if shared else a.frame.join(right, how='cross')
+    frame = joined.with_columns((pl.col('coeff') * pl.col(_RHS)).alias('coeff')).select(
+        *out_dims, *carried_columns('quad')
+    )
+    return TermFragment(out_dims, frame, 'quad', presences=a.presences + b.presences)
 
 
 def _scattered(at: pl.Series, values: pl.Series, size: int) -> Any:

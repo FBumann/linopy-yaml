@@ -238,7 +238,11 @@ def test_check_and_load_model_need_no_data(dispatch_yaml):
     ('expression', 'match'),
     [
         pytest.param('sum(p ** 2)', r"operator '\*\*'", id='an-operator-outside-the-language'),
-        pytest.param('sum(p * p)', 'degree 2', id='degree-2-caught-with-no-data-bound'),
+        pytest.param(
+            'sum(p) * sum(p)',
+            'sums of more than one term',
+            id='two-reductions-multiplied-caught-with-no-data-bound',
+        ),
     ],
 )
 def test_check_reports_language_errors_before_any_data_is_bound(

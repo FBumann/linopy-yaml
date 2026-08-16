@@ -44,7 +44,11 @@ VariableAbsence = Literal['undefined', 'zero']
 
 @dataclass(frozen=True)
 class Expression:
-    """Base class for affine expressions over variables and parameters.
+    """Base class for expressions over variables and parameters.
+
+    Affine everywhere but the objective, where a :class:`Multiply` of two
+    variable-carrying operands is degree 2; which position allows what is
+    ``language/degree.py``'s to say and no node here records.
 
     The four operators exist for the tests that compose plans by hand;
     constructing Programs in Python is not supported API, so there is no
@@ -98,7 +102,13 @@ class Add(Expression):
 
 @dataclass(frozen=True)
 class Multiply(Expression):
-    """Product. At least one factor must be variable-free (affine algebra)."""
+    """Product of two operands.
+
+    Affine where at least one factor is variable-free. **Degree 2 where neither
+    is**, which the language allows in the objective alone
+    (``language/degree.py``) — so a consumer that cannot represent a quadratic
+    term is told which position it is compiling rather than assuming it.
+    """
 
     left: Expression
     right: Expression
