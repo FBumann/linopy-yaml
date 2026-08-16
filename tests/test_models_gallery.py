@@ -384,34 +384,6 @@ def test_the_guide_teaches_lines_that_exist() -> None:
         assert expression in declared, f'docs/guide.md teaches an expression no example model contains:\n  {expression}'
 
 
-#: English for a corpus size, indexed by it. The gallery states the number of
-#: ports in prose, spelled as a word, so the guard below has to spell it too.
-#: A corpus that outgrows this tuple raises here, which is the right place to
-#: find out that the sentence needs rewriting anyway.
-NUMERALS = (
-    'zero',
-    'one',
-    'two',
-    'three',
-    'four',
-    'five',
-    'six',
-    'seven',
-    'eight',
-    'nine',
-    'ten',
-    'eleven',
-    'twelve',
-    'thirteen',
-    'fourteen',
-    'fifteen',
-    'sixteen',
-    'seventeen',
-    'eighteen',
-    'nineteen',
-    'twenty',
-)
-
 #: Every sentence that states how many ports there are, as ``(page, template)``.
 #: A third one is added here, not asserted separately.
 COUNTED_IN_PROSE = (
@@ -430,7 +402,7 @@ def test_the_prose_counts_the_ports_there_are(page: str, sentence: str) -> None:
     and the total lands one short. Nothing else in the suite reads these
     sentences, so without this they are wrong until a person notices.
     """
-    expected = sentence.format(NUMERALS[len(constructs.ports())])
+    expected = sentence.format(len(constructs.ports()))
     assert expected in (constructs.ROOT / page).read_text(), (
         f'{page} does not say "{expected}", and examples/ports/ holds '
         f'{len(constructs.ports())} models — the count in the prose has drifted from the corpus'

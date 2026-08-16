@@ -1,0 +1,120 @@
+description: >-
+  PyPSA storage spillage: water a reservoir cannot hold leaves through a second
+  sink. A hydro unit takes inflow it did not choose and spills what neither its
+  turbine nor its reservoir can absorb; a battery beside it has no inflow, and
+  so no spill variable at all. Optimum 3200.0, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  bus:
+    description: network nodes
+    dtype: str
+  generator:
+    description: generating units, each sitting on one bus
+    dtype: str
+  storage:
+    description: storage units, each sitting on one bus
+    dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  storage_bus:
+    description: the bus a storage unit sits on
+    over: storage
+    into: bus
+
+parameters:
+  p_nom:
+    description: installed capacity of a generator
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  storage_p_nom:
+    description: most a storage unit may charge or discharge in one snapshot
+    dims: [storage]
+  soc_max:
+    description: how much energy a storage unit holds when full
+    dims: [storage]
+  soc_initial:
+    description: energy in the store before the first snapshot
+    dims: [storage]
+  inflow:
+    description: >-
+      energy arriving at a storage unit whether or not it was wanted — zero for
+      a unit that receives none, which is what pins its spill to nothing
+    dims: [snapshot, storage]
+  load:
+    description: demand at each bus in each snapshot
+    dims: [snapshot, bus]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_nom
+  p_dispatch:
+    description: power a storage unit puts onto its bus
+    foreach: [snapshot, storage]
+    bounds:
+      lower: 0
+      upper: storage_p_nom
+  p_store:
+    description: power a storage unit takes off its bus
+    foreach: [snapshot, storage]
+    bounds:
+      lower: 0
+      upper: storage_p_nom
+  soc:
+    description: energy in the store at the end of a snapshot
+    foreach: [snapshot, storage]
+    bounds:
+      lower: 0
+      upper: soc_max
+  spill:
+    description: >-
+      inflow let go rather than kept, and never more than that snapshot's
+      arrival — so a unit with no inflow spills nothing
+    foreach: [snapshot, storage]
+    bounds:
+      lower: 0
+      upper: inflow
+
+constraints:
+  nodal_balance:
+    description: >-
+      what is generated at a bus, plus what comes out of the stores less what
+      goes into them, meets the load there
+    foreach: [snapshot, bus]
+    expression: >-
+      sum(p, by=gen_bus)
+      + sum(p_dispatch, by=storage_bus)
+      - sum(p_store, by=storage_bus)
+      == load
+
+  energy_balance_initial:
+    description: the first snapshot's level is carried from the initial state of charge
+    foreach: [snapshot, storage]
+    where: "snapshot == 0"
+    expression: soc == soc_initial + p_store - p_dispatch + inflow - spill
+
+  energy_balance:
+    description: >-
+      the level carried into a snapshot, plus what was stored and what arrived,
+      less what was taken and what was let go
+    foreach: [snapshot, storage]
+    expression: >-
+      soc == shift(soc, over=snapshot, by=1)
+      + p_store - p_dispatch + inflow - spill
+
+objective:
+  sense: minimize
+  description: total cost of generation; storage and spillage are free here
+  expression: p * marginal_cost
