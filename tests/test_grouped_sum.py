@@ -34,7 +34,7 @@ from lpspec.relational.plan import (
 from lpspec.sources import tidy_sources
 from tests.conftest import override, resolved, schema_of
 from tests.differential import RTOL, differential
-from tests.oracle import lpspec_linopy, pd, transport_eager_objective, xr
+from tests.oracle import lpspec_linopy, pd, transport_eager_objective
 
 TRANSPORT_YAML = Path('examples/transport.yaml')
 
@@ -45,7 +45,7 @@ def _inputs(gens, lines, load):
         'cost': gens.set_index('generator')['cost'],
         'cap': lines.set_index('line')['cap'],
         'neg_cap': -lines.set_index('line')['cap'],
-        'load': xr.DataArray.from_series(load.set_index(['snapshot', 'bus'])['value']),
+        'load': load.set_index(['snapshot', 'bus'])['value'],
     }
     coords = {
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),

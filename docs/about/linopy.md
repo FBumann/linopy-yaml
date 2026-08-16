@@ -96,7 +96,7 @@ design ([#60](https://github.com/fluxopt/lpspec/issues/60)):
 | | product path (`sources=`) | shim (`data=` / `coords=`) |
 |---|---|---|
 | dimension labels | `sources`, then `coords=`, then `values:`, then **derived from the parameter tables** | `coords=`, then `values:`, then error — no derivation |
-| a parameter | parquet path, or any table exporting the Arrow PyCapsule protocol; `int`/`float` for 0-D | `int`/`float` (broadcasts freely), `dict` / `pd.Series` for 1-D, `pd.DataFrame` for 2-D, `xr.DataArray` directly |
+| a parameter | parquet path, or any table exporting the Arrow PyCapsule protocol; `int`/`float` for 0-D | `int`/`float` (broadcasts freely), `dict` or a sequence for 1-D, `pd.Series` / tidy `pd.DataFrame` for any rank |
 | unnamed index levels | — | bind positionally to the declared dims; named levels bind by name |
 
 The derivation row is the one that bites: on the product path a dimension some

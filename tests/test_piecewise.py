@@ -299,16 +299,15 @@ def test_breakpoints_may_vary_along_another_dim():
     each one's cost has to sit on its own curve: the hull is exact here,
     because the curves are convex and the objective minimises.
     """
-    import xarray as xr
-
     example = Path('examples/piecewise.yaml')
     rng = np.random.default_rng(31)
     n_s = 24
     gens = pd.Index(['cheap', 'mid'], name='generator')
     bps = pd.RangeIndex(3, name='bp')
     p_max = pd.Series({'cheap': 100.0, 'mid': 120.0})
-    bp_x = xr.DataArray([[0.0, 40.0, 100.0], [0.0, 60.0, 120.0]], coords={'generator': gens, 'bp': bps})
-    bp_y = xr.DataArray([[0.0, 200.0, 800.0], [0.0, 900.0, 2700.0]], coords={'generator': gens, 'bp': bps})
+    per_generator = pd.MultiIndex.from_product([gens, bps], names=['generator', 'bp'])
+    bp_x = pd.Series([0.0, 40.0, 100.0, 0.0, 60.0, 120.0], index=per_generator)
+    bp_y = pd.Series([0.0, 200.0, 800.0, 0.0, 900.0, 2700.0], index=per_generator)
     load = pd.Series(
         (rng.uniform(0.3, 0.9, n_s) * p_max.sum()).round(1),
         index=pd.RangeIndex(n_s, name='snapshot'),
@@ -322,7 +321,7 @@ def test_breakpoints_may_vary_along_another_dim():
         p = by_coord(run.result, 'p', 'snapshot', 'generator')
         cost = by_coord(run.result, 'op_cost', 'snapshot', 'generator')
         for (s, g), pv in p.items():
-            expected = curve(pv, bp_x.sel(generator=g), bp_y.sel(generator=g))
+            expected = curve(pv, bp_x.xs(g), bp_y.xs(g))
             assert cost[(s, g)] == pytest.approx(expected, abs=1e-5)
 
 
@@ -684,7 +683,6 @@ def epigraph_inputs():
     at 40% and 75% of each generator's ``p_max``, and the intercepts are what
     make the tangents touch there.
     """
-    import xarray as xr
 
     rng = np.random.default_rng(9)
     n_s = 24
@@ -707,8 +705,8 @@ def epigraph_inputs():
     data = {
         'p_max': p_max,
         'load': load,
-        'seg_slope': xr.DataArray.from_series(slopes.T.stack().rename_axis(['generator', 'segment'])),
-        'seg_intercept': xr.DataArray.from_series(icepts.T.stack().rename_axis(['generator', 'segment'])),
+        'seg_slope': slopes.T.stack().rename_axis(['generator', 'segment']),
+        'seg_intercept': icepts.T.stack().rename_axis(['generator', 'segment']),
     }
     coords = {
         'snapshot': load.index,
@@ -732,8 +730,8 @@ def test_the_epigraph_pattern_needs_no_formulation_machinery(epigraph_inputs):
     with differential(EPIGRAPH_YAML, data, coords, lp=True) as run:
         p = by_coord(run.result, 'p', 'snapshot', 'generator')
         gc = by_coord(run.result, 'gen_cost', 'snapshot', 'generator')
-        slopes = data['seg_slope'].to_series().unstack('segment')
-        icepts = data['seg_intercept'].to_series().unstack('segment')
+        slopes = data['seg_slope'].unstack('segment')
+        icepts = data['seg_intercept'].unstack('segment')
         for (s, g), pv in p.items():
             expected = max(sl * pv + ic for sl, ic in zip(slopes.loc[g], icepts.loc[g], strict=True))
             assert gc[(s, g)] == pytest.approx(expected, abs=1e-6)

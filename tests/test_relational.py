@@ -1443,19 +1443,18 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
     """
     data = {
         # a tech produces exactly one carrier, which is what makes `produces` sparse
-        'produces': xr.DataArray(
-            [[1.0, 0.0], [0.0, 1.0]],
-            coords={'tech': ['t1', 't2'], 'carrier': ['elec', 'heat']},
-            dims=['tech', 'carrier'],
+        'produces': pd.Series(
+            [1.0, 0.0, 0.0, 1.0],
+            index=pd.MultiIndex.from_product([['t1', 't2'], ['elec', 'heat']], names=['tech', 'carrier']),
         ),
-        'demand': xr.DataArray(
-            [[10.0, 20.0], [10.0, 20.0]],
-            coords={'node': ['n1', 'n2'], 'carrier': ['elec', 'heat']},
-            dims=['node', 'carrier'],
+        'demand': pd.Series(
+            [10.0, 20.0, 10.0, 20.0],
+            index=pd.MultiIndex.from_product([['n1', 'n2'], ['elec', 'heat']], names=['node', 'carrier']),
         ),
         'cost': pd.Series({'t1': 1.0, 't2': 2.0}),
-        'installed': xr.DataArray(
-            [[100.0, 100.0], [100.0, 100.0]], coords={'node': ['n1', 'n2'], 'tech': ['t1', 't2']}, dims=['node', 'tech']
+        'installed': pd.Series(
+            [100.0, 100.0, 100.0, 100.0],
+            index=pd.MultiIndex.from_product([['n1', 'n2'], ['t1', 't2']], names=['node', 'tech']),
         ),
     }
 

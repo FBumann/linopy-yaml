@@ -364,7 +364,6 @@ def _nodal_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]
     into NaN padding, and doing it here rather than pretending otherwise is the
     point of the case.
     """
-    import xarray as xr
 
     nodes = pd.read_parquet(paths['node'])['node']
     techs = pd.read_parquet(paths['tech'])['tech']
@@ -374,7 +373,7 @@ def _nodal_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]
     data = {
         'installed': installed,
         'cost': cost,
-        'demand': xr.DataArray.from_series(demand.set_index(['snapshot', 'node'])['value']),
+        'demand': demand.set_index(['snapshot', 'node'])['value'],
     }
     coords = {
         'snapshot': pd.Index(sorted(demand['snapshot'].unique()), name='snapshot'),
@@ -448,7 +447,6 @@ def _sector_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]
     has nowhere else to put an absent pair, and doing it in the open is what
     makes the arms comparable.
     """
-    import xarray as xr
 
     nodes = pd.read_parquet(paths['node'])['node']
     techs = pd.read_parquet(paths['tech'])['tech']
@@ -466,7 +464,7 @@ def _sector_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]
         'installed': installed,
         'produces': produces,
         'cost': pd.read_parquet(paths['cost']).set_index('tech')['value'],
-        'demand': xr.DataArray.from_series(demand.set_index(['snapshot', 'node', 'carrier'])['value']),
+        'demand': demand.set_index(['snapshot', 'node', 'carrier'])['value'],
     }
     coords = {
         'snapshot': pd.Index(sorted(demand['snapshot'].unique()), name='snapshot'),
@@ -523,7 +521,6 @@ def _transport_data(shape: Shape, dest: Path) -> dict[str, str]:
 
 
 def _transport_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
-    import xarray as xr
 
     gens = pd.read_parquet(paths['generator'])
     lines = pd.read_parquet(paths['line'])
@@ -533,7 +530,7 @@ def _transport_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, A
         'cost': pd.read_parquet(paths['cost']).set_index('generator')['value'],
         'cap': pd.read_parquet(paths['cap']).set_index('line')['value'],
         'neg_cap': pd.read_parquet(paths['neg_cap']).set_index('line')['value'],
-        'load': xr.DataArray.from_series(load.set_index(['snapshot', 'bus'])['value']),
+        'load': load.set_index(['snapshot', 'bus'])['value'],
     }
     coords = {
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),
@@ -717,24 +714,21 @@ def _profiled_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, An
     tech) — so a permuted file would change the objective and the parity gate
     would kill the run before anything is timed.
     """
-    import xarray as xr
 
     nodes = pd.read_parquet(paths['node'])['node']
     techs = pd.read_parquet(paths['tech'])['tech']
     snapshots = pd.read_parquet(paths['snapshot'])['snapshot']
     demand = pd.read_parquet(paths['demand'])
 
-    values = pd.read_parquet(paths['availability'])['value'].to_numpy()
-    availability = xr.DataArray(
-        values.reshape(len(snapshots), len(nodes), len(techs)),
-        coords={'snapshot': snapshots.to_numpy(), 'node': nodes.to_numpy(), 'tech': techs.to_numpy()},
-        dims=['snapshot', 'node', 'tech'],
+    availability = pd.read_parquet(paths['availability'])['value']
+    availability.index = pd.MultiIndex.from_product(
+        [snapshots.to_numpy(), nodes.to_numpy(), techs.to_numpy()], names=['snapshot', 'node', 'tech']
     )
 
     data = {
         'availability': availability,
         'cost': pd.read_parquet(paths['cost']).set_index('tech')['value'],
-        'demand': xr.DataArray.from_series(demand.set_index(['snapshot', 'node'])['value']),
+        'demand': demand.set_index(['snapshot', 'node'])['value'],
     }
     coords = {
         'snapshot': pd.Index(snapshots, name='snapshot'),
