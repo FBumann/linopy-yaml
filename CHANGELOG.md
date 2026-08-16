@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.155](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.154...v0.0.1-alpha.155) (2026-08-16)
+
+
+### Features
+
+* **api:** both lanes read the same tables, and neither reads a dense array ([#855](https://github.com/fluxopt/lpspec/issues/855)) ([4afc9a7](https://github.com/fluxopt/lpspec/commit/4afc9a7993b4c0a0f9c5c31c4aafd3a7e86f14df))
+
+
+### Documentation
+
+* **ceiling:** data prep computes what the compiler cannot derive ([#854](https://github.com/fluxopt/lpspec/issues/854)) ([add8c3d](https://github.com/fluxopt/lpspec/commit/add8c3db955b9817b8e59abca88d2add3ad92bd2))
+
 ## [0.0.1-alpha.154](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.153...v0.0.1-alpha.154) (2026-08-16)
 
 
