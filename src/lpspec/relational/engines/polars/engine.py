@@ -585,8 +585,13 @@ class PolarsEngine:
         )
         return rows, matrix, start + surviving.height
 
-    def _build_objective(self, o: plan.ObjectiveDeclaration) -> pl.DataFrame | None:
+    def _build_objective(self, o: plan.ObjectiveDeclaration | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
+
+        ``None`` in is the file that declares no objective at all, and it takes
+        the same path out: the sense stays ``min`` and the constant ``0``, so
+        the sink is handed a zero objective and answers whether the constraints
+        can be met.
 
         This projection drops the dims, so a dim that arrived by broadcast puts
         several rows on one column and their **sum** is the coefficient.
@@ -605,6 +610,8 @@ class PolarsEngine:
         against a best case that is a wash (#581). ``obj`` carries no order
         contract anyway.
         """
+        if o is None:
+            return None
         comp = self._q.expression(o.expression, 'objective')
         for p in comp.consts:
             if p.dims:

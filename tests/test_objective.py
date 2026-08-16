@@ -80,3 +80,52 @@ def test_a_term_is_summed_over_its_own_dims(data, expression, expected, broadcas
     with differential(model, data) as run:
         assert run.oracle == pytest.approx(expected)
         assert run.oracle != pytest.approx(broadcast_would_give) or expected == broadcast_would_give
+
+
+#: No `objective:` at all — the constraints are the whole question, and the
+#: answer is whether they can be met. `need` sits inside the caps, so they can.
+FEASIBILITY_MODEL = {
+    'dimensions': {'g': {'values': ['wind', 'gas']}},
+    'parameters': {'cap': {'dims': ['g']}, 'need': {'dims': []}},
+    'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'meet': {'foreach': [], 'expression': 'sum(x, over=g) >= need'}},
+}
+
+
+def test_a_model_with_no_objective_is_a_feasibility_problem(tmp_path):
+    """Both lanes build it, and the answer is a point rather than an optimum.
+
+    A file with no `objective:` used to lower to `LanguageError: the relational
+    backend requires an objective` while the linopy lane built it happily —
+    the one construct the two lanes disagreed about (#845). Nothing optimises,
+    so the objective value is the zero the sink was handed.
+    """
+    import yaml as pyyaml
+
+    import lpspec as lps
+    from tests.oracle import lpspec_linopy
+
+    sources = {'cap': {'wind': 40.0, 'gas': 100.0}, 'need': 90.0}
+
+    path = tmp_path / 'feasibility.yaml'
+    path.write_text(pyyaml.safe_dump(FEASIBILITY_MODEL))
+    eager = lpspec_linopy.build(path, data=sources)
+    assert 'meet' in eager.constraints, 'the eager lane built the same file'
+
+    with lps.solve(FEASIBILITY_MODEL, sources) as result:
+        assert result.is_ok, 'the constraints can be met, so this is not a failed solve'
+        assert result.objective == 0.0, 'nothing was optimised, so the objective is the zero it was given'
+        served = result.primal('x')['value'].sum()
+        assert served == pytest.approx(90.0), 'the constraint is the whole model, so it binds'
+
+    lp = lps.write(FEASIBILITY_MODEL, sources, tmp_path / 'feasibility.lp')
+    assert 'obj:\n\ns.t.' in lp.read_text(), 'the objective section is written, and is empty'
+
+
+def test_a_model_with_no_objective_still_says_when_it_cannot_be_met():
+    """The answer a feasibility problem exists to give."""
+    import lpspec as lps
+
+    with lps.solve(FEASIBILITY_MODEL, {'cap': {'wind': 40.0, 'gas': 10.0}, 'need': 90.0}) as result:
+        assert not result.is_ok
+        assert result.termination_condition == 'infeasible'

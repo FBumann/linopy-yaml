@@ -128,16 +128,15 @@ def lower_program(schema: Model) -> plan.Program:
             )
         )
 
-    odef = schema.objective
-    if odef is None:
-        raise LanguageError('the relational backend requires an objective')
-    ast = expression_of(odef.expression, schema, ns, 'the objective')
-    if isinstance(ast, ComparisonNode):
-        raise LanguageError('the objective: expression must not contain a comparison operator')
-    objective = plan.ObjectiveDeclaration(
-        'min' if odef.sense == 'minimize' else 'max',
-        _lower_expr(ast, schema, 'the objective'),
-    )
+    objective = None
+    if (odef := schema.objective) is not None:
+        ast = expression_of(odef.expression, schema, ns, 'the objective')
+        if isinstance(ast, ComparisonNode):
+            raise LanguageError('the objective: expression must not contain a comparison operator')
+        objective = plan.ObjectiveDeclaration(
+            'min' if odef.sense == 'minimize' else 'max',
+            _lower_expr(ast, schema, 'the objective'),
+        )
 
     dimensions = tuple(
         plan.DimensionDeclaration(
@@ -481,7 +480,7 @@ def advice(program: plan.Program) -> list[str]:
     axes: set[str] = set()
     for declaration in (*program.parameters, *program.variables, *program.constraints):
         axes.update(declaration.dims)
-    expressions = [program.objective.expression]
+    expressions = [program.objective.expression] if program.objective is not None else []
     expressions.extend(side for c in program.constraints for side in (c.lhs, c.rhs))
     for e in expressions:
         axes |= _produced_axes(e)
