@@ -38,44 +38,8 @@ RESERVES_YAML = Path('examples/reserves.yaml')
 OPTIMUM = 915.0
 
 
-def _both_lane_inputs() -> tuple[dict, dict]:
-    """The port tables in the shapes both lanes accept in one call.
-
-    1-D parameters travel as ``pd.Series``, the 2-D ``zone_share`` as one with
-    a two-level index — densified first, absent memberships as 0, which is what
-    a missing row means — and each dimension carrying lookups as its index
-    frame.
-    """
-    tables = {k: v.to_pandas() if isinstance(v, pl.DataFrame) else v for k, v in port_sources('reserves').items()}
-    data = {
-        k: tables[k].set_index(tables[k].columns[0])['value']
-        for k in (
-            'p_max',
-            'energy_cost',
-            'load',
-            'cap',
-            'neg_cap',
-            'bus_cap',
-            'offer_cost',
-            'req',
-            'tranche_frac',
-            'zone_req',
-        )
-    }
-    data['zone_share'] = (
-        tables['zone_share']
-        .pivot(index='generator', columns='zone', values='value')
-        .fillna(0.0)
-        .stack()
-        .rename_axis(['generator', 'zone'])
-    )
-    coords = {k: tables[k] for k in ('generator', 'line', 'offer')}
-    return data, coords
-
-
 def test_both_lanes_and_the_lp_file_reach_the_hand_derived_optimum():
-    data, coords = _both_lane_inputs()
-    with differential(RESERVES_YAML, data, coords, lp=True) as run:
+    with differential(RESERVES_YAML, port_sources('reserves'), lp=True) as run:
         assert run.oracle == pytest.approx(OPTIMUM, rel=RTOL), 'the eager lane disagrees with the hand derivation'
 
 
@@ -150,8 +114,7 @@ def test_the_offer_cap_is_two_pullbacks_through_two_legs():
     """A per-offer number assembled from two other dimensions' parameters —
     ``at()`` through ``tranche_of`` times ``at()`` through ``gen_of`` — priced
     into the eager lane's own solution: o4 sits exactly at 0.25 * 80."""
-    data, coords = _both_lane_inputs()
-    with differential(RESERVES_YAML, data, coords) as run:
+    with differential(RESERVES_YAML, port_sources('reserves')) as run:
         r = run.result.primal('r')
         assert r.filter(pl.col('offer') == 'o4')['value'][0] == pytest.approx(20.0, rel=RTOL), (
             'o4 must sit at its tranche_frac * p_max cap for the cap to be binding'
