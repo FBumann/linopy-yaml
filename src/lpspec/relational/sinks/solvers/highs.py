@@ -95,6 +95,16 @@ def build_highs(
     import highspy
     import numpy as np
 
+    if model.qmatrix.height:
+        raise LpspecError(
+            'HiGHS has no quadratic-constraint concept at all — no entry point takes one — and '
+            f'this model has {model.row_count - model.linear_row_count} such rows. Solving through '
+            'lps.solve() '
+            'refuses this earlier and names the sinks that do take it; reaching build_highs '
+            'directly skips that, and loading the rows without their quadratic part would be a '
+            'different model that solves.'
+        )
+
     batch = HANDOFF_BUDGET if batch_rows is None else batch_rows
     inf = highspy.kHighsInf
     h = highspy.Highs()

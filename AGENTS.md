@@ -272,5 +272,5 @@ skipped. A body invalidated by a rewrite is closed and re-filed, not annotated.
 - **Do not widen scope.** Name the adjacent thing in a sentence instead.
 - **Recommend, do not survey.**
 - **A language feature is triaged first: macro, primitive, or escape** — the
-  ceiling is relational ∩ local, degree 2 in the objective and 1 elsewhere, and the deliberate non-primitives in
+  ceiling is relational ∩ local, degree 2 in the math and 1 beside it, and the deliberate non-primitives in
   [ceiling.md](docs/about/ceiling.md) come first.

@@ -250,21 +250,6 @@ def test_transport_roundtrip(transport_data, tmp_path):
 @pytest.mark.parametrize(
     ('patch', 'match'),
     [
-        pytest.param(
-            {
-                'constraints': (
-                    ConstraintDeclaration(
-                        'power_balance',
-                        ('snapshot',),
-                        lhs=Sum(Variable('p') * Variable('p'), over=('generator',)),
-                        sense='==',
-                        rhs=Parameter('load'),
-                    ),
-                )
-            },
-            'nonlinear',
-            id='a-product-of-two-variables-in-a-row',
-        ),
         # generator dim deliberately not summed
         pytest.param(
             {
@@ -280,14 +265,7 @@ def test_transport_roundtrip(transport_data, tmp_path):
     ],
 )
 def test_a_program_outside_the_language_is_rejected(dispatch_data, patch, match):
-    """A nonlinear product, or a term carrying a dim the constraint does not `foreach`, is refused.
-
-    The product is refused **by position**: the compiler is told which ceiling
-    it is compiling for, so the plan boundary catches a degree-2 node reaching
-    a constraint row even though `language/degree.py` would have refused it
-    first. This test builds the plan by hand, which is the route that skips
-    the language — and the reason the backstop exists.
-    """
+    """A term carrying a dim the constraint does not `foreach` is refused."""
     gens, load = dispatch_data
     with PolarsEngine() as engine, pytest.raises(LanguageError, match=match):
         engine.build(replace(dispatch_program(), **patch), dispatch_sources(gens, load))

@@ -165,10 +165,10 @@ Worth knowing before you start, rather than after:
   fine; `upper: -rating` is not. This one has bitten a real port —
   [#31](https://github.com/fluxopt/lpspec/issues/31), and the workaround is to
   ship the negated column as data.
-- **Every expression is affine in the variables — except the objective**,
-  which takes `variable * variable`. Everywhere else a product needs a
-  variable-free factor. That ceiling is what the whole design is built around,
-  and where it sits is a choice with reasons. →
+- **The math takes degree 2; what stands beside it does not.** The objective
+  and constraints take `variable * variable`; a bound, a named expression and a
+  `piecewise:` link need a variable-free factor. Where a quadratic model can be
+  *solved* is a second question — `check(model, sink=…)` answers it. →
   [The ceiling](about/ceiling.md#two-tiers-and-the-ceiling)
 - **Several plausible features are refused on purpose**, with reasons.
   → [the roadmap](about/roadmap.md)

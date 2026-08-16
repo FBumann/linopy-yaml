@@ -22,6 +22,7 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
+from lpspec.errors import LpspecError, nonconvex_row_message
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
@@ -91,7 +92,7 @@ def build_gurobi(
     One thing to own rather than two, which is why this returns a model rather
     than a pair.
     """
-    m, _x, _blocks, environment = _built(model, batch_rows, solver_options)
+    m, _x, _blocks, _quadratic, environment = _built(model, batch_rows, solver_options)
     weakref.finalize(m, environment.dispose)
     return m
 
@@ -120,6 +121,10 @@ class Gurobi(Solver):
     _m: Any
     _x: Any
     _blocks: list[Any]
+    #: The quadratic constraints, in row order and **after** every linear one:
+    #: they are the tail of the label space, so the read-back concatenates
+    #: rather than scatters.
+    _qrows: list[Any]
     _env: Any
 
     #: Both halves of the extra, for the reason :attr:`unavailable_message`
@@ -135,20 +140,21 @@ class Gurobi(Solver):
     #: default parameters, both measured in
     #: ``tests/test_gurobi_capability_probes.py``.
     #:
-    #: ``quadratic_constraint`` stays out although gurobipy takes one — a
-    #: capability describes the sink **as shipped**, and no stream carries a
-    #: quadratic row to it.
+    #: ``quadratic_constraint`` joined them when the stream that carries one
+    #: did. This is the only consumer in the package that builds one at all —
+    #: the linopy lane cannot (:data:`lpspec.api.LANES`).
     capabilities = Capabilities(
         supports={
             'integrality': 'native',
             'sos': 'native',
             'quadratic_objective': 'native',
             'nonconvex_quadratic_objective': 'native',
+            'quadratic_constraint': 'native',
         }
     )
 
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
-        self._m, self._x, self._blocks, self._env = _built(model, batch_rows, self._options)
+        self._m, self._x, self._blocks, self._qrows, self._env = _built(model, batch_rows, self._options)
 
     def push(self, model: ModelTables) -> None:
         """Whole vectors, in as many calls as there are blocks.
@@ -219,13 +225,29 @@ class Gurobi(Solver):
         Gurobi refuses the attribute where there is no primal or no dual
         rather than handing back zeros, which is the one place it makes this
         easier than HiGHS.
+
+        The one error translated here is the convexity refusal a *caller's own
+        option* can provoke: ``QCPDual`` puts the solve on the convex path, so
+        a nonconvex quadratic constraint that solves without it fails with it.
+        Left alone that reaches the caller as a ``GurobiError`` naming a
+        parameter they set for an unrelated reason.
         """
-        self._m.optimize()
+        gurobipy = _gurobipy()
+        try:
+            self._m.optimize()
+        except gurobipy.GurobiError as exc:
+            if 'not PSD' not in str(exc):
+                raise
+            raise LpspecError(nonconvex_row_message(str(exc))) from None
         status = _status_of(self._m)
         if not status.is_readable:
             return SolveAnswer.unreadable(status)
         return SolveAnswer(
-            status, self._m.ObjVal, solver_vector(self._x.X), _duals(self._blocks), _activity(self._blocks)
+            status,
+            self._m.ObjVal,
+            solver_vector(self._x.X),
+            _duals(self._blocks, self._qrows),
+            _activity(self._blocks, self._qrows),
         )
 
     def forget(self) -> None:
@@ -250,13 +272,14 @@ class Gurobi(Solver):
             self._env.dispose()
             self._m = self._x = self._env = None
             self._blocks = []
+            self._qrows = []
 
 
 def _built(
     model: ModelTables,
     batch_rows: int | None,
     solver_options: Mapping[str, Any] | None,
-) -> tuple[Any, Any, list[Any], Any]:
+) -> tuple[Any, Any, list[Any], list[Any], Any]:
     """The model, the handles to read it back, and the environment to release.
 
     ``x.X`` and ``block.Pi`` are numpy arrays; ``getVars()``/``getConstrs()``
@@ -298,12 +321,50 @@ def _built(
         blocks.append(m.addMConstr(block, x, spelling[rows.sense[chunk.lo : chunk.hi]], rows.rhs[chunk.lo : chunk.hi]))
 
     _add_sets(m, x, model, gurobipy)
+    quadratic = _add_quadratic_rows(m, x, model, gurobipy)
     if model.objective_sense == 'max':
         m.ModelSense = gurobipy.GRB.MAXIMIZE
     m.ObjCon = model.objective_constant
     _set_quadratic(m, x, model, cols.cost)
     m.update()
-    return m, x, blocks, environment
+    return m, x, blocks, quadratic, environment
+
+
+def _add_quadratic_rows(m: Any, x: Any, model: ModelTables, gurobipy: Any) -> list[Any]:
+    r"""Every quadratic constraint, one ``addMQConstr`` call each.
+
+    The second stream with no bulk form — ``addSOS`` is the first — and for the
+    same reason it does not matter: the API takes one constraint per call, and
+    a model with enough quadratic rows for that to cost anything is one no
+    spatial branch-and-bound would finish.
+
+    Each row is assembled from **both** matrices: its quadratic entries as
+    :math:`Q` in :math:`x^	op Q x` (no halving, the convention
+    :func:`_set_quadratic` already takes) and its linear entries from the
+    ordinary matrix, where they sit at the same row label. A quadratic row
+    keeps its place in the linear matrix precisely so that the two halves are
+    read from one label rather than kept in step by hand.
+
+    They are the **tail** of the label space, so the handles returned here
+    concatenate onto the linear blocks and the read-back stays two runs rather
+    than a scatter (:func:`_duals`).
+    """
+    import numpy as np
+    import scipy.sparse
+
+    spelling = _spelled(gurobipy)
+    rows = model.dense_rows(gurobipy.GRB.INFINITY)
+    added = []
+    for row, pairs in model.quadratic_blocks():
+        quadratic = scipy.sparse.csr_matrix(
+            (pairs['coeff'].to_numpy(), (pairs['col_l'].to_numpy(), pairs['col_r'].to_numpy())),
+            shape=(model.column_count, model.column_count),
+        )
+        entries = model.matrix_block(row, row + 1)
+        linear = np.zeros(model.column_count, dtype=np.float64)
+        linear[entries['col'].to_numpy()] = entries['coeff'].to_numpy()
+        added.append(m.addMQConstr(quadratic, linear, spelling[rows.sense[row]], float(rows.rhs[row]), x, x, x))
+    return added
 
 
 def _set_quadratic(m: Any, x: Any, model: ModelTables, cost: Any) -> None:
@@ -422,8 +483,8 @@ def _wording(code: int) -> str:
     return names.get(code, str(code))
 
 
-def _activity(blocks: list[Any]) -> pl.Series:
-    """Each row's left-hand side at the solution, in row order.
+def _activity(blocks: list[Any], qrows: list[Any]) -> pl.Series:
+    r"""Each row's left-hand side at the solution, in row order.
 
     Gurobi exposes no row value of its own — only ``Slack``, which is
     ``rhs - activity`` uniformly across senses — so the one subtraction
@@ -431,27 +492,43 @@ def _activity(blocks: list[Any]) -> pl.Series:
     mixed-integer included, and a readable status guarantees one by the time
     this is asked. Blocks were added in ascending row ranges, the same fact
     :func:`_duals` leans on.
+
+    **A quadratic row's activity is not** :math:`Ax`: ``QCSlack`` is measured
+    against the whole left-hand side, :math:`x^\top Q x + a^\top x`, so the
+    same subtraction returns what the row actually asserts. Nothing here
+    recomputes it — the solver's own number is the one feasibility was judged
+    against.
     """
     import numpy as np
 
     slices = [block.RHS - block.Slack for block in blocks]
+    slices += [np.asarray([row.QCRHS - row.QCSlack], dtype=np.float64) for row in qrows]
     values = np.concatenate(slices) if slices else np.empty(0, dtype=np.float64)
     return solver_vector(values)
 
 
-def _duals(blocks: list[Any]) -> pl.Series | None:
+def _duals(blocks: list[Any], qrows: list[Any]) -> pl.Series | None:
     """Shadow prices in row order, or ``None`` where the model has none.
 
-    Blocks were added in ascending row ranges, so concatenating their slices
-    reproduces the row index without a sort — and :meth:`Solver.run` checks
-    the vector spans the model. Gurobi refuses ``Pi`` on a mixed-integer
-    model, and that refusal *is* the answer — no zero vector to test.
+    Blocks were added in ascending row ranges and the quadratic rows after
+    them, so concatenating their slices reproduces the row index without a
+    sort — and :meth:`Solver.run` checks the vector spans the model. Gurobi
+    refuses ``Pi`` on a mixed-integer model, and that refusal *is* the answer
+    — no zero vector to test.
+
+    A quadratic row prices through ``QCPi``, which exists **only under
+    ``QCPDual``** — off by default and deliberately left off: asking for it
+    puts the solve on the convex path, and a nonconvex row that solves without
+    it then fails outright (measured: ``Constraint Q not PSD``). A caller who
+    wants prices asks with ``solver_options={'QCPDual': 1}``; without it the
+    attribute is refused, and that refusal *is* the answer.
     """
     import numpy as np
 
     gurobipy = _gurobipy()
     try:
         slices = [block.Pi for block in blocks]
+        slices += [np.asarray([row.QCPi], dtype=np.float64) for row in qrows]
     except (AttributeError, gurobipy.GurobiError):
         return None
     values = np.concatenate(slices) if slices else np.empty(0, dtype=np.float64)

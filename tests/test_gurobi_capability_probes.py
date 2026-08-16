@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 gurobipy = pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
 
 from lpspec.relational.sinks import SOLVERS  # noqa: E402 — after the guard, or a bare install fails at import
+from lpspec.relational.sinks.capabilities import CAPABILITIES  # noqa: E402
 
 TABLE = 'docs/about/benchmarks.md, "Sink capabilities"'
 
@@ -110,15 +111,11 @@ def test_the_gurobi_descriptor_says_what_this_sink_does_with_what_it_measured():
     """The claim beside its evidence — `test_sink_capability_probes.py`'s twin.
 
     Everything above solved, and this sink now hands gurobipy every one of them
-    but the quadratic *constraint*: no stream carries a quadratic row, and the
-    language cannot state one. **A capability describes the sink as shipped**,
-    so that entry stays `absent` however capable the library is.
+    — the quadratic constraint included, which makes it the only consumer in
+    the package that builds one at all. The linopy lane cannot, which is hard
+    rule 3's amendment and what ``api.LANES`` declares.
     """
     capabilities = SOLVERS['gurobi'].capabilities
-    for capability in ('sos', 'integrality', 'quadratic_objective', 'nonconvex_quadratic_objective'):
+    for capability in CAPABILITIES:
         assert capabilities.support(capability) == 'native', f'{capability} solved natively above'
     assert capabilities.excludes == (), 'every combination probed above solved; nothing here is excluded'
-    assert capabilities.support('quadratic_constraint') == 'absent', (
-        'gurobipy takes one — the probe above measures it — but no stream carries a quadratic row '
-        'to this sink, and the language has no spelling for one'
-    )

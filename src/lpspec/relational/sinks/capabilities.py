@@ -125,27 +125,10 @@ def required(program: plan.Program, /) -> frozenset[Capability]:
     needed: set[Capability] = set()
     if any(v.variable_type != 'continuous' for v in program.variables):
         needed.add('integrality')
-    if program.objective is not None and _is_quadratic(program.objective.expression):
+    if program.objective is not None and plan.is_quadratic(program.objective.expression):
         needed.add('quadratic_objective')
+    if any(plan.is_quadratic(c.lhs) or plan.is_quadratic(c.rhs) for c in program.constraints):
+        needed.add('quadratic_constraint')
     if program.sos:
         needed.add('sos')
     return frozenset(needed)
-
-
-def _is_quadratic(expression: plan.Expression) -> bool:
-    """Whether *expression* contains a product of two variable-carrying operands.
-
-    The plan's own reading of degree, and the only place outside the compiler
-    that asks it: a capability is decided on the program, and the program is
-    the plan. Structural, so it costs a walk of the tree and reads no data.
-    """
-    if isinstance(expression, plan.Multiply) and all(_carries_variable(x) for x in (expression.left, expression.right)):
-        return True
-    return any(_is_quadratic(child) for child in plan.children(expression))
-
-
-def _carries_variable(expression: plan.Expression) -> bool:
-    """Whether a variable appears anywhere under *expression*."""
-    if isinstance(expression, plan.Variable):
-        return True
-    return any(_carries_variable(child) for child in plan.children(expression))

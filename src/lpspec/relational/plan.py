@@ -529,6 +529,31 @@ class Program:
         return _declared(self.variables, name, 'variable')
 
 
+def is_quadratic(expression: Expression) -> bool:
+    """Whether *expression* contains a product of two variable-carrying operands.
+
+    A structural question over the plan, asked by three unrelated callers — the
+    capability a program requires, which declarations the engine builds last,
+    and the compiler's own ceiling — so it is answered once here beside the
+    other walks rather than three times in their own terms.
+
+    Degree is the *language's* verdict (``language/degree.py``) and this is not
+    a second opinion on it: by the time a plan exists the question is no longer
+    "may this be written" but "which shape is it", and only the plan is in
+    hand to answer it.
+    """
+    if isinstance(expression, Multiply) and all(carries_variable(x) for x in (expression.left, expression.right)):
+        return True
+    return any(is_quadratic(child) for child in children(expression))
+
+
+def carries_variable(expression: Expression) -> bool:
+    """Whether a variable appears anywhere under *expression*."""
+    if isinstance(expression, Variable):
+        return True
+    return any(carries_variable(child) for child in children(expression))
+
+
 def parameters_of(*expressions: Expression) -> frozenset[str]:
     """Every parameter named anywhere under *expressions*."""
     found: set[str] = set()

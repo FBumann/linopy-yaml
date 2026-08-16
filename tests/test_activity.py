@@ -15,6 +15,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import LpspecError, NoSolutionError
+from tests.conftest import recomputed_row_values
 from tests.differential import differential
 from tests.oracle import pd  # through the guard: a bare import would beat it
 from tests.test_milp import COMMITMENT_YAML
@@ -22,31 +23,16 @@ from tests.test_milp import COMMITMENT_YAML
 ACTIVITY_RTOL = 1e-9
 
 
-def _csr_row_values(run) -> np.ndarray:
-    """Every row's Ax at the solution, recomputed from the CSR block.
-
-    ``np.add.reduceat(coeff * x[cols], row_starts[:-1])`` — nothing the solver
-    produced except the primal vector itself, which is what makes agreement
-    with `activity` an independent check rather than a tautology.
-    """
-    tables = run.engine._tables()
-    x = np.zeros(tables.column_count)
-    for name, block in run.engine._variable_blocks.items():
-        x[block.start : block.start + block.height] = run.result.primal(name)['value'].to_numpy()
-    products = tables.matrix['coeff'].to_numpy() * x[tables.matrix['col'].to_numpy()]
-    assert (np.diff(tables.row_starts) > 0).all(), 'reduceat repeats on an empty row — pick a model without one'
-    return np.add.reduceat(products, tables.row_starts[:-1])
-
-
 def _agrees_with_csr(run) -> None:
     """Each constraint's activity against its slice of the recomputation."""
-    recomputed = _csr_row_values(run)
+    recomputed = recomputed_row_values(run.engine, run.result)
     for name, block in run.engine._constraint_blocks.items():
         got = run.result.activity(name)['value'].to_numpy()
         assert got == pytest.approx(recomputed[block.start : block.start + block.height], rel=ACTIVITY_RTOL), (
             f'the solver judged feasibility against a different {name!r} LHS than the CSR block holds. '
-            f'activity is Ax only while every constraint is linear: if quadratic constraints ever land, '
-            f'it must grow the x^T Q x term (#563) — this disagreement is that invariant failing.'
+            f'Activity is the *whole* left-hand side, which is Ax on a linear row and x^T Q x + Ax '
+            f'on a quadratic one — `recomputed_row_values` adds both, and this disagreement is that '
+            f'invariant failing.'
         )
 
 

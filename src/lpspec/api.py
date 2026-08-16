@@ -28,24 +28,62 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from lpspec.errors import DataError, LpspecError, LpspecWarning
+from lpspec.errors import DataError, LpspecError, LpspecWarning, lane_cannot_build_message
 from lpspec.language import expand_piecewise, load_model, unbounded_notes
-from lpspec.lowering import advice, expression_thunks, lower_program
+from lpspec.lowering import advice, expression_thunks, lower_expression, lower_program
 from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
+from lpspec.relational.sinks.capabilities import Capabilities, required
 from lpspec.sources import tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from lpspec.language import Model
+    from lpspec.relational.plan import Program
     from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a
 #: consumer that binds no data (``typeset``) must be able to reach it without
 #: reaching the runner. Callers keep saying ``lps.load_model``.
 __all__ = ['build', 'check', 'load_model', 'solve', 'write']
+
+
+#: What each **lane** can build, beside what each sink can ingest. Nothing is
+#: *solved* on a lane, but the question is the same one, and hard rule 3's
+#: amendment is this constant: both lanes accept the same language, and one
+#: cannot build a quadratic constraint —
+#: ``linopy.Model.add_constraints`` refuses a ``QuadraticExpression`` outright
+#: and no reformulation of it is exact.
+#:
+#: Declared here rather than in ``lpspec.linopy`` because that needs an extra
+#: this build may not have, and read as *data* so ``check`` answers without it.
+#: What the gap costs is the differential oracle for that one construct, which
+#: is why it should stay one entry long.
+LANES: Mapping[str, Capabilities] = {
+    'linopy': Capabilities(
+        supports={
+            'integrality': 'native',
+            'sos': 'native',
+            'quadratic_objective': 'native',
+            'nonconvex_quadratic_objective': 'native',
+        }
+    )
+}
+
+
+def _refused_by(program: Program, sink: str) -> str | None:
+    """Why *sink* — a solver, a writer suffix or a lane — cannot take *program*.
+
+    The lane arm is the only one this module answers itself: what a *sink*
+    refuses is ``relational.sinks``' business, and it may not know a lane
+    exists (hard rule 2).
+    """
+    if (lane := LANES.get(sink)) is None:
+        return sinks.refusal(program, sink)
+    missing = lane.missing(required(program))
+    return lane_cannot_build_message(sink, missing) if missing else None
 
 
 def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -> Model:
@@ -57,6 +95,10 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
     portability. Most models never leave the common subset, and a default that
     warned about a sink nobody named would be noise on every one of them.
 
+    **Named expressions are lowered here and nowhere else.** They are thunks
+    until read, so an error inside one would otherwise wait for a reader —
+    which rule 2 refuses. This is the verb that can afford to look.
+
     A capability question is answered off a declared table with no data bound,
     so it costs no build and needs no solver installed: a repository of models
     can be checked in CI against every sink they will eventually be solved on.
@@ -65,9 +107,9 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
 
     Args:
         model: A YAML path, a mapping, or a loaded :class:`Model`.
-        sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an output
-            suffix (``.lp``, ``.mps``). ``None`` asks only whether the model is
-            sayable.
+        sink: A solver name (``highs``, ``gurobi``, ``xpress``), an output
+            suffix (``.lp``, ``.mps``), or a lane (``linopy``). ``None`` asks
+            only whether the model is sayable.
 
     Returns:
         The validated schema.
@@ -86,9 +128,11 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
     """
     schema = load_model(model)
     program = lower_program(schema)
+    for name in schema.expressions:
+        lower_expression(schema, name)
     notes = [*unbounded_notes(expand_piecewise(schema)), *advice(program)]
-    refused = sinks.refusal(program, sink) if sink is not None else None
-    if sink is not None and refused is None:
+    refused = _refused_by(program, sink) if sink is not None else None
+    if sink is not None and refused is None and sink not in LANES:
         notes += sinks.relaxations(program, sink)
     for note in notes:
         warnings.warn(note, LpspecWarning, stacklevel=2)

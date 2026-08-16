@@ -23,19 +23,17 @@ from tests.conftest import dispatch_model_path
 from tests.oracle import lpspec_linopy  # skips the module without the [linopy] extra
 
 
-#: One entry per way an expression leaves the language on a binary node. The
-#: first is *positional*: the same product one line up, in the objective, is the
-#: language's quadratic case and is checked by ``test_quadratic_objective.py``.
-#: The divisor that adds is affine and refused all the same, because a quotient
-#: is built as one reciprocal factor.
+#: One entry per way the degree rule can be broken *at build time on both
+#: lanes*. A product of two variables is not among them any more — the
+#: objective and constraints both take one — and the position that still
+#: refuses it, a named expression, is lowered only by ``check``
+#: (``test_language_boundary.py``). What the eager lane refuses about a
+#: quadratic *constraint* is not degree but capability, and lives in
+#: ``test_quadratic_constraint.py``. The divisor that adds is affine and
+#: refused all the same, because a quotient is built as one reciprocal factor.
 @pytest.mark.parametrize(
     ('patch', 'match'),
     [
-        pytest.param(
-            {'constraints.balance.expression': 'sum(p * p, over=generator) == load'},
-            'degree 2',
-            id='variable-times-variable-in-a-constraint',
-        ),
         pytest.param(
             {'objective.expression': 'sum(p) * sum(p)'},
             'sums of more than one term',

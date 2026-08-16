@@ -60,15 +60,8 @@ _REFUSED = [
         },
     ),
     (
-        "variable x variable in a constraint — degree 2 is the objective's alone",
-        {
-            'constraints': {
-                'shaped': {
-                    'foreach': ['snapshot'],
-                    'expression': 'sum(p * p, over=generator) <= load',
-                }
-            }
-        },
+        'variable x variable x variable — the ceiling is degree 2, not "nonlinear is fine"',
+        {'objective': {'sense': 'minimize', 'expression': 'sum(p * p * p)'}},
     ),
 ]
 

@@ -333,7 +333,8 @@ choice load-bearing in the language's rulebook.
    Enforced *more* strictly than stated — it imports nothing from the
    package at all, bar two declared leaves (`errors.py` and `frames.py`, in
    `ENGINE_MAY_IMPORT`), because a near-zero import surface is what keeps the
-   subpackage extractable. Widening that list is a decision, not an accident.
+   subpackage extractable. Widening
+   that list is a decision, not an accident.
    **`errors.py` is a leaf by name and not by cost**: it re-exports the
    language's half of the hierarchy, so importing it loads the language. That
    is the price of the root class living upstream of everything that extends
@@ -349,6 +350,18 @@ choice load-bearing in the language's rulebook.
    That equality is what makes the differential tests an oracle rather than a
    comparison of dialects. A construct outside the language is a load error
    naming the construct and its rewrite, never a redirection to the other lane.
+
+   **Accepting is not building, and one construct now separates them.** A lane
+   may accept what it cannot construct: `linopy.Model.add_constraints` refuses
+   a `QuadraticExpression`, so a quadratic *constraint* has no linopy lane.
+   That is declared (`capabilities.LINOPY_LANE`), answerable before any build
+   (`check(model, sink='linopy')`) and refused in the language's own words —
+   the axis [the ceiling](ceiling.md#capability-is-not-the-ceiling) draws for
+   sinks, one level up. **What it costs is the oracle**: a construct one lane
+   builds is checked by one lane, and the differential test is replaced by
+   weaker ones — two independent encodings reaching one optimum, a residual at
+   the returned primal — that no shared misreading fails. Every name added to
+   that gap is a construct fewer eyes have seen.
 4. **Backend-visible YAML files are self-contained.** No Python-side state
    (registries, session objects) may change what a file means.
 5. **The public interface is a declared model, not a Python API.** YAML is what
@@ -522,6 +535,7 @@ it.
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
 | `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued lookups |
 | `relational/sinks/tables.py` | what every sink reads and no more — the five frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
+| `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; `api.py` declares each **lane** against the same vocabulary |
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
 | `linopy/__init__.py` | opt-in lane: `build` constructing a `linopy.Model`, and `expression` reading a named quantity off a solved one |

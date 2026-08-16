@@ -487,10 +487,12 @@ assumed. The architectural reading is in
 [the ceiling](ceiling.md#capability-is-not-the-ceiling); the plan is
 [Track 3](https://github.com/fluxopt/lpspec/issues/472).
 
-Two rows have since been acted on. `quadratic objective` is in the language —
-the objective takes degree 2 — and each sink answers for itself: HiGHS by its
-two exclusions, Gurobi by having none, `lp_file` by writing a section. The
-other is `sos:`
+Three rows have since been acted on. Both quadratic rows are in the language —
+the math takes degree 2 — and each sink answers for itself: HiGHS by its two
+exclusions and by having no quadratic-constraint concept at all, Gurobi by
+having none, `lp_file` by writing a section either way. A quadratic constraint
+is also the first construct one *lane* cannot build, which is what hard rule 3's
+`accepts ≠ builds` amendment is for. The third is `sos:`
 ([sos](../reference/language/piecewise.md#sos)) ships to every sink, natively where the row says
 so and as binaries plus linking rows where it says *no concept*.
 

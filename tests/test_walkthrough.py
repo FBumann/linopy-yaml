@@ -57,5 +57,5 @@ def test_walkthrough_claims_hold(output: str) -> None:
     assert 'weighted_sum' in output and "FunctionCallNode(name='sum'" in output, 'the macro expanded away'
     assert 'row absence' in output and 'not 24' in output, 'a mask removes rows, not values'
     assert 'ok (optimal)' in output
-    assert 'degree 2' in output, 'the degree ceiling still bites where the position cannot hold one'
+    assert 'degree 3' in output, 'the ceiling still bites — the objective takes 2 and no more'
     assert 'caught by check()' in output, 'and with no data bound, so CI can run it'

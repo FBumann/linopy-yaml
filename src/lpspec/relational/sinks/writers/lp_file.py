@@ -39,6 +39,7 @@ LP_FILE_CAPABILITIES = Capabilities(
         'sos': 'native',
         'quadratic_objective': 'native',
         'nonconvex_quadratic_objective': 'native',
+        'quadratic_constraint': 'native',
     }
 )
 
@@ -93,6 +94,8 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         f.write(b'\ns.t.\n\n')
         for block in model.row_blocks(EMIT_BUDGET):
             sink(_constraint_lines(model, block.lo, block.hi, model.matrix_block(block.lo, block.hi)), f)
+        for row, pairs in model.quadratic_blocks():
+            sink(_quadratic_row_lines(model, row, pairs), f)
 
         f.write(b'\nbounds\n')
         sink(bounds, f)
@@ -109,6 +112,36 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
             sink(_set_lines(model), f)
 
         f.write(b'\nend\n')
+
+
+def _quadratic_row_lines(model: ModelTables, row: int, pairs: pl.DataFrame) -> pl.LazyFrame:
+    r"""One quadratic constraint, linear part then bracketed quadratic part.
+
+    ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``. **Not** halved, unlike the objective's
+    section: the format divides only that one by two, an asymmetry of the
+    format rather than of ours.
+
+    Written a row at a time, after the linear rows and still in label order —
+    the quadratic rows *are* the tail. Gathering one row's lines is the ``sos``
+    section's trade, and it leaves the linear path's streamed interleave alone.
+    """
+    entries = model.matrix_block(row, row + 1)
+    header = pl.LazyFrame({'line': [f'c{row}:']})
+    linear = entries.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')).alias('line'))
+    opened = pl.LazyFrame({'line': ['+ [']})
+    quadratic = pairs.lazy().select(
+        pl.concat_str(
+            *_signed(pl.col('coeff')),
+            pl.lit(' x'),
+            digits(pl.col('col_l')),
+            pl.when(pl.col('col_l') == pl.col('col_r'))
+            .then(pl.lit(' ^ 2'))
+            .otherwise(pl.concat_str(pl.lit(' * x'), digits(pl.col('col_r')))),
+        ).alias('line')
+    )
+    sense = model.rows.filter(pl.col('row') == row)
+    closed = pl.LazyFrame({'line': [']' + ' ' + _LP_SENSE[sense.item(0, 'sense')] + ' ' + str(sense.item(0, 'rhs'))]})
+    return pl.concat([header, linear, opened, quadratic, closed])
 
 
 def _quadratic_terms(model: ModelTables) -> pl.LazyFrame:

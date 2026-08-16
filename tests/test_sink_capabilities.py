@@ -75,7 +75,7 @@ def test_nothing_is_excluded_where_no_exclusion_is_declared():
         pytest.param('gurobi', 'sos', 'native', id='gurobi-branches-on-a-set'),
         pytest.param('gurobi', 'quadratic_objective', 'native', id='gurobi-passes-a-hessian'),
         pytest.param('gurobi', 'nonconvex_quadratic_objective', 'native', id='gurobi-goes-spatial'),
-        pytest.param('gurobi', 'quadratic_constraint', 'absent', id='no-stream-carries-a-quadratic-row'),
+        pytest.param('gurobi', 'quadratic_constraint', 'native', id='gurobi-takes-a-quadratic-row'),
     ],
 )
 def test_the_shipped_solver_table(sink, capability, expected):
@@ -115,11 +115,10 @@ def test_a_set_is_excluded_from_the_hessian_it_would_arrive_beside():
 
 
 def test_the_lp_writer_carries_what_it_writes():
-    """A section is text, so the format has no exclusion either — and what it
-    declares is the *writer's*, not the reader's and not the format's: LP text
-    has a quadratic-constraint section, nothing here emits one, and a model
-    carrying one would otherwise be written back without it."""
+    """A section is text, so the format has no exclusion — and what it declares
+    is the *writer's*, not the reader's: HiGHS parses neither the `sos` section
+    nor the quadratic-constraint one this writer emits."""
     capabilities = WRITERS['.lp'].capabilities
-    assert capabilities.missing(CAPABILITIES) == ['quadratic_constraint']
-    assert capabilities.support('quadratic_objective') == 'native', 'the section this branch taught it to write'
+    assert capabilities.missing(CAPABILITIES) == [], 'every section the language can reach is emitted now'
+    assert capabilities.support('quadratic_constraint') == 'native', 'the section this branch taught it to write'
     assert capabilities.excludes == ()
