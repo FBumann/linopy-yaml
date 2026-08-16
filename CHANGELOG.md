@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.0.1-alpha.159](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.158...v0.0.1-alpha.159) (2026-08-16)
+
+
+### Features
+
+* **compat:** choosing the linopy lane is an import, not a different call ([#864](https://github.com/fluxopt/lpspec/issues/864)) ([0a74aac](https://github.com/fluxopt/lpspec/commit/0a74aac347bc96e70ec24fe82a7d1606295c96d8))
+
+
+### Bug Fixes
+
+* **compat:** a construct the streaming lane refuses is refused on the linopy lane too ([#865](https://github.com/fluxopt/lpspec/issues/865)) ([48ca92e](https://github.com/fluxopt/lpspec/commit/48ca92ea78644c34932a4aeef7a092b0e3d998f7))
+
+
+### Documentation
+
+* **architecture:** the linopy lane names its verbs instead of counting them ([#866](https://github.com/fluxopt/lpspec/issues/866)) ([9f93d84](https://github.com/fluxopt/lpspec/commit/9f93d8417f6944b414aa24a57a8d97f75c7dc81f))
+
 ## [0.0.1-alpha.158](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.157...v0.0.1-alpha.158) (2026-08-16)
 
 
