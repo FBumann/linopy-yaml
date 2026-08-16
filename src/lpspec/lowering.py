@@ -34,11 +34,11 @@ from lpspec.language.expression_parser import (
     ArithmeticNode,
     BinaryOperatorNode,
     ComparisonNode,
-    CoordinateNode,
     DimensionNode,
     EdgeNode,
     FunctionCallNode,
     KeywordNode,
+    LookupNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -227,7 +227,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             f'by its kwarg during resolution (docs/ARCHITECTURE.md hard rule 1).'
         )
         raise AssertionError(msg)
-    if isinstance(node, (NameNode, DimensionNode, CoordinateNode)):
+    if isinstance(node, (NameNode, DimensionNode, LookupNode)):
         msg = (
             f'{type(node).__name__}({node.name!r}) reached lowering. Expressions '
             f'must go through resolution.expression_of() first '
@@ -261,34 +261,31 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             raise LanguageError(f'{context}: {shape_error}')
 
         if node.name == 'sum':
-            over_node = node.kwargs['over']
-            if not isinstance(over_node, DimensionNode):
-                raise LanguageError(f'{context}: sum(over=...) must name a dimension')
-            by_node = node.kwargs.get('group_by')
+            by_node = node.kwargs.get('by')
             _check_dim_rules(node, schema, context)
             operand = _lower_expr(node.args[0], schema, context)
             if by_node is None:
+                over_node = node.kwargs['over']
+                if not isinstance(over_node, DimensionNode):
+                    raise LanguageError(f'{context}: sum(over=...) must name a dimension')
                 return plan.Sum(operand, (over_node.name,))
-            if not isinstance(by_node, CoordinateNode):
-                raise LanguageError(f'{context}: sum(group_by=...) must name a lookup')
+            if not isinstance(by_node, LookupNode):
+                raise LanguageError(f'{context}: sum(by=...) must name a lookup')
             return plan.GroupSum(
                 operand,
-                over=over_node.name,
+                over=by_node.dimension,
                 coordinate=by_node.name,
                 into=by_node.into,
             )
 
         if node.name == 'at':
-            over_node = node.kwargs['onto']
             by_node = node.kwargs['by']
-            if not isinstance(over_node, DimensionNode):
-                raise LanguageError(f'{context}: at(onto=...) must name a dimension')
-            if not isinstance(by_node, CoordinateNode):
+            if not isinstance(by_node, LookupNode):
                 raise LanguageError(f'{context}: at(by=...) must name a lookup')
             _check_dim_rules(node, schema, context)
             return plan.At(
                 _lower_expr(node.args[0], schema, context),
-                over=over_node.name,
+                over=by_node.dimension,
                 coordinate=by_node.name,
                 into=by_node.into,
             )
@@ -504,7 +501,7 @@ def advice(program: plan.Program) -> list[str]:
 def _produced_axes(e: plan.Expression) -> set[str]:
     """The axes an expression *creates*, beyond what its declarations index.
 
-    ``group_by=`` lands terms on its target and ``at()`` spreads onto its fine
+    ``sum(by=)`` lands terms on its target and ``at()`` spreads onto its fine
     dimension, so both are axes even when no declaration is indexed by them —
     an objective may group into a dimension and then implicitly sum it away.
     """

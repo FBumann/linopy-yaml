@@ -249,14 +249,14 @@ class TestDimensionKwargs:
         [
             pytest.param('sum(p, over=snapshto) == load', ('silent no-op', 'sum(over=snapshto)'), id='sum-over-typo'),
             pytest.param(
-                'sum(p, over=generatr, group_by=zone) == load',
-                ('does not name a declared dimension',),
-                id='group-by-dim-typo',
+                'sum(p, by=bus) == load',
+                ("'bus' is a dimension, and by= takes a lookup",),
+                id='by-names-a-dimension',
             ),
             pytest.param(
-                'sum(p, over=generator, group_by=zne) == load',
-                ("does not name a lookup over 'generator'",),
-                id='group-by-lookup-typo',
+                'sum(p, by=zne) == load',
+                ('does not name a lookup', "Lookups: ['zone']"),
+                id='by-lookup-typo',
             ),
             pytest.param(
                 'shift(p, over=snapshto, by=1) == load',
@@ -275,7 +275,7 @@ class TestDimensionKwargs:
         ('expression', 'foreach'),
         [
             pytest.param('sum(p, over=generator) == load', ['snapshot'], id='a-sum'),
-            pytest.param('sum(p, over=generator, group_by=zone) == load', ['snapshot', 'bus'], id='a-grouped-sum'),
+            pytest.param('sum(p, by=zone) == load', ['snapshot', 'bus'], id='a-grouped-sum'),
             pytest.param(
                 "shift(p, over=snapshot, by=1, edge='wrap') == load", ['snapshot', 'generator'], id='a-wrapping-shift'
             ),
@@ -418,9 +418,7 @@ def test_the_retired_group_sum_names_its_rewrite():
         )
 
     assert 'no longer an operator' in str(exc.value)
-    assert 'sum(<expr>, over=<dim>, group_by=<coord>)' in str(exc.value), (
-        'a retired spelling has to name its rewrite, not just fail'
-    )
+    assert 'sum(<expr>, by=<lookup>)' in str(exc.value), 'a retired spelling has to name its rewrite, not just fail'
 
 
 class TestVersion:

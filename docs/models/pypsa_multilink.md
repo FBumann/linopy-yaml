@@ -158,7 +158,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           rows name — three ends or two, the expression never says.
         foreach: [bus]
         expression: >-
-          sum(gen, over=generator, group_by=gen_bus)
+          sum(gen, by=gen_bus)
           + sum(incidence * p, over=link)
           == load
 

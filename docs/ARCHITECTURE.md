@@ -359,7 +359,7 @@ declarations build, and lands as CSR at assembly — `(col, coeff)` in row-major
 order plus a `row_starts` offset array, the same three arrays a solver takes,
 at 12 bytes per entry. Masks
 are **row absence** — no NaN sentinels, no `-1` labels. Broadcasting is a join,
-`sum` drops coordinate columns, `sum(group_by=)` joins the dim table and projects a
+`sum` drops coordinate columns, `sum(by=)` joins the dim table and projects a
 declared lookup in place of the grouped dim. Neither aggregates: both
 rewrite a fragment's dim tuple, and duplicates collapse in the terminal
 `SUM(coeff) GROUP BY row, col` at assembly.
@@ -520,7 +520,7 @@ emits declarations, and declarations are language.
 
 The test cuts the other way too, which is what keeps it from swallowing
 everything. `lowering.py` legitimately refuses **plan shapes** — `shift(by=)`
-must be an integer literal, `sum(group_by=)` a declared lookup — because
+must be an integer literal, `sum(by=)` a declared lookup — because
 those are about what a plan node can represent, and a second opinion about them
 is not a bug, it is the other lane's own business. What a consumer may not do is
 state a rule about the *language* that another consumer then has to restate.

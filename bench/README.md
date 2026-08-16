@@ -209,7 +209,7 @@ verdict off the SQL"), not to cover the language:
 |---|---|---|
 | `dispatch` | pointwise bounds + one `sum` per row | raw throughput, and the case a dense eager broadcast is best at — so our worst ratio |
 | `nodal` | `(snapshot, node, tech)`, `where: installed > 0` | sparsity as it actually occurs — see below |
-| `transport` | three `sum(group_by=)` joins per row | the mapping-table path, where the eager lane must materialise a bus x generator product |
+| `transport` | three `sum(by=)` joins per row | the mapping-table path, where the eager lane must materialise a bus x generator product |
 | `sector` | dense snapshots x dense carriers x sparse portfolio | mixed density in one model — the shape a sector-coupled model actually has, and where the sparsity claim is visible |
 | `storage` | a cyclic `shift` recurrence | the self-join, and the only locality class with no eager cost analogue: xarray shifts an array, we join a term stream against itself on `snapshot.ord - 1` |
 | `commitment` | dispatch gated by a binary `u`, `p <= p_max * u` | the MILP — the only case whose `vtype` stream is not all-continuous, so integrality reaches every sink at scale |

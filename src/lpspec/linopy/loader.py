@@ -141,7 +141,7 @@ def build_dim_coords(
                         f"Dimension '{dim_name}' lookup '{cname}' has value(s) that are "
                         f"not '{target}' labels: {', '.join(unknown)}. Every value must "
                         f"be a declared '{target}' label — otherwise "
-                        f'sum(over={dim_name}, group_by={cname}) drops those terms and the '
+                        f'sum(by={cname}) drops those terms and the '
                         f'model builds and solves without them.'
                     )
                     raise DataError(msg)

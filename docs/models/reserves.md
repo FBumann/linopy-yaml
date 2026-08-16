@@ -222,7 +222,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     expressions:
       reserve_of:
-        expression: sum(r, over=offer, group_by=gen_of)
+        expression: sum(r, by=gen_of)
         description: all the reserve a generator holds, across every offer it made
 
     constraints:
@@ -230,18 +230,18 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         description: what is generated at a bus plus what arrives over the lines meets the load there
         foreach: [bus]
         expression: >-
-          sum(p, over=generator, group_by=gen_bus)
-          + sum(f, over=line, group_by=to)
-          - sum(f, over=line, group_by=from)
+          sum(p, by=gen_bus)
+          + sum(f, by=to)
+          - sum(f, by=from)
           == load
       export_cap:
         description: a line carries no more than the bus it leaves is allowed to export
         foreach: [line]
-        expression: f <= at(bus_cap, onto=line, by=from)
+        expression: f <= at(bus_cap, by=from)
       requirement:
         description: the offers made into a market fill its requirement
         foreach: [market]
-        expression: sum(r, over=offer, group_by=market_of) >= req
+        expression: sum(r, by=market_of) >= req
       headroom:
         description: a generator's output plus the reserve it holds stays inside its capacity
         foreach: [generator]
@@ -252,7 +252,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           two other dimensions' parameters pulled back through two legs of one edge
           set
         foreach: [offer]
-        expression: r <= at(tranche_frac, onto=offer, by=tranche_of) * at(p_max, onto=offer, by=gen_of)
+        expression: r <= at(tranche_frac, by=tranche_of) * at(p_max, by=gen_of)
       zone_cover:
         description: the weighted reserve of the generators backing a zone covers its requirement
         foreach: [zone]
@@ -349,7 +349,7 @@ above; the balance duals are checked too).
 | self-relation, used in both directions | lines bus→bus, balance sums through `from` and `to` | edge dimension + leg lookups | — (the balance is every other row's feasibility) |
 | parallel edges | `l1`, `l2` both b2→b1 | member identity is the label, not the endpoint pair | drop `l2` → dearer |
 | dangling member | `l4`'s `to` is null | a partial lookup: the open end aggregates nowhere | point `l4` at b1 → cheaper |
-| pullback through a leg | `f ≤ at(bus_cap, onto=line, by=from)` | `at()` | uncap the exporting bus → cheaper |
+| pullback through a leg | `f ≤ at(bus_cap, by=from)` | `at()` | uncap the exporting bus → cheaper |
 | k-ary edge set | offers carry `gen_of`, `market_of`, `tranche_of` | three legs, one edge dimension | — (structure, pinned by test) |
 | duplicate pair | `o1`, `o2` share all three legs | multiplicity is real capacity | drop `o2` → dearer |
 | two pullbacks through two legs | the offer cap above | `at() * at()` | `o4` sits exactly at its cap |

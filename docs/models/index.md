@@ -72,7 +72,7 @@ Read off the resolved plan of each model rather than its text, so it cannot
 drift from what the engine builds.
 
 <!-- constructs:begin -->
-| model | verified | `sum` | `sum(group_by)` | `at()` | `shift` | `shift(edge='wrap')` | `where` | `bounds` | `piecewise` | `sos` | MILP |
+| model | verified | `sum` | `sum(by=)` | `at()` | `shift` | `shift(edge='wrap')` | `where` | `bounds` | `piecewise` | `sos` | MILP |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | [dispatch](dispatch.md) | **✔** 10500 | **✓** | · | · | · | · | **✓** | **✓** | · | · | · |
 | [monthly_budget](monthly_budget.md) | **✔** 9500 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |

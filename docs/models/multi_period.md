@@ -22,8 +22,8 @@ is just a column with four of one value and two of another.
 
 ## Both directions of one mapping
 
-Grouping reads the coordinate one way:
-`sum(p, over=snapshot, group_by=period)` is a per-period CO₂ budget, and
+Grouping reads the lookup one way:
+`sum(p, by=period_of)` is a per-period CO₂ budget, and
 [monthly_budget](monthly_budget.md) is the same construct on a different
 coordinate.
 
@@ -33,10 +33,10 @@ each `snapshot`, so a coarse quantity is pulled onto a fine one:
 ```yaml
 within_cap:
   foreach: [snapshot, generator]
-  expression: p <= at(p_nom, onto=snapshot, by=period)
+  expression: p <= at(p_nom, by=period_of)
 ```
 
-`at` and `sum(group_by=)` take the same two arguments because `(over, by)` names one
+`at` and `sum(by=)` take the same one argument because the lookup names one
 mapping table and the operator says which direction it is walked.
 
 A per-period **parameter** needs neither: data prep can join it onto the
@@ -159,7 +159,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       within_cap:
         description: output in a snapshot is capped by the capacity of the period it falls in
         foreach: [snapshot, generator]
-        expression: p <= at(p_nom, onto=snapshot, by=period_of)
+        expression: p <= at(p_nom, by=period_of)
       balance:
         description: the fleet meets the load exactly in every snapshot
         foreach: [snapshot]

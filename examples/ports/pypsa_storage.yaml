@@ -124,11 +124,11 @@ constraints:
       the stores, meets the load there
     foreach: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, group_by=gen_bus)
-      + sum(f, over=link, group_by=to)
-      - sum(f, over=link, group_by=from)
-      + sum(p_dispatch, over=storage, group_by=storage_bus)
-      - sum(p_store, over=storage, group_by=storage_bus)
+      sum(p, by=gen_bus)
+      + sum(f, by=to)
+      - sum(f, by=from)
+      + sum(p_dispatch, by=storage_bus)
+      - sum(p_store, by=storage_bus)
       == load
 
   ramp_up:

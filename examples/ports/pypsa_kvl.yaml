@@ -78,9 +78,9 @@ constraints:
     description: what is generated at a bus plus what arrives over the lines meets the load there
     foreach: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, group_by=gen_bus)
-      + sum(f, over=line, group_by=to)
-      - sum(f, over=line, group_by=from)
+      sum(p, by=gen_bus)
+      + sum(f, by=to)
+      - sum(f, by=from)
       == load
 
   kirchhoff_voltage_law:

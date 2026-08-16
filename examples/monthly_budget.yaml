@@ -49,7 +49,7 @@ constraints:
   monthly_budget:
     description: what a generator produces across a month stays inside that month's budget
     foreach: [month, generator]
-    expression: sum(p, over=snapshot, group_by=month_of) <= monthly_cap
+    expression: sum(p, by=month_of) <= monthly_cap
 
 objective:
   sense: minimize

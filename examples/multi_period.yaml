@@ -51,7 +51,7 @@ constraints:
   within_cap:
     description: output in a snapshot is capped by the capacity of the period it falls in
     foreach: [snapshot, generator]
-    expression: p <= at(p_nom, onto=snapshot, by=period_of)
+    expression: p <= at(p_nom, by=period_of)
   balance:
     description: the fleet meets the load exactly in every snapshot
     foreach: [snapshot]

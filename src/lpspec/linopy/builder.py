@@ -22,11 +22,11 @@ from lpspec.language.expression_parser import (
     ArithmeticNode,
     BinaryOperatorNode,
     ComparisonNode,
-    CoordinateNode,
     DimensionNode,
     EdgeNode,
     FunctionCallNode,
     KeywordNode,
+    LookupNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -373,7 +373,7 @@ def _eval_ast(
             f'where no kwarg expects one.'
         )
         raise AssertionError(msg)
-    if isinstance(node, (NameNode, DimensionNode, CoordinateNode)):
+    if isinstance(node, (NameNode, DimensionNode, LookupNode)):
         msg = (
             f'{type(node).__name__}({node.name!r}) reached the evaluator. '
             f'Expressions must go through resolution.expression_of() first '
@@ -400,11 +400,11 @@ def _eval_ast(
         args = [_eval_ast(a, ctx) for a in node.args]
         if node.name == 'at':
             by = node.kwargs['by']
-            assert isinstance(by, CoordinateNode)
-            return _operator_at(args[0], _coordinate_array(by, ctx), into=by.into)
-        if (by := node.kwargs.get('group_by')) is not None:
-            assert isinstance(by, CoordinateNode)
-            return _operator_grouped_sum(args[0], _coordinate_array(by, ctx), into=by.into)
+            assert isinstance(by, LookupNode)
+            return _operator_at(args[0], _lookup_array(by, ctx), into=by.into)
+        if node.name == 'sum' and (by := node.kwargs.get('by')) is not None:
+            assert isinstance(by, LookupNode)
+            return _operator_grouped_sum(args[0], _lookup_array(by, ctx), into=by.into)
         kwargs: dict[str, Any] = {}
         for k, v in node.kwargs.items():
             if isinstance(v, DimensionNode):
@@ -418,10 +418,10 @@ def _eval_ast(
     assert_never(node)
 
 
-def _coordinate_array(by: CoordinateNode, ctx: EvaluationContext) -> Any:
-    """The declared coordinate ``by`` as an array over the dimension carrying it.
+def _lookup_array(by: LookupNode, ctx: EvaluationContext) -> Any:
+    """The declared lookup ``by`` as an array over the dimension it is over.
 
-    Looked up rather than evaluated as an operand: the coordinate lives on the
+    Looked up rather than evaluated as an operand: the lookup lives on the
     dimension, not in the parameter dataset.
     """
     try:
@@ -454,25 +454,22 @@ def _operator_sum(array: Any, *, over: str) -> Any:
 
 
 def _operator_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
-    """Sum *array* through a declared coordinate, producing dimension *into*.
+    """Sum *array* through a declared lookup, producing dimension *into*.
 
-    YAML: ``sum(p, over=generator, group_by=bus)``. *mapping* is the
-    coordinate's values as a one-dimensional array over the dim being grouped,
-    from ``EvaluationContext.dim_coords``; that dim is summed out and *into*
+    YAML: ``sum(p, by=gen_bus)``. *mapping* is the lookup's values as a
+    one-dimensional array over the dim being grouped, from
+    ``EvaluationContext.dim_coords``; that dim is summed out and *into*
     holds the group labels.
 
-    A null coordinate says the label belongs to no group, so its terms
+    A null lookup value says the label belongs to no group, so its terms
     contribute nowhere. linopy refuses to group by NaN at all, so those members
     are dropped before grouping rather than after.
     """
     if not isinstance(mapping, xr.DataArray):
-        msg = (
-            f'sum(group_by=) coordinate must be an array (got '
-            f'{type(mapping).__name__}). Usage: sum(expr, over=dim, group_by=coord)'
-        )
+        msg = f'sum(by=) lookup must be an array (got {type(mapping).__name__}). Usage: sum(expr, by=lookup)'
         raise TypeError(msg)
     if mapping.ndim != 1:
-        msg = f'sum(group_by=) mapping must have exactly one dimension, got {list(mapping.dims)}'
+        msg = f'sum(by=) mapping must have exactly one dimension, got {list(mapping.dims)}'
         raise LanguageError(msg)
 
     group = mapping.rename(into)
@@ -483,26 +480,26 @@ def _operator_grouped_sum(array: Any, mapping: Any, *, into: str) -> Any:
         array = array.isel({dim: present.to_numpy()})
     if isinstance(array, xr.DataArray) or hasattr(array, 'groupby'):
         return array.groupby(group).sum()
-    raise _unsupported('sum(group_by=)', array)
+    raise _unsupported('sum(by=)', array)
 
 
 def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:
-    """Read *array* through a declared coordinate — the adjoint of a group.
+    """Read *array* through a declared lookup — the adjoint of a group.
 
-    YAML: ``at(on, onto=flow, by=component)``. *mapping* is the same
-    one-dimensional array ``sum`` takes; grouping sums *along* it, this indexes
-    *through* it, so the operand must carry ``into`` and the result carries the
-    mapping's own dim.
+    YAML: ``at(on, by=component)``. *mapping* is the same one-dimensional
+    array ``sum`` takes; grouping sums *along* it, this indexes *through* it,
+    so the operand must carry ``into`` and the result carries the mapping's
+    own dim.
 
     xarray's vectorised selection is the pullback exactly — one ``into`` label
     read once per fine label pointing at it — so the fan-out is the indexer's
     doing rather than a broadcast arranged here.
 
-    A null coordinate reads nothing and its row is absent, the same reading
+    A null lookup value reads nothing and its row is absent, the same reading
     ``sum`` gives a null group.
     """
     if not isinstance(mapping, xr.DataArray):
-        msg = f'at() coordinate must be an array (got {type(mapping).__name__}). Usage: at(expr, onto=dim, by=coord)'
+        msg = f'at() lookup must be an array (got {type(mapping).__name__}). Usage: at(expr, by=lookup)'
         raise TypeError(msg)
     if mapping.ndim != 1:
         msg = f'at() mapping must have exactly one dimension, got {list(mapping.dims)}'

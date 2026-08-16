@@ -13,10 +13,10 @@ reference implementation. This directory is the source; that is the guided tour.
 |---|---|
 | `dispatch.yaml` | least-cost generation against a load profile — the smallest complete model |
 | `storage.yaml` | dispatch plus a cyclic battery (`shift(edge='wrap')`) |
-| `transport.yaml` | a network: coordinates on a dimension *are* the topology (`sum(group_by=)`) |
+| `transport.yaml` | a network: coordinates on a dimension *are* the topology (`sum(by=)`) |
 | `piecewise.yaml` | per-generator convex cost curves (`piecewise:`) |
 | `sos.yaml` | the same curve stated as a set the solver branches on, rather than built from binaries (`method: sos2`) |
-| `monthly_budget.yaml` | a cap per calendar month: time grouped through a coordinate, exactly as a generator sits on a bus (`sum(group_by=)`) |
+| `monthly_budget.yaml` | a cap per calendar month: time grouped through a coordinate, exactly as a generator sits on a bus (`sum(by=)`) |
 | `multi_period.yaml` | capacity decided once per investment period and binding at every snapshot in it (`at()`) |
 | `reserves.yaml` | energy and reserves co-optimized on a two-bus grid: every many-to-many shape at once — a pair set reified as a dimension whose legs are lookups, and weighted membership left as data (`lookups:`, `at()`) |
 | `walkthrough.yaml` | the model `walkthrough.py` prints every pipeline stage for |

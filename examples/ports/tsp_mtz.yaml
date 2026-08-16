@@ -63,8 +63,8 @@ constraints:
     foreach: [from_city, to_city]
     where: "from_city != c01 AND to_city != c01"
     expression: >-
-      sum(u, over=city, group_by=as_from)
-      - sum(u, over=city, group_by=as_to)
+      sum(u, by=as_from)
+      - sum(u, by=as_to)
       + n * travel
       <= n - 1
 

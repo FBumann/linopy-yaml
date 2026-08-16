@@ -37,7 +37,7 @@ BASE = {
     'constraints': {
         'balance': {
             'foreach': ['snapshot', 'bus'],
-            'expression': 'sum(p, over=generator, group_by=gen_bus) == load',
+            'expression': 'sum(p, by=gen_bus) == load',
         }
     },
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
@@ -72,7 +72,7 @@ def test_the_base_model_typechecks():
         ('p * cost', {'snapshot', 'generator'}),
         ('sum(p, over=generator)', {'snapshot'}),
         ('sum(p * cost, over=generator)', {'snapshot'}),
-        ('sum(p, over=generator, group_by=gen_bus)', {'snapshot', 'bus'}),
+        ('sum(p, by=gen_bus)', {'snapshot', 'bus'}),
         ("shift(p, over=snapshot, by=1, edge='wrap')", {'snapshot', 'generator'}),
     ],
 )
@@ -91,13 +91,13 @@ def test_dim_inference(expr, expected):
             id='sum-over-an-absent-dim-is-an-error-not-a-noop',
         ),
         pytest.param(
-            'sum(load, over=generator, group_by=gen_bus)',
-            r'sum\(over=generator, group_by=\.\.\.\) but the expression has dims',
+            'sum(load, by=gen_bus)',
+            r"sum\(by=gen_bus\) consumes 'generator', the dim the lookup is over",
             id='sum-requires-the-grouped-dim',
         ),
         # `(inner - {over}) | {into}` is a union, and a union absorbs a collision.
         #
-        # `sum(load, over=generator, group_by=gen_bus)` -- with `load` already
+        # `sum(load, by=gen_bus)` -- with `load` already
         # carrying `bus` -- asks for `bus` twice: once as the operand's own dim, once
         # as the group its terms are placed into. The union returns one, so the rule reports
         # a shape neither lane can build. The eager lane makes an xarray object with
@@ -107,7 +107,7 @@ def test_dim_inference(expr, expected):
         # Refusing it at load time is the only answer both lanes can give, which is
         # why the rule lives here rather than in either engine.
         pytest.param(
-            'sum(load * p, over=generator, group_by=gen_bus)',
+            'sum(load * p, by=gen_bus)',
             'already carries',
             id='sum-into-a-dim-the-operand-already-carries',
         ),

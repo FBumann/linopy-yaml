@@ -58,13 +58,13 @@ lookups:
 
 ```yaml
 - expression: >-
-    sum(p, over=generator, group_by=gen_bus)
-    + sum(f, over=line, group_by=to)
-    - sum(f, over=line, group_by=from)
+    sum(p, by=gen_bus)
+    + sum(f, by=to)
+    - sum(f, by=from)
     == load
 ```
 
-`sum(group_by=)` sums along a lookup, landing the result on the dimension the
+`sum(by=)` sums along a lookup, landing the result on the dimension the
 lookup points at. The same `f` is summed twice through two different lookups —
 once as inflow, once as outflow.
 

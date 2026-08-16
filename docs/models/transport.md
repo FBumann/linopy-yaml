@@ -141,10 +141,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     expressions:
       gen_at_bus:
-        expression: sum(p, over=generator, group_by=gen_bus)
+        expression: sum(p, by=gen_bus)
         description: what the generators sitting on a bus produce there
       net_inflow:
-        expression: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+        expression: sum(f, by=to) - sum(f, by=from)
         description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
     constraints:
@@ -204,11 +204,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
 ## What it exercises
 
-Three `sum(group_by=)` calls, and they are what a network *is* in this language.
-A dimension can carry **coordinates** — `generator` carries `bus`, `line`
-carries `from` and `to` — and `sum(f, over=line, group_by=to)` sums along a
-line's `to` coordinate, landing the result on `bus`. The same `f` is summed
-twice through two different coordinates, once as an inflow and once as an
+Three `sum(by=)` calls, and they are what a network *is* in this language.
+A model can declare **lookups** — `gen_bus` maps `generator` onto `bus`, `from`
+and `to` map `line` — and `sum(f, by=to)` sums along a
+line's `to` lookup, landing the result on `bus`. The same `f` is summed
+twice through two different lookups, once as an inflow and once as an
 outflow.
 
 No adjacency matrix, and no join written by the modeller: the topology is

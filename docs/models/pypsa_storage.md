@@ -240,11 +240,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           the stores, meets the load there
         foreach: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, group_by=gen_bus)
-          + sum(f, over=link, group_by=to)
-          - sum(f, over=link, group_by=from)
-          + sum(p_dispatch, over=storage, group_by=storage_bus)
-          - sum(p_store, over=storage, group_by=storage_bus)
+          sum(p, by=gen_bus)
+          + sum(f, by=to)
+          - sum(f, by=from)
+          + sum(p_dispatch, by=storage_bus)
+          - sum(p_store, by=storage_bus)
           == load
 
       ramp_up:
@@ -370,7 +370,7 @@ result that merely looks sensible.
 ## What it exercises
 
 `shift` across a boundary condition, division of a variable by a parameter, and
-a five-term `sum(group_by=)` nodal balance — generators, both ends of every link,
+a five-term `sum(by=)` nodal balance — generators, both ends of every link,
 and both directions of storage, all projected onto `bus`.
 
 It also asks for [#31](https://github.com/fluxopt/lpspec/issues/31) a third

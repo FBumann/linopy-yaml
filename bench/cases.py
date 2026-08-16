@@ -18,7 +18,7 @@ Cases are chosen so each stresses a *different* SQL shape (docs/ARCHITECTURE.md,
                multi-node model has, and the one axis where the two lanes do
                different *amounts* of work rather than the same work in a
                different order.
-``transport``  three ``sum(group_by=)`` joins per row — the mapping-table path, where
+``transport``  three ``sum(by=)`` joins per row — the mapping-table path, where
                the eager lane has to materialise a bus x generator product.
 ``storage``    a cyclic ``shift`` recurrence — the only locality class whose cost
                has no eager analogue: xarray shifts an array, we join a term

@@ -299,9 +299,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           meets the load there
         foreach: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, group_by=gen_bus)
-          + sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
-          + sum(g, over=link, group_by=link_to) - sum(g, over=link, group_by=link_from)
+          sum(p, by=gen_bus)
+          + sum(f, by=to) - sum(f, by=from)
+          + sum(g, by=link_to) - sum(g, by=link_from)
           == load
 
       kirchhoff_voltage_law:
@@ -316,7 +316,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           horizon's total stays inside the budget
         foreach: []
         expression: >-
-          sum(sum(p * at(co2_per_mwh, onto=generator, by=gen_carrier) / efficiency, over=generator), over=snapshot)
+          sum(sum(p * at(co2_per_mwh, by=gen_carrier) / efficiency, over=generator), over=snapshot)
           <= co2_limit
 
     objective:

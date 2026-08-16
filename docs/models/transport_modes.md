@@ -132,7 +132,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       within_stock:
         description: a depot cannot send out more than it holds
         foreach: [depot]
-        expression: sum(moved, over=connection, group_by=origin) <= stock
+        expression: sum(moved, by=origin) <= stock
 
       move_the_lot:
         description: everything that has to be moved is moved

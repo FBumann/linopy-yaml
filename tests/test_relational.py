@@ -745,7 +745,7 @@ def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
         'constraints': {
             'balance': {
                 'foreach': ['snapshot', 'bus'],
-                'expression': 'sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from) == load',
+                'expression': 'sum(f, by=to) - sum(f, by=from) == load',
             }
         },
         'objective': {'sense': 'minimize', 'expression': 'sum(sum(f, over=line), over=snapshot)'},

@@ -163,9 +163,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: what is generated at a bus plus what arrives over the links meets the load there
         foreach: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, group_by=gen_bus)
-          + sum(f, over=link, group_by=to)
-          - sum(f, over=link, group_by=from)
+          sum(p, by=gen_bus)
+          + sum(f, by=to)
+          - sum(f, by=from)
           == load
 
       ramp_up:

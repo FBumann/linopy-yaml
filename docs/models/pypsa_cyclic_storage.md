@@ -244,11 +244,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           the stores, meets the load there
         foreach: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, group_by=gen_bus)
-          + sum(f, over=link, group_by=to)
-          - sum(f, over=link, group_by=from)
-          + sum(p_dispatch, over=storage, group_by=storage_bus)
-          - sum(p_store, over=storage, group_by=storage_bus)
+          sum(p, by=gen_bus)
+          + sum(f, by=to)
+          - sum(f, by=from)
+          + sum(p_dispatch, by=storage_bus)
+          - sum(p_store, by=storage_bus)
           == load
 
       ramp_up:
@@ -346,7 +346,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 ## What it exercises
 
 `edge='wrap'`, against rung 3's bare `shift` — plus division by a parameter and the same
-five-term `sum(group_by=)` balance, with one fewer equation and one fewer parameter.
+five-term `sum(by=)` balance, with one fewer equation and one fewer parameter.
 Worth reading the two side by side: neither boundary needs a clause to state it.
 The operator names which one is meant, and picking the wrong one is a different
 model rather than a missing guard.

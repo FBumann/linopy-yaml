@@ -64,10 +64,10 @@ variables:
 
 expressions:
   gen_at_bus:
-    expression: sum(p, over=generator, group_by=gen_bus)
+    expression: sum(p, by=gen_bus)
     description: what the generators sitting on a bus produce there
   net_inflow:
-    expression: sum(f, over=line, group_by=to) - sum(f, over=line, group_by=from)
+    expression: sum(f, by=to) - sum(f, by=from)
     description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
 constraints:

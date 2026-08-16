@@ -126,7 +126,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       within_demand:
         description: a pair cannot be carried more than it asked for, however many paths serve it
         foreach: [call]
-        expression: sum(flow, over=path, group_by=call_of) <= demand
+        expression: sum(flow, by=call_of) <= demand
 
       within_capacity:
         description: >-
