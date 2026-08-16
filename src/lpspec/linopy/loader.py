@@ -17,6 +17,7 @@ from lpspec.errors import (
     sparse_divisor_message,
     uncovered_constant_message,
 )
+from lpspec.frames import as_frame
 from lpspec.language.expression_parser import (
     BinaryOperatorNode,
     ComparisonNode,
@@ -25,7 +26,6 @@ from lpspec.language.expression_parser import (
     VariableNode,
     children,
 )
-from lpspec.relational.frames import as_frame
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -341,7 +341,7 @@ def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str]) -
     """A tidy ``(dims…, value)`` frame as the array this lane builds against.
 
     The seam that lets one object reach either lane: everything
-    :func:`~lpspec.relational.frames.as_frame` recognises — polars, pyarrow,
+    :func:`~lpspec.frames.as_frame` recognises — polars, pyarrow,
     duckdb — plus a parquet path arrives here already tidy, and only this last
     step differs from what the relational lane does with it.
 

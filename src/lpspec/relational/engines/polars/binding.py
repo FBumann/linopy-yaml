@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from lpspec.errors import DataError
+from lpspec.frames import as_frame
 from lpspec.relational.engines.polars import data_validation
-from lpspec.relational.frames import as_frame
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

@@ -44,7 +44,7 @@ import polars as pl
 from lpspec.api import build, check
 from lpspec.api import solve as _solve
 from lpspec.errors import DataError, LpspecError
-from lpspec.relational.frames import as_frame
+from lpspec.frames import as_frame
 from lpspec.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 
 if TYPE_CHECKING:
