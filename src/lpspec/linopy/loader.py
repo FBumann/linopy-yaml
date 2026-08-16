@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -15,6 +16,8 @@ from lpspec.errors import (
     DataError,
     dense_array_message,
     duplicate_coordinate_message,
+    lookups_need_an_index_message,
+    missing_lookup_columns_message,
     no_index_source_message,
     sparse_divisor_message,
     uncovered_constant_message,
@@ -54,8 +57,9 @@ def build_master_coords(
     coords = coords or {}
     master: dict[str, pd.Index] = {}
 
+    sources = sources or {}
     for dim_name, dim_def in schema.dimensions.items():
-        supplied = supplied_index(schema, coords, dim_name)
+        supplied = supplied_index(schema, coords, dim_name, sources)
         if supplied is not None:
             master[dim_name] = dim_index_of(supplied, dim_name)
         elif dim_def.values is not None:
@@ -121,17 +125,22 @@ def _labels_in(raw: Any, dim: str, dims: list[str]) -> list[Any] | None:
     return frame[dim].unique().to_list() if dim in frame.columns else None
 
 
-def supplied_index(schema: Model, coords: dict[str, Any], dim_name: str) -> Any:
+def supplied_index(
+    schema: Model, coords: dict[str, Any], dim_name: str, sources: Mapping[str, Any] = MappingProxyType({})
+) -> Any:
     """The index for *dim_name* the caller passed, or the one the file declares.
 
-    A lookup carrying ``values:`` puts its map in the file, so the dimension it
-    is over has an index without ``coords=`` — assembled into the same frame a
-    caller would have passed, which is why nothing downstream distinguishes the
-    two. ``coords=`` wins where both exist, as it does over ``values:``.
+    The data-binding precedence, which is the relational lane's: a key in
+    ``sources``, then ``coords=``, then what the file declares. A lookup
+    carrying ``values:`` puts its map in the file, so the dimension it is over
+    has an index without either — assembled into the same frame a caller would
+    have passed, which is why nothing downstream distinguishes them.
 
     Returns:
-        A frame or label sequence, or ``None`` where neither supplies one.
+        A frame, path or label sequence, or ``None`` where none supplies one.
     """
+    if dim_name in sources:
+        return sources[dim_name]
     if dim_name in coords:
         return coords[dim_name]
     declared = schema.declared_index(dim_name)
@@ -139,16 +148,22 @@ def supplied_index(schema: Model, coords: dict[str, Any], dim_name: str) -> Any:
 
 
 def dim_index_of(source: Any, dim_name: str) -> pd.Index:
-    """A dimension index from a label sequence or a frame carrying coordinates."""
-    if isinstance(source, pd.DataFrame):
-        if dim_name not in source.columns:
+    """A dimension index from a label sequence, or from any table carrying the labels.
+
+    Table first, sequence second: everything :func:`_index_frame` recognises is
+    read for its label column, and what it cannot make a table of is taken as
+    the labels themselves.
+    """
+    frame = _index_frame(source, dim_name)
+    if frame is not None:
+        if dim_name not in frame.columns:
             msg = (
-                f"coords['{dim_name}'] is a DataFrame without a '{dim_name}' column "
-                f'(has {list(source.columns)}). The label column must be named after '
+                f"the index for '{dim_name}' is a table without a '{dim_name}' column "
+                f'(has {list(frame.columns)}). The label column must be named after '
                 f'the dimension.'
             )
             raise DataError(msg)
-        return pd.Index(pd.unique(source[dim_name]), name=dim_name)
+        return pd.Index(pd.unique(frame[dim_name]), name=dim_name)
     return pd.Index(source, name=dim_name)
 
 
@@ -156,12 +171,14 @@ def build_dim_coords(
     schema: Model,
     coords: dict[str, Any] | None,
     master_coords: dict[str, pd.Index],
+    sources: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, xr.DataArray]]:
     """Assemble declared lookups, checked against the dimension they target.
 
     A lookup is a column of its ``over`` dimension's index source, so it
-    arrives through ``coords=`` as a DataFrame carrying the label column plus
-    one column per lookup. The containment check mirrors the relational
+    arrives under that dimension's key as any table carrying the label column
+    plus one column per lookup — the shapes the relational lane takes there,
+    read through the same recogniser. The containment check mirrors the relational
     lane's: a value that is not a label of the target dimension would
     otherwise be dropped by xarray's inner-join alignment, silently losing
     the term it carries. A null value passes the check: it means "this label
@@ -172,28 +189,21 @@ def build_dim_coords(
     the check could ask.
     """
     coords = coords or {}
+    sources = sources or {}
     out: dict[str, dict[str, xr.DataArray]] = {}
 
     for dim_name in schema.dimensions:
         declared = {**schema.targeted_of(dim_name), **schema.labels_of(dim_name)}
         if not declared:
             continue
-        source = supplied_index(schema, coords, dim_name)
-        if not isinstance(source, pd.DataFrame):
-            got = type(source).__name__ if source is not None else 'nothing'
-            msg = (
-                f"Dimension '{dim_name}' carries lookups {sorted(declared)}, "
-                f"so coords['{dim_name}'] must be a DataFrame with a '{dim_name}' column "
-                f'plus one column per lookup (got {got}).'
-            )
-            raise DataError(msg)
+        supplied = supplied_index(schema, coords, dim_name, sources)
+        source = _index_frame(supplied, dim_name)
+        if source is None:
+            got = 'nothing' if supplied is None else 'a shape no table can be made of'
+            raise DataError(lookups_need_an_index_message(dim_name, list(declared), got))
         missing = [c for c in sorted(declared) if c not in source.columns]
         if missing:
-            msg = (
-                f"Dimension '{dim_name}' index is missing declared lookup column(s) "
-                f'{missing} (has {list(source.columns)}).'
-            )
-            raise DataError(msg)
+            raise DataError(missing_lookup_columns_message(dim_name, missing, list(source.columns)))
 
         labels = master_coords[dim_name]
         first = source.drop_duplicates(subset=[dim_name]).set_index(dim_name)
@@ -233,6 +243,29 @@ def build_dim_coords(
     return out
 
 
+def _index_frame(source: Any, dim: str) -> pd.DataFrame | None:
+    """A dimension's index source as the pandas frame the lookups are read off.
+
+    Every table shape a parameter may arrive in, plus a parquet path — the
+    dimension side of a caller's ``sources`` should take what the parameter
+    side does, and a lookup lives in a column either way.
+
+    Returns:
+        The frame, or ``None`` for a source no table can be made of.
+    """
+    if isinstance(source, pd.DataFrame):
+        return source
+    if source is None:
+        return None
+    if isinstance(source, (str, Path)):
+        return pl.scan_parquet(source).collect().to_pandas()
+    table = as_frame(source, (dim,))
+    if table is None:
+        return None
+    frame = table.collect() if isinstance(table, pl.LazyFrame) else table
+    return pd.DataFrame({name: frame[name].to_numpy() for name in frame.columns})
+
+
 def load_parameters(
     schema: Model,
     data: dict[str, Any] | None,
@@ -243,6 +276,11 @@ def load_parameters(
     Dim and coordinate checking happens here rather than per input shape:
     every branch of ``_coerce_to_dataarray`` produces a DataArray, and every
     one of them owes the same two guarantees.
+
+    A key naming a *dimension* is a dimension index, read by
+    :func:`build_master_coords` and :func:`build_dim_coords` rather than here,
+    and passes through untouched — one ``sources`` mapping carries both, as it
+    does on the relational lane.
 
     Returns:
         One DataArray per parameter, aligned to the master coordinates.
@@ -259,14 +297,12 @@ def load_parameters(
             msg = f"Parameter '{pname}' is required but was not provided in data.\nAdd '{pname}' to the data= argument."
             raise DataError(msg)
 
-    declared = set(schema.parameters)
-    unknown = set(data) - declared
+    unknown = set(data) - set(schema.parameters) - set(schema.dimensions)
     if unknown:
         msg = (
-            f'The following data keys are not declared as parameters: '
+            f'The following source keys name neither a parameter nor a dimension: '
             f'{sorted(unknown)}.\n'
-            f"Declare them under 'parameters:' in the YAML or remove "
-            f'them from data=.'
+            f"Declare them under 'parameters:' in the YAML, or remove them."
         )
         raise DataError(msg)
 

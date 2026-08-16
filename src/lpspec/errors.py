@@ -243,6 +243,27 @@ def dense_array_message(name: str) -> str:
     )
 
 
+def lookups_need_an_index_message(dim: str, lookups: list[str], got: str) -> str:
+    """A dimension carrying lookups and no index to read them from — one wording, both lanes.
+
+    A lookup is a *column* of its dimension's index, so unlike labels it cannot
+    be inferred from the parameters that happen to span the dimension: they
+    carry the label, never what it maps to.
+    """
+    return (
+        f"dimension '{dim}' carries lookups {sorted(lookups)} but has no index source "
+        f"(got {got}). Pass one under key '{dim}' — a parquet path, or any table "
+        f'carrying columns {[dim, *sorted(lookups)]}. A lookup cannot be inferred from '
+        f'the parameters that happen to use the dimension: they carry the label, not '
+        f'what it maps to.'
+    )
+
+
+def missing_lookup_columns_message(dim: str, missing: list[str], available: list[str]) -> str:
+    """An index that is present and short of a declared lookup — one wording, both lanes."""
+    return f"index for dimension '{dim}' is missing declared lookup column(s) {sorted(missing)} (has {available})"
+
+
 def no_index_source_message(dim: str) -> str:
     """A dimension nothing can supply labels for — one wording, both lanes.
 

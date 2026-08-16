@@ -158,3 +158,63 @@ def test_the_table_covers_both_verdicts():
     """
     verdicts = {c.verdict for c in CASES}
     assert verdicts == {ACCEPTED, DataError}, f'expected both verdicts to be exercised; got {verdicts}'
+
+
+#: A lookup-carrying dimension: the one index a parameter table cannot stand in
+#: for, since it carries the label and never what the label maps to.
+LOOKUP_MODEL = {
+    'dimensions': {'g': {}, 'b': {'values': ['n', 'e']}},
+    'lookups': {'gen_bus': {'over': 'g', 'into': 'b'}},
+    'parameters': {'p_max': {'dims': ['g']}},
+    'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
+    'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 10'}},
+    'objective': {'sense': 'maximize', 'expression': 'x'},
+}
+
+_P_MAX = {'p_max': _tidy(g=['w', 's'], value=[5.0, 5.0])}
+
+
+@pytest.mark.parametrize(
+    ('sources', 'match'),
+    [
+        pytest.param(_P_MAX, 'carries lookups', id='no-index-at-all'),
+        pytest.param(
+            {**_P_MAX, 'g': _tidy(g=['w', 's'])},
+            'missing declared lookup column',
+            id='an-index-without-the-lookup-column',
+        ),
+    ],
+)
+def test_a_lookup_index_defect_reads_the_same_on_both_lanes(tmp_path, sources, match):
+    """One wording, not two — the same rule `no_index_source_message` follows.
+
+    These two were written twice and drifted: the relational lane named the
+    `sources` key and the eager one named `coords=`, for one defect a caller
+    fixes the same way whichever lane they were on.
+    """
+    path = tmp_path / 'lookup.yaml'
+    path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
+
+    with pytest.raises(DataError, match=match) as relational:
+        lps.build(path, sources).close()
+    with pytest.raises(DataError, match=match) as eager:
+        lpspec_linopy.build(path, sources)
+
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+
+
+def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
+    """And it may arrive under `sources`, which is where the relational lane looks first.
+
+    The eager lane read `coords=` only and required a pandas frame, so an index
+    a caller passed the way the runner documents — a polars table under the
+    dimension's own key — was invisible to one of two lanes.
+    """
+    path = tmp_path / 'lookup.yaml'
+    path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
+    sources = {**_P_MAX, 'g': _tidy(g=['w', 's'], gen_bus=['n', 'e'])}
+
+    with lps.solve(path, sources) as relational:
+        assert relational.is_ok
+    built = lpspec_linopy.build(path, sources)
+    assert set(built.variables['x'].coords['g'].to_numpy()) == {'w', 's'}, 'the eager lane read the same index'

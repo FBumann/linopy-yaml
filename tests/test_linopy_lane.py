@@ -156,7 +156,7 @@ class TestLoadParameters:
                 {'x': {'values': [1], 'dtype': 'int'}},
                 None,
                 {'extra': 1},
-                'not declared',
+                'neither a parameter nor a dimension',
                 id='unknown-key',
             ),
             pytest.param(
