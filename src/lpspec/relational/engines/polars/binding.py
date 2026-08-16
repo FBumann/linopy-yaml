@@ -20,7 +20,12 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import DataError, no_index_source_message
+from lpspec.errors import (
+    DataError,
+    lookups_need_an_index_message,
+    missing_lookup_columns_message,
+    no_index_source_message,
+)
 from lpspec.frames import as_frame
 from lpspec.relational.engines.polars import data_validation
 
@@ -188,12 +193,7 @@ class _Binder:
                 continue
             carried = self.program.dimension(d).carried
             if carried:
-                raise DataError(
-                    f"dimension '{d}' carries lookups {carried} but has "
-                    f"no index source. Pass one under key '{d}' (a parquet path or frame "
-                    f'carrying columns {[d, *carried]}) — a lookup cannot '
-                    f'be inferred from the parameters that happen to use the dimension.'
-                )
+                raise DataError(lookups_need_an_index_message(d, list(carried), 'nothing'))
             params = [p for p in self.program.parameters if d in p.dims]
             if not params:
                 raise DataError(no_index_source_message(d))
@@ -237,9 +237,7 @@ class _Binder:
             )
         missing = [c for c in names if c not in available]
         if missing:
-            raise DataError(
-                f"index for dimension '{d}' is missing declared lookup column(s) {missing} (has {available})"
-            )
+            raise DataError(missing_lookup_columns_message(d, missing, available))
         labelled = frame.select(d, *names).with_row_index(_ROW_POSITION).collect().lazy()
         data_validation.check_coordinates_single_valued(d, names, labelled)
         return (

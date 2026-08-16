@@ -96,11 +96,14 @@ It takes the same *data* too, which it did not always
 path, any table exporting the Arrow PyCapsule protocol, a `pd.Series` carrying
 its dims in an index, a `dict` or a sequence over one dimension, or one number
 spread over the coordinates it covers. Neither reads an `xr.DataArray`: this
-package reads tables and hands arrays back. Dimension labels come from
-`sources`, then `coords=`, then `values:`, then the parameters that span the
-dimension — sorted, since a derived dimension has no declared order, which is
-why an explicit index is worth passing whenever order matters. A dimension
-carrying lookups cannot be derived at all, since derivation reads labels only.
+package reads tables and hands arrays back. A dimension index is any of those
+tables too, under the dimension's own key in `sources` or under `coords=`, and
+labels come from `sources`, then `coords=`, then `values:`, then the parameters
+that span the dimension — sorted, since a derived dimension has no declared
+order, which is why an explicit index is worth passing whenever order matters.
+A dimension carrying lookups cannot be derived at all: the parameters spanning
+it carry the label, never what the label maps to, and both lanes say so in the
+same sentence.
 
 So one `sources` mapping goes to either, and which lane builds a file is
 decided by an import and nothing else.
