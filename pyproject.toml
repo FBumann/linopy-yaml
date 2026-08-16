@@ -57,21 +57,22 @@ dependencies = [
 # name rather than repeating it — one place for the pins, so what CI tests the
 # lane against is what a user of the extra gets.
 #
-# The lower bound is 0.8, not 0.9, because the v1 arithmetic convention this
-# lane requires is not in a release yet: PyPSA/linopy#717 branches from 0.8.x
-# and reports a 0.8 dev version. `[tool.uv.sources]` below is what actually
-# resolves it for development and CI. When v1 ships, this becomes an ordinary
-# floor on the release that carries it and the source pin goes away.
+# linopy is a git requirement because the v1 arithmetic convention this lane
+# requires is in no release: PyPSA/linopy#717 branches from 0.8.x, and 0.9.0
+# ships without `options['semantics']`. `lpspec/linopy/__init__.py` sets that
+# option on import and does not guard — its docstring says what legacy
+# semantics would answer instead — so a released linopy turns the import into a
+# bare `KeyError: semantics is not a valid setting`, which no version floor
+# prevents, every release being above a 0.8 dev version.
 #
-# **That last sentence is a release step, not a tidy-up.** `lpspec/linopy/
-# __init__.py` sets `options['semantics'] = 'v1'` on import and does not guard,
-# on the grounds that this floor guarantees the option — so a linopy released
-# without v1 would satisfy `>=0.8.0.post1.dev0` (0.9 > 0.8.0.post1.dev0) and
-# turn the import into a bare `KeyError: semantics is not a valid setting`.
-# Raise the floor to the release that carries v1 in the same change that drops
-# the source pin.
+# The branch, not a rev: this tracks active upstream work, and a stale rev
+# would quietly measure the lane against a spec that has since moved.
+#
+# A direct reference is metadata PyPI refuses, so this pin and a PyPI release
+# cannot both stand — see RELEASING.md. When v1 ships, this becomes an
+# ordinary floor on the release that carries it (#463).
 linopy = [
-    "linopy>=0.8.0.post1.dev0",
+    "linopy @ git+https://github.com/PyPSA/linopy@feat/arithmetic-convention",
     "xarray>=2024.2.0",
     # also what `Result.to_pandas` / `to_dataarray` need. Declared here rather
     # than as a runtime dependency: pandas is a bridge out of the engine, not
@@ -102,6 +103,11 @@ repository = "https://github.com/fluxopt/lpspec"
 source = "vcs"
 # only hit when building outside a git checkout (e.g. an sdist of an sdist)
 fallback-version = "0.0.0"
+
+# What lets the `linopy` extra name a git branch; hatchling refuses a direct
+# reference otherwise. The extra says why it needs one.
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lpspec"]
@@ -313,12 +319,3 @@ unresolvable-dunder-all = true
 untyped-import = true
 unused-ignore = true
 variance-mismatch = true
-
-# The v1 arithmetic convention is not released. lpspec's eager lane is written
-# against it — absence propagates and drops a constraint row rather than being
-# filled with zero — so the oracle is only an oracle on a linopy that speaks it.
-# Pinned by branch rather than by rev deliberately: this is tracking active
-# upstream work, and a stale rev would quietly measure us against a spec that
-# has since moved. Removed once v1 ships.
-[tool.uv.sources]
-linopy = { git = "https://github.com/PyPSA/linopy", branch = "feat/arithmetic-convention" }

@@ -207,3 +207,10 @@ Every tagged build also attaches its wheel and sdist to the GitHub release.
   [trusted publisher](https://docs.pypi.org/trusted-publishers/) for
   `lpspec` (workflow `publish.yaml`, environment `pypi`), create the `pypi`
   environment, then set the variable.
+
+  **PyPI refuses a direct reference**, and the `linopy` extra is one —
+  `linopy @ git+…@feat/arithmetic-convention`, because the arithmetic
+  convention that lane requires is in no linopy release. So the upload fails
+  until upstream ships v1 and the extra becomes an ordinary floor
+  ([#463](https://github.com/fluxopt/lpspec/issues/463)). Everything else —
+  the tag, the wheel, the GitHub release — works today.
