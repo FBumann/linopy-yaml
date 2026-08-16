@@ -17,6 +17,7 @@ import sys
 import textwrap
 from typing import TYPE_CHECKING
 
+import polars as pl
 import pytest
 
 from lpspec.errors import DataError, LanguageError
@@ -105,6 +106,20 @@ class TestLoadParameters:
                 id='tidy-frame',
             ),
             pytest.param([0, 1], [10.0, 20.0], {'x': 1}, 20.0, id='sequence'),
+            pytest.param(
+                [0, 1],
+                pl.DataFrame({'x': [0, 1], 'value': [10.0, 20.0]}),
+                {'x': 1},
+                20.0,
+                id='a-polars-frame',
+            ),
+            pytest.param(
+                [0, 1],
+                pl.LazyFrame({'x': [0, 1], 'value': [10.0, 20.0]}),
+                {'x': 1},
+                20.0,
+                id='a-polars-scan',
+            ),
         ],
     )
     def test_accepted_shapes(self, values, data, select, expected):
@@ -452,3 +467,22 @@ def test_the_shim_refuses_an_unknown_expression_name(yaml_file):
     m = lpspec_linopy.build(path, data=dict(EXPRESSION_DATA))
     with pytest.raises(KeyError, match='never an expression string'):
         lpspec_linopy.expression(m, path, 'sum(p, over=generator)', data=dict(EXPRESSION_DATA))
+
+
+def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inputs, tmp_path):
+    """The claim the shape work is for: one `sources` mapping, either lane.
+
+    polars frames and a parquet path, handed to both unchanged — no per-lane
+    conversion at the call site, which is what made the two accepted-input sets
+    a divergence a user hit directly (#60).
+    """
+    from tests.differential import differential
+
+    frames, coords = dispatch_frame_inputs
+    path = tmp_path / 'load.parquet'
+    frames['load'].write_parquet(path)
+    sources = {**frames, 'load': path}
+
+    with differential(dispatch_yaml, sources, coords) as run:
+        assert run.result.primal('p').height, 'the relational lane built no rows'
+        assert float(run.model.variables['p'].labels.count()), 'the eager lane built no variables'

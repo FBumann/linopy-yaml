@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import xarray as xr
 
 from lpspec.errors import (
@@ -23,6 +25,7 @@ from lpspec.language.expression_parser import (
     VariableNode,
     children,
 )
+from lpspec.relational.frames import as_frame
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -273,6 +276,9 @@ def _coerce_to_dataarray(
     if isinstance(raw, xr.DataArray):
         raise DataError(dense_array_message(name))
 
+    if isinstance(raw, (str, Path)):
+        return _from_tidy(name, pl.scan_parquet(raw), dims)
+
     if isinstance(raw, (int, float, np.integer, np.floating)):
         return xr.DataArray(float(raw))
 
@@ -301,6 +307,11 @@ def _coerce_to_dataarray(
         _refuse_duplicate_index(name, raw.index, dims)
         return xr.DataArray.from_series(raw)
 
+    if not isinstance(raw, (np.ndarray, list, tuple)):
+        table = as_frame(raw, dims)
+        if table is not None:
+            return _from_tidy(name, table, dims)
+
     if isinstance(raw, (np.ndarray, list, tuple)):
         arr_np = np.asarray(raw)
         if arr_np.ndim == 0:
@@ -324,6 +335,36 @@ def _coerce_to_dataarray(
     type_name = type(raw).__name__
     msg = f"Parameter '{name}': unsupported type '{type_name}'."
     raise TypeError(msg)
+
+
+def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str]) -> xr.DataArray:
+    """A tidy ``(dims…, value)`` frame as the array this lane builds against.
+
+    The seam that lets one object reach either lane: everything
+    :func:`~lpspec.relational.frames.as_frame` recognises — polars, pyarrow,
+    duckdb — plus a parquet path arrives here already tidy, and only this last
+    step differs from what the relational lane does with it.
+
+    Read through numpy rather than ``to_pandas()``, which wants pyarrow: this
+    extra ships pandas and xarray, and nothing says it ships that too.
+
+    Raises:
+        DataError: The frame does not carry the declared dims and ``value``, or
+            holds more than one row for a coordinate.
+    """
+    frame = table.collect() if isinstance(table, pl.LazyFrame) else table
+    wanted = [*dims, 'value']
+    if any(column not in frame.columns for column in wanted):
+        raise DataError(
+            f"Parameter '{name}': a table is read tidy — one row per coordinate, with "
+            f'columns {wanted}. Got {frame.columns}.'
+        )
+    if not dims:
+        return xr.DataArray(float(frame['value'][0]))
+    columns = [frame[d].to_numpy() for d in dims]
+    index = pd.Index(columns[0], name=dims[0]) if len(dims) == 1 else pd.MultiIndex.from_arrays(columns, names=dims)
+    _refuse_duplicate_index(name, index, dims)
+    return xr.DataArray.from_series(pd.Series(frame['value'].to_numpy(), index=index))
 
 
 def _tidy_series(name: str, frame: pd.DataFrame, dims: list[str]) -> pd.Series:
