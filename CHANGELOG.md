@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.1-alpha.156](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.155...v0.0.1-alpha.156) (2026-08-16)
+
+
+### Features
+
+* **api:** a parameter may be written out in Python, not only handed over as a table ([#853](https://github.com/fluxopt/lpspec/issues/853)) ([b8cf21f](https://github.com/fluxopt/lpspec/commit/b8cf21fbea440bc952ddb2c1c9627c5df7a4c237))
+* **compat:** the linopy lane reads every table the product path reads ([#857](https://github.com/fluxopt/lpspec/issues/857)) ([c39bd5d](https://github.com/fluxopt/lpspec/commit/c39bd5d93ca4385b9313766634546135b4d74af4))
+
+
+### Refactoring
+
+* **compat:** the linopy lane constructs a model, it does not attach to one ([#846](https://github.com/fluxopt/lpspec/issues/846)) ([e268b0b](https://github.com/fluxopt/lpspec/commit/e268b0b9eac375c9d4fe1e9fbbb1fd14ef4ac257))
+
 ## [0.0.1-alpha.155](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.154...v0.0.1-alpha.155) (2026-08-16)
 
 
