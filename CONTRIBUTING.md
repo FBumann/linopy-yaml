@@ -1,7 +1,7 @@
 # Contributing
 
 Procedure lives here. **Why** the project is shaped the way it is lives in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and that split is deliberate: this file
+[docs/about/architecture.md](docs/about/architecture.md), and that split is deliberate: this file
 should be readable in one sitting and go stale only when a command changes.
 
 ## Setup
@@ -71,15 +71,22 @@ uv run mkdocs serve  # http://127.0.0.1:8000, live-reloading
 uv run mkdocs build --strict  # what CI runs
 ```
 
-Three rules, each enforced, so none has to be remembered:
+**A page states a rule or argues for one, and that decides where it goes.**
+`docs/guide.md`, `docs/models/` and `docs/reference/` are the path a reader
+writing or running a model takes; design notes, measured cost, project
+direction and the changelog live under `docs/about/`, reachable and out of the
+way.
+
+Three rules on top of that, each enforced, so none has to be remembered:
 
 - **Every page under `docs/` needs a `nav:` entry** in `mkdocs.yml`. Adding a
   model page without one fails the build rather than shipping an unreachable
   page. `docs/README.md` is the deliberate exception — it is the folder view
   GitHub renders, and `exclude_docs` keeps it out of the site, where
   `docs/index.md` is the home page.
-- **Inside `docs/`, link relatively.** `../SPEC.md`, `models/index.md`. mkdocs
-  resolves and validates these; a dead one fails the build.
+- **Inside `docs/`, link relatively.** `../reference/api.md`,
+  `models/index.md`. mkdocs resolves and validates these; a dead one fails the
+  build.
 - **Outside `docs/`, write the full GitHub URL** —
   `https://github.com/fluxopt/lpspec/blob/main/bench/README.md`, not
   `../bench/README.md`. The site has no file above `docs/` to resolve to, and
@@ -171,16 +178,17 @@ declared `escape:` island rather than into the language.
 
 Read, in order:
 
-1. [the deliberate non-primitives](docs/design/ceiling.md#deliberate-non-primitives) — parity with
+1. [the deliberate non-primitives](docs/about/ceiling.md#deliberate-non-primitives) — parity with
    another tool is not by itself a reason to add anything, and several
    plausible-sounding features are refused there on purpose;
-2. [the ceiling in docs/design/ceiling.md](docs/design/ceiling.md#two-tiers-and-the-ceiling) —
+2. [the ceiling in docs/about/ceiling.md](docs/about/ceiling.md#two-tiers-and-the-ceiling) —
    the admissibility test;
-3. [the extension checklists](docs/ARCHITECTURE.md#extension-checklists), which sit directly under that
+3. [the extension checklists](docs/about/architecture.md#extension-checklists), which sit directly under that
    test. They stay there rather than moving here: *may I?* and *how?* are one
    question, and splitting them invites answering the second without the first.
 
-A PR that adds, renames or retires a construct updates [docs/SPEC.md](docs/SPEC.md).
+A PR that adds, renames or retires a construct updates the [language
+reference](docs/reference/language/index.md).
 Rationale belongs in the PR description or a code comment; "this used to work
 differently" belongs in git.
 
@@ -266,7 +274,7 @@ published figure.
   reference table is rendered straight from `references.json`, so the published
   optimum and the asserted one cannot disagree.
 - **A rung that cannot be said is also a result.** It goes in the ledger with a
-  verdict — macro, primitive or escape — and feeds docs/ROADMAP.md. Do not work
+  verdict — macro, primitive or escape — and feeds docs/about/roadmap.md. Do not work
   around a gap silently.
 
 ## Refreshing the benchmarks

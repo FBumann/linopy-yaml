@@ -6,7 +6,7 @@ verified by checking the linked primals lie ON the curve (adjacency binaries
 at work) against a numpy interpolation; the ``convex:`` flag is verified to
 produce the hull instead.
 
-The last section is the counterweight, and SPEC §12's claim: convex piecewise
+The last section is the counterweight, and the piecewise rules' claim: convex piecewise
 needs no formulation machinery at all. Written as epigraph constraints it is
 ordinary affine YAML, relational-eligible with no ``piecewise:`` block in
 sight — which is the reason the block is only for the nonconvex case.

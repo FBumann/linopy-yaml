@@ -261,7 +261,7 @@ class ModelTables:
 
         Read off the data rather than derived from the declarations, because
         whether a rebind moved a label or a coefficient is a property of the
-        data (SPEC §8) and not of the model that declared it. Every vector it
+        data (the data-binding rules) and not of the model that declared it. Every vector it
         reads is one with an order contract — the label-ordered columns, the
         row-ordered matrix and rows — so that two builds of one model agree.
 

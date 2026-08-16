@@ -1,7 +1,7 @@
 # The performance harness
 
 Not shipped in the wheel, not imported by `lpspec`, not run in CI. It exists so
-that [docs/benchmarks.md](../docs/benchmarks.md) has a *provenance* — the last
+that [docs/about/benchmarks.md](../docs/about/benchmarks.md) has a *provenance* — the last
 set of published numbers came from a `scratch/` script that was deleted, and a
 claim nobody can re-run is a claim with a shelf life.
 
@@ -11,7 +11,7 @@ a selection out of it: `--cases / --sizes / --arms / --sinks`, plus `-k`.
 ```bash
 uv sync --group bench
 
-# every rung docs/benchmarks.md publishes. The size ladder and each sweep go
+# every rung docs/about/benchmarks.md publishes. The size ladder and each sweep go
 # to separate files: a run REPLACES its results file rather than adding to
 # it, and the report takes as many files as you give it
 uv run pytest bench --benchmark-memory --sizes xs s m l \
@@ -32,7 +32,7 @@ uv run pytest bench --sinks highs --benchmark-json=/tmp/highs.json
 ```
 
 The committed `results/*.jsonl` are the provenance of the tables
-`docs/benchmarks.md` publishes *today*, written by the pre-pytest harness. The
+`docs/about/benchmarks.md` publishes *today*, written by the pre-pytest harness. The
 readers no longer parse them — a full ladder run replaces them with `.json`,
 and until someone takes one on an idle machine the published numbers stand on
 files nothing in this directory can still read.
@@ -42,7 +42,7 @@ A bare `pytest bench` is **not** the committed ladder: `--sizes` defaults to
 Narrowing the run and then committing the file leaves the published tables with
 no provenance, and nothing about the file looks wrong afterwards.
 
-**`bench.plot` rewrites one line of `docs/benchmarks-scaling.html`** — the
+**`bench.plot` rewrites one line of `docs/about/benchmarks-scaling.html`** — the
 `const DATA = {...};` literal — and nothing else. The page is a tracked source
 file, so its markup and prose are reviewed in the diff like any other code and
 only the measurements inside it are mechanical.
@@ -92,7 +92,7 @@ Both arms read the same parquet files and end at the same seam — an LP file on
 disk, or a populated `highspy.Highs` — so the comparison is one language, one
 destination, two engines. The linopy arm is the right
 comparison and the only one worth making first: it accepts *exactly* the same
-YAML (docs/ARCHITECTURE.md hard rule 3), which is what makes it the oracle rather
+YAML (docs/about/architecture.md hard rule 3), which is what makes it the oracle rather
 than a rival dialect.
 
 Not measured, deliberately: solve time (that is HiGHS, identical either way, and
@@ -202,7 +202,7 @@ wall time and is usually the honest half of a before/after claim.
 
 ## The cases
 
-Chosen so each stresses a *different* SQL shape (docs/ARCHITECTURE.md, "read the
+Chosen so each stresses a *different* SQL shape (docs/about/architecture.md, "read the
 verdict off the SQL"), not to cover the language:
 
 | case | shape | why |
@@ -231,7 +231,7 @@ what an engine can exploit.
 **Measured, this sweep alone does not show it** — at a 1.2M coordinate product
 a dense array over it is ~10 MB and the fixed cost of the process dominates.
 `sector` runs the same sparsity at a 12M product and the effect is plain. See
-[docs/benchmarks.md](../docs/benchmarks.md#the-density-sweep-and-a-claim-it-refuses).
+[docs/about/benchmarks.md](../docs/about/benchmarks.md#the-density-sweep-and-a-claim-it-refuses).
 
 `Shape.density` (technologies per node: 12 / 6 / 3 / 1) is swept at one model
 size, because sweeping size and density together leaves no way to tell one

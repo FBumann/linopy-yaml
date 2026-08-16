@@ -1,9 +1,9 @@
 # The ceiling
 
 **What may enter the language, and what may never.** The structure that holds
-it is [ARCHITECTURE](../ARCHITECTURE.md); the rules a model must obey are
-[SPEC §0](../SPEC.md#0-the-laws); why the project exists and where it is going
-is [ROADMAP](../ROADMAP.md). This page is the argument in between: the test a
+it is [the architecture notes](architecture.md); the rules a model must obey are
+[the ten rules](../reference/language/index.md#ten-rules-the-language-reduces-to); why the project exists and where it is going
+is [the roadmap](roadmap.md). This page is the argument in between: the test a
 candidate primitive has to pass, why capability is a second axis rather than
 part of the ceiling, [what has been refused and why](#deliberate-non-primitives),
 and what composition would force.
@@ -17,11 +17,11 @@ language could not state becomes a ledger row in
 **Primitives** (operators, `sum`, `sum(by=)`, `shift`, `where`
 predicates) set the expressive ceiling, and each costs the full two-backend tax:
 eager implementation, plan node + locality class, engine case, lowering case,
-differential tests, SPEC entry. **`macros:`** are pure AST substitution — every
+differential tests, a language-reference entry. **`macros:`** are pure AST substitution — every
 composition of primitives at zero marginal cost and zero divergence risk.
 **`expressions:`** substitute the same way where referenced and still cost
 nothing at build, but they are a tier apart from macros
-([SPEC §3](../SPEC.md#3-expressions-and-macros)): a named expression has fixed
+([named expressions](../reference/language/expressions.md#named-expressions)): a named expression has fixed
 dims and an observable identity — readable after a solve via
 `result.expression(name)`, lowered on demand at the read through the same
 compiler the constraints use, which is what keeps the divergence risk at zero.
@@ -78,7 +78,7 @@ linopy oracle passes.
 **The ceiling is a claim, so it needs evidence.** In
 [docs/models/index.md](../models/index.md), math a ported model needed and this language
 could not state becomes a ledger row with its triage verdict — what
-[docs/ROADMAP.md](../ROADMAP.md) should be argued from. Those ports also cover a class
+[the roadmap](roadmap.md) should be argued from. Those ports also cover a class
 no other test reaches: both lanes consume the same resolved AST by rule 1, so a
 *shared misreading* passes the differential suite green, and only an outside
 optimum catches it.
@@ -141,7 +141,7 @@ The ceiling above is about **streamability** and is solver-independent. What a
 *sink* can ingest is a separate axis, and conflating the two let one solver's
 limits read as architectural law — "no sink carries the stream" described
 HiGHS, not the architecture. Two findings, measured in
-[docs/benchmarks.md](../benchmarks.md#sink-capabilities): SOS is
+[the benchmarks](benchmarks.md#sink-capabilities): SOS is
 **solver-bounded** (HiGHS has no SOS concept at all, while `lp_file` carries it
 as a text section and Gurobi natively), and what blocks quadratic is a
 **conjunction** — HiGHS has integrality *and* a Hessian and refuses the pair —

@@ -8,14 +8,16 @@ parsing the strings with pyparsing rather than `eval`. Our `expressions` is
 their `global_expressions`, our `piecewise` their `piecewise_constraints`. What
 is ours is the semantics underneath: one `expression` per block, macros that
 take arguments, a schema closed at every level, and the absence and degree-1
-laws ([SPEC §0](../SPEC.md#0-the-laws)). Their math is also the corpus we score
+laws ([the ten rules](../reference/language/index.md#ten-rules-the-language-reduces-to)). Their math is also the corpus we score
 coverage against, which is a different thing from a specification we match
-([SPEC §11](../SPEC.md#11-out-of-scope)).
+([the limits](../reference/language/errors.md#what-the-language-will-not-say)):
+**file portability is not a goal** — a Calliope model does not load here — and
+neither is operation parity with xarray or pandas.
 
 **[linopy](https://github.com/PyPSA/linopy) (MIT) is the vocabulary, the oracle
 and the denominator.** Where a concept is already theirs we copy the spelling
 rather than invent a second one; every language feature is differentially
-tested against a linopy build; every ratio on the [benchmarks](../benchmarks.md)
+tested against a linopy build; every ratio on the [benchmarks](benchmarks.md)
 page is lpspec ÷ linopy. The three relationships are
 [one page](linopy.md). The ported models in [the gallery](../models/index.md)
 and their reference optima are **PyPSA**'s.

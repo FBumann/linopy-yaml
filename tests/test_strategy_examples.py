@@ -16,7 +16,7 @@ a page that shows output is promising what a reader will see, and a diff is how
 that promise stays true. Regenerate with ``--update-golden``.
 
 The scenario sweep has no example of its own — it is the uncoupled case, so
-`docs/api.md`'s three lines are the whole of it and there is nothing an example
+`docs/reference/api.md`'s three lines are the whole of it and there is nothing an example
 would add.
 """
 

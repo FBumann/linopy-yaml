@@ -5,7 +5,7 @@
 
 The ladder's ratios have linopy as their only denominator, which ranks two
 engines without saying how much headroom either has left. This module is the
-missing denominator: ``transport`` — the case whose ratios docs/benchmarks.md
+missing denominator: ``transport`` — the case whose ratios docs/about/benchmarks.md
 discusses — built straight from the case's cached parquet into numpy arrays
 and a CSR matrix, with no lpspec and no polars expression engine anywhere in
 the path. What it costs is the irreducible price of emitting the coefficients,

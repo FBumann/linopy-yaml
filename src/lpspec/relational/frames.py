@@ -94,9 +94,10 @@ def _is_missing(value: Any) -> bool:
     return value is None or (isinstance(value, float) and value != value)
 
 
-#: The declared dimension dtypes (SPEC §2), as the column an index becomes.
+#: The declared dimension dtypes (the declaration rules), as the column an index becomes.
 #: Read only when there are no labels to infer from — polars decides the rest,
-#: and a cast over labels that exist could change how §6.1 compares them.
+#: and a cast over labels that exist could change how the where-string rules
+#: compare them.
 _DECLARED: dict[str, pl.DataType] = {
     'int': pl.Int64(),
     'float': pl.Float64(),

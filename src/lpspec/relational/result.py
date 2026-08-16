@@ -10,7 +10,7 @@ coordinates, so no reader ever goes back to the engine.
 Named for linopy's envelope (``Result`` = status + solution + report) rather
 than for our own decomposition, because our audience arrives from linopy and a
 second vocabulary for one fact is a tax on every one of them
-(docs/ARCHITECTURE.md, "Where a concept is already linopy's").
+(docs/about/architecture.md, "Where a concept is already linopy's").
 """
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ class Diagnostics:
     sink_rows: int
 
     #: ``(constraint, rows_not_built)`` — every row that lost all its terms and
-    #: so was not built (SPEC §6): without this record a declared constraint
+    #: so was not built (the absence rules): without this record a declared constraint
     #: could go unenforced with no way to notice. Empty for a model whose every
     #: declared row reached the solver. Counts rather than coordinates: the
     #: label of an unbuilt row does not exist, so naming which went would mean
@@ -191,7 +191,7 @@ class Result:
     #: never off what was asked for.
     _kept: Keep
     #: One deferred reader per declared named expression. A callable rather
-    #: than a frame because deferral is the contract (SPEC §3): nothing about
+    #: than a frame because deferral is the contract (the rules for named expressions): nothing about
     #: an expression is lowered or compiled until its reader is called, so a
     #: model that reads none pays for none. Released with the primals by
     #: :meth:`close`, since each holds this build's frames and values.

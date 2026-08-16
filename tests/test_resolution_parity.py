@@ -210,7 +210,8 @@ def test_the_empty_coordinate_builds_on_both_lanes():
     `constraint 'budget_row' has no dims`, and with that guard gone,
     `variable 'slack' has no dims (scalars: use dims of size 1)`. So the same
     file was two languages, against hard rule 3 — and the hint pointed at the
-    dummy dimension §2 now says is never how a scalar is written.
+    dummy dimension the declaration rules now say is never how a scalar is
+    written.
 
     Underneath both guards `_coordinate_product` asserted that no declaration
     arrives dimensionless. A product over nothing has one coordinate, not none.

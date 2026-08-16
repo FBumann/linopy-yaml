@@ -124,8 +124,9 @@ objective:
   expression: cap * invest + theta
 ```
 
-**`cut` and `fcut` take their members from data** ([§8](../SPEC.md)), so an
-iteration appends rows to their parameter tables and this file never changes.
+**`cut` and `fcut` take their members from data**
+([data binding](../reference/language/data.md)), so an iteration appends rows
+to their parameter tables and this file never changes.
 No YAML is generated at runtime, which is what keeps the model a reviewer reads
 the model that runs.
 

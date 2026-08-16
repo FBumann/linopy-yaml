@@ -31,7 +31,7 @@ signal, not a second headline — the tables still publish ``min``.
 
 **One thing the old runner did that this does not: record a failure as a
 result.** It caught a child that died, kept the exception line, and the report
-rendered it as a cell — which is how `docs/benchmarks.md` publishes that the
+rendered it as a cell — which is how `docs/about/benchmarks.md` publishes that the
 eager lane runs out of memory at a rung the relational one survives. Under
 pytest a dead pass is an error, and a real OOM kills the process before
 anything in it can record why. The readers still understand an ``error`` record

@@ -126,10 +126,10 @@ implementation agreeing on a meaning the modeller did not intend, which passes
 every lpspec-against-lpspec test green.
 
 Even the differential harness compares two lanes consuming the *same resolved
-AST* ([hard rule 1](../ARCHITECTURE.md#hard-rules)), which is what makes them
+AST* ([hard rule 1](../about/architecture.md#hard-rules)), which is what makes them
 an oracle for each other and also what they cannot see. This is the net for
 that class, and the evidence behind
-[the ceiling](../design/ceiling.md#two-tiers-and-the-ceiling).
+[the ceiling](../about/ceiling.md#two-tiers-and-the-ceiling).
 
 <!-- references:begin -->
 | port | optimum | `rtol` | duals | reference |
@@ -228,7 +228,7 @@ sharper statement about the language than either alone.
 
 ## Ledger — what a port could not say
 
-Feeds [ROADMAP](../ROADMAP.md), with the verdict
+Feeds [the roadmap](../about/roadmap.md), with the verdict
 [AGENTS.md](https://github.com/fluxopt/lpspec/blob/main/AGENTS.md) asks for:
 macro, primitive, or escape.
 
@@ -243,11 +243,11 @@ something the language cares about. The constraint is
 `sum(start_up over the last T snapshots) <= status`. For a *single T fixed in
 the file* that is `start_up + shift(start_up, over=snapshot, by=1, edge=0) + …`
 — a **macro**, free, and `edge=0` because a window reaching before the horizon
-is short a term rather than undefined ([law 8](../SPEC.md#0-the-laws)). For
+is short a term rather than undefined ([law 8](../reference/language/index.md#ten-rules-the-language-reduces-to)). For
 PyPSA's actual
 signature, where `T` is a column and each generator may have its own, the
 number of terms is read from data, and
-[data-dependent structure inside an expression](../design/ceiling.md#two-tiers-and-the-ceiling)
+[data-dependent structure inside an expression](../about/ceiling.md#two-tiers-and-the-ceiling)
 is refused by design rather than unimplemented. The two halves of that answer
 are worth keeping apart: one is a macro nobody has written, the other is the
 ceiling doing its job.

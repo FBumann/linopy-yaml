@@ -75,22 +75,38 @@ nav:
           - OSeMOSYS UTOPIA: models/osemosys_utopia.md
           - Travelling salesman: models/tsp_mtz.md
   - Reference:
-      - Language: SPEC.md
-      - Python API: api.md
-      - Benchmarks: benchmarks.md
+      - Language:
+          - reference/language/index.md
+          - File shape: reference/language/file.md
+          - Dimensions and lookups: reference/language/dimensions.md
+          - Parameters, variables, constraints: reference/language/declarations.md
+          - Expressions: reference/language/expressions.md
+          - Operators: reference/language/operators.md
+          - Absence and where: reference/language/absence.md
+          - Piecewise curves and SOS: reference/language/piecewise.md
+          - Data binding: reference/language/data.md
+          - Errors and limits: reference/language/errors.md
+      - Python API: reference/api.md
+      - Sweeps and rolling horizons: reference/sweeps.md
+      - Typeset the math: reference/typeset.md
+  # Everything a reader does not need in order to write or run a model: design
+  # notes, measured cost, project direction. One section, so the user path
+  # above stays the whole of the top level.
+  - About:
+      - about/index.md
+      - Architecture: about/architecture.md
+      - The ceiling: about/ceiling.md
+      - Decomposition: about/decomposition.md
+      - Benchmarks: about/benchmarks.md
       # A source file, not a generated page: mkdocs copies it through and the
       # nav links it like any other. It is the same data as the figures on the
       # page above, with a cursor — which is the whole reason it is reachable
       # from the nav rather than from one link mid-paragraph.
-      - Benchmarks (interactive): benchmarks-scaling.html
-  - Design notes:
-      - Architecture: ARCHITECTURE.md
-      - The ceiling: design/ceiling.md
-      - Decomposition: design/decomposition.md
-      - Relationship to linopy: design/linopy.md
-      - Prior art and credit: design/prior-art.md
-      - Roadmap: ROADMAP.md
-  - Changelog: changelog.md
+      - Benchmarks (interactive): about/benchmarks-scaling.html
+      - Relationship to linopy: about/linopy.md
+      - Prior art and credit: about/prior-art.md
+      - Roadmap: about/roadmap.md
+      - Changelog: about/changelog.md
 
 theme:
   name: material

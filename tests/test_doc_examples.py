@@ -65,13 +65,26 @@ except ModuleNotFoundError:
 REPO = Path(__file__).resolve().parent.parent
 TRACKED = [
     'README.md',
-    'docs/SPEC.md',
-    'docs/api.md',
-    'docs/design/linopy.md',
-    'docs/ARCHITECTURE.md',
-    'docs/design/ceiling.md',
-    'docs/ROADMAP.md',
-    'docs/design/decomposition.md',
+    # not `docs/guide.md`: its snippets are fragments of models that run, and
+    # `test_the_guide_teaches_lines_that_exist` checks them against those files.
+    'docs/reference/language/index.md',
+    'docs/reference/language/file.md',
+    'docs/reference/language/dimensions.md',
+    'docs/reference/language/declarations.md',
+    'docs/reference/language/expressions.md',
+    'docs/reference/language/operators.md',
+    'docs/reference/language/absence.md',
+    'docs/reference/language/piecewise.md',
+    'docs/reference/language/data.md',
+    'docs/reference/language/errors.md',
+    'docs/reference/api.md',
+    'docs/reference/sweeps.md',
+    'docs/reference/typeset.md',
+    'docs/about/linopy.md',
+    'docs/about/architecture.md',
+    'docs/about/ceiling.md',
+    'docs/about/roadmap.md',
+    'docs/about/decomposition.md',
 ]
 
 #: Names an example may dot into, and the object that decides what is valid.

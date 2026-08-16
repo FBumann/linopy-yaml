@@ -14,7 +14,7 @@ Four files, and the split is the whole idea:
 - ``feasibility.yaml``  how far from dispatchable a capacity is, when it is too small
 
 The master's cuts are **data**. It declares ``cut`` and ``fcut`` with members
-from data (SPEC §8) and never changes; an iteration appends rows to their
+from data (the data-binding rules) and never changes; an iteration appends rows to their
 parameter tables. No YAML is written at runtime, so the model a reviewer reads
 is the model that runs — which is the point of writing models in YAML at all.
 

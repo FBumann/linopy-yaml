@@ -1,4 +1,4 @@
-"""SPEC §7's operators, each shown as the math it prints.
+"""The operator reference's operators, each shown as the math it prints.
 
     uv run python -m tools.spec_math           # rewrite the block
     uv run python -m tools.spec_math --check   # fail if it has drifted
@@ -32,13 +32,13 @@ from pathlib import Path
 from lpspec import to_markdown
 
 ROOT = Path(__file__).resolve().parent.parent
-SPEC = ROOT / 'docs' / 'SPEC.md'
+PAGE = ROOT / 'docs' / 'reference' / 'language' / 'operators.md'
 PROBES = ROOT / 'examples' / 'operators'
 BEGIN, END = '<!-- operator-math:begin -->', '<!-- operator-math:end -->'
 
-#: The §7 row -> the model that renders it. The key is the table's first cell
-#: exactly as §7 spells it, which is the whole coupling: it cannot be edited on
-#: one side alone without a test noticing.
+#: The operator-table row -> the model that renders it. The key is that
+#: table's first cell verbatim, which is the whole coupling: it cannot be
+#: edited on one side alone without a test noticing.
 OPERATORS = {
     'sum(array, over=dim)': 'sum',
     'sum(array, by=lookup)': 'sum_by',
@@ -87,13 +87,13 @@ def block() -> str:
 
 
 def table_operators() -> list[str]:
-    """The first cell of every row of §7's operator table, in order.
+    """The first cell of every row of the operator table, in order.
 
     Read back out of the page rather than kept beside :data:`OPERATORS`,
     because the point is to catch the two disagreeing.
     """
-    table = SPEC.read_text()
-    table = table[table.index('| Operator | Result | Notes |') :]
+    table = PAGE.read_text()
+    table = table[table.index('| Operator | Result |') :]
     table = table[: table.index('\n\n')]
     rows = [line for line in table.splitlines()[2:] if line.startswith('|')]
     return [row.split('|')[1].strip().strip('`') for row in rows]
@@ -109,16 +109,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument('--check', action='store_true', help='fail if the committed block has drifted')
     opts = ap.parse_args(argv)
 
-    page = SPEC.read_text()
+    page = PAGE.read_text()
     updated = rendered(page)
     if opts.check:
         if updated != page:
-            print(f'{SPEC} is stale — run `uv run python -m tools.spec_math`', file=sys.stderr)
+            print(f'{PAGE} is stale — run `uv run python -m tools.spec_math`', file=sys.stderr)
             return 1
-        print(f'{SPEC} matches the operator probes')
+        print(f'{PAGE} matches the operator probes')
         return 0
-    SPEC.write_text(updated)
-    print(f'{SPEC} refreshed')
+    PAGE.write_text(updated)
+    print(f'{PAGE} refreshed')
     return 0
 
 

@@ -11,7 +11,7 @@ collects those into its own ``ValidationError`` and a custom class does not
 survive the trip; :func:`schema_error` turns one back at the API boundary.
 
 Deliberately dependency-free: the relational engine imports this module and
-nothing else from the package (docs/ARCHITECTURE.md, hard rule 2).
+nothing else from the package (docs/about/architecture.md, hard rule 2).
 """
 
 from __future__ import annotations
@@ -125,7 +125,7 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
 def sparse_divisor_message(name: str, missing: int) -> str:
     """Why a divisor may not be sparse — one wording, both lanes.
 
-    Divisor position is the one place SPEC §6's zero fill has no identity to
+    Divisor position is the one place the absence rules' zero fill has no identity to
     fall back on: 0 divides by zero, 1 silently rescales, and dropping the term
     rewrites what the row asserts.
     """
@@ -141,7 +141,7 @@ def sparse_divisor_message(name: str, missing: int) -> str:
 def null_bounds_message(name: str, rows: int) -> str:
     """A bound with no value — one wording, both lanes.
 
-    SPEC §6's zero is a coefficient, never a bound: unbounded is not
+    The absence rules' zero is a coefficient, never a bound: unbounded is not
     bounded-at-zero. Both exits are named because they build different models —
     supplying the value bounds the variable, masking removes it from every row
     and from the solution — so naming one would choose for the caller.
@@ -194,7 +194,7 @@ def duplicate_coordinate_message(name: str, shown: str, dims: list[str]) -> str:
     A parameter is a function of its dims, so two rows for one coordinate has
     no answer the language could pick. Both lanes refuse before the duplicate
     reaches xarray, whose own `ValueError` names neither the parameter nor the
-    repair — the opaque exception §9 exists to prevent (#351).
+    repair — the opaque exception the error rules exist to prevent (#351).
     """
     return (
         f"parameter '{name}' has more than one row for a coordinate: {shown}. "
@@ -206,9 +206,9 @@ def duplicate_coordinate_message(name: str, shown: str, dims: list[str]) -> str:
 def unknown_labels_message(name: str, dim: str, strangers: list[object], known: list[object]) -> str:
     """A source label the dimension does not have — one wording, both lanes.
 
-    Distinct from sparsity: a *missing* row reads as zero (SPEC §8), but a row
-    that is present and unaddressable is a typo, the line §2 already draws for
-    coordinates (#350).
+    Distinct from sparsity: a *missing* row reads as zero (the data-binding rules), but a row
+    that is present and unaddressable is a typo, the line the declaration rules
+    already draw for coordinates (#350).
 
     Only asked where the dimension's labels come from somewhere else — one
     derived *from* the parameters cannot have a stranger in it, the union of

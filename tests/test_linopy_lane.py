@@ -7,7 +7,7 @@ idiom were being restated in each of them.
 
 The shim itself is a *pure producer* — no accessor, no session, no state on
 the model. A file's meaning must not depend on what was loaded before it
-(docs/ARCHITECTURE.md, hard rule 5), which is what the last section pins.
+(docs/about/architecture.md, hard rule 5), which is what the last section pins.
 """
 
 from __future__ import annotations
@@ -618,7 +618,7 @@ EXPRESSION_DATA = {
 def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
     """`result.expression(name)` and the shim's `expression` read one value.
 
-    Including the standalone case: SPEC §3 guarantees a never-referenced
+    Including the standalone case: the rules for named expressions guarantees a never-referenced
     expression is parsed and name-checked, and #562 makes it readable — on
     the eager lane by building the declared expression on the solved model and
     taking linopy's native `.solution`.

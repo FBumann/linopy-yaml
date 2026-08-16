@@ -34,7 +34,7 @@ the relational engine and through linopy, and compares.
 
 That is only meaningful because both paths consume the *same resolved AST* and
 neither may hold its own opinion about what a name means — the narrow waist in
-[ARCHITECTURE](../ARCHITECTURE.md#one-contract-many-consumers). If they resolved
+[the architecture notes](architecture.md#one-contract-many-consumers). If they resolved
 names independently, the suite would be comparing two dialects rather than
 checking one language.
 
@@ -71,7 +71,7 @@ All three are *pure*: YAML in, a model or a value out, nothing retained.
 patched attributes — so nothing is lost across `pickle`, `deepcopy` or
 `to_netcdf`. To inspect the math, re-read the file with `lps.load_model`.
 `expression` is the reader the same purity forces to take `data=` again: it
-evaluates a declared named expression ([SPEC §3](../SPEC.md#3-expressions-and-macros))
+evaluates a declared named expression ([named expressions](../reference/language/expressions.md#named-expressions))
 on the solved model and hands back linopy's native `.solution` — the eager
 half of `result.expression(name)`, so the differential suite can hold the two
 lanes to one answer.
@@ -109,8 +109,8 @@ derivation reads index columns only.
 
 Array operations (`merge`, `reindex`, `stack`), the Python modeling API, and the
 solver layer. The first is data prep
-([SPEC §11](../SPEC.md#11-out-of-scope)), the second is
-[hard rule 5](../ARCHITECTURE.md#hard-rules) — the model is the file you review
+([the limits](../reference/language/errors.md#what-the-language-will-not-say)), the second is
+[hard rule 5](architecture.md#hard-rules) — the model is the file you review
 and diff — and the third is
 [#106](https://github.com/fluxopt/lpspec/issues/106), where we adopt linopy's
 *design* for declared solver capabilities without adopting its code.
@@ -124,7 +124,7 @@ the verbs, which are the same loops aimed at `fix`, `relax` and
 printing a built row. Both pages say so.
 
 Where linopy is genuinely ahead, and why none of it is a ceiling question, is the
-honest snapshot in [ROADMAP](../ROADMAP.md#honest-snapshot).
+honest snapshot in [the roadmap](roadmap.md#honest-snapshot).
 
 What is *owed* to linopy rather than merely true of it — and the same for
 Calliope, whose math language this surface is derived from — is

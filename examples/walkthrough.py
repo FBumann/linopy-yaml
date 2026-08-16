@@ -1,6 +1,6 @@
 """The whole architecture, one model, one stage at a time — run it and read.
 
-docs/ARCHITECTURE.md describes the pipeline; this script *executes* it one stage at
+docs/about/architecture.md describes the pipeline; this script *executes* it one stage at
 a time and prints the artifact each stage produces. Nothing here is a
 reimplementation: every call is the same public entry point ``lps.solve`` takes
 internally, so what you see is what actually runs.
@@ -13,7 +13,7 @@ unnoticed: a stage that starts saying something else fails CI, and the diff of
 the regenerated file is the record of what changed. Everything printed is
 therefore deterministic.
 
-The point it is trying to make is the thesis in docs/ARCHITECTURE.md: a YAML math
+The point it is trying to make is the thesis in docs/about/architecture.md: a YAML math
 spec is a closed AST known before any data is touched. Stages 1-3 happen with
 no data bound at all; only stage 4 sees a number.
 """
@@ -83,7 +83,7 @@ def main() -> None:
         solution(engine)
     refusals()
 
-    print(f'\n{_dim("docs/ARCHITECTURE.md has the rules these stages enforce.")}')
+    print(f'\n{_dim("docs/about/architecture.md has the rules these stages enforce.")}')
 
 
 def validated_model() -> lps.Model:

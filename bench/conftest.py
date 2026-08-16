@@ -67,7 +67,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-#: Rounds every measurement gets at least, which is what `docs/benchmarks.md`
+#: Rounds every measurement gets at least, which is what `docs/about/benchmarks.md`
 #: publishes as the method. pytest-benchmark's own default is 5, and its
 #: calibration hands the fewest rounds to the slowest cells — exactly where
 #: interference sustained across every round is most likely and a clean round

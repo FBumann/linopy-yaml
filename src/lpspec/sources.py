@@ -105,7 +105,7 @@ def _filled_from_declaration(
 
     A supplied index outranks the file, so a column the caller passes is left
     alone and only the absent ones are joined — the rule that makes a declared
-    map a default rather than a lock (SPEC §8). Labels the caller's index does
+    map a default rather than a lock (the data-binding rules). Labels the caller's index does
     not hold drop out of the join, and a label the map omits stays null, which
     is the partial case either way.
     """
@@ -119,7 +119,7 @@ def _filled_from_declaration(
 
 
 def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
-    """Data-time guard for ``method: convex`` blocks (SPEC §3.6).
+    """Data-time guard for ``method: convex`` blocks (the piecewise rules).
 
     The hull relaxation is silently wrong for mixed curvature and ill-defined
     when the x-breakpoints are not strictly monotone; both are checkable once

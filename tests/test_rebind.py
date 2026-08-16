@@ -63,7 +63,7 @@ REACH = {
 
 
 def reaching(*served: tuple[str, str, float]) -> pl.DataFrame:
-    """A `reach` frame. An absent row is a zero coefficient (SPEC §8), so it drops the entry."""
+    """A `reach` frame. An absent row is a zero coefficient (the data-binding rules), so it drops the entry."""
     return pl.DataFrame(
         {'zone': [z for z, _, _ in served], 'plant': [p for _, p, _ in served], 'value': [v for _, _, v in served]},
         schema={'zone': pl.String, 'plant': pl.String, 'value': pl.Float64},
@@ -118,7 +118,7 @@ def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, pl.DataFrame],
     }[rung.model]()
 
 
-#: Each rung of the rebind table (docs/api.md): the model it moves, what
+#: Each rung of the rebind table (docs/reference/api.md): the model it moves, what
 #: changes, and whether the loaded solver may be kept. `p_max` appears twice on
 #: purpose: it gates ``where: p_max > 0`` *and* bounds the variable, so whether
 #: it is structural is a property of the values and not of where the name
@@ -556,7 +556,7 @@ def test_a_rebind_refuses_a_name_the_model_does_not_declare(bound, call, unknown
 
 
 def test_a_dimension_index_rebinds_as_a_source(bound):
-    """A dimension index is a source (SPEC §8), so `rebind` takes it where it
+    """A dimension index is a source (the data-binding rules), so `rebind` takes it where it
     takes any other — the refusal above is for names the model never declared,
     not for names that happen not to be parameters."""
     change = {'snapshot': [0, 1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 6.0]})}
@@ -566,7 +566,7 @@ def test_a_dimension_index_rebinds_as_a_source(bound):
 def test_a_rebind_can_grow_a_dimension():
     """Appending rows is a rebind — the Benders master, in three lines.
 
-    A cut family is declared once and its members come from data (SPEC §8), so
+    A cut family is declared once and its members come from data (the data-binding rules), so
     an iteration hands over a longer table and the coordinates to match. The
     labels of the rows that were already there do not move, but the model has
     more rows than the solver holds, so it is loaded again.

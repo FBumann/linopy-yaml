@@ -1,7 +1,7 @@
 """The streaming language boundary: out-of-subset constructs are load errors.
 
 There is no runtime fallback — the streaming subset IS the language
-(docs/ARCHITECTURE.md). The eager builder survives only as the opt-in
+(docs/about/architecture.md). The eager builder survives only as the opt-in
 compatibility layer (`lpspec.linopy`) and the differential oracle.
 Errors must carry the construct and its context, verbatim.
 """

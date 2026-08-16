@@ -426,7 +426,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
 **An emission rate is a property of the carrier, and `at()` is how a generator
 reads it.** `co2_per_mwh` is dimensioned over `carrier` alone — six generators,
-two rates — and `at(co2_per_mwh, onto=generator, by=carrier)` walks the map
+two rates — and `at(co2_per_mwh, by=gen_carrier)` walks the map
 backwards to put the right rate beside each generator's output. PyPSA does the
 same join through `n.carriers`; the difference is that here the map is declared
 once and checked at load.
@@ -444,15 +444,15 @@ before comparing any PyPSA capacity-expansion result against anything.
 
 ## What it exercises
 
-Two coordinates on one dimension into different targets, and `at()` reading a
+Two lookups over one dimension into different targets, and `at()` reading a
 parameter that lives only on the coarse end. Beside them, the shapes rungs 1–5
-already established: `sum(group_by=)` on both ends of two different branch
+already established: `sum(by=)` on both ends of two different branch
 dimensions, and a cycle basis as a sparse `(cycle, line)` parameter.
 
 The cycle basis carries **impedance** rather than reactance alone: PyPSA applies
 the voltage law with `x` inside an AC sub-network and `r` inside a DC one, and
 this network has one meshed loop of each. Which value belongs in the row is
-decided in data preparation, where [the ceiling](../design/ceiling.md) puts
+decided in data preparation, where [the ceiling](../about/ceiling.md) puts
 graph work — the language sees one incidence table either way.
 
 No new construct was needed.

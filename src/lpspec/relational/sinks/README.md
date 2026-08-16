@@ -1,7 +1,7 @@
 # Sinks
 
 How a built model leaves the engine — the boxes downstream of the engine in
-[docs/ARCHITECTURE.md](../../../../docs/ARCHITECTURE.md)'s pipeline, which
+[docs/about/architecture.md](../../../../docs/about/architecture.md)'s pipeline, which
 carries the argument for the split. This page is the membership list.
 
 **Two families.** A **solver** takes the tables and runs them; a **writer**

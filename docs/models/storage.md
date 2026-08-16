@@ -201,7 +201,7 @@ positions translated past the edge simply contribute nothing.
 
 It is also the one plan shape whose cost is not obviously linear in the model
 size, which is why it is named in *Not measured yet* in
-[the benchmarks](../benchmarks.md).
+[the benchmarks](../about/benchmarks.md).
 
 ---
 

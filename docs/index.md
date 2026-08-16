@@ -66,7 +66,7 @@ Write the math in YAML, bind data at runtime, solve.
 
     YAML and data in, a populated solver out, no LP file in between: 2–4x faster
     than linopy on four of five benchmark cases, lower peak memory on
-    all five. [The numbers](benchmarks.md)
+    all five. [The numbers](about/benchmarks.md)
 
 -   :material-check-decagram-outline: __Checked against somebody else__
 
@@ -250,20 +250,30 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     ---
 
-    What a YAML file may contain, and what it means.
+    What a YAML file may contain, and what it means — ten rules, ten
+    declaration keys, one closed set of operators.
 
-    [:octicons-arrow-right-24: SPEC](SPEC.md)
+    [:octicons-arrow-right-24: The language](reference/language/index.md)
+
+-   :material-code-braces: __Python API__
+
+    ---
+
+    Bind data, build, solve, read the answer back — and sweep the same model
+    over scenarios or a rolling horizon.
+
+    [:octicons-arrow-right-24: The API](reference/api.md) ·
+    [Sweeps](reference/sweeps.md) ·
+    [Typeset](reference/typeset.md)
 
 -   :material-source-branch: __Why it is shaped this way__
 
     ---
 
-    The hard rules, the expressive ceiling, the module map — and what we have
-    decided never to build.
+    The hard rules, the expressive ceiling, the measured cost, the module map —
+    and what we have decided never to build.
 
-    [:octicons-arrow-right-24: Architecture](ARCHITECTURE.md) ·
-    [Roadmap](ROADMAP.md) ·
-    [Prior art](design/prior-art.md)
+    [:octicons-arrow-right-24: About](about/index.md)
 
 </div>
 

@@ -114,7 +114,7 @@ def test_an_unknown_where_name_is_an_error_at_lowering_too(dispatch_schema):
 def test_sum_over_absent_dim_raises_at_lowering_too(dispatch_schema):
     """A no-op sum is an error at *every* layer, not only at the front door.
 
-    SPEC §"dims" and alpha.4 settled the language question: summing over a dim
+    The dim algebra and alpha.4 settled the language question: summing over a dim
     the operand does not carry builds a model that solves and is wrong, so it
     is an error rather than the silent identity it once was. ``check_schema``
     raises it for anything entering through ``lps.check``; this pins that

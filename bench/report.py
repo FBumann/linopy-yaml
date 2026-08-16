@@ -1,4 +1,4 @@
-"""Turn a results JSONL into the markdown that goes in docs/benchmarks.md.
+"""Turn a results JSONL into the markdown that goes in docs/about/benchmarks.md.
 
     uv run python -m bench.report bench/results/latest.json
 

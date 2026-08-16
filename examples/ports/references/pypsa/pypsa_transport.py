@@ -50,7 +50,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     ``tables`` is the same mapping the lpspec call binds as ``sources``.
 
     ``p_min_pu = -1`` makes a link bidirectional. The port cannot say that in
-    a bound — bounds take a name or a number, never arithmetic (SPEC §2) — so
+    a bound — bounds take a name or a number, never arithmetic (the declaration rules) — so
     it ships ``neg_rating`` as data instead. That is the ledger row.
     """
     n = pypsa.Network()

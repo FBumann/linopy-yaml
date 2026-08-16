@@ -1,7 +1,7 @@
 """Solving strategies: one plan per slice, folded.
 
 A plan cannot contain a loop; a *process* may loop over plans, each with its
-shape fixed before its own data (docs/design/ceiling.md). So a strategy is
+shape fixed before its own data (docs/about/ceiling.md). So a strategy is
 never a language feature and never an engine feature — it is a driver above
 :mod:`lpspec.api`, built from the public verbs, and no lane learns a new word.
 
@@ -26,7 +26,7 @@ cannot cross. The two differ in that and nothing else: both yield an
 containment check refuses them by design, so an axis rewrites the sources and
 supplies the matching ``coords`` together.
 
-The caller-facing rules are [docs/api.md](../../docs/api.md#solving-one-model-many-times).
+The caller-facing rules are [docs/reference/sweeps.md](../../docs/reference/sweeps.md).
 """
 
 from __future__ import annotations
@@ -598,7 +598,7 @@ def solve_over(
 
     The caller-facing rules — what a carry copies, how a key column is named,
     which executor to choose — are the table in
-    [docs/api.md](../../docs/api.md#solving-one-model-many-times), so that they
+    [docs/reference/sweeps.md](../../docs/reference/sweeps.md), so that they
     are stated once. What this docstring adds is the order the work happens in.
 
     **Everything answerable from the declarations is answered before a source

@@ -31,9 +31,10 @@ if TYPE_CHECKING:
     from lpspec.typeset.format import Format
 
 #: Every model a format has to handle: the gallery corpus, plus the operator
-#: probes SPEC §7.1 renders. The probes live outside `examples/`, so without
-#: this line the one part of the corpus written *because* it covers every
-#: operator would be the one part no format ever renders.
+#: probes the operators page renders as math. The probes live outside
+#: `examples/`, so without this line the one part of the corpus written
+#: *because* it covers every operator would be the one part no format ever
+#: renders.
 TYPESET_PATHS = [*MODEL_PATHS, *sorted(spec_math.PROBES.glob('*.yaml'))]
 
 LATEX, TYPST = FORMATS['latex'], FORMATS['typst']

@@ -1,6 +1,6 @@
 """What an objective sums, when its terms do not carry the same dims.
 
-The rule is one line of SPEC §2 — an objective is a scalar, so every dim it
+The rule is one line of the declaration rules — an objective is a scalar, so every dim it
 names is summed — and the whole content of these tests is *which* dims belong
 to *what*. A term is summed over the dims that term carries. A term is not
 repeated because a sibling term carries a dim it does not.

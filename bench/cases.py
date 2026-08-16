@@ -1,7 +1,7 @@
 """The models we time, and the data that sizes them.
 
 One case = one YAML model + a deterministic data generator + a size ladder.
-Cases are chosen so each stresses a *different* SQL shape (docs/ARCHITECTURE.md,
+Cases are chosen so each stresses a *different* SQL shape (docs/about/architecture.md,
 "read the verdict off the SQL"), not to cover the language:
 
 ``dispatch``   pointwise bounds + one ``sum`` — raw throughput, and the case
@@ -819,7 +819,7 @@ def _ladder(
     ``xs``..``l`` is the published ladder — the range the tables compare across
     cases. ``xl`` and ``2xl`` answer a different question: whether an engine
     that keeps the model resident holds together where one that spills would.
-    ``2xl`` is the capability rung, where ``docs/benchmarks.md`` claims a model
+    ``2xl`` is the capability rung, where ``docs/about/benchmarks.md`` claims a model
     whose dense build cannot fit on the machine still streams out under the
     budget; a rung nothing else survives is the only way to keep testing that
     claim rather than restating it. Every case grows by the same two factors,

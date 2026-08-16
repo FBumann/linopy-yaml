@@ -287,7 +287,7 @@ def test_the_rounds_default_is_the_documented_one_and_an_explicit_flag_wins(
     )
     harness.pytest_configure(config)  # pyrefly: ignore[bad-argument-type]
     assert config.option.benchmark_min_rounds == expected, (
-        'docs/benchmarks.md publishes nine rounds per measurement; a run that asks for another count keeps it'
+        'docs/about/benchmarks.md publishes nine rounds per measurement; a run that asks for another count keeps it'
     )
 
 

@@ -82,7 +82,7 @@ def bound(boolean_parameters: frozenset[str] = frozenset()) -> BoundSources:
     """The data a query is written against — schemas only, no rows.
 
     Compiling reads nothing, so an empty frame of the right schema is a whole
-    fixture (docs/ARCHITECTURE.md's admissibility test).
+    fixture (docs/about/architecture.md's admissibility test).
     """
     return BoundSources(
         parameters=PARAMETERS,
@@ -386,7 +386,7 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     while the frame had no row for it.
 
     Over a *term* there is still nothing to write: `edge=0` on a variable means
-    the vacated slot contributes no term (SPEC §7), and a zero-coefficient
+    the vacated slot contributes no term (the operator rules), and a zero-coefficient
     entry would be a nonzero in the matrix standing for a term that is absent.
     """
     snapshots = pl.LazyFrame({'val': [0, 1, 2], 'ord': [0, 1, 2]})

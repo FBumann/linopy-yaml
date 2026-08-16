@@ -10,7 +10,7 @@ The gurobi map diverges from linopy's in three declared places, and that is
 checked in both directions: a copy is only honest if the exceptions are as
 pinned as the agreements.
 
-The engine itself never imports linopy (docs/ARCHITECTURE.md, hard rule 2). Tests
+The engine itself never imports linopy (docs/about/architecture.md, hard rule 2). Tests
 may, and this is the same oracle arrangement the differential tests use for
 the math.
 """

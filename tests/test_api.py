@@ -136,7 +136,7 @@ def test_check_and_load_model_need_no_data(dispatch_yaml):
 def test_check_reports_language_errors_before_any_data_is_bound(
     dispatch_yaml, dispatch_frame_inputs, expression, match
 ):
-    """The CI verb enforces the ceiling with no data bound (docs/design/ceiling.md).
+    """The CI verb enforces the ceiling with no data bound (docs/about/ceiling.md).
 
     ``build`` is asserted to say the same thing rather than defer it to the
     solver.
@@ -326,7 +326,7 @@ def test_no_operator_registry_anywhere():
 
     This is what makes the two lanes accept the same language, and hence what
     makes the differential tests an oracle rather than a comparison of
-    dialects (docs/ARCHITECTURE.md, "The expressive ceiling").
+    dialects (docs/about/architecture.md, "The expressive ceiling").
     """
     import lpspec.language.operators as operators
 
@@ -420,7 +420,7 @@ def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
 
     Model checking happens in two places — pydantic's validators and the
     language checkers — and they failed differently, so `except LpspecError`,
-    the thing `docs/api.md` tells a caller to write, missed the majority of
+    the thing `docs/reference/api.md` tells a caller to write, missed the majority of
     model mistakes and a caller had no way to know which.
 
     `Model.__init__` is *not* in this list, and cannot be: defining one makes

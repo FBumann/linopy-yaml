@@ -313,7 +313,8 @@
 /* --- Anchor target highlight ---
  * When the URL has a #hash, the matching element gets :target. Flash the
  * background once on arrival so it's obvious where the page jumped to —
- * SPEC.md and ARCHITECTURE.md are long, and most arrivals are deep links. */
+ * The reference and architecture pages are long, and most arrivals are deep
+ * links. */
 .md-content :target {
   animation: target-flash 1.5s ease-in-out;
   scroll-margin-top: 4rem;

@@ -1,6 +1,6 @@
 """Label-space lookups: structure on a dimension, never an axis.
 
-SPEC §2's split, pinned: everything under ``dimensions:`` is an axis, and a
+The declaration rules' split, pinned: everything under ``dimensions:`` is an axis, and a
 label a dimension's members carry is a lookup — *groupable* when it targets a
 dimension something aggregates into, *label-space* when it owns its values and
 is only ever selected on. What these tests hold still: the schema tells the
@@ -436,7 +436,8 @@ def test_a_lookup_comparison_is_checked_against_its_dtype():
 def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():
     """A stranger label masks everything out; it does not raise.
 
-    §6.1's reading for every other comparison, and the reason the lookup
+    The where-string rules' reading for every other comparison, and the reason
+    the lookup
     column is compared as a string: binding casts it to the target's `Enum`,
     which orders by declaration and *refuses* a label outside it — so without
     the cast back this is a polars error rather than an empty mask.
@@ -448,7 +449,7 @@ def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():
 
 
 def test_a_targeted_lookup_orders_bytewise_not_by_declaration():
-    """§6.1: labels order bytewise, whatever order the dimension declared them.
+    """Labels order bytewise, whatever order the dimension declared them.
 
     Binding casts a lookup column to the target's `Enum`, which orders by
     *declaration*, so an ordering comparison read off it would answer a
@@ -517,7 +518,7 @@ def test_a_declared_map_fills_an_index_that_does_not_carry_it():
 
 
 def test_a_supplied_lookup_column_outranks_the_declared_map():
-    """A caller's column outranks the file, as it does for a dimension's own values (SPEC §8).
+    """A caller's column outranks the file, as it does for a dimension's own values.
 
     The swap costs 14 rather than 13 — north's load is served by the dearer
     generator, which is only true if the column the caller passed won.

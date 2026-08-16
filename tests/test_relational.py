@@ -517,7 +517,7 @@ def test_a_string_dimension_is_enum_encoded_up_to_the_read_back():
 
 def test_a_where_orders_string_labels_bytewise_not_by_declaration():
     """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
-    (§6.1). Declared c, a, b so the Enum's declaration order would keep {b} alone."""
+    (the where-string rules). Declared c, a, b so the Enum's declaration order would keep {b} alone."""
     model = override(
         NODE_CAP_MODEL,
         **{
@@ -534,7 +534,8 @@ def test_a_where_orders_string_labels_bytewise_not_by_declaration():
 
 
 def test_a_where_naming_an_undeclared_label_masks_nothing_in():
-    """A quoted label the dimension does not carry masks everything out (§6.1)
+    """A quoted label the dimension does not carry masks everything out (the
+    where-string rules)
     — the Enum would refuse the stranger, so the comparison is in String space."""
     model = override(NODE_CAP_MODEL, **{'constraints.k.where': "node == 'zzz'"})
     cap = pl.DataFrame({'node': ['a', 'b'], 'value': [1.0, 2.0]})
@@ -1114,7 +1115,7 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
     """A tidy parameter table is a compressed dense array — where it can be.
 
     Supplying rows only where a *coefficient* is nonzero stays the language's
-    sparsity idiom (SPEC §8). The uncovered coordinate contributes no term, the
+    sparsity idiom (the data-binding rules). The uncovered coordinate contributes no term, the
     row survives, and both lanes agree about it: nothing was invented, the term
     simply is not there.
 
@@ -1178,8 +1179,8 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
     ``x - relmax * size <= 0`` where ``size`` is masked out used to build
     ``x <= 0`` — a row that silently pinned the flow to zero. Plausible answer,
     no error, which is goal 1 of linopy's v1 convention ("no silent wrong
-    answers") and the whole of PyPSA/linopy#712. Under §6 the slot is absent and
-    §12 drops the row instead, so ``x`` is left free at ``f=b`` and bounded only
+    answers") and the whole of PyPSA/linopy#712. Under v1 §6 the slot is absent
+    and v1 §12 drops the row instead, so ``x`` is left free at ``f=b`` and bounded only
     by its own declaration.
 
     The oracle is the point: the eager lane gets this from linopy's own v1
@@ -1249,7 +1250,7 @@ ABSENT_COEFFICIENT_MODEL = {
 
 
 def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
-    """The half of §6's hazard that survives absence propagation.
+    """The half of v1 §6's hazard that survives absence propagation.
 
     Same expression as ``ABSENT_VARIABLE_MODEL`` above, one operand different:
     the thing missing at ``f=b`` is the *parameter* ``relmax``, not the variable
@@ -1258,7 +1259,7 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
 
     That is correct and it is the documented reading of a sparse coefficient
     table, but it is the same silently-wrong shape the v1 convention removed
-    from the variable side, so SPEC §6 now names it and this pins the behaviour
+    from the variable side, so the absence rules now names it and this pins the behaviour
     the prose describes. The benign case is
     ``test_a_parameter_covering_a_subset_of_its_dims_means_zero_on_both_lanes``:
     there the zero lands on a coefficient *and* a right-hand side, so the row
@@ -1301,9 +1302,9 @@ def _reindexed_parameter_model(op: str) -> dict:
     ],
 )
 def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expected):
-    """``array`` in §7 is any node, so these operators read a parameter.
+    """``array`` is any node, so these operators read a parameter.
 
-    Worth its own test because every example in SPEC took a variable, and a
+    Worth its own test because every documented example took a variable, and a
     downstream consumer built and shipped a hand-shifted copy of a parameter
     table before probing revealed this works.
 
@@ -1324,7 +1325,8 @@ def test_a_bare_shift_over_data_is_refused_rather_than_filled():
     ``x <= shift(dt, over=t, by=1)`` used to build ``x <= 0`` at the first coordinate:
     a bound invented from a slot that has no value. Absence would be the
     consistent answer, but a parameter has no absence to propagate — a missing
-    row is a zero coefficient (§6) — so this follows linopy v1 and refuses,
+    row is a zero coefficient (the absence rules) — so this follows linopy v1
+    and refuses,
     at load time, naming the three things the author might have meant.
 
     Decidable without data, so ``lps.check()`` catches it: the operand is
@@ -1356,7 +1358,7 @@ def test_equal_bounds_pin_a_variable_so_one_equation_covers_both_regimes():
     pre-multiplied coefficients — ``rate_max_at_size``, ``rate_max_when_on`` —
     whose names encode which regime they belong to rather than what quantity
     they are. Pinning with equal bounds writes the row form once and lets
-    presolve substitute the fixed column, so SPEC §2 documents it and this shows
+    presolve substitute the fixed column, so the declaration rules documents it and this shows
     both regimes coming out of the single equation.
     """
     data = {
@@ -1491,7 +1493,8 @@ def test_a_label_the_dimension_does_not_have_is_refused():
 
 def test_a_missing_row_is_still_only_sparse():
     """The distinction the refusal above rests on. A row that is *absent* is
-    ordinary — it reads as a zero coefficient (§8) — and only a row that is
+    ordinary — it reads as a zero coefficient (the data-binding rules) — and
+    only a row that is
     present and unaddressable is a typo. Refusing both would make sparsity,
     which is the common case, an error.
     """

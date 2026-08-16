@@ -15,7 +15,7 @@ module exists for two narrow jobs:
 Three functions — two producers and one reader — and all are **pure**: YAML
 goes in, a model or a value comes out, and nothing is retained. No accessor
 on the model, no session, no state. A file's meaning never depends on what was
-loaded before it (docs/ARCHITECTURE.md, hard rule 5), so every file declares
+loaded before it (docs/about/architecture.md, hard rule 5), so every file declares
 the parameters it uses and the caller supplies their data per call — the
 reader included, which is why :func:`expression` takes ``data=`` again rather
 than remembering what :func:`build` saw::
@@ -37,7 +37,7 @@ For models declared entirely in YAML, use the native API — it streams::
 **Importing this module sets** ``linopy.options['semantics'] = 'v1'``. This
 lane speaks v1 and the option is global, so importing is what sets it.
 linopy's ``legacy`` default fills every absent slot with 0, where the
-relational lane drops the row (SPEC §6, §7) — left alone the two lanes answer
+relational lane drops the row (the absence rules) — left alone the two lanes answer
 the same YAML 25.0 against 125.0 on a masked-variable model, a wrong answer
 rather than a wrong error.
 

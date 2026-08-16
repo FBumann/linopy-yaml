@@ -15,17 +15,17 @@ snapshots — and a study that models 2030 hourly and 2050 in four-hour blocks i
 asking for exactly the opposite.
 
 So `snapshot` is one flat dimension carrying $\mathrm{period}$ as a
-[coordinate](../SPEC.md#2-declarations), the same way `generator` carries
-$\mathrm{bus}$ in [transport](transport.md). Ragged periods then cost nothing:
-a coordinate is a per-row column, and four snapshots in 2030 beside two in 2050
-is just a column with four of one value and two of another.
+[lookup](../reference/language/dimensions.md#lookups), the same way `generator`
+carries $\mathrm{bus}$ in [transport](transport.md). Ragged periods then cost
+nothing: a lookup is a per-row column, and four snapshots in 2030 beside two in
+2050 is just a column with four of one value and two of another.
 
 ## Both directions of one mapping
 
 Grouping reads the lookup one way:
 `sum(p, by=period_of)` is a per-period CO₂ budget, and
 [monthly_budget](monthly_budget.md) is the same construct on a different
-coordinate.
+lookup.
 
 `within_cap` reads it the other way. Capacity lives on `period` and binds at
 each `snapshot`, so a coarse quantity is pulled onto a fine one:
