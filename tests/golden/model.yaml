@@ -4,9 +4,11 @@ dimensions:
   snapshot: {dtype: int}
   generator: {dtype: str}
   bus: {dtype: str}
+  zone: {dtype: str}
 
 lookups:
   gen_bus: {over: generator, into: bus}
+  zone_of: {over: bus, into: zone}
 
 parameters:
   p_max: {dims: [generator]}
@@ -14,6 +16,7 @@ parameters:
   cost: {dims: [generator]}
   load: {dims: [snapshot, bus]}
   is_flexible: {dims: [generator], dtype: bool}
+  zone_cap: {dims: [zone]}
 
 variables:
   p:            # both bounds, and a where with all three connectives
@@ -43,6 +46,14 @@ constraints:
   ramp:         # roll (cyclic) and shift (acyclic) in one equation
     foreach: [snapshot, generator]
     expression: p - shift(p, over=snapshot, by=1, edge='wrap') <= shift(p, over=snapshot, by=1) + p_max
+  edges:        # the two translations `ramp` leaves out: a fill, and forwards
+    foreach: [snapshot, generator]
+    expression: >-
+      shift(p, over=snapshot, by=1, edge=0)
+      <= shift(p, over=snapshot, by=-1, edge=0) + p_max
+  pullback:     # at(), which re-indexes through a lookup instead of an offset
+    foreach: [snapshot, bus]
+    expression: spill <= at(zone_cap, by=zone_of)
   arithmetic:   # division, unary minus, nested reduction, bracketing
     # No `**`: the walk renders it, but `lower_program` rejects it, so a model
     # using it would not be a model. Format.power stays exercised by unit

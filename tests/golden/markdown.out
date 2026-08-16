@@ -6,7 +6,8 @@
 |---|---|
 | $\mathcal{T}$ | index $t$ --- `snapshot` |
 | $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ |
-| $\mathcal{B}$ | index $b$ --- `bus` |
+| $\mathcal{B}$ | index $b$ --- `bus` with $\mathrm{zone\_of}: \mathcal{B} \to \mathcal{Z}$ |
+| $\mathcal{Z}$ | index $z$ --- `zone` |
 
 #### Parameters
 
@@ -17,6 +18,7 @@
 | $\mathit{cost}$ | `cost` over $\mathcal{G}$ |
 | $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ |
 | $\mathit{is\_flexible}$ | `is_flexible` over $\mathcal{G}$ |
+| $\mathit{zone}^{\mathrm{cap}}$ | `zone_cap` over $\mathcal{Z}$ |
 
 #### Variables
 
@@ -31,6 +33,8 @@
 
 $t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound --- terms translated past the edge are simply absent.
 
+$t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
+
 #### Objective
 
 $$\max \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g}$$
@@ -44,6 +48,14 @@ $$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g
 **`ramp`**
 
 $$p_{t,g} - p_{t \ominus 1,g} \le p_{t - 1,g} + p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`edges`**
+
+$$p_{t \boxminus_{0} 1,g} \le p_{t \boxplus_{0} 1,g} + p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`pullback`**
+
+$$\mathit{spill}_{t} \le \mathit{zone}^{\mathrm{cap}}_{\mathrm{zone\_of}(b)} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 **`arithmetic`**
 
