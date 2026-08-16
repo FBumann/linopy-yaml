@@ -463,6 +463,7 @@ must stay off the import path of a caller who does not use it.
 | `language/resolution.py` | one flat namespace; `NameNode` → typed `Variable`/`Parameter`/`Dimension` nodes |
 | `language/dimensions.py` | static dim-set checking over the resolved AST |
 | `language/degree.py` | degree 1: the ceiling's first clause, asked by both lanes and stated by neither |
+| `language/boundedness.py` | the models no data can bound: a free variable the objective improves toward infinity, named by `check` |
 | `language/operators.py` | the closed set of built-in operators: their *names* and *call shapes* — no registry |
 | `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_model`, the language's front door |
 | `language/piecewise.py` | `piecewise:` → λ-formulation declarations |
