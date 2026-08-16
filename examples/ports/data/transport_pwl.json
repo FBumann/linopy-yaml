@@ -1,6 +1,4 @@
 {
-  "plant": {"plant": ["seattle", "san-diego"]},
-  "market": {"market": ["new-york", "chicago", "topeka"]},
   "bp": {"bp": [0, 1, 2, 3, 4, 5, 6, 7]},
 
   "capacity": {"plant": ["seattle", "san-diego"], "value": [350, 600]},

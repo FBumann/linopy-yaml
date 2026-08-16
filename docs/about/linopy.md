@@ -98,11 +98,13 @@ its dims in an index, a `dict` or a sequence over one dimension, or one number
 spread over the coordinates it covers. Neither reads an `xr.DataArray`: this
 package reads tables and hands arrays back. A dimension index is any of those
 tables too, under the dimension's own key in `sources` or under `coords=`, and
-labels come from `sources`, then `coords=`, then `values:`. A dimension with
-none of the three has no index, and both lanes refuse it in the same sentence
-rather than deriving one from the parameters that span it — a parameter carries
-a label, never the set of labels that exist, nor what a label maps to. The index
-is also what fixes the *order*, so pass one wherever order matters.
+labels come from `sources`, from `coords=`, or from what the file declares —
+exactly one of them, since a dimension the file declares and the caller also
+supplies is refused by both lanes in the same sentence. A dimension with none of
+the three has no index, and is refused in the same sentence again rather than
+derived from the parameters that span it: a parameter carries a label, never the
+set of labels that exist, nor what a label maps to. The index is also what fixes
+the *order*, so pass one wherever order matters.
 
 So one `sources` mapping goes to either, and which lane builds a file is
 decided by an import and nothing else.

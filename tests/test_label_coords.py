@@ -13,6 +13,7 @@ label) covers both kinds alike.
 
 from __future__ import annotations
 
+import re
 import warnings
 
 import polars as pl
@@ -504,32 +505,6 @@ def test_a_declared_map_needs_no_index_source():
     assert built['g3'] == pytest.approx(0.0), 'a generator on no bus can serve no load, however cheap'
 
 
-def test_a_declared_map_fills_an_index_that_does_not_carry_it():
-    """A supplied index says which labels exist; the file may still say how they map.
-
-    The two arrive by different routes and a model may want one of each — a
-    port whose labels come out of its source data but whose structure is small
-    enough to read. Binding demanded the column regardless, which made a
-    declared map unusable for exactly the models that most wanted it.
-    """
-    model = {**DECLARED, 'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}}}
-    sources = {**DECLARED_SOURCES, 'generator': pl.DataFrame({'generator': ['g1', 'g2', 'g3']})}
-    with lps.solve(model, sources) as result:
-        assert result.objective == pytest.approx(13.0), 'the declared map placed the terms, not the index'
-
-
-def test_a_supplied_lookup_column_outranks_the_declared_map():
-    """A caller's column outranks the file, as it does for a dimension's own values.
-
-    The swap costs 14 rather than 13 — north's load is served by the dearer
-    generator, which is only true if the column the caller passed won.
-    """
-    model = {**DECLARED, 'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}}}
-    swapped = pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['south', 'north', None]})
-    with lps.solve(model, {**DECLARED_SOURCES, 'generator': swapped}) as result:
-        assert result.objective == pytest.approx(14.0), 'a declared map is a default, not a lock'
-
-
 def test_a_declared_map_agrees_with_the_oracle():
     """Both lanes assemble the same index out of the declaration."""
     from tests.differential import differential
@@ -543,20 +518,43 @@ def test_a_declared_map_agrees_with_the_oracle():
         assert run.result.objective == pytest.approx(13.0)
 
 
-def test_a_caller_index_still_wins():
-    """`coords=` outranks the file, exactly as it does over a dimension's
-    `values:` — so a declared map is a default, not a lock."""
-    sources = {
-        **DECLARED_SOURCES,
-        'generator': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['north', 'north', 'south']}),
-    }
-    with lps.solve(DECLARED, sources) as result:
-        assert result.objective == pytest.approx(7.0), (
-            'the passed index puts g3 on south, so the cheapest generator can serve load: '
-            '4 x 0.5 there and 5 x 1.0 from g1 on north, against 13.0 under the declared map'
-        )
-        built = {row['generator']: row['value'] for row in result.primal('p').to_dicts()}
-    assert built['g3'] == pytest.approx(4.0), 'the passed index repointed g3 onto south'
+#: A dimension bare but for its declared map, so the refusal below names the
+#: lookup rather than the dimension's own ``values:``.
+MAP_ONLY = {**DECLARED, 'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}}}
+
+_LABELS = pl.DataFrame({'generator': ['g1', 'g2', 'g3']})
+_LABELS_AND_MAP = pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['south', 'north', None]})
+
+
+@pytest.mark.parametrize(
+    ('model', 'sources', 'coords', 'names'),
+    [
+        pytest.param(DECLARED, {'generator': _LABELS}, None, 'dimensions.generator.values', id='labels-twice'),
+        pytest.param(MAP_ONLY, {'generator': _LABELS}, None, 'lookups.gen_bus.values', id='labels-against-a-map'),
+        pytest.param(MAP_ONLY, {'generator': _LABELS_AND_MAP}, None, 'lookups.gen_bus.values', id='the-map-twice'),
+        pytest.param(DECLARED, {}, {'generator': ['g1', 'g2', 'g3']}, "coords['generator']", id='through-coords'),
+    ],
+)
+def test_a_declared_index_refuses_a_supplied_one(model, sources, coords, names):
+    """One dimension, one home — the file owns its index or the caller does.
+
+    A precedence rule instead lets the file describe a model the caller does
+    not build: the YAML says ``g1`` sits on north, the passed column says south,
+    and the file a reviewer reads is not the model that solved. Neither half is
+    overridable on its own either, because labels are derived from the maps
+    where the dimension declares none, so taking one changes what the other
+    means.
+    """
+    with pytest.raises(DataError, match=re.escape(names)):
+        lps.solve(model, {**DECLARED_SOURCES, **sources}, coords=coords)
+
+
+def test_a_declared_index_is_refused_the_same_way_on_the_eager_lane():
+    """The refusal is the binding rule, not one lane's reading of it."""
+    from tests.oracle import lpspec_linopy
+
+    with pytest.raises(DataError, match=re.escape('dimensions.generator.values')):
+        lpspec_linopy.build(DECLARED, {**DECLARED_SOURCES, 'generator': _LABELS})
 
 
 @pytest.mark.parametrize(

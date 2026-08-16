@@ -46,7 +46,6 @@ FEASIBILITY = lps.load_model(HERE / 'feasibility.yaml')
 MASTER = lps.load_model(HERE / 'master.yaml')
 
 SOURCES = {
-    'generator': pl.DataFrame({'generator': GENERATORS}),
     'snapshot': pl.DataFrame({'snapshot': SNAPSHOTS}),
     'invest': pl.DataFrame({'generator': GENERATORS, 'value': [90.0, 30.0]}),
     'cost': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 25.0]}),

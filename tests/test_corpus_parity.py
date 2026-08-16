@@ -23,7 +23,6 @@ from typing import Any
 
 import pytest
 
-from lpspec.errors import DataError
 from tests.conftest import PORT_REFERENCES, port_model, port_sources
 from tests.differential import differential
 
@@ -31,7 +30,6 @@ from tests.differential import differential
 #: that owns it and the error it raises today. Strict, so the day a fix lands
 #: these XPASS, the suite goes red, and the entry comes out in the same PR.
 LANE_BUGS: dict[str, tuple[str, type[Exception]]] = {
-    'genx_piecewise_fuel': ('#895 — a supplied index discards the declared lookup map', DataError),
     'osemosys_utopia': ('#894 — linopy has no objective-constant slot', ValueError),
 }
 

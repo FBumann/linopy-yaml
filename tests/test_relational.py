@@ -1543,7 +1543,6 @@ def test_every_multi_valued_coordinate_is_named_at_once():
     """
     data = {
         'cap': pl.DataFrame({'line': ['l1'], 'value': [1.0]}),
-        'bus': pl.DataFrame({'bus': ['b1', 'b2']}),
         'line': pl.DataFrame({'line': ['l1', 'l1'], 'from': ['b1', 'b2'], 'to': ['b2', 'b1']}),
     }
 

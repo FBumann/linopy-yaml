@@ -71,12 +71,16 @@ class TestBuildMasterCoords:
         [
             pytest.param({'values': [1, 2, 3], 'dtype': 'int'}, None, [1, 2, 3], id='from-yaml-values'),
             pytest.param({}, {'x': [10, 20]}, [10, 20], id='from-coords-kwarg'),
-            pytest.param({'values': [1, 2], 'dtype': 'int'}, {'x': [99]}, [99], id='coords-overrides-yaml'),
         ],
     )
     def test_labels_come_from_values_or_the_coords_kwarg(self, dim, coords, expected):
         mc = loader.build_master_coords(_schema(dims={'x': dim}), coords)
         assert list(mc['x']) == expected
+
+    def test_a_dimension_cannot_take_its_labels_from_both(self):
+        """One home, and no precedence to remember — the two ways above are exclusive."""
+        with pytest.raises(DataError, match=r'dimensions\.x\.values'):
+            loader.build_master_coords(_schema(dims={'x': {'values': [1, 2], 'dtype': 'int'}}), {'x': [99]})
 
     def test_a_dimension_with_no_index_is_refused(self):
         """Third in the precedence there is not one: the index is the authority.

@@ -99,7 +99,7 @@ def capped_sources() -> dict[str, pl.DataFrame]:
 
 ITEMS = [f'item{i}' for i in range(12)]
 KNAPSACK = {
-    'dimensions': {'item': {'values': ITEMS}},
+    'dimensions': {'item': {'dtype': 'str'}},
     'parameters': {'worth': {'dims': ['item']}, 'weight': {'dims': ['item']}, 'capacity': {'dims': []}},
     'variables': {'take': {'foreach': ['item'], 'domain': 'binary'}},
     'constraints': {'fits': {'foreach': [], 'expression': 'sum(weight * take, over=item) <= capacity'}},
@@ -109,6 +109,7 @@ KNAPSACK = {
 
 def knapsack_sources(items: list[str] = ITEMS) -> dict[str, pl.DataFrame]:
     return {
+        'item': pl.DataFrame({'item': items}),
         'worth': pl.DataFrame({'item': items, 'value': [float(7 * i % 13 + 1) for i in range(len(items))]}),
         'weight': pl.DataFrame({'item': items, 'value': [float(5 * i % 11 + 1) for i in range(len(items))]}),
         'capacity': pl.DataFrame({'value': [20.0]}),

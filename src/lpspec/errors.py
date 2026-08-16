@@ -282,6 +282,20 @@ def missing_lookup_columns_message(dim: str, missing: list[str], available: list
     return f"index for dimension '{dim}' is missing declared lookup column(s) {sorted(missing)} (has {available})"
 
 
+def declared_index_also_supplied_message(dim: str, declares: str, where: str) -> str:
+    """A dimension's index declared in the file and supplied by the caller — both lanes.
+
+    Refused rather than resolved by precedence: a declaration says the file owns
+    the fact, and any rule picking a winner lets the file describe a model the
+    caller does not build.
+    """
+    return (
+        f"dimension '{dim}' has its index in the file ({declares}) and is also supplied "
+        f'under {where}. Exactly one of the two may say what its labels are: drop {where} '
+        f'to keep the declaration, or remove {declares} to let the data decide.'
+    )
+
+
 def no_index_source_message(dim: str) -> str:
     """A dimension with no index — one wording, both lanes.
 
