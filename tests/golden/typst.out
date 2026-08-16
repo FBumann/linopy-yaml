@@ -1,6 +1,8 @@
 #set page(margin: 2.5cm)
 #set text(size: 11pt)
 
+every character a notation escapes, set as text: link\_to, 100% & \#1 costs \$5 {net} \~ ^ \\ \*star\* \@ref \<label\>
+
 == Sets
 / $cal(T)$: index $t$ --- `snapshot`
 / $cal(G)$: index $g$ --- `generator` with $upright("gen_bus"): cal(G) arrow.r cal(B)$

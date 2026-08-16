@@ -717,6 +717,19 @@ def test_a_committed_typst_table_compiles_beside_its_model(typst, tmp_path: Path
     typst.compile(str(source), output=str(tmp_path / f'{table.name}.pdf'))
 
 
+def test_a_description_of_every_special_compiles(typst, tmp_path: Path):
+    """Escapes that are *present* are not necessarily *right*, and only a
+    compiler says which.
+
+    The golden model's description carries every character the notations
+    escape; this is the Typst half of that claim, and CI's `pdflatex` run over
+    the same file is the LaTeX half.
+    """
+    source = tmp_path / 'specials.typ'
+    source.write_text(to_typst(golden.MODEL, standalone=True))
+    typst.compile(str(source), output=str(tmp_path / 'specials.pdf'))
+
+
 def test_every_typst_operator_compiles(typst, tmp_path: Path):
     """Only a handful of operators appear in `examples/`; the rest would
     otherwise first fail on somebody's own model."""
@@ -979,3 +992,33 @@ def test_the_model_description_opens_the_document(fmt: Format):
         assert 'least-cost dispatch of a generator fleet' in out, f'missing with {options}'
         assert out.index('least-cost dispatch') < out.index(fmt.operators['minimize']), 'it opens the document'
     assert 'least-cost dispatch' not in typeset(DISPATCH, fmt), 'a model without one prints no empty paragraph'
+
+
+#: Every character the two typeset notations have to escape, in prose a
+#: modeller would plausibly write: the underscore in a coordinate's name is
+#: what #827 hit, on a description `examples/ports/pypsa_ac_dc.yaml` carried.
+SPECIALS = r'flow to link_to, 100% & #1 costs $5 {net} ~ ^ \ *star* @ref <label>'
+
+ESCAPED = {
+    'latex': (r'link\_to', r'100\% \& \#1', r'\$5 \{net\}', r'\textasciitilde{}', r'\textbackslash{}'),
+    'typst': (r'link\_to', r'\#1', r'\$5', r'\*star\*', r'\@ref', r'\<label\>'),
+}
+
+
+@pytest.mark.parametrize('notation', sorted(ESCAPED), ids=sorted(ESCAPED))
+@pytest.mark.parametrize('position', ['file', 'declaration'], ids=['file-description', 'declaration-description'])
+def test_a_description_sets_as_text_rather_than_as_markup(notation: str, position: str):
+    """A `description:` is prose in no notation, so a special in it is a
+    character rather than an instruction.
+
+    Both places author prose reaches the page: the file's own description,
+    which opens the document, and a declaration's, which is the `Meaning` half
+    of its legend row. Left raw, `link_to` was a fatal `pdflatex` error instead
+    of a document (#827), and the corpus could only avoid that by never writing
+    one.
+    """
+    where = 'description' if position == 'file' else 'parameters.load.description'
+    out = typeset(override(DISPATCH, **{where: SPECIALS}), FORMATS[notation])
+    for expected in ESCAPED[notation]:
+        assert expected in out, f'{notation}: {expected!r} is set as text'
+    assert SPECIALS not in out, 'the raw prose reached the document unescaped'
