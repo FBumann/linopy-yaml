@@ -82,18 +82,21 @@ def port_sources(name: str) -> dict[str, Any]:
     return {k: v for k, v in tables.items() if k in known}
 
 
-@pytest.fixture(params=sorted(PORT_REFERENCES), ids=str)
-def port(request: pytest.FixtureRequest) -> dict[str, Any]:
-    """Each referenced model in turn: its name, its file, and what it should reach.
+def port_model(name: str) -> Path:
+    """The file behind a referenced model's name.
 
     A port's model file lives in ``examples/ports/``; a teaching model with a
     reference implementation keeps its file in ``examples/``, where the guide
     and the gallery already point.
     """
-    model = PORTS_DIR / f'{request.param}.yaml'
-    if not model.exists():
-        model = EXAMPLES_DIR / f'{request.param}.yaml'
-    return {'name': request.param, 'model': model} | PORT_REFERENCES[request.param]
+    model = PORTS_DIR / f'{name}.yaml'
+    return model if model.exists() else EXAMPLES_DIR / f'{name}.yaml'
+
+
+@pytest.fixture(params=sorted(PORT_REFERENCES), ids=str)
+def port(request: pytest.FixtureRequest) -> dict[str, Any]:
+    """Each referenced model in turn: its name, its file, and what it should reach."""
+    return {'name': request.param, 'model': port_model(request.param)} | PORT_REFERENCES[request.param]
 
 
 #: Every model in the repo, ports included — ``constructs.models()`` is the one

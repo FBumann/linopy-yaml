@@ -98,12 +98,11 @@ its dims in an index, a `dict` or a sequence over one dimension, or one number
 spread over the coordinates it covers. Neither reads an `xr.DataArray`: this
 package reads tables and hands arrays back. A dimension index is any of those
 tables too, under the dimension's own key in `sources` or under `coords=`, and
-labels come from `sources`, then `coords=`, then `values:`, then the parameters
-that span the dimension — sorted, since a derived dimension has no declared
-order, which is why an explicit index is worth passing whenever order matters.
-A dimension carrying lookups cannot be derived at all: the parameters spanning
-it carry the label, never what the label maps to, and both lanes say so in the
-same sentence.
+labels come from `sources`, then `coords=`, then `values:`. A dimension with
+none of the three has no index, and both lanes refuse it in the same sentence
+rather than deriving one from the parameters that span it — a parameter carries
+a label, never the set of labels that exist, nor what a label maps to. The index
+is also what fixes the *order*, so pass one wherever order matters.
 
 So one `sources` mapping goes to either, and which lane builds a file is
 decided by an import and nothing else.
