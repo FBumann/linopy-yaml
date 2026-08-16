@@ -1,0 +1,25 @@
+# The Typst twin of transport_dantzig.yaml beside it, same notation choices in
+# the other language: plants are $i$ and markets $j$, as they have been since
+# 1963. A table is matched to its model by the stem up to the first dot, so
+# `<model>.<notation>.yaml` is a second table for a model that already has one
+# — the unsuffixed file is what the gallery renders.
+#
+# This one exists so the Typst path has a committed artifact: loading a table
+# from a file, checking it against its model, and compiling what it renders
+# were all reached by a single inline dict before it (#746).
+
+notation: typst
+
+dimensions:
+  plant: {index: i, set: "cal(I)"}
+  market: {index: j, set: "cal(J)"}
+
+names:
+  shipment: "x"
+  capacity: "a"
+  demand: "b"
+  # `c_ij` in the textbook is the delivered cost. Here it is still built from
+  # distance and freight rate, so the two keep their own symbols rather than
+  # pretending to be a `c` the model does not declare.
+  distance: "d"
+  freight: "f"
