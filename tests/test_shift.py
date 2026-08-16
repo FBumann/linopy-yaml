@@ -105,6 +105,58 @@ def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inp
         )
 
 
+def test_a_forward_shift_drops_the_row_at_the_far_end_on_both_lanes(storage_inputs):
+    """`by=-1` is the mirror of the test above: the *last* snapshot has no successor.
+
+    Both directions are one operator and the sign is data, so nothing about the
+    drop should be special to reaching backwards — but nothing built a forward
+    shift until #837, where the typesetter turned out to abort on one. The
+    engine had always been right; that is the half no test said.
+    """
+    data, coords = storage_inputs
+    data = {**data, 'load': (data['load'] * 0.93).round(3)}
+
+    original = STORAGE_YAML.read_text()
+    assert "shift(soc, over=snapshot, by=1, edge='wrap')" in original
+    forward = original.replace("shift(soc, over=snapshot, by=1, edge='wrap')", 'shift(soc, over=snapshot, by=-1)')
+
+    with differential(forward, data, coords) as run:
+        soc, charge, discharge = _soc_trace(run.result)
+        assert np.allclose(soc[:-1], soc[1:] + 0.9 * charge[:-1] - discharge[:-1], atol=1e-6), (
+            'the recurrence reads forwards, and holds up to the second-to-last snapshot'
+        )
+        assert run.model.constraints['soc_balance'].labels.values[-1] == -1, (
+            'the last snapshot has no successor, so no row is built for it'
+        )
+
+
+def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storage_inputs):
+    """`edge=0` fills what `by=-1` vacates, so the row at the far end survives.
+
+    The distinction the two spellings carry is the whole of law 8 in this
+    position, and it is the one #830 found the math could not state: both
+    printed as `t - 1`. Here it is asserted as rows rather than as notation —
+    the last snapshot keeps its equation, with the successor term contributing
+    nothing.
+    """
+    data, coords = storage_inputs
+    data = {**data, 'load': (data['load'] * 0.93).round(3)}
+
+    original = STORAGE_YAML.read_text()
+    filled = original.replace(
+        "shift(soc, over=snapshot, by=1, edge='wrap')", 'shift(soc, over=snapshot, by=-1, edge=0)'
+    )
+
+    with differential(filled, data, coords) as run:
+        soc, charge, discharge = _soc_trace(run.result)
+        assert run.model.constraints['soc_balance'].labels.values[-1] != -1, (
+            'edge=0 asks for a value at the boundary, so the last row is built rather than dropped'
+        )
+        assert np.allclose(soc[-1], 0.9 * charge[-1] - discharge[-1], atol=1e-6), (
+            'at the last snapshot the vacated successor contributes zero, not a wraparound'
+        )
+
+
 def test_shift_semantics_are_positional_not_lexicographic():
     """Coords whose sorted order differs from declared order (string labels:
     lexicographic t0,t1,t10,... vs positional t0..t47). Both backends must
