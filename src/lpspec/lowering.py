@@ -156,7 +156,118 @@ def lower_program(schema: Model) -> plan.Program:
         )
         for sname, sdef in schema.sos.items()
     )
-    return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos)
+    program = plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos)
+    _refuse_provably_unbounded(program)
+    return program
+
+
+def _refuse_provably_unbounded(program: plan.Program) -> None:
+    """Refuse a variable nothing can stop the objective from running away with.
+
+    The conjunction, and only the conjunction: a variable **in the objective
+    with a coefficient of known sign**, **unbounded on the side that improves
+    it**, and **named by no constraint and no set**. Each alone is ordinary —
+    a free variable held by a constraint is fine, a bounded one in no
+    constraint is fine — so all three are required before this speaks.
+
+    A ``binary`` needs no case of its own: it lowers with 0/1 bounds, so it
+    is bounded on both sides before this reads it.
+
+    Provable without data, which is why it lives here rather than after a
+    build: a coefficient reached through a parameter has no sign until the
+    parameter is bound, and that case is left alone. The per-coordinate
+    variant, where the mask rather than the schema leaves a slice undefined,
+    needs the built rows and is not answered here.
+
+    Raises:
+        LanguageError: Naming the variable, the bound that is missing, and the
+            reason the solver would otherwise return a bare ``unbounded``.
+    """
+    if program.objective is None:
+        return
+    held = {v for c in program.constraints for side in (c.lhs, c.rhs) for v in _variables_in(side)}
+    held |= {s.variable for s in program.sos}
+    for declaration in program.variables:
+        if declaration.name in held:
+            continue
+        sign = _objective_sign(program.objective.expression, declaration.name)
+        if not sign:
+            continue
+        toward_minus = (program.objective.sense == 'min') == (sign > 0)
+        bound = declaration.lower if toward_minus else declaration.upper
+        if not _is_unbounded(bound, toward_minus=toward_minus):
+            continue
+        raise LanguageError(
+            f"variable '{declaration.name}' is unbounded {'below' if toward_minus else 'above'} "
+            f'and appears in no constraint, so the objective can improve without limit — the '
+            f'model has no optimum to find.\n'
+            f'Give it a finite {"lower" if toward_minus else "upper"} bound, constrain it, or '
+            f'drop it from the objective. Solved as it stands, the answer is a bare '
+            f"'unbounded' that names nothing."
+        )
+
+
+def _variables_in(e: plan.Expression) -> set[str]:
+    """Every variable named anywhere in *e*."""
+    if isinstance(e, plan.Variable):
+        return {e.name}
+    return {name for child in plan.children(e) for name in _variables_in(child)}
+
+
+def _is_unbounded(bound: plan.Expression, *, toward_minus: bool) -> bool:
+    """Whether *bound* is the infinity that leaves the improving side open.
+
+    A bound read from a parameter is finite as far as this can tell — its
+    values arrive later — so it counts as held. Only the literal infinity the
+    schema wrote is provably no bound at all.
+    """
+    if not isinstance(bound, plan.Constant):
+        return False
+    return bound.value == (float('-inf') if toward_minus else float('inf'))
+
+
+def _objective_sign(e: plan.Expression, variable: str) -> int:
+    """The sign of *variable*'s coefficient in *e*: ``+1``, ``-1``, or ``0``.
+
+    ``0`` is "absent, or present with a coefficient this cannot sign" — the two
+    cases the caller treats alike, since neither proves anything. A coefficient
+    is signed only through literal constants: one reached through a parameter
+    has no sign until data arrives, and a sum of parameters may be empty, so
+    both stop the walk.
+    """
+    if isinstance(e, plan.Variable):
+        return 1 if e.name == variable else 0
+    if isinstance(e, (plan.Constant, plan.Parameter)):
+        return 0
+    if isinstance(e, plan.Negate):
+        return -_objective_sign(e.operand, variable)
+    if isinstance(e, plan.Add):
+        left = _objective_sign(e.left, variable)
+        right = _objective_sign(e.right, variable)
+        if left and right and left != right:
+            return 0
+        return left or right
+    if isinstance(e, plan.Multiply):
+        for this, other in ((e.left, e.right), (e.right, e.left)):
+            if variable in _variables_in(this):
+                return _objective_sign(this, variable) * _constant_sign(other)
+        return 0
+    if isinstance(e, plan.Divide):
+        return _objective_sign(e.numerator, variable) * _constant_sign(e.divisor)
+    if isinstance(e, (plan.Sum, plan.GroupSum, plan.At, plan.Translate, plan.Window)):
+        return _objective_sign(e.operand, variable)
+    return 0
+
+
+def _constant_sign(e: plan.Expression) -> int:
+    """The sign of a variable-free *e*, or ``0`` where it is not provable."""
+    if isinstance(e, plan.Constant):
+        return (e.value > 0) - (e.value < 0)
+    if isinstance(e, plan.Negate):
+        return -_constant_sign(e.operand)
+    if isinstance(e, plan.Multiply):
+        return _constant_sign(e.left) * _constant_sign(e.right)
+    return 0
 
 
 def lower_expression(schema: Model, name: str) -> plan.Expression:

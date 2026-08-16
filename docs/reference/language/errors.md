@@ -44,6 +44,30 @@ are the *file* being wrong, and are reproducible from the YAML alone;
 declared dimension nothing uses as an axis, say. It is the only place warnings
 come from.
 
+## One wrong *answer* is decidable without data too
+
+Almost everything above is the file being malformed. One thing is not: a model
+that parses, composes and builds, and has **no optimum to find**.
+
+```text
+variable 'slack' is unbounded below and appears in no constraint, so the
+objective can improve without limit — the model has no optimum to find.
+Give it a finite lower bound, constrain it, or drop it from the objective.
+Solved as it stands, the answer is a bare 'unbounded' that names nothing.
+```
+
+The refusal needs all three of: the variable is **in the objective with a
+coefficient of known sign**, it is **unbounded on the side that improves it**,
+and **no constraint and no set names it**. Each alone is an ordinary model — a
+free variable held by a constraint is how a dual is read, a bounded one in no
+constraint is how a cost is declared — so only the conjunction is refused.
+
+A coefficient reached through a **parameter** has no sign until that parameter
+is bound, so those are left to the solver: this runs before any data exists,
+and guessing would refuse models that solve. The per-coordinate case, where a
+`where` rather than the schema leaves one slice of a variable undefined, is not
+answered here either — it needs the built rows.
+
 ## What the language will not say
 
 Refusals, and what to reach for instead. None of them is an unimplemented
