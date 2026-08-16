@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.0.1-alpha.149](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.148...v0.0.1-alpha.149) (2026-08-16)
+
+
+### Features
+
+* **gallery:** a model proves every many-to-many shape load-bearing ([#747](https://github.com/fluxopt/lpspec/issues/747)) ([bb75a1a](https://github.com/fluxopt/lpspec/commit/bb75a1af2714f4c6e5d3ef7dcee8da4a8462db9d))
+* **language:** a coordinate is a named top-level lookup ([#742](https://github.com/fluxopt/lpspec/issues/742)) ([a326026](https://github.com/fluxopt/lpspec/commit/a326026d6a020752e2ae24aeb134b0a5130f7b59))
+* **language:** a lookup addresses itself, and the sibling kwarg is gone ([#759](https://github.com/fluxopt/lpspec/issues/759)) ([01c243c](https://github.com/fluxopt/lpspec/commit/01c243ca15c1fbecf4ad2a4bf7a99ed0775c3805))
+
+
+### Bug Fixes
+
+* **typeset:** the pullback test states its coordinate as a lookup ([#835](https://github.com/fluxopt/lpspec/issues/835)) ([fb74811](https://github.com/fluxopt/lpspec/commit/fb7481151e6853651daae7bab5caf2fc422a2bba))
+
+
+### Documentation
+
+* **gallery:** a model that uses at() says so in the constructs matrix ([#749](https://github.com/fluxopt/lpspec/issues/749)) ([af2a3db](https://github.com/fluxopt/lpspec/commit/af2a3db9c85cac572a4fbbf7dc4a831ae2deac03))
+
 ## [0.0.1-alpha.148](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.147...v0.0.1-alpha.148) (2026-08-16)
 
 
