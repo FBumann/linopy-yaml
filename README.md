@@ -142,7 +142,7 @@ construct outside the language is a load error naming its rewrite.
 ## Docs
 
 Start with [**writing a model**](docs/guide.md) — five ideas, each shown in a
-model that runs. Then [the models](docs/models/index.md) to browse, the
+model that runs. Then [the examples](docs/examples/index.md) to browse, the
 [language reference](docs/reference/language/index.md) for the exact rule, and
 the [Python API](docs/reference/api.md) for running one. Why it is shaped this
 way, what it costs and what is refused are together under

@@ -1,11 +1,11 @@
 # Examples
 
 **These are fixtures, not samples.** The test suite loads them by path and
-`docs/models/` embeds them, so the file you read here is the file CI runs.
+`docs/examples/` embeds them, so the file you read here is the file CI runs.
 Renaming one breaks tests; changing one changes what the docs claim, and a test
 will say so.
 
-**Read them explained** in [docs/models/](../docs/models/index.md) — the maths,
+**Read them explained** in [docs/examples/](../docs/examples/index.md) — the maths,
 what each construct exercises, and for a port a side-by-side against the
 reference implementation. This directory is the source; that is the guided tour.
 

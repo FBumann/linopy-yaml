@@ -6,7 +6,7 @@ start at [writing a model](guide.md), then
 [the rules](reference/language/index.md#ten-rules-the-language-reduces-to) for
 the exact one.
 
-**The layout is the reader's path.** `guide.md`, `models/` and `reference/` are
+**The layout is the reader's path.** `guide.md`, `examples/` and `reference/` are
 what somebody writing or running a model needs; everything else — design notes,
 measured cost, project direction, changelog — is under `about/`, reachable and
 out of the way. A page that argues for a decision belongs there; a page that
@@ -19,7 +19,7 @@ repo and 404s on the site, silently. The rest is in *the docs* in
 [CONTRIBUTING.md](../CONTRIBUTING.md#the-docs).
 
 **Generated, so do not hand-edit:** the catalogue, the construct matrix and the
-reference table in [models/index.md](models/index.md) (`tools/constructs.py`),
+reference table in [examples/index.md](examples/index.md) (`tools/constructs.py`),
 the *"the same model, as math"* block on each model page
 (`tools/gallery_math.py`), the operator math in
 [the operators page](reference/language/operators.md#as-math)

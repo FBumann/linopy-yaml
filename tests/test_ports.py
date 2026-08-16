@@ -10,7 +10,7 @@ else's code, or — for the teaching models — reached by a hand-written
 formulation on another modelling stack; ``examples/ports/references/`` holds
 the scripts, run out of band, and ``references.json`` records what they said.
 So the corpus needs no oracle and no extra dependency: it is linopy-free and
-pandas-free, and runs on the bare-install job. See docs/models/index.md; the
+pandas-free, and runs on the bare-install job. See docs/examples/index.md; the
 gallery page for each referenced model is asserted against its model file by
 ``test_models_gallery.py``.
 """

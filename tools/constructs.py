@@ -47,7 +47,7 @@ from lpspec.lowering import lower_program
 from lpspec.relational import plan
 
 ROOT = Path(__file__).resolve().parent.parent
-GALLERY = ROOT / 'docs' / 'models'
+GALLERY = ROOT / 'docs' / 'examples'
 PAGE = GALLERY / 'index.md'
 MKDOCS = ROOT / 'mkdocs.yml'
 REFERENCES = json.loads((ROOT / 'examples' / 'ports' / 'references.json').read_text())
@@ -143,7 +143,7 @@ _NavLoader.add_multi_constructor('tag:yaml.org,2002:python/', lambda *_: None)
 
 
 def nav_groups() -> list[tuple[str, list[tuple[str, str]]]]:
-    """The Models section of the site nav: group title, then its pages.
+    """The Examples section of the site nav: group title, then its pages.
 
     Each page is ``(label, name)`` — the label the sidebar shows and the
     model's name, which is also its page and its YAML file. Entries in the
@@ -152,7 +152,7 @@ def nav_groups() -> list[tuple[str, list[tuple[str, str]]]]:
     :func:`models` for the ones that are.
     """
     nav = yaml.load(MKDOCS.read_text(), Loader=_NavLoader)['nav']
-    section = next(entry['Models'] for entry in nav if isinstance(entry, dict) and 'Models' in entry)
+    section = next(entry['Examples'] for entry in nav if isinstance(entry, dict) and 'Examples' in entry)
     groups = []
     for entry in section:
         if not isinstance(entry, dict):

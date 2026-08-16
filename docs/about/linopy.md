@@ -42,7 +42,7 @@ checking one language.
 It also has a known blind spot, which is why the model gallery exists: a
 **shared misreading** passes the differential suite green. Only an outside
 published optimum catches that, and
-[docs/models/index.md](../models/index.md) is where those live.
+[docs/examples/index.md](../examples/index.md) is where those live.
 
 **Where a concept is already linopy's, we copy its name** — solve statuses,
 `status` / `termination_condition` as two axes with `is_ok` as the rollup, the

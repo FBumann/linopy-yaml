@@ -20,7 +20,7 @@ import pytest
 import lpspec as lps
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGE = ROOT / 'docs' / 'models' / 'data.md'
+PAGE = ROOT / 'docs' / 'examples' / 'data.md'
 FOLDER = ROOT / 'examples' / 'ports' / 'data' / 'dispatch'
 
 
@@ -37,7 +37,7 @@ def _block(marker: str) -> str:
 @pytest.mark.parametrize('name', ['generators', 'load'])
 def test_the_page_shows_the_file_that_is_committed(name: str) -> None:
     text = (FOLDER / f'{name}.csv').read_text()
-    assert text in _fences('csv'), f'docs/models/data.md has drifted from {name}.csv'
+    assert text in _fences('csv'), f'docs/examples/data.md has drifted from {name}.csv'
 
 
 def test_the_preparation_code_runs_and_solves(monkeypatch: pytest.MonkeyPatch) -> None:
