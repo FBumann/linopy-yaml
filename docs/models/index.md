@@ -235,22 +235,49 @@ macro, primitive, or escape.
 | Port | What could not be said | Worked around by | Verdict |
 |---|---|---|---|
 | PyPSA rung 1 | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/lpspec/issues/31). A second model asking for it |
-| PyPSA unit commitment | `min_up_time` — a unit that starts must stay up for *T* snapshots | left at 0, so the constraint is not written | **split verdict**, below |
+| PyPSA unit commitment | `min_up_time` — a unit that starts must stay up for *T* snapshots | left at 0, so the constraint is not written | **sayable**, and the row used to say otherwise — below |
 | Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut, which is how every serious TSP code works | [MTZ](tsp_mtz.md), O(n²) and static | **refused, and correctly**: a solve loop is an algorithm, not a model |
 
-`min_up_time` is the more interesting row, because the answer depends on
-something the language cares about. The constraint is
+`min_up_time` is the row worth reading twice, because it was **wrong** until
+recently and the correction is instructive. The constraint is
 `sum(start_up over the last T snapshots) <= status`. For a *single T fixed in
 the file* that is `start_up + shift(start_up, over=snapshot, by=1, edge=0) + …`
 — a **macro**, free, and `edge=0` because a window reaching before the horizon
-is short a term rather than undefined ([law 8](../reference/language/index.md#ten-rules-the-language-reduces-to)). For
-PyPSA's actual
-signature, where `T` is a column and each generator may have its own, the
-number of terms is read from data, and
-[data-dependent structure inside an expression](../about/ceiling.md#two-tiers-and-the-ceiling)
-is refused by design rather than unimplemented. The two halves of that answer
-are worth keeping apart: one is a macro nobody has written, the other is the
-ceiling doing its job.
+is short a term rather than undefined ([law 8](../reference/language/index.md#ten-rules-the-language-reduces-to)).
+
+For PyPSA's actual signature, where `T` is a column and each generator may have
+its own, this row used to claim the constraint was refused by design, because
+the number of *terms* is read from data. That confused a spelling with the
+constraint. No chain of shifts can be written down — but the window is a
+relation between snapshots, one row per pair inside it, and a relation is an
+incidence table:
+
+```yaml
+lookups:
+  same_moment: {over: snapshot_from, into: snapshot}
+constraints:
+  a_start_turns_it_on:
+    foreach: [unit, snapshot_from]
+    expression: >-
+      started >= at(on, by=same_moment)
+      - shift(at(on, by=same_moment), over=snapshot_from, by=1, edge=0)
+  stays_up_its_own_time:
+    foreach: [unit, snapshot]
+    expression: sum(started * window, over=snapshot_from) <= on
+```
+
+with `window[unit, snapshot, snapshot_from]` built in data preparation. That is
+the shape [`pypsa_kvl`](pypsa_kvl.md) already uses for a cycle basis and
+[UTOPIA](osemosys_utopia.md) for an operational life. The plan's *shape* is
+fixed before any data is read; only its cardinality comes from data, which is
+as true of `foreach: [snapshot]`.
+
+**What it costs is one mirror of the snapshot axis** — the window sum is taken
+on `snapshot_from` while capacity and cost are rows on `snapshot`, and
+[`tsp_mtz`](tsp_mtz.md) carries a mirror for the same reason. It costs nothing
+else: `snapshot_from` maps back to `snapshot` single-valuedly, so the mirror is
+a **lookup**, and `at()` reads the commitment across it. No second commitment
+variable, no identity table. A cost, then, and a small one — not a refusal.
 
 Three rows from seventeen ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
