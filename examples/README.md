@@ -24,7 +24,7 @@ reference implementation. This directory is the source; that is the guided tour.
 | `myopic/` | an investment pathway over periods of typical days, each inheriting the last one's fleet (`solve_over`, `carry`) |
 | `benders/` | the problem split in two and reassembled, checked against the monolith it decomposes |
 | `operators/` | one minimal model per operator in [the operator reference](../docs/reference/language/operators.md), which is where the math on that page comes from |
-| `ports/` | 22 models somebody else already solved, checked against an optimum that did not come from us |
+| `ports/` | 23 models somebody else already solved, checked against an optimum that did not come from us |
 
 `walkthrough.py` runs one model through YAML → schema → AST → plan → frames →
 LP text → solution, printing what each stage produces, then two models the
