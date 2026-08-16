@@ -102,3 +102,17 @@ def test_both_quadratic_parts_take_a_matrix_through_their_bulk_entry_point(model
         f'{TABLE} names setMObjective and addMQConstr as the bulk quadratic entry points. Q = I '
         f'over x0·x1 >= 4 minimises x0² + x1² at x = (2, 2), so 8.'
     )
+
+
+def test_the_gurobi_descriptor_says_what_these_probes_measured():
+    """The claim, beside its evidence — `test_sink_capability_probes.py`'s twin.
+
+    Gurobi is the sink a refusal *names*, so its column being right is what
+    makes "…and these sinks do take it" true rather than encouraging.
+    """
+    from lpspec.relational.sinks import SOLVERS
+
+    capabilities = SOLVERS['gurobi'].capabilities
+    for capability in ('quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint', 'sos'):
+        assert capabilities.support(capability) == 'native', f'{capability} solved natively above'
+    assert capabilities.excludes == (), 'every combination probed above solved; nothing here is excluded'

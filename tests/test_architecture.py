@@ -980,8 +980,34 @@ def test_each_sink_family_is_its_directory_and_its_registry():
         assert held.unavailable_message, f'{name} does not say what to do when is_available() is False'
         assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
-    assert {w.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {'base'}
+    assert {w.write.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {'base'}
     assert all(s.startswith('.') for s in WRITERS), 'writers are keyed by file suffix'
+
+
+def test_every_sink_declares_what_it_can_ingest():
+    """Both families answer the capability axis, in one vocabulary.
+
+    Two silent failures: a sink declaring nothing reads as ``absent``
+    everywhere and is refused a model it can take, and one naming a capability
+    outside the vocabulary is refused nothing, since no required set can
+    contain a name that is not in it.
+    """
+    from lpspec.relational.sinks import SOLVERS, WRITERS
+    from lpspec.relational.sinks.capabilities import CAPABILITIES, Capabilities
+
+    described = {f'solver {name}': held.capabilities for name, held in SOLVERS.items()}
+    described |= {f'writer {suffix}': found.capabilities for suffix, found in WRITERS.items()}
+    for sink, capabilities in described.items():
+        assert isinstance(capabilities, Capabilities), f'{sink} declares no capabilities'
+        strangers = sorted(set(capabilities.supports) - set(CAPABILITIES))
+        assert not strangers, f'{sink} names capabilities the vocabulary has not got: {strangers}'
+        for combination in capabilities.excludes:
+            unsupported = sorted(c for c in combination if capabilities.support(c) == 'absent')
+            assert not unsupported, (
+                f'{sink} excludes the combination {sorted(combination)} while lacking {unsupported} '
+                f'outright — an exclusion is about a *pair* it has both halves of, and a capability '
+                f'it simply does not have is already refused on its own'
+            )
 
 
 def test_the_engine_dtype_table_matches_the_declared_vocabulary():
@@ -1089,8 +1115,12 @@ def test_no_sink_reaches_a_sibling():
     so it cannot carry one across, and it is what stops the alternative — one
     leaf importing the other to share a rule — from being the tempting option.
     A ``base`` that reached for a leaf would fail the same check.
+
+    ``capabilities`` joined it on the same argument: a frozen descriptor and
+    two ``Literal`` vocabularies, importing nothing, read by **both** families
+    — where one per family would be two spellings of a single axis.
     """
-    shareable = ('.tables', '.base')
+    shareable = ('.tables', '.base', '.capabilities')
     offenders = {}
     for family in ('solvers', 'writers'):
         for path in sorted((SINKS / family).glob('*.py')):

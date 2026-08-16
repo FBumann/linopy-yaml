@@ -22,6 +22,7 @@ import numpy as np
 import polars as pl
 
 from lpspec.relational import chunking
+from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.tables import SENSE_CODES
 from lpspec.relational.sinks.writers.base import digits, number, sink
 
@@ -29,6 +30,14 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
     from lpspec.relational.sinks.tables import ModelTables
+
+
+#: The sections this writer emits, and nothing beyond them. Where
+#: :data:`~lpspec.relational.sinks.writers.lp_file.LP_FILE_CAPABILITIES` carries
+#: every construct because a section is text, MPS spells a quadratic term in an
+#: extension section this writer does not write, so a model that needs one is
+#: refused by name rather than written without it.
+MPS_FILE_CAPABILITIES = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
 
 
 #: How MPS spells each comparison, read off the engine's own vocabulary so a

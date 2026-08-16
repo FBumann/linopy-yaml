@@ -1,0 +1,86 @@
+"""What a sink can ingest — the axis that is not the ceiling.
+
+The ceiling is about streamability and is solver-independent
+(docs/about/ceiling.md); what a *sink* can take is separate, and conflating the
+two let one solver's limits read as architectural law. One descriptor per sink,
+so a construct the language says and a sink cannot take is a refusal naming
+both rather than a ``kError`` from inside a library.
+
+Three shapes, each forced by docs/about/benchmarks.md#sink-capabilities rather
+than chosen:
+
+- **Three-valued.** ``reformulated`` is an answer, not a missing ``native``: a
+  set reaches HiGHS as binaries and linking rows and the model still solves, at
+  the cost of the duals an LP would have returned.
+- **Exclusions.** HiGHS takes a Hessian, takes integrality, and refuses the
+  pair — which linopy's flat ``frozenset`` reports as MIQP available.
+- **Some entries are data-time.** Convexity is a property of coefficients, so
+  ``check`` cannot answer it (rule 2). ``nonconvex_quadratic_objective`` is
+  declared anyway: the sink that discovers it at solve time reads the sinks
+  that would have taken it off this table.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal, get_args
+
+if TYPE_CHECKING:
+    from collections.abc import Collection, Mapping
+
+#: What a model may need a sink to have. ``indicator`` and ``semi-continuous``
+#: are absent deliberately: they have rows in the benchmarks table and no
+#: spelling in the language (#220, #383), so an entry would be a fact nothing
+#: can consult.
+Capability = Literal[
+    'integrality',
+    'sos',
+    'quadratic_objective',
+    'nonconvex_quadratic_objective',
+    'quadratic_constraint',
+]
+
+#: How a sink satisfies one capability. ``reformulated`` means the model is
+#: rewritten into what the sink does take — a worse relaxation rather than a
+#: refusal, which a caller needs to know before choosing a sink.
+Support = Literal['native', 'reformulated', 'absent']
+
+CAPABILITIES: tuple[Capability, ...] = get_args(Capability)
+
+
+@dataclass(frozen=True)
+class Capabilities:
+    """One sink's answer for every capability, and the pairs it refuses.
+
+    Attributes:
+        supports: What the sink does with each capability it has; a name left
+            out is ``absent``, so a descriptor lists only what it *can* do.
+        excludes: Sets of capabilities it has individually and refuses together.
+    """
+
+    supports: Mapping[Capability, Support]
+    excludes: tuple[frozenset[Capability], ...] = ()
+
+    def support(self, capability: Capability) -> Support:
+        """What this sink does with *capability* — ``absent`` where it says nothing."""
+        return self.supports.get(capability, 'absent')
+
+    def missing(self, required: Collection[Capability]) -> list[Capability]:
+        """Those of *required* this sink cannot take at all.
+
+        In :data:`CAPABILITIES` order rather than the caller's, so a refusal
+        naming two of them reads the same way twice.
+        """
+        return [c for c in CAPABILITIES if c in required and self.support(c) == 'absent']
+
+    def excluded(self, required: Collection[Capability]) -> frozenset[Capability] | None:
+        """The first conjunction *required* contains that this sink refuses.
+
+        Returns:
+            The excluded set, or ``None``. Each member is one the sink supports
+            on its own; one it simply lacks is :meth:`missing`'s answer.
+        """
+        for combination in self.excludes:
+            if combination <= set(required):
+                return combination
+        return None

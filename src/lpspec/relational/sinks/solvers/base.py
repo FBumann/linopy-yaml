@@ -19,7 +19,7 @@ from __future__ import annotations
 import importlib.util
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lpspec.errors import LpspecError
 
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from lpspec.relational.sinks.capabilities import Capabilities
     from lpspec.relational.sinks.tables import ModelTables
     from lpspec.relational.status import SolveStatus
 
@@ -135,18 +136,11 @@ class Solver(ABC):
     #: :meth:`is_available`, where a copy of it in each leaf could drift.
     requires: ClassVar[tuple[str, ...]]
 
-    #: How this member satisfies a model carrying special-ordered sets:
-    #: ``native`` takes the ``sos`` stream itself, ``reformulated`` is handed
-    #: binaries and linking rows instead
-    #: (:func:`~lpspec.relational.sinks.sos.reformulated`).
-    #:
-    #: Declared rather than discovered at the hand-off, which is what the
-    #: capability axis in docs/about/ceiling.md asks for: what a *sink* can
-    #: ingest is separate from what the language can say, and the two words
-    #: here are the first two of that vocabulary. A member states it; the
-    #: family acts on it (:func:`~lpspec.relational.sinks.solvers.ingestible`),
-    #: so no ``_load`` has to remember to ask.
-    sos: ClassVar[Literal['native', 'reformulated']]
+    #: What this member can ingest, and what it refuses in combination. A
+    #: member states it; the family acts on it
+    #: (:func:`~lpspec.relational.sinks.solvers.ingestible`), so no ``_load``
+    #: has to remember to ask.
+    capabilities: ClassVar[Capabilities]
 
     #: What to tell a caller when :meth:`is_available` says no — which package
     #: is missing, and whether it ships or needs an extra. The member's own

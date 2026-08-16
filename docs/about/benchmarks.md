@@ -488,19 +488,24 @@ assumed. The architectural reading is in
 [Track 3](https://github.com/fluxopt/lpspec/issues/472).
 
 The SOS row is the one this table has since been acted on: `sos:`
-([sos](../reference/language/piecewise.md#sos)) ships to all three, natively where the row says
+([sos](../reference/language/piecewise.md#sos)) ships to every sink, natively where the row says
 so and as binaries plus linking rows where it says *no concept*.
 
-| | `lp_file` | HiGHS direct | Gurobi direct |
-|---|---|---|---|
-| affine rows, COO, integrality | text | native | native |
-| semi-continuous | text | `kSemiContinuous` | native |
-| SOS1 / SOS2 | text section | **no concept** — `HighsLp` has no SOS field and no `addSos` | `addSOS` |
-| indicator | text section | **no concept** | `addGenConstrIndicator` |
-| convex quadratic objective | text section | `passHessian` | `setMObjective` |
-| nonconvex quadratic objective | text section | **refused** — *"Cannot solve non-convex QP problems with HiGHS"* | native, at default parameters |
-| quadratic objective **and** integrality | text section | **refused** — `run()` returns `kError` | native (MIQP) |
-| quadratic constraint | text section, unreadable | **no concept** — no entry point at all | `addQConstr` / `addMQConstr` |
+| | `lp_file` | `mps_file` | HiGHS direct | Gurobi direct | Xpress direct |
+|---|---|---|---|---|---|
+| affine rows, COO, integrality | text | text, `MARKER` | native | native | native |
+| semi-continuous | text | **not written** — no `SC` bound | `kSemiContinuous` | native | native |
+| SOS1 / SOS2 | text section | `SOS` section | **no concept** — `HighsLp` has no SOS field and no `addSos` | `addSOS` | `addSOS` |
+| indicator | text section | **not written** | **no concept** | `addGenConstrIndicator` | native |
+| convex quadratic objective | text section | **not written** — the section is an extension | `passHessian` | `setMObjective` | **no path here** |
+| nonconvex quadratic objective | text section | **not written** | **refused** — *"Cannot solve non-convex QP problems with HiGHS"* | native, at default parameters | **no path here** |
+| quadratic objective **and** integrality | text section | **not written** | **refused** — `run()` returns `kError` | native (MIQP) | **no path here** |
+| quadratic constraint | text section, unreadable | **not written** | **no concept** — no entry point at all | `addQConstr` / `addMQConstr` | **no path here** |
+
+**"No path here" is about this tree, not about Xpress.** The Optimizer takes a
+Hessian and quadratic rows; the sink in `solvers/xpress.py` never hands it one,
+and a descriptor says what the sink ingests rather than what the library could
+— so the entries are `absent` and a model needing one is refused by name.
 
 The four quadratic rows are probed rather than remembered, as are the two
 sections HiGHS writes and will not read back —
@@ -508,8 +513,9 @@ sections HiGHS writes and will not read back —
 `tests/test_gurobi_capability_probes.py`, each assertion naming this table.
 Capabilities move on somebody else's release, and nothing here calls
 `passHessian` yet, so without the probes a row would go wrong with the suite
-green. The four rows above them are still read off the two APIs rather than
-measured. Three readings:
+green. The four rows above them are still read off the APIs rather than
+measured, and so is the whole **Xpress** column — this repository probes the
+two sinks a quadratic model can actually reach. Three readings:
 
 - **HiGHS excludes quadratic twice**, by *convexity* and by *conjunction* with
   integrality — and neither is a set membership. linopy declares HiGHS with

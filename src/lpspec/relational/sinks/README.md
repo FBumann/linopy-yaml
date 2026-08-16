@@ -15,7 +15,7 @@ takes the tables and renders them to a file. Everything else follows.
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `base.py` |
 
 `sos.py` belongs to neither, which is what it is for: see *the one uneven
-stream* below.
+stream* below. `capabilities.py` belongs to both — *what a sink can ingest*.
 
 ## Staying loaded
 
@@ -124,11 +124,12 @@ every caller who never writes a file.
 
 Four of the five are the same question to every sink. `sos` is not: Gurobi
 branches on a set, `lp_file` writes it as text, and HiGHS has no such concept
-at all. So a solver **declares** how it satisfies one —
+at all. So a sink **declares** how it satisfies one, in the descriptor
+*what a sink can ingest* below gives it —
 
 ```python
-sos = 'native'  # gurobi: addSOS, no binaries and no bound to have
-sos = 'reformulated'  # highs: binaries and linking rows instead
+'sos': 'native'  # gurobi: addSOS, no binaries and no bound to have
+'sos': 'reformulated'  # highs: binaries and linking rows instead
 ```
 
 — and `solvers.ingestible(name, tables)` acts on the answer, before the load,
@@ -183,14 +184,18 @@ Either way: stream — nothing here may materialise the model a second time —
 and nothing above changes. No method on the engine, no branch in `api.py`,
 no name on the Python surface.
 
-## When the rest of Track 3 lands
+## What a sink can ingest
 
-[Track 3](https://github.com/fluxopt/lpspec/issues/472) gives each sink a
-declared capability *table* so `check(model, sink=...)` can answer "will this
-sink take it". `Solver.sos` above is its first entry and its shape — declared
-in the sink's own module, read by the family — and what is still missing is
-the table around it: a second capability to put beside it, the writers
-answering the same questions, and a `check` that reads them without data.
+`capabilities.py` is the second axis of [the
+ceiling](../../../../docs/about/ceiling.md#capability-is-not-the-ceiling) —
+what a sink takes, as against what the language may say — and its docstring is
+where the three-valued entries, the exclusions and the data-time ones are
+argued. One `Capabilities` descriptor per sink, declared in the sink's own
+module: a `ClassVar` on a `Solver`, a field on a `Writer`, since a writer is a
+function and has nowhere else to put a fact.
+
+`ingestible` reads it today. Still missing is
+[the `check(model, sink=...)` half](https://github.com/fluxopt/lpspec/issues/89).
 
 ## Stable output
 

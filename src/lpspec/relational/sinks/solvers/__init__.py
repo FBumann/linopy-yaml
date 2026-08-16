@@ -95,7 +95,7 @@ def ingestible(name: str, model: ModelTables) -> ModelTables:
         *model* itself where nothing has to change, which is every model
         declaring no sets.
     """
-    if model.sos.height and solver(name).sos != 'native':
+    if model.sos.height and solver(name).capabilities.support('sos') != 'native':
         return sos.reformulated(model)
     return model
 
