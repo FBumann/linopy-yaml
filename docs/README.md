@@ -14,8 +14,9 @@ repo and 404s on the site, silently. The rest is in *the docs* in
 **Generated, so do not hand-edit:** the catalogue, the construct matrix and the
 reference table in [models/index.md](models/index.md) (`tools/constructs.py`),
 the *"the same model, as math"* block on each model page
-(`tools/gallery_math.py`), and the tables in [benchmarks.md](benchmarks.md)
-(`bench.report`, `bench.plot`). The catalogue is read off `mkdocs.yml`'s nav,
+(`tools/gallery_math.py`), the operator math in
+[SPEC §7.1](SPEC.md#71-as-math) (`tools/spec_math.py`), and the tables in
+[benchmarks.md](benchmarks.md) (`bench.report`, `bench.plot`). The catalogue is read off `mkdocs.yml`'s nav,
 so a model is added to the gallery list by adding it to the sidebar — one list,
 not two.
 The YAML and Python shown on the model pages and in the guide is asserted
