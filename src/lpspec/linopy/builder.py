@@ -557,6 +557,53 @@ def _translation(over: str, by: float) -> Mapping[Hashable, int]:
     return {over: int(by)}
 
 
+def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: float | None, card: int) -> Any:
+    """Translate *array* along *over* by an offset that differs per entity.
+
+    A scalar shift is one call; a per-entity one is a **gather**: every output
+    position reads a source position of its own, so the index is an array over
+    the offset's dims and *over* rather than a number.
+
+    Selection is by *label* rather than by ordinal, because that is what linopy
+    passes through to its own labels — the positions are turned back into
+    coordinate values here, which also keeps a non-integer axis (a datetime
+    snapshot) working for free.
+
+    Out-of-range positions are clipped so the gather stays on the axis, then
+    emptied again by ``where``, so an edge means the same thing it does for a
+    scalar shift: absent by default, and :func:`_vacated` fills it where the
+    model asked. Under ``wrap`` nothing is out of range and the modulo is the
+    whole of it.
+    """
+    labels = np.asarray(array.indexes[over])
+    ordinal = xr.DataArray(np.arange(card), coords={over: labels}, dims=[over])
+    source = (ordinal - offset).astype(int)
+
+    def gathered(ordinals: Any) -> Any:
+        # The indexer carries no coordinate, so the result comes back with the
+        # axis unlabelled; the output position *t* still means "at t", so the
+        # original labels go back on before anything is combined with it.
+        picked = array.sel({over: _labelled(labels, ordinals, over)})
+        return picked.assign_coords({over: labels})
+
+    if wrap:
+        return gathered(source % card)
+    inside = (source >= 0) & (source < card)
+    vacated = gathered(source.clip(0, card - 1)).where(inside.assign_coords({over: labels}))
+    return vacated if fill is None else _vacated(vacated, fill)
+
+
+def _labelled(labels: Any, ordinals: Any, over: str) -> Any:
+    """*ordinals* as the coordinate labels they stand for, keeping their dims.
+
+    Carries no coordinates of its own: an indexer that keeps the axis's own
+    coordinate asserts the values it holds *are* that axis, and after a gather
+    they are not — which xarray reports as a size conflict rather than a
+    mislabelling.
+    """
+    return xr.DataArray(labels[ordinals.transpose(*ordinals.dims).values], dims=ordinals.dims)
+
+
 def _operator_shift(array: Any, *, over: str, by: float, edge: str | float | None = None) -> Any:
     """Translate *array* along one dimension — the value at *t - by*.
 
@@ -570,7 +617,20 @@ def _operator_shift(array: Any, *, over: str, by: float, edge: str | float | Non
     A DataArray shift always fills, absence not being representable in data, so
     lowering refuses a bare shift over a variable-free operand and that branch
     is only reached under a numeric ``edge=``.
+
+    ``by`` arrives as an array where the model named a parameter — an offset
+    that differs per entity, which is a gather rather than a shift and is
+    :func:`_gather_by_offset`.
     """
+    if isinstance(by, xr.DataArray) and by.ndim:
+        return _gather_by_offset(
+            array,
+            over,
+            by,
+            wrap=edge == EDGE_WRAP,
+            fill=None if isinstance(edge, str) else edge,
+            card=int(array.sizes[over]),
+        )
     amount = _translation(over, by)
     if edge == EDGE_WRAP:
         if isinstance(array, xr.DataArray):

@@ -162,11 +162,16 @@ class Translate(Expression):
     propagate and drop the row — linopy v1's ``.shift()``. A number makes them
     present and contribute it, the ``.fillna(0)`` escape hatch spelled in the
     language. Always ``None`` under ``wrap``, a cyclic map vacating nothing.
+
+    ``by`` is the offset: an integer, or the name of an integer parameter when
+    the offset differs per entity — a construction lead time, a transit time, a
+    minimum up time. A named offset may not depend on the dimension being
+    translated, and carries its sign in the values.
     """
 
     operand: Expression
     dimension: str
-    by: int
+    by: int | str
     wrap: bool = True
     fill: float | None = None
 

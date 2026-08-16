@@ -46,6 +46,7 @@ OPERATORS = {
     'shift(array, over=dim, by=n)': 'shift',
     "shift(array, over=dim, by=n, edge='wrap')": 'shift_wrap',
     'shift(array, over=dim, by=n, edge=v)': 'shift_edge',
+    'shift(array, over=dim, by=p, edge=…)': 'shift_by_parameter',
 }
 
 
