@@ -212,3 +212,100 @@ def test_the_retired_onto_kwarg_names_its_rewrite():
         lps.load_model(model)
     assert 'at(onto=...) was removed' in str(exc.value)
     assert 'at(<expr>, by=<lookup>)' in str(exc.value), 'the refusal has to name the rewrite'
+
+
+def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
+    """The window family's data-dependent member, and what to write instead of a shift chain.
+
+    A minimum up time — a unit that starts must stay committed for its own *T*
+    snapshots — is `sum(start over the last T) <= status`. Where *T* is fixed in
+    the file that is a chain of shifts, a macro. Where each unit carries its
+    own, the *number of terms* differs per unit and no chain can be written
+    down, which the ledger read as the constraint being unsayable.
+
+    It is not. The window is a relation between snapshots — one row per pair
+    inside it — so it is an incidence table contracted along a mirror of the
+    snapshot axis, the shape `pypsa_kvl` already uses for a cycle basis. The
+    plan's *shape* is fixed before any data is read; only its cardinality comes
+    from data, which is as true of `foreach: [snapshot]`.
+
+    The mirror needs no second commitment variable and no identity table: `tf`
+    maps back to `t` single-valuedly, which is a lookup, and `at()` reads the
+    commitment onto the mirror axis where the start recurrence needs it.
+
+    Two units, one with T=3 and one with T=1, and a no-load cost so idling is
+    not free. The slow unit is cheaper to run, so it is chosen and must then
+    stay up its full three hours: **13.0**. Relaxing the window row gives 11.0
+    with one hour up, which is what makes it bind rather than decorate.
+
+    Relational lane only: the differential harness cannot carry a 3-D
+    parameter, because the two lanes take a wide frame and a tidy one
+    respectively (#60). The claim here is about what the language can state,
+    and the engine is what states it.
+    """
+    import polars as pl
+
+    import lpspec as lps
+
+    up_time = {'slow': 3, 'fast': 1}
+    hours = list(range(6))
+    model = {
+        'dimensions': {'unit': {'dtype': 'str'}, 't': {'dtype': 'int'}, 'tf': {'dtype': 'int'}},
+        # every `tf` is the same moment as one `t` — single-valued, so a lookup
+        'lookups': {'same_moment': {'over': 'tf', 'into': 't'}},
+        'parameters': {
+            'window': {'dims': ['unit', 't', 'tf']},
+            'load': {'dims': ['t']},
+            'cap': {'dims': ['unit']},
+            'run_cost': {'dims': ['unit']},
+            'idle_cost': {'dims': ['unit']},
+        },
+        'variables': {
+            'p': {'foreach': ['unit', 't'], 'bounds': {'lower': 0}},
+            'on': {'foreach': ['unit', 't'], 'domain': 'binary'},
+            'started': {'foreach': ['unit', 'tf'], 'domain': 'binary'},
+        },
+        'constraints': {
+            # the commitment read onto the mirror axis, where the recurrence lives
+            'a_start_turns_it_on': {
+                'foreach': ['unit', 'tf'],
+                'expression': (
+                    'started >= at(on, by=same_moment) - shift(at(on, by=same_moment), over=tf, by=1, edge=0)'
+                ),
+            },
+            'stays_up_its_own_time': {
+                'foreach': ['unit', 't'],
+                'expression': 'sum(started * window, over=tf) <= on',
+            },
+            'within_capacity': {'foreach': ['unit', 't'], 'expression': 'p <= on * cap'},
+            'meet_load': {'foreach': ['t'], 'expression': 'sum(p, over=unit) >= load'},
+        },
+        'objective': {'sense': 'minimize', 'expression': 'p * run_cost + on * idle_cost'},
+    }
+    rows = [(u, t, tf) for u, k in up_time.items() for t in hours for tf in hours if 0 <= t - tf < k]
+    sources = {
+        'window': pl.DataFrame(
+            {
+                'unit': [r[0] for r in rows],
+                't': [r[1] for r in rows],
+                'tf': [r[2] for r in rows],
+                'value': [1.0] * len(rows),
+            }
+        ),
+        'load': pl.DataFrame({'t': hours, 'value': [0.0, 10.0, 0.0, 0.0, 0.0, 0.0]}),
+        'cap': pl.DataFrame({'unit': list(up_time), 'value': [10.0, 10.0]}),
+        'run_cost': pl.DataFrame({'unit': list(up_time), 'value': [1.0, 5.0]}),
+        'idle_cost': pl.DataFrame({'unit': list(up_time), 'value': [1.0, 1.0]}),
+    }
+    coords = {
+        'unit': pl.DataFrame({'unit': list(up_time)}),
+        't': pl.DataFrame({'t': hours}),
+        'tf': pl.DataFrame({'tf': hours, 'same_moment': hours}),
+    }
+    with lps.solve(model, sources, coords=coords) as solution:
+        assert solution.objective == pytest.approx(13.0), (
+            'the slow unit runs and is held up its own three hours; 11.0 would mean the window read nothing'
+        )
+        on = solution.primal('on').filter(pl.col('value') > 0.5)
+        assert on.height == 3, 'exactly the three snapshots its own minimum up time forces'
+        assert set(on['unit']) == {'slow'}, 'and it is the slow unit that is held, not the fast one'
