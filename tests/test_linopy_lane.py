@@ -516,3 +516,32 @@ def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as
 
     built = lpspec_linopy.build(as_model(raw, path), {'cap': {'wind': 40.0, 'gas': 100.0}})
     assert 'x' in built.variables, 'the same file, whichever way it was handed over'
+
+
+#: A shift over a variable-free expression: the vacated positions have no
+#: value, and inventing one silently pins a bound to zero.
+_BARE_SHIFT = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'parameters': {'eff': {'dims': ['t']}},
+    'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
+    'constraints': {'c': {'foreach': ['t'], 'expression': 'x <= shift(eff, over=t, by=1)'}},
+    'objective': {'sense': 'maximize', 'expression': 'x'},
+}
+
+
+def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
+    """One gate, both lanes — hard rule 3 held mechanically rather than by care.
+
+    This lane used to load and expand and stop there, so the fourteen refusals
+    in `lowering.py` never fired on it: a bare `shift()` over data built a
+    model whose vacated positions were `NaN`, and died two phases later inside
+    linopy's IO with a sentence naming neither the YAML nor the fix.
+    """
+    import lpspec as lps
+
+    with pytest.raises(LanguageError, match='vacated positions') as native:
+        lps.check(_BARE_SHIFT)
+    with pytest.raises(LanguageError, match='vacated positions') as eager:
+        lpspec_linopy.build(_BARE_SHIFT, {'eff': {0: 1.0, 1: 2.0, 2: 3.0}})
+
+    assert str(native.value) == str(eager.value), 'one refusal, one wording, whichever lane was asked'

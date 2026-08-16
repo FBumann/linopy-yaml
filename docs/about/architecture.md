@@ -304,11 +304,14 @@ choice load-bearing in the language's rulebook.
    `frames.py`, in `ENGINE_MAY_IMPORT`), because a near-zero import surface is
    what keeps the subpackage extractable. Widening that list is a decision, not
    an accident.
-3. **One language, two lanes — not fast-vs-slow versions of each other.** The
-   streaming engine builds models declared in YAML; the linopy lane attaches YAML
-   math to a `linopy.Model` already in memory. **Both accept exactly the same
-   language**, and no operator registry exists that could create a divergence —
-   that equality is what makes the differential tests an oracle rather than a
+3. **One language, two lanes — not fast-vs-slow versions of each other.** Both
+   build the models a file declares: the streaming engine binds and solves
+   relationally, the linopy lane constructs a `linopy.Model` the caller owns.
+   **Both accept exactly the same language**, and that is structural rather
+   than careful — the linopy lane runs the same `lower_program` gate, so a
+   construct the streaming subset refuses is refused there in the same
+   sentence, and no operator registry exists that could create a divergence.
+   That equality is what makes the differential tests an oracle rather than a
    comparison of dialects. A construct outside the language is a load error
    naming the construct and its rewrite, never a redirection to the other lane.
 4. **Backend-visible YAML files are self-contained.** No Python-side state
