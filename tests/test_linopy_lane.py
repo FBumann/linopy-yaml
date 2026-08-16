@@ -275,7 +275,7 @@ def test_a_failure_names_the_declaration_and_the_file(yaml_file, tail, error, ma
     bad = yaml_file(textwrap.dedent(_MINIMAL).lstrip() + tail, 'bad.yaml')
 
     with pytest.raises(error, match=match) as ei:
-        lpspec_linopy.build(bad)
+        lpspec_linopy.build(bad, {})
 
     assert context in str(ei.value) or _has_note(ei.value, context)
     assert _has_note(ei.value, f"while loading YAML '{bad}'")
@@ -337,7 +337,7 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
         import lpspec as lps
         from lpspec import linopy as fkl
         data = {{'gate': pd.Series({{'a': True}}), 'relmax': pd.Series({{'a': 0.5, 'b': 0.5}})}}
-        m = fkl.build({str(model)!r}, data=data)
+        m = fkl.build({str(model)!r}, data)
         m.solve(solver_name='highs', output_flag=False)
         native = lps.solve({str(model)!r}, {{
             'gate': pl.DataFrame({{'f': ['a'], 'value': [True]}}),
@@ -388,13 +388,13 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
     }
 
     with pytest.raises(DataError, match='NULL bounds'):
-        lpspec_linopy.build(model, data=data)
+        lpspec_linopy.build(model, data)
 
     masked = yaml_file(
         model.read_text().replace('{foreach: [f], bounds:', '{foreach: [f], where: live, bounds:'),
         'masked.yaml',
     )
-    built = lpspec_linopy.build(masked, data=data)
+    built = lpspec_linopy.build(masked, data)
     assert 'x' in built.variables
 
 
@@ -456,7 +456,7 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
     with differential(path, EXPRESSION_DATA) as run:
         tidy = run.result.expression(name)
-        eager = lpspec_linopy.expression(run.model, path, name, data=dict(EXPRESSION_DATA))
+        eager = lpspec_linopy.expression(run.model, path, name, dict(EXPRESSION_DATA))
         got = {int(k): v for k, v in zip(tidy['snapshot'], tidy['value'], strict=True)}
         want = {int(k): float(v) for k, v in eager.to_series().items()}
         assert got == pytest.approx(want), f"the two lanes disagree about named expression '{name}'"
@@ -464,9 +464,9 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
 
 def test_the_shim_refuses_an_unknown_expression_name(yaml_file):
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
-    m = lpspec_linopy.build(path, data=dict(EXPRESSION_DATA))
+    m = lpspec_linopy.build(path, dict(EXPRESSION_DATA))
     with pytest.raises(KeyError, match='never an expression string'):
-        lpspec_linopy.expression(m, path, 'sum(p, over=generator)', data=dict(EXPRESSION_DATA))
+        lpspec_linopy.expression(m, path, 'sum(p, over=generator)', dict(EXPRESSION_DATA))
 
 
 def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inputs, tmp_path):
@@ -486,3 +486,33 @@ def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inpu
     with differential(dispatch_yaml, sources, coords) as run:
         assert run.result.primal('p').height, 'the relational lane built no rows'
         assert float(run.model.variables['p'].labels.count()), 'the eager lane built no variables'
+
+
+@pytest.mark.parametrize(
+    'as_model',
+    [
+        pytest.param(lambda raw, path: path, id='a-path'),
+        pytest.param(lambda raw, path: raw, id='a-mapping'),
+        pytest.param(lambda raw, path: schema_of(raw), id='a-loaded-model'),
+    ],
+)
+def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as_model):
+    """`lps.build` and this take the same first argument, so neither decides the lane.
+
+    A path was the only spelling here while the runner took all three, which
+    made "convert this to a linopy.Model instead" a rewrite of the call rather
+    than a change of import (#845).
+    """
+    import yaml as pyyaml
+
+    raw = {
+        'dimensions': {'g': {'values': ['wind', 'gas']}},
+        'parameters': {'cap': {'dims': ['g']}},
+        'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'objective': {'sense': 'maximize', 'expression': 'x'},
+    }
+    path = tmp_path / 'm.yaml'
+    path.write_text(pyyaml.safe_dump(raw))
+
+    built = lpspec_linopy.build(as_model(raw, path), {'cap': {'wind': 40.0, 'gas': 100.0}})
+    assert 'x' in built.variables, 'the same file, whichever way it was handed over'

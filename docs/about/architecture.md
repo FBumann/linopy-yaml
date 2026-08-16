@@ -62,7 +62,7 @@ flowchart TB
     AST -.->|"opt-in: lpspec.linopy"| BUILD
 
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> SRC
-    DATA -.->|"opt-in: data="| LOAD
+    DATA -.->|"opt-in: lpspec.linopy"| LOAD
 
     LOWER["<b>lowering.py</b> — flat<br/>AST → plan; the subset test"]
     SRC["<b>sources.py</b> — flat<br/>data → the tidy frames, by name"]
@@ -215,7 +215,7 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | | how big is it, what did the build and its solves do, and where did the time go | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `solves` · `loads` · `timings`, all advisory | **yes** |
 | | write an LP file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
-| | build the same math as a `linopy.Model` | `lpspec.linopy.build` (`data=`, its own coercion) | **yes** |
+| | build the same math as a `linopy.Model` | `lpspec.linopy.build` — `lps.build`'s own signature | **yes** |
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `lpspec.linopy.expression` on the other lane | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |

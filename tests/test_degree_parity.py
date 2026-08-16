@@ -44,7 +44,7 @@ def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, 
     path = dispatch_model_path(tmp_path, **{'objective.expression': expression})
 
     with pytest.raises(LanguageError, match=match) as eager:
-        lpspec_linopy.build(path, data=data, coords=coords)
+        lpspec_linopy.build(path, data, coords=coords)
 
     with pytest.raises(LanguageError, match=match) as relational:
         lps.check(path)
@@ -59,5 +59,5 @@ def test_the_eager_lane_still_accepts_an_affine_product(tmp_path, dispatch_model
     """
     data, coords = dispatch_model_inputs
     path = dispatch_model_path(tmp_path, **{'objective.expression': 'sum(p * cost, over=generator)'})
-    model = lpspec_linopy.build(path, data=data, coords=coords)
+    model = lpspec_linopy.build(path, data, coords=coords)
     assert model.objective is not None

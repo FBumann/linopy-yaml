@@ -143,7 +143,7 @@ class TestLoadTimeIntegration:
             '    expression: pp <= 100\n'
         )
         with pytest.raises(ValueError, match="'pp' not found"):
-            lpspec_linopy.build(f)
+            lpspec_linopy.build(f, {})
 
 
 class TestDimensionKwargs:

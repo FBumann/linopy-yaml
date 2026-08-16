@@ -131,7 +131,7 @@ def _verdict_relational(path: Path, data: dict[str, Any]) -> type[Exception] | s
 
 def _verdict_eager(path: Path, data: dict[str, Any]) -> type[Exception] | str:
     try:
-        m = lpspec_linopy.build(path, data=data)
+        m = lpspec_linopy.build(path, data)
         m.solve(solver_name='highs', output_flag=False)
     except DataError:
         return DataError

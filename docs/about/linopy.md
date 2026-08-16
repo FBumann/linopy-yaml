@@ -54,21 +54,23 @@ that rots.
 ## 3. The shim
 
 The same file, built as a `linopy.Model` instead of bound relationally — the
-caller picks the lane, and nothing else differs.
+caller picks the lane by an import, and the call is the one `lps.build` takes:
+same first argument (a path, a mapping or a loaded `Model`), same `sources`,
+same `coords=`.
 
 ```python
 from lpspec import linopy as lpspec_linopy
 
-m = lpspec_linopy.build('model.yaml', data={...}, coords={...})  # -> linopy.Model
+m = lpspec_linopy.build('model.yaml', {...}, coords={...})  # -> linopy.Model
 m.solve(...)
-lpspec_linopy.expression(m, 'model.yaml', 'co2', data={...})  # a named quantity, read back
+lpspec_linopy.expression(m, 'model.yaml', 'co2', {...})  # a named quantity, read back
 ```
 
 Both are *pure*: YAML in, a model or a value out, nothing retained. `build`
 returns a plain `linopy.Model` — no accessor, no attached schema, no patched
 attributes — so nothing is lost across `pickle`, `deepcopy` or `to_netcdf`. To
 inspect the math, re-read the file with `lps.load_model`.
-`expression` is the reader the same purity forces to take `data=` again: it
+`expression` is the reader the same purity forces to take `sources` again: it
 evaluates a declared named expression ([named expressions](../reference/language/expressions.md#named-expressions))
 on the solved model and hands back linopy's native `.solution` — the eager
 half of `result.expression(name)`, so the differential suite can hold the two
@@ -96,7 +98,7 @@ tables and hands arrays back.
 What still differs is narrower, and is the remainder of
 [#60](https://github.com/fluxopt/lpspec/issues/60):
 
-| | product path (`sources=`) | shim (`data=` / `coords=`) |
+| | product path | linopy lane |
 |---|---|---|
 | dimension labels | `sources`, then `coords=`, then `values:`, then **derived from the parameter tables** | `coords=`, then `values:`, then error — no derivation |
 | unnamed index levels | — | bind positionally to the declared dims; named levels bind by name |
