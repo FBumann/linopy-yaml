@@ -111,6 +111,11 @@ jobs:
       # and would cover five of sixteen, which is the bug #282 fixed in two
       # test globs. A port is exactly where an unusual construct shows up.
       #
+      # `examples/operators/` and the golden model join them for the same
+      # reason from the other end: they are written to cover every operator, so
+      # they are where a spelling nothing else reaches — \boxplus, a forward
+      # translation — first meets a real TeX.
+      #
       # The package list is deliberately minimal, and each entry earns its place:
       #   texlive-latex-base        geometry.sty, amsmath.sty (and pulls in
       #                             texlive-base, which carries amssymb.sty)
@@ -129,7 +134,7 @@ jobs:
         if: steps.scope.outputs.inert != 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/tex"
-          for model in examples/*.yaml examples/ports/*.yaml; do
+          for model in examples/*.yaml examples/ports/*.yaml examples/operators/*.yaml tests/golden/model.yaml; do
             name=$(basename "$model" .yaml)
             symbols="examples/symbols/$name.yaml"
             args=(latex "$model" --standalone -o "$RUNNER_TEMP/tex/$name.tex")

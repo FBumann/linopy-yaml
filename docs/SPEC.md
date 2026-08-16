@@ -681,6 +681,33 @@ at all goes to a declared `escape:` island
 bounded by the preceding `where` mask, terminal (it yields a constraint, never a
 sub-expression), and billed against a label budget before any Python runs.
 
+### 7.1 As math
+
+Each row above as the typesetter prints it, **generated** from one model per
+operator in
+[`examples/operators/`](https://github.com/fluxopt/lpspec/blob/main/examples/operators)
+— so a row cannot outlive the operator it documents, and two operators that
+render the same are visible here rather than in somebody's paper. Regenerate
+with `uv run python -m tools.spec_math`.
+
+The three `shift` rows are the ones to read together: they differ only at the
+boundary, and that difference is the whole of law 8 in this position.
+
+<!-- operator-math:begin -->
+| Operator | Renders as |
+|---|---|
+| `sum(array, over=dim)` | $\sum_{g \in \mathcal{G}} p_{t,g} \le \mathit{limit}_{t} \qquad \forall\thinspace t \in \mathcal{T}$ |
+| `sum(array, by=lookup)` | $\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} \le \mathit{limit}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$ |
+| `at(array, by=lookup)` | $p_{t} \le \mathit{cap}_{\mathrm{period\_of}(t)} \qquad \forall\thinspace t \in \mathcal{T}$ |
+| `shift(array, over=dim, by=n)` | $p_{t} \le p_{t - 1} \qquad \forall\thinspace t \in \mathcal{T}$ |
+| `shift(array, over=dim, by=n, edge='wrap')` | $p_{t} \le p_{t \ominus 1} \qquad \forall\thinspace t \in \mathcal{T}$ |
+| `shift(array, over=dim, by=n, edge=v)` | $p_{t} \le p_{t \boxminus_{0} 1} \qquad \forall\thinspace t \in \mathcal{T}$ |
+
+$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound --- terms translated past the edge are simply absent.
+
+$t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
+<!-- operator-math:end -->
+
 ## 8. Data binding
 
 **Master coordinates** are resolved per dimension before any parameter loads,

@@ -25,10 +25,16 @@ from lpspec.typeset.format import OPERATOR_NAMES
 from lpspec.typeset.symbols import _derive_name_symbol
 from tests import golden
 from tests.conftest import MODEL_PATHS, override
-from tools import gallery_math
+from tools import gallery_math, spec_math
 
 if TYPE_CHECKING:
     from lpspec.typeset.format import Format
+
+#: Every model a format has to handle: the gallery corpus, plus the operator
+#: probes SPEC §7.1 renders. The probes live outside `examples/`, so without
+#: this line the one part of the corpus written *because* it covers every
+#: operator would be the one part no format ever renders.
+TYPESET_PATHS = [*MODEL_PATHS, *sorted(spec_math.PROBES.glob('*.yaml'))]
 
 LATEX, TYPST = FORMATS['latex'], FORMATS['typst']
 EVERY_FORMAT = pytest.mark.parametrize('fmt', list(FORMATS.values()), ids=list(FORMATS))
@@ -68,7 +74,7 @@ def test_a_format_spells_every_operator_the_walk_can_emit(fmt: Format):
 def test_every_example_renders(fmt: Format):
     """The walk consumes the same AST as lowering, so anything ``check``
     accepts it must print — a node it forgot is an exception, not a blank."""
-    for path in MODEL_PATHS:
+    for path in TYPESET_PATHS:
         assert typeset(path, fmt).strip()
 
 
@@ -185,6 +191,30 @@ def test_a_translation_under_a_pullback_survives_it(fmt: Format):
 
 
 @EVERY_FORMAT
+def test_a_shift_forward_renders_and_does_not_crash(fmt: Format):
+    """``by=-1`` is a model the language accepts and the walk used to abort on.
+
+    The parser reads a negated literal as a unary minus over a number, and the
+    walk asserted a bare ``NumberNode`` — so every format raised
+    ``AssertionError`` on a legal model, and the forward halves of the three
+    translation operators were unreachable code that had never been printed.
+    """
+    model = {
+        'dimensions': {'snapshot': {'dtype': 'int'}},
+        'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0}}},
+        'constraints': {
+            'later': {'foreach': ['snapshot'], 'expression': 'p <= shift(p, over=snapshot, by=-1, edge=0)'}
+        },
+        'objective': {'sense': 'minimize', 'expression': 'p'},
+    }
+    text = typeset(model, fmt, legend=False)
+    assert fmt.subscript(fmt.operators['edge_plus'], ['0']) in text, (
+        'a forward shift should translate the index the other way, with its fill'
+    )
+    assert fmt.operators['edge_minus'] not in text, 'a forward shift printed as a backward one'
+
+
+@EVERY_FORMAT
 def test_translations_that_disagree_at_the_edge_do_not_merge(fmt: Format):
     """Two shifts on one dim collapse to one offset only when they are the same shift.
 
@@ -261,7 +291,7 @@ def test_no_format_leaks_another_formats_syntax(name: str, foreign: str):
     earlier version of this test looked for the literal ``\\mathcal{X}``, which
     no model declares, so it passed without ever reading the output.
     """
-    text = '\n'.join(typeset(p, FORMATS[name], standalone=True) for p in MODEL_PATHS)
+    text = '\n'.join(typeset(p, FORMATS[name], standalone=True) for p in TYPESET_PATHS)
     assert any(mark in text for mark in _FINGERPRINTS[name if name != 'markdown' else 'latex']), (
         f'{name} output contains none of its own syntax — is this test still reading anything?'
     )
@@ -598,7 +628,7 @@ def typst():
 def test_typst_output_compiles(typst, tmp_path: Path):
     """The only check that the Typst is real, and it has already earned its
     place: the first run rejected `minus.circle`, which is not a Typst symbol."""
-    for path in MODEL_PATHS:
+    for path in TYPESET_PATHS:
         source = tmp_path / f'{path.stem}.typ'
         source.write_text(to_typst(path, standalone=True))
         typst.compile(str(source), output=str(tmp_path / f'{path.stem}.pdf'))
@@ -690,7 +720,7 @@ def _structural_errors(tex: str) -> list[str]:
     return errors
 
 
-@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.stem)
+@pytest.mark.parametrize('path', TYPESET_PATHS, ids=lambda p: p.stem)
 def test_the_latex_is_structurally_well_formed(path: Path):
     assert _structural_errors(to_latex(path, standalone=True)) == []
 
