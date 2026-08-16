@@ -255,6 +255,23 @@ ceiling doing its job.
 Three rows from seventeen ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
+### Shapes still without a witness
+
+Not things the language cannot say — things no *outside* model in the corpus
+has yet been found to need. Each was searched for and not found, so the row is
+a standing request rather than a gap in the language:
+
+| Shape | Where it was looked for |
+|---|---|
+| one axis grouped several ways, all of them load-bearing | OSeMOSYS UTOPIA declares three maps out of its timeslice, but they feed only storage constraints and the instance builds none |
+| a chain whose coarse end carries a constraint | PyPSA's `ac-dc-meshed` has a country per bus and nothing constrains a country; GAMSLIB `alum` composes three such chains and its shipped scenario switches two of them off |
+| a group that carries its own constraint and appears nowhere else | GAMSLIB `mexls` is exactly this, and its optimum is published only in a book with no reachable text |
+| a partial map whose null membership moves an optimum | `reserves` exercises it, but that model is ours and was built to |
+| opposite-sign legs onto one dimension, plus a second hop a constraint reads | an airline fleet-assignment text has it; the data and both optima are not obtainable |
+
+A model that needs one of these is worth more to this corpus than another that
+exercises a shape already covered.
+
 **The TSP row is the one to read**, and it is narrower than it first looked.
 Writing DFJ's subtour rows out in full *is* sayable — the subsets go in as data
 exactly the way [KVL's cycle basis](pypsa_kvl.md) does, and an 8-city instance
