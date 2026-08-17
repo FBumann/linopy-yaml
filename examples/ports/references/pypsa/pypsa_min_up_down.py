@@ -33,10 +33,11 @@ parameter and used a constant.
 default of 1 and 0. The default says the unit was already running before the
 horizon, which emits a further block pinning the status on for the remainder of
 its minimum up time — real behaviour, but a *second* feature, and this rung is
-about the windows. With both at 0 that block does not appear, and the first
-snapshot's transition rows become the mirror of the ones
-``pypsa_unit_commitment`` ports: a unit that begins the horizon on pays for a
-start, and nothing is charged for a stop.
+about the windows. With both at 0 that block does not appear, every unit begins
+the horizon **off**, and the first snapshot's transition rows are the mirror of
+the ones ``pypsa_unit_commitment`` ports: a unit committed in the first snapshot
+pays for a start and nothing is charged for a stop, where a unit that began the
+horizon running pays for no start and is charged if it goes down.
 """
 
 from __future__ import annotations

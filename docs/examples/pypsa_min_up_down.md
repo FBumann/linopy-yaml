@@ -297,10 +297,12 @@ wrapping or dropping the row, which is why no `edge=` argument appears here.
 `up_time_before` defaults to 1 in PyPSA — the unit was already running — which
 emits a further block pinning the status on for the remainder of its minimum up
 time. That is real behaviour and a *second* feature; this rung is about the
-windows, so both `*_time_before` values are set to 0. The first snapshot's
-transition rows then become the mirror of the ones
-[unit commitment](pypsa_unit_commitment.md) ports: a unit that begins the
-horizon on pays for a start, and nothing is charged for a stop.
+windows, so both `*_time_before` values are set to 0. Every unit therefore
+begins the horizon **off**, and the first snapshot's transition rows are the
+mirror of the ones [unit commitment](pypsa_unit_commitment.md) ports: a unit
+committed in the first snapshot pays for a start, and nothing is charged for a
+stop, where a unit that began the horizon running pays for no start and is
+charged if it goes down.
 
 ## What it exercises
 
