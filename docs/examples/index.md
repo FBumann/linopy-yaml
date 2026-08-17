@@ -56,6 +56,7 @@ Every page starts from data in the shape the call wants, and
 | [link delay](pypsa_link_delay.md) | A shipment is the input shifted along time: withdrawn at one snapshot, delivered at another, derated on the way. |
 | [multi-period investment](pypsa_multi_period.md) | A build year and a lifetime decide which rows an asset appears in, and each period's costs carry its own discount. |
 | [committable and extendable](pypsa_committable_extendable.md) | A minimum output that is a share of a capacity still being decided: two variables multiplied, and one constant to take them apart. |
+| [growth limit](pypsa_growth_limit.md) | A cap on new capacity per investment period, which grows with the period before it. The first `shift` in the corpus along an axis that is not time-of-day. |
 
 ### Published optima
 
@@ -109,6 +110,7 @@ drift from what the engine builds.
 | [pypsa_energy_sum](pypsa_energy_sum.md) | **✔** 21400 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_fixed](pypsa_fixed.md) | **✔** 49900 | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_global_limits](pypsa_global_limits.md) | **✔** 127212 | **✓** | **✓** | **✓** | · | · | **✓** | **✓** | · | · | · |
+| [pypsa_growth_limit](pypsa_growth_limit.md) | **✔** 47110 | **✓** | **✓** | **✓** | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_linearized_uc](pypsa_linearized_uc.md) | **✔** 5540 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | · |
 | [pypsa_link_delay](pypsa_link_delay.md) | **✔** 4311.11 | · | **✓** | · | **✓** | · | · | **✓** | · | · | · |
@@ -176,6 +178,7 @@ that class, and the evidence behind
 | [pypsa_energy_sum](pypsa_energy_sum.md) | 21400.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_energy_sum.py |
 | [pypsa_fixed](pypsa_fixed.md) | 49900.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_fixed.py |
 | [pypsa_global_limits](pypsa_global_limits.md) | 127211.66666666666 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_global_limits.py |
+| [pypsa_growth_limit](pypsa_growth_limit.md) | 47110.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_growth_limit.py |
 | [pypsa_kvl](pypsa_kvl.md) | 17000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py |
 | [pypsa_linearized_uc](pypsa_linearized_uc.md) | 5540.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_linearized_uc.py |
 | [pypsa_link_delay](pypsa_link_delay.md) | 4311.111111111111 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_link_delay.py |
@@ -283,7 +286,7 @@ macro, primitive, or escape.
 `sum_back(start_up, over=snapshot, within=min_up_time)`, each generator's own
 width read off the column.
 
-Two rows from 29 ports — a rate worth watching once the corpus has hit
+Two rows from 30 ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 ### Shapes still without a witness
