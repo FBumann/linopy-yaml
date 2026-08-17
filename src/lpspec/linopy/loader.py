@@ -32,7 +32,7 @@ from lpspec.language.expression_parser import (
     VariableNode,
     children,
 )
-from lpspec.sources import check_index_ownership
+from lpspec.sources import check_declared_map_keys, check_index_ownership
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -105,6 +105,7 @@ def supplied_index(
         return supplied
     frame = _index_frame(supplied, dim_name)
     frame = pd.DataFrame({dim_name: list(supplied)}) if frame is None else frame
+    check_declared_map_keys(dim_name, maps, frame[dim_name].tolist())
     for name, values in maps.items():
         right = pd.DataFrame({dim_name: list(values), name: list(values.values())})
         frame = frame.merge(right, on=dim_name, how='left')

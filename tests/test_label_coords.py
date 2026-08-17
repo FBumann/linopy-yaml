@@ -558,6 +558,29 @@ def test_a_map_alone_does_not_say_which_labels_exist():
         lps.solve(MAP_ONLY, DECLARED_SOURCES)
 
 
+@pytest.mark.parametrize('lane', ['relational', 'eager'])
+def test_a_declared_map_keyed_off_the_callers_labels_is_refused(lane):
+    """A key matching no label is a typo, and the two sides only meet at bind.
+
+    Where the file declares the labels too, this is decided at load with no data
+    at all. Here they are the caller's, so the same law lands later — and land
+    it must, because the join that reads the map would otherwise drop the key
+    and build a model that solves while placing those terms nowhere.
+
+    Deliberately not symmetric with the test below: a label no map mentions is a
+    null, a key no label matches is an error.
+    """
+    from tests.oracle import lpspec_linopy
+
+    model = {
+        **MAP_ONLY,
+        'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus', 'values': {'g1': 'north', 'g9': 'south'}}},
+    }
+    build = lps.solve if lane == 'relational' else lpspec_linopy.build
+    with pytest.raises(DataError, match=r"lookup 'gen_bus' declares values for g9"):
+        build(model, {**DECLARED_SOURCES, 'generator': _LABELS})
+
+
 def test_a_declared_map_is_read_against_the_labels_the_caller_brings():
     """The two facts have different authors, which is the shape the split buys.
 

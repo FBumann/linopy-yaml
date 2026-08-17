@@ -17,7 +17,7 @@ the module that already knows what shape a caller's table is in.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +29,7 @@ from lpspec.errors import (
     declared_index_also_supplied_message,
     declared_map_needs_labels_message,
     dense_array_message,
+    map_keys_are_not_labels_message,
     unknown_source_keys_message,
 )
 from lpspec.frames import as_frame, is_dense_array, labels_frame
@@ -236,15 +237,37 @@ def check_index_ownership(schema: Model, data: Mapping[str, object], coords: Map
                 raise DataError(declared_index_also_supplied_message(dim, f'lookups.{name}.values', where))
 
 
+def check_declared_map_keys(dim: str, maps: Mapping[str, Mapping[Any, Any]], labels: Sequence[Any]) -> None:
+    """Every declared map is keyed by labels *dim* actually has — one wording, both lanes.
+
+    The asymmetry is the point. A label no map mentions is the **partial case**
+    and gets a null; a key naming no label is a **typo**, and dropping it would
+    place its terms nowhere while the model built and solved. Where the file
+    declares the labels too, ``Model._declared_lookup_errors`` decides this at
+    load; here the labels are the caller's, so the same law lands at bind.
+
+    Raises:
+        DataError: Naming the lookup and the keys that match no label.
+    """
+    known = set(labels)
+    for name, values in maps.items():
+        strays = sorted(str(k) for k in values if k not in known)
+        if strays:
+            raise DataError(map_keys_are_not_labels_message(dim, name, strays, [str(x) for x in labels]))
+
+
 def _read_declared_maps_against(table: pl.LazyFrame, dim: str, maps: dict[str, dict[Any, Any]]) -> pl.LazyFrame:
     """*table*'s labels, with each declared map read against them as a column.
 
     The labels are the caller's and stay exactly as they arrive — order
     included. A label a map omits gets a null, which is what a partial relation
-    means, and a key naming no label contributes nothing rather than inventing
-    one. :func:`check_index_ownership` has already refused a table carrying a
-    column a map also declares, so neither can overwrite the other here.
+    means; a key naming no label is refused first by
+    :func:`check_declared_map_keys`, so the left join can only ever add nulls.
+    :func:`check_index_ownership` has already refused a table carrying a column
+    a map also declares, so neither author can overwrite the other here.
     """
+    labels = table.select(dim).collect()[dim].to_list()
+    check_declared_map_keys(dim, maps, labels)
     for name, values in maps.items():
         table = table.join(
             pl.LazyFrame({dim: list(values), name: list(values.values())}),

@@ -72,11 +72,17 @@ that list.** `lookups.<x>.values` says how labels map, never which ones exist: a
 map is a partial relation over the dimension, free to omit members and written
 in whatever key order someone typed, and neither may decide an extent nor an
 order that [`shift`](operators.md#shift) reads positionally. A map is instead
-*read against* whichever of the three supplied the labels, and a label it omits
-gets a null. Each map has one home in the same way the labels do — the file, or
-a column of the caller's index — and claiming both is the same refusal. Which
-leaves exactly one index with two authors, one fact each: **labels from the
-caller, maps from the file.**
+*read against* whichever of the three supplied the labels. Each map has one home
+in the same way the labels do — the file, or a column of the caller's index —
+and claiming both is the same refusal. Which leaves exactly one index with two
+authors, one fact each: **labels from the caller, maps from the file.**
+
+Reading a map against labels is **not symmetric**, because the two directions
+mean different things. A label no map mentions gets a **null** — the partial
+case, and what a relation over a dimension is entitled to be. A key matching no
+label is a **typo**, and refused: dropping it would place its terms nowhere
+while the model built and solved. Where the file declares the labels too, that
+same refusal happens at load with no data at all.
 
 There is no fourth step. A dimension none of the three supplies raises, and
 labels are never read out of the parameters: they would *be* the definition,
@@ -104,6 +110,7 @@ Both lanes bind by these rules.
 | a dimension the file declares and the caller also supplies | names the declaration and the colliding key |
 | a lookup whose map the file declares and the caller also supplies | names the map and the colliding column |
 | a declared map whose labels nothing supplies | names the map, and asks only for the labels |
+| a declared map keyed by something the labels do not carry | names the lookup and the strays |
 
 ### Accepted
 

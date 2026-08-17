@@ -120,9 +120,12 @@ may omit members, and its key order is whatever someone typed. Reading the label
 set out of it would let an added entry create a member, and a reordered map
 re-order the axis that [`shift`](operators.md#shift) reads positionally. So a
 dimension whose own `values:` the file omits takes its labels from the caller
-however many maps point at it; each map is then read against those labels, and a
-label no map mentions gets a null — the partial case, reachable with a single
-map.
+however many maps point at it; each map is then read against those labels.
+
+That reading is not symmetric. A label no map mentions gets a **null** — the
+partial case, reachable now with a single map. A key matching no label is a
+**typo** and refused, the same law the load-time check applies where the file
+declares both sides, arriving at bind because that is where the two first meet.
 
 Which makes **labels from the caller, maps from the file** an ordinary shape
 rather than a conflict, and the one worth reaching for: a relation small enough

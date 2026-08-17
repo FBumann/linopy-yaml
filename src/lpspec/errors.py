@@ -296,6 +296,25 @@ def declared_index_also_supplied_message(dim: str, declares: str, where: str) ->
     )
 
 
+def map_keys_are_not_labels_message(dim: str, lookup: str, strays: Sequence[str], labels: Sequence[str]) -> str:
+    """A declared map keyed by something the caller's index does not carry — both lanes.
+
+    The same law ``Model._declared_lookup_errors`` decides at load where the
+    dimension declares its own labels, arriving later because these labels do
+    not exist until the caller supplies them. Refused rather than dropped: a key
+    matching no label is a typo, and the join that reads the map would silently
+    place its terms nowhere.
+    """
+    shown = ', '.join(strays[:5]) + (' …' if len(strays) > 5 else '')
+    return (
+        f"lookup '{lookup}' declares values for {shown}, which are not labels of '{dim}'. "
+        f"'{dim}' takes its labels from the data here, and they are "
+        f'{list(labels[:8])}{" …" if len(labels) > 8 else ""}. A map maps the labels that '
+        f'exist — a key matching none of them would place its terms nowhere, so it is a typo '
+        f'on one side or a label missing from the other.'
+    )
+
+
 def declared_map_needs_labels_message(dim: str, maps: Iterable[str]) -> str:
     """A dimension whose maps the file declares and whose labels nothing does — both lanes.
 
