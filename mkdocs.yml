@@ -61,6 +61,7 @@ nav:
           - rung 3 — storage: examples/pypsa_storage.md
           - rung 4 — cyclic storage: examples/pypsa_cyclic_storage.md
           - rung 5 — KVL: examples/pypsa_kvl.md
+          - transmission losses: examples/pypsa_losses.md
           - rung 6 — AC-DC, two coordinates: examples/pypsa_ac_dc.md
       - PyPSA components and modes:
           - unit commitment: examples/pypsa_unit_commitment.md
