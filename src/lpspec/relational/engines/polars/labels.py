@@ -96,6 +96,32 @@ def frame(
     return materialised.select(*dims, pl.col(label).set_sorted())
 
 
+def declared_height(compiler: PolarsCompiler, dims: tuple[str, ...], where: plan.Predicate | None) -> int:
+    """How many rows a declaration *asks* for: its coord product under its own mask.
+
+    The count :func:`frame` would return if no variable's absence restricted it,
+    so the difference between the two is the rows a propagated absence removed —
+    which nothing else records, a restricted row never existing to be counted
+    (#944).
+
+    **Unmasked, it is arithmetic**: the product of the dims' own index heights,
+    which are thousands of rows where the product they span is millions. That is
+    the case worth being cheap in, being exactly the shape the count exists to
+    report — a constraint that wrote no ``where`` of its own and lost rows to a
+    variable's absence anyway.
+
+    With a mask it costs a pass over the masked product, and is therefore asked
+    only where there is a restriction to attribute rows to. Projection pushdown
+    leaves it a count rather than a materialisation: no column is read.
+    """
+    if where is None:
+        height = 1
+        for d in dims:
+            height *= int(compiler.data.dimensions[d].select(pl.len()).collect().item())
+        return height
+    return int(compiler.frame(dims, where).select(pl.len()).collect(engine='streaming').item())
+
+
 def _factored(
     compiler: PolarsCompiler,
     dims: tuple[str, ...],

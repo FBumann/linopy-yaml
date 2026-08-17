@@ -485,7 +485,10 @@ class PolarsEngine:
 
         restrictions = _absence_restrictions([p for p, _ in terms])
         start = self._n_rows
+        declared = labels.declared_height(self._q, c.dims, c.where) if restrictions else None
         labelled = labels.frame(self._q, c.dims, c.where, 'row', start, restrictions)
+        if declared is not None and declared > labelled.height:
+            self._omitted[c.name] = self._omitted.get(c.name, 0) + declared - labelled.height
         self._n_rows = start + labelled.height
         frame = labelled.lazy()
         self._constraints[c.name] = frame
