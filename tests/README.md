@@ -9,13 +9,38 @@ fraction of the claim.
 | tier | the claim | the harness |
 |---|---|---|
 | **corpus sweeps** | every model in the repo loads, round-trips, stays inside the language, and its gallery page is current | `conftest.MODEL_PATHS` (= `tools.constructs.models()`) — one list, so a model added anywhere is covered the day it lands |
-| **differential** | the same YAML means the same thing on the eager lane and the relational one — and in the written LP file, with `lp=True` | `tests.differential.differential()`; importing it *is* the `[linopy]` guard |
+| **differential** | the same YAML means the same thing on the eager lane and the relational one — the same objective, and the same shape in columns and rows — and in the written LP file, with `lp=True` | `tests.differential.differential()`; importing it *is* the `[linopy]` guard |
 | **probes** | one mechanism each, pinned on the smallest model whose data can reach it | `conftest.DISPATCH_MODEL` + `override`, or a purpose-built module constant |
 | **goldens** | an example prints what the docs show | `conftest.run_example` + `assert_golden`; regenerate with `--update-golden` |
 
 `examples/ports/` cuts across the tiers: the one corpus checked against optima
 that did not come from us (`conftest.port`, `references.json`) — data and
 reference committed *because* the provenance is external.
+
+**Across the lanes, compare the model — not the answer.** The corpus sweep
+compares the two lanes' **coefficient matrices**, constraint by constraint,
+canonically: each constraint as the sorted multiset of its rows, each row as
+the sorted multiset of its coefficients, so the claim survives the two lanes
+numbering rows and columns in their own declaration order. Structure exactly,
+values to a tolerance — the same coefficient reached by a different order of
+operations differs in its last bit, and that is not a difference in the model.
+
+That is the strongest cross-lane claim available, and the one an *answer*
+cannot make. An LP with alternative optima has many optimal primal and dual
+solutions, so comparing answers compares which vertex a solver happened to
+reach: `genx_piecewise_fuel` agrees on the objective to nine decimals and
+disagrees on a quarter of one dual vector, while its two matrices are
+identical to the entry ([#992]). Duals and primals are therefore **never**
+compared lane to lane.
+
+A *recorded* dual is a different claim: that this instance has a **unique**
+one, which is a property of the instance and something a port designs for
+(#938 moved a bound off the optimum to get it). Both lanes owe it the same
+answer, and both are asked — `test_ports` of the relational lane,
+`test_corpus_parity` of the eager one, which linopy-free `test_ports` cannot
+reach.
+
+[#992]: https://github.com/fluxopt/lpspec/pull/992
 
 ## Rules
 
