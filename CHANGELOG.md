@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.177](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.176...v0.0.1-alpha.177) (2026-08-17)
+
+
+### Features
+
+* **ports:** a Store is one signed power with no rating of its own ([#940](https://github.com/fluxopt/lpspec/issues/940)) ([5f4b775](https://github.com/fluxopt/lpspec/commit/5f4b7754a80ccd1ff8b73e147480ff6fe94007be))
+
 ## [0.0.1-alpha.176](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.175...v0.0.1-alpha.176) (2026-08-17)
 
 
