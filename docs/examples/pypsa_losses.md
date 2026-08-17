@@ -337,6 +337,18 @@ the loss exceed the flow — at `r = 0.05` this instance is *infeasible*, the
 generators unable to cover a loss larger than the demand. At this value losses
 run about 3% of throughput.
 
+**PyPSA's *other* loss mode is this same model.** Its default is secants rather
+than tangents — secants lie above a convex curve where tangents lie below, so
+they overestimate the losses these underestimate — and it emits the identical
+rows: one half-plane per segment per sign of the flow. Only the coefficients
+differ, and how many of them there are, since a secant's breakpoints come from
+an error tolerance rather than from a segment count.
+
+So it gets no model file of its own. `test_the_two_loss_approximations_are_one_model`
+binds *this* model to those coefficients and reaches PyPSA's own secant
+optimum — which is the stronger claim, and the reason the page you are reading
+describes one construct rather than two.
+
 ## What it exercises
 
 A third dimension that exists only to index an approximation — `segment` is not

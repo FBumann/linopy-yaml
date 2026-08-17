@@ -19,13 +19,20 @@ is linopy-free and pandas-free on purpose, and runs on the bare-install job.
 
 from __future__ import annotations
 
+import itertools
+import json
+import math
 from typing import Any
 
 import polars as pl
 import pytest
 
-from tests.conftest import PORT_REFERENCES, port_model, port_sources
+from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_model, port_sources
 from tests.differential import differential
+
+#: The instance files the ports bind, for a test that needs a column the model
+#: does not declare — ``port_sources`` filters those out, as it should.
+PORTS_DATA = PORTS_DIR / 'data'
 
 #: What the eager lane cannot build yet, keyed by model, valued by the issue
 #: that owns it and the error it raises today. Strict, so the day a fix lands
@@ -184,3 +191,80 @@ def test_the_eager_dual_check_would_notice_a_wrong_price() -> None:
 
     with differential(port_model(name), port_sources(name)) as run, pytest.raises(AssertionError, match=constraint):
         _check_recorded_duals(name, entry, run)
+
+
+#: PyPSA's secant loss mode on ``pypsa_losses``' own network — its default, where
+#: the ported tangent mode is deprecated. From
+#: ``examples/ports/references/pypsa/pypsa_losses.py``'s ``secant_objective``,
+#: pypsa 1.2.4, under the tolerances that script records.
+SECANT_OBJECTIVE = 23314.687529055293
+
+
+def _secant_coefficients(r: float, s_nom: float, atol: float = 0.01, rtol: float = 0.1) -> list[tuple[float, float]]:
+    """PyPSA's secant breakpoints as ``(slope, offset)`` per segment.
+
+    Its first breakpoint is ``2 * sqrt(atol / r)`` and each next one steps by
+    ``max(k / (k - 1), 1 + 2 * (rtol + sqrt(rtol + rtol**2)))`` until the line's
+    rating is covered, so **how many segments there are is data, not a
+    declaration** — which is the one thing that distinguishes this mode from the
+    tangents the port ships.
+
+    Reproduced here rather than dumped because it is the arithmetic a modeller
+    would do in data prep, and doing it makes the coefficients checkable against
+    PyPSA's own rows.
+
+    ``atol`` is tighter than PyPSA's default so this instance needs four
+    segments: at two, ``k / (k - 1)`` wins the ``max`` every time and the
+    ``rtol`` half of the rule is never reached — a version of this test with the
+    default tolerance passed with that half deleted.
+    """
+    first = 2 * math.sqrt(atol / r)
+    factors = [0.0, 1.0]
+    target = s_nom / first
+    while factors[-1] < target:
+        k = len(factors)
+        factors.append(factors[-1] * max(k / (k - 1), 1 + 2 * (rtol + math.sqrt(rtol + rtol**2))))
+    return [(2 * math.sqrt(atol * r) * (a + b), -4 * atol * a * b) for a, b in itertools.pairwise(factors)]
+
+
+def test_the_two_loss_approximations_are_one_model() -> None:
+    """PyPSA's other loss mode is the same rows with different numbers in them.
+
+    ``pypsa_losses`` ports the tangent approximation. The secant one — PyPSA's
+    **default**, the tangents being deprecated — emits the identical shape: one
+    half-plane per segment per sign of the flow, ``loss ± slope * f >= offset``.
+    Only the coefficients differ, and how many of them there are.
+
+    So it gets no model file of its own. A second YAML byte-identical to the
+    first would assert a second model that does not exist; binding *this* model
+    to the other instance is the claim, and it is the stronger one — the two
+    approximations are one thing the language says once.
+
+    Through ``differential``, so the secant instance is held to everything the
+    corpus holds a port to: both lanes, the written LP file, and the coefficient
+    matrices agreeing entry for entry.
+    """
+    sources = dict(port_sources('pypsa_losses'))
+    instance = json.loads((PORTS_DATA / 'pypsa_losses.json').read_text())
+    resistance = dict(zip(instance['r']['line'], instance['r']['value'], strict=True))
+    rating = dict(zip(instance['s_nom']['line'], instance['s_nom']['value'], strict=True))
+    lines = instance['s_nom']['line']
+
+    line, segment, slope, offset = [], [], [], []
+    for name in lines:
+        if not resistance[name]:
+            continue  # a line with no resistance has no curve to approximate
+        for k, (m, c) in enumerate(_secant_coefficients(resistance[name], rating[name]), start=1):
+            line.append(name)
+            segment.append(k)
+            slope.append(m)
+            offset.append(c)
+
+    sources['segment'] = pl.DataFrame({'segment': sorted(set(segment))})
+    sources['tangent_slope'] = pl.DataFrame({'line': line, 'segment': segment, 'value': slope})
+    sources['tangent_offset'] = pl.DataFrame({'line': line, 'segment': segment, 'value': offset})
+
+    with differential(port_model('pypsa_losses'), sources, lp=True) as run:
+        assert run.result.objective == pytest.approx(SECANT_OBJECTIVE, rel=1e-9), (
+            'the secant instance reaches the number PyPSA reaches under its own default mode'
+        )

@@ -60,6 +60,18 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_losses.json'
 #: What ``n.optimize`` is asked for, and what the port's tangent columns encode.
 SEGMENTS = 3
 
+#: The tolerances PyPSA's *secant* mode derives its breakpoints from — its
+#: current default, where the tangent mode is deprecated. Recorded here because
+#: the port's second instance encodes the coefficients they produce, and they
+#: are the only inputs that decide how many segments there are.
+#:
+#: ``atol`` is 0.01 rather than PyPSA's default 1 so that the breakpoints need
+#: four segments rather than two. Its step rule is
+#: ``max(k / (k - 1), rtol_step)``, and at two segments the first term wins
+#: every time — an instance that stops there cannot tell whether the ``rtol``
+#: half of the rule was implemented at all.
+SECANT_TOLERANCES = {'atol': 0.01, 'rtol': 0.1}
+
 
 def load_tables() -> dict[str, pd.DataFrame]:
     """The instance, one frame per parameter — what a caller of either library holds."""
@@ -124,12 +136,27 @@ def nodal_duals(n: pypsa.Network) -> dict[str, list]:
     }
 
 
+def secant_objective() -> float:
+    """The same network under PyPSA's *default* loss mode, for the second instance.
+
+    Secants lie above a convex curve where tangents lie below, so this
+    overestimates the losses the tangent instance underestimates and costs more.
+    The rows are the same shape either way — one half-plane per segment per sign
+    of the flow — which is the whole claim the port's second instance makes.
+    """
+    n = build(load_tables())
+    status, condition = n.optimize(solver_name='highs', transmission_losses={'mode': 'secants', **SECANT_TOLERANCES})
+    assert status == 'ok', f'{status}: {condition}'
+    return float(n.objective)
+
+
 def main() -> float:
     n = build(load_tables())
     status, condition = n.optimize(solver_name='highs', transmission_losses={'mode': 'tangents', 'segments': SEGMENTS})
     assert status == 'ok', f'{status}: {condition}'
     print(f'pypsa {pypsa.__version__}')
     print(f'objective {float(n.objective)!r}')
+    print(f'objective, secant mode {secant_objective()!r}')
     print(f'duals {json.dumps({"nodal_balance": nodal_duals(n)})}')
     print(n.lines_t.p0)
     print(n.lines_t.loss)
