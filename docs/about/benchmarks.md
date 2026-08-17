@@ -582,3 +582,29 @@ Measurement pitfall worth keeping: memray's tracker slows an allocation-heavy
 engine several-fold and overcounts reserved arenas, so it can attribute memory
 but must never time anything. Peak RSS is the gate metric; memray is for
 attribution only.
+
+### The allocator is in the number, and only on one arm
+
+**Every peak on this page includes a jemalloc decay component that the
+relational arm pays and the eager arm does not.** polars ships its own jemalloc
+settings, so a peak measured through it holds pages that have been freed and
+not yet returned; the eager arm's build is xarray and numpy on the system
+allocator and never enters jemalloc at all. The asymmetry is not an estimate —
+linopy's build arm measures the same to three digits with the decay clock on
+and off, where ours moves by 12–27% (#896). It runs one way, against the
+relational lane, on every row.
+
+The numbers are published at polars' default anyway, because that is what a
+caller who sets nothing actually pays. A caller near a memory ceiling can turn
+the decay off:
+
+```bash
+_RJEM_MALLOC_CONF=dirty_decay_ms:0,muzzy_decay_ms:0 python build_my_model.py
+```
+
+Two things make it look inert when it is not. It has to be set **before
+`import polars`** — jemalloc reads the variable at its first allocation, so
+assigning to `os.environ` afterwards is silently a no-op. And on macOS only `0`
+does anything, jemalloc's background purge thread being unavailable there. It
+costs wall time, which is why it is not a default, and what it costs has not
+been measured on this ladder.
