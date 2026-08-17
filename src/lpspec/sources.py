@@ -17,7 +17,7 @@ the module that already knows what shape a caller's table is in.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,7 +27,9 @@ from lpspec.errors import (
     DataError,
     PiecewiseExpansionError,
     declared_index_also_supplied_message,
+    declared_map_needs_labels_message,
     dense_array_message,
+    map_keys_are_not_labels_message,
     unknown_source_keys_message,
 )
 from lpspec.frames import as_frame, is_dense_array, labels_frame
@@ -83,13 +85,17 @@ def tidy_sources(
             continue
         elif ddef.values is not None:
             src = ddef.values
+        elif maps_only := schema.declared_maps(dname):
+            raise DataError(declared_map_needs_labels_message(dname, maps_only))
         else:
             continue
-        if isinstance(src, (str, Path)):
+        maps = schema.declared_maps(dname)
+        if isinstance(src, (str, Path)) and not maps:
             sources[dname] = src
             continue
-        table = as_frame(src, (dname,))
-        sources[dname] = table if table is not None else labels_frame(dname, src, ddef.dtype)
+        table = pl.scan_parquet(src) if isinstance(src, (str, Path)) else as_frame(src, (dname,))
+        table = table if table is not None else labels_frame(dname, src, ddef.dtype)
+        sources[dname] = _read_declared_maps_against(table, dname, maps)
 
     for pname, pdef in schema.parameters.items():
         if pname not in data:
@@ -197,39 +203,86 @@ def _labels(name: str, dim: str, sources: Mapping[str, object]) -> list[Any]:
 
 
 def check_index_ownership(schema: Model, data: Mapping[str, object], coords: Mapping[str, Any] | None) -> None:
-    """Refuse a dimension whose index the file declares and the caller also supplies.
+    """Refuse anything about a dimension's index that two authors both claim.
 
-    One dimension, one home. A dimension's ``values:`` and the ``values:`` of any
-    lookup over it are the file claiming to own which labels exist and how they
-    map; a caller passing the same dimension is claiming the same thing from the
-    other side. Resolving that by precedence would let the file describe a model
-    the caller does not build, so it is refused at bind, before either lane
-    reads a table.
+    Two facts, each with one home. **The labels** — which members exist, and in
+    what order — come from ``dimensions.<d>.values`` or from the caller's ``d``
+    source. **Each lookup's map** comes from ``lookups.<x>.values`` or from a
+    column named after it in that same source. Resolving either by precedence
+    would let the file describe a model the caller does not build, so both are
+    refused here, before either lane reads a table.
 
-    The unit is the dimension rather than the column, because the two halves are
-    not independent: labels are derived from the maps where the dimension
-    declares none, so taking half a declaration changes what the other half
-    means.
+    A declared map is deliberately *not* a claim on the labels: it is a partial
+    relation over the dimension, free to omit members and written in whatever
+    key order someone typed
+    (:meth:`~lpspec.language.model.Model.declared_maps`). A sparse map over a
+    caller's label set is therefore the one index with two authors — one per
+    fact — and it is the shape this check exists to keep honest.
 
     Raises:
-        DataError: Naming the dimension, the declaration, and the key that
-            collided with it.
+        DataError: Naming the dimension, the declaration, and the key or column
+            that collided with it.
     """
+    coords = coords or {}
     for dim, ddef in schema.dimensions.items():
-        declares = _declaring_index(schema, dim, ddef)
-        if declares is None:
+        supplied = [w for w, m in ((f"sources['{dim}']", data), (f"coords['{dim}']", coords)) if dim in m]
+        if not supplied:
             continue
-        for where, supplied in ((f"sources['{dim}']", data), (f"coords['{dim}']", coords or {})):
-            if dim in supplied:
-                raise DataError(declared_index_also_supplied_message(dim, declares, where))
+        if ddef.values is not None:
+            raise DataError(declared_index_also_supplied_message(dim, f'dimensions.{dim}.values', supplied[0]))
+        carried = _column_names(data.get(dim, coords.get(dim)), dim)
+        for name in sorted(schema.declared_maps(dim)):
+            if name in carried:
+                where = f"the '{name}' column of {supplied[0]}"
+                raise DataError(declared_index_also_supplied_message(dim, f'lookups.{name}.values', where))
 
 
-def _declaring_index(schema: Model, dim: str, ddef: Any) -> str | None:
-    """How the file claims *dim*'s index, spelled as the keys to delete, or ``None``."""
-    if ddef.values is not None:
-        return f'dimensions.{dim}.values'
-    declared = [f'lookups.{n}.values' for n, lk in schema.lookups.items() if lk.over == dim and lk.values is not None]
-    return ' and '.join(declared) if declared else None
+def check_declared_map_keys(dim: str, maps: Mapping[str, Mapping[Any, Any]], labels: Sequence[Any]) -> None:
+    """Every declared map is keyed by labels *dim* actually has — one wording, both lanes.
+
+    The asymmetry is the point. A label no map mentions is the **partial case**
+    and gets a null; a key naming no label is a **typo**, and dropping it would
+    place its terms nowhere while the model built and solved. Where the file
+    declares the labels too, ``Model._declared_lookup_errors`` decides this at
+    load; here the labels are the caller's, so the same law lands at bind.
+
+    Raises:
+        DataError: Naming the lookup and the keys that match no label.
+    """
+    known = set(labels)
+    for name, values in maps.items():
+        strays = sorted(str(k) for k in values if k not in known)
+        if strays:
+            raise DataError(map_keys_are_not_labels_message(dim, name, strays, [str(x) for x in labels]))
+
+
+def _read_declared_maps_against(table: pl.LazyFrame, dim: str, maps: dict[str, dict[Any, Any]]) -> pl.LazyFrame:
+    """*table*'s labels, with each declared map read against them as a column.
+
+    The labels are the caller's and stay exactly as they arrive — order
+    included. A label a map omits gets a null, which is what a partial relation
+    means; a key naming no label is refused first by
+    :func:`check_declared_map_keys`, so the left join can only ever add nulls.
+    :func:`check_index_ownership` has already refused a table carrying a column
+    a map also declares, so neither author can overwrite the other here.
+    """
+    labels = table.select(dim).collect()[dim].to_list()
+    check_declared_map_keys(dim, maps, labels)
+    for name, values in maps.items():
+        table = table.join(
+            pl.LazyFrame({dim: list(values), name: list(values.values())}),
+            on=dim,
+            how='left',
+        )
+    return table
+
+
+def _column_names(source: Any, dim: str) -> frozenset[str]:
+    """What a supplied index carries, or nothing where it is a bare label sequence."""
+    if isinstance(source, (str, Path)):
+        return frozenset(pl.scan_parquet(source).collect_schema().names())
+    table = as_frame(source, (dim,))
+    return frozenset(table.collect_schema().names()) if table is not None else frozenset()
 
 
 def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
