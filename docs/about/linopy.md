@@ -91,6 +91,22 @@ oracle an oracle, and it is now structural: both run the same `lower_program`
 gate, so a construct one refuses the other refuses in the same sentence, never
 with a redirection to the other lane.
 
+**Accepting is not building, and one construct parts them: an objective
+carrying a constant.** `linopy.Objective`'s expression setter rejects any
+expression whose `const` is nonzero — *"Constant values in objective function
+not supported."* — and there is no slot to put one in, which is why PyPSA
+carries `n.objective_constant` out of band. So a model like
+`examples/ports/osemosys_utopia.yaml`, whose objective owes a fixed cost on
+capacity that already stood in 1990, builds relationally and raises linopy's
+`ValueError` on this lane. **Dropping the constant is the one repair that must
+not happen**: the lane is the oracle, so a quietly shortened objective would
+recalibrate every differential test on such a model to the wrong number.
+Adding it back as a variable pinned to `[1, 1]` reaches the right answer and
+was refused too — it puts a column on the caller's model that the other lane
+does not have.
+[#894](https://github.com/fluxopt/lpspec/issues/894) holds the gap, the
+alternatives, and the clear refusal that is to replace the upstream error.
+
 It takes the same *data* too, which it did not always
 ([#60](https://github.com/fluxopt/lpspec/issues/60)). A parameter is a parquet
 path, any table exporting the Arrow PyCapsule protocol, a `pd.Series` carrying
