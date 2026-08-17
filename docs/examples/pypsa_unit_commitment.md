@@ -10,9 +10,8 @@ had no verified example of. One bus and no network, deliberately: a model that
 fails to match should implicate one feature, and here that feature is
 commitment.
 
-`min_up_time` and `min_down_time` are left at 0. They need a rolling window sum
-over a horizon, which is a different question from whether the language can say
-commitment at all — see [the ledger](index.md#ledger--what-a-port-could-not-say).
+`min_up_time` and `min_down_time` are left at 0 here;
+[minimum up and down times](pypsa_min_up_down.md) is the rung that writes them.
 
 ## The model
 

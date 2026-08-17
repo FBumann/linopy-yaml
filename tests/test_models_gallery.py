@@ -388,7 +388,7 @@ def test_the_guide_teaches_lines_that_exist() -> None:
 #: A third one is added here, not asserted separately.
 COUNTED_IN_PROSE = (
     ('examples/README.md', '| `ports/` | {} models somebody else already solved'),
-    ('docs/examples/index.md', 'Three rows from {} ports'),
+    ('docs/examples/index.md', 'Two rows from {} ports'),
 )
 
 
