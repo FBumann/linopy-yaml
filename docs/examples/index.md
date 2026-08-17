@@ -37,6 +37,11 @@ Every page starts from data in the shape the call wants, and
 | [rung 4 — cyclic storage](pypsa_cyclic_storage.md) | [Rung 3](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*. |
 | [rung 5 — KVL](pypsa_kvl.md) | Passive AC lines: flow is decided by physics, not chosen. **The last rung of the ladder.** |
 | [rung 6 — AC-DC, two coordinates](pypsa_ac_dc.md) | A meshed AC–DC network under a CO₂ budget. **PyPSA's own `ac-dc-meshed` example.** |
+
+### PyPSA components and modes
+
+| | |
+|---|---|
 | [unit commitment](pypsa_unit_commitment.md) | Which generators are *on*, not just how much they produce — a binary per generator per snapshot, with start-up and shut-down charges. |
 | [multi-link](pypsa_multilink.md) | One `Link`, one input bus, several output buses, each output derated by its own efficiency — PyPSA's spelling for a CHP plant, an electrolyser with waste heat, any conversion with more than one product. |
 
@@ -192,9 +197,9 @@ AC-DC network under a CO₂ budget** ✔. Rungs 1–5 are one feature at a time 
 three-bus network; rung 6 is the first that puts several of them on a network
 somebody else designed, which is a different question — not *can it say this
 feature* but *does the whole thing still read*.
-[Unit commitment](pypsa_unit_commitment.md) sits beside the ladder
-rather than on it — one bus, no network, because the feature under test is
-integrality.
+**The ladder is the six rungs.** A feature that needs no network gets a one-bus
+model of its own instead — *PyPSA components and modes* above — where a
+mismatch implicates the one thing switched on.
 
 A rung that matches is a row in the table above; one that **cannot be said** is
 a row in the ledger. Both are evidence, so no rung is wasted.
