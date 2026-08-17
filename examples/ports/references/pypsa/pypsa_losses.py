@@ -27,6 +27,11 @@ plain linear model rather than a piecewise one.
 The loss is subtracted **half at each end** of the branch, which is PyPSA's
 convention for where the energy goes.
 
+Three of the six snapshots are quiet on purpose. A fan of segments is only
+witnessed by flows that reach them, and with the busy snapshots alone the model
+sits on the top two of five throughout — the other three coefficients could
+have been anything.
+
 The network is a **path**, b0—b1—b2—b3, and radial on purpose: with no
 independent cycle there is no Kirchhoff voltage law to satisfy, so a mismatch
 here implicates the loss approximation rather than rung 5's technique. ``x`` is
@@ -136,6 +141,38 @@ def nodal_duals(n: pypsa.Network) -> dict[str, list]:
     }
 
 
+def secant_coefficients(n: pypsa.Network) -> dict[str, list]:
+    """PyPSA's secant half-planes, tidy — ``(line, segment, slope, offset)``.
+
+    Read off the constraints it built rather than recomputed here. **How the
+    breakpoints are chosen is PyPSA's business**: the first sits at
+    ``2 * sqrt(atol / r)`` and each next steps by
+    ``max(k / (k - 1), 1 + 2 * (rtol + sqrt(rtol + rtol**2)))`` until the
+    rating is covered, so even the *number* of segments is an output of their
+    heuristic. Reproducing that here would put their algorithm in this
+    repository, where a change on their side becomes a failure on ours; the
+    port's job is to show the language says the rows, not to re-derive the
+    numbers in them.
+
+    Lines with no resistance are left out: their coefficients are all zero, and
+    the model gives them no rows at all.
+    """
+    constraint = n.model.constraints['Line-loss_secants-pos']
+    slopes = constraint.coeffs.isel(snapshot=0, _term=1)
+    offsets = constraint.rhs.isel(snapshot=0)
+    line, segment, slope, offset = [], [], [], []
+    for name in constraint.indexes['name']:
+        column = slopes.sel(name=name).values
+        if not column.any():
+            continue
+        for k, (m, c) in enumerate(zip(column, offsets.sel(name=name).values, strict=True), start=1):
+            line.append(str(name))
+            segment.append(k)
+            slope.append(float(m))
+            offset.append(float(c))
+    return {'line': line, 'segment': segment, 'slope': slope, 'offset': offset}
+
+
 def secant_objective() -> float:
     """The same network under PyPSA's *default* loss mode, for the second instance.
 
@@ -157,6 +194,9 @@ def main() -> float:
     print(f'pypsa {pypsa.__version__}')
     print(f'objective {float(n.objective)!r}')
     print(f'objective, secant mode {secant_objective()!r}')
+    secant = build(load_tables())
+    secant.optimize.create_model(transmission_losses={'mode': 'secants', **SECANT_TOLERANCES})
+    print(f'secant coefficients {json.dumps(secant_coefficients(secant))}')
     print(f'duals {json.dumps({"nodal_balance": nodal_duals(n)})}')
     print(n.lines_t.p0)
     print(n.lines_t.loss)
