@@ -157,7 +157,44 @@ def check_binary(node: BinaryOperatorNode, context: str | None = None, *, ceilin
         return
     if ceiling < 2:
         raise LanguageError(_degree_two_here_message(where))
+    if (degree := _degree(node)) > ceiling:
+        raise LanguageError(_above_the_ceiling_message(where, degree))
     _check_single_term_factor(node, where)
+
+
+def _degree(node: ExpressionNode) -> int:
+    """The polynomial degree *node* stands for, counted structurally.
+
+    A product adds its factors' degrees and a division keeps the dividend's
+    (:func:`check_binary` has already refused a divisor carrying a variable);
+    everything else — a sum, a reduction, a shape operator — is the highest
+    degree beneath it. No data, so this answers at ``check`` time, which is
+    what stops a cubic from reaching a lane to be refused by whichever one
+    happens to notice.
+    """
+    if isinstance(node, VariableNode):
+        return 1
+    if isinstance(node, BinaryOperatorNode) and node.op == '*':
+        return _degree(node.left) + _degree(node.right)
+    if isinstance(node, BinaryOperatorNode) and node.op == '/':
+        return _degree(node.left)
+    return max((_degree(child) for child in children(node)), default=0)
+
+
+def _above_the_ceiling_message(where: str, degree: int) -> str:
+    """A product inside the position's degree at every step and above it whole.
+
+    ``p * p * p`` is two nested products of a variable-carrying pair, each of
+    them admissible on its own, so the sentence is about the product's own
+    degree rather than about its factors.
+    """
+    return (
+        f'{where}this product is degree {degree}. The language takes degree 2, in the '
+        f'**objective** and nowhere else: a sink takes a quadratic form and none takes a '
+        f'cubic one.\n'
+        f'Multiply by a parameter instead, or give the inner product a name — a variable '
+        f'constrained to equal it is degree 1 wherever it is used.'
+    )
 
 
 def _degree_two_here_message(where: str) -> str:

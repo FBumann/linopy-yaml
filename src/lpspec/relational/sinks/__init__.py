@@ -123,7 +123,6 @@ def relaxations(program: plan.Program, name: str) -> list[str]:
     ]
 
 
-
 def ingestible(name: str, model: ModelTables, program: plan.Program | None = None) -> ModelTables:
     """*model* in the form the named solver can take it — sets included.
 

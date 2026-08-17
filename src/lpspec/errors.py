@@ -388,16 +388,19 @@ def nonconvex_objective_message() -> str:
     """A quadratic objective HiGHS refuses for its curvature.
 
     The one capability verdict no data-free check can reach, so it arrives at
-    the solve — and names the way out, as :func:`no_duals_message` does.
+    the solve — and names the way out, as :func:`no_duals_message` does. The
+    way out is spelled as the loader takes it (``method: convex``), a message
+    sending its reader to a key ``piecewise:`` rejects being worse than none.
     """
     return (
-        'this objective is quadratic and not convex, and HiGHS solves only convex QPs — it '
-        'reported the Hessian as not positive semidefinite. Convexity is a property of the '
-        'coefficients rather than of the model, so nothing could refuse it before the data was '
-        'bound.\n'
-        'Write the model to an .lp file for a solver that takes one, or state the curve as '
-        'piecewise: {convex: true} instead — a convex reformulation keeps the LP, and with it '
-        'the duals and the warm start a quadratic objective gives up.'
+        'the highs sink refused to run this quadratic objective, and a Hessian that is not '
+        'positive semidefinite is why it refuses one: it solves convex QPs only. Convexity is a '
+        'property of the coefficients rather than of the model, so nothing could refuse it '
+        "before the data was bound — the sink's other quadratic refusal, a Hessian standing "
+        'beside integrality, is declared and caught before the build.\n'
+        'Write the model to an .lp file for a solver that takes one, or state the curve as a '
+        'piecewise: block with method: convex instead — a convex reformulation keeps the LP, '
+        'and with it the duals and the warm start a quadratic objective gives up.'
     )
 
 

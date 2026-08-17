@@ -653,11 +653,15 @@ class PolarsCompiler:
         """
 
         def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
-            """``a * b``, with the variable-carrying side normalised to the left.
+            """``a * b``, distributed over both operands' fragment lists.
 
-            Four products of fragment lists; the diagonal one is the quadratic
-            case. Degree 3 is refused rather than represented — a quadratic
-            fragment times a term has nowhere to put the third label.
+            Every pairing is formed and each is formed once, **including both
+            mixed products**: where the two factors each carry a variable and a
+            constant part, ``a.terms`` against ``b.consts`` and ``b.terms``
+            against ``a.consts`` are different terms of the model, and dropping
+            either answers something else. Degree 3 is refused rather than
+            represented — a quadratic fragment times a term has nowhere to put
+            the third label.
             """
             if (a.quads and b.terms) or (b.quads and a.terms) or (a.quads and b.quads):
                 raise LanguageError(
@@ -667,10 +671,10 @@ class PolarsCompiler:
             if a.terms and b.terms and not quadratic:
                 raise LanguageError(f'nonlinear product in {context}: both factors contain variables')
             quads = tuple(_join_quad(t, u) for t in a.terms for u in b.terms)
-            if b.terms or b.quads:
-                a, b = b, a
             quads += tuple(_join_mul(q, c, 'quad') for q in a.quads for c in b.consts)
+            quads += tuple(_join_mul(q, c, 'quad') for q in b.quads for c in a.consts)
             terms = tuple(_join_mul(t, c, t.kind) for t in a.terms for c in b.consts)
+            terms += tuple(_join_mul(t, c, t.kind) for t in b.terms for c in a.consts)
             consts = tuple(_join_mul(x, c, 'const') for x in a.consts for c in b.consts)
             return CompiledExpression(terms, consts, quads)
 

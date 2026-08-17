@@ -1410,7 +1410,7 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[Presence]:
 
     Only *variable* absence counts — a sparse parameter's missing rows mean a
     zero coefficient (the data-binding rules) — which is why the fragment carries
-    :attr:`TermFragment.presence` separately from its frame, and why this reads
+    :attr:`TermFragment.presences` separately from its frame, and why this reads
     that. A fragment with nothing to restrict is skipped, an unmasked variable
     existing at every coordinate of its foreach.
 

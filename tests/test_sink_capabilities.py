@@ -113,9 +113,12 @@ def test_a_set_is_excluded_from_the_hessian_it_would_arrive_beside():
     )
 
 
-def test_the_lp_writer_carries_everything():
-    """A section is text, so the format has no exclusion either — and its
-    capabilities are the *writer's*, not the reader's."""
+def test_the_lp_writer_carries_what_it_writes():
+    """A section is text, so the format has no exclusion either — and what it
+    declares is the *writer's*, not the reader's and not the format's: LP text
+    has a quadratic-constraint section, nothing here emits one, and a model
+    carrying one would otherwise be written back without it."""
     capabilities = WRITERS['.lp'].capabilities
-    assert capabilities.missing(CAPABILITIES) == []
+    assert capabilities.missing(CAPABILITIES) == ['quadratic_constraint']
+    assert capabilities.support('quadratic_objective') == 'native', 'the section this branch taught it to write'
     assert capabilities.excludes == ()

@@ -69,6 +69,8 @@ def quad_of(expression: str, sources=None) -> pl.DataFrame:
         pytest.param('sum(p * p * weight, over=g)', id='a-square-with-a-parameter-coefficient'),
         pytest.param('sum(p * p + q * q - p * q, over=g)', id='a-form-with-both'),
         pytest.param('sum(p * p, over=g) + sum(q * weight, over=g)', id='quadratic-plus-affine'),
+        pytest.param('sum(p * (p + weight), over=g)', id='a-factor-carrying-a-constant-part'),
+        pytest.param('sum((p + weight) * p, over=g)', id='the-same-factors-the-other-way-round'),
     ],
 )
 def test_both_lanes_and_the_lp_file_reach_one_optimum(expression):
@@ -76,6 +78,35 @@ def test_both_lanes_and_the_lp_file_reach_one_optimum(expression):
     not, a pair counted twice — each still solves, and each moves the optimum."""
     with differential(model(expression), SOURCES, lp=True):
         pass
+
+
+#: The agreement models above leave ``p`` free at zero, where a *missing* term
+#: costs nothing. A floor puts every variable in the objective's way, so a
+#: dropped product moves the optimum instead of being multiplied by nothing.
+FLOORED = {name: bounds | {'bounds': {'lower': 1, 'upper': 10}} for name, bounds in MODEL['variables'].items()}
+
+
+@pytest.mark.parametrize(
+    ('expression', 'optimum'),
+    [
+        pytest.param('sum(p * (p + weight), over=g)', 6.0, id='a-constant-part-on-the-right'),
+        pytest.param('sum((p + weight) * p, over=g)', 6.0, id='a-constant-part-on-the-left'),
+        pytest.param('sum((p + weight) * (q + weight), over=g)', 20.0, id='a-constant-part-on-both-sides'),
+    ],
+)
+def test_a_product_keeps_both_of_its_linear_cross_terms(expression, optimum):
+    """``(a + c)(b + d)`` has two mixed products and the model owns both.
+
+    A walk that normalises the variable-carrying side to the left forms one of
+    them and drops the other, and *which* one it drops follows the spelling —
+    so the oracle here is arithmetic rather than another spelling, which would
+    lose the same term and agree. At the floor ``p = q = 1`` with
+    ``weight = (1, 3)``: ``Σ p² + p·weight`` is ``2 + 4``, and
+    ``Σ (p + weight)(q + weight)`` is ``4 + 16``. Every model still builds and
+    still solves with the term missing.
+    """
+    solved = lps.solve(model(expression, variables=FLOORED), SOURCES).objective
+    assert solved == pytest.approx(optimum), f'{expression} lost one of its two mixed products'
 
 
 def test_a_square_spreads_where_a_linear_cost_would_fill_the_cheapest_first():
@@ -222,9 +253,17 @@ def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
 
 
 def test_degree_three_is_refused_where_degree_two_is_taken():
-    """The ceiling is 2 in the objective, not 'nonlinear is fine here'."""
-    with pytest.raises(LpspecError, match='degree 3 or more'):
-        lps.build(model('sum(p * p * p, over=g)'), SOURCES)
+    """The ceiling is 2 in the objective, not 'nonlinear is fine here'.
+
+    Asked of ``check``, like its sibling below: every factor of ``p * p * p``
+    is admissible at every step, so a cubic caught only at the build is one the
+    gate let through — and the typesetter, which reads the same verdict, would
+    have printed math no lane can build.
+    """
+    with pytest.raises(LpspecError, match='degree 3'):
+        lps.check(model('sum(p * p * p, over=g)'))
+    with pytest.raises(LpspecError, match='degree 3'):
+        lps.to_latex(model('sum(p * p * p, over=g)'))
 
 
 def test_two_reductions_may_not_be_multiplied_even_in_the_objective():
@@ -289,7 +328,7 @@ def test_a_nonconvex_objective_is_refused_at_the_solve_and_still_writes(tmp_path
     concave = model('-sum(p * p, over=g)')
     lps.check(concave, sink='highs')
 
-    with pytest.raises(LpspecError, match='not convex'), lps.build(concave, SOURCES) as bound:
+    with pytest.raises(LpspecError, match='not positive semidefinite'), lps.build(concave, SOURCES) as bound:
         bound.solve()
 
     path = tmp_path / 'nonconvex.lp'

@@ -296,6 +296,14 @@ class Highs(Solver):
             _took(self._handle.setSolution(solution), 'the carried incumbent')
 
     def _run(self, model: ModelTables) -> SolveAnswer:
+        """Solve, and read the one error HiGHS reports as a refusal to start.
+
+        A ``kError`` from ``run()`` leaves the model status unset — there is no
+        solve to read back — so a quadratic model that gets one is refused with
+        the sentence the curvature earns rather than as an unreadable status.
+        The pair a Hessian is otherwise refused for, integrality beside it, is
+        declared on the descriptor and never reaches a load.
+        """
         import highspy
 
         if self._handle.run() == highspy.HighsStatus.kError and model.quad.height:

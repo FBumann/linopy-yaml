@@ -24,17 +24,21 @@ if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
 
 
-#: A section is text, so this format carries every construct the language has.
-#: What it does **not** promise is that the solver reading the file back parses
-#: what was written — that is a property of a *reader*
-#: (docs/about/benchmarks.md#sink-capabilities).
+#: A section is text, so this format excludes no combination and curvature
+#: costs it nothing — but what it declares is what :func:`write_lp_file`
+#: **emits**, on the rule the gurobi sink's descriptor states: the format has a
+#: quadratic-constraint section and nothing here writes one, and claiming it
+#: would hand back a file missing the rows that make the model what it is.
+#:
+#: What no descriptor promises is that the solver reading the file back parses
+#: what was written — that is a property of a *reader*, and HiGHS's refuses two
+#: of these sections (docs/about/benchmarks.md#sink-capabilities).
 LP_FILE_CAPABILITIES = Capabilities(
     supports={
         'integrality': 'native',
         'sos': 'native',
         'quadratic_objective': 'native',
         'nonconvex_quadratic_objective': 'native',
-        'quadratic_constraint': 'native',
     }
 )
 

@@ -95,8 +95,8 @@ class ModelTables:
 
     ``quad`` is the objective's quadratic part, in ``(col_l, col_r)`` order,
     one row per **unordered pair** of columns: the objective contains ``coeff · x[col_l] · x[col_r]``, whole.
-    Three sinks spell that three ways — a Hessian is :math:`\\frac12 x^\\top Q x`,
-    the LP section is divided by two, Gurobi takes :math:`x^\\top Q x` — so what
+    Three sinks spell that three ways — a Hessian is :math:`\frac12 x^\top Q x`,
+    the LP section is divided by two, Gurobi takes :math:`x^\top Q x` — so what
     arrives here is the algebra and the conversion belongs to whoever loads it.
     Empty for every affine model, which is nearly all of them.
 
