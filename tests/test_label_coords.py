@@ -245,8 +245,8 @@ def test_both_lanes_read_the_same_index():
     from tests.oracle import pd
 
     data = {'load': pd.Series({0: 1.0, 1: 2.0, 2: 3.0}).rename_axis('snapshot')}
-    coords = {'snapshot': pd.DataFrame({'snapshot': [0, 1, 2], 'period': [1, 1, 2]})}
-    with differential(_model(), data, coords) as run:
+    index = {'snapshot': pd.DataFrame({'snapshot': [0, 1, 2], 'period': [1, 1, 2]})}
+    with differential(_model(), data | index) as run:
         assert run.oracle == pytest.approx(6.0)
 
 
@@ -345,7 +345,7 @@ def test_a_lookup_where_agrees_with_the_oracle(where, objective):
         'cap': pd.Series([10.0, 20.0, 30.0, 40.0], index=LINES),
         'price': pd.Series([1.0, 1.0, 1.0, 1.0], index=LINES),
     }
-    coords = {
+    index = {
         'bus': pd.Index(['north', 'south'], name='bus'),
         'line': pd.DataFrame(
             {
@@ -356,7 +356,7 @@ def test_a_lookup_where_agrees_with_the_oracle(where, objective):
             }
         ),
     }
-    with differential(model, data, coords) as run:
+    with differential(model, data | index) as run:
         assert run.result.objective == pytest.approx(objective), (
             f'where: {where!r} — the two lanes agree on the objective but not on this one'
         )
@@ -527,14 +527,14 @@ _LABELS_AND_MAP = pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['so
 
 
 @pytest.mark.parametrize(
-    ('model', 'sources', 'coords', 'names'),
+    ('model', 'sources', 'names'),
     [
-        pytest.param(DECLARED, {'generator': _LABELS}, None, 'dimensions.generator.values', id='labels-twice'),
-        pytest.param(MAP_ONLY, {'generator': _LABELS_AND_MAP}, None, 'lookups.gen_bus.values', id='the-map-twice'),
-        pytest.param(DECLARED, {}, {'generator': ['g1', 'g2', 'g3']}, "coords['generator']", id='through-coords'),
+        pytest.param(DECLARED, {'generator': _LABELS}, 'dimensions.generator.values', id='labels-twice'),
+        pytest.param(DECLARED, {'generator': ['g1', 'g2', 'g3']}, 'dimensions.generator.values', id='bare-labels'),
+        pytest.param(MAP_ONLY, {'generator': _LABELS_AND_MAP}, 'lookups.gen_bus.values', id='the-map-twice'),
     ],
 )
-def test_a_declared_index_refuses_a_supplied_one(model, sources, coords, names):
+def test_a_declared_index_refuses_a_supplied_one(model, sources, names):
     """One fact, one home — for the labels, and for each map over them.
 
     A precedence rule instead lets the file describe a model the caller does
@@ -542,7 +542,7 @@ def test_a_declared_index_refuses_a_supplied_one(model, sources, coords, names):
     and the file a reviewer reads is not the model that solved.
     """
     with pytest.raises(DataError, match=re.escape(names)):
-        lps.solve(model, {**DECLARED_SOURCES, **sources}, coords=coords)
+        lps.solve(model, {**DECLARED_SOURCES, **sources})
 
 
 def test_a_map_alone_does_not_say_which_labels_exist():

@@ -52,18 +52,18 @@ def _agrees_with_csr(run) -> None:
 
 def test_activity_matches_the_csr_recomputation(dispatch_yaml, dispatch_inputs):
     """The solver's row values against Ax recomputed from the model's own CSR."""
-    data, coords = dispatch_inputs
-    with differential(dispatch_yaml, data, coords) as run:
+    data = dispatch_inputs
+    with differential(dispatch_yaml, data) as run:
         got = run.result.activity('power_balance')
         assert got.columns == ['snapshot', 'value']
-        assert got.height == len(coords['snapshot'])
+        assert got.height == len(data['snapshot'])
         _agrees_with_csr(run)
 
 
 def test_activity_matches_the_eager_lane(dispatch_yaml, dispatch_inputs):
     """The linopy lane has no accessor, so its half is lhs evaluated at the solution."""
-    data, coords = dispatch_inputs
-    with differential(dispatch_yaml, data, coords) as run:
+    data = dispatch_inputs
+    with differential(dispatch_yaml, data) as run:
         oracle = run.model.constraints['power_balance'].lhs.solution
         expected = pd.Series(np.asarray(oracle), index=np.asarray(oracle.indexes['snapshot'])).sort_index()
         actual = run.result.activity('power_balance').sort('snapshot')['value'].to_numpy()
@@ -77,8 +77,8 @@ def test_a_milp_returns_activity_where_dual_refuses(commitment_inputs):
     `dual` must refuse (`tests/test_duals.py`) reads its activities back, and
     they agree with the CSR recomputation at the incumbent.
     """
-    data, coords = commitment_inputs
-    with differential(COMMITMENT_YAML, data, coords) as run:
+    data = commitment_inputs
+    with differential(COMMITMENT_YAML, data) as run:
         assert run.result.has_primal
         _agrees_with_csr(run)
 
@@ -92,8 +92,8 @@ def test_a_milp_returns_activity_where_dual_refuses(commitment_inputs):
 
 def test_equality_row_activity_equals_rhs(dispatch_yaml, dispatch_frame_inputs):
     """On an `==` row activity equals the rhs up to solver tolerance, by construction."""
-    data, coords = dispatch_frame_inputs
-    with lps.solve(dispatch_yaml, data, coords=coords) as sol:
+    data = dispatch_frame_inputs
+    with lps.solve(dispatch_yaml, data) as sol:
         got = sol.activity('power_balance').sort('snapshot')['value'].to_numpy()
         assert got == pytest.approx(data['load'].sort('snapshot')['value'].to_numpy(), rel=ACTIVITY_RTOL), (
             'an == row holds at the solution, so its activity is its rhs — a residual check, not a bug'
@@ -105,10 +105,10 @@ def test_equality_row_activity_equals_rhs(dispatch_yaml, dispatch_frame_inputs):
 
 def test_infeasible_solve_refuses_activity(dispatch_yaml, dispatch_inputs):
     """No values at all is the refusal `primal` shares — same class, same gate."""
-    data, coords = dispatch_inputs
-    data = dict(data, load=pd.Series(1e6, index=coords['snapshot']))  # more than every generator together
+    data = dispatch_inputs
+    data = dict(data, load=pd.Series(1e6, index=data['snapshot']))  # more than every generator together
 
-    with lps.solve(dispatch_yaml, data, coords=coords) as result:
+    with lps.solve(dispatch_yaml, data) as result:
         assert not result.has_primal
         with pytest.raises(NoSolutionError, match='cannot read the activity'):
             result.activity('power_balance')
@@ -116,8 +116,8 @@ def test_infeasible_solve_refuses_activity(dispatch_yaml, dispatch_inputs):
 
 def test_a_closed_result_refuses_activity(dispatch_yaml, dispatch_frame_inputs):
     """close() releases the activity frames with the primal and dual ones."""
-    data, coords = dispatch_frame_inputs
-    with lps.solve(dispatch_yaml, data, coords=coords) as sol:
+    data = dispatch_frame_inputs
+    with lps.solve(dispatch_yaml, data) as sol:
         pass
     with pytest.raises(LpspecError, match='closed'):
         sol.activity('power_balance')

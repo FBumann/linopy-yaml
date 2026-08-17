@@ -99,7 +99,7 @@ class Case:
     name: str
     ladder: tuple[Shape, ...]
     write: Callable[[Shape, Path], dict[str, str]]
-    eager_inputs: Callable[[dict[str, str]], tuple[dict[str, Any], dict[str, Any]]]
+    eager_inputs: Callable[[dict[str, str]], dict[str, Any]]
     model: Path | None = None
     generate_model: Callable[[Shape], str] | None = None
 
@@ -215,7 +215,7 @@ def _dispatch_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _dispatch_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _dispatch_eager(paths: dict[str, str]) -> dict[str, Any]:
     """The same parquet files, as the linopy lane wants them.
 
     Reading them is the eager arm's own cost and is timed inside its build
@@ -226,11 +226,11 @@ def _dispatch_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, An
     cost = pd.read_parquet(paths['cost']).set_index('generator')['value']
     load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
     data = {'p_max': p_max, 'cost': cost, 'load': load}
-    coords = {
+    index = {
         'generator': pd.Index(p_max.index, name='generator'),
         'snapshot': pd.Index(load.index, name='snapshot'),
     }
-    return data, coords
+    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -267,7 +267,7 @@ def _commitment_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _commitment_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _commitment_eager(paths: dict[str, str]) -> dict[str, Any]:
     p_max = pd.read_parquet(paths['p_max']).set_index('generator')['value']
     load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
     data = {
@@ -276,11 +276,11 @@ def _commitment_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, 
         'fix_cost': pd.read_parquet(paths['fix_cost']).set_index('generator')['value'],
         'load': load,
     }
-    coords = {
+    index = {
         'generator': pd.Index(p_max.index, name='generator'),
         'snapshot': pd.Index(load.index, name='snapshot'),
     }
-    return data, coords
+    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -355,7 +355,7 @@ def _nodal_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _nodal_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _nodal_eager(paths: dict[str, str]) -> dict[str, Any]:
     """The same parquet files, as the linopy lane wants them.
 
     The eager lane cannot hold an absent pair, so ``installed`` is reindexed
@@ -374,12 +374,12 @@ def _nodal_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]
         'cost': cost,
         'demand': demand.set_index(['snapshot', 'node'])['value'],
     }
-    coords = {
+    index = {
         'snapshot': pd.Index(sorted(demand['snapshot'].unique()), name='snapshot'),
         'node': pd.Index(nodes, name='node'),
         'tech': pd.Index(techs, name='tech'),
     }
-    return data, coords
+    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -439,7 +439,7 @@ def _sector_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _sector_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _sector_eager(paths: dict[str, str]) -> dict[str, Any]:
     """The same parquet files, as the linopy lane wants them.
 
     Both sparse tables are reindexed over their full product: the eager lane
@@ -459,13 +459,13 @@ def _sector_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]
         'cost': pd.read_parquet(paths['cost']).set_index('tech')['value'],
         'demand': demand.set_index(['snapshot', 'node', 'carrier'])['value'],
     }
-    coords = {
+    index = {
         'snapshot': pd.Index(sorted(demand['snapshot'].unique()), name='snapshot'),
         'node': pd.Index(nodes, name='node'),
         'tech': pd.Index(techs, name='tech'),
         'carrier': pd.Index(carriers, name='carrier'),
     }
-    return data, coords
+    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -513,7 +513,7 @@ def _transport_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _transport_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _transport_eager(paths: dict[str, str]) -> dict[str, Any]:
 
     gens = pd.read_parquet(paths['generator'])
     lines = pd.read_parquet(paths['line'])
@@ -525,13 +525,13 @@ def _transport_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, A
         'neg_cap': pd.read_parquet(paths['neg_cap']).set_index('line')['value'],
         'load': load.set_index(['snapshot', 'bus'])['value'],
     }
-    coords = {
+    index = {
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),
         'generator': gens,
         'bus': pd.Index(pd.read_parquet(paths['bus'])['bus'], name='bus'),
         'line': lines,
     }
-    return data, coords
+    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -573,16 +573,16 @@ def _fleet_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _fleet_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _fleet_eager(paths: dict[str, str]) -> dict[str, Any]:
     p_max = pd.read_parquet(paths['p_max']).set_index('unit')['value']
     cost = pd.read_parquet(paths['cost']).set_index('unit')['value']
     demand = pd.read_parquet(paths['demand']).set_index('snapshot')['value']
     data = {'p_max': p_max, 'cost': cost, 'demand': demand}
-    coords = {
+    index = {
         'unit': pd.Index(p_max.index, name='unit'),
         'snapshot': pd.Index(demand.index, name='snapshot'),
     }
-    return data, coords
+    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -695,7 +695,7 @@ def _profiled_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _profiled_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _profiled_eager(paths: dict[str, str]) -> dict[str, Any]:
     """The same parquet files, as the linopy lane wants them.
 
     This is the eager lane at its best, and the case exists to let it be: the
@@ -723,12 +723,12 @@ def _profiled_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, An
         'cost': pd.read_parquet(paths['cost']).set_index('tech')['value'],
         'demand': demand.set_index(['snapshot', 'node'])['value'],
     }
-    coords = {
+    index = {
         'snapshot': pd.Index(snapshots, name='snapshot'),
         'node': pd.Index(nodes, name='node'),
         'tech': pd.Index(techs, name='tech'),
     }
-    return data, coords
+    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -772,7 +772,7 @@ def _storage_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _storage_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _storage_eager(paths: dict[str, str]) -> dict[str, Any]:
     p_max = pd.read_parquet(paths['p_max']).set_index('generator')['value']
     load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
     e_max = pd.read_parquet(paths['e_max']).set_index('store')['value']
@@ -784,12 +784,12 @@ def _storage_eager(paths: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any
         'p_store': pd.read_parquet(paths['p_store']).set_index('store')['value'],
         'eta': pd.read_parquet(paths['eta']).set_index('store')['value'],
     }
-    coords = {
+    index = {
         'generator': pd.Index(p_max.index, name='generator'),
         'store': pd.Index(e_max.index, name='store'),
         'snapshot': pd.Index(load.index, name='snapshot'),
     }
-    return data, coords
+    return data | index
 
 
 # --------------------------------------------------------------------------

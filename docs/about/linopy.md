@@ -57,12 +57,12 @@ that rots.
 The same file, built as a `linopy.Model` instead of bound relationally — the
 caller picks the lane by an import, and the call is the one `lps.build` takes:
 same first argument (a path, a mapping or a loaded `Model`), same `sources`,
-same `coords=`.
+same index sources.
 
 ```python
 from lpspec import linopy as lpspec_linopy
 
-m = lpspec_linopy.build('model.yaml', {...}, coords={...})  # -> linopy.Model
+m = lpspec_linopy.build('model.yaml', {...})  # -> linopy.Model
 m.solve(...)
 lpspec_linopy.expression(m, 'model.yaml', 'co2', {...})  # a named quantity, read back
 ```
@@ -97,9 +97,8 @@ path, any table exporting the Arrow PyCapsule protocol, a `pd.Series` carrying
 its dims in an index, a `dict` or a sequence over one dimension, or one number
 spread over the coordinates it covers. Neither reads an `xr.DataArray`: this
 package reads tables and hands arrays back. A dimension index is any of those
-tables too, under the dimension's own key in `sources` or under `coords=`, and
-labels come from `sources`, from `coords=`, or from what the file declares —
-exactly one of them, since a dimension the file declares and the caller also
+tables too, under the dimension's own key in `sources`, and labels come from
+`sources` or from what the file declares — exactly one of the two, since a dimension the file declares and the caller also
 supplies is refused by both lanes in the same sentence. A dimension with none of
 the three has no index, and is refused in the same sentence again rather than
 derived from the parameters that span it: a parameter carries a label, never the

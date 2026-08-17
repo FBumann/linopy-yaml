@@ -21,7 +21,7 @@ harness at collection time, with no filename list to maintain.
 Usage — the engine stays open for the length of the ``with`` block, so
 per-variable primal checks live inside it::
 
-    with differential(NONCONVEX_YAML, data, coords, lp=True) as run:
+    with differential(NONCONVEX_YAML, sources, lp=True) as run:
         assert run.result.to_pandas('op_cost') ...
 """
 
@@ -75,8 +75,7 @@ class Agreement:
 @contextmanager
 def differential(
     model: str | Path | dict[str, Any],
-    data: Mapping[str, Any],
-    coords: Mapping[str, Any] | None = None,
+    sources: Mapping[str, Any],
     *,
     lp: bool = False,
     rel: float = RTOL,
@@ -100,13 +99,13 @@ def differential(
         work = Path(tmp)
         path = model if isinstance(model, Path) else _write(work / 'model.yaml', model)
 
-        m = lpspec_linopy.build(path, dict(data), coords=dict(coords) if coords else None)
+        m = lpspec_linopy.build(path, dict(sources))
         m.solve(solver_name='highs', output_flag=False, reformulate_sos='auto')
         oracle = float(m.objective.value)
         assert np.isfinite(oracle), 'the eager oracle is infeasible or unbounded — fix the data, not the tolerance'
 
         with PolarsEngine() as engine:
-            engine.build(lower_program(schema), tidy_sources(schema, data, coords), expression_thunks(schema))
+            engine.build(lower_program(schema), tidy_sources(schema, dict(sources)), expression_thunks(schema))
             result = engine.solve()
             assert result.is_ok
             assert result.objective == pytest.approx(oracle, rel=rel)

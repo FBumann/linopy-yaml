@@ -92,7 +92,7 @@ class TestBuildMasterCoords:
         schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
 
         with pytest.raises(ValueError, match="dimension 'x' has no index"):
-            loader.build_master_coords(schema, None, {'a': {'wind': 1.0}})
+            loader.build_master_coords(schema, {'a': {'wind': 1.0}})
 
 
 class TestLoadParameters:
@@ -483,12 +483,12 @@ def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inpu
     """
     from tests.differential import differential
 
-    frames, coords = dispatch_frame_inputs
+    frames = dispatch_frame_inputs
     path = tmp_path / 'load.parquet'
     frames['load'].write_parquet(path)
     sources = {**frames, 'load': path}
 
-    with differential(dispatch_yaml, sources, coords) as run:
+    with differential(dispatch_yaml, sources) as run:
         assert run.result.primal('p').height, 'the relational lane built no rows'
         assert float(run.model.variables['p'].labels.count()), 'the eager lane built no variables'
 

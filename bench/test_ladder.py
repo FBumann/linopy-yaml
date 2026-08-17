@@ -32,7 +32,7 @@ import pytest
 
 from bench.cases import CASES
 from bench.conftest import shape_of
-from bench.workloads import build_only, linopy_build_and_emit, lpspec_build_and_emit, split_sources
+from bench.workloads import build_only, checked_sources, linopy_build_and_emit, lpspec_build_and_emit
 
 
 def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -> None:
@@ -75,7 +75,7 @@ def test_emit(
     pays for its own data ingestion. That is the honest unit, and it is the only
     reason the two are comparable at all.
 
-    ``split_sources`` runs before the clock: it is harness bookkeeping, and the
+    ``checked_sources`` runs before the clock: it is harness bookkeeping, and the
     linopy arm has no counterpart to be charged for it.
     """
     if sink == 'gurobi':
@@ -86,8 +86,8 @@ def test_emit(
     if arm == 'linopy':
         counts = benchmark(linopy_build_and_emit, case_name, size, sink, case_paths, io_api)
     else:
-        sources, coords = split_sources(CASES[case_name], size, case_paths)
-        counts = benchmark(lpspec_build_and_emit, case_name, size, sink, sources, coords)
+        sources = checked_sources(CASES[case_name], size, case_paths)
+        counts = benchmark(lpspec_build_and_emit, case_name, size, sink, sources)
     _record(benchmark, counts, case_name, size)
 
 

@@ -1753,10 +1753,10 @@ def test_an_empty_index_keeps_the_dimension_s_declared_dtype(declared, dtype, gr
         'objective': {'sense': 'minimize', 'expression': 'x * c'},
     }
     empty = pl.DataFrame(schema={'cut': dtype, 'value': pl.Float64})
-    with lps.build(model, {'c': empty}, coords={'cut': []}) as bound:
+    with lps.build(model, {'c': empty} | {'cut': []}) as bound:
         assert bound._engine._tables().column_count == 0
 
-    with lps.build(model, {'c': pl.DataFrame({'cut': grown, 'value': [1.0, 2.0]})}, coords={'cut': grown}) as bound:
+    with lps.build(model, {'c': pl.DataFrame({'cut': grown, 'value': [1.0, 2.0]})} | {'cut': grown}) as bound:
         assert bound._engine._tables().column_count == 2
 
 

@@ -40,11 +40,11 @@ def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, 
     and the relational one ends with it. One source, so this cannot drift into
     two dialects the way the hand-copied ``**`` message could.
     """
-    data, coords = dispatch_model_inputs
+    data = dispatch_model_inputs
     path = dispatch_model_path(tmp_path, **{'objective.expression': expression})
 
     with pytest.raises(LanguageError, match=match) as eager:
-        lpspec_linopy.build(path, data, coords=coords)
+        lpspec_linopy.build(path, data)
 
     with pytest.raises(LanguageError, match=match) as relational:
         lps.check(path)
@@ -57,7 +57,7 @@ def test_the_eager_lane_still_accepts_an_affine_product(tmp_path, dispatch_model
     is the shape the whole language is built around, and a check that broke it
     would be caught here rather than by every other test at once.
     """
-    data, coords = dispatch_model_inputs
+    data = dispatch_model_inputs
     path = dispatch_model_path(tmp_path, **{'objective.expression': 'sum(p * cost, over=generator)'})
-    model = lpspec_linopy.build(path, data, coords=coords)
+    model = lpspec_linopy.build(path, data)
     assert model.objective is not None

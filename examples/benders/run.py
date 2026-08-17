@@ -136,7 +136,7 @@ def main() -> None:
     with (
         lps.build(SUB, slice_for(SUB, cap_hat=capacity)) as sub_model,
         lps.build(FEASIBILITY, slice_for(FEASIBILITY, cap_hat=capacity)) as short_model,
-        lps.build(MASTER, {'invest': SOURCES['invest'], **tables}, coords=empty) as master,
+        lps.build(MASTER, {'invest': SOURCES['invest'], **tables, **empty}) as master,
     ):
         for step in range(25):
             sub = sub_model.rebind({'cap_hat': capacity}).solve()
@@ -152,7 +152,7 @@ def main() -> None:
                 appended(tables, 'fcut', here - short.objective, slope)
 
             coordinates = {'cut': tables['cut_const']['cut'].to_list(), 'fcut': tables['fcut_const']['fcut'].to_list()}
-            answer = master.rebind(tables, coords=coordinates).solve()
+            answer = master.rebind({**tables, **coordinates}).solve()
             lower = answer.objective
             capacity = answer.primal('cap').select('generator', 'value')
 

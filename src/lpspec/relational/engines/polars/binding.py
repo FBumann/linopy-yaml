@@ -201,8 +201,8 @@ class _Binder:
                         f"dimension '{d}' lookup '{lk.name}' targets '{lk.target}', which "
                         f'nothing in this model spans and which has no index of its own, so '
                         f"the lookup's values have no label set to be checked against. "
-                        f"Pass an index for '{lk.target}' (under key '{lk.target}' in data or "
-                        f'coords, or as values on its declaration), or remove the lookup.'
+                        f"Pass an index for '{lk.target}' (under key '{lk.target}' in sources, "
+                        f'or as values on its declaration), or remove the lookup.'
                     )
                 data_validation.check_lookup_containment(d, lk.name, lk.target, self.dimensions)
 

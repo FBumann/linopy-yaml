@@ -326,8 +326,7 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
         lps.build(MODELS / 'feasibility.yaml', slice_for(MODELS / 'feasibility.yaml', cap_hat=capacity)) as short_model,
         lps.build(
             MODELS / 'master.yaml',
-            {'invest': data['invest'], 'cap_max': data['cap_max'], **cuts},
-            coords={'generator': gens, 'cut': [], 'fcut': []},
+            {'invest': data['invest'], 'cap_max': data['cap_max'], **cuts, 'generator': gens, 'cut': [], 'fcut': []},
         ) as master,
     ):
         for _ in range(steps):
@@ -343,11 +342,11 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
                 _appended(cuts, 'fcut', here - short.objective, slope)
 
             master.rebind(
-                cuts,
-                coords={
+                {
+                    **cuts,
                     'cut': cuts['cut_const']['cut'].to_list(),
                     'fcut': cuts['fcut_const']['fcut'].to_list(),
-                },
+                }
             )
             engine = master._engine
             built = sinks.ingestible('highs', engine._tables())

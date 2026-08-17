@@ -33,8 +33,8 @@ if TYPE_CHECKING:
 Counts = dict[str, Any]
 
 
-def split_sources(case: Case, size: str, paths: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
-    """Parameters from dimension index tables, by what the model declares.
+def checked_sources(case: Case, size: str, paths: dict[str, str]) -> dict[str, str]:
+    """Every generated parquet, checked against what the model declares.
 
     Harness bookkeeping, and it runs *before* the clock on the lpspec arm: it
     re-parses the YAML only because the runner, not lpspec, decides which
@@ -59,10 +59,7 @@ def split_sources(case: Case, size: str, paths: dict[str, str]) -> tuple[dict[st
             f'{case.name}: {undeclared} declared as neither parameter nor dimension in '
             f'{model} — the build would not see it. Stale files under bench/.cache/?'
         )
-    return (
-        {k: v for k, v in paths.items() if k in params},
-        {k: v for k, v in paths.items() if k in dims},
-    )
+    return dict(paths)
 
 
 def _tables(handle: Any) -> Any:
@@ -76,9 +73,7 @@ def _tables(handle: Any) -> Any:
     return getattr(handle, '_engine', handle)._tables()
 
 
-def lpspec_build_and_emit(
-    case_name: str, size: str, sink: str, sources: dict[str, str], coords: dict[str, str]
-) -> Counts:
+def lpspec_build_and_emit(case_name: str, size: str, sink: str, sources: dict[str, str]) -> Counts:
     """Build relationally and hand the model over — an LP file, or a solver.
 
     ``run()`` / ``optimize()`` is never called. The simplex is the solver's work
@@ -96,7 +91,7 @@ def lpspec_build_and_emit(
     case = CASES[case_name]
     with (
         tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp,
-        lps.build(case.model_path(case.shape(size)), sources, coords=coords) as bound,
+        lps.build(case.model_path(case.shape(size)), sources) as bound,
     ):
         if sink == 'lp':
             bound.write(Path(tmp) / 'model.lp')
@@ -138,8 +133,8 @@ def linopy_build_and_emit(
 
     case = CASES[case_name]
     with tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp:
-        data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(case.model_path(case.shape(size)), data, coords=coords)
+        data = case.eager_inputs(paths)
+        m = lpspec_linopy.build(case.model_path(case.shape(size)), data)
         if sink == 'lp':
             m.to_file(Path(tmp) / 'model.lp', io_api=io_api, progress=False)
         elif sink == 'gurobi':
@@ -162,14 +157,14 @@ def build_only(arm: str, case_name: str, size: str, paths: dict[str, str]) -> Co
     if arm == 'linopy':
         from lpspec import linopy as lpspec_linopy
 
-        data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(model, data, coords=coords)
+        data = case.eager_inputs(paths)
+        m = lpspec_linopy.build(model, data)
         return {'columns': int(m.nvars), 'rows': int(m.ncons), 'nonzeros': None}
 
     import lpspec as lps
 
-    sources, coords_ = split_sources(case, size, paths)
-    with lps.build(model, sources, coords=coords_) as bound:
+    sources = checked_sources(case, size, paths)
+    with lps.build(model, sources) as bound:
         tables = _tables(bound)
         return {'columns': tables.column_count, 'rows': tables.row_count, 'nonzeros': None}
 
@@ -191,8 +186,8 @@ def objective(arm: str, case_name: str, size: str, paths: dict[str, str]) -> flo
     if arm == 'linopy':
         from lpspec import linopy as lpspec_linopy
 
-        data, coords = case.eager_inputs(paths)
-        m = lpspec_linopy.build(model, data, coords=coords)
+        data = case.eager_inputs(paths)
+        m = lpspec_linopy.build(model, data)
         m.solve(solver_name='highs', output_flag=False)
         if m.status != 'ok':
             raise RuntimeError(f'linopy solve finished {m.status!r}, not ok')
@@ -200,8 +195,8 @@ def objective(arm: str, case_name: str, size: str, paths: dict[str, str]) -> flo
 
     import lpspec as lps
 
-    sources, coords_ = split_sources(case, size, paths)
-    with lps.solve(model, sources, coords=coords_) as sol:
+    sources = checked_sources(case, size, paths)
+    with lps.solve(model, sources) as sol:
         if sol.termination_condition != 'optimal':
             raise RuntimeError(f'lpspec solve terminated {sol.termination_condition!r}, not optimal')
         return float(sol.objective)

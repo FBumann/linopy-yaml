@@ -44,9 +44,8 @@ def _case(name: str) -> Any:
 def test_both_lanes_and_the_lp_file_reach_one_objective(name: str) -> None:
     """The harness is the whole assertion: it builds both lanes and re-solves the LP.
 
-    No ``coords=`` is passed. Every port's ``sources`` already carries each
-    dimension's own index table, which is what both lanes read — handing the
-    labels in a second way here would test the call rather than the lanes.
+    Every port's ``sources`` already carries each dimension's own index table,
+    which is what both lanes read.
     """
     with differential(port_model(name), port_sources(name), lp=True):
         pass  # a deliberate no-op: the harness asserted everything on the way in

@@ -45,9 +45,9 @@ def test_dispatch_yaml_agrees_variable_by_variable(dispatch_inputs):
     An objective can agree while the dispatch behind it differs, which is what
     this rules out.
     """
-    data, coords = dispatch_inputs
+    data = dispatch_inputs
 
-    with differential(DISPATCH_YAML, data, coords, lp=True) as run:
+    with differential(DISPATCH_YAML, data, lp=True) as run:
         eager_p = run.model.solution['p'].to_dataframe(name='value').reset_index()
         rel_p = run.result.to_pandas('p')
         merged = eager_p.merge(rel_p, on=['snapshot', 'generator'], suffixes=('_eager', '_rel'))

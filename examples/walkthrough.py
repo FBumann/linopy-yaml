@@ -43,8 +43,8 @@ SOURCES = {
     'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 200.0, 0.0]}),
     'load': pl.DataFrame({'snapshot': range(6), 'value': [80.0, 120.0, 150.0, 180.0, 140.0, 100.0]}),
     'cost': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 0.0, 50.0, 80.0]}),
+    'snapshot': range(6),
 }
-COORDS = {'snapshot': range(6)}
 
 #: Two ways out of the language, caught at two different stages (see stage 7).
 _REFUSED = [
@@ -153,7 +153,7 @@ def model_frames(engine: PolarsEngine, schema: lps.Model, program: Any) -> None:
     the whole point.
     """
     banner(4, 'plan + data -> the model frames', 'relational/engines/polars/engine.py')
-    engine.build(program, tidy_sources(schema, SOURCES, COORDS), expression_thunks(schema))
+    engine.build(program, tidy_sources(schema, SOURCES), expression_thunks(schema))
     model = engine._tables()
     for name, frame in (
         ('cols', model.cols),
@@ -236,7 +236,7 @@ def refusals() -> None:
             _refusal('check()', exc)
             continue
         try:
-            lps.build(model, SOURCES, coords=COORDS).close()
+            lps.build(model, SOURCES).close()
         except ValueError as exc:
             _refusal('build()', exc)
 

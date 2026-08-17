@@ -21,10 +21,10 @@ cannot cross. The two differ in that and nothing else: both yield an
     myopic pathway      ``EachCoordinate('period', ordered=True)``  + ``carry``
     rolling horizon     ``EachWindow('snapshot', 48, 24, 't')``     + ``carry``
 
-**A partition is a filter on the sources, not a narrower ``coords``.** Passing
-``coords`` alone leaves the parameter rows outside the window in place, and the
-containment check refuses them by design, so an axis rewrites the sources and
-supplies the matching ``coords`` together.
+**A partition is a filter on the sources, not a narrower index.** Narrowing a
+dimension alone leaves the parameter rows outside the window in place, and the
+containment check refuses them by design, so an axis rewrites the rows and the
+index it is over in one mapping.
 
 The caller-facing rules are [docs/reference/sweeps.md](../../docs/reference/sweeps.md).
 """
@@ -63,15 +63,16 @@ _COMPRESSION = 'zstd'
 
 
 class Cut(NamedTuple):
-    """One slice of a sweep: the key, its sources, and the coords the axis re-indexed.
+    """One slice of a sweep: the key, and the sources that build it.
 
     A tuple on purpose: a hand-built axis is documented as a plain list of
-    ``(key, sources, coords)``, and those unpack the same way.
+    ``(key, sources)``, and those unpack the same way. An axis that re-indexes
+    a dimension puts the new index in ``sources`` under the dimension's own
+    key, which is where every other index lives.
     """
 
     key: Any
     sources: dict[str, Any]
-    coords: dict[str, Any]
 
 
 class _SliceMeta(NamedTuple):
@@ -266,7 +267,7 @@ class EachCoordinate:
         out: list[Cut] = []
         for key in coordinates:
             cut = {name: _lazy(sources[name]).filter(pl.col(self.dim) == key).drop(self.dim) for name in carrying}
-            out.append(Cut(key, {**sources, **cut}, {}))
+            out.append(Cut(key, {**sources, **cut}))
         return out, None
 
 
@@ -332,7 +333,7 @@ class EachWindow:
                 )
                 for name in carrying
             }
-            out.append(Cut(window[0], {**sources, **cut}, {self.into: range(len(window))}))
+            out.append(Cut(window[0], {**sources, **cut, self.into: range(len(window))}))
             owned.extend(
                 {key_name: window[0], self.into: position, self.dim: coordinate}
                 for position, coordinate in enumerate(window[: self.step])
@@ -340,7 +341,7 @@ class EachWindow:
         return out, _OriginalIndex(self.into, self.dim, pl.DataFrame(owned))
 
 
-#: What ``axis=`` accepts. A plain list of ``(key, sources, coords)`` is also
+#: What ``axis=`` accepts. A plain list of ``(key, sources)`` is also
 #: taken, so an irregular ladder or a hand-built draw needs no third class.
 Axis = EachCoordinate | EachWindow
 
@@ -592,7 +593,6 @@ def solve_over(
     solver_options: Mapping[str, Any] | None = None,
     solver_name: str = 'highs',
     keep: Keep = 'solver',
-    **build_kwargs: Any,
 ) -> Runs:
     """Solve *model* once per slice of *axis* and fold the answers together.
 
@@ -622,10 +622,6 @@ def solve_over(
     labels move is loaded again and keeps nothing, which the fold neither
     prevents nor needs to know; the pooled branch can keep nothing at all,
     building per slice, and asking there is not an error.
-
-    **A caller's own ``coords`` sit under the axis's**, which owns the dim it
-    re-indexed. They are merged into the cuts once, here, so neither of the two
-    ways a slice can be solved has to know the rule.
 
     **The last slice carries nothing**, there being no next slice to read it.
     A short tail window can hold fewer coordinates than the carry index names,
@@ -672,8 +668,7 @@ def solve_over(
     if not cut:
         raise DataError('the axis produced no slices')
 
-    under = dict(build_kwargs.pop('coords', None) or {})
-    cuts = [Cut(key, sliced, {**under, **coords}) for key, sliced, coords in cut]
+    cuts = [Cut(*entry) for entry in cut]
     solving = {'solver_name': solver_name, 'solver_options': dict(solver_options or {}) or None}
     rows: list[dict[str, Any]] = []
     primals: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
@@ -683,9 +678,9 @@ def solve_over(
     no_expressions: dict[str, str] = {}
 
     answered = (
-        _serially(schema, cuts, build_kwargs, solving, plan, keep)
+        _serially(schema, cuts, solving, plan, keep)
         if executor is None
-        else _pooled(executor, workers_share_fs, schema, cuts, build_kwargs, solving)
+        else _pooled(executor, workers_share_fs, schema, cuts, solving)
     )
     with closing(answered) as stream:
         for key, answer in stream:
@@ -712,7 +707,6 @@ def solve_over(
 def _serially(
     schema: Model,
     cuts: Sequence[Cut],
-    building: Mapping[str, Any],
     solving: Mapping[str, Any],
     plan: Mapping[str, _CarryRule],
     keep: Keep,
@@ -744,18 +738,18 @@ def _serially(
     abandoned part way.
     """
     bound: Any = None
-    named: tuple[frozenset[str], frozenset[str]] | None = None
+    named: frozenset[str] | None = None
     state: dict[str, Any] = {}
     try:
         for position, cut in enumerate(cuts):
             sources = {**cut.sources, **state}
-            names = (frozenset(sources), frozenset(cut.coords))
+            names = frozenset(sources)
             if names == named:
-                bound.rebind(sources, coords=cut.coords)
+                bound.rebind(sources)
             else:
                 if bound is not None:
                     bound.close()
-                bound, named = build(schema, sources, coords=cut.coords or None, **building), names
+                bound, named = build(schema, sources), names
             answer = _answers(bound.solve(**solving, keep=keep), schema)
             yield cut.key, answer
             if plan and position < len(cuts) - 1:
@@ -770,7 +764,6 @@ def _pooled(
     workers_share_fs: bool | None,
     schema: Model,
     cuts: Sequence[Cut],
-    building: Mapping[str, Any],
     solving: Mapping[str, Any],
 ) -> Generator[tuple[Any, _Answer], None, None]:
     """The same, from slices built independently and possibly elsewhere.
@@ -785,14 +778,13 @@ def _pooled(
     """
     crosses = _crosses_a_process(executor)
     shared = _shares_filesystem(executor, workers_share_fs)
-    call = {**building, **solving}
+    call = dict(solving)
     memo: dict[str, tuple[Any, Any]] = {}
     futures = [
         executor.submit(
             _run_slice,
             schema,
             _encode(cut.sources, memo, workers_share_fs=shared) if crosses else dict(cut.sources),
-            cut.coords or None,
             crosses,
             call,
         )
@@ -855,7 +847,6 @@ def _answers(result: Any, model: Any) -> _Answer:
 def _run_slice(
     model: Any,
     encoded: dict[str, Any],
-    coords: dict[str, Any] | None,
     encode_out: bool,
     call: dict[str, Any],
 ) -> _Answer:
@@ -867,7 +858,7 @@ def _run_slice(
     number — which is also why this one builds per slice where the serial
     branch rebinds.
     """
-    with _solve(model, _decode(encoded), coords=coords, **call) as result:
+    with _solve(model, _decode(encoded), **call) as result:
         answer = _answers(result, model)
         if not encode_out:
             return answer

@@ -18,7 +18,7 @@ runs.primal('p')  # (scenario, snapshot, generator, value)
 |---|---|
 | `lps.EachCoordinate(dim, ordered=False)` | one slice per coordinate of `dim` — scenarios, draws, investment periods. Sources carrying `dim` are filtered to one coordinate and the column dropped, so the model never mentions it; every other source passes through untouched. `ordered=True` says the coordinates are a sequence, which a `carry` needs |
 | `lps.EachWindow(dim, length, step, into)` | one slice per window of consecutive coordinates of `dim`. `length` is what the solver sees, `step` is what the window keeps, and `length > step` is overlap. The dimension is re-indexed rather than dropped, into a dense `0..n-1` column the model addresses by the name `into` gives it |
-| a sequence of `(key, sources, coords)` triples | a hand-built axis: each cut says what the *whole* model binds for that slice, and the call must pass `key_name=` |
+| a sequence of `(key, sources)` pairs | a hand-built axis: each cut says what the *whole* model binds for that slice, and the call must pass `key_name=` |
 
 ```python
 runs = lps.solve_over(
@@ -163,7 +163,7 @@ Only `scan_parquet` is a reference.)
 
 | | |
 |---|---|
-| **a partition is a filter on the sources** | not a narrower `coords`: the containment check refuses parameter rows outside the declared coordinates, by design. The axis rewrites the sources and supplies the matching `coords` together |
+| **a partition is a filter on the sources** | not a narrower index: the containment check refuses parameter rows outside the declared coordinates, by design. The axis rewrites the rows and the index it is over in one mapping |
 | **one model, rebound per slice** | every slice is the same math over different numbers, so a serial sweep builds once and [rebinds](api.md#re-solving-with-new-numbers): the YAML is parsed once, the plan lowered once, and a slice whose structure matches the last keeps the loaded solver. A sweep under `executor=` cannot — a built model is the one thing that does not cross a process — so it builds per slice |
 | **`keep=` reaches every slice, and the fold chooses none of them** | it defaults exactly as [`solve`](api.md#how-much-of-the-session-a-solve-keeps) does, to `'solver'`. A fold is where `keep='progress'` has something to carry, consecutive slices differing by one step — but whether carrying pays is a fact about the *model*, and the driver knows no more about that than you do, so it does not decide for you. Under `executor=` it cannot apply at all: a pooled sweep builds per slice, so every slice is a first solve and keeps `'nothing'` |
 | **the model is parsed once** | `solve_over` validates it up front and hands every slice the schema, so a model outside the language fails before the data is touched and no worker re-reads the YAML |

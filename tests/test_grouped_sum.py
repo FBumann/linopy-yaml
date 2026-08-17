@@ -47,23 +47,22 @@ def _inputs(gens, lines, load):
         'neg_cap': -lines.set_index('line')['cap'],
         'load': load.set_index(['snapshot', 'bus'])['value'],
     }
-    coords = {
+    return data | {
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),
         'generator': gens[['generator', 'bus']].rename(columns={'bus': 'gen_bus'}),
         'bus': pd.Index(sorted(load['bus'].unique()), name='bus'),
         'line': lines[['line', 'from_bus', 'to_bus']].rename(columns={'from_bus': 'from', 'to_bus': 'to'}),
     }
-    return data, coords
 
 
 def test_transport_yaml_agrees_with_an_independent_oracle(transport_data):
     gens, lines, load = transport_data
-    data, coords = _inputs(gens, lines, load)
+    data = _inputs(gens, lines, load)
 
     independent = transport_eager_objective(gens, lines, load)
     assert np.isfinite(independent), 'indicator matrices, no sum involved — an oracle for the oracle'
 
-    with differential(TRANSPORT_YAML, data, coords, lp=True) as run:
+    with differential(TRANSPORT_YAML, data, lp=True) as run:
         assert run.oracle == pytest.approx(independent, rel=RTOL)
 
 
@@ -152,10 +151,10 @@ def test_a_lookup_over_another_dim_is_a_dim_error_not_a_resolution_one():
 # ---------------------------------------------------------------------------
 
 
-def _relationally(data, coords):
+def _relationally(data):
     schema = schema_of(TRANSPORT_YAML)
     with PolarsEngine() as engine:
-        engine.build(lower_program(schema), tidy_sources(schema, data, coords))
+        engine.build(lower_program(schema), tidy_sources(schema, data))
 
 
 def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
@@ -165,12 +164,12 @@ def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
     gens, lines, load = transport_data
     bad = gens.copy()
     bad.loc[bad.index[0], 'bus'] = 'nowhere'  # a bus that does not exist
-    data, coords = _inputs(bad, lines, load)
+    data = _inputs(bad, lines, load)
 
     with pytest.raises(DataError, match="not 'bus' labels"):
-        _relationally(data, coords)
+        _relationally(data)
     with pytest.raises(DataError, match="not 'bus' labels"):
-        lpspec_linopy.build(TRANSPORT_YAML, data, coords=coords)
+        lpspec_linopy.build(TRANSPORT_YAML, data)
 
 
 def test_a_coordinate_must_be_single_valued(transport_data):
@@ -184,11 +183,11 @@ def test_a_coordinate_must_be_single_valued(transport_data):
     """
     gens, lines, load = transport_data
     other = 's' if gens['bus'].iloc[0] != 's' else 'n'
-    data, coords = _inputs(gens, lines, load)
-    coords['generator'] = pd.concat([coords['generator'], coords['generator'].head(1).assign(gen_bus=other)])
+    data = _inputs(gens, lines, load)
+    data['generator'] = pd.concat([data['generator'], data['generator'].head(1).assign(gen_bus=other)])
 
     with pytest.raises(DataError, match='more than one value'):
-        _relationally(data, coords)
+        _relationally(data)
 
 
 def test_a_parameter_carrying_a_coordinate_twice_is_refused(transport_data):
@@ -202,18 +201,18 @@ def test_a_parameter_carrying_a_coordinate_twice_is_refused(transport_data):
     doubled = pd.concat([gens, gens.head(1)])
 
     with pytest.raises(DataError, match="parameter 'p_max' has more than one row"):
-        _relationally(*_inputs(doubled, lines, load))
+        _relationally(_inputs(doubled, lines, load))
 
 
 def test_a_coordinate_bearing_dim_needs_an_index_source(transport_data):
     """A coordinate cannot be inferred from the parameters that use the dim —
     inferring it is what would let a typo extend the label space."""
     gens, lines, load = transport_data
-    data, coords = _inputs(gens, lines, load)
-    del coords['generator']
+    data = _inputs(gens, lines, load)
+    del data['generator']
 
     with pytest.raises(DataError, match='no index source'):
-        _relationally(data, coords)
+        _relationally(data)
 
 
 PARTIAL_YAML = """
@@ -250,11 +249,12 @@ def _partial_inputs():
             'cap': pd.DataFrame({'item': items, 'value': [5.0, 5.0, 5.0]}),
             'target': pd.DataFrame({'g': ['g0'], 'value': [3.0]}),
         },
-        {  # eager data / coords
+        {  # the same, in the shapes the eager lane is usually fed
             'cap': pd.Series([5.0, 5.0, 5.0], index=pd.Index(items, name='item')),
             'target': pd.Series([3.0], index=pd.Index(['g0'], name='g')),
+            'item': index,
+            'g': pd.Index(['g0'], name='g'),
         },
-        {'item': index, 'g': pd.Index(['g0'], name='g')},
     )
 
 
@@ -268,7 +268,7 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
     """
     path = tmp_path / 'partial.yaml'
     path.write_text(PARTIAL_YAML)
-    sources, data, coords = _partial_inputs()
+    sources, data = _partial_inputs()
 
     with lps.solve(path, sources) as result:
         assert result.is_ok
@@ -277,7 +277,7 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
             'the orphan is still a variable; it just carries no group obligation'
         )
 
-    model = lpspec_linopy.build(path, data, coords=coords)
+    model = lpspec_linopy.build(path, data)
     model.solve(solver_name='highs', output_flag=False)
     assert float(model.objective.value) == pytest.approx(3.0)
 
@@ -440,8 +440,8 @@ def test_the_broadcast_objective_agrees_with_the_eager_lane():
         'w': pd.Series([1.0, 10.0, 100.0, 1000.0], index=pd.Index([0, 1, 2, 3], name='snapshot')),
         'floor': pd.Series([1.0, 2.0, 3.0], index=pd.Index(['b0', 'b1', 'b2'], name='bus')),
     }
-    coords = {'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
-    with differential(BROADCAST_OBJECTIVE, data, coords, lp=True) as run:
+    index = {'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
+    with differential(BROADCAST_OBJECTIVE, data | index, lp=True) as run:
         assert run.oracle == pytest.approx(6666.0)
 
 

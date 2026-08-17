@@ -35,13 +35,13 @@ from tests.conftest import (
 @pytest.fixture
 def dispatch_solution(dispatch_yaml, dispatch_frame_inputs):
     """The dispatch model solved on the native lane, closed after the test."""
-    sources, coords = dispatch_frame_inputs
-    with lps.solve(dispatch_yaml, sources, coords=coords) as result:
+    sources = dispatch_frame_inputs
+    with lps.solve(dispatch_yaml, sources) as result:
         yield result
 
 
 def test_solve(dispatch_solution, dispatch_frame_inputs):
-    sources, _coords = dispatch_frame_inputs
+    sources = dispatch_frame_inputs
     assert dispatch_solution.is_ok
     assert np.isfinite(dispatch_solution.objective)
     balance = dispatch_solution.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
@@ -49,29 +49,29 @@ def test_solve(dispatch_solution, dispatch_frame_inputs):
 
 
 def test_build_context_manager_and_write(dispatch_yaml, dispatch_frame_inputs, tmp_path):
-    sources, coords = dispatch_frame_inputs
-    with lps.build(dispatch_yaml, sources, coords=coords) as bound:
+    sources = dispatch_frame_inputs
+    with lps.build(dispatch_yaml, sources) as bound:
         result = bound.solve()
         assert result.is_ok
         objective_direct = result.objective
 
-    lp = lps.write(dispatch_yaml, sources, tmp_path / 'm.lp', coords=coords)
+    lp = lps.write(dispatch_yaml, sources, tmp_path / 'm.lp')
     assert solve_lp_file(lp) == pytest.approx(objective_direct, rel=1e-9)
 
 
 def test_parquet_path_sources(dispatch_yaml, dispatch_frame_inputs, tmp_path):
-    sources, coords = dispatch_frame_inputs
+    sources = dispatch_frame_inputs
     paths = {}
     for name, frame in sources.items():
         p = tmp_path / f'{name}.parquet'
         frame.write_parquet(p)
         paths[name] = str(p)
 
-    with lps.solve(dispatch_yaml, paths, coords=coords) as result:
+    with lps.solve(dispatch_yaml, paths) as result:
         assert result.is_ok
         objective = result.objective
 
-    with lps.solve(dispatch_yaml, sources, coords=coords) as ref:
+    with lps.solve(dispatch_yaml, sources) as ref:
         assert objective == pytest.approx(ref.objective, rel=1e-9)
 
 
@@ -98,11 +98,11 @@ def test_plain_python_sources_reach_the_same_answer_as_tables(dispatch_yaml, dis
     A dict carries its own labels; a sequence is positional against the index,
     which is why the dimensions are resolved before any parameter is read.
     """
-    _frames, coords = dispatch_frame_inputs
-    with lps.solve(dispatch_yaml, _frames, coords=coords) as tables:
+    frames = dispatch_frame_inputs
+    with lps.solve(dispatch_yaml, frames) as tables:
         expected = tables.objective
 
-    with lps.solve(dispatch_yaml, _PLAIN[shape], coords=coords) as plain:
+    with lps.solve(dispatch_yaml, _PLAIN[shape] | {'snapshot': frames['snapshot']}) as plain:
         assert plain.objective == pytest.approx(expected, rel=1e-9)
 
 
@@ -112,13 +112,13 @@ def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_frame_in
     Dense by construction, and materialised here — which is the cost of saying
     it this way rather than declaring the parameter ``dims: []``.
     """
-    frames, coords = dispatch_frame_inputs
+    frames = dispatch_frame_inputs
     flat = {**frames, 'cost': 7.0}
     spelled = {**frames, 'cost': pl.DataFrame({'generator': list(DISPATCH_GENERATORS), 'value': [7.0] * 3})}
 
     with (
-        lps.solve(dispatch_yaml, flat, coords=coords) as broadcast,
-        lps.solve(dispatch_yaml, spelled, coords=coords) as written,
+        lps.solve(dispatch_yaml, flat) as broadcast,
+        lps.solve(dispatch_yaml, spelled) as written,
     ):
         assert broadcast.objective == pytest.approx(written.objective, rel=1e-9)
 
@@ -131,9 +131,9 @@ def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_frame_in
     ],
 )
 def test_a_plain_python_source_that_does_not_fit_is_refused(dispatch_yaml, dispatch_frame_inputs, sources, match):
-    frames, coords = dispatch_frame_inputs
+    frames = dispatch_frame_inputs
     with pytest.raises(lps.DataError, match=match):
-        lps.build(dispatch_yaml, {**frames, **sources}, coords=coords).close()
+        lps.build(dispatch_yaml, {**frames, **sources}).close()
 
 
 #: One parameter over two dims — what a dict and a sequence cannot cover.
@@ -205,8 +205,8 @@ def test_runtime_is_linopy_free(dispatch_yaml):
                                       "value": [1.0, 2.0, 50.0]}}),
                 "load": pl.DataFrame({{"snapshot": [0, 1, 2],
                                       "value": [80.0, 120.0, 150.0]}}),
+                "snapshot": range(3),
             }},
-            coords={{"snapshot": range(3)}},
         )
         assert result.is_ok
         assert isinstance(result.primal("p"), pl.DataFrame), "no dataframe on either side"
@@ -248,9 +248,9 @@ def test_check_reports_language_errors_before_any_data_is_bound(
 
     with pytest.raises(lps.LanguageError, match=match):
         lps.check(raw)
-    sources, coords = dispatch_frame_inputs
+    sources = dispatch_frame_inputs
     with pytest.raises(lps.LanguageError, match=match):
-        lps.build(raw, sources, coords=coords)
+        lps.build(raw, sources)
 
 
 def test_error_hierarchy_is_one_catchable_tree():
@@ -271,9 +271,9 @@ def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispa
     not of gurobi. Refused before the build, as an unwritable suffix is."""
     from lpspec.relational.sinks import SOLVERS
 
-    sources, coords = dispatch_frame_inputs
+    sources = dispatch_frame_inputs
     with pytest.raises(lps.LpspecError, match='unknown solver'):
-        lps.solve(dispatch_yaml, sources, solver_name='cplex', coords=coords)
+        lps.solve(dispatch_yaml, sources, solver_name='cplex')
     assert set(SOLVERS) == {'highs', 'gurobi'}
 
 
@@ -295,14 +295,14 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
     from lpspec import api
     from lpspec.relational.sinks import SOLVERS
 
-    sources, coords = dispatch_frame_inputs
+    sources = dispatch_frame_inputs
     monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))
     monkeypatch.setattr(
         api.PolarsEngine, 'build', lambda *_a, **_k: pytest.fail('the model was built before the refusal')
     )
 
     with pytest.raises(ModuleNotFoundError, match=r'not installed here.*\[gurobi\] extra'):
-        lps.solve(dispatch_yaml, sources, solver_name='gurobi', coords=coords)
+        lps.solve(dispatch_yaml, sources, solver_name='gurobi')
 
 
 def test_a_list_of_models_is_refused(dispatch_yaml):
@@ -316,11 +316,11 @@ def test_a_list_of_models_is_refused(dispatch_yaml):
 
 
 def test_write_suffix_dispatch(dispatch_yaml, dispatch_frame_inputs, tmp_path):
-    sources, coords = dispatch_frame_inputs
-    out = lps.write(dispatch_yaml, sources, tmp_path / 'm.lp', coords=coords)
+    sources = dispatch_frame_inputs
+    out = lps.write(dispatch_yaml, sources, tmp_path / 'm.lp')
     assert out.stat().st_size > 0
     with pytest.raises(ValueError, match='unsupported output format'):
-        lps.write(dispatch_yaml, sources, tmp_path / 'm.nc', coords=coords)
+        lps.write(dispatch_yaml, sources, tmp_path / 'm.nc')
 
 
 def test_solution_to_parquet(dispatch_solution, tmp_path):
@@ -345,9 +345,9 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
     against the coordinates themselves: `snapshot` varies slowest, and within
     it `generator` follows the order the file declares.
     """
-    sources, coords = dispatch_frame_inputs
+    sources = dispatch_frame_inputs
     generators = list(sources['p_max']['generator'])
-    with lps.solve(dispatch_yaml, sources, coords=coords) as result:
+    with lps.solve(dispatch_yaml, sources) as result:
         first = result.primal('p')
         assert first.equals(result.primal('p')), 'a second read agrees, to the row'
 
@@ -368,8 +368,8 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
     release the label frames it pins early, and it means what it says — after
     it, there is nothing left to read.
     """
-    sources, coords = dispatch_frame_inputs
-    result = lps.solve(dispatch_yaml, sources, coords=coords)
+    sources = dispatch_frame_inputs
+    result = lps.solve(dispatch_yaml, sources)
     height = result.primal('p').height
     assert height > 0
     assert result.primal('p').height == height, 'still readable, with no close in sight'
@@ -390,8 +390,8 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
     against labels that are already solver indices).
     """
     key = ['snapshot', 'generator']  # a read is a join, so compare on coordinates
-    sources, coords = dispatch_frame_inputs
-    with lps.build(dispatch_yaml, sources, coords=coords) as bound:
+    sources = dispatch_frame_inputs
+    with lps.build(dispatch_yaml, sources) as bound:
         first = bound.solve()
         before = first.primal('p').sort(key)
         assert first.is_ok
@@ -493,7 +493,7 @@ def test_to_dataset_defaults_to_every_variable():
         'load': pl.DataFrame({'snapshot': list(range(n)), 'value': np.full(n, 90.0)}),
     }
 
-    with lps.solve(TWO_VARIABLE_MODEL, sources, coords={'snapshot': range(n)}) as result:
+    with lps.solve(TWO_VARIABLE_MODEL, sources | {'snapshot': range(n)}) as result:
         ds = result.to_dataset()
         subset = result.to_dataset('shed')
 
@@ -552,8 +552,8 @@ def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs
     a bare `AssertionError`. Frames read before the close are their own data
     and stay valid, which is the half worth stating in the message.
     """
-    sources, coords = dispatch_frame_inputs
-    sol = lps.solve(dispatch_yaml, sources, coords=coords)
+    sources = dispatch_frame_inputs
+    sol = lps.solve(dispatch_yaml, sources)
     frame = sol.primal('p')
     objective = sol.objective
     sol.close()

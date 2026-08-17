@@ -217,7 +217,7 @@ for step in range(25):
             slope, here_value = slope_at(short, capacity)
             appended(tables, 'fcut', here_value - short.objective, slope)
 
-    with lps.solve(master_model, master_sources, coords=coordinates) as master:
+    with lps.solve(master_model, {**master_sources, **coordinates}) as master:
         lower = master.objective
         capacity = master.primal('cap').select('generator', 'value')
 
