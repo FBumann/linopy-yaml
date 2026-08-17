@@ -1,0 +1,90 @@
+description: >-
+  PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one,
+  so a shipment is the input shifted along time and derated by the link's
+  efficiency. Two links serve the same demand — one takes two snapshots to
+  arrive, one arrives at once — and the first snapshots, which nothing has
+  reached yet, are served by the expensive unit standing beside the load.
+  Optimum 4311.111111111111, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  bus:
+    description: network nodes
+    dtype: str
+  generator:
+    description: generating units, each sitting on one bus
+    dtype: str
+  link:
+    description: controllable connections, each joining two buses
+    dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  link_from:
+    description: the bus a link leaves
+    over: link
+    into: bus
+  link_to:
+    description: the bus a link arrives at
+    over: link
+    into: bus
+
+parameters:
+  p_nom:
+    description: installed capacity of a generator
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  link_p_nom:
+    description: most a link may take in during one snapshot
+    dims: [link]
+  efficiency:
+    description: share of what entered a link that arrives at the other end
+    dims: [link]
+  delay:
+    description: how many snapshots a link takes to deliver what it took in
+    dims: [link]
+    dtype: int
+  load:
+    description: demand at each bus in each snapshot
+    dims: [snapshot, bus]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_nom
+  g:
+    description: what a link takes in during a snapshot, at the bus it leaves
+    foreach: [snapshot, link]
+    bounds:
+      lower: 0
+      upper: link_p_nom
+
+constraints:
+  nodal_balance:
+    description: >-
+      what is generated at a bus, plus what arrives over the links — the input
+      of `delay` snapshots ago, derated — less what the links took in there,
+      meets the load. `edge=0` is what a non-cyclic delay means: a snapshot
+      earlier than a link's delay receives nothing over it, there being no such
+      snapshot to have taken anything in.
+    foreach: [snapshot, bus]
+    expression: >-
+      sum(p, by=gen_bus)
+      + sum(shift(g, over=snapshot, by=delay, edge=0) * efficiency, by=link_to)
+      - sum(g, by=link_from)
+      == load
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run; moving power costs nothing but time and losses
+  expression: p * marginal_cost

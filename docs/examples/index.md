@@ -52,6 +52,7 @@ Every page starts from data in the shape the call wants, and
 | [fixed by data](pypsa_fixed.md) | A row of data that is present pins its variable; a row that is absent leaves it free. |
 | [spillage](pypsa_spill.md) | A hydro unit takes inflow it did not choose, and spills what neither turbine nor reservoir can absorb. |
 | [the Store component](pypsa_store.md) | The component every sector-coupled PyPSA model uses for hydrogen, heat and gas. |
+| [link delay](pypsa_link_delay.md) | A shipment is the input shifted along time: withdrawn at one snapshot, delivered at another, derated on the way. |
 
 ### Published optima
 
@@ -105,6 +106,7 @@ drift from what the engine builds.
 | [pypsa_fixed](pypsa_fixed.md) | **✔** 49900 | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_linearized_uc](pypsa_linearized_uc.md) | **✔** 5540 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | · |
+| [pypsa_link_delay](pypsa_link_delay.md) | **✔** 4311.11 | · | **✓** | · | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_losses](pypsa_losses.md) | **✔** 23001.4 | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_min_up_down](pypsa_min_up_down.md) | **✔** 32750 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | **✓** |
 | [pypsa_modular](pypsa_modular.md) | **✔** 56700 | · | **✓** | · | · | · | · | **✓** | · | · | **✓** |
@@ -168,6 +170,7 @@ that class, and the evidence behind
 | [pypsa_fixed](pypsa_fixed.md) | 49900.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_fixed.py |
 | [pypsa_kvl](pypsa_kvl.md) | 17000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py |
 | [pypsa_linearized_uc](pypsa_linearized_uc.md) | 5540.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_linearized_uc.py |
+| [pypsa_link_delay](pypsa_link_delay.md) | 4311.111111111111 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_link_delay.py |
 | [pypsa_losses](pypsa_losses.md) | 23001.387593283584 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_losses.py |
 | [pypsa_min_up_down](pypsa_min_up_down.md) | 32750.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_min_up_down.py |
 | [pypsa_modular](pypsa_modular.md) | 56700.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_modular.py |
@@ -271,7 +274,7 @@ macro, primitive, or escape.
 `sum_back(start_up, over=snapshot, within=min_up_time)`, each generator's own
 width read off the column.
 
-Two rows from 25 ports — a rate worth watching once the corpus has hit
+Two rows from 26 ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 ### Shapes still without a witness
