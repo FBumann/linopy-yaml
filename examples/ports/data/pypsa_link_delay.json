@@ -1,0 +1,16 @@
+{
+  "snapshot": {"snapshot": [0, 1, 2, 3, 4, 5]},
+  "bus": {"bus": ["port_a", "port_b"]},
+  "generator": {"generator": ["cheap_a", "peak_b"], "gen_bus": ["port_a", "port_b"]},
+  "link": {"link": ["ship", "wire"], "link_from": ["port_a", "port_a"], "link_to": ["port_b", "port_b"]},
+  "p_nom": {"generator": ["cheap_a", "peak_b"], "value": [100.0, 100.0]},
+  "marginal_cost": {"generator": ["cheap_a", "peak_b"], "value": [10.0, 100.0]},
+  "link_p_nom": {"link": ["ship", "wire"], "value": [50.0, 20.0]},
+  "efficiency": {"link": ["ship", "wire"], "value": [0.9, 1.0]},
+  "delay": {"link": ["ship", "wire"], "value": [2, 0]},
+  "load": {
+    "snapshot": [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5],
+    "bus": ["port_a", "port_a", "port_a", "port_a", "port_a", "port_a", "port_b", "port_b", "port_b", "port_b", "port_b", "port_b"],
+    "value": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 30.0, 30.0, 60.0, 60.0, 30.0, 30.0]
+  }
+}
