@@ -144,43 +144,15 @@ def _build_variables(ctx: EvaluationContext) -> None:
 
             _check_bounds_are_defined(vname, vdef, ctx.dataset, mask)
 
-            lower, upper, vmask = _absent_as_declared(vdef, lower, upper, mask)
-
             ctx.model.add_variables(
                 lower=lower,
                 upper=upper,
                 coords=coords,
                 name=vname,
-                mask=vmask,
+                mask=_as_linopy_mask(mask),
                 binary=vdef.domain == 'binary',
                 integer=vdef.domain == 'integer',
             )
-
-
-def _absent_as_declared(vdef: Any, lower: Any, upper: Any, mask: xr.DataArray) -> tuple[Any, Any, Any]:
-    """Bounds and linopy mask carrying out the variable's declared ``absence:``.
-
-    ``undefined`` hands linopy the mask. Its masked entries are invalid labels,
-    and linopy drops any row carrying one — which is the absence rule, and what
-    the relational lane's presence frame does.
-
-    ``zero`` cannot use that mask at all, because dropping the row is precisely
-    what the declaration says not to do. The variable is created **unmasked with
-    its bounds filled to zero** outside its own mask instead, so the term is
-    present and contributes nothing.
-
-    That fill is not free here, and it is the one place the two lanes differ in
-    cost rather than in answer. A masked linopy entry carries label ``-1`` and
-    reaches no solver, so the mask *does* save a column; pinning to zero hands
-    one back — one per absent coordinate. The relational lane pays nothing for
-    the same reading, a coefficient it never emits being zero already. The
-    asymmetry is the sparse/dense difference and not an accident: a linopy row
-    has to name a valid label for every term it carries, so there is no state
-    here that means "no entry".
-    """
-    if vdef.absence != 'zero':
-        return lower, upper, _as_linopy_mask(mask)
-    return xr.where(mask, lower, 0.0), xr.where(mask, upper, 0.0), None
 
 
 def _check_bounds_are_defined(name: str, vdef: Any, dataset: xr.Dataset, mask: Any) -> None:
@@ -216,6 +188,26 @@ def _resolve_bound(
             raise DataError(msg)
         return dataset[value]
     return value
+
+
+def _variable_term(name: str, ctx: EvaluationContext) -> Any:
+    """The variable as it enters an expression, carrying its declared ``absence:``.
+
+    The mask stays on the variable either way — it is what keeps the absent
+    coordinates out of the model, and dropping it to pin them at zero instead
+    would hand the solver a column per absent coordinate that the relational
+    lane never emits.
+
+    What differs is the *arithmetic*. This lane sets
+    ``linopy.options['semantics'] = 'v1'`` on import (see the module docstring),
+    under which an absent slot propagates and takes its row — the default, and
+    ``absence: undefined``. ``fillna(0)`` is linopy's own per-expression escape
+    back to the other reading: the slot contributes nothing and the row stands.
+    Per use rather than per model, which is the granularity a declaration needs
+    and the reason the global option alone could not express this.
+    """
+    variable = ctx.model.variables[name]
+    return variable.fillna(0) if ctx.schema.variables[name].absence == 'zero' else variable
 
 
 def _as_linopy_mask(mask: xr.DataArray) -> xr.DataArray | None:
@@ -389,7 +381,7 @@ def _eval_ast(
         return node.value
 
     if isinstance(node, VariableNode):
-        return ctx.model.variables[node.name]
+        return _variable_term(node.name, ctx)
 
     if isinstance(node, ParameterNode):
         return _coefficient(ctx.dataset[node.name])
