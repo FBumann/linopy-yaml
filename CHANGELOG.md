@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.181](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.180...v0.0.1-alpha.181) (2026-08-17)
+
+
+### Features
+
+* **api:** a dimension's labels arrive in sources, like every other input ([#956](https://github.com/fluxopt/lpspec/issues/956)) ([d30890f](https://github.com/fluxopt/lpspec/commit/d30890f4310b417a98f195727bf7d7c71d68ce1b))
+
 ## [0.0.1-alpha.180](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.179...v0.0.1-alpha.180) (2026-08-17)
 
 
