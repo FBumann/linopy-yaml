@@ -23,6 +23,7 @@ than chosen:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, get_args
 
 if TYPE_CHECKING:
@@ -47,6 +48,13 @@ Support = Literal['native', 'reformulated', 'absent']
 
 CAPABILITIES: tuple[Capability, ...] = get_args(Capability)
 
+#: Those whose ``reformulated`` rewrite is binaries and linking rows
+#: (:func:`~lpspec.relational.sinks.sos.reformulated`). Two things read it: a
+#: sink promising such a rewrite must take integrality to perform it, and a
+#: model that declared none reaches that sink mixed-integer, so it comes back
+#: without the duals an LP would have returned.
+REWRITTEN_AS_INTEGRALITY: frozenset[Capability] = frozenset({'sos'})
+
 
 @dataclass(frozen=True)
 class Capabilities:
@@ -60,6 +68,15 @@ class Capabilities:
 
     supports: Mapping[Capability, Support]
     excludes: tuple[frozenset[Capability], ...] = ()
+
+    def __post_init__(self) -> None:
+        """Take a read-only copy of *supports*, which a sink holds as a ``ClassVar``.
+
+        A plain ``dict`` behind a frozen field is process-wide mutable state
+        one attribute lookup away, and a test that reached it would change what
+        every later sink answers.
+        """
+        object.__setattr__(self, 'supports', MappingProxyType(dict(self.supports)))
 
     def support(self, capability: Capability) -> Support:
         """What this sink does with *capability* — ``absent`` where it says nothing."""

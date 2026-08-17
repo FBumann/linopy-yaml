@@ -176,12 +176,14 @@ to import for callers who will never use it. Copy linopy's status map for it
 and pin the copy in `tests/test_solve_status.py`, including anywhere you
 deliberately diverge.
 
-**A writer:** `writers/<format>.py`, one line in `WRITERS` keyed by suffix.
-Render through `base.py` rather than casting in the module — that is what
-makes two files describe one model to a reader holding both.
+**A writer:** `writers/<format>.py`, one line in `WRITERS` keyed by suffix,
+holding a `Writer(write, capabilities)` — a function has nowhere to carry a
+fact about itself, so the pair travels together. Render through `base.py`
+rather than casting in the module — that is what makes two files describe one
+model to a reader holding both.
 
-Either way: stream — nothing here may materialise the model a second time —
-and nothing above changes. No method on the engine, no branch in `api.py`,
+Either way it declares what it can ingest, and stream — nothing here may
+materialise the model a second time — and nothing above changes. No method on the engine, no branch in `api.py`,
 no name on the Python surface.
 
 ## What a sink can ingest

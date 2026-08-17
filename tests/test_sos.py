@@ -216,8 +216,8 @@ def test_the_lp_file_carries_the_set_and_a_reader_agrees(sos_type, tmp_path):
 def test_highs_refuses_the_written_section_which_is_why_it_reformulates(tmp_path):
     """The capability finding itself, pinned rather than described.
 
-    If HiGHS ever grows an SOS concept this fails, and the sink's
-    ``sos = 'reformulated'`` is what should change.
+    If HiGHS ever grows an SOS concept this fails, and the ``'sos':
+    'reformulated'`` in its capability descriptor is what should change.
     """
     path = lps.write(model(1), DATA, tmp_path / 'model.lp')
     with pytest.raises(AssertionError):

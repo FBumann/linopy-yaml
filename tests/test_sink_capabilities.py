@@ -35,10 +35,14 @@ def test_missing_names_only_what_is_required_and_absent():
 
 def test_missing_reads_in_vocabulary_order_not_the_callers():
     """A refusal naming two capabilities reads the same way whichever order the
-    program's requirements happened to be collected in."""
-    required = {'quadratic_constraint', 'nonconvex_quadratic_objective'}
-    assert EMPTY.missing(required) == ['nonconvex_quadratic_objective', 'quadratic_constraint']
-    assert EMPTY.missing(list(required)[::-1]) == ['nonconvex_quadratic_objective', 'quadratic_constraint']
+    program's requirements happened to be collected in.
+
+    Both calls pass a *list*, in each of the two orders, since a set has no
+    order to disagree with.
+    """
+    ordered = ['nonconvex_quadratic_objective', 'quadratic_constraint']
+    assert EMPTY.missing(ordered) == ordered
+    assert EMPTY.missing(ordered[::-1]) == ordered, 'the caller collected them the other way round'
 
 
 def test_an_exclusion_fires_only_on_the_whole_combination():
@@ -81,8 +85,25 @@ def test_the_shipped_solver_table(sink, capability, expected):
 def test_only_highs_excludes_a_combination():
     """Gurobi's column has no exclusion, which is what makes it the sink a
     refusal can name."""
-    assert SOLVERS['highs'].capabilities.excludes == (frozenset({'quadratic_objective', 'integrality'}),)
+    assert SOLVERS['highs'].capabilities.excludes == (
+        frozenset({'quadratic_objective', 'integrality'}),
+        frozenset({'quadratic_objective', 'sos'}),
+    )
     assert SOLVERS['gurobi'].capabilities.excludes == ()
+
+
+def test_a_set_is_excluded_from_the_hessian_it_would_arrive_beside():
+    """The exclusion a reformulation manufactures, and the reason it is
+    declared rather than derived at the hand-off: what HiGHS is handed for a
+    set *is* binaries, so the pair it refuses is the pair it would be given —
+    while the model itself declares no integrality at all."""
+    excluded = SOLVERS['highs'].capabilities.excluded(['sos', 'quadratic_objective'])
+    assert excluded == frozenset({'quadratic_objective', 'sos'}), (
+        'a set and a Hessian reach highs as integrality and a Hessian, which it refuses'
+    )
+    assert SOLVERS['gurobi'].capabilities.excluded(['sos', 'quadratic_objective']) is None, (
+        'gurobi branches on the set instead, so nothing is manufactured'
+    )
 
 
 def test_the_lp_writer_carries_everything():

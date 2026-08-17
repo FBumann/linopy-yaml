@@ -987,13 +987,23 @@ def test_each_sink_family_is_its_directory_and_its_registry():
 def test_every_sink_declares_what_it_can_ingest():
     """Both families answer the capability axis, in one vocabulary.
 
-    Two silent failures: a sink declaring nothing reads as ``absent``
-    everywhere and is refused a model it can take, and one naming a capability
+    Three silent failures: a sink declaring nothing reads as ``absent``
+    everywhere and is refused a model it can take, one naming a capability
     outside the vocabulary is refused nothing, since no required set can
-    contain a name that is not in it.
+    contain a name that is not in it, and one *answering* outside the
+    vocabulary is read as ``absent`` by every comparison in the family — a
+    ``'Native'`` on gurobi silently takes the big-M rewrite instead of the sets
+    it branches on.
     """
+    from typing import get_args
+
     from lpspec.relational.sinks import SOLVERS, WRITERS
-    from lpspec.relational.sinks.capabilities import CAPABILITIES, Capabilities
+    from lpspec.relational.sinks.capabilities import (
+        CAPABILITIES,
+        REWRITTEN_AS_INTEGRALITY,
+        Capabilities,
+        Support,
+    )
 
     described = {f'solver {name}': held.capabilities for name, held in SOLVERS.items()}
     described |= {f'writer {suffix}': found.capabilities for suffix, found in WRITERS.items()}
@@ -1001,6 +1011,14 @@ def test_every_sink_declares_what_it_can_ingest():
         assert isinstance(capabilities, Capabilities), f'{sink} declares no capabilities'
         strangers = sorted(set(capabilities.supports) - set(CAPABILITIES))
         assert not strangers, f'{sink} names capabilities the vocabulary has not got: {strangers}'
+        answers = sorted(set(capabilities.supports.values()) - set(get_args(Support)))
+        assert not answers, f'{sink} answers {answers}, which no comparison in the family reads as support'
+        spent = sorted(c for c in REWRITTEN_AS_INTEGRALITY if capabilities.support(c) == 'reformulated')
+        if spent:
+            assert capabilities.support('integrality') != 'absent', (
+                f'{sink} rewrites {spent} into binaries and linking rows, which is integrality it '
+                f'does not declare — the rewrite it promises is one it cannot perform'
+            )
         for combination in capabilities.excludes:
             unsupported = sorted(c for c in combination if capabilities.support(c) == 'absent')
             assert not unsupported, (

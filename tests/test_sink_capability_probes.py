@@ -163,7 +163,8 @@ def test_the_highs_lp_reader_refuses_the_sos_section(tmp_path: Path):
     h.setOptionValue('output_flag', False)
     assert h.readModel(str(path)) == highspy.HighsStatus.kError, (
         f'{TABLE} says the HiGHS reader refuses an sos section. If it takes one now, HiGHS has the '
-        f'concept and `sos = reformulated` is a worse relaxation than it needs to be.'
+        f"concept and the `'sos': 'reformulated'` in its descriptor is a worse relaxation than it "
+        f'needs to be.'
     )
 
 

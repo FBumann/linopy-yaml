@@ -162,15 +162,20 @@ class Highs(Solver):
 
     #: No SOS concept at all, so a set arrives already written as binaries and
     #: linking rows. A *convex* Hessian goes in through ``passHessian``; the
-    #: two exclusions beside it are why this is a descriptor rather than a set
-    #: of features, and both are probed in ``test_sink_capability_probes.py``.
+    #: exclusions beside it are why this is a descriptor rather than a set of
+    #: features, and the pair is probed in ``test_sink_capability_probes.py``.
+    #: A set is that same refusal one step removed: the rewrite that gets one
+    #: in here *is* binaries, so it cannot stand beside a Hessian either.
     capabilities = Capabilities(
         supports={
             'integrality': 'native',
             'sos': 'reformulated',
             'quadratic_objective': 'native',
         },
-        excludes=(frozenset({'quadratic_objective', 'integrality'}),),
+        excludes=(
+            frozenset({'quadratic_objective', 'integrality'}),
+            frozenset({'quadratic_objective', 'sos'}),
+        ),
     )
 
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
