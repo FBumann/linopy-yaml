@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.1-alpha.185](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.184...v0.0.1-alpha.185) (2026-08-17)
+
+
+### Bug Fixes
+
+* **compat:** at() through a label that maps nowhere drops the row, not the coordinate ([#969](https://github.com/fluxopt/lpspec/issues/969)) ([89587ce](https://github.com/fluxopt/lpspec/commit/89587cef8dd2f73b172e34de3ee716951947a5a5))
+* **engine:** a row a propagated absence deleted is an omission too ([#981](https://github.com/fluxopt/lpspec/issues/981)) ([0851444](https://github.com/fluxopt/lpspec/commit/0851444a1f199da9b410e0a39c83b5c14f1f7f07))
+
+
+### Documentation
+
+* **benchmarks:** the published peak says which arm pays the allocator ([#970](https://github.com/fluxopt/lpspec/issues/970)) ([c84b394](https://github.com/fluxopt/lpspec/commit/c84b3942af53452b0062db78f2b59b7e3887f31b))
+
 ## [0.0.1-alpha.184](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.183...v0.0.1-alpha.184) (2026-08-17)
 
 
