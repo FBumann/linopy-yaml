@@ -148,6 +148,19 @@ class Diagnostics:
     #: faults with different repairs.
     objective_range: tuple[float, float] | None
 
+    #: ``(part, smallest, largest)`` — what the solver was actually handed,
+    #: one row for ``matrix`` and one for ``objective``, once ``scale=True``
+    #: had equilibrated the model. **Empty for a build that was not scaled**,
+    #: which is every build by default.
+    #:
+    #: Read against ``coefficient_range`` and ``objective_range`` beside it,
+    #: which keep saying what was *declared*: those name the block a modeller
+    #: would repair, this says what the repair was worth. The two move in
+    #: opposite directions — a variable's scale multiplies its cost where it
+    #: multiplies its column — so an equilibration that improved the matrix
+    #: and worsened the objective is visible here and nowhere else.
+    scaled_range: pl.DataFrame
+
     #: How many times this model has been solved, and how many of those solves
     #: loaded the solver from scratch instead of pushing values onto one that
     #: already held it. Read together: ``loads == 1`` is a driver on the fast

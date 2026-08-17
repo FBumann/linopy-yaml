@@ -213,7 +213,8 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | | *will that solver take it* | | |
 | **run it** | stream it straight into a solver | `solve`, or `build` → `BoundModel` to drive several sinks off one build | **yes** |
 | | re-solve one built model with new numbers | `bound.rebind(...)` — the label contract, spent | **yes** |
-| | how big is it, how is it scaled, what did the build and its solves do, and where did the time go | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `coefficient_range` · `objective_range` · `solves` · `loads` · `timings`, all advisory | **yes** |
+| | how big is it, how is it scaled, what did the build and its solves do, and where did the time go | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `coefficient_range` · `objective_range` · `scaled_range` · `solves` · `loads` · `timings`, all advisory | **yes** |
+| | solve it without redeclaring it in units nobody wants to read | `build(..., scale=True)` — equilibrated for the solver, answered in the units you wrote | **yes** |
 | | write an LP file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | build the same math as a `linopy.Model` | `lpspec.linopy.build` — `lps.build`'s own signature | **yes** |
@@ -336,10 +337,11 @@ lazy frames and reads nothing; `engine.py` fills the model frames; `sinks/`
 drains them. Two more sit beside the engine rather than inside it, because
 each answers a question the engine merely *uses*: `labels.py` decides which
 coordinate gets which solver index, and `result.py` is what a caller reads a
-solve back through. The remaining five are not on the spine and the diagram
+solve back through. The remaining six are not on the spine and the diagram
 does not draw them — `plan.py` is the vocabulary the spine speaks, `status.py`
-is the boundary a solver's verdict comes back over, and `chunking.py` and
-`data_validation.py` are single rules lifted out of whoever needed them first.
+is the boundary a solver's verdict comes back over, and `chunking.py`,
+`data_validation.py` and `scaling.py` are single rules lifted out of whoever
+needed them first.
 The other boundary, a caller's table on the way in, is `frames.py` — top level
 rather than in this lane, because all three consumers read it. The map below is
 the full list.
@@ -484,6 +486,7 @@ must stay off the import path of a caller who does not use it.
 | `relational/engines/polars/engine.py` | assemble the model frames from the bound data |
 | `relational/result.py` | what a solve returned: status, objective, and the label joins that read values back |
 | `relational/engines/polars/data_validation.py` | is the bound data usable — one row per coordinate, labels that exist, single-valued lookups |
+| `relational/engines/polars/scaling.py` | opt-in equilibration of the assembled model, objective included, and the inverse every vector a solve returns owes it |
 | `relational/sinks/tables.py` | what every sink reads and no more — the five frames plus the batching scalars, and their projection onto the solver's column index; what an engine produces |
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |

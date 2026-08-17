@@ -21,8 +21,8 @@ result.dual('power_balance')
 |---|---|
 | `lps.check(model)` | parse, expand, validate and lower; bind no data. Returns the validated `Model` |
 | `lps.load_model(model)` | the same parse, without the lowering pass and its warnings |
-| `lps.build(model, sources)` | bind data and build it — returns a `BoundModel` |
-| `lps.solve(model, sources, solver_name='highs', solver_options=None)` | build and solve in one call — returns a `Result` |
+| `lps.build(model, sources, scale=False)` | bind data and build it — returns a `BoundModel` |
+| `lps.solve(model, sources, solver_name='highs', solver_options=None, scale=False)` | build and solve in one call — returns a `Result` |
 | `lps.solve_over(model, sources, axis, ...)` | solve once per slice and fold the answers — [sweeps](sweeps.md) |
 | `lps.write(model, sources, out)` | build and stream to a file; the suffix picks the format |
 | `lps.to_latex` / `to_typst` / `to_markdown` | the math as a document — [typeset](typeset.md) |
@@ -217,11 +217,46 @@ one has made this engine's bookkeeping part of their model.
 | `omissions` | rows a constraint declared but did not build ([absence](language/absence.md#a-row-with-no-variable-terms-is-not-built)) |
 | `coefficient_range` | `(constraint, smallest, largest)` — the coefficient **magnitudes** each block put in the matrix. A solver prints one range for the whole model, which says a repair is needed and not where; this says which declaration holds the outlier, and `largest / smallest` over the frame is the conditioning to compare against the solver's own |
 | `objective_range` | the same pair for the costs, or `None` where the model declares no objective. Beside the frame rather than in it: badly scaled costs and a badly scaled matrix are different faults with different repairs |
+| `scaled_range` | `(part, smallest, largest)` for `matrix` and `objective` — what the solver was handed once `build(..., scale=True)` equilibrated the model, and **empty** for the builds that did not ask. The two rows above keep saying what was *declared*, so read them together: those name the block to repair, this says what the repair was worth |
 | `solves`, `loads` | how many solves ran, and how many of them had to load the model from scratch. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies" |
 | `timings` | cumulative wall seconds per phase — `bind`, `build`, `handoff`, `solve`, `write` |
 
 It answers after `close()` too: every field is a count, a clock or a small
 frame the model keeps rather than a read of what it releases.
+
+## Scaling a badly scaled model
+
+A capacity-expansion model mixes an hourly cost (€/MWh) with an annualised one
+(€/MW), and the objective can span five orders of magnitude while the matrix is
+a clean 1. A variable's *unit* is the only lever on that, and it is a column
+scaling — it multiplies that variable's cost where it multiplies its matrix
+column — so declaring capacity in kW to shrink the objective grows the matrix by
+the same factor. The best trade is the geometric mean of the two, which is
+rarely a unit anybody wants to read in a model file.
+
+`scale=True` does that arithmetic instead:
+
+```python
+bound = lps.build('model.yaml', sources, scale=True)
+bound.diagnostics().scaled_range  # what the solver got
+```
+
+**Answers come back in the units you declared**, whichever way the flag is set —
+the primal by its column's factor, the dual by its row's and the objective's,
+the activity by the reciprocal. What changes is what the solver sees, and what
+`write` puts in an LP file.
+
+Three reasons it is off by default:
+
+- it costs a pass over the assembled matrix at the build's peak;
+- it gives up the `rebind` fast path — coefficients are what a loaded solver
+  may not have moved, and scaling folds costs and right-hand sides into them;
+- **an integer column is never scaled**, no factor keeping it integral, so a
+  mostly-integer model has little to gain. `scaled_range` is where that shows.
+
+The first repair is still the cheaper one: annualise the capital cost, get the
+snapshot weights right, and pick a money unit that puts the largest cost near 1.
+`coefficient_range` and `objective_range` name what is left.
 
 ## Choosing a solver
 

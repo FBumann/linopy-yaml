@@ -1175,6 +1175,163 @@ def test_the_largest_magnitude_agrees_with_the_oracle():
         assert largest == pytest.approx(expected), f"the lanes disagree on the widest coefficient in '{name}'"
 
 
+#: A binary linked to a badly scaled continuous, which is the shape that says
+#: whether an integer column was rescaled behind the caller's back: `p`'s column
+#: is worth scaling by ~1e6 and `on`'s is not scalable at all.
+INTEGRAL = {
+    'dimensions': {'unit': {'values': ['a', 'b']}},
+    'parameters': {'large': {'dims': ['unit']}},
+    'variables': {
+        'p': {'foreach': ['unit'], 'bounds': {'lower': 0, 'upper': 1000.0}},
+        'on': {'foreach': ['unit'], 'domain': 'binary'},
+    },
+    'constraints': {'link': {'foreach': ['unit'], 'expression': 'p * large <= on * 1000000'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(p, over=unit) - sum(on, over=unit)'},
+}
+INTEGRAL_SOURCES = {'large': pl.DataFrame({'unit': ['a', 'b'], 'value': [1e3, 1e-3]})}
+
+
+def test_a_scaled_solve_answers_in_the_units_the_model_was_declared_in():
+    """Equilibration is the engine's business and never the caller's.
+
+    Every vector a solve hands back is in the scaled model's units, so a
+    scaling that reached a caller would be a wrong answer rather than a badly
+    scaled one — the primal by its column's factor, the dual by its row's and
+    the objective's, the activity by the reciprocal.
+    """
+    plain = lps.solve(SCALING, SCALING_SOURCES)
+    scaled = lps.solve(SCALING, SCALING_SOURCES, scale=True)
+
+    assert scaled.objective == pytest.approx(plain.objective), 'the objective is money, not a scaled quantity'
+    for name in ('p',):
+        assert scaled.primal(name)['value'].to_list() == pytest.approx(plain.primal(name)['value'].to_list()), (
+            f"'{name}' comes back in the units it was declared in"
+        )
+    for name in SCALING['constraints']:
+        assert scaled.dual(name)['value'].to_list() == pytest.approx(plain.dual(name)['value'].to_list()), (
+            f"'{name}'s dual carries both its row's factor and the objective's"
+        )
+        assert scaled.activity(name)['value'].to_list() == pytest.approx(plain.activity(name)['value'].to_list()), (
+            f"'{name}'s activity takes the reciprocal of what its dual takes"
+        )
+
+
+def test_scaling_says_what_the_solver_saw_and_leaves_the_declaration_alone():
+    """The two ranges answer different readers, so scaling moves only one of them.
+
+    `coefficient_range` names the declaration a modeller would repair, so it
+    keeps saying what they wrote however the engine rescaled it; `scaled_range`
+    is what the solver was handed instead.
+    """
+    with lps.build(SCALING, SCALING_SOURCES, scale=True) as bound:
+        seen = bound.diagnostics()
+
+    assert seen.coefficient_range.to_dicts() == [
+        {'constraint': 'ordinary', 'smallest': 1.0, 'largest': 4.0},
+        {'constraint': 'badly_scaled', 'smallest': 1e-3, 'largest': 1e6},
+        {'constraint': 'signed', 'smallest': 1.0, 'largest': 4.0},
+    ], 'what was declared, which is what a repair acts on — unmoved by the engine rescaling it'
+
+    handed = {row['part']: row['largest'] / row['smallest'] for row in seen.scaled_range.to_dicts()}
+    assert set(handed) == {'matrix', 'objective'}, 'the objective is equilibrated beside the matrix, not after it'
+    assert handed['matrix'] < 1e9, 'the declared 1e9 spread is what scaling was asked to remove'
+
+
+def test_an_unscaled_build_reports_no_scaled_range():
+    """Empty rather than a copy of the declared numbers: nothing was handed over rescaled."""
+    with lps.build(SCALING, SCALING_SOURCES) as bound:
+        assert bound.diagnostics().scaled_range.is_empty(), 'a build nobody asked to scale reports no scaling'
+
+
+def test_an_integer_column_keeps_its_declared_scale():
+    """``s·x'`` is integral only for integral ``s``, so those columns are pinned at 1.
+
+    The failure this catches is silent: a scaled binary comes back as a
+    multiple of its own factor, which is a number the model never allowed and
+    which no status reports.
+    """
+    answer = lps.solve(INTEGRAL, INTEGRAL_SOURCES, scale=True)
+
+    on = answer.primal('on')['value'].to_list()
+    assert on == [pytest.approx(round(v)) for v in on], (
+        f'{on} — a binary comes back binary, where a rescaled integer column comes back a multiple of its own factor'
+    )
+
+
+#: Costs far enough from 1 that the objective's own row is rescaled — `SCALING`
+#: leaves that factor at 1.0, so nothing there can tell whether it is undone —
+#: and a constant, which rides the same factor and has no column to carry it.
+COSTLY = {
+    'dimensions': {'unit': {'values': ['a', 'b']}},
+    'parameters': {'cost': {'dims': ['unit']}, 'small': {'dims': ['unit']}},
+    'variables': {'p': {'foreach': ['unit'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'floor': {'foreach': ['unit'], 'expression': 'p * small >= 1'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=unit) + 1000'},
+}
+COSTLY_SOURCES = {
+    'cost': pl.DataFrame({'unit': ['a', 'b'], 'value': [2e6, 5e5]}),
+    'small': pl.DataFrame({'unit': ['a', 'b'], 'value': [1.0, 4.0]}),
+}
+
+
+def test_a_scaled_objective_is_reported_in_the_money_it_was_declared_in():
+    """The objective's own row takes a factor, and the constant rides it with no column to ride on.
+
+    Costs near 1e6 put that factor at 1e-6, where a model whose costs are
+    already near 1 leaves it at 1 and cannot tell an undone factor from a
+    forgotten one.
+    """
+    plain = lps.solve(COSTLY, COSTLY_SOURCES)
+    scaled = lps.solve(COSTLY, COSTLY_SOURCES, scale=True)
+
+    with lps.build(COSTLY, COSTLY_SOURCES, scale=True) as bound:
+        factor = bound._engine._scaling
+    assert factor is not None and factor.objective == pytest.approx(1e-6), (
+        'the premise: an objective row that is genuinely rescaled, so undoing it is observable'
+    )
+    assert scaled.objective == pytest.approx(plain.objective), (
+        'the constant scales with the costs it is added to, and both come back in the declared money'
+    )
+
+
+def test_a_column_no_constraint_reaches_is_scaled_by_one():
+    """An unused variable's column has no entry, so it has no extremes to centre.
+
+    Its group's largest is ``-inf`` and its smallest ``+inf``, whose midpoint is
+    not a number — and a NaN factor reaches the solver as a NaN bound rather
+    than as an error.
+    """
+    idle = {
+        **COSTLY,
+        'variables': {**COSTLY['variables'], 'spare': {'foreach': ['unit'], 'bounds': {'lower': 0, 'upper': 3}}},
+    }
+    answer = lps.solve(idle, COSTLY_SOURCES, scale=True)
+
+    assert answer.primal('spare')['value'].to_list() == [0.0, 0.0], (
+        'a variable nothing constrains and nothing costs still comes back a number'
+    )
+
+
+def test_scaling_trades_the_objective_against_the_matrix_rather_than_one_for_the_other():
+    """The claim the joint equilibration is for (#997).
+
+    A variable's scale multiplies its cost where it multiplies its column, so
+    one lever serves both and the matrix alone cannot be fixed without the
+    costs paying for it. Equilibrating them together lands on the geometric
+    mean, which is better than either end.
+    """
+    with lps.build(SCALING, SCALING_SOURCES) as bound:
+        declared = bound.diagnostics()
+    with lps.build(SCALING, SCALING_SOURCES, scale=True) as bound:
+        handed = {row['part']: row['largest'] / row['smallest'] for row in bound.diagnostics().scaled_range.to_dicts()}
+
+    matrix = declared.coefficient_range.select((pl.col('largest') / pl.col('smallest')).max()).item()
+    objective = declared.objective_range[1] / declared.objective_range[0]
+    assert max(handed['matrix'], handed['objective']) < max(matrix, objective), (
+        'the worse of the two ranges is what a solver pays for, and equilibrating both is what improves it'
+    )
+
+
 def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
     """A chunk of rows is a chunk of *entries*, and only entries are residency.
 

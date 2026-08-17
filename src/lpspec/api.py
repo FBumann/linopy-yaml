@@ -85,10 +85,11 @@ class BoundModel:
     Nothing has to be released; :meth:`close` hands a large model back early.
     """
 
-    def __init__(self, schema: Model, sources: Mapping[str, Any]) -> None:
+    def __init__(self, schema: Model, sources: Mapping[str, Any], scale: bool = False) -> None:
         self._schema = schema
         self._program = lower_program(schema)
         self._sources = dict(sources)
+        self._scale = scale
         self._engine = PolarsEngine()
         self._fill()
 
@@ -104,6 +105,7 @@ class BoundModel:
                 self._program,
                 tidy_sources(self._schema, dict(self._sources)),
                 expressions=expression_thunks(self._schema),
+                scale=self._scale,
             )
         except BaseException:
             self._engine.close()
@@ -233,7 +235,7 @@ def _known(given: Mapping[str, Any], declared: Mapping[str, Any], where: str) ->
     return given
 
 
-def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]) -> BoundModel:
+def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any], *, scale: bool = False) -> BoundModel:
     """Bind *sources* to *model* and build it — the model with your data on it.
 
     Args:
@@ -241,6 +243,16 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
         sources: Parameter names to parquet paths or in-memory tables, and
             dimension names to their labels — an index table, a parquet path,
             or a bare sequence — wherever the YAML declares none.
+        scale: Equilibrate the built model, so that a badly scaled one need not
+            be redeclared in units nobody wants to read. Off by default and
+            worth turning on only for a model that solves badly: it costs a
+            pass over the matrix at the build's peak, and it gives up the fast
+            path a ``rebind`` loop takes, coefficients being what a loaded
+            solver may not have moved. Answers come back in the units you
+            declared either way; what changes is what the solver sees, and
+            :attr:`~lpspec.relational.result.Diagnostics.scaled_range` says
+            what that was. An **integer column is never scaled** — no factor
+            keeps it integral — so a mostly-integer model has little to gain.
 
     Returns:
         The bound model. It feeds any number of sinks — ``bound.solve()`` and
@@ -251,7 +263,7 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
         LanguageError: A construct outside the streaming language.
         DataError: A source that is missing, unreadable, or the wrong shape.
     """
-    return BoundModel(load_model(model), sources)
+    return BoundModel(load_model(model), sources, scale)
 
 
 def solve(
@@ -260,6 +272,7 @@ def solve(
     solver_name: str = 'highs',
     *,
     solver_options: Mapping[str, Any] | None = None,
+    scale: bool = False,
 ) -> Result:
     """Build *model* and solve it in one call.
 
@@ -279,6 +292,7 @@ def solve(
             which needs the ``[gurobi]`` extra.
         solver_options: Forwarded to the solver verbatim, in its own
             vocabulary (``{'time_limit': 60}``).
+        scale: As :func:`build` takes it.
 
     Returns:
         The solution, self-contained: it owns the frames it reads, so the built
@@ -289,7 +303,7 @@ def solve(
         LpspecError: A solver name nothing serves — checked before the build.
     """
     solver(solver_name)
-    bound = build(model, sources)
+    bound = build(model, sources, scale=scale)
     try:
         return bound.solve(solver_name, solver_options=solver_options)
     finally:

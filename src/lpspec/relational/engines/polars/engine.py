@@ -38,6 +38,7 @@ from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler, Presence, TermFragment
+from lpspec.relational.engines.polars.scaling import Scaling, equilibrate
 from lpspec.relational.result import KEEPS, Diagnostics, Keep, Result, unknown_keep_message
 from lpspec.relational.sinks.tables import SENSE
 
@@ -45,6 +46,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
 
     from polars._typing import MaintainOrderJoin
+
+    from lpspec.relational.sinks.solvers.base import SolveAnswer
 
 
 #: The four frames a sink reads, as schemas. Stated here because the engine
@@ -159,6 +162,13 @@ class PolarsEngine:
         #: model releases.
         self._coefficients: dict[str, tuple[float, float]] = {}
         self._objective_range: tuple[float, float] | None = None
+        #: The factors an equilibration chose, and what it achieved — ``None``
+        #: and empty for a build that was not asked to scale, which is every
+        #: build by default. The two are kept apart because they answer to
+        #: different readers: the factors are owed to every vector a solve
+        #: hands back, the ranges only to :meth:`diagnostics`.
+        self._scaling: Scaling | None = None
+        self._scaled: dict[str, tuple[float, float]] = {}
         #: One :class:`_Block` per declaration, one map per label space.
         #: Columns and rows are numbered independently and a model may name a
         #: variable and a constraint alike, so one map keyed by name would
@@ -193,6 +203,7 @@ class PolarsEngine:
         program: plan.Program,
         sources: Mapping[str, Any],
         expressions: Mapping[str, Callable[[], plan.Expression]] | None = None,
+        scale: bool = False,
     ) -> None:
         """Bind *sources*, then build every declaration into the model frames.
 
@@ -233,6 +244,10 @@ class PolarsEngine:
         its plan expression. None is called here — a build pays nothing for a
         declared expression (the rules for named expressions) — they become the deferred readers a
         solve's result hands out (:meth:`_expression_readers`).
+
+        *scale* equilibrates the assembled model (:meth:`_equilibrate`), which
+        costs a pass over the matrix at the build's peak and is why it is off
+        unless asked for.
         """
         self._reset()
         self._expression_thunks = dict(expressions or {})
@@ -252,10 +267,12 @@ class PolarsEngine:
             self._cols = _stack(cols, _COLS)
             self._rows = labels.in_position_order(_stack([r for r, _ in built], _ROWS), 'row')
             ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
+            self._obj = _stack([objective] if objective is not None else [], _OBJ)
+            if scale:
+                ordered = self._equilibrate(ordered)
             self._matrix_starts = _row_starts(ordered, self._n_rows)
             self._matrix = ordered.select('col', 'coeff').rechunk()
             self._n_entries = self._matrix.height
-            self._obj = _stack([objective] if objective is not None else [], _OBJ)
 
     @property
     def _q(self) -> PolarsCompiler:
@@ -646,6 +663,63 @@ class PolarsEngine:
         self._objective_range = _magnitude_range(objective.get_column('coeff'))
         return objective
 
+    def _equilibrate(self, matrix: pl.DataFrame) -> pl.DataFrame:
+        """Put the whole model on one scale, and keep what it takes to undo.
+
+        Every frame moves together or the model is a different one: a column's
+        factor divides its bounds where it multiplies its costs, a row's
+        multiplies its right-hand side where it multiplies its coefficients,
+        and a set's ``big_m`` divides with the bound it is the stand-in for
+        (:func:`~lpspec.relational.sinks.sos.reformulated` takes the tighter of
+        the two, so one scaled and one not would silently pick the wrong one).
+
+        **What #993 reports is left as declared.** ``coefficient_range`` names
+        the declaration a modeller has to repair, so it has to keep saying what
+        they wrote; what the solver was handed instead is ``scaled_range``,
+        beside it.
+
+        Returns:
+            *matrix*, scaled, still in ``(row, col)`` order — the caller reads
+            the CSR index off it, which a reordering here would invalidate.
+        """
+        assert self._cols is not None and self._rows is not None and self._obj is not None
+        assert self._sos is not None, 'the four frames are assembled before this runs'
+        row, col = matrix.get_column('row').to_numpy(), matrix.get_column('col').to_numpy()
+        obj_col = self._obj.get_column('col').to_numpy()
+        scaling = equilibrate(
+            row,
+            col,
+            matrix.get_column('coeff').to_numpy(),
+            obj_col,
+            self._obj.get_column('coeff').to_numpy(),
+            self._cols.get_column('vtype').to_physical().to_numpy() != 0,
+            self._n_rows,
+            self._n_cols,
+        )
+        self._scaling = scaling
+
+        columns = pl.Series(scaling.columns)
+        self._cols = self._cols.with_columns(pl.col('lb') / columns, pl.col('ub') / columns)
+        self._rows = self._rows.with_columns(
+            pl.col('rhs') * pl.Series(scaling.rows[self._rows.get_column('row').to_numpy()])
+        )
+        self._obj = self._obj.with_columns(pl.col('coeff') * pl.Series(scaling.columns[obj_col]) * scaling.objective)
+        self._obj_const *= scaling.objective
+        if self._sos.height:
+            big_m = self._sos.get_column('col').to_numpy()
+            self._sos = self._sos.with_columns(pl.col('big_m') / pl.Series(scaling.columns[big_m]))
+        matrix = matrix.with_columns(pl.col('coeff') * pl.Series(scaling.rows[row] * scaling.columns[col]))
+
+        self._scaled = {
+            part: spread
+            for part, spread in (
+                ('matrix', _magnitude_range(matrix.get_column('coeff'))),
+                ('objective', _magnitude_range(self._obj.get_column('coeff'))),
+            )
+            if spread is not None
+        }
+        return matrix
+
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the engine only supplies the frames
     # ------------------------------------------------------------------
@@ -758,15 +832,16 @@ class PolarsEngine:
         assert (answer.activity is None) == (answer.primal is None), (
             'activity travels with the primal: every sink reads it whenever a solution exists, mixed-integer included'
         )
-        primals, duals, activities = self._read_back(answer.primal, answer.dual, answer.activity)
+        primal, dual, activity, objective = self._in_declared_units(answer)
+        primals, duals, activities = self._read_back(primal, dual, activity)
         return Result(
             _status=answer.status,
-            _objective=answer.objective,
+            _objective=objective,
             _primals=primals,
             _duals=duals,
             _activities=activities,
             _kept=kept,
-            _expressions=self._expression_readers(answer.primal),
+            _expressions=self._expression_readers(primal),
             _no_duals=None
             if answer.dual is not None
             else no_duals_message(
@@ -774,6 +849,29 @@ class PolarsEngine:
                 answer.status.termination_condition,
                 sets=self._reformulated_sets(tables is not built),
             ),
+        )
+
+    def _in_declared_units(
+        self, answer: SolveAnswer
+    ) -> tuple[pl.Series | None, pl.Series | None, pl.Series | None, float]:
+        """*answer*'s vectors in the units the model was declared in.
+
+        The one gate between a scaled solve and everything that reads it, so
+        that no later reader has to know whether a build was equilibrated:
+        :meth:`_read_back` and :meth:`_expression_readers` are handed the same
+        already-corrected primal rather than each correcting it.
+
+        An unscaled build returns *answer*'s own vectors untouched, which is
+        every build that did not ask to be scaled.
+        """
+        scaling = self._scaling
+        if scaling is None:
+            return answer.primal, answer.dual, answer.activity, answer.objective
+        return (
+            None if answer.primal is None else scaling.primal(answer.primal),
+            None if answer.dual is None else scaling.dual(answer.dual),
+            None if answer.activity is None else scaling.activity(answer.activity),
+            scaling.objective_value(answer.objective),
         )
 
     def diagnostics(self) -> Diagnostics:
@@ -801,6 +899,14 @@ class PolarsEngine:
                 schema={'constraint': pl.String, 'smallest': pl.Float64, 'largest': pl.Float64},
             ),
             objective_range=self._objective_range,
+            scaled_range=pl.DataFrame(
+                {
+                    'part': list(self._scaled),
+                    'smallest': [low for low, _ in self._scaled.values()],
+                    'largest': [high for _, high in self._scaled.values()],
+                },
+                schema={'part': pl.String, 'smallest': pl.Float64, 'largest': pl.Float64},
+            ),
             solves=self._solves,
             loads=self._loads,
             timings=dict(self._timings),

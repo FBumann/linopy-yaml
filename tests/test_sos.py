@@ -568,3 +568,44 @@ def _without_the_set() -> dict[str, Any]:
         'cost': {'foreach': ['snapshot', 'generator'], 'expression': 'op_cost == sum(lam * bp_y, over=bp)'},
     }
     return raw
+
+
+#: ``DATA`` with one site's numbers four orders of magnitude up, so an
+#: equilibration has something to do and its column factors land far from 1.
+#: A set scaled by a factor its ``big_m`` did not take is a *different*
+#: reformulation, and one whose column factors are all ~1 cannot show it.
+def _skewed() -> dict[str, Any]:
+    return {
+        name: table.with_columns(
+            pl.when(pl.col('site') == 'south').then(pl.col('value') * 1e4).otherwise(pl.col('value')).alias('value')
+        )
+        for name, table in DATA.items()
+    }
+
+
+@pytest.mark.parametrize('sos_type', [1, 2], ids=['sos1', 'sos2'])
+def test_a_scaled_set_reformulates_over_the_columns_it_was_scaled_with(sos_type):
+    """Scaling reaches the one stream a sink may not be able to ingest.
+
+    Two things only this shape reaches. A ``big_m`` stands in for a member's
+    bound and :func:`~lpspec.relational.sinks.sos.reformulated` takes the
+    tighter of the two, so a big-M left at the declared scale beside a bound
+    divided by its column's factor silently picks the wrong one — ``big_m: 2``
+    binds here, where the block's default of ``inf`` would leave the bound to
+    win and prove nothing.
+
+    And the reformulation appends a binary per member past the model's own
+    columns, so the vector HiGHS answers with is longer than the model has
+    columns — the entries a scaling must not reach, having never scaled them.
+    """
+    sources, restricted = _skewed(), model(sos_type, big_m=2.0)
+
+    plain = lps.solve(restricted, sources)
+    scaled = lps.solve(restricted, sources, scale=True)
+
+    assert scaled.objective == pytest.approx(plain.objective), (
+        'the set means the same thing at either scale, or the big-M and the bound it caps disagree'
+    )
+    assert scaled.primal('take')['value'].to_list() == pytest.approx(plain.primal('take')['value'].to_list()), (
+        "the members come back over the model's own columns, not the reformulation's appended ones"
+    )
