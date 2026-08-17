@@ -1,0 +1,91 @@
+description: >-
+  PyPSA dispatch and capacity fixed by data: a row that is present pins its
+  variable, a row that is absent leaves it free. A must-run unit runs in the two
+  snapshots it is pinned in even though it is the dearest in the fleet.
+  Optimum 49900.0, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  bus:
+    description: network nodes
+    dtype: str
+  generator:
+    description: generating units, each sitting on one bus
+    dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+
+parameters:
+  p_nom_max:
+    description: most capacity that may stand at a generator once built
+    dims: [generator]
+  capital_cost:
+    description: cost of holding one unit of capacity over the horizon
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  p_nom_set:
+    description: >-
+      the capacity a generator is to hold, for the generators whose capacity is
+      already decided
+    dims: [generator]
+  p_set:
+    description: >-
+      the output a generator is to deliver, for the snapshots in which it is
+      scheduled rather than chosen
+    dims: [snapshot, generator]
+  load:
+    description: demand at each bus in each snapshot
+    dims: [snapshot, bus]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  p_nom:
+    description: capacity built at a generator
+    foreach: [generator]
+    bounds:
+      lower: 0
+      upper: p_nom_max
+
+constraints:
+  within_capacity:
+    description: a generator produces no more than the capacity built for it
+    foreach: [snapshot, generator]
+    expression: p <= p_nom
+
+  capacity_fixed:
+    description: >-
+      a generator whose capacity is already decided holds exactly that — the
+      row exists only where the table has one
+    foreach: [generator]
+    where: p_nom_set
+    expression: p_nom == p_nom_set
+
+  dispatch_fixed:
+    description: >-
+      a generator scheduled for a snapshot delivers exactly its schedule there,
+      and is free everywhere else
+    foreach: [snapshot, generator]
+    where: p_set
+    expression: p == p_set
+
+  nodal_balance:
+    description: what is generated at a bus meets the load there
+    foreach: [snapshot, bus]
+    expression: sum(p, by=gen_bus) == load
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run, plus what its capacity costs to build
+  expression: p * marginal_cost + p_nom * capital_cost
