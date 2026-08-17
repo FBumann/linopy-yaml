@@ -86,6 +86,16 @@ def differential(
     the eager lane only takes paths, so text and dicts are written to a
     temporary file here rather than in every caller.
 
+    **Duals are not compared here, and cannot be.** An LP with alternative
+    optima has many optimal dual solutions, and the two lanes hand HiGHS the
+    same rows in a different order, so it lands on a different basis:
+    ``genx_piecewise_fuel`` agrees on the objective to nine decimals, differs in
+    2 of 72 entries of one primal, and in 12 of 48 entries of one dual. A
+    lane-to-lane dual assertion would therefore be false rather than merely
+    strict. What *is* checkable is a dual against a recording made from an
+    instance designed to have a unique one, which is ``test_ports`` and
+    ``test_corpus_parity``'s job rather than this harness's.
+
     Set ``lp=True`` to also write and re-solve the LP file, the third opinion.
     HiGHS reads that file, so a model carrying ``sos:`` must not ask for it:
     HiGHS has no SOS concept and its parser refuses the section outright, which
@@ -104,8 +114,9 @@ def differential(
         oracle = float(m.objective.value)
         assert np.isfinite(oracle), 'the eager oracle is infeasible or unbounded — fix the data, not the tolerance'
 
+        program = lower_program(schema)
         with PolarsEngine() as engine:
-            engine.build(lower_program(schema), tidy_sources(schema, dict(sources)), expression_thunks(schema))
+            engine.build(program, tidy_sources(schema, dict(sources)), expression_thunks(schema))
             result = engine.solve()
             assert result.is_ok
             assert result.objective == pytest.approx(oracle, rel=rel)
