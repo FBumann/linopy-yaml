@@ -109,6 +109,7 @@ def differential(
             result = engine.solve()
             assert result.is_ok
             assert result.objective == pytest.approx(oracle, rel=rel)
+            _same_shape(engine.diagnostics(), m)
 
             lp_path = None
             if lp:
@@ -117,6 +118,29 @@ def differential(
                 assert solve_lp_file(lp_path) == pytest.approx(oracle, rel=rel)
 
             yield Agreement(oracle=oracle, model=m, result=result, schema=schema, engine=engine, lp=lp_path)
+
+
+def _same_shape(diagnostics: Any, eager: Any) -> None:
+    """The two lanes built the same *model*, not merely the same answer.
+
+    An objective, a dual vector and a re-solved LP file are all invariant to a
+    column that cannot move: a variable pinned to ``[0, 0]``, or a row that is
+    true whatever the solver does. So a lane could materialise either and every
+    other assertion here would still pass — which is not hypothetical, it is
+    how a first draft of ``absence: zero`` shipped an extra column per absent
+    coordinate on the eager lane with the whole suite green.
+
+    Counts rather than a set comparison: the two lanes name their columns
+    differently by design (labels against a ``(name, coordinate)`` index), and
+    the claim worth making is that the same declarations produced the same
+    number of them.
+    """
+    assert diagnostics.columns == eager.nvars, (
+        f'the lanes disagree on how many columns this model has — relational {diagnostics.columns}, eager {eager.nvars}'
+    )
+    assert diagnostics.rows == eager.ncons, (
+        f'the lanes disagree on how many rows this model has — relational {diagnostics.rows}, eager {eager.ncons}'
+    )
 
 
 def _write(path: Path, model: str | dict[str, Any]) -> Path:
