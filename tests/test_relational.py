@@ -1073,6 +1073,108 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
         assert ran == snapshot, 'a diagnostics snapshot is its own dict, not a view of the running clocks'
 
 
+#: Three blocks that differ only in how they are scaled, so the report has
+#: something to distinguish. `badly_scaled` spans nine orders of magnitude by
+#: itself, `signed` carries `ordinary`'s coefficients negated, and one cost is
+#: negative — which is where a signed extreme and a magnitude part company.
+SCALING = {
+    'dimensions': {'unit': {'values': ['a', 'b']}},
+    'parameters': {'small': {'dims': ['unit']}, 'large': {'dims': ['unit']}, 'cost': {'dims': ['unit']}},
+    'variables': {'p': {'foreach': ['unit'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {
+        'ordinary': {'foreach': ['unit'], 'expression': 'p * small >= 1'},
+        'badly_scaled': {'foreach': ['unit'], 'expression': 'p * large <= 10000000'},
+        'signed': {'foreach': ['unit'], 'expression': '0 - p * small >= -100'},
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=unit)'},
+}
+SCALING_SOURCES = {
+    'small': pl.DataFrame({'unit': ['a', 'b'], 'value': [1.0, 4.0]}),
+    'large': pl.DataFrame({'unit': ['a', 'b'], 'value': [1e6, 1e-3]}),
+    'cost': pl.DataFrame({'unit': ['a', 'b'], 'value': [2.0, -0.5]}),
+}
+
+
+def test_the_coefficient_range_names_the_block_that_holds_the_outlier():
+    """The spread of the matrix, per declaration — which is what a caller can act on.
+
+    A solver prints one ``Matrix range`` for the whole model, and the model is
+    too large to open, so the number says a repair is needed and not where. The
+    engine builds the matrix a declaration at a time and can say both.
+
+    Magnitudes, not signed extremes: `signed` holds `ordinary`'s coefficients
+    negated and is scaled identically, which is the answer a modeller wants and
+    the one a signed min/max cannot give.
+    """
+    with lps.build(SCALING, SCALING_SOURCES) as bound:
+        spread = bound.diagnostics().coefficient_range
+
+    assert spread.to_dicts() == [
+        {'constraint': 'ordinary', 'smallest': 1.0, 'largest': 4.0},
+        {'constraint': 'badly_scaled', 'smallest': 1e-3, 'largest': 1e6},
+        {'constraint': 'signed', 'smallest': 1.0, 'largest': 4.0},
+    ], 'one row per block in build order, and `signed` is scaled exactly as `ordinary` is'
+
+    worst = spread.select((pl.col('largest') / pl.col('smallest')).max()).item()
+    assert worst == pytest.approx(1e9), 'the conditioning number to compare against what the solver reports'
+
+
+def test_the_objective_range_is_read_beside_the_matrix_and_not_in_it():
+    """Costs and coefficients are different faults, so they are different fields.
+
+    `cost` is negative on one unit, which is the whole reason the pair is
+    magnitudes: a signed answer here would be ``(-0.5, 2.0)`` and say nothing
+    about the four-fold spread it actually has.
+    """
+    with lps.build(SCALING, SCALING_SOURCES) as bound:
+        seen = bound.diagnostics()
+
+    assert seen.objective_range == (0.5, 2.0), 'the objective is read off `obj`, never off the matrix'
+    assert 'objective' not in seen.coefficient_range.get_column('constraint').to_list(), (
+        'the objective is not a constraint block and does not appear as one'
+    )
+
+
+def test_a_model_with_no_objective_has_no_objective_range():
+    """A feasibility model has no costs to be badly scaled, and says so rather than lying with zeros."""
+    feasibility = {k: v for k, v in SCALING.items() if k != 'objective'}
+    with lps.build(feasibility, SCALING_SOURCES) as bound:
+        seen = bound.diagnostics()
+
+    assert seen.objective_range is None, 'no objective is not an objective whose coefficients span nothing'
+    assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint block is there'
+
+
+def test_the_coefficient_range_survives_the_model_being_released():
+    """Read off each share as it is built, so it outlives the frames it came from.
+
+    The alternative — a reader over the live matrix — would go dark exactly
+    when a caller comes back to a finished run asking why it solved badly.
+    """
+    with lps.build(SCALING, SCALING_SOURCES) as bound:
+        held = bound.diagnostics()
+    released = bound.diagnostics()
+
+    assert released.coefficient_range.equals(held.coefficient_range), 'a released model still says how it was scaled'
+    assert released.objective_range == held.objective_range
+
+
+def test_the_largest_magnitude_agrees_with_the_oracle():
+    """linopy answers the same question per constraint, and the two must not drift.
+
+    Its `coefficientrange` is a *signed* min/max, so only the larger magnitude
+    is comparable — the smaller one is the half this engine adds, and there is
+    nothing upstream to check it against.
+    """
+    with differential(SCALING, SCALING_SOURCES) as run:
+        ours = {row['constraint']: row['largest'] for row in run.engine.diagnostics().coefficient_range.to_dicts()}
+        theirs = run.model.constraints.coefficientrange
+
+    for name, largest in ours.items():
+        expected = max(abs(theirs.loc[name, 'min']), abs(theirs.loc[name, 'max']))
+        assert largest == pytest.approx(expected), f"the lanes disagree on the widest coefficient in '{name}'"
+
+
 def test_row_chunks_are_bounded_by_nonzeros_not_by_rows():
     """A chunk of rows is a chunk of *entries*, and only entries are residency.
 
