@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.180](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.179...v0.0.1-alpha.180) (2026-08-17)
+
+
+### Features
+
+* **ports:** integrality is one declaration and nothing above it cares ([#943](https://github.com/fluxopt/lpspec/issues/943)) ([f14b5fc](https://github.com/fluxopt/lpspec/commit/f14b5fc28ba4280f3b5a6bfc5118a2db40d98908))
+
 ## [0.0.1-alpha.179](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.178...v0.0.1-alpha.179) (2026-08-17)
 
 
