@@ -112,7 +112,7 @@ def _eager_matrix(eager: Any, constraint: str) -> list[tuple[float, ...]]:
         if label < 0:
             continue
         collapsed: dict[int, float] = {}
-        for column, coefficient in zip(variables[i], coefficients[i]):
+        for column, coefficient in zip(variables[i], coefficients[i], strict=True):
             if column >= 0:
                 collapsed[int(column)] = collapsed.get(int(column), 0.0) + float(coefficient)
         rows.append(tuple(sorted(v for v in collapsed.values() if round(v, 12) != 0)))
