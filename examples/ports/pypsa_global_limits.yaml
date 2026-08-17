@@ -1,0 +1,161 @@
+description: >-
+  PyPSA's global constraints: four limits over four different selected sets —
+  the energy a carrier may deliver, the capacity a carrier may hold at one bus,
+  and the built transmission measured twice, once as length and once as money.
+  Each is one grouped sum against a bound only some rows carry.
+  Optimum 127211.66666666666, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  bus:
+    description: network nodes
+    dtype: str
+  carrier:
+    description: what a generator burns, and what a global limit selects on
+    dtype: str
+  generator:
+    description: generating units, each sitting on a bus and burning a carrier
+    dtype: str
+  link:
+    description: controllable connections, each joining two buses
+    dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  gen_carrier:
+    description: the carrier a generator burns
+    over: generator
+    into: carrier
+  link_from:
+    description: the bus a link leaves
+    over: link
+    into: bus
+  link_to:
+    description: the bus a link arrives at
+    over: link
+    into: bus
+
+parameters:
+  load:
+    description: demand at each bus in each snapshot
+    dims: [snapshot, bus]
+  p_max_pu:
+    description: share of built capacity a generator can produce in a snapshot
+    dims: [snapshot, generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  gen_capital_cost:
+    description: annualised cost of a unit of generator capacity
+    dims: [generator]
+  link_capital_cost:
+    description: annualised cost of a unit of link capacity
+    dims: [link]
+  link_length:
+    description: how far a link reaches — what turns built capacity into a volume
+    dims: [link]
+  energy_cap:
+    description: >-
+      energy a carrier may deliver over the whole horizon, for the carriers that
+      have such a limit
+    dims: [carrier]
+  capped_carrier:
+    description: >-
+      1 for the carrier the per-bus capacity caps are about, 0 for the rest —
+      the selection PyPSA writes into a column name, written here as data
+    dims: [carrier]
+  bus_capacity_cap:
+    description: >-
+      capacity of that carrier a bus may hold, for the buses that cap it
+    dims: [bus]
+  volume_cap:
+    description: capacity times length the whole network may build
+    dims: []
+  expansion_cost_cap:
+    description: money the whole network may spend building links
+    dims: []
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  p_nom:
+    description: capacity built at a generator
+    foreach: [generator]
+    bounds:
+      lower: 0
+  g:
+    description: flow on a link, towards the bus it delivers at
+    foreach: [snapshot, link]
+    bounds:
+      lower: 0
+  link_p_nom:
+    description: capacity built on a link
+    foreach: [link]
+    bounds:
+      lower: 0
+
+constraints:
+  within_capacity:
+    description: a generator produces no more than the built capacity available to it
+    foreach: [snapshot, generator]
+    expression: p <= p_nom * p_max_pu
+
+  within_link_capacity:
+    foreach: [snapshot, link]
+    expression: g <= link_p_nom
+
+  nodal_balance:
+    description: what is generated at a bus plus what arrives over the links meets the load there
+    foreach: [snapshot, bus]
+    expression: >-
+      sum(p, by=gen_bus)
+      + sum(g, by=link_to) - sum(g, by=link_from)
+      == load
+
+  carrier_energy:
+    description: >-
+      a carrier with an energy limit delivers no more than it over the horizon —
+      the generators are grouped onto the carrier they burn, which is the
+      selection PyPSA makes by querying its own table
+    foreach: [carrier]
+    where: energy_cap
+    expression: sum(sum(p, by=gen_carrier), over=snapshot) <= energy_cap
+
+  carrier_capacity_at_bus:
+    description: >-
+      a bus that caps the capped carrier holds no more of it than that — the
+      capacity is grouped onto the bus and masked to the one carrier, because a
+      sum cannot yet group through two lookups at once
+    foreach: [bus]
+    where: bus_capacity_cap
+    expression: sum(p_nom * at(capped_carrier, by=gen_carrier), by=gen_bus) <= bus_capacity_cap
+
+  transmission_volume:
+    description: >-
+      capacity times length, summed over the links — a limit on how much network
+      is built, in the unit a planner is granted
+    foreach: []
+    expression: sum(link_p_nom * link_length, over=link) <= volume_cap
+
+  transmission_cost:
+    description: >-
+      the same set weighted by money instead of distance, which is why the two
+      limits are not each other: the long link is the cheap one
+    foreach: []
+    expression: sum(link_p_nom * link_capital_cost, over=link) <= expansion_cost_cap
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run, plus what the generation and link capacity cost to build
+  expression: >-
+    p * marginal_cost
+    + p_nom * gen_capital_cost
+    + link_p_nom * link_capital_cost

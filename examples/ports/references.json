@@ -1069,5 +1069,56 @@
         ]
       }
     }
+  },
+  "pypsa_global_limits": {
+    "objective": 127211.66666666666,
+    "rtol": 1e-09,
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_global_limits.py",
+    "duals": {
+      "nodal_balance": {
+        "snapshot": [
+          0,
+          0,
+          0,
+          1,
+          1,
+          1,
+          2,
+          2,
+          2,
+          3,
+          3,
+          3
+        ],
+        "bus": [
+          "north",
+          "south",
+          "east",
+          "north",
+          "south",
+          "east",
+          "north",
+          "south",
+          "east",
+          "north",
+          "south",
+          "east"
+        ],
+        "value": [
+          0.0,
+          300.0,
+          300.0,
+          2050.0,
+          700.0,
+          150.0,
+          0.0,
+          300.0,
+          300.0,
+          300.0,
+          300.0,
+          150.0
+        ]
+      }
+    }
   }
 }
