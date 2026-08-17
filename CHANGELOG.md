@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.182](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.181...v0.0.1-alpha.182) (2026-08-17)
+
+
+### Features
+
+* **language:** a variable declares whether its absence is zero or undefined ([#950](https://github.com/fluxopt/lpspec/issues/950)) ([adfcd8b](https://github.com/fluxopt/lpspec/commit/adfcd8b82f10ec6416f5e8e2835a80ac786781aa))
+
 ## [0.0.1-alpha.181](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.180...v0.0.1-alpha.181) (2026-08-17)
 
 
