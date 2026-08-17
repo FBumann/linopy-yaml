@@ -1,0 +1,181 @@
+{
+  "snapshot": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "period_of": [
+      2030,
+      2030,
+      2040,
+      2040,
+      2050,
+      2050
+    ]
+  },
+  "period": {
+    "period": [
+      2030,
+      2040,
+      2050
+    ]
+  },
+  "carrier": {
+    "carrier": [
+      "wind",
+      "gas"
+    ]
+  },
+  "generator": {
+    "generator": [
+      "wind_2030",
+      "wind_2040",
+      "wind_2050",
+      "gas"
+    ],
+    "gen_carrier": [
+      "wind",
+      "wind",
+      "wind",
+      "gas"
+    ],
+    "build_period": [
+      2030,
+      2040,
+      2050,
+      2030
+    ]
+  },
+  "load": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "value": [
+      40.0,
+      60.0,
+      70.0,
+      100.0,
+      110.0,
+      150.0
+    ]
+  },
+  "period_weight": {
+    "period": [
+      2030,
+      2040,
+      2050
+    ],
+    "value": [
+      1.0,
+      0.8,
+      0.6
+    ]
+  },
+  "opex": {
+    "generator": [
+      "wind_2030",
+      "wind_2040",
+      "wind_2050",
+      "gas"
+    ],
+    "value": [
+      0.0,
+      0.0,
+      0.0,
+      80.0
+    ]
+  },
+  "capex": {
+    "generator": [
+      "wind_2030",
+      "wind_2040",
+      "wind_2050",
+      "gas"
+    ],
+    "value": [
+      200.0,
+      200.0,
+      200.0,
+      60.0
+    ]
+  },
+  "p_nom_max": {
+    "generator": [
+      "wind_2030",
+      "wind_2040",
+      "wind_2050",
+      "gas"
+    ],
+    "value": [
+      200.0,
+      200.0,
+      200.0,
+      200.0
+    ]
+  },
+  "capped_carrier": {
+    "carrier": [
+      "wind",
+      "gas"
+    ],
+    "value": [
+      1.0,
+      0.0
+    ]
+  },
+  "max_growth": 15.0,
+  "max_relative_growth": 0.5,
+  "activity": {
+    "period": [
+      2030,
+      2030,
+      2030,
+      2030,
+      2040,
+      2040,
+      2040,
+      2040,
+      2050,
+      2050,
+      2050,
+      2050
+    ],
+    "generator": [
+      "wind_2030",
+      "wind_2040",
+      "wind_2050",
+      "gas",
+      "wind_2030",
+      "wind_2040",
+      "wind_2050",
+      "gas",
+      "wind_2030",
+      "wind_2040",
+      "wind_2050",
+      "gas"
+    ],
+    "value": [
+      1.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0,
+      1.0,
+      0.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

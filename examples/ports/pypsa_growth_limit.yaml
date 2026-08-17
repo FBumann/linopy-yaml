@@ -1,0 +1,119 @@
+description: >-
+  PyPSA's carrier growth limit: how much of a technology may be built in one
+  investment period, given how much was built in the one before. Three periods,
+  one capped carrier, and a row that couples each period to its predecessor —
+  the first `shift` in the corpus over an axis that is not time-of-day.
+  Optimum 47110.0, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods, each falling in one investment period
+    dtype: int
+  period:
+    description: investment periods, the axis capacity is built along
+    dtype: int
+  carrier:
+    description: what a generator burns, and what a growth limit is a property of
+    dtype: str
+  generator:
+    description: generating units, each built in one period and standing from then on
+    dtype: str
+
+lookups:
+  gen_carrier:
+    description: the carrier a generator burns
+    over: generator
+    into: carrier
+  build_period:
+    description: the period a generator is first built in, and so counted as new in
+    over: generator
+    into: period
+  period_of:
+    description: the investment period a snapshot falls in
+    over: snapshot
+    into: period
+
+parameters:
+  load:
+    description: demand to be met
+    dims: [snapshot]
+  period_weight:
+    description: what one period's costs are worth at the horizon's start
+    dims: [period]
+  opex:
+    description: cost of one unit of output
+    dims: [generator]
+  capex:
+    description: cost of holding one unit of capacity through one period
+    dims: [generator]
+  p_nom_max:
+    description: most capacity a generator may build
+    dims: [generator]
+  activity:
+    description: 1 where a generator stands in a period and 0 where it does not
+    dims: [period, generator]
+  capped_carrier:
+    description: >-
+      1 for the carrier whose growth is capped, 0 for the rest — the selection
+      PyPSA makes by reading its carrier table
+    dims: [carrier]
+  max_growth:
+    description: most capacity of that carrier that may be newly built in one period
+    dims: []
+  max_relative_growth:
+    description: >-
+      how much of the previous period's new capacity is added to that allowance —
+      what makes the limit a growth rate rather than a flat cap
+    dims: []
+
+expressions:
+  new_capacity:
+    description: >-
+      capacity of the capped carrier first standing in a period: each generator's
+      capacity counted once, in the period it is built, and never again
+    expression: sum(p_nom * at(capped_carrier, by=gen_carrier), by=build_period)
+
+variables:
+  p:
+    description: output of a generator in a snapshot, zero where it does not yet stand
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  p_nom:
+    description: capacity built at a generator
+    foreach: [generator]
+    bounds:
+      lower: 0
+      upper: p_nom_max
+
+constraints:
+  within_capacity:
+    description: >-
+      a generator produces no more than the capacity built for it, and nothing in
+      a period it does not stand in
+    foreach: [snapshot, generator]
+    expression: p <= p_nom * at(activity, by=period_of)
+
+  power_balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+
+  growth_limit:
+    description: >-
+      what may be built of the capped carrier in a period is its allowance plus a
+      share of what was built in the period before. `edge=0` keeps the first
+      period's row, where there is no predecessor to grow from, as the bare
+      allowance — which is the row PyPSA emits there.
+    foreach: [period]
+    expression: >-
+      new_capacity - shift(new_capacity, over=period, by=1, edge=0) * max_relative_growth
+      <= max_growth
+
+objective:
+  sense: minimize
+  description: >-
+    operating and capacity cost, each discounted by the weight of the period it
+    falls in — capacity once per period the generator stands in
+  expression: >-
+    p * opex * at(period_weight, by=period_of)
+    + p_nom * capex * activity * period_weight
