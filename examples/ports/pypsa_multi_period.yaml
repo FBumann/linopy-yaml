@@ -1,0 +1,88 @@
+description: >-
+  PyPSA multi-period investment: a build year and a lifetime decide which
+  periods an asset exists in, so a generator that has retired has no dispatch to
+  choose, and capacity is paid for once per period it stands in — discounted by
+  that period's weight. One unit retires between the two periods, one is built
+  for the second, one lives through both.
+  Optimum 85300.0, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods, each falling in one investment period
+    dtype: int
+  period:
+    description: investment periods, the grouping capacity is decided and paid over
+    dtype: int
+  generator:
+    description: generating units, each existing in some periods and not others
+    dtype: str
+
+lookups:
+  period_of:
+    description: the investment period a snapshot falls in
+    over: snapshot
+    into: period
+
+parameters:
+  load:
+    description: demand to be met
+    dims: [snapshot]
+  period_weight:
+    description: >-
+      what one period's costs are worth at the horizon's start — the discount
+      that makes a 2040 decision comparable with a 2030 one
+    dims: [period]
+  opex:
+    description: cost of one unit of output
+    dims: [generator]
+  capex:
+    description: cost of holding one unit of capacity through one period
+    dims: [generator]
+  p_nom_max:
+    description: most capacity a generator may build
+    dims: [generator]
+  activity:
+    description: >-
+      1 where a generator exists in a period and 0 where it does not — PyPSA
+      derives this from a build year and a lifetime, and it decides both what may
+      run and what is paid for
+    dims: [period, generator]
+
+variables:
+  p:
+    description: >-
+      output of a generator in a snapshot, held at zero in the snapshots whose
+      period the generator does not exist in
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  p_nom:
+    description: capacity built at a generator
+    foreach: [generator]
+    bounds:
+      lower: 0
+      upper: p_nom_max
+
+constraints:
+  within_capacity:
+    description: >-
+      a generator produces no more than the capacity built for it, and nothing at
+      all in a period it does not exist in — the activity is read down onto the
+      snapshot through the period lookup
+    foreach: [snapshot, generator]
+    expression: p <= p_nom * at(activity, by=period_of)
+
+  power_balance:
+    description: what exists in this snapshot meets the load
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+
+objective:
+  sense: minimize
+  description: >-
+    operating cost and capacity cost, each discounted by the weight of the
+    period it falls in — capacity once per period the asset stands in, which is
+    why an asset alive in both is paid for twice
+  expression: >-
+    p * opex * at(period_weight, by=period_of)
+    + p_nom * capex * activity * period_weight

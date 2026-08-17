@@ -75,6 +75,7 @@ nav:
           - spillage: examples/pypsa_spill.md
           - the Store component: examples/pypsa_store.md
           - link delay: examples/pypsa_link_delay.md
+          - multi-period investment: examples/pypsa_multi_period.md
       - Published optima:
           - Dantzig transport: examples/transport_dantzig.md
           - Dantzig, economies of scale: examples/transport_pwl.md

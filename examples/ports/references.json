@@ -1120,5 +1120,26 @@
         ]
       }
     }
+  },
+  "pypsa_multi_period": {
+    "objective": 85300.0,
+    "rtol": 1e-09,
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_multi_period.py",
+    "duals": {
+      "power_balance": {
+        "snapshot": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "value": [
+          70.0,
+          310.0,
+          49.0,
+          440.99999999999994
+        ]
+      }
+    }
   }
 }
