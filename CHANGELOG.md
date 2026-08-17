@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.176](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.175...v0.0.1-alpha.176) (2026-08-17)
+
+
+### Features
+
+* **ports:** storage that may spill has a second sink ([#939](https://github.com/fluxopt/lpspec/issues/939)) ([d457b0e](https://github.com/fluxopt/lpspec/commit/d457b0e33c44c8f017eb1bbe1b28ec7a0a45d358))
+
 ## [0.0.1-alpha.175](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.174...v0.0.1-alpha.175) (2026-08-17)
 
 
