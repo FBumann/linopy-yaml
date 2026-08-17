@@ -553,8 +553,7 @@ def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:
     ``x <= 0`` at a coordinate the model said nothing about. Putting the dim
     back is also what keeps the operand combinable at all — linopy v1 aligns on
     membership, so a result short of a label refuses the next arithmetic
-    outright, which is how #897 surfaced. The relational lane still keeps that
-    row (#968), so this is the lane that is right until it lands.
+    outright, which is how #897 surfaced.
     """
     if not isinstance(mapping, xr.DataArray):
         msg = f'at() lookup must be an array (got {type(mapping).__name__}). Usage: at(expr, by=lookup)'

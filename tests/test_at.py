@@ -341,9 +341,9 @@ def test_at_through_a_null_lookup_takes_the_row_with_it():
     returned a result over a short `flow` and linopy v1 refused the next
     combination with a coordinate mismatch.
 
-    Eager-lane only, and the oracle is imported in the body, because the
-    relational lane still answers 0.0 here (#968) — the differential case
-    below is the one that closes when it does.
+    Eager-lane only, and the oracle is imported in the body: the differential
+    case below carries the relational lane, and reads the same answer off the
+    row count as well as the objective.
     """
     from tests.oracle import lpspec_linopy, pd
 
@@ -365,15 +365,13 @@ def test_at_through_a_null_lookup_takes_the_row_with_it():
     )
 
 
-@pytest.mark.xfail(
-    reason='#968 — the relational lane builds link[f3] as `take[f3] <= 0` instead of dropping it', strict=True
-)
 def test_at_through_a_null_lookup_agrees_between_lanes():
     """The same model on both lanes, which is what #897 is finally about.
 
-    Kept beside the eager assertion rather than folded into it: the eager lane
-    is right and the relational one is not, so a single test would have to
-    assert the wrong number to stay green. This XPASSes the day #968 lands.
+    Until #968 the relational lane answered 0.0: the null entry was dropped by
+    the join that places the pullback's terms, so the term vanished while its
+    row stayed and `link[f3]` was built as `take[f3] <= 0` — a row asserting
+    something the model never said, with nothing anywhere reporting it.
     """
     from tests.differential import differential
     from tests.oracle import pd
@@ -388,3 +386,99 @@ def test_at_through_a_null_lookup_agrees_between_lanes():
         lp=True,
     ) as run:
         assert run.oracle == pytest.approx(10.0)
+        assert run.engine.diagnostics().rows == 2, 'the two flows that map somewhere have a row, and f3 has none'
+
+
+#: The same shape with a *total* lookup, so the absence is the operand's own:
+#: `c2` exists as a label and every flow maps somewhere, but `level` is masked
+#: away there, and a fine coordinate reading a masked slot reads nothing.
+MASKED = DANGLING | {
+    'parameters': {'usable': {'dims': ['component']}},
+    'variables': DANGLING['variables'] | {'level': DANGLING['variables']['level'] | {'where': 'usable > 0'}},
+}
+
+
+def test_at_over_a_masked_variable_takes_the_row_with_it():
+    """A pullback carries the mask under it, not only the lookup's own gaps.
+
+    Two absences reach a fine coordinate through the same join and the engine
+    used to report neither, so this answered 0.0 beside the null-lookup case
+    above and for the same reason (#968) — `f3` reads `level[c2]`, which is not
+    there, and its row was built anyway with the right-hand side empty.
+    """
+    from tests.differential import differential
+    from tests.oracle import pd
+
+    flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
+    with differential(
+        MASKED,
+        {
+            'flow': pd.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c2']}),
+            'component': pd.Index(components, name='component'),
+            'usable': pd.Series([1.0, 0.0], index=pd.Index(components, name='component')),
+        },
+        lp=True,
+    ) as run:
+        assert run.oracle == pytest.approx(10.0), 'take[f3] is held by its own bound — 0.0 would mean a row bound it'
+        assert run.engine.diagnostics().rows == 2, 'only the flows whose component has a level are asserted'
+
+
+#: A pullback's absence is one column wide — the fine dim — while the fragment
+#: it rides on carries every dim the operand had. `u` is what makes that
+#: difference observable: a shift along `t` reads the *other* dims off the
+#: presence to place its edge, and there are two of them here where the frame
+#: names one.
+DANGLING_SHIFTED = {
+    'dimensions': {
+        'flow': {'dtype': 'str'},
+        'component': {'dtype': 'str'},
+        't': {'dtype': 'int'},
+        'u': {'dtype': 'str'},
+    },
+    'lookups': {'component_of': {'over': 'flow', 'into': 'component'}},
+    'variables': {
+        'level': {'foreach': ['component', 't', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
+        'take': {'foreach': ['flow', 't', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {
+        'link': {
+            'foreach': ['flow', 't', 'u'],
+            'expression': 'take <= shift(at(level, by=component_of), over=t, by=1, edge=0)',
+        }
+    },
+    'objective': {
+        'sense': 'maximize',
+        'expression': (
+            'sum(sum(sum(take, over=flow), over=t), over=u) '
+            '- 1000 * sum(sum(sum(level, over=component), over=t), over=u)'
+        ),
+    },
+}
+
+
+def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
+    """The shift edge places itself over dims the pullback's presence omits.
+
+    A presence keyed by one column is the cheap spelling — materialising the
+    coordinate product to name an edge costs a fifth of build on a wide ramp —
+    and `edge: 0` is the one reader that goes looking for columns it may not
+    have. It widens rather than asking, so this builds at all instead of
+    failing on a column named `u`.
+
+    Relational-lane only: the eager lane answers 0.0 here because its `edge: 0`
+    fills every absence rather than the positions the shift vacated (#987), so
+    a differential case would have to assert the wrong number to stay green.
+    """
+    flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
+    sources = {
+        'flow': pl.DataFrame({'flow': flows, 'component_of': DANGLING_MAP}),
+        'component': pl.DataFrame({'component': components}),
+        't': pl.DataFrame({'t': [0, 1]}),
+        'u': pl.DataFrame({'u': ['a', 'b']}),
+    }
+    with lps.build(DANGLING_SHIFTED, sources) as bound:
+        assert bound.diagnostics().rows == 8, 'the flows that map somewhere are asserted at both t, and f3 at neither'
+        with bound.solve() as result:
+            assert result.objective == pytest.approx(40.0), (
+                "f3's four coordinates are held by their own bound alone, every other row by a level worth 1000"
+            )

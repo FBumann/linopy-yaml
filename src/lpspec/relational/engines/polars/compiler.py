@@ -690,10 +690,49 @@ class PolarsCompiler:
         A pullback duplicates a label — the same ``var_label`` at every fine
         coordinate of its component — so a later reduction can bring two copies
         into one row, where the terminal aggregate adds them.
+
+        Unlike the group it shares that join with, it **reports absence**:
+        pointwise, so what the fine coordinate has is whatever the coarse slot
+        it reads has, and a slot with nothing has to take the row with it.
         """
         if a.into not in p.dims:
             raise LanguageError(f"in {context}: At through '{a.into}' but the expression has dims {list(p.dims)}")
-        return self._remap_fragment(p, a, consumed=a.into, produced=a.over)
+        remapped = self._remap_fragment(p, a, consumed=a.into, produced=a.over)
+        return replace(remapped, presence=self._pulled_back_presence(p, a))
+
+    def _pulled_back_presence(self, p: TermFragment, a: plan.At) -> Presence | None:
+        """Where a pullback's term exists, keyed by the fine dim it now spans.
+
+        Two absences reach the fine coordinate and :meth:`_remap_fragment`'s
+        inner join swallows both — the operand's own, where the variable under
+        it was masked away, and the **lookup's**, where the label maps to null
+        and there is no slot to read (the absence rules list it among the four
+        constructs that create one). Unreported, the term merely vanishes and
+        its row survives to assert something the model never said: `x <= 0`
+        where the model said nothing (#968).
+
+        A total lookup over an operand with nothing to report yields ``None``
+        rather than a restriction admitting everything, so a model with no
+        absence in it does not pay for the machinery that carries one.
+
+        The key is stated rather than left implied because a later product
+        widens the fragment's dims while this frame keeps the one column that
+        matters — the hazard :class:`Presence` names.
+        """
+        mapping = self.data.dimensions[a.over].select(pl.col('val').alias(a.over), pl.col(a.lookup).alias(a.into))
+        reachable = mapping.filter(pl.col(a.into).is_not_null())
+        if p.presence is None:
+            partial = mapping.select(pl.col(a.into).null_count()).collect().item() > 0
+            return Presence(reachable.select(a.over), (a.over,)) if partial else None
+
+        keys = p.presence.keys(p.dims)
+        if not keys:
+            return Presence(p.presence.restrict(reachable.select(a.over), keys), (a.over,))
+        source, keys = (
+            (p.presence.frame, keys) if a.into in keys else (self._widen(p.presence.frame, keys, p.dims), p.dims)
+        )
+        kept = tuple(k for k in keys if k != a.into)
+        return Presence(source.join(reachable, on=a.into, how='inner').select(*kept, a.over), (*kept, a.over))
 
     def _remap_fragment(
         self, p: TermFragment, node: plan.GroupSum | plan.At, *, consumed: str, produced: str
@@ -942,11 +981,17 @@ class PolarsCompiler:
         removed is genuinely absent and remapping already dropped it. So the
         edge is crossed with the other-dim combinations the variable actually
         has, one vacated row each.
+
+        The incoming presence is widened to *others* first, since a narrowly
+        keyed one — a pullback's, an earlier shift's — is silent about the
+        columns this reads and asking for them is #546 all over again.
         """
         edge = self._edge(s, card, vacated=True)
-        if not others:
+        if not others or p.presence is None:
             return edge
-        return p.presence.frame.select(*others).unique().join(edge, how='cross') if p.presence is not None else edge
+        have = p.presence.keys(p.dims)
+        source = p.presence.frame if all(d in have for d in others) else self._widen(p.presence.frame, have, p.dims)
+        return source.select(*others).unique().join(edge, how='cross')
 
     # ------------------------------------------------------------------
     # assembly helpers used by the engine
