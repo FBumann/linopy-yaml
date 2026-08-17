@@ -1,0 +1,96 @@
+description: >-
+  PyPSA linearized unit commitment: commitment with the status continuous in
+  [0, 1] rather than binary, so a unit may be committed by a third. A relaxation
+  and therefore a bound — on this instance worth less than half the integer
+  answer. Optimum 5540.0, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  generator:
+    description: generating units, each committed to some degree or not at all
+    dtype: str
+
+parameters:
+  p_nom:
+    description: installed capacity of a generator
+    dims: [generator]
+  p_min_pu:
+    description: share of capacity a committed unit must produce at least
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  start_up_cost:
+    description: what bringing a unit up costs, once per start
+    dims: [generator]
+  shut_down_cost:
+    description: what taking a unit down costs, once per stop
+    dims: [generator]
+  load:
+    description: demand to be met
+    dims: [snapshot]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  status:
+    description: >-
+      how far this unit is committed in this snapshot — one of the three
+      declarations that separate this model from the integer one
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: 1
+  start_up:
+    description: how much of this unit comes up entering this snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: 1
+  shut_down:
+    description: how much of this unit goes down entering this snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: 1
+
+constraints:
+  power_balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+
+  commitment_max:
+    description: a unit runs at no more than the share of capacity it has committed
+    foreach: [snapshot, generator]
+    expression: p - p_nom * status <= 0
+
+  commitment_min:
+    description: and at no less than that share of its minimum
+    foreach: [snapshot, generator]
+    expression: p - p_min_pu * p_nom * status >= 0
+
+  start_up_initial:
+    description: every unit begins the horizon off, so committing in the first snapshot is a start
+    foreach: [snapshot, generator]
+    where: "snapshot == 0"
+    expression: start_up - status >= 0
+
+  start_up:
+    description: a unit whose commitment rises entering this snapshot pays for the rise
+    foreach: [snapshot, generator]
+    expression: start_up - status + shift(status, over=snapshot, by=1) >= 0
+
+  shut_down:
+    description: a unit whose commitment falls entering this snapshot pays for the fall
+    foreach: [snapshot, generator]
+    expression: shut_down + status - shift(status, over=snapshot, by=1) >= 0
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run, plus what its starts and stops cost
+  expression: p * marginal_cost + start_up * start_up_cost + shut_down * shut_down_cost
