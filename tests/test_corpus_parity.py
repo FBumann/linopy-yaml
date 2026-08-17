@@ -19,13 +19,18 @@ is linopy-free and pandas-free on purpose, and runs on the bare-install job.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import polars as pl
 import pytest
 
-from tests.conftest import PORT_REFERENCES, port_model, port_sources
+from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_model, port_sources
 from tests.differential import differential
+
+#: The instance files the ports bind, for a test that needs a column the model
+#: does not declare — ``port_sources`` filters those out, as it should.
+PORTS_DATA = PORTS_DIR / 'data'
 
 #: What the eager lane cannot build yet, keyed by model, valued by the issue
 #: that owns it and the error it raises today. Strict, so the day a fix lands
@@ -184,3 +189,71 @@ def test_the_eager_dual_check_would_notice_a_wrong_price() -> None:
 
     with differential(port_model(name), port_sources(name)) as run, pytest.raises(AssertionError, match=constraint):
         _check_recorded_duals(name, entry, run)
+
+
+#: PyPSA's secant loss mode on ``pypsa_losses``' own network — its default, where
+#: the ported tangent mode is deprecated. From
+#: ``examples/ports/references/pypsa/pypsa_losses.py``'s ``secant_objective``,
+#: pypsa 1.2.4, under the tolerances that script records.
+SECANT_OBJECTIVE = 24432.20488089685
+
+#: The loss each lossy line settles on, ``(snapshot, line)`` in sorted order.
+#: The objective alone pins only the half-planes that bind, so this pins where
+#: on the approximated curve the model sits — and the instance carries three
+#: low-demand snapshots so that the flows reach the *early* segments too. With
+#: the busy snapshots alone only the top two of five bound, and the other three
+#: coefficients could be anything.
+SECANT_LOSSES = [
+    4.319999999999999,
+    1.6236570501210394,
+    4.319999999999999,
+    1.2607240286010466,
+    4.319999999999999,
+    2.034868195461712,
+    0.05571402370778852,
+    0.031231008229264477,
+    0.3029679080268904,
+    0.14940704839558197,
+    1.4593292560812914,
+    0.753085939715055,
+]
+
+
+def test_the_two_loss_approximations_are_one_model() -> None:
+    """PyPSA's other loss mode is the same rows with different numbers in them.
+
+    ``pypsa_losses`` ports the tangent approximation. The secant one — PyPSA's
+    **default**, the tangents being deprecated — emits the identical shape: one
+    half-plane per segment per sign of the flow, ``loss ± slope * f >= offset``.
+    Only the coefficients differ, and how many of them there are.
+
+    So it gets no model file of its own. A second YAML byte-identical to the
+    first would assert a second model that does not exist; binding *this* model
+    to the other instance is the claim, and it is the stronger one — the two
+    approximations are one thing the language says once.
+
+    The coefficients are **dumped from PyPSA**, not re-derived here. Where its
+    breakpoints fall — and even how many there are — comes out of a tolerance
+    heuristic that is its business, so reproducing it would put their algorithm
+    in this repository, where a change on their side becomes a failure on ours.
+    ``pypsa_losses.py::secant_coefficients`` is the provenance, the same footing
+    as every other committed instance.
+
+    Through ``differential``, so the secant instance is held to everything the
+    corpus holds a port to: both lanes, the written LP file, and the coefficient
+    matrices agreeing entry for entry.
+    """
+    sources = dict(port_sources('pypsa_losses'))
+    sources |= {
+        name: pl.DataFrame(table)
+        for name, table in json.loads((PORTS_DATA / 'pypsa_losses_secants.json').read_text()).items()
+    }
+
+    with differential(port_model('pypsa_losses'), sources, lp=True) as run:
+        assert run.result.objective == pytest.approx(SECANT_OBJECTIVE, rel=1e-9), (
+            'the secant instance reaches the number PyPSA reaches under its own default mode'
+        )
+        loss = run.result.primal('loss').sort(['snapshot', 'line'])['value'].to_list()
+        assert loss == pytest.approx(SECANT_LOSSES, rel=1e-9), (
+            'and sits where PyPSA sits on the approximated curve, line by line'
+        )

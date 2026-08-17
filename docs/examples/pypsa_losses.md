@@ -2,13 +2,18 @@
 
 The loss on a line is `r · s²`. PyPSA approximates it from below with a fan of tangents.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **23001.387593283584**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **24114.237385131008**, matched to `rtol=1e-09`.
 
 For each segment *k* PyPSA takes the point `p_k = k/segments · s_nom`, draws the
 tangent to the loss curve there, and adds it once for each sign of the flow.
 Every one is a half-plane on `(loss, s)`, so the whole approximation is linear
 rows and **no auxiliary variable at all** — the objective pushes the loss down,
 the tangents hold it up, and it settles on the curve.
+
+Six snapshots, three busy and three quiet: the flows have to reach the **early**
+segments of the fan as well as the top of it. With the busy snapshots alone only
+two of five half-planes ever bound, and the other three coefficients could have
+been anything without the port noticing.
 
 The network is a path, `b0—b1—b2—b3`, radial on purpose: with no independent
 cycle there is no voltage law to satisfy, so a mismatch here implicates the loss
@@ -44,8 +49,8 @@ PyPSA transmission losses, tangent form: the quadratic loss on a line, underesti
 | $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- most a line may carry towards its `to` bus |
 | $\mathit{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ --- most a line may carry the other way, negative by convention |
 | $\mathit{loss}^{\mathrm{max}}$ | `loss_max` over $\mathcal{L}$ --- the loss at a line's rating — the top of the curve being approximated, carried as a column because a bound takes a name or a number, and given only for the lines that dissipate anything |
-| $\mathit{tangent\_slope}$ | `tangent_slope` over $\mathcal{L} \times \mathcal{S}$ --- the slope of the loss curve at this segment's tangent point, twice the resistance times the flow there |
-| $\mathit{tangent\_offset}$ | `tangent_offset` over $\mathcal{L} \times \mathcal{S}$ --- where that tangent meets the loss axis — negative, because a tangent to a convex curve through the origin lies below it |
+| $\mathit{loss}^{\mathrm{slope}}$ | `loss_slope` over $\mathcal{L} \times \mathcal{S}$ --- the slope of this segment's half-plane — how much loss the flow buys along it. Where the segments come from is the instance's business, not the model's: a tangent to the loss curve and a secant across it both arrive here as a slope and an offset. |
+| $\mathit{loss}^{\mathrm{offset}}$ | `loss_offset` over $\mathcal{L} \times \mathcal{S}$ --- where this segment's half-plane meets the loss axis, negative for a curve through the origin |
 | $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
 
 #### Variables
@@ -74,13 +79,13 @@ $$f_{t,l} + \mathit{loss}_{t,l} \le s^{\mathrm{nom}}_{l} \qquad \forall\thinspac
 
 $$f_{t,l} - \mathit{loss}_{t,l} \ge \mathit{neg\_s\_nom}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L}$$
 
-**`loss_above_tangent_forward`**
+**`loss_above_segment_forward`**
 
-$$\mathit{loss}_{t,l} + \mathit{tangent\_slope}_{l,s} \cdot f_{t,l} \ge \mathit{tangent\_offset}_{l,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathit{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
+$$\mathit{loss}_{t,l} + \mathit{loss}^{\mathrm{slope}}_{l,s} \cdot f_{t,l} \ge \mathit{loss}^{\mathrm{offset}}_{l,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathit{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
 
-**`loss_above_tangent_reverse`**
+**`loss_above_segment_reverse`**
 
-$$\mathit{loss}_{t,l} - \mathit{tangent\_slope}_{l,s} \cdot f_{t,l} \ge \mathit{tangent\_offset}_{l,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathit{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
+$$\mathit{loss}_{t,l} - \mathit{loss}^{\mathrm{slope}}_{l,s} \cdot f_{t,l} \ge \mathit{loss}^{\mathrm{offset}}_{l,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathit{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
 
 #### Variable domains
 
@@ -161,15 +166,17 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           carried as a column because a bound takes a name or a number, and given
           only for the lines that dissipate anything
         dims: [line]
-      tangent_slope:
+      loss_slope:
         description: >-
-          the slope of the loss curve at this segment's tangent point, twice the
-          resistance times the flow there
+          the slope of this segment's half-plane — how much loss the flow buys
+          along it. Where the segments come from is the instance's business, not
+          the model's: a tangent to the loss curve and a secant across it both
+          arrive here as a slope and an offset.
         dims: [line, segment]
-      tangent_offset:
+      loss_offset:
         description: >-
-          where that tangent meets the loss axis — negative, because a tangent to a
-          convex curve through the origin lies below it
+          where this segment's half-plane meets the loss axis, negative for a curve
+          through the origin
         dims: [line, segment]
       load:
         description: demand at each bus in each snapshot
@@ -227,19 +234,20 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, line]
         expression: f - loss >= neg_s_nom
 
-      loss_above_tangent_forward:
+      loss_above_segment_forward:
         description: >-
-          the loss sits above every tangent to its curve, which for a convex curve
-          is the whole approximation. Only the lines that have a curve get a fan.
+          the loss sits above every one of its half-planes, which for a convex
+          curve is the whole approximation. Only the lines that have a curve get a
+          fan.
         foreach: [snapshot, line, segment]
         where: loss_max
-        expression: loss + tangent_slope * f >= tangent_offset
+        expression: loss + loss_slope * f >= loss_offset
 
-      loss_above_tangent_reverse:
+      loss_above_segment_reverse:
         description: the same fan mirrored, because the loss depends on the flow's magnitude
         foreach: [snapshot, line, segment]
         where: loss_max
-        expression: loss - tangent_slope * f >= tangent_offset
+        expression: loss - loss_slope * f >= loss_offset
 
     objective:
       sense: minimize
@@ -250,7 +258,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     ```python
     # sources: parameter name -> frame or parquet path
     with lps.solve('examples/ports/pypsa_losses.yaml', sources) as solution:
-        solution.objective  # 23001.387593283584
+        solution.objective  # 24114.237385131008
         solution.dual('nodal_balance')
     ```
 
@@ -325,17 +333,37 @@ and the model reports a cheaper answer with nothing flagged:
 
 | spelling | rows | `omissions` | objective |
 |---|---|---|---|
-| `where:` + `absence: zero` | 66 | 0 | **23001.39** ✔ |
-| `where:` alone | 60 | 0 | 16401.39 ✘ |
+| `where:` + `absence: zero` | 132 | 0 | **24114.24** ✔ |
+| `where:` alone | 120 | **2** | 17514.24 ✘ |
 
-Twenty-nine per cent low, an empty omissions table
-([#944](https://github.com/fluxopt/lpspec/issues/944)), and an optimal status.
+Twenty-seven per cent low, and an optimal status — but no longer silent: since
+[#944](https://github.com/fluxopt/lpspec/issues/944) a row a propagated absence
+deleted is counted, so `diagnostics().omissions` names the two rating rows that
+went. The wrong model announces itself where it used to shrug.
 
 **`r` is 0.0003, not a per-unit textbook figure.** PyPSA's loss term is
 `r_pu_eff · s²` with `s` in MW, so a resistance chosen for a per-unit base makes
 the loss exceed the flow — at `r = 0.05` this instance is *infeasible*, the
 generators unable to cover a loss larger than the demand. At this value losses
 run about 3% of throughput.
+
+**PyPSA's *other* loss mode is this same model.** Its default is secants rather
+than tangents — secants lie above a convex curve where tangents lie below, so
+they overestimate the losses these underestimate — and it emits the identical
+rows: one half-plane per segment per sign of the flow. Only the coefficients
+differ, and how many of them there are.
+
+So it gets no model file of its own. `test_the_two_loss_approximations_are_one_model`
+binds *this* model to those coefficients and reaches PyPSA's own secant optimum,
+which is the stronger claim: the two approximations are one thing the language
+says once.
+
+That is also why the model's parameters are called `loss_slope` and
+`loss_offset` rather than anything with *tangent* in it, and why the
+coefficients are **dumped** from PyPSA rather than recomputed here. Where the
+breakpoints fall is the instance's business — a secant's come out of an error
+tolerance, and even their number does — and the model asks only for a slope and
+an offset per segment.
 
 ## What it exercises
 

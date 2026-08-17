@@ -114,7 +114,7 @@ drift from what the engine builds.
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_linearized_uc](pypsa_linearized_uc.md) | **✔** 5540 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | · |
 | [pypsa_link_delay](pypsa_link_delay.md) | **✔** 4311.11 | · | **✓** | · | **✓** | · | · | **✓** | · | · | · |
-| [pypsa_losses](pypsa_losses.md) | **✔** 23001.4 | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
+| [pypsa_losses](pypsa_losses.md) | **✔** 24114.2 | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_min_up_down](pypsa_min_up_down.md) | **✔** 32750 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | **✓** |
 | [pypsa_modular](pypsa_modular.md) | **✔** 56700 | · | **✓** | · | · | · | · | **✓** | · | · | **✓** |
 | [pypsa_multi_period](pypsa_multi_period.md) | **✔** 85300 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
@@ -182,7 +182,7 @@ that class, and the evidence behind
 | [pypsa_kvl](pypsa_kvl.md) | 17000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py |
 | [pypsa_linearized_uc](pypsa_linearized_uc.md) | 5540.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_linearized_uc.py |
 | [pypsa_link_delay](pypsa_link_delay.md) | 4311.111111111111 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_link_delay.py |
-| [pypsa_losses](pypsa_losses.md) | 23001.387593283584 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_losses.py |
+| [pypsa_losses](pypsa_losses.md) | 24114.237385131008 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_losses.py |
 | [pypsa_min_up_down](pypsa_min_up_down.md) | 32750.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_min_up_down.py |
 | [pypsa_modular](pypsa_modular.md) | 56700.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_modular.py |
 | [pypsa_multi_period](pypsa_multi_period.md) | 85300.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_multi_period.py |
