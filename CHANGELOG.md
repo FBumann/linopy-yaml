@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.179](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.178...v0.0.1-alpha.179) (2026-08-17)
+
+
+### Features
+
+* **ports:** a committed unit must stay on for its own window ([#941](https://github.com/fluxopt/lpspec/issues/941)) ([051797a](https://github.com/fluxopt/lpspec/commit/051797a47167089208f1bbb8898e189655339b11))
+
 ## [0.0.1-alpha.178](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.177...v0.0.1-alpha.178) (2026-08-17)
 
 
