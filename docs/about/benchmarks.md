@@ -500,22 +500,26 @@ so and as binaries plus linking rows where it says *no concept*.
 | convex quadratic objective | text section | `passHessian` | `setMObjective` |
 | nonconvex quadratic objective | text section | **refused** — *"Cannot solve non-convex QP problems with HiGHS"* | native, at default parameters |
 | quadratic objective **and** integrality | text section | **refused** — `run()` returns `kError` | native (MIQP) |
-| quadratic constraint | text section | **no concept** — no entry point at all | `addQConstr` / `addMQConstr` |
+| quadratic constraint | text section, unreadable | **no concept** — no entry point at all | `addQConstr` / `addMQConstr` |
 
-Every cell is probed rather than remembered —
+The four quadratic rows are probed rather than remembered, as are the two
+sections HiGHS writes and will not read back —
 `tests/test_sink_capability_probes.py` and
 `tests/test_gurobi_capability_probes.py`, each assertion naming this table.
 Capabilities move on somebody else's release, and nothing here calls
 `passHessian` yet, so without the probes a row would go wrong with the suite
-green. Three readings:
+green. The four rows above them are still read off the two APIs rather than
+measured. Three readings:
 
 - **HiGHS excludes quadratic twice**, by *convexity* and by *conjunction* with
   integrality — and neither is a set membership. linopy declares HiGHS with
   `INTEGER_VARIABLES` and `QUADRATIC_OBJECTIVE` in one flat `frozenset`, so its
   own model reports MIQP as available.
 - **The `lp_file` column says what can be *written*, not what will be read
-  back.** The same HiGHS parser takes the quadratic section and refuses the
-  `sos` one, so only the round trip says which.
+  back.** The same HiGHS parser takes the quadratic-objective section and
+  refuses both the `sos` and the quadratic-constraint one, so only the round
+  trip says which — and a differential oracle that re-solves the written file
+  has the reader's answer, not the writer's.
 - **Gurobi's column was the unverified one** and is now measured, retiring one
   piece of folklore: a nonconvex quadratic objective needs no `NonConvex=2`.
 

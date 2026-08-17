@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import pytest
 
 if TYPE_CHECKING:
@@ -21,17 +22,19 @@ gurobipy = pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gu
 
 TABLE = 'docs/about/benchmarks.md, "Sink capabilities"'
 
+#: What these probes measure is acceptance, not precision: a spatial or mixed-integer
+#: solve stops on ``MIPGap`` (1e-4 by default), so a vertex proved to that gap is a yes.
+ACCEPTED = 1e-3
+
 
 @pytest.fixture
-def model() -> Iterator[Callable[..., Any]]:
+def model() -> Iterator[Callable[[], Any]]:
     """A silent, disposable model — one environment per test, since each holds a licence."""
     with gurobipy.Env(params={'OutputFlag': 0}) as env:
         made: list[Any] = []
 
-        def build(**params: Any) -> Any:
+        def build() -> Any:
             m = gurobipy.Model(env=env)
-            for name, value in params.items():
-                m.setParam(name, value)
             made.append(m)
             return m
 
@@ -63,7 +66,7 @@ def test_gurobi_takes_a_nonconvex_quadratic_objective_at_default_parameters(mode
     x = m.addVars(2, lb=0, ub=10)
     m.addConstr(x[0] + x[1] >= 2)
     m.setObjective(-x[0] * x[0] - x[1] * x[1], gurobipy.GRB.MINIMIZE)
-    assert _solved(m) == pytest.approx(-200.0), (
+    assert _solved(m) == pytest.approx(-200.0, rel=ACCEPTED), (
         f'{TABLE} says Gurobi solves a nonconvex quadratic objective, at default parameters. A '
         f'refusal here means the nonconvex row needs a parameter beside it.'
     )
@@ -74,7 +77,7 @@ def test_gurobi_takes_a_quadratic_objective_beside_integrality(model):
     x = m.addVars(2, lb=0, ub=10, vtype=gurobipy.GRB.INTEGER)
     m.addConstr(x[0] + x[1] >= 3)
     m.setObjective(x[0] * x[0] + x[1] * x[1], gurobipy.GRB.MINIMIZE)
-    assert _solved(m) == pytest.approx(5.0), f'{TABLE} says MIQP is native on Gurobi'
+    assert _solved(m) == pytest.approx(5.0, rel=ACCEPTED), f'{TABLE} says MIQP is native on Gurobi'
 
 
 def test_gurobi_takes_a_quadratic_constraint(model):
@@ -82,11 +85,20 @@ def test_gurobi_takes_a_quadratic_constraint(model):
     x = m.addVars(2, lb=0, ub=10)
     m.addConstr(x[0] * x[1] >= 4)
     m.setObjective(x[0] + x[1], gurobipy.GRB.MINIMIZE)
-    assert _solved(m) == pytest.approx(4.0), f'{TABLE} says a quadratic constraint is native on Gurobi'
+    assert _solved(m) == pytest.approx(4.0, rel=ACCEPTED), f'{TABLE} says a quadratic constraint is native on Gurobi'
 
 
-def test_both_quadratic_parts_have_a_bulk_entry_point():
+def test_both_quadratic_parts_take_a_matrix_through_their_bulk_entry_point(model):
     """`addSOS` has no bulk form; the quadratic parts do, which is why the
-    hand-off cost is about memory rather than call overhead."""
-    missing = [name for name in ('setMObjective', 'addQConstr', 'addMQConstr') if not hasattr(gurobipy.Model, name)]
-    assert missing == [], f'{TABLE} names these as the bulk quadratic entry points, and gurobipy lacks {missing}'
+    hand-off cost is about memory rather than call overhead. Measured through
+    the matrix APIs the table names, since those are what this package would
+    call and a shape they stop accepting is a cell going wrong."""
+    m = model()
+    x = m.addVars(2, lb=0, ub=10)
+    columns = [x[0], x[1]]
+    m.addMQConstr(np.array([[0.0, 1.0], [0.0, 0.0]]), None, gurobipy.GRB.GREATER_EQUAL, 4.0, columns, columns)
+    m.setMObjective(np.eye(2), None, 0.0, columns, columns, sense=gurobipy.GRB.MINIMIZE)
+    assert _solved(m) == pytest.approx(8.0, rel=ACCEPTED), (
+        f'{TABLE} names setMObjective and addMQConstr as the bulk quadratic entry points. Q = I '
+        f'over x0·x1 >= 4 minimises x0² + x1² at x = (2, 2), so 8.'
+    )

@@ -40,6 +40,21 @@ bounds
 end
 """
 
+QUADRATIC_CONSTRAINT_LP = """min
+
+obj: +1 x0 +1 x1
+
+s.t.
+
+qc0: [ +1 x0 * x1 ] >= 4
+
+bounds
+0 <= x0 <= 10
+0 <= x1 <= 10
+
+end
+"""
+
 SOS_LP = """min
 
 obj: +1 x0 +1 x1
@@ -147,6 +162,18 @@ def test_the_highs_lp_reader_refuses_the_sos_section(tmp_path: Path):
     assert h.readModel(str(path)) == highspy.HighsStatus.kError, (
         f'{TABLE} says the HiGHS reader refuses an sos section. If it takes one now, HiGHS has the '
         f'concept and `sos = reformulated` is a worse relaxation than it needs to be.'
+    )
+
+
+def test_the_highs_lp_reader_refuses_the_quadratic_constraint_section(tmp_path: Path):
+    path = tmp_path / 'quadratic_constraint.lp'
+    path.write_text(QUADRATIC_CONSTRAINT_LP)
+    h = highspy.Highs()
+    h.setOptionValue('output_flag', False)
+    assert h.readModel(str(path)) == highspy.HighsStatus.kError, (
+        f'{TABLE} says the HiGHS reader refuses a quadratic constraint the way it refuses an sos '
+        f'section — it printed "Quadratic constraints not supported by HiGHS" when this was '
+        f'measured. If it takes one now, the `lp_file` column stops being write-only for that row.'
     )
 
 
