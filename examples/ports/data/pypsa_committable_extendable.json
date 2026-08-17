@@ -1,0 +1,10 @@
+{
+  "snapshot": {"snapshot": [0, 1, 2, 3]},
+  "generator": {"generator": ["flex", "peak"]},
+  "p_min_pu": {"generator": ["flex", "peak"], "value": [0.4, 0.0]},
+  "p_nom_max": {"generator": ["flex", "peak"], "value": [100.0, 100.0]},
+  "big_m": {"generator": ["flex"], "value": [100.0]},
+  "marginal_cost": {"generator": ["flex", "peak"], "value": [40.0, 120.0]},
+  "capital_cost": {"generator": ["flex", "peak"], "value": [100.0, 50.0]},
+  "load": {"snapshot": [0, 1, 2, 3], "value": [90.0, 30.0, 90.0, 20.0]}
+}
