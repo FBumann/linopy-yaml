@@ -309,3 +309,82 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
         on = solution.primal('on').filter(pl.col('value') > 0.5)
         assert on.height == 3, 'exactly the three snapshots its own minimum up time forces'
         assert set(on['unit']) == {'slow'}, 'and it is the slow unit that is held, not the fast one'
+
+
+#: `f3` maps nowhere, which is what a *partial* lookup is for. The objective
+#: pays for `take` and charges ruinously for `level`, so the two readings of
+#: `f3`'s row are separated by the answer and not merely by a row count: with
+#: the row gone, `take[f3]` is held by its own bound alone and goes to 10; with
+#: the row built, its right-hand side is zero and it cannot move at all.
+DANGLING = {
+    'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}},
+    'lookups': {'component_of': {'over': 'flow', 'into': 'component'}},
+    'variables': {
+        'level': {'foreach': ['component'], 'bounds': {'lower': 0, 'upper': 10}},
+        'take': {'foreach': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'link': {'foreach': ['flow'], 'expression': 'take <= at(level, by=component_of)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(take, over=flow) - 1000 * sum(level, over=component)'},
+}
+DANGLING_MAP = ['c1', 'c1', None]
+
+
+def test_at_through_a_null_lookup_takes_the_row_with_it():
+    """A label mapping nowhere has no value to read, so the row is not asserted.
+
+    The absence rules list a null lookup value among the four constructs that
+    create absence, and absence spreads through arithmetic taking its row —
+    so `link` is built for the two flows that map somewhere and not for `f3`.
+
+    Before #897 this did not get as far as an answer: the null entry was
+    dropped from the *coordinate* rather than read as an absence, so `at()`
+    returned a result over a short `flow` and linopy v1 refused the next
+    combination with a coordinate mismatch.
+
+    Eager-lane only, and the oracle is imported in the body, because the
+    relational lane still answers 0.0 here (#968) — the differential case
+    below is the one that closes when it does.
+    """
+    from tests.oracle import lpspec_linopy, pd
+
+    flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
+    built = lpspec_linopy.build(
+        DANGLING,
+        {
+            'flow': pd.DataFrame({'flow': flows, 'component_of': DANGLING_MAP}),
+            'component': pd.Index(components, name='component'),
+        },
+    )
+    labels = built.constraints['link'].labels.to_series().to_dict()
+    assert labels['f3'] == -1, 'a flow mapping nowhere has no row, and -1 is how linopy spells one that was not built'
+    assert labels['f1'] != -1 and labels['f2'] != -1, 'the flows that do map keep theirs'
+
+    built.solve(solver_name='highs', output_flag=False)
+    assert built.objective.value == pytest.approx(10.0), (
+        'take[f3] is held by its own bound alone — 0.0 would mean the row was built and bound it at zero'
+    )
+
+
+@pytest.mark.xfail(
+    reason='#968 — the relational lane builds link[f3] as `take[f3] <= 0` instead of dropping it', strict=True
+)
+def test_at_through_a_null_lookup_agrees_between_lanes():
+    """The same model on both lanes, which is what #897 is finally about.
+
+    Kept beside the eager assertion rather than folded into it: the eager lane
+    is right and the relational one is not, so a single test would have to
+    assert the wrong number to stay green. This XPASSes the day #968 lands.
+    """
+    from tests.differential import differential
+    from tests.oracle import pd
+
+    flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
+    with differential(
+        DANGLING,
+        {
+            'flow': pd.DataFrame({'flow': flows, 'component_of': DANGLING_MAP}),
+            'component': pd.Index(components, name='component'),
+        },
+        lp=True,
+    ) as run:
+        assert run.oracle == pytest.approx(10.0)

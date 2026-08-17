@@ -543,7 +543,18 @@ def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:
     doing rather than a broadcast arranged here.
 
     A null lookup value reads nothing and its row is absent, the same reading
-    ``sum`` gives a null group.
+    ``sum`` gives a null group. It cannot be selected — there is no ``into``
+    label to read — so it is dropped from the indexer and the result is put
+    back over the whole dim, the missing positions filled with the operand's
+    own **absence** rather than a zero — which is what ``reindex`` does untold,
+    on all three operand shapes. Absence is what the absence rules ask for
+    here: it propagates and takes the row with it, the same mechanism the
+    default ``shift`` edge relies on, where a zero would leave a row asserting
+    ``x <= 0`` at a coordinate the model said nothing about. Putting the dim
+    back is also what keeps the operand combinable at all — linopy v1 aligns on
+    membership, so a result short of a label refuses the next arithmetic
+    outright, which is how #897 surfaced. The relational lane still keeps that
+    row (#968), so this is the lane that is right until it lands.
     """
     if not isinstance(mapping, xr.DataArray):
         msg = f'at() lookup must be an array (got {type(mapping).__name__}). Usage: at(expr, by=lookup)'
@@ -551,14 +562,16 @@ def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:
     if mapping.ndim != 1:
         msg = f'at() mapping must have exactly one dimension, got {list(mapping.dims)}'
         raise LanguageError(msg)
+    if not (isinstance(array, xr.DataArray) or hasattr(array, 'sel')):
+        raise _unsupported('at()', array)
 
     present = mapping.notnull()
-    if not bool(present.all()):
-        dim = str(mapping.dims[0])
-        mapping = mapping.isel({dim: present.to_numpy()})
-    if isinstance(array, xr.DataArray) or hasattr(array, 'sel'):
+    if bool(present.all()):
         return array.sel({into: mapping.rename(into)})
-    raise _unsupported('at()', array)
+
+    dim = str(mapping.dims[0])
+    picked = array.sel({into: mapping.isel({dim: present.to_numpy()}).rename(into)})
+    return picked.reindex({dim: mapping[dim]})
 
 
 def _bound_lookup(
