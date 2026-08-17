@@ -21,9 +21,10 @@ from typing import Any
 
 import polars as pl
 import pytest
+import yaml
 
 import lpspec as lps
-from tests.conftest import bindable_on_this_install
+from tests.conftest import bindable_on_this_install, port_model
 from tests.conftest import port_sources as sources
 
 
@@ -76,3 +77,51 @@ def test_port_reaches_the_reference_duals(port: dict[str, Any]) -> None:
             assert got['value'].to_list() == pytest.approx(want['value'].to_list(), rel=port['rtol']), (
                 f'{port["name"]}.{constraint} disagrees with {port["provenance"]}'
             )
+
+
+#: A rule a port claims, and the wrong row it is claimed against: model file,
+#: constraint, the expression as shipped, and the misreading. Parametrized so a
+#: second one is a row rather than a function.
+MISREADINGS = [
+    pytest.param(
+        'pypsa_store',
+        'energy_balance_initial',
+        'e == e_initial - store_p',
+        'e == e_initial * (1 - standing_loss) - store_p',
+        id='pypsa_store-the-initial-level-is-not-decayed',
+    ),
+]
+
+
+@pytest.mark.parametrize(('name', 'constraint', 'shipped', 'misread'), MISREADINGS)
+def test_the_instance_can_tell_the_rule_from_its_misreading(
+    name: str, constraint: str, shipped: str, misread: str
+) -> None:
+    """The recorded optimum only guards a rule the *instance* is sensitive to.
+
+    ``pypsa_store`` is why this exists. It claimed PyPSA does not decay the
+    level a store holds before the horizon — true, and unprovable on an
+    instance whose ``e_initial`` was 0, where both readings of the row reach
+    3116.36. The claim was in the model file, the reference and the page, and
+    nothing in the suite could have caught its opposite.
+
+    So: solve the ported model, then solve it again with one constraint
+    replaced by the misreading, and demand the two disagree. It fails if the
+    instance stops discriminating — a load profile widened, a parameter zeroed
+    — which is exactly when the recorded number quietly stops being evidence.
+    """
+    model = yaml.safe_load(port_model(name).read_text())
+    assert model['constraints'][constraint]['expression'] == shipped, (
+        f'{name}.{constraint} no longer reads `{shipped}` — this probe is pinned to a row that moved'
+    )
+    model['constraints'][constraint]['expression'] = misread
+
+    with lps.solve(port_model(name), sources(name)) as solution:
+        as_shipped = solution.objective
+    with lps.solve(model, sources(name)) as solution:
+        misreading = solution.objective
+
+    assert misreading != pytest.approx(as_shipped, rel=1e-09), (
+        f'{name} reaches {as_shipped!r} whether {constraint} reads `{shipped}` or `{misread}` — '
+        f'the instance cannot tell them apart, so its recorded optimum is not evidence for the rule'
+    )

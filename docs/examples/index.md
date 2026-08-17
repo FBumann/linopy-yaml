@@ -110,7 +110,7 @@ drift from what the engine builds.
 | [pypsa_ramp](pypsa_ramp.md) | **✔** 18200 | · | **✓** | · | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_spill](pypsa_spill.md) | **✔** 3200 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
 | [pypsa_storage](pypsa_storage.md) | **✔** 15253.2 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
-| [pypsa_store](pypsa_store.md) | **✔** 3116.36 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
+| [pypsa_store](pypsa_store.md) | **✔** 7005.5 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
 | [pypsa_transport](pypsa_transport.md) | **✔** 22000 | · | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | **✔** 24900 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | **✓** |
 | [stigler_diet](stigler_diet.md) | **✔** 0.108662 | **✓** | · | · | · | · | · | **✓** | · | · | · |
@@ -172,7 +172,7 @@ that class, and the evidence behind
 | [pypsa_ramp](pypsa_ramp.md) | 18200.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py |
 | [pypsa_spill](pypsa_spill.md) | 3200.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_spill.py |
 | [pypsa_storage](pypsa_storage.md) | 15253.178322993519 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_storage.py |
-| [pypsa_store](pypsa_store.md) | 3116.3637500000004 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_store.py |
+| [pypsa_store](pypsa_store.md) | 7005.5025000000005 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_store.py |
 | [pypsa_transport](pypsa_transport.md) | 22000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_transport.py |
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | 24900.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py |
 | [reserves](reserves.md) | 915.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/reserves.py — agreement, not a published figure |

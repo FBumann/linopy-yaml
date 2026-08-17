@@ -2,7 +2,7 @@ description: >-
   PyPSA's Store component: one signed power at the bus, no efficiencies and no
   power rating — only the energy level limits how fast it moves. The tank fills
   early and drains late, losing a share of what it holds every snapshot, and its
-  energy capacity is built rather than given. Optimum 3116.3637500000004, from
+  energy capacity is built rather than given. Optimum 7005.5025000000005, from
   PyPSA itself.
 
 dimensions:
