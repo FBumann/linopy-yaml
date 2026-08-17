@@ -543,7 +543,7 @@ def test_closing_a_result_never_touches_the_model(bound):
     ('call', 'unknown'),
     [
         pytest.param(lambda bound: bound.rebind({'p_maxx': 1}), 'p_maxx', id='sources'),
-        pytest.param(lambda bound: bound.rebind({} | {'snapshots': [0]}), 'snapshots', id='coords'),
+        pytest.param(lambda bound: bound.rebind({'snapshots': [0]}), 'snapshots', id='an index'),
     ],
 )
 def test_a_rebind_refuses_a_name_the_model_does_not_declare(bound, call, unknown):

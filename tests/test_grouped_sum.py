@@ -440,8 +440,8 @@ def test_the_broadcast_objective_agrees_with_the_eager_lane():
         'w': pd.Series([1.0, 10.0, 100.0, 1000.0], index=pd.Index([0, 1, 2, 3], name='snapshot')),
         'floor': pd.Series([1.0, 2.0, 3.0], index=pd.Index(['b0', 'b1', 'b2'], name='bus')),
     }
-    coords = {'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
-    with differential(BROADCAST_OBJECTIVE, data | coords, lp=True) as run:
+    index = {'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
+    with differential(BROADCAST_OBJECTIVE, data | index, lp=True) as run:
         assert run.oracle == pytest.approx(6666.0)
 
 

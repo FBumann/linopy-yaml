@@ -402,7 +402,7 @@ workflow runs and uploads nothing.
 
 Add a YAML file under `bench/models/`, a data generator and a ladder to `CASES`
 in `bench/cases.py`, and a function turning the same parquet paths into the
-linopy lane's `data=`/`coords=` shapes. Nothing else: the parametrization reads
+linopy lane's `sources` shapes. Nothing else: the parametrization reads
 `CASES`, and the gate and the report are case-agnostic.
 
 A case whose YAML has to vary per rung sets `generate_model` instead of

@@ -30,7 +30,7 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
-from bench.workloads import _tables, split_sources
+from bench.workloads import _tables, checked_sources
 from lpspec.relational.engines.polars.engine import _Block
 from lpspec.relational.sinks.solvers.base import WarmStart
 
@@ -340,9 +340,8 @@ def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
     case = CASES['declarations']
     shape = Shape('tiny', {'declaration': 2, 'unit': 8, 'snapshot': 20}, 20 * 16)
     paths = case.write(shape, tmp_path)
-    sources = {k: v for k, v in paths.items() if k in ('p_max', 'cost', 'demand')}
-    coords = {k: v for k, v in paths.items() if k in ('unit', 'snapshot')}
-    with lps.build(case.model_path(shape, cache=tmp_path), sources, coords=coords) as bound:
+    sources = {k: v for k, v in paths.items() if k in ('p_max', 'cost', 'demand', 'unit', 'snapshot')}
+    with lps.build(case.model_path(shape, cache=tmp_path), sources) as bound:
         assert bound is not None
 
 
@@ -400,8 +399,8 @@ def test_the_floor_builds_the_model_lpspec_builds() -> None:
     paths = case.data(case.ladder[0])
     model = floor.arrays(floor.read(paths))
 
-    sources, coords = split_sources(case, case.ladder[0].label, paths)
-    with lps.build(case.model, sources, coords=coords) as bound:
+    sources = checked_sources(case, case.ladder[0].label, paths)
+    with lps.build(case.model, sources) as bound:
         tables = _tables(bound)
         assert model.column_count == tables.column_count, 'the floor holds a different number of variables'
         assert model.row_count == tables.row_count, 'the floor holds a different number of constraints'

@@ -184,11 +184,11 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'cost': pd.Series([1.0, 2.0, 1.5], index=flows),
         'share': pd.Series([1.0, 2.0, 3.0], index=flows),
     }
-    coords = {
+    index = {
         'flow': pd.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c2']}),
         'component': pd.Index(components, name='component'),
     }
-    with differential(model, data | coords) as run:
+    with differential(model, data | index) as run:
         assert run.result.objective > 0
 
 

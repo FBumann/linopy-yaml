@@ -189,7 +189,7 @@ def test_a_lookup_index_defect_reads_the_same_on_both_lanes(tmp_path, sources, m
     """One wording, not two — the same rule `no_index_source_message` follows.
 
     These two were written twice and drifted: the relational lane named the
-    `sources` key and the eager one named `coords=`, for one defect a caller
+    `sources` key and the eager one a separate argument, for one defect a caller
     fixes the same way whichever lane they were on.
     """
     path = tmp_path / 'lookup.yaml'
@@ -206,7 +206,7 @@ def test_a_lookup_index_defect_reads_the_same_on_both_lanes(tmp_path, sources, m
 def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
     """And it may arrive under `sources`, which is where the relational lane looks first.
 
-    The eager lane read `coords=` only and required a pandas frame, so an index
+    The eager lane took its own argument and required a pandas frame, so an index
     a caller passed the way the runner documents — a polars table under the
     dimension's own key — was invisible to one of two lanes.
     """
