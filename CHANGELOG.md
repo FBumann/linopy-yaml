@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.188](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.187...v0.0.1-alpha.188) (2026-08-17)
+
+
+### Features
+
+* **ports:** an asset exists for the periods its lifetime covers ([#975](https://github.com/fluxopt/lpspec/issues/975)) ([0b33d9f](https://github.com/fluxopt/lpspec/commit/0b33d9ff2ab1744ce730634bf127c85983dc78b3))
+
 ## [0.0.1-alpha.187](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.186...v0.0.1-alpha.187) (2026-08-17)
 
 
