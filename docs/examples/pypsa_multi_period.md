@@ -253,9 +253,9 @@ Writing the absence exactly would need `where: at(activity, by=period_of)` on
 the variable, and a `where:` cannot call `at()`: its grammar compares a name
 against a literal. A second table keyed by `(snapshot, generator)` would work
 and would state one fact twice, which is worse. So this rung is a live consumer
-of [#429](https://github.com/fluxopt/lpspec/issues/429) and
-[#816](https://github.com/fluxopt/lpspec/issues/816): what a modeller wants here
-is a mask that reads a coarser parameter through a declared lookup.
+of [#982](https://github.com/fluxopt/lpspec/issues/982), which asks whether a
+mask may read a parameter one declared lookup away — or whether the pin is the
+answer.
 
 ## What it exercises
 
