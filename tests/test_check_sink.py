@@ -18,6 +18,7 @@ from lpspec.lowering import lower_program
 from lpspec.relational import sinks
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers import SOLVERS
+from lpspec.relational.sinks.writers import WRITERS
 
 #: A pure LP: every sink takes it whole, so it is what "silent" is measured
 #: against.
@@ -94,7 +95,7 @@ def test_no_shipped_sink_refuses_anything_the_language_can_say():
     why `check(sink=)` can only warn. The first `absent` cell the language can
     reach turns this red, which is where that should show up.
     """
-    refused = {name: sinks.refusal(_program(WITH_A_SET), name) for name in (*SOLVERS, '.lp')}
+    refused = {name: sinks.refusal(_program(WITH_A_SET), name) for name in (*SOLVERS, *WRITERS)}
     assert set(refused.values()) == {None}, f'a shipped sink now refuses a model the language can state: {refused}'
 
 
@@ -135,6 +136,61 @@ def test_a_sink_excluding_a_pair_says_so_rather_than_denying_the_half(monkeypatc
     assert message is not None
     assert 'separately and refuses them together' in message
     assert 'binary or integer variables' in message and 'special-ordered sets' in message
+
+
+def test_a_suffix_is_a_sink_however_the_path_spelled_it():
+    """``write`` resolves ``out.LP`` through the same registry, so the natural
+    ``check(model, sink=path.suffix)` in a CI script cannot be the call that
+    rejects it."""
+    assert sinks.sink_capabilities('.LP') is sinks.sink_capabilities('.lp')
+
+
+def test_a_refusal_does_not_swallow_the_solver_independent_advice(recwarn):
+    """The two axes are independent, so naming a sink answers the second
+    question without costing the first."""
+    unused = PLAIN | {'dimensions': PLAIN['dimensions'] | {'spare': {'values': ['x']}}}
+
+    class Stub:
+        capabilities = Capabilities(supports={})
+
+    bare = _warnings(unused)
+    assert bare, 'the premise: this model has something to say without any sink named'
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(SOLVERS, 'stub', Stub)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            with pytest.raises(LpspecError):
+                lps.check(unused | {'sos': {'pick': {'variable': 'p', 'over': 'g', 'type': 1}}}, sink='stub')
+        assert [str(w.message) for w in caught] == bare, 'the advice a bare check gives is issued before the raise'
+
+
+def test_a_refusal_names_only_what_the_model_declares(monkeypatch):
+    """What a rewrite would cost is the sink's fact, not a requirement of the
+    model: a pure LP with a set on it declares no integrality, and a refusal
+    telling its author otherwise sends them looking for binaries they never
+    wrote."""
+
+    class Stub:
+        capabilities = Capabilities(supports={'sos': 'reformulated'})
+
+    monkeypatch.setitem(SOLVERS, 'stub', Stub)
+    message = sinks.refusal(_program(WITH_A_SET), 'stub')
+    assert message is None, 'a sink that rewrites a set takes the model; only what it lacks refuses one'
+
+
+def test_a_set_beside_a_hessian_is_the_pair_highs_refuses():
+    """The exclusion HiGHS's own rewrite manufactures, read through `check`.
+
+    Its answer for a set is binaries, and it refuses those beside a Hessian —
+    so the pair is declared there and named here in the model's own words,
+    rather than derived into integrality the file never mentions.
+    """
+    from lpspec.relational.sinks.capabilities import required
+
+    needed = required(_program(WITH_A_SET)) | {'quadratic_objective'}
+    excluded = sinks.sink_capabilities('highs').excluded(needed)
+    assert excluded == frozenset({'quadratic_objective', 'sos'})
 
 
 def _program(model):

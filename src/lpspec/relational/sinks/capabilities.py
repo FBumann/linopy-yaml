@@ -105,14 +105,15 @@ class Capabilities:
         return None
 
 
-def required(program: plan.Program, sink: Capabilities) -> frozenset[Capability]:
+def required(program: plan.Program, /) -> frozenset[Capability]:
     """What *program* needs a sink to have, decided with no data bound.
 
-    *sink* is read as well as the program because **how a sink satisfies a
-    capability can require another one**: a set reaches a member without the
-    concept as binaries, so that model requires integrality *of that sink* and
-    not of one that branches natively. Without it, HiGHS would discover the
-    exclusion at ``run()``.
+    Exactly what the model declares, so a refusal built on it names constructs
+    the reader can find in their own file. What a *rewrite* then costs is the
+    performing sink's own fact and is declared there: HiGHS excludes a set
+    beside a Hessian because what it is handed for one is binaries, and a
+    requirement derived here instead would refuse the model for integrality it
+    never stated.
 
     Only what rule 2 can decide appears here, so convexity never does.
     """
@@ -121,6 +122,4 @@ def required(program: plan.Program, sink: Capabilities) -> frozenset[Capability]
         needed.add('integrality')
     if program.sos:
         needed.add('sos')
-        if sink.support('sos') == 'reformulated':
-            needed.add('integrality')
     return frozenset(needed)

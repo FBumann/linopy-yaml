@@ -1135,8 +1135,10 @@ def test_no_sink_reaches_a_sibling():
     A ``base`` that reached for a leaf would fail the same check.
 
     ``capabilities`` joined it on the same argument: a frozen descriptor and
-    two ``Literal`` vocabularies, importing nothing, read by **both** families
-    — where one per family would be two spellings of a single axis.
+    two ``Literal`` vocabularies, read by **both** families — where one per
+    family would be two spellings of a single axis. It names ``plan`` for the
+    type of the program ``required`` reads, and that is a ``TYPE_CHECKING``
+    import: it runs nothing, so a leaf still carries nothing across.
     """
     shareable = ('.tables', '.base', '.capabilities')
     offenders = {}

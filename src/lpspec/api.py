@@ -60,6 +60,8 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
     A capability question is answered off a declared table with no data bound,
     so it costs no build and needs no solver installed: a repository of models
     can be checked in CI against every sink they will eventually be solved on.
+    The solver-independent advice is issued either way — a sink that refuses is
+    the answer to the second question, and naming one must not cost the first.
 
     Args:
         model: A YAML path, a mapping, or a loaded :class:`Model`.
@@ -85,12 +87,13 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
     schema = load_model(model)
     program = lower_program(schema)
     notes = [*unbounded_notes(expand_piecewise(schema)), *advice(program)]
-    if sink is not None:
-        if (refused := sinks.refusal(program, sink)) is not None:
-            raise LpspecError(refused)
+    refused = sinks.refusal(program, sink) if sink is not None else None
+    if sink is not None and refused is None:
         notes += sinks.relaxations(program, sink)
     for note in notes:
         warnings.warn(note, LpspecWarning, stacklevel=2)
+    if refused is not None:
+        raise LpspecError(refused)
     return schema
 
 

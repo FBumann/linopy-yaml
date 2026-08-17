@@ -57,15 +57,15 @@ def sink_capabilities(name: str) -> caps.Capabilities:
     """
     if name in SOLVERS:
         return SOLVERS[name].capabilities
-    if name in WRITERS:
-        return WRITERS[name].capabilities
+    if (suffix := name.lower()) in WRITERS:
+        return WRITERS[suffix].capabilities
     raise LpspecError(unknown_name_message('sink', name, (*SOLVERS, *WRITERS)))
 
 
 def _takes(program: plan.Program, name: str) -> bool:
     """Whether the sink called *name* would take *program* as it stands."""
     table = sink_capabilities(name)
-    needed = caps.required(program, table)
+    needed = caps.required(program)
     return not table.missing(needed) and table.excluded(needed) is None
 
 
@@ -88,7 +88,7 @@ def refusal(program: plan.Program, name: str) -> str | None:
     both halves of and refuses together.
     """
     table = sink_capabilities(name)
-    needed = caps.required(program, table)
+    needed = caps.required(program)
     if missing := table.missing(needed):
         return sink_refuses_message(name, missing, _takers(program, name))
     if combination := table.excluded(needed):
@@ -101,9 +101,20 @@ def relaxations(program: plan.Program, name: str) -> list[str]:
 
     Not refusals — the model solves — but it answers a question slightly
     different from the one asked, which is worth saying *before* it is read.
+
+    In :data:`~lpspec.relational.sinks.capabilities.CAPABILITIES` order, for
+    :meth:`~lpspec.relational.sinks.capabilities.Capabilities.missing`'s reason:
+    a sink rewriting two of them reads the same way twice.
     """
     table = sink_capabilities(name)
-    needed = caps.required(program, table)
-    reformulated = [c for c in needed if table.support(c) == 'reformulated']
+    needed = caps.required(program)
     declared = any(v.variable_type != 'continuous' for v in program.variables)
-    return [sink_reformulates_message(name, c, integrality_added=not declared) for c in reformulated]
+    return [
+        sink_reformulates_message(
+            name,
+            c,
+            integrality_added=c in caps.REWRITTEN_AS_INTEGRALITY and not declared,
+        )
+        for c in caps.CAPABILITIES
+        if c in needed and table.support(c) == 'reformulated'
+    ]
