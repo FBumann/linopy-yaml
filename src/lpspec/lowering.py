@@ -103,6 +103,7 @@ def lower_program(schema: Model) -> plan.Program:
                 lower=lower,
                 upper=upper,
                 variable_type=variable_type,
+                absence=cast('plan.VariableAbsence', vdef.absence),
             )
         )
 

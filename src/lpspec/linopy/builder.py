@@ -144,15 +144,35 @@ def _build_variables(ctx: EvaluationContext) -> None:
 
             _check_bounds_are_defined(vname, vdef, ctx.dataset, mask)
 
+            lower, upper, vmask = _absent_as_declared(vdef, lower, upper, mask)
+
             ctx.model.add_variables(
                 lower=lower,
                 upper=upper,
                 coords=coords,
                 name=vname,
-                mask=_as_linopy_mask(mask),
+                mask=vmask,
                 binary=vdef.domain == 'binary',
                 integer=vdef.domain == 'integer',
             )
+
+
+def _absent_as_declared(vdef: Any, lower: Any, upper: Any, mask: xr.DataArray) -> tuple[Any, Any, Any]:
+    """Bounds and linopy mask carrying out the variable's declared ``absence:``.
+
+    ``undefined`` hands linopy the mask. Its masked entries are invalid labels,
+    and linopy drops any row carrying one — which is the absence rule, and what
+    the relational lane's presence frame does.
+
+    ``zero`` cannot use that mask at all, because dropping the row is precisely
+    what the declaration says not to do. The variable is created **unmasked and
+    pinned to zero** outside its own mask instead, so the term is present and
+    contributes nothing. Same model: a dense lane holds a slot at every
+    coordinate either way, so this materialises nothing a mask would have saved.
+    """
+    if vdef.absence != 'zero':
+        return lower, upper, _as_linopy_mask(mask)
+    return xr.where(mask, lower, 0.0), xr.where(mask, upper, 0.0), None
 
 
 def _check_bounds_are_defined(name: str, vdef: Any, dataset: xr.Dataset, mask: Any) -> None:

@@ -18,7 +18,7 @@ model: examples/walkthrough.yaml
 
 [3] core AST -> relational IR  (lowering.py)
     Program(
-      VariableDeclaration(name='p', dims=('snapshot', 'generator'), where=ParameterComparison(parameter='p_max', op='>', value=0.0), lower=Constant(value=0.0), upper=Parameter(name='p_max'), variable_type='continuous')
+      VariableDeclaration(name='p', dims=('snapshot', 'generator'), where=ParameterComparison(parameter='p_max', op='>', value=0.0), lower=Constant(value=0.0), upper=Parameter(name='p_max'), variable_type='continuous', absence='undefined')
       ConstraintDeclaration(name='power_balance', dims=('snapshot',), lhs=Sum(operand=Variable(name='p'), over=('generator',)), sense='==', rhs=Parameter(name='load'), where=None)
       ObjectiveDeclaration(sense='min', expression=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)))
     )

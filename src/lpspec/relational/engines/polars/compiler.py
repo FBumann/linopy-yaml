@@ -605,18 +605,24 @@ class PolarsCompiler:
     def _variable_fragment(self, name: str) -> TermFragment:
         """A variable as a term with unit coefficients.
 
-        Presence is attached only for a masked variable, decided off the
-        declaration before any data is read: an unmasked one exists at every
-        coordinate of its foreach and could restrict nothing.
+        Presence is what makes absence *propagate*, and it is attached only
+        where the declaration asks for it — decided before any data is read.
+        Two declarations carry none: an unmasked variable, which exists at every
+        coordinate of its foreach and could restrict nothing, and one declaring
+        ``absence: zero``, whose missing coordinates hold a quantity that *is*
+        zero rather than one with no value. Both then leave the term simply
+        absent from the rows it does not reach, which is the same arithmetic —
+        only the second had a choice about it.
 
         ``keyed_by`` is stated rather than left to its ``None`` default,
         because dims are rewritten downstream while the presence frame is not
         — the hazard :class:`Presence` names.
         """
-        dims = self.program.variable(name).dims
+        declaration = self.program.variable(name)
+        dims = declaration.dims
         frame = self.variables[name].select(*dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff'))
-        masked = self.program.variable(name).where is not None
-        presence = Presence(self._presence(name, dims), dims) if masked else None
+        propagates = declaration.where is not None and declaration.absence == 'undefined'
+        presence = Presence(self._presence(name, dims), dims) if propagates else None
         return TermFragment(dims, frame, True, presence=presence)
 
     def _presence(self, name: str, dims: tuple[str, ...]) -> pl.LazyFrame:

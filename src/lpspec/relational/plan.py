@@ -30,6 +30,12 @@ ObjectiveSense = Literal['min', 'max']
 ComparisonOperator = Literal['==', '!=', '<=', '>=', '<', '>']
 VariableType = Literal['continuous', 'binary', 'integer']
 
+#: What a masked variable's non-existence means where it does not exist.
+#: ``undefined`` is the absence rules' default — a term carrying it takes its
+#: row. ``zero`` says the quantity *is* zero there, so the term contributes
+#: nothing and the row stands.
+VariableAbsence = Literal['undefined', 'zero']
+
 
 # --------------------------------------------------------------------------
 # Affine expressions
@@ -382,6 +388,7 @@ class VariableDeclaration:
     lower: Expression = field(default_factory=lambda: Constant(float('-inf')))
     upper: Expression = field(default_factory=lambda: Constant(float('inf')))
     variable_type: VariableType = 'continuous'
+    absence: VariableAbsence = 'undefined'
 
 
 @dataclass(frozen=True)
