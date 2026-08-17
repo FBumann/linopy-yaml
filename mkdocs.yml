@@ -67,6 +67,7 @@ nav:
           - unit commitment: examples/pypsa_unit_commitment.md
           - minimum up and down times: examples/pypsa_min_up_down.md
           - linearized unit commitment: examples/pypsa_linearized_uc.md
+          - global limits: examples/pypsa_global_limits.md
           - multi-link: examples/pypsa_multilink.md
           - modular capacity: examples/pypsa_modular.md
           - energy totals: examples/pypsa_energy_sum.md
