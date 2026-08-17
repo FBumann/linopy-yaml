@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.173](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.172...v0.0.1-alpha.173) (2026-08-17)
+
+
+### Features
+
+* **ports:** capacity that comes in whole modules is an integer count ([#935](https://github.com/fluxopt/lpspec/issues/935)) ([e55603f](https://github.com/fluxopt/lpspec/commit/e55603f3660881a1592b094bf8038cdd7a687137))
+
 ## [0.0.1-alpha.172](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.171...v0.0.1-alpha.172) (2026-08-17)
 
 
