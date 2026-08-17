@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.0.1-alpha.189](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.188...v0.0.1-alpha.189) (2026-08-17)
+
+
+### Features
+
+* **ports:** a committed unit whose capacity is built declares its big-M ([#991](https://github.com/fluxopt/lpspec/issues/991)) ([98fd368](https://github.com/fluxopt/lpspec/commit/98fd36874ce723f63e4b959e3e0c764144d3e3f4))
+
+
+### Bug Fixes
+
+* **engine:** a pullback through a null lookup no longer binds its row at zero ([#988](https://github.com/fluxopt/lpspec/issues/988)) ([578868c](https://github.com/fluxopt/lpspec/commit/578868ccac162e6bed247808073df9a971909177))
+
+
+### Refactoring
+
+* **examples:** an edge leg is named for the edge set it belongs to ([#973](https://github.com/fluxopt/lpspec/issues/973)) ([810a702](https://github.com/fluxopt/lpspec/commit/810a702f235c05756ac0fb0f70f78a3c5a5d763a))
+
 ## [0.0.1-alpha.188](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.187...v0.0.1-alpha.188) (2026-08-17)
 
 
