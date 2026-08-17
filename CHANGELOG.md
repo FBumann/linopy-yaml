@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.187](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.186...v0.0.1-alpha.187) (2026-08-17)
+
+
+### Features
+
+* **ports:** a global limit is a sum over a selected set ([#967](https://github.com/fluxopt/lpspec/issues/967)) ([42f6e57](https://github.com/fluxopt/lpspec/commit/42f6e5795154830df87329f7a3e7cf5727b1668e))
+
 ## [0.0.1-alpha.186](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.185...v0.0.1-alpha.186) (2026-08-17)
 
 
