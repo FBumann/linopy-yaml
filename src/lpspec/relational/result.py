@@ -118,13 +118,18 @@ class Diagnostics:
     sink_columns: int
     sink_rows: int
 
-    #: ``(constraint, rows_not_built)`` — every row that lost all its terms and
-    #: so was not built (the absence rules): without this record a declared constraint
-    #: could go unenforced with no way to notice. Empty for a model whose every
-    #: declared row reached the solver. Counts rather than coordinates: the
-    #: label of an unbuilt row does not exist, so naming which went would mean
-    #: holding the pre-drop frame — memory proportional to the omission, on the
-    #: path this package measures hardest.
+    #: ``(constraint, rows_not_built)`` — every declared row that did not reach
+    #: the solver (the absence rules), by either route: one emptied of all its
+    #: terms, and one a **propagated absence** deleted while its other terms were
+    #: still live. Without this record a declared constraint could go unenforced
+    #: with no way to notice, which is what the second route did until #944.
+    #: Empty for a model whose every declared row was built — a recurrence's
+    #: first coordinate counting as a row it declared and did not get, so a
+    #: ``shift`` against the horizon's edge reports here and is the boundary
+    #: rather than a fault. Counts rather than coordinates: the label of an
+    #: unbuilt row does not exist, so naming which went would mean holding the
+    #: pre-drop frame — memory proportional to the omission, on the path this
+    #: package measures hardest.
     omissions: pl.DataFrame
 
     #: How many times this model has been solved, and how many of those solves

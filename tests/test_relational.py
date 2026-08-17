@@ -1007,6 +1007,42 @@ def test_omissions_is_empty_when_every_declared_row_is_built():
         assert bound.diagnostics().omissions.is_empty()
 
 
+def test_a_row_a_propagated_absence_deleted_is_reported_too():
+    """The other way a declared row goes missing, and it used to go unrecorded (#944).
+
+    A row that loses *all* its terms was always counted. This one keeps three of
+    them: ``x`` exists at both coordinates with a bound of its own, and the row
+    is deleted because absence travelled out of ``y``. Nothing ever counted it,
+    because a restricted row is removed before there is a row to count — so the
+    model quietly enforced half of what it declared and said so nowhere.
+
+    Asserted through the objective as well as the report, because the point is
+    that the two disagree with each other: `both[b]` reads `x[b] >= 5` and its
+    loss is worth 5 of the answer.
+    """
+    model = {
+        'dimensions': {'g': {'values': ['a', 'b']}},
+        'parameters': {'cap': {'dims': ['g']}, 'extra': {'dims': ['g']}},
+        'variables': {
+            'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}},
+            'y': {'foreach': ['g'], 'where': 'extra', 'bounds': {'lower': 0, 'upper': 0}},
+        },
+        'constraints': {'both': {'foreach': ['g'], 'expression': 'x + y >= 5'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x, over=g)'},
+    }
+    data = {
+        'cap': pl.DataFrame({'g': ['a', 'b'], 'value': [10.0, 10.0]}),
+        'extra': pl.DataFrame({'g': ['a'], 'value': [1.0]}),
+    }
+    with lps.build(model, data) as bound:
+        assert bound.diagnostics().omissions.to_dicts() == [{'constraint': 'both', 'rows_not_built': 1}], (
+            'the row absence travelled out of y and deleted is counted'
+        )
+        assert bound.solve().objective == pytest.approx(5.0, rel=RTOL), (
+            'and it is worth 5: only one of the two declared rows is enforced'
+        )
+
+
 def test_diagnostics_say_where_the_time_went(tmp_path):
     """A run that is slower than it should be can say which phase the time went to.
 
