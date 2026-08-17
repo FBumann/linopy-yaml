@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.175](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.174...v0.0.1-alpha.175) (2026-08-17)
+
+
+### Features
+
+* **ports:** a dispatch or a capacity fixed by data pins only the rows it has ([#938](https://github.com/fluxopt/lpspec/issues/938)) ([d2a27d5](https://github.com/fluxopt/lpspec/commit/d2a27d57a4ad98cf23e95d1585c40878b6d2c516))
+
 ## [0.0.1-alpha.174](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.173...v0.0.1-alpha.174) (2026-08-17)
 
 
