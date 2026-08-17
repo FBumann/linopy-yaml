@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.171](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.170...v0.0.1-alpha.171) (2026-08-17)
+
+
+### Documentation
+
+* **examples:** a model beside the ladder is not listed as a rung ([#947](https://github.com/fluxopt/lpspec/issues/947)) ([470eaf1](https://github.com/fluxopt/lpspec/commit/470eaf135c23a24a3571e4e0562247ee6d37315f))
+
 ## [0.0.1-alpha.170](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.169...v0.0.1-alpha.170) (2026-08-16)
 
 
