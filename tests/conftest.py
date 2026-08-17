@@ -275,15 +275,15 @@ def dispatch_yaml() -> Path:
 
 @pytest.fixture
 def dispatch_model_inputs():
-    """``DISPATCH_MODEL``'s data as pandas — what the parity modules feed both lanes."""
+    """``DISPATCH_MODEL``'s data as pandas, index included — one mapping, both lanes."""
     import pandas as pd
 
-    data = {
+    return {
         'p_max': pd.Series({'wind': 100.0, 'gas': 200.0}),
         'cost': pd.Series({'wind': 0.0, 'gas': 50.0}),
         'load': pd.Series([80.0] * 4, index=pd.RangeIndex(4, name='snapshot')),
+        'snapshot': pd.RangeIndex(4, name='snapshot'),
     }
-    return data, {'snapshot': pd.RangeIndex(4, name='snapshot')}
 
 
 def dispatch_model_path(directory: Path, **patch: Any) -> Path:
@@ -318,13 +318,12 @@ def dispatch_inputs():
     """
     import pandas as pd
 
-    data = {
+    return {
         'p_max': pd.Series(dict(zip(DISPATCH_GENERATORS, DISPATCH_P_MAX, strict=True))),
         'cost': pd.Series(dict(zip(DISPATCH_GENERATORS, DISPATCH_COST, strict=True))),
         'load': pd.Series(_dispatch_load(), index=pd.RangeIndex(DISPATCH_SNAPSHOTS, name='snapshot')),
+        'snapshot': pd.RangeIndex(DISPATCH_SNAPSHOTS, name='snapshot'),
     }
-    coords = {'snapshot': pd.RangeIndex(DISPATCH_SNAPSHOTS, name='snapshot')}
-    return data, coords
 
 
 @pytest.fixture
@@ -337,13 +336,12 @@ def dispatch_frame_inputs():
     import polars as pl
 
     generators = list(DISPATCH_GENERATORS)
-    data = {
+    return {
         'p_max': pl.DataFrame({'generator': generators, 'value': list(DISPATCH_P_MAX)}),
         'cost': pl.DataFrame({'generator': generators, 'value': list(DISPATCH_COST)}),
         'load': pl.DataFrame({'snapshot': list(range(DISPATCH_SNAPSHOTS)), 'value': _dispatch_load()}),
+        'snapshot': pl.DataFrame({'snapshot': range(DISPATCH_SNAPSHOTS)}),
     }
-    coords = {'snapshot': range(DISPATCH_SNAPSHOTS)}
-    return data, coords
 
 
 @pytest.fixture
@@ -368,11 +366,10 @@ def commitment_inputs():
             index=pd.RangeIndex(n_s, name='snapshot'),
         ),
     }
-    coords = {
+    return data | {
         'snapshot': pd.RangeIndex(n_s, name='snapshot'),
         'generator': pd.Index(p_max.index, name='generator'),
     }
-    return data, coords
 
 
 @pytest.fixture

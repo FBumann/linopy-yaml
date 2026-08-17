@@ -84,12 +84,7 @@ linopy.options['semantics'] = 'v1'
 __all__ = ['build', 'expression']
 
 
-def build(
-    model: str | Path | dict[str, Any] | Model,
-    sources: Mapping[str, Any],
-    *,
-    coords: dict[str, Any] | None = None,
-) -> linopy.Model:
+def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]) -> linopy.Model:
     """Bind *sources* to *model* and build it as a ``linopy.Model``.
 
     :func:`lpspec.build`'s signature, and deliberately: which lane builds a
@@ -98,8 +93,8 @@ def build(
     Args:
         model: A YAML path, a mapping, or a loaded :class:`~lpspec.language.model.Model`.
         sources: Parameter names to parquet paths or in-memory tables, and
-            optionally dimension names to index tables.
-        coords: Dimension labels neither *sources* nor the YAML carries.
+            dimension names to their labels — an index table, a parquet path,
+            or a bare sequence — wherever the YAML declares none.
 
     Returns:
         A model carrying every declaration the file makes.
@@ -115,8 +110,8 @@ def build(
         schema = expand_piecewise(original)
         lower_program(original)
 
-        master_coords = build_master_coords(schema, coords, sources)
-        dim_coords = build_dim_coords(schema, coords, master_coords, sources)
+        master_coords = build_master_coords(schema, sources)
+        dim_coords = build_dim_coords(schema, master_coords, sources)
         dataset = load_parameters(schema, dict(sources), master_coords)
         validate_piecewise_data(original, dataset)
 
@@ -131,15 +126,13 @@ def expression(
     model: str | Path | dict[str, Any] | Model,
     name: str,
     sources: Mapping[str, Any],
-    *,
-    coords: dict[str, Any] | None = None,
 ) -> xarray.DataArray:
     """Evaluate named expression *name* of *model* at *built*'s solution.
 
     The eager lane's half of readable expressions — the streaming lane spells
     it ``result.expression(name)``. Pure like :func:`build`: nothing was
-    retained there, so the same *sources* and *coords* the model was built with
-    are passed again, the declared expression is evaluated on the model, and
+    retained there, so the same *sources* the model was built with are passed
+    again, the declared expression is evaluated on the model, and
     linopy's native ``.solution`` is the answer.
 
     Args:
@@ -148,7 +141,6 @@ def expression(
         name: A name declared under ``expressions:`` — never an expression
             string.
         sources: As :func:`build` takes them.
-        coords: As :func:`build` takes them.
 
     Returns:
         The expression's value over its own dims, as an ``xarray.DataArray``
@@ -171,8 +163,8 @@ def expression(
             )
         lower_program(original)
         lower_expression(schema, name)
-        master_coords = build_master_coords(schema, coords, sources)
-        dim_coords = build_dim_coords(schema, coords, master_coords, sources)
+        master_coords = build_master_coords(schema, sources)
+        dim_coords = build_dim_coords(schema, master_coords, sources)
         dataset = load_parameters(schema, dict(sources), master_coords)
         ns = Namespace.of(schema)
         ast = expression_of(schema.expressions[name].expression, schema, ns, f"named expression '{name}'")

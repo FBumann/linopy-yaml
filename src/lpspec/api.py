@@ -16,8 +16,7 @@ Example::
 
     result = lps.solve(
         'model.yaml',
-        {'p_max': 'p_max.parquet', 'load': 'load.parquet'},
-        coords={'snapshot': range(8760)},
+        {'p_max': 'p_max.parquet', 'load': 'load.parquet', 'snapshot': range(8760)},
     )
     result.objective
     result.primal('p')  # tidy polars.DataFrame (coords..., value)
@@ -86,16 +85,10 @@ class BoundModel:
     Nothing has to be released; :meth:`close` hands a large model back early.
     """
 
-    def __init__(
-        self,
-        schema: Model,
-        sources: Mapping[str, Any],
-        coords: Mapping[str, Any] | None = None,
-    ) -> None:
+    def __init__(self, schema: Model, sources: Mapping[str, Any]) -> None:
         self._schema = schema
         self._program = lower_program(schema)
         self._sources = dict(sources)
-        self._coords = dict(coords or {})
         self._engine = PolarsEngine()
         self._fill()
 
@@ -109,19 +102,14 @@ class BoundModel:
         try:
             self._engine.build(
                 self._program,
-                tidy_sources(self._schema, dict(self._sources), self._coords),
+                tidy_sources(self._schema, dict(self._sources)),
                 expressions=expression_thunks(self._schema),
             )
         except BaseException:
             self._engine.close()
             raise
 
-    def rebind(
-        self,
-        sources: Mapping[str, Any],
-        *,
-        coords: Mapping[str, Any] | None = None,
-    ) -> BoundModel:
+    def rebind(self, sources: Mapping[str, Any]) -> BoundModel:
         """Put new numbers on the same model, in place.
 
         ::
@@ -142,9 +130,8 @@ class BoundModel:
 
         Args:
             sources: Only what changed; the rest keeps what :func:`build`
-                bound. A dimension index as well as a parameter, which is how
-                a coordinate set grows.
-            coords: Dimension labels, likewise only where they changed.
+                bound. A dimension's labels as well as a parameter, which is
+                how a coordinate set grows.
 
         Returns:
             This object, so a driver can chain.
@@ -154,7 +141,6 @@ class BoundModel:
                 nothing would silently re-solve the numbers already bound.
         """
         self._sources.update(_known(sources, {**self._schema.parameters, **self._schema.dimensions}, 'sources'))
-        self._coords.update(_known(coords or {}, self._schema.dimensions, 'coords'))
         self._fill()
         return self
 
@@ -247,19 +233,14 @@ def _known(given: Mapping[str, Any], declared: Mapping[str, Any], where: str) ->
     return given
 
 
-def build(
-    model: str | Path | dict[str, Any] | Model,
-    sources: Mapping[str, Any],
-    *,
-    coords: dict[str, Any] | None = None,
-) -> BoundModel:
+def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]) -> BoundModel:
     """Bind *sources* to *model* and build it — the model with your data on it.
 
     Args:
         model: A YAML path, a mapping, or a loaded :class:`Model`.
         sources: Parameter names to parquet paths or in-memory tables, and
-            optionally dimension names to index tables.
-        coords: Dimension labels neither *sources* nor the YAML carries.
+            dimension names to their labels — an index table, a parquet path,
+            or a bare sequence — wherever the YAML declares none.
 
     Returns:
         The bound model. It feeds any number of sinks — ``bound.solve()`` and
@@ -270,7 +251,7 @@ def build(
         LanguageError: A construct outside the streaming language.
         DataError: A source that is missing, unreadable, or the wrong shape.
     """
-    return BoundModel(load_model(model), sources, coords)
+    return BoundModel(load_model(model), sources)
 
 
 def solve(
@@ -279,7 +260,6 @@ def solve(
     solver_name: str = 'highs',
     *,
     solver_options: Mapping[str, Any] | None = None,
-    **build_kwargs: Any,
 ) -> Result:
     """Build *model* and solve it in one call.
 
@@ -299,7 +279,6 @@ def solve(
             which needs the ``[gurobi]`` extra.
         solver_options: Forwarded to the solver verbatim, in its own
             vocabulary (``{'time_limit': 60}``).
-        **build_kwargs: Passed to :func:`build`.
 
     Returns:
         The solution, self-contained: it owns the frames it reads, so the built
@@ -310,7 +289,7 @@ def solve(
         LpspecError: A solver name nothing serves — checked before the build.
     """
     solver(solver_name)
-    bound = build(model, sources, **build_kwargs)
+    bound = build(model, sources)
     try:
         return bound.solve(solver_name, solver_options=solver_options)
     finally:
@@ -321,7 +300,6 @@ def write(
     model: str | Path | dict[str, Any] | Model,
     sources: Mapping[str, Any],
     out: str | Path,
-    **build_kwargs: Any,
 ) -> Path:
     """Build *model* and stream it to a file, in the format *out*'s suffix names.
 
@@ -329,7 +307,6 @@ def write(
         model: A YAML path, a mapping, or a loaded :class:`Model`.
         sources: As :func:`build` takes them.
         out: Where to write; ``.lp`` is what ships.
-        **build_kwargs: Passed to :func:`build`.
 
     Returns:
         The path written.
@@ -339,6 +316,6 @@ def write(
     """
     out = Path(out)
     writer(out.suffix.lower())
-    with build(model, sources, **build_kwargs) as bound:
+    with build(model, sources) as bound:
         bound.write(out)
     return out

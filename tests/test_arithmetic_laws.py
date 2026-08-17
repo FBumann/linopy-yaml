@@ -271,7 +271,7 @@ def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
         'constraints': {'c': {'foreach': foreach, 'expression': expression}},
         'objective': {'sense': 'maximize', 'expression': 'x'},
     }
-    with differential(model, WIDE_DATA, WIDE_COORDS if grouped else PLAIN_COORDS, lp=True) as run:
+    with differential(model, WIDE_DATA | (WIDE_COORDS if grouped else PLAIN_COORDS), lp=True) as run:
         return float(run.result.objective)
 
 
@@ -344,7 +344,7 @@ def test_a_mask_on_a_dim_the_reduction_does_not_touch_still_propagates():
     data = {'tgate': pd.Series([True], index=pd.Index([0], name='t'))}
     coords = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
-    with differential(model, data, coords, lp=True) as run:
+    with differential(model, data | coords, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL), (
             't=0 the row binds; t=1 the summand is absent everywhere, so both x are free'
         )
@@ -382,7 +382,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
     }
     coords = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
-    with differential(model, {}, coords, lp=True) as run:
+    with differential(model, {} | coords, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL), (
             't=0: the shifted operand vacates, so both x[.,0] stay at 100; t=1: the row binds'
         )

@@ -20,7 +20,7 @@ dimensions:
 ```
 
 A dimension is an axis. You either list its coordinates in the file, or leave
-them to be read off whatever data binds — `coords={"snapshot": range(6)}` at
+them to be read off whatever data binds — `{"snapshot": range(6)}` in `sources` at
 call time, or the union of what the parameters carry.
 
 **One master coordinate set per dimension, resolved before any data binds.**

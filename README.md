@@ -90,9 +90,10 @@ sources = {
     'p_max': pl.DataFrame({'generator': generators, 'value': [100.0, 60.0, 200.0]}),
     'cost': pl.DataFrame({'generator': generators, 'value': [1.0, 2.0, 50.0]}),
     'load': pl.DataFrame({'snapshot': range(6), 'value': [80.0, 120.0, 150.0, 180.0, 140.0, 100.0]}),
+    'snapshot': range(6),
 }
 
-result = lps.solve('dispatch.yaml', sources, coords={'snapshot': range(6)})
+result = lps.solve('dispatch.yaml', sources)
 print(result.objective)  # 1920.0
 print(result.primal('p'))  # a tidy frame: (snapshot, generator, value)
 print(result.dual('power_balance'))  # the price at each snapshot

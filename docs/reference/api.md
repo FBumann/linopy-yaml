@@ -21,7 +21,7 @@ result.dual('power_balance')
 |---|---|
 | `lps.check(model)` | parse, expand, validate and lower; bind no data. Returns the validated `Model` |
 | `lps.load_model(model)` | the same parse, without the lowering pass and its warnings |
-| `lps.build(model, sources, coords=None)` | bind data and build it — returns a `BoundModel` |
+| `lps.build(model, sources)` | bind data and build it — returns a `BoundModel` |
 | `lps.solve(model, sources, solver_name='highs', solver_options=None)` | build and solve in one call — returns a `Result` |
 | `lps.solve_over(model, sources, axis, ...)` | solve once per slice and fold the answers — [sweeps](sweeps.md) |
 | `lps.write(model, sources, out)` | build and stream to a file; the suffix picks the format |
@@ -39,7 +39,7 @@ without shipping the data.
 ## Sources
 
 `sources` maps declared names to data: parquet paths, or any table exposing the
-Arrow PyCapsule protocol — polars, pandas, pyarrow. `coords=` supplies
+Arrow PyCapsule protocol — polars, pandas, pyarrow. A dimension's own key supplies
 dimension labels that neither the sources nor the YAML carries. The exact rules
 are [data binding](language/data.md).
 
@@ -47,12 +47,12 @@ are [data binding](language/data.md).
 result = lps.solve(
     'dispatch.yaml',
     {'load': 'load.parquet', 'cost': cost_frame, 'p_max': p_max_frame},
-    coords={'snapshot': range(24)},
 )
 ```
 
-`coords` is the only build knob. **`solver_options` is not a build knob** — it
-is forwarded to the solver verbatim.
+`sources` is the whole of the build's input — parameters and dimension indexes
+in one mapping. **`solver_options` is not a build knob** — it is forwarded to
+the solver verbatim.
 
 ## Reading a result
 
@@ -123,7 +123,7 @@ for capacity in search:
 
 | | |
 |---|---|
-| **it names what changed** | everything else keeps what `build` bound. A parameter, or a dimension index — a coordinate set grows by handing over a longer table and the `coords=` to match |
+| **it names what changed** | everything else keeps what `build` bound. A parameter, or a dimension index under its own key — a coordinate set grows by handing over a longer table |
 | **the answer is the reference build's** | `bound.rebind(x)` solves what `build(model, sources \| x)` solves, always |
 | **it never refuses** | there is no capability to query and no shape of data it rejects. What new values can cost is the *fast path*, never the answer |
 | **the solver stays loaded where it can** | new bounds, costs and right-hand sides go onto the model the solver already holds, so the matrix is never handed over twice. Whether the next solve also carries on from the *work* the last one did is [`keep=`](#how-much-of-the-session-a-solve-keeps). A rebind that moves a **mask** — a parameter a `where` compares against — renumbers labels, so that model is loaded again and keeps nothing |

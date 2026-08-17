@@ -38,17 +38,13 @@ if TYPE_CHECKING:
     from lpspec.language.model import Model
 
 
-def tidy_sources(
-    schema: Model,
-    data: dict[str, object],
-    coords: dict[str, Any] | None = None,
-) -> dict[str, object]:
-    """Adapt the caller's ``data=``/``coords=`` inputs to engine sources.
+def tidy_sources(schema: Model, data: dict[str, object]) -> dict[str, object]:
+    """Adapt the caller's ``sources`` mapping to engine sources.
 
     Every in-memory source becomes a tidy :class:`polars.LazyFrame` with columns
     ``(dims…, value)``; parquet paths pass through untouched for the engine to
-    scan directly. A dimension index comes from ``data``, from ``coords``, or
-    from what the YAML declares — exactly one of them, which
+    scan directly. A dimension index comes from ``data`` under the dimension's
+    own key, or from what the YAML declares — one of the two, which
     :func:`check_index_ownership` settles before anything is read.
 
     Normalising here rather than at the engine is what lets the piecewise
@@ -72,14 +68,12 @@ def tidy_sources(
     known = {**schema.parameters, **schema.dimensions}
     if unknown := set(data) - set(known):
         raise DataError(unknown_source_keys_message(unknown, known))
-    check_index_ownership(schema, data, coords)
+    check_index_ownership(schema, data)
 
     sources: dict[str, object] = {}
     for dname, ddef in schema.dimensions.items():
         if dname in data:
             src = data[dname]
-        elif coords and dname in coords:
-            src = coords[dname]
         elif (declared := schema.declared_index(dname)) is not None:
             sources[dname] = pl.LazyFrame(declared)
             continue
@@ -195,14 +189,14 @@ def _labels(name: str, dim: str, sources: Mapping[str, object]) -> list[Any]:
         raise DataError(
             f"parameter '{name}' is written positionally over '{dim}', so it says what the "
             f'values are but not what they are labelled — and nothing else supplies an index '
-            f"for '{dim}'. Declare dimensions.{dim}.values, pass coords={{'{dim}': [...]}}, "
+            f"for '{dim}'. Declare dimensions.{dim}.values, pass '{dim}': [...] in sources, "
             f"or pass '{name}' as a table carrying its own '{dim}' column."
         )
     frame = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
     return frame.select(dim).unique(maintain_order=True).collect()[dim].to_list()  # pyrefly: ignore[missing-attribute]
 
 
-def check_index_ownership(schema: Model, data: Mapping[str, object], coords: Mapping[str, Any] | None) -> None:
+def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
     """Refuse anything about a dimension's index that two authors both claim.
 
     Two facts, each with one home. **The labels** — which members exist, and in
@@ -223,18 +217,17 @@ def check_index_ownership(schema: Model, data: Mapping[str, object], coords: Map
         DataError: Naming the dimension, the declaration, and the key or column
             that collided with it.
     """
-    coords = coords or {}
     for dim, ddef in schema.dimensions.items():
-        supplied = [w for w, m in ((f"sources['{dim}']", data), (f"coords['{dim}']", coords)) if dim in m]
-        if not supplied:
+        if dim not in data:
             continue
+        where = f"sources['{dim}']"
         if ddef.values is not None:
-            raise DataError(declared_index_also_supplied_message(dim, f'dimensions.{dim}.values', supplied[0]))
-        carried = _column_names(data.get(dim, coords.get(dim)), dim)
+            raise DataError(declared_index_also_supplied_message(dim, f'dimensions.{dim}.values', where))
+        carried = _column_names(data[dim], dim)
         for name in sorted(schema.declared_maps(dim)):
             if name in carried:
-                where = f"the '{name}' column of {supplied[0]}"
-                raise DataError(declared_index_also_supplied_message(dim, f'lookups.{name}.values', where))
+                column = f"the '{name}' column of {where}"
+                raise DataError(declared_index_also_supplied_message(dim, f'lookups.{name}.values', column))
 
 
 def check_declared_map_keys(dim: str, maps: Mapping[str, Mapping[Any, Any]], labels: Sequence[Any]) -> None:

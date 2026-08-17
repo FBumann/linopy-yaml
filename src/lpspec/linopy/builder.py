@@ -435,7 +435,7 @@ def _lookup_array(by: LookupNode, ctx: EvaluationContext) -> Any:
     except KeyError:
         msg = (
             f"lookup '{by.name}' over dimension '{by.dimension}' has no bound values. "
-            f"Pass coords={{'{by.dimension}': <DataFrame with '{by.dimension}' and "
+            f"Pass sources={{'{by.dimension}': <table with '{by.dimension}' and "
             f"'{by.name}' columns>}}."
         )
         raise DataError(msg) from None
@@ -550,15 +550,15 @@ def _bound_lookup(
 
     The where counterpart of :func:`_lookup_array`, which reads the same store
     for a grouped sum. Kept separate because the failure differs: a predicate
-    can be evaluated before any variable exists, so the message names ``coords=``
-    rather than the helper call that wanted it.
+    can be evaluated before any variable exists, so the message names the
+    source that was wanted rather than the helper call that wanted it.
     """
     try:
         return dim_coords[over][name]
     except KeyError:
         msg = (
             f"where reads lookup '{name}' over dimension '{over}', which has no bound "
-            f"values. Pass coords={{'{over}': <DataFrame with '{over}' and '{name}' columns>}}."
+            f"values. Pass sources={{'{over}': <table with '{over}' and '{name}' columns>}}."
         )
         raise DataError(msg) from None
 

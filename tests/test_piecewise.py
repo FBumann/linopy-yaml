@@ -130,9 +130,7 @@ def nonconvex_inputs():
     bp_x = pd.Series([0.0, 40.0, 100.0], index=pd.RangeIndex(3, name='bp'))
     bp_y = pd.Series([0.0, 30.0, 55.0], index=pd.RangeIndex(3, name='bp'))
     load = pd.Series(rng.uniform(5, 95, n_s).round(2), index=pd.RangeIndex(n_s, name='snapshot'))
-    data = {'load': load, 'bp_x': bp_x, 'bp_y': bp_y}
-    coords = {'snapshot': load.index, 'bp': bp_x.index}
-    return data, coords
+    return {'load': load, 'bp_x': bp_x, 'bp_y': bp_y, 'snapshot': load.index, 'bp': bp_x.index}
 
 
 # ---------------------------------------------------------------------------
@@ -142,10 +140,10 @@ def nonconvex_inputs():
 
 def test_the_solution_sits_on_the_curve_not_on_its_hull(nonconvex_inputs):
     """The λ formulation reaches the curve itself, not the chord under it."""
-    data, coords = nonconvex_inputs
+    data = nonconvex_inputs
     expected = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
 
-    with differential(NONCONVEX_YAML, data, coords) as run:
+    with differential(NONCONVEX_YAML, data) as run:
         assert run.oracle == pytest.approx(expected, rel=1e-6), 'ON the curve, not on the hull'
 
         cost = by_coord(run.result, 'op_cost', 'snapshot')
@@ -159,14 +157,14 @@ def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs):
     The same concave curve relaxes to its hull, whose lower envelope is the
     chord, so the objective must land below the curve.
     """
-    data, coords = nonconvex_inputs
+    data = nonconvex_inputs
 
     program = lower_program(schema_of(CONVEX_MODEL))
     assert all(v.variable_type == 'continuous' for v in program.variables), 'method: convex is a pure LP'
 
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
     chord = sum(0.55 * v for v in data['load'])  # the (100, 55) chord from the origin
-    with differential(CONVEX_MODEL, data, coords) as run:
+    with differential(CONVEX_MODEL, data) as run:
         assert run.oracle == pytest.approx(chord, rel=1e-6)
         assert run.oracle < on_curve, 'the hull undercuts a concave curve'
 
@@ -219,10 +217,16 @@ def test_three_links_all_track_the_same_curve_position():
     fuel_bp = pd.Series([10.0, 60.0, 140.0], index=pd.RangeIndex(3, name='bp'))
     heat_bp = pd.Series([0.0, 20.0, 60.0], index=pd.RangeIndex(3, name='bp'))
     load = pd.Series(rng.uniform(10, 90, n_s).round(2), index=pd.RangeIndex(n_s, name='snapshot'))
-    data = {'load': load, 'power_bp': power_bp, 'fuel_bp': fuel_bp, 'heat_bp': heat_bp}
-    coords = {'snapshot': load.index, 'bp': power_bp.index}
+    data = {
+        'load': load,
+        'power_bp': power_bp,
+        'fuel_bp': fuel_bp,
+        'heat_bp': heat_bp,
+        'snapshot': load.index,
+        'bp': power_bp.index,
+    }
 
-    with differential(CHP_YAML, data, coords) as run:
+    with differential(CHP_YAML, data) as run:
         fuel = by_coord(run.result, 'fuel', 'snapshot')
         heat = by_coord(run.result, 'heat', 'snapshot')
         for s, load_v in load.items():
@@ -280,11 +284,11 @@ def test_active_gates_the_curve_off(nonconvex_inputs):
     Gated on, the cost sits on the curve at the pinned load; gated off, it is
     pinned to zero.
     """
-    data, coords = nonconvex_inputs
+    data = nonconvex_inputs
     on_flag = pd.Series([1.0, 0.0] * 6, index=pd.RangeIndex(12, name='snapshot'))
     data = {**data, 'on_flag': on_flag}
 
-    with differential(GATED_YAML, data, coords) as run:
+    with differential(GATED_YAML, data) as run:
         cost = by_coord(run.result, 'op_cost', 'snapshot')
         for s in on_flag.index:
             expected = curve(data['load'][s], data['bp_x'], data['bp_y']) if on_flag[s] else 0.0
@@ -312,12 +316,19 @@ def test_breakpoints_may_vary_along_another_dim():
         (rng.uniform(0.3, 0.9, n_s) * p_max.sum()).round(1),
         index=pd.RangeIndex(n_s, name='snapshot'),
     )
-    data = {'p_max': p_max, 'load': load, 'bp_x': bp_x, 'bp_y': bp_y}
-    coords = {'snapshot': load.index, 'generator': gens, 'bp': bps}
+    data = {
+        'p_max': p_max,
+        'load': load,
+        'bp_x': bp_x,
+        'bp_y': bp_y,
+        'snapshot': load.index,
+        'generator': gens,
+        'bp': bps,
+    }
 
     lower_program(schema_of(example))
 
-    with differential(example, data, coords) as run:
+    with differential(example, data) as run:
         p = by_coord(run.result, 'p', 'snapshot', 'generator')
         cost = by_coord(run.result, 'op_cost', 'snapshot', 'generator')
         for (s, g), pv in p.items():
@@ -374,10 +385,10 @@ def test_the_sos2_method_reaches_the_curve_the_binaries_reach(nonconvex_inputs):
     curve there, so a set that failed to restrict anything would show up as
     the chord rather than as a near miss.
     """
-    data, coords = nonconvex_inputs
+    data = nonconvex_inputs
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
 
-    with differential(SOS2_MODEL, data, coords) as run:
+    with differential(SOS2_MODEL, data) as run:
         assert run.result.objective == pytest.approx(on_curve, rel=1e-6), 'ON the curve, not on the hull'
         cost = by_coord(run.result, 'op_cost', 'snapshot')
         for s, load_v in data['load'].items():
@@ -387,9 +398,9 @@ def test_the_sos2_method_reaches_the_curve_the_binaries_reach(nonconvex_inputs):
 def test_the_sos2_method_solves_natively_where_the_sink_has_the_concept(nonconvex_inputs):
     """The whole point of saying it rather than building it."""
     pytest.importorskip('gurobipy', reason='the native SOS path needs the [gurobi] extra')
-    data, coords = nonconvex_inputs
+    data = nonconvex_inputs
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
-    assert lps.solve(SOS2_MODEL, data, 'gurobi', coords=coords).objective == pytest.approx(on_curve, rel=1e-6)
+    assert lps.solve(SOS2_MODEL, data, 'gurobi').objective == pytest.approx(on_curve, rel=1e-6)
 
 
 def test_the_sos2_method_gates_off_like_the_binaries_do(nonconvex_inputs):
@@ -400,11 +411,11 @@ def test_the_sos2_method_gates_off_like_the_binaries_do(nonconvex_inputs):
     by none. ``method: convex`` is the one that refuses ``active``, and does
     so because a hull with nothing pinning it is not a gate.
     """
-    data, coords = nonconvex_inputs
+    data = nonconvex_inputs
     gated = override(raw_of(GATED_YAML), **{'piecewise.cost_curve.method': 'sos2'})
     on_flag = pd.Series([1.0, 0.0] * 6, index=pd.RangeIndex(12, name='snapshot'))
 
-    with differential(gated, {**data, 'on_flag': on_flag}, coords) as run:
+    with differential(gated, {**data, 'on_flag': on_flag}) as run:
         cost = by_coord(run.result, 'op_cost', 'snapshot')
         for s in on_flag.index:
             expected = curve(data['load'][s], data['bp_x'], data['bp_y']) if on_flag[s] else 0.0
@@ -462,8 +473,8 @@ def test_the_adjacency_row_survives_at_the_first_breakpoint(nonconvex_inputs):
     expanded = expand_piecewise(schema_of(NONCONVEX_YAML))
     assert 'edge=0' in expanded.constraints['cost_curve_adjacency'].expression
 
-    data, coords = nonconvex_inputs
-    with differential(NONCONVEX_YAML, data, coords) as run:
+    data = nonconvex_inputs
+    with differential(NONCONVEX_YAML, data) as run:
         first = run.model.constraints['cost_curve_adjacency'].labels.isel({'bp': 0}).values
         assert (first != -1).all(), 'the first breakpoint lost its adjacency row'
 
@@ -611,7 +622,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
     ],
 )
 def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, breakpoints, match):
-    data, _ = nonconvex_inputs
+    data = nonconvex_inputs
     schema = schema_of(CONVEX_MODEL)
 
     with pytest.raises(PiecewiseExpansionError, match=match):
@@ -621,14 +632,14 @@ def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, br
 def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex_inputs):
     """`tidy_sources` is the streaming lane's only door for data, so the guard
     has to live behind it too — not only in the eager loader."""
-    data, coords = nonconvex_inputs
+    data = nonconvex_inputs
     schema = schema_of(CONVEX_MODEL)
 
     validate_piecewise_data(schema, data)  # consistent (concave) curvature passes
 
     bad = {**data, 'bp_x': BACKWARDS_BP_X}
     with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
-        tidy_sources(schema, bad, coords)
+        tidy_sources(schema, bad)
 
 
 # ---------------------------------------------------------------------------
@@ -705,12 +716,11 @@ def epigraph_inputs():
         'seg_slope': slopes.T.stack().rename_axis(['generator', 'segment']),
         'seg_intercept': icepts.T.stack().rename_axis(['generator', 'segment']),
     }
-    coords = {
+    return data | {
         'snapshot': load.index,
         'generator': pd.Index(gens, name='generator'),
         'segment': pd.Index(segments, name='segment'),
     }
-    return data, coords
 
 
 def test_the_epigraph_pattern_needs_no_formulation_machinery(epigraph_inputs):
@@ -719,12 +729,12 @@ def test_the_epigraph_pattern_needs_no_formulation_machinery(epigraph_inputs):
     Under minimisation the epigraph is tight, so ``gen_cost`` equals the true
     piecewise cost at the optimal dispatch.
     """
-    data, coords = epigraph_inputs
+    data = epigraph_inputs
 
     program = lower_program(schema_of(EPIGRAPH_YAML))
     assert all(v.variable_type == 'continuous' for v in program.variables), 'the epigraph pattern is a pure LP'
 
-    with differential(EPIGRAPH_YAML, data, coords, lp=True) as run:
+    with differential(EPIGRAPH_YAML, data, lp=True) as run:
         p = by_coord(run.result, 'p', 'snapshot', 'generator')
         gc = by_coord(run.result, 'gen_cost', 'snapshot', 'generator')
         slopes = data['seg_slope'].unstack('segment')

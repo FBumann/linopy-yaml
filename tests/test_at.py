@@ -188,7 +188,7 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'flow': pd.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c2']}),
         'component': pd.Index(components, name='component'),
     }
-    with differential(model, data, coords) as run:
+    with differential(model, data | coords) as run:
         assert run.result.objective > 0
 
 
@@ -297,12 +297,12 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
         'run_cost': pl.DataFrame({'unit': list(up_time), 'value': [1.0, 5.0]}),
         'idle_cost': pl.DataFrame({'unit': list(up_time), 'value': [1.0, 1.0]}),
     }
-    coords = {
+    sources |= {
         'unit': pl.DataFrame({'unit': list(up_time)}),
         't': pl.DataFrame({'t': hours}),
         'tf': pl.DataFrame({'tf': hours, 'same_moment': hours}),
     }
-    with lps.solve(model, sources, coords=coords) as solution:
+    with lps.solve(model, sources) as solution:
         assert solution.objective == pytest.approx(13.0), (
             'the slow unit runs and is held up its own three hours; 11.0 would mean the window read nothing'
         )

@@ -39,12 +39,13 @@ def storage_inputs():
         (110 + 60 * np.sin(2 * np.pi * t / 24)).round(3),  # peaks above the fleet's 150
         index=pd.RangeIndex(n_s, name='snapshot'),
     )
-    data = {'p_max': p_max, 'cost': cost, 'load': load}
-    coords = {
+    return {
+        'p_max': p_max,
+        'cost': cost,
+        'load': load,
         'snapshot': pd.RangeIndex(n_s, name='snapshot'),
         'generator': pd.Index(p_max.index, name='generator'),
     }
-    return data, coords
 
 
 def _soc_trace(result):
@@ -62,9 +63,9 @@ def _soc_trace(result):
 
 def test_a_wrapping_edge_is_cyclic_on_both_lanes(storage_inputs):
     """`edge='wrap'` closes the recurrence, so `soc[0]` reads the last slot."""
-    data, coords = storage_inputs
+    data = storage_inputs
 
-    with differential(STORAGE_YAML, data, coords, lp=True) as run:
+    with differential(STORAGE_YAML, data, lp=True) as run:
         assert float(run.model.solution['discharge'].max()) > 1e-3, (
             'the battery must actually cycle for the model to be feasible'
         )
@@ -89,14 +90,14 @@ def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inp
     propagation, the relational one from the vacated coordinates leaving the
     presence set.
     """
-    data, coords = storage_inputs
+    data = storage_inputs
     data = {**data, 'load': (data['load'] * 0.93).round(3)}
 
     original = STORAGE_YAML.read_text()
     assert "shift(soc, over=snapshot, by=1, edge='wrap')" in original
     acyclic = original.replace("shift(soc, over=snapshot, by=1, edge='wrap')", 'shift(soc, over=snapshot, by=1)')
 
-    with differential(acyclic, data, coords) as run:
+    with differential(acyclic, data) as run:
         soc, charge, discharge = _soc_trace(run.result)
         assert np.allclose(soc[1:], soc[:-1] + 0.9 * charge[1:] - discharge[1:], atol=1e-6), (
             'the recurrence holds from the second snapshot on'
@@ -114,14 +115,14 @@ def test_a_forward_shift_drops_the_row_at_the_far_end_on_both_lanes(storage_inpu
     shift until #837, where the typesetter turned out to abort on one. The
     engine had always been right; that is the half no test said.
     """
-    data, coords = storage_inputs
+    data = storage_inputs
     data = {**data, 'load': (data['load'] * 0.93).round(3)}
 
     original = STORAGE_YAML.read_text()
     assert "shift(soc, over=snapshot, by=1, edge='wrap')" in original
     forward = original.replace("shift(soc, over=snapshot, by=1, edge='wrap')", 'shift(soc, over=snapshot, by=-1)')
 
-    with differential(forward, data, coords) as run:
+    with differential(forward, data) as run:
         soc, charge, discharge = _soc_trace(run.result)
         assert np.allclose(soc[:-1], soc[1:] + 0.9 * charge[:-1] - discharge[:-1], atol=1e-6), (
             'the recurrence reads forwards, and holds up to the second-to-last snapshot'
@@ -140,7 +141,7 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
     the last snapshot keeps its equation, with the successor term contributing
     nothing.
     """
-    data, coords = storage_inputs
+    data = storage_inputs
     data = {**data, 'load': (data['load'] * 0.93).round(3)}
 
     original = STORAGE_YAML.read_text()
@@ -148,7 +149,7 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
         "shift(soc, over=snapshot, by=1, edge='wrap')", 'shift(soc, over=snapshot, by=-1, edge=0)'
     )
 
-    with differential(filled, data, coords) as run:
+    with differential(filled, data) as run:
         soc, charge, discharge = _soc_trace(run.result)
         assert run.model.constraints['soc_balance'].labels.values[-1] != -1, (
             'edge=0 asks for a value at the boundary, so the last row is built rather than dropped'
@@ -173,11 +174,11 @@ def test_shift_semantics_are_positional_not_lexicographic():
         'cost': pd.Series({'wind': 1.0, 'gas': 40.0}),
         'load': pd.Series((110 + 60 * np.sin(2 * np.pi * t / 24)).round(3), index=labels),
     }
-    coords = {'snapshot': labels, 'generator': pd.Index(p_max.index, name='generator')}
+    data |= {'snapshot': labels, 'generator': pd.Index(p_max.index, name='generator')}
 
     original = STORAGE_YAML.read_text()
     assert 'dtype: int' in original
-    with differential(original.replace('dtype: int', 'dtype: str'), data, coords):
+    with differential(original.replace('dtype: int', 'dtype: str'), data):
         pass  # agreement on the objective is the whole assertion
 
 
@@ -212,9 +213,9 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
             index=pd.RangeIndex(n_s, name='snapshot'),
         ),
     }
-    coords = {'snapshot': pd.RangeIndex(n_s, name='snapshot')}
+    data |= {'snapshot': pd.RangeIndex(n_s, name='snapshot')}
 
-    with differential(RAMP_MODEL, data, coords) as run:
+    with differential(RAMP_MODEL, data) as run:
         active = int((run.model.constraints['ramp_up'].labels != -1).sum())
         assert active == (n_s - 1) * 2, (
             'the mask must bite: the first snapshot is dropped per generator, and a masked row on '

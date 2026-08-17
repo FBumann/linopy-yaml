@@ -29,13 +29,13 @@ DUAL_RTOL = 1e-9
 
 def test_dual_matches_the_eager_lane(dispatch_yaml, dispatch_inputs):
     """The price at each snapshot, both lanes, same sign and same magnitude."""
-    data, coords = dispatch_inputs
+    data = dispatch_inputs
 
-    with differential(dispatch_yaml, data, coords) as run:
+    with differential(dispatch_yaml, data) as run:
         got = run.result.dual('power_balance')
 
         assert got.columns == ['snapshot', 'value']
-        assert got.height == len(coords['snapshot'])
+        assert got.height == len(data['snapshot'])
 
         oracle = run.model.constraints['power_balance'].dual
         expected = pd.Series(np.asarray(oracle), index=np.asarray(oracle.indexes['snapshot']))
@@ -51,11 +51,10 @@ def test_dual_matches_the_eager_lane(dispatch_yaml, dispatch_inputs):
 
 def test_dual_respects_the_where_mask(dispatch_yaml, dispatch_inputs):
     """Duals are a label join, so a masked row is absent — never a zero."""
-    data, coords = dispatch_inputs
-    trimmed = dict(coords, snapshot=coords['snapshot'][:12])
-    data = dict(data, load=data['load'].iloc[:12])
+    data = dispatch_inputs
+    trimmed = dict(data, snapshot=data['snapshot'][:12], load=data['load'].iloc[:12])
 
-    with differential(dispatch_yaml, data, trimmed) as run:
+    with differential(dispatch_yaml, trimmed) as run:
         got = run.result.dual('power_balance')
         assert got.height == 12
         assert sorted(got['snapshot'].to_list()) == list(range(12))
@@ -78,9 +77,9 @@ def test_milp_refuses_duals_and_names_the_variable(commitment_inputs):
     binary or integer variable must raise, naming the reason, not return
     zeros. Parity here would be parity with the bug.
     """
-    data, coords = commitment_inputs
+    data = commitment_inputs
 
-    with differential(COMMITMENT_YAML, data, coords) as run:
+    with differential(COMMITMENT_YAML, data) as run:
         with pytest.raises(LpspecError) as excinfo:
             run.result.dual('balance')
 
@@ -97,10 +96,10 @@ def test_infeasible_solve_refuses_duals(dispatch_yaml, dispatch_inputs):
     infeasible solve raises `NoSolutionError` exactly as `primal` does rather
     than reporting the narrower "this model has no duals".
     """
-    data, coords = dispatch_inputs
-    data = dict(data, load=pd.Series(1e6, index=coords['snapshot']))  # more than every generator together
+    data = dispatch_inputs
+    data = dict(data, load=pd.Series(1e6, index=data['snapshot']))  # more than every generator together
 
-    with lps.solve(dispatch_yaml, data, coords=coords) as result:
+    with lps.solve(dispatch_yaml, data) as result:
         assert not result.has_primal
         assert result.termination_condition == 'infeasible'
 

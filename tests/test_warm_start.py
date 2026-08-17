@@ -124,9 +124,9 @@ def solver_name(request: pytest.FixtureRequest) -> str:
     return str(request.param)
 
 
-def _tables(model: dict[str, Any], given: dict[str, Any], coords: dict[str, Any]) -> Any:
+def _tables(model: dict[str, Any], given: dict[str, Any]) -> Any:
     """*model*'s solver tables, read off it built on *given*."""
-    with lps.build(model, given, coords=coords) as built:
+    with lps.build(model, given) as built:
         return built._engine._tables()
 
 
@@ -148,7 +148,7 @@ def test_a_carried_basis_starts_at_the_optimum_not_from_scratch(solver_name):
     Sink-level on purpose — the iteration counters are the members' own, so
     this is where warmth is observable rather than inferred from timing.
     """
-    tables = _tables(DISPATCH, dispatch_sources(), {'snapshot': SNAPSHOTS})
+    tables = _tables(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
     member = SOLVERS[solver_name]
     first = member(tables)
     try:
@@ -172,7 +172,7 @@ def test_a_carried_basis_starts_at_the_optimum_not_from_scratch(solver_name):
 
 def test_a_carried_basis_answers_what_the_cold_session_answered(solver_name):
     """A carry moves the route, never the answer — the oracle for the primitive."""
-    tables = _tables(DISPATCH, dispatch_sources(), {'snapshot': SNAPSHOTS})
+    tables = _tables(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
     member = SOLVERS[solver_name]
     first = member(tables)
     try:
@@ -205,7 +205,7 @@ def test_the_three_keeps_hold_the_two_things_independently(solver_name):
     exists: `solver` skips the hand-off *and* begins from nothing, which no
     boolean over one axis can say.
     """
-    with lps.build(DISPATCH, dispatch_sources(), coords={'snapshot': SNAPSHOTS}) as bound:
+    with lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as bound:
         first = bound.solve(solver_name=solver_name)
         scratch = SIMPLEX_ITERATIONS[solver_name](bound._engine._solver)
         assert first.kept == 'nothing', 'a first solve has nothing to keep'
@@ -242,14 +242,14 @@ def test_the_solver_is_kept_by_default_and_its_progress_is_not(solver_name):
     knows which kind it has — so the default takes the half that always pays
     (the hand-off) and leaves the bet to a caller who can make it.
     """
-    with lps.build(DISPATCH, dispatch_sources(), coords={'snapshot': SNAPSHOTS}) as bound:
+    with lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as bound:
         bound.solve(solver_name=solver_name)
         assert bound.solve(solver_name=solver_name).kept == 'solver'
 
 
 def test_an_unknown_keep_names_the_three(solver_name):
     with (
-        lps.build(DISPATCH, dispatch_sources(), coords={'snapshot': SNAPSHOTS}) as bound,
+        lps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as bound,
         pytest.raises(lps.LpspecError, match='unknown keep') as raised,
     ):
         bound.solve(solver_name=solver_name, keep='warm')
@@ -277,7 +277,7 @@ def test_keeping_nothing_after_a_mip_solve_is_cold_too(solver_name):
 
 
 def test_a_mixed_integer_solve_carries_an_incumbent_not_a_basis(solver_name):
-    tables = _tables(KNAPSACK, knapsack_sources(), {})
+    tables = _tables(KNAPSACK, knapsack_sources())
     member = SOLVERS[solver_name]
     first = member(tables)
     try:
@@ -305,31 +305,28 @@ def test_a_mixed_integer_solve_carries_an_incumbent_not_a_basis(solver_name):
 SHAPES = [
     pytest.param(
         DISPATCH,
-        dispatch_sources(),
-        {'snapshot': SNAPSHOTS},
-        (DISPATCH_NARROW, dispatch_sources(SNAPSHOTS, GENERATORS[:5]), {'snapshot': SNAPSHOTS}),
+        dispatch_sources() | {'snapshot': SNAPSHOTS},
+        (DISPATCH_NARROW, dispatch_sources(SNAPSHOTS, GENERATORS[:5]) | {'snapshot': SNAPSHOTS}),
         id='a column short',
     ),
     pytest.param(
         DISPATCH,
-        dispatch_sources(),
-        {'snapshot': SNAPSHOTS},
-        (DISPATCH_CAPPED, capped_sources(), {'snapshot': SNAPSHOTS}),
+        dispatch_sources() | {'snapshot': SNAPSHOTS},
+        (DISPATCH_CAPPED, capped_sources() | {'snapshot': SNAPSHOTS}),
         id='rows extra under the same columns',
     ),
     pytest.param(
         KNAPSACK,
         knapsack_sources(),
-        {},
-        (KNAPSACK, knapsack_sources(ITEMS[:8]), {'item': ITEMS[:8]}),
+        (KNAPSACK, knapsack_sources(ITEMS[:8])),
         id='an incumbent for other items',
     ),
 ]
 
 
-def _read_from(solver_name: str, model: dict[str, Any], given: dict[str, Any], coords: dict[str, Any]) -> Any:
+def _read_from(solver_name: str, model: dict[str, Any], given: dict[str, Any]) -> Any:
     """The warm start one solve of *model* leaves, the session closed behind it."""
-    tables = _tables(model, given, coords)
+    tables = _tables(model, given)
     session = SOLVERS[solver_name](tables)
     try:
         session.run(tables)
@@ -338,16 +335,16 @@ def _read_from(solver_name: str, model: dict[str, Any], given: dict[str, Any], c
         session.close()
 
 
-@pytest.mark.parametrize(('model', 'given', 'coords', 'other'), SHAPES)
-def test_a_warm_start_for_a_differently_shaped_model_is_refused(solver_name, model, given, coords, other):
+@pytest.mark.parametrize(('model', 'given', 'other'), SHAPES)
+def test_a_warm_start_for_a_differently_shaped_model_is_refused(solver_name, model, given, other):
     """A basis is positional, so a wrong span is a start about a different model.
 
     The refusal a cutting-plane master meets on its own rebind: a master that
     gained a row is exactly the second column of this table (#382).
     """
-    ws = _read_from(solver_name, model, given, coords)
-    other_model, other_given, other_coords = other
-    tables = _tables(other_model, other_given, other_coords)
+    ws = _read_from(solver_name, model, given)
+    other_model, other_given = other
+    tables = _tables(other_model, other_given)
     session = SOLVERS[solver_name](tables)
     try:
         with pytest.raises(lps.LpspecError, match='warm start carries'):
@@ -358,9 +355,9 @@ def test_a_warm_start_for_a_differently_shaped_model_is_refused(solver_name, mod
 
 def test_a_warm_start_from_another_solver_is_refused(solver_name):
     """Statuses are the reading solver's own encoding; nothing else takes them."""
-    ws = _read_from(solver_name, DISPATCH, dispatch_sources(), {'snapshot': SNAPSHOTS})
+    ws = _read_from(solver_name, DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
     assert ws is not None
-    tables = _tables(DISPATCH, dispatch_sources(), {'snapshot': SNAPSHOTS})
+    tables = _tables(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
     session = SOLVERS[solver_name](tables)
     try:
         with pytest.raises(lps.LpspecError, match='read from'):
@@ -371,7 +368,7 @@ def test_a_warm_start_from_another_solver_is_refused(solver_name):
 
 def test_a_solver_that_has_not_run_has_nothing_to_carry(solver_name):
     """Loaded is not solved: there is no basis and no incumbent to read yet."""
-    tables = _tables(DISPATCH, dispatch_sources(), {'snapshot': SNAPSHOTS})
+    tables = _tables(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
     session = SOLVERS[solver_name](tables)
     try:
         assert session.warm_start() is None, 'a model that has not been solved has left nothing behind'
@@ -400,15 +397,15 @@ class _Refusing:
 
 
 HINTS = [
-    pytest.param(DISPATCH, dispatch_sources(), {'snapshot': SNAPSHOTS}, 'setBasis', id='a basis'),
-    pytest.param(KNAPSACK, knapsack_sources(), {}, 'setSolution', id='an incumbent'),
+    pytest.param(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}, 'setBasis', id='a basis'),
+    pytest.param(KNAPSACK, knapsack_sources(), 'setSolution', id='an incumbent'),
 ]
 
 
-@pytest.mark.parametrize(('model', 'given', 'coords', 'call'), HINTS)
-def test_a_hint_the_solver_refuses_is_loud_not_a_silent_cold_start(model, given, coords, call):
+@pytest.mark.parametrize(('model', 'given', 'call'), HINTS)
+def test_a_hint_the_solver_refuses_is_loud_not_a_silent_cold_start(model, given, call):
     """The `_took` guard: a refused hint raises instead of solving cold."""
-    tables = _tables(model, given, coords)
+    tables = _tables(model, given)
     member = SOLVERS['highs']
     session = member(tables)
     try:

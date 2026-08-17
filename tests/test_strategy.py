@@ -1105,8 +1105,8 @@ def test_a_reader_for_a_name_the_sweep_lacks_fails_the_way_primal_does(sweep):
 
 
 def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
-    """`axis` also takes a plain list of `(key, sources, coords)`, so an
-    irregular ladder needs no third constructor on the public surface.
+    """`axis` also takes a plain list of `(key, sources)`, so an irregular
+    ladder needs no third constructor on the public surface.
 
     What it cannot do is say what its keys are coordinates *of*, so `key=` is
     required there — the same argument that leaves `EachWindow.into` without a
@@ -1114,7 +1114,7 @@ def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
     else's draw.
     """
     base = scenario_sources()
-    cuts = [(name, {**base, 'load': _draw(base, name)}, {}) for name in ('low', 'high')]
+    cuts = [(name, {**base, 'load': _draw(base, name)}) for name in ('low', 'high')]
 
     with pytest.raises(lps.LpspecError, match='hand-built axis needs key_name='):
         lps.solve_over(DISPATCH, base, cuts)
@@ -1127,11 +1127,11 @@ def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
 
 #: The second cut of a two-slice hand-built axis, each naming *less* than the
 #: first. Neither class axis can produce one — each rewrites a copy of the
-#: whole source mapping and supplies its own coords every slice — so this is
-#: where a cut being total stops being automatic.
+#: whole source mapping every slice, index included — so this is where a cut
+#: being total stops being automatic.
 NARROWED = [
-    pytest.param(lambda base: ({'load': _draw(base, 'high')}, {'snapshot': range(4)}), id='fewer sources'),
-    pytest.param(lambda base: ({**base, 'load': _draw(base, 'high', 2)}, {}), id='no coords'),
+    pytest.param(lambda base: {'load': _draw(base, 'high'), 'snapshot': range(4)}, id='fewer sources'),
+    pytest.param(lambda base: {**base, 'load': _draw(base, 'high', 2)}, id='no index'),
 ]
 
 
@@ -1140,14 +1140,14 @@ def test_a_hand_built_slice_that_names_less_does_not_inherit_the_last_one(second
     """A cut says what the whole model binds, whichever way the sweep runs.
 
     A serial fold rebinds, and a rebind is partial by construction — it keeps
-    what the last slice bound. So a cut naming fewer sources, or no coords,
+    what the last slice bound. So a cut naming fewer sources, or no index,
     would be answered off the *previous slice's* data, where a pooled fold
     builds it alone and answers off the cut. The two branches are run against
     each other because the failure is a disagreement: either outcome on its own
     reads as an answer.
     """
     base = scenario_sources()
-    cuts = [('low', {**base, 'load': _draw(base, 'low')}, {'snapshot': range(4)}), ('high', *second(base))]
+    cuts = [('low', {**base, 'load': _draw(base, 'low'), 'snapshot': range(4)}), ('high', second(base))]
 
     def fold(executor: object) -> object:
         try:

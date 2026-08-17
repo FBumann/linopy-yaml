@@ -41,30 +41,24 @@ if TYPE_CHECKING:
     from lpspec.language.model import Model
 
 
-def build_master_coords(
-    schema: Model,
-    coords: dict[str, Any] | None,
-    sources: Mapping[str, Any] | None = None,
-) -> dict[str, pd.Index]:
+def build_master_coords(schema: Model, sources: Mapping[str, Any] | None = None) -> dict[str, pd.Index]:
     """Assemble master coordinate indices for every declared dimension.
 
     Where the index comes from, per the data-binding rules: a key in
-    ``sources``, then ``coords``, then the ``values:`` the YAML declares — and
-    never two of them, which :func:`~lpspec.sources.check_index_ownership`
-    refuses first. There is no fourth step: a dimension without an index has no
+    ``sources``, or the ``values:`` the YAML declares — and never both, which
+    :func:`~lpspec.sources.check_index_ownership` refuses first. There is no fourth step: a dimension without an index has no
     way to tell a mistyped label from a new one.
 
     Raises:
         DataError: A dimension with no index, or one the file and the caller
             both claim.
     """
-    coords = coords or {}
     master: dict[str, pd.Index] = {}
 
     sources = sources or {}
-    check_index_ownership(schema, sources, coords)
+    check_index_ownership(schema, sources)
     for dim_name, dim_def in schema.dimensions.items():
-        supplied = supplied_index(schema, coords, dim_name, sources)
+        supplied = supplied_index(schema, dim_name, sources)
         if supplied is not None:
             master[dim_name] = dim_index_of(supplied, dim_name)
         elif dim_def.values is not None:
@@ -81,14 +75,12 @@ def build_master_coords(
     return master
 
 
-def supplied_index(
-    schema: Model, coords: dict[str, Any], dim_name: str, sources: Mapping[str, Any] = MappingProxyType({})
-) -> Any:
+def supplied_index(schema: Model, dim_name: str, sources: Mapping[str, Any] = MappingProxyType({})) -> Any:
     """The index for *dim_name* the caller passed, or the one the file declares.
 
     Where the labels come from, which is the relational lane's rule: a key in
-    ``sources``, then ``coords=``, then the dimension's own ``values:`` — never
-    two of them, refused before this runs. A lookup's ``values:`` supplies no
+    ``sources``, or the dimension's own ``values:`` — never both, refused before
+    this runs. A lookup's ``values:`` supplies no
     labels; where the caller brings them, each declared map is read against
     them here, so nothing downstream distinguishes a map that was declared from
     one that arrived as a column.
@@ -96,7 +88,7 @@ def supplied_index(
     Returns:
         A frame, path or label sequence, or ``None`` where none supplies one.
     """
-    supplied = sources.get(dim_name, coords.get(dim_name))
+    supplied = sources.get(dim_name)
     maps = schema.declared_maps(dim_name)
     if supplied is None:
         declared = schema.declared_index(dim_name)
@@ -134,7 +126,6 @@ def dim_index_of(source: Any, dim_name: str) -> pd.Index:
 
 def build_dim_coords(
     schema: Model,
-    coords: dict[str, Any] | None,
     master_coords: dict[str, pd.Index],
     sources: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, xr.DataArray]]:
@@ -153,7 +144,6 @@ def build_dim_coords(
     values, so there is no dimension for them to be contained in and nothing
     the check could ask.
     """
-    coords = coords or {}
     sources = sources or {}
     out: dict[str, dict[str, xr.DataArray]] = {}
 
@@ -161,7 +151,7 @@ def build_dim_coords(
         declared = {**schema.targeted_of(dim_name), **schema.labels_of(dim_name)}
         if not declared:
             continue
-        supplied = supplied_index(schema, coords, dim_name, sources)
+        supplied = supplied_index(schema, dim_name, sources)
         source = _index_frame(supplied, dim_name)
         if source is None:
             got = 'nothing' if supplied is None else 'a shape no table can be made of'

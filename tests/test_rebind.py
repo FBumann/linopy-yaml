@@ -109,12 +109,12 @@ class Rung(NamedTuple):
     keeps_the_solver: bool
 
 
-def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, pl.DataFrame], dict[str, Any]]:
-    """The rung's model, its data and its coordinates."""
+def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, Any]]:
+    """The rung's model and the sources that build it, index included."""
     return {
-        'dispatch': lambda: (dispatch_yaml, sources(), COORDS),
-        'reach': lambda: (REACH, reach_sources(), {}),
-        'knapsack': lambda: (KNAPSACK, knapsack_sources(), {}),
+        'dispatch': lambda: (dispatch_yaml, sources() | COORDS),
+        'reach': lambda: (REACH, reach_sources()),
+        'knapsack': lambda: (KNAPSACK, knapsack_sources()),
     }[rung.model]()
 
 
@@ -190,7 +190,7 @@ def solver_name(request: pytest.FixtureRequest) -> str:
 @pytest.fixture
 def bound(dispatch_yaml):
     """The example dispatch on its own data, built and open for the test's duration."""
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as model:
+    with lps.build(dispatch_yaml, sources() | COORDS) as model:
         yield model
 
 
@@ -213,11 +213,11 @@ def test_a_rebind_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
     that can stay loaded: each writes its own push, and a field one of them
     forgets is a confident answer to the model before the rebind.
     """
-    model, given, coords = _case(rung, dispatch_yaml)
+    model, given = _case(rung, dispatch_yaml)
     schema = lps.load_model(model)
     with (
-        lps.solve(model, {**given, **rung.change}, solver_name=solver_name, coords=coords) as reference,
-        lps.build(model, given, coords=coords) as bound,
+        lps.solve(model, {**given, **rung.change}, solver_name=solver_name) as reference,
+        lps.build(model, given) as bound,
     ):
         bound.solve(solver_name=solver_name)
         rebound = bound.rebind(rung.change).solve(solver_name=solver_name)
@@ -391,8 +391,8 @@ def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, 
     The rule is the digest's, so it is the same rule for every sink that can
     stay loaded.
     """
-    model, given, coords = _case(rung, dispatch_yaml)
-    with lps.build(model, given, coords=coords) as bound:
+    model, given = _case(rung, dispatch_yaml)
+    with lps.build(model, given) as bound:
         bound.solve(solver_name=solver_name)
         assert bound.diagnostics().loads == 1, 'the first solve has nothing loaded to keep'
 
@@ -489,7 +489,7 @@ def test_a_solve_asking_for_other_options_loads_the_model_again(bound, solver_na
 def test_a_rebind_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml, bound):
     """Partial by construction: what is not named keeps what `build` bound."""
     every = {**sources(), 'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [1.0, 2.0, 3.0, 4.0]})}
-    with lps.solve(dispatch_yaml, every, coords=COORDS) as reference:
+    with lps.solve(dispatch_yaml, every | COORDS) as reference:
         rebound = bound.rebind({'load': every['load']}).solve()
         assert rebound.objective == pytest.approx(reference.objective)
 
@@ -543,7 +543,7 @@ def test_closing_a_result_never_touches_the_model(bound):
     ('call', 'unknown'),
     [
         pytest.param(lambda bound: bound.rebind({'p_maxx': 1}), 'p_maxx', id='sources'),
-        pytest.param(lambda bound: bound.rebind({}, coords={'snapshots': [0]}), 'snapshots', id='coords'),
+        pytest.param(lambda bound: bound.rebind({} | {'snapshots': [0]}), 'snapshots', id='coords'),
     ],
 )
 def test_a_rebind_refuses_a_name_the_model_does_not_declare(bound, call, unknown):
@@ -605,11 +605,11 @@ def test_a_rebind_can_grow_a_dimension():
         }
 
     with (
-        lps.solve(master, {'invest': invest, **cuts(3)}, coords={'cut': [0, 1, 2]}) as reference,
-        lps.build(master, {'invest': invest, **cuts(1)}, coords={'cut': [0]}) as bound,
+        lps.solve(master, {'invest': invest, **cuts(3)} | {'cut': [0, 1, 2]}) as reference,
+        lps.build(master, {'invest': invest, **cuts(1)} | {'cut': [0]}) as bound,
     ):
         bound.solve()
-        grown = bound.rebind(cuts(3), coords={'cut': [0, 1, 2]}).solve()
+        grown = bound.rebind(cuts(3) | {'cut': [0, 1, 2]}).solve()
 
         assert grown.objective == pytest.approx(reference.objective)
         assert grown.primal('cap').equals(reference.primal('cap'))
@@ -648,7 +648,7 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     *survived* the mask rather than what the declarations multiply out to —
     which is the whole reason it is read off the built model.
     """
-    with lps.build(dispatch_yaml, sources(), coords=COORDS) as bound:
+    with lps.build(dispatch_yaml, sources() | COORDS) as bound:
         bound.solve()
         seen = bound.diagnostics()
 
@@ -662,7 +662,7 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
 def test_a_mask_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
     """Read off the built model, so a mask that moved moves the counts with it."""
     zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
-    with lps.build(dispatch_yaml, zeroed, coords=COORDS) as bound:
+    with lps.build(dispatch_yaml, zeroed | COORDS) as bound:
         assert bound.diagnostics().columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)
 
 

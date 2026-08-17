@@ -31,11 +31,11 @@ from tests.oracle import lpspec_linopy, pd  # skips the module without the [lino
     ],
 )
 def test_both_lanes_refuse_the_same_where(tmp_path, dispatch_model_inputs, where, match):
-    data, coords = dispatch_model_inputs
+    data = dispatch_model_inputs
     path = dispatch_model_path(tmp_path, **{'variables.p.where': where})
 
     with pytest.raises(ValueError, match=match):
-        lpspec_linopy.build(path, data, coords=coords)
+        lpspec_linopy.build(path, data)
 
     with pytest.raises(ValueError, match=match):
         lps.check(path)
@@ -81,14 +81,14 @@ def test_both_lanes_build_the_same_model(tmp_path, dispatch_model_inputs, where)
     is not the claim here, and neither lane is asked to make every mask
     feasible.
     """
-    data, coords = dispatch_model_inputs
+    data = dispatch_model_inputs
     path = dispatch_model_path(tmp_path, **{'variables.p.where': where})
 
-    m = lpspec_linopy.build(path, data, coords=coords)
+    m = lpspec_linopy.build(path, data)
     eager_rows = int((m.variables['p'].labels != -1).sum())
     eager_status = m.solve(solver_name='highs')[1]
 
-    with lps.build(path, data, coords=coords) as bound:
+    with lps.build(path, data) as bound:
         relational_rows = bound._engine._variables['p'].select(pl.len()).collect().item()
         relational_status = bound.solve().termination_condition
 
@@ -150,13 +150,13 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_model_inputs
     The omission is asserted too. Dropping a declared row is only defensible
     because the build says it happened.
     """
-    data, coords = dispatch_model_inputs
+    data = dispatch_model_inputs
     path = dispatch_model_path(tmp_path, **{'variables.p.where': 'snapshot > 0'})
 
-    m = lpspec_linopy.build(path, data, coords=coords)
+    m = lpspec_linopy.build(path, data)
     eager_status = m.solve(solver_name='highs')[1]
 
-    with lps.build(path, data, coords=coords) as bound:
+    with lps.build(path, data) as bound:
         relational_status = bound.solve().termination_condition
         assert bound.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}], (
             'a dropped row has to be reported, or a declared constraint goes quietly unenforced'
@@ -293,9 +293,12 @@ def test_a_datetime_boundary_is_sayable_on_both_lanes(tmp_path):
         'cost': pd.Series({'wind': 1.0, 'gas': 5.0}),
         'load': pd.Series([10.0, 20.0, 30.0], index=pd.Index(days, name='snapshot')),
     }
-    coords = {'snapshot': pd.Index(days, name='snapshot'), 'generator': pd.Index(['wind', 'gas'], name='generator')}
+    eager_data |= {
+        'snapshot': pd.Index(days, name='snapshot'),
+        'generator': pd.Index(['wind', 'gas'], name='generator'),
+    }
 
-    m = lpspec_linopy.build(path, eager_data, coords=coords)
+    m = lpspec_linopy.build(path, eager_data)
     m.solve(solver_name='highs')
     eager = float(m.objective.value)
 
