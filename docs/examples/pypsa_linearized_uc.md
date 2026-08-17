@@ -1,4 +1,4 @@
-# PyPSA linearized unit commitment — the same rows, relaxed
+# PyPSA linearized unit commitment — the status, relaxed
 
 A unit may be committed by a third. PyPSA ships this as a mode, not as a debugging convenience.
 
@@ -10,7 +10,11 @@ transition variables in [0, 1] instead of {0, 1}. The interesting question is
 not whether the relaxation is expressible — it obviously is — but whether the
 model file can say *both* without duplicating a single row.
 
-It can: the difference between the two models is three `domain:` lines.
+It can: three `domain:` lines carry the whole relaxation, and every row the two
+models share is byte-identical. They part company in one place, and not over
+integrality — this instance starts every unit off, where the integer port takes
+PyPSA's default of a unit already running, so the first snapshot's two
+transition rows are not the same two rows.
 
 ## The model
 
@@ -18,7 +22,7 @@ It can: the difference between the two models is three `domain:` lines.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA linearized unit commitment: the same rows as the integer model with the status continuous in [0, 1], so a unit may be committed by a third. A relaxation and therefore a bound — on this instance worth less than half the integer answer. Optimum 5540.0, from PyPSA itself.
+PyPSA linearized unit commitment: commitment with the status continuous in [0, 1] rather than binary, so a unit may be committed by a third. A relaxation and therefore a bound — on this instance worth less than half the integer answer. Optimum 5540.0, from PyPSA itself.
 
 #### Sets
 
@@ -43,7 +47,7 @@ PyPSA linearized unit commitment: the same rows as the integer model with the st
 | Symbol | Meaning |
 |---|---|
 | $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ --- how far this unit is committed in this snapshot — the one declaration that separates this model from the integer one |
+| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ --- how far this unit is committed in this snapshot — one of the three declarations that separate this model from the integer one |
 | $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ --- how much of this unit comes up entering this snapshot |
 | $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ --- how much of this unit goes down entering this snapshot |
 
@@ -104,10 +108,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
     ```yaml
     description: >-
-      PyPSA linearized unit commitment: the same rows as the integer model with the
-      status continuous in [0, 1], so a unit may be committed by a third. A
-      relaxation and therefore a bound — on this instance worth less than half the
-      integer answer. Optimum 5540.0, from PyPSA itself.
+      PyPSA linearized unit commitment: commitment with the status continuous in
+      [0, 1] rather than binary, so a unit may be committed by a third. A relaxation
+      and therefore a bound — on this instance worth less than half the integer
+      answer. Optimum 5540.0, from PyPSA itself.
 
     dimensions:
       snapshot:
@@ -145,8 +149,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           lower: 0
       status:
         description: >-
-          how far this unit is committed in this snapshot — the one declaration that
-          separates this model from the integer one
+          how far this unit is committed in this snapshot — one of the three
+          declarations that separate this model from the integer one
         foreach: [snapshot, generator]
         bounds:
           lower: 0
@@ -257,15 +261,22 @@ makes a dual solution undefined, so `pypsa_unit_commitment` and
 nothing else. Relaxing the status turns the model back into an LP, which is most
 of why the mode exists — and so this port records a price vector too.
 
-**The start-up and shut-down costs are deliberately unequal.** PyPSA tightens
-the relaxation with an extra dispatch-limit block only where the two costs
-match, and that block reaches for the ramp-limit parameters. With unequal costs
-PyPSA logs that it is proceeding without the tightening, and the two
-formulations are then row for row the same model — which is what makes the
-comparison clean.
+**`base` carries deliberately unequal start-up and shut-down costs.** PyPSA
+tightens the relaxation with an extra dispatch-limit block wherever a
+generator's two costs *match*, and that block reaches for the ramp-limit
+parameters — a second feature. So `base` is left untightened, and PyPSA logs
+that it is proceeding without it. `peak` is not: its two costs are both zero, so
+PyPSA does emit the tightening there — four blocks of three rows this port has
+not got. Every one of them collapses to a row the port already holds, because
+`p_min_pu` is 0 and there are no ramp limits: `p ≤ p_nom · status`, or that same
+row differenced against the snapshot before. Which is why the objective and the
+price vector still agree to `rtol=1e-09` — the two are the same model here by
+redundancy, not row for row.
 
 ## What it exercises
 
 That integrality is **one declaration on a variable** and nothing above it
-cares. Every constraint here is byte-identical to the ones in the integer port;
-only `domain: binary` versus a `[0, 1]` bound separates them.
+cares. Every row the two ports share is byte-identical, and `domain: binary`
+against a `[0, 1]` bound is the whole of the relaxation; what else differs is
+the first snapshot's initial conditions, which are an instance choice rather
+than a consequence of relaxing anything.

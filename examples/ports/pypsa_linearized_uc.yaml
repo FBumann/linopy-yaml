@@ -1,8 +1,8 @@
 description: >-
-  PyPSA linearized unit commitment: the same rows as the integer model with the
-  status continuous in [0, 1], so a unit may be committed by a third. A
-  relaxation and therefore a bound — on this instance worth less than half the
-  integer answer. Optimum 5540.0, from PyPSA itself.
+  PyPSA linearized unit commitment: commitment with the status continuous in
+  [0, 1] rather than binary, so a unit may be committed by a third. A relaxation
+  and therefore a bound — on this instance worth less than half the integer
+  answer. Optimum 5540.0, from PyPSA itself.
 
 dimensions:
   snapshot:
@@ -40,8 +40,8 @@ variables:
       lower: 0
   status:
     description: >-
-      how far this unit is committed in this snapshot — the one declaration that
-      separates this model from the integer one
+      how far this unit is committed in this snapshot — one of the three
+      declarations that separate this model from the integer one
     foreach: [snapshot, generator]
     bounds:
       lower: 0

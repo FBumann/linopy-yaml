@@ -23,11 +23,14 @@ convenience: ``optimize(linearized_unit_commitment=True)`` declares the status
 and the two transition variables in [0, 1] instead of {0, 1} and leaves every
 constraint where it was. A unit may then be committed by a third.
 
-The start-up and shut-down costs are **deliberately unequal**. PyPSA tightens
-the relaxation with an extra dispatch-limit block only where the two costs
-match, and that block reaches for the ramp-limit parameters — a second feature.
-With unequal costs PyPSA logs that it is proceeding without the tightening, and
-the two formulations are then row for row the same model.
+``base`` carries **deliberately unequal** start-up and shut-down costs. PyPSA
+tightens the relaxation with an extra dispatch-limit block wherever a
+generator's two costs *match*, and that block reaches for the ramp-limit
+parameters — a second feature. ``base`` is therefore left untightened, and the
+log says so. ``peak`` is not, its two costs both being zero: PyPSA emits four
+further blocks for it, every one of which collapses to a row the port already
+holds, since ``p_min_pu`` is 0 and there are no ramp limits. Hence the same
+objective and the same prices out of a model with more rows in it.
 
 The relaxation is a bound, not an approximation to be trusted: on this instance
 it is worth less than half the integer answer, which is why ``main`` prints both.
