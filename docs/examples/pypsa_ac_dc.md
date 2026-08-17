@@ -31,7 +31,7 @@ PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose generators
 | $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
 | $\mathcal{C}$ | index $c$ --- `carrier` --- what a generator burns, and what its emissions are a property of |
 | $\mathcal{E}$ | index $e$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\enspace \mathrm{gen\_carrier}: \mathcal{E} \to \mathcal{C}$ --- generating units, each sitting on a bus and burning a carrier — two coordinates on one dimension, landing on two different axes |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
+| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
 | $\mathcal{I}$ | index $i$ --- `link` with $\mathrm{link\_from}: \mathcal{I} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{I} \to \mathcal{B}$ --- controllable connections, each joining two buses |
 | $\mathcal{Y}$ | index $y$ --- `cycle` --- one independent loop per meshed sub-network |
 
@@ -59,7 +59,7 @@ PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose generators
 |---|---|
 | $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ --- output of a generator in a snapshot |
 | $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ --- generator capacity to hold, built on top of what already stands |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `to` bus — not chosen, but whatever the voltage law leaves |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
 | $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- line capacity to build |
 | $g$ | `g` over $\mathcal{T} \times \mathcal{I}$ --- flow on a link, signed towards the bus it delivers at — chosen, which is what makes it a link and not a line |
 | $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{I}$ --- link capacity to build |
@@ -92,7 +92,7 @@ $$g_{t,i} \ge \mathit{link}^{\mathrm{p,nom}}_{i} \cdot \mathit{link}^{\mathrm{p,
 
 **`nodal_balance`**
 
-$$\sum_{e \in \mathcal{E} \thinspace:\thinspace \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) + \sum_{i \in \mathcal{I} \thinspace:\thinspace \mathrm{link\_to}(i) = b} g_{t,i} - \left( \sum_{i \in \mathcal{I} \thinspace:\thinspace \mathrm{link\_from}(i) = b} g_{t,i} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{e \in \mathcal{E} \thinspace:\thinspace \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_from}(l) = b} f_{t,l} \right) + \sum_{i \in \mathcal{I} \thinspace:\thinspace \mathrm{link\_to}(i) = b} g_{t,i} - \left( \sum_{i \in \mathcal{I} \thinspace:\thinspace \mathrm{link\_from}(i) = b} g_{t,i} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 **`kirchhoff_voltage_law`**
 
@@ -178,11 +178,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: the carrier a generator burns
         over: generator
         into: carrier
-      from:
+      line_from:
         description: the bus a line leaves
         over: line
         into: bus
-      to:
+      line_to:
         description: the bus a line arrives at
         over: line
         into: bus
@@ -251,7 +251,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           lower: p_nom_min
       f:
         description: >-
-          flow on a line, signed towards its `to` bus — not chosen, but whatever
+          flow on a line, signed towards its `line_to` bus — not chosen, but whatever
           the voltage law leaves
         foreach: [snapshot, line]
       s_nom:
@@ -296,7 +296,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, bus]
         expression: >-
           sum(p, by=gen_bus)
-          + sum(f, by=to) - sum(f, by=from)
+          + sum(f, by=line_to) - sum(f, by=line_from)
           + sum(g, by=link_to) - sum(g, by=link_from)
           == load
 
@@ -377,7 +377,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
             )
 
         for line, ends in tables['line'].set_index('line').iterrows():
-            bus0, bus1 = ends['from'], ends['to']
+            bus0, bus1 = ends['line_from'], ends['line_to']
             n.add(
                 'Line',
                 line,

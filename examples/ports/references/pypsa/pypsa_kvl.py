@@ -77,8 +77,8 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Line',
         lines.index,
-        bus0=lines['from'],
-        bus1=lines['to'],
+        bus0=lines['line_from'],
+        bus1=lines['line_to'],
         x=tables['reactance'].set_index('line')['value'],
         r=0.0,
         s_nom=tables['s_nom'].set_index('line')['value'],

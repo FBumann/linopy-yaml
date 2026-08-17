@@ -92,7 +92,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
         )
 
     for line, ends in tables['line'].set_index('line').iterrows():
-        bus0, bus1 = ends['from'], ends['to']
+        bus0, bus1 = ends['line_from'], ends['line_to']
         n.add(
             'Line',
             line,

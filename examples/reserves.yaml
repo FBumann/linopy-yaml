@@ -33,8 +33,8 @@ dimensions:
 
 lookups:
   gen_bus: {over: generator, into: bus, description: "the bus a generator sits on"}
-  from: {over: line, into: bus, description: "the bus a line leaves, null where the end is open"}
-  to: {over: line, into: bus, description: "the bus a line arrives at, null where the end is open"}
+  line_from: {over: line, into: bus, description: "the bus a line leaves, null where the end is open"}
+  line_to: {over: line, into: bus, description: "the bus a line arrives at, null where the end is open"}
   gen_of: {over: offer, into: generator, description: "the generator behind an offer"}
   market_of: {over: offer, into: market, description: "the market an offer is made into"}
   tranche_of: {over: offer, into: tranche, description: "the tranche an offer is made at"}
@@ -85,7 +85,7 @@ variables:
     bounds:
       lower: 0
   f:
-    description: flow on a line, signed towards its `to` bus
+    description: flow on a line, signed towards its `line_to` bus
     foreach: [line]
     bounds:
       lower: neg_cap
@@ -107,13 +107,13 @@ constraints:
     foreach: [bus]
     expression: >-
       sum(p, by=gen_bus)
-      + sum(f, by=to)
-      - sum(f, by=from)
+      + sum(f, by=line_to)
+      - sum(f, by=line_from)
       == load
   export_cap:
     description: a line carries no more than the bus it leaves is allowed to export
     foreach: [line]
-    expression: f <= at(bus_cap, by=from)
+    expression: f <= at(bus_cap, by=line_from)
   requirement:
     description: the offers made into a market fill its requirement
     foreach: [market]

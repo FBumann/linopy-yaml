@@ -68,7 +68,7 @@
    "norwich_london",
    "bremen_frankfurt"
   ],
-  "from": [
+  "line_from": [
    "london",
    "manchester",
    "bremen_dc",
@@ -77,7 +77,7 @@
    "norwich",
    "bremen"
   ],
-  "to": [
+  "line_to": [
    "manchester",
    "norwich",
    "norwich_dc",

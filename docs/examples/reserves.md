@@ -43,7 +43,7 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 | $\mathcal{M}$ | index $m$ --- `market` --- reserve markets, each with a requirement to fill |
 | $\mathcal{T}$ | index $t$ --- `tranche` --- how fast a reserve has to be deliverable |
 | $\mathcal{Z}$ | index $z$ --- `zone` --- reserve zones, which overlap |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, which may have an open end |
+| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, which may have an open end |
 | $\mathcal{O}$ | index $o$ --- `offer` with $\mathrm{gen\_of}: \mathcal{O} \to \mathcal{G},\enspace \mathrm{market\_of}: \mathcal{O} \to \mathcal{M},\enspace \mathrm{tranche\_of}: \mathcal{O} \to \mathcal{T}$ --- one generator's bid into one market at one tranche |
 
 #### Parameters
@@ -67,7 +67,7 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 | Symbol | Meaning |
 |---|---|
 | $p$ | `p` over $\mathcal{G}$ --- output of a generator |
-| $f$ | `f` over $\mathcal{L}$ --- flow on a line, signed towards its `to` bus |
+| $f$ | `f` over $\mathcal{L}$ --- flow on a line, signed towards its `line_to` bus |
 | $r$ | `r` over $\mathcal{O}$ --- reserve held against an offer |
 
 #### Objective
@@ -78,11 +78,11 @@ $$\min \sum_{g \in \mathcal{G},\enspace o \in \mathcal{O}} \left( p_{g} \cdot \m
 
 **`balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{l} \right) = \mathit{load}_{b} \qquad \forall\thinspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_to}(l) = b} f_{l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_from}(l) = b} f_{l} \right) = \mathit{load}_{b} \qquad \forall\thinspace b \in \mathcal{B}$$
 
 **`export_cap`**
 
-$$f_{l} \le \mathit{bus}^{\mathrm{cap}}_{\mathrm{from}(l)} \qquad \forall\thinspace l \in \mathcal{L}$$
+$$f_{l} \le \mathit{bus}^{\mathrm{cap}}_{\mathrm{line\_from}(l)} \qquad \forall\thinspace l \in \mathcal{L}$$
 
 **`requirement`**
 
@@ -157,8 +157,8 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     lookups:
       gen_bus: {over: generator, into: bus, description: "the bus a generator sits on"}
-      from: {over: line, into: bus, description: "the bus a line leaves, null where the end is open"}
-      to: {over: line, into: bus, description: "the bus a line arrives at, null where the end is open"}
+      line_from: {over: line, into: bus, description: "the bus a line leaves, null where the end is open"}
+      line_to: {over: line, into: bus, description: "the bus a line arrives at, null where the end is open"}
       gen_of: {over: offer, into: generator, description: "the generator behind an offer"}
       market_of: {over: offer, into: market, description: "the market an offer is made into"}
       tranche_of: {over: offer, into: tranche, description: "the tranche an offer is made at"}
@@ -209,7 +209,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         bounds:
           lower: 0
       f:
-        description: flow on a line, signed towards its `to` bus
+        description: flow on a line, signed towards its `line_to` bus
         foreach: [line]
         bounds:
           lower: neg_cap
@@ -231,13 +231,13 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         foreach: [bus]
         expression: >-
           sum(p, by=gen_bus)
-          + sum(f, by=to)
-          - sum(f, by=from)
+          + sum(f, by=line_to)
+          - sum(f, by=line_from)
           == load
       export_cap:
         description: a line carries no more than the bus it leaves is allowed to export
         foreach: [line]
-        expression: f <= at(bus_cap, by=from)
+        expression: f <= at(bus_cap, by=line_from)
       requirement:
         description: the offers made into a market fill its requirement
         foreach: [market]
@@ -304,8 +304,8 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         zones = pd.Index(series['zone_req'].index, name='zone')
 
         gen_at = indicator(buses, tables['generator'], 'generator', 'gen_bus')
-        line_in = indicator(buses, tables['line'], 'line', 'to')
-        line_out = indicator(buses, tables['line'], 'line', 'from')
+        line_in = indicator(buses, tables['line'], 'line', 'line_to')
+        line_out = indicator(buses, tables['line'], 'line', 'line_from')
         offer_gen = indicator(pd.Index(series['p_max'].index, name='generator'), tables['offer'], 'offer', 'gen_of')
         offer_market = indicator(pd.Index(series['req'].index, name='market'), tables['offer'], 'offer', 'market_of')
 
@@ -317,7 +317,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         zone_at.columns.name = 'generator'
 
         r_cap = offers['tranche_of'].map(series['tranche_frac']) * offers['gen_of'].map(series['p_max'])
-        f_cap = tables['line'].set_index('line')['from'].map(series['bus_cap'])
+        f_cap = tables['line'].set_index('line')['line_from'].map(series['bus_cap'])
 
         m = linopy.Model()
         p = m.add_variables(lower=0, coords=[series['p_max'].index], name='p')
@@ -346,10 +346,10 @@ above; the balance duals are checked too).
 
 | Shape | Where | Idiom | Mutation that moves the optimum |
 |---|---|---|---|
-| self-relation, used in both directions | lines bus→bus, balance sums through `from` and `to` | edge dimension + leg lookups | — (the balance is every other row's feasibility) |
+| self-relation, used in both directions | lines bus→bus, balance sums through `line_from` and `line_to` | edge dimension + leg lookups | — (the balance is every other row's feasibility) |
 | parallel edges | `l1`, `l2` both b2→b1 | member identity is the label, not the endpoint pair | drop `l2` → dearer |
-| dangling member | `l4`'s `to` is null | a partial lookup: the open end aggregates nowhere | point `l4` at b1 → cheaper |
-| pullback through a leg | `f ≤ at(bus_cap, by=from)` | `at()` | uncap the exporting bus → cheaper |
+| dangling member | `l4`'s `line_to` is null | a partial lookup: the open end aggregates nowhere | point `l4` at b1 → cheaper |
+| pullback through a leg | `f ≤ at(bus_cap, by=line_from)` | `at()` | uncap the exporting bus → cheaper |
 | k-ary edge set | offers carry `gen_of`, `market_of`, `tranche_of` | three legs, one edge dimension | — (structure, pinned by test) |
 | duplicate pair | `o1`, `o2` share all three legs | multiplicity is real capacity | drop `o2` → dearer |
 | two pullbacks through two legs | the offer cap above | `at() * at()` | `o4` sits exactly at its cap |

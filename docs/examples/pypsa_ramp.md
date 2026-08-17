@@ -31,7 +31,7 @@ PyPSA linear optimal power flow, rung 2: rung 1 plus a limit on how fast a gener
 | $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
 | $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
 | $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{L}$ | index $l$ --- `link` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- controllable connections, each joining two buses |
+| $\mathcal{L}$ | index $l$ --- `link` with $\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}$ --- controllable connections, each joining two buses |
 
 #### Parameters
 
@@ -41,7 +41,7 @@ PyPSA linear optimal power flow, rung 2: rung 1 plus a limit on how fast a gener
 | $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
 | $\mathit{ramp\_limit\_up}$ | `ramp_limit_up` over $\mathcal{G}$ --- share of capacity output may rise by from one snapshot to the next |
 | $\mathit{ramp\_limit\_down}$ | `ramp_limit_down` over $\mathcal{G}$ --- share of capacity output may fall by from one snapshot to the next |
-| $\mathit{rating}$ | `rating` over $\mathcal{L}$ --- most a link may carry towards its `to` bus |
+| $\mathit{rating}$ | `rating` over $\mathcal{L}$ --- most a link may carry towards its `link_to` bus |
 | $\mathit{neg\_rating}$ | `neg_rating` over $\mathcal{L}$ --- most a link may carry the other way, negative by convention |
 | $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
 
@@ -50,7 +50,7 @@ PyPSA linear optimal power flow, rung 2: rung 1 plus a limit on how fast a gener
 | Symbol | Meaning |
 |---|---|
 | $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a link, signed towards its `to` bus |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a link, signed towards its `link_to` bus |
 
 #### Objective
 
@@ -60,7 +60,7 @@ $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit
 
 **`nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{link\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{link\_from}(l) = b} f_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 **`ramp_up`**
 
@@ -112,11 +112,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: the bus a generator sits on
         over: generator
         into: bus
-      from:
+      link_from:
         description: the bus a link leaves
         over: link
         into: bus
-      to:
+      link_to:
         description: the bus a link arrives at
         over: link
         into: bus
@@ -135,7 +135,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: share of capacity output may fall by from one snapshot to the next
         dims: [generator]
       rating:
-        description: most a link may carry towards its `to` bus
+        description: most a link may carry towards its `link_to` bus
         dims: [link]
       neg_rating:
         description: most a link may carry the other way, negative by convention
@@ -152,7 +152,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           lower: 0
           upper: p_nom
       f:
-        description: flow on a link, signed towards its `to` bus
+        description: flow on a link, signed towards its `link_to` bus
         foreach: [snapshot, link]
         bounds:
           lower: neg_rating
@@ -164,8 +164,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, bus]
         expression: >-
           sum(p, by=gen_bus)
-          + sum(f, by=to)
-          - sum(f, by=from)
+          + sum(f, by=link_to)
+          - sum(f, by=link_from)
           == load
 
       ramp_up:
@@ -221,8 +221,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         n.add(
             'Link',
             links.index,
-            bus0=links['from'],
-            bus1=links['to'],
+            bus0=links['link_from'],
+            bus1=links['link_to'],
             p_nom=tables['rating'].set_index('link')['value'],
             p_min_pu=-1.0,
             efficiency=1.0,

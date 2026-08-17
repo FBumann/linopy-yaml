@@ -72,8 +72,8 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     zones = pd.Index(series['zone_req'].index, name='zone')
 
     gen_at = indicator(buses, tables['generator'], 'generator', 'gen_bus')
-    line_in = indicator(buses, tables['line'], 'line', 'to')
-    line_out = indicator(buses, tables['line'], 'line', 'from')
+    line_in = indicator(buses, tables['line'], 'line', 'line_to')
+    line_out = indicator(buses, tables['line'], 'line', 'line_from')
     offer_gen = indicator(pd.Index(series['p_max'].index, name='generator'), tables['offer'], 'offer', 'gen_of')
     offer_market = indicator(pd.Index(series['req'].index, name='market'), tables['offer'], 'offer', 'market_of')
 
@@ -85,7 +85,7 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     zone_at.columns.name = 'generator'
 
     r_cap = offers['tranche_of'].map(series['tranche_frac']) * offers['gen_of'].map(series['p_max'])
-    f_cap = tables['line'].set_index('line')['from'].map(series['bus_cap'])
+    f_cap = tables['line'].set_index('line')['line_from'].map(series['bus_cap'])
 
     m = linopy.Model()
     p = m.add_variables(lower=0, coords=[series['p_max'].index], name='p')

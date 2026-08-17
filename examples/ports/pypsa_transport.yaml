@@ -21,11 +21,11 @@ lookups:
     description: the bus a generator sits on
     over: generator
     into: bus
-  from:
+  link_from:
     description: the bus a link leaves
     over: link
     into: bus
-  to:
+  link_to:
     description: the bus a link arrives at
     over: link
     into: bus
@@ -38,7 +38,7 @@ parameters:
     description: cost of one unit of output
     dims: [generator]
   rating:
-    description: most a link may carry towards its `to` bus
+    description: most a link may carry towards its `link_to` bus
     dims: [link]
   neg_rating:
     description: most a link may carry the other way, negative by convention
@@ -56,8 +56,8 @@ variables:
       upper: p_nom
   f:
     description: >-
-      PyPSA's p0 — flow measured at the link's `from` end, so a positive value
-      withdraws there and injects at `to`
+      PyPSA's p0 — flow measured at the link's `link_from` end, so a positive value
+      withdraws there and injects at `link_to`
     foreach: [snapshot, link]
     bounds:
       lower: neg_rating
@@ -69,8 +69,8 @@ constraints:
     foreach: [snapshot, bus]
     expression: >-
       sum(p, by=gen_bus)
-      + sum(f, by=to)
-      - sum(f, by=from)
+      + sum(f, by=link_to)
+      - sum(f, by=link_from)
       == load
 
 objective:

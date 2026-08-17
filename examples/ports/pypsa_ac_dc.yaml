@@ -40,11 +40,11 @@ lookups:
     description: the carrier a generator burns
     over: generator
     into: carrier
-  from:
+  line_from:
     description: the bus a line leaves
     over: line
     into: bus
-  to:
+  line_to:
     description: the bus a line arrives at
     over: line
     into: bus
@@ -113,7 +113,7 @@ variables:
       lower: p_nom_min
   f:
     description: >-
-      flow on a line, signed towards its `to` bus — not chosen, but whatever
+      flow on a line, signed towards its `line_to` bus — not chosen, but whatever
       the voltage law leaves
     foreach: [snapshot, line]
   s_nom:
@@ -158,7 +158,7 @@ constraints:
     foreach: [snapshot, bus]
     expression: >-
       sum(p, by=gen_bus)
-      + sum(f, by=to) - sum(f, by=from)
+      + sum(f, by=line_to) - sum(f, by=line_from)
       + sum(g, by=link_to) - sum(g, by=link_from)
       == load
 

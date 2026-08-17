@@ -51,7 +51,7 @@ def _inputs(gens, lines, load):
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),
         'generator': gens[['generator', 'bus']].rename(columns={'bus': 'gen_bus'}),
         'bus': pd.Index(sorted(load['bus'].unique()), name='bus'),
-        'line': lines[['line', 'from_bus', 'to_bus']].rename(columns={'from_bus': 'from', 'to_bus': 'to'}),
+        'line': lines[['line', 'from_bus', 'to_bus']].rename(columns={'from_bus': 'line_from', 'to_bus': 'line_to'}),
     }
 
 
@@ -86,7 +86,7 @@ def test_sum_lowers_to_one_node_per_injection_term():
     assert c.dims == ('snapshot', 'bus')
     terms = _flatten(c.lhs)
     assert GroupSum(Variable('p'), over='generator', lookup='gen_bus', into='bus') in terms
-    assert GroupSum(Variable('f'), over='line', lookup='to', into='bus') in terms
+    assert GroupSum(Variable('f'), over='line', lookup='line_to', into='bus') in terms
 
 
 @pytest.mark.parametrize(
@@ -141,8 +141,8 @@ def test_a_lookup_over_another_dim_is_a_dim_error_not_a_resolution_one():
     message: `p` does not carry `line`.
     """
     schema = schema_of(TRANSPORT_YAML)
-    node = resolved('sum(p, by=to)', schema)
-    with pytest.raises(LanguageError, match=r"sum\(by=to\) consumes 'line', the dim the lookup is over"):
+    node = resolved('sum(p, by=line_to)', schema)
+    with pytest.raises(LanguageError, match=r"sum\(by=line_to\) consumes 'line', the dim the lookup is over"):
         _lower_expr(node, schema, 't')
 
 
