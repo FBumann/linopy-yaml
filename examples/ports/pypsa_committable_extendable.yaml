@@ -1,0 +1,90 @@
+description: >-
+  PyPSA's committable unit whose capacity is also being built: the minimum
+  output is a share of a capacity that is itself a decision, so the product of
+  the status and the capacity is linearised with a big-M the model declares
+  rather than infers. One unit is both committed and built, one is only built.
+  Optimum 21700.0, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  generator:
+    description: generating units, some of which are committed rather than merely dispatched
+    dtype: str
+
+parameters:
+  p_min_pu:
+    description: share of its built capacity a committed unit must produce while on
+    dims: [generator]
+  p_nom_max:
+    description: most capacity a generator may build
+    dims: [generator]
+  big_m:
+    description: >-
+      a bound on the output of a committed unit, large enough never to bind on
+      its own — the capacity ceiling times the availability, and present only for
+      the units that are committed at all
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  capital_cost:
+    description: cost of holding one unit of capacity over the horizon
+    dims: [generator]
+  load:
+    description: demand to be met
+    dims: [snapshot]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  p_nom:
+    description: capacity built at a generator
+    foreach: [generator]
+    bounds:
+      lower: 0
+      upper: p_nom_max
+  status:
+    description: >-
+      is this unit committed in this snapshot? Declared only for the units that
+      carry a big-M, which is what marks a unit as committed rather than merely
+      dispatched
+    foreach: [snapshot, generator]
+    where: big_m
+    domain: binary
+
+constraints:
+  within_capacity:
+    description: a generator produces no more than the capacity built for it, committed or not
+    foreach: [snapshot, generator]
+    expression: p <= p_nom
+
+  off_means_zero:
+    description: >-
+      an uncommitted unit produces nothing, and a committed one is held only by
+      the big-M — which is why the row above is the real capacity limit
+    foreach: [snapshot, generator]
+    where: big_m
+    expression: p - big_m * status <= 0
+
+  commitment_floor:
+    description: >-
+      a committed unit runs at no less than its share of the capacity built for
+      it. The share of a *variable* capacity is a product of two decisions, so it
+      is linearised: the row is slack by the whole big-M while the unit is off
+    foreach: [snapshot, generator]
+    where: big_m
+    expression: p - p_min_pu * p_nom - big_m * status >= -big_m
+
+  power_balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run, plus what its capacity costs to build
+  expression: p * marginal_cost + p_nom * capital_cost
