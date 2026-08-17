@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.174](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.173...v0.0.1-alpha.174) (2026-08-17)
+
+
+### Features
+
+* **ports:** an energy total over the whole horizon is a bound ([#936](https://github.com/fluxopt/lpspec/issues/936)) ([33fee41](https://github.com/fluxopt/lpspec/commit/33fee416e373146db9947165becd66bd3cb3ba5a))
+
 ## [0.0.1-alpha.173](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.172...v0.0.1-alpha.173) (2026-08-17)
 
 
