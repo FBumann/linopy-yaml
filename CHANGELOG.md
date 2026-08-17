@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.183](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.182...v0.0.1-alpha.183) (2026-08-17)
+
+
+### Documentation
+
+* **language:** a propagated absence is a different event from an emptied row ([#945](https://github.com/fluxopt/lpspec/issues/945)) ([409cea0](https://github.com/fluxopt/lpspec/commit/409cea0a01112547b35f6cb22e511f5d4b2bad3c))
+
 ## [0.0.1-alpha.182](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.181...v0.0.1-alpha.182) (2026-08-17)
 
 
