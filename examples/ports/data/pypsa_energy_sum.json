@@ -1,0 +1,15 @@
+{
+  "snapshot": {"snapshot": [0, 1, 2, 3]},
+  "bus": {"bus": ["hub"]},
+  "generator": {"generator": ["hydro", "contract", "gas"], "gen_bus": ["hub", "hub", "hub"]},
+  "weighting": {"snapshot": [0, 1, 2, 3], "value": [1.0, 2.0, 3.0, 2.0]},
+  "p_nom": {"generator": ["hydro", "contract", "gas"], "value": [60.0, 40.0, 100.0]},
+  "marginal_cost": {"generator": ["hydro", "contract", "gas"], "value": [5.0, 80.0, 60.0]},
+  "e_sum_max": {"generator": ["hydro"], "value": [200.0]},
+  "e_sum_min": {"generator": ["contract"], "value": [150.0]},
+  "load": {
+    "snapshot": [0, 1, 2, 3],
+    "bus": ["hub", "hub", "hub", "hub"],
+    "value": [50.0, 60.0, 80.0, 40.0]
+  }
+}
