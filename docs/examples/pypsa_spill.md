@@ -38,7 +38,7 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 | $\mathit{storage}^{\mathrm{p,nom}}$ | `storage_p_nom` over $\mathcal{S}$ --- most a storage unit may charge or discharge in one snapshot |
 | $\mathit{soc}^{\mathrm{max}}$ | `soc_max` over $\mathcal{S}$ --- how much energy a storage unit holds when full |
 | $\mathit{soc}^{\mathrm{initial}}$ | `soc_initial` over $\mathcal{S}$ --- energy in the store before the first snapshot |
-| $\mathit{inflow}$ | `inflow` over $\mathcal{T} \times \mathcal{S}$ --- energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none, which is what pins its spill to nothing |
+| $\mathit{inflow}$ | `inflow` over $\mathcal{T} \times \mathcal{S}$ --- energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none |
 | $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
 
 #### Variables
@@ -49,7 +49,7 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 | $p^{\mathrm{dispatch}}$ | `p_dispatch` over $\mathcal{T} \times \mathcal{S}$ --- power a storage unit puts onto its bus |
 | $p^{\mathrm{store}}$ | `p_store` over $\mathcal{T} \times \mathcal{S}$ --- power a storage unit takes off its bus |
 | $\mathit{soc}$ | `soc` over $\mathcal{T} \times \mathcal{S}$ --- energy in the store at the end of a snapshot |
-| $\mathit{spill}$ | `spill` over $\mathcal{T} \times \mathcal{S}$ --- inflow let go rather than kept, and never more than that snapshot's arrival — so a unit with no inflow spills nothing |
+| $\mathit{spill}$ | `spill` over $\mathcal{T} \times \mathcal{S}$ --- inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
 
 #### Objective
 
@@ -89,7 +89,7 @@ $$0 \le \mathit{soc}_{t,s} \le \mathit{soc}^{\mathrm{max}}_{s} \qquad \forall\th
 
 **`spill`**
 
-$$0 \le \mathit{spill}_{t,s} \le \mathit{inflow}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S}$$
+$$0 \le \mathit{spill}_{t,s} \le \mathit{inflow}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathit{inflow}_{t,s} \neq 0$$
 
 </details>
 <!-- math:end -->
@@ -148,7 +148,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       inflow:
         description: >-
           energy arriving at a storage unit whether or not it was wanted — zero for
-          a unit that receives none, which is what pins its spill to nothing
+          a unit that receives none
         dims: [snapshot, storage]
       load:
         description: demand at each bus in each snapshot
@@ -182,8 +182,12 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       spill:
         description: >-
           inflow let go rather than kept, and never more than that snapshot's
-          arrival — so a unit with no inflow spills nothing
+          arrival. A unit that receives no inflow has none to let go, which is a
+          spill of zero rather than a quantity with no value — so the energy
+          balance keeps its row there.
         foreach: [snapshot, storage]
+        where: "inflow != 0"
+        absence: zero
         bounds:
           lower: 0
           upper: inflow
@@ -285,27 +289,35 @@ has to go. Total gas burn is then pinned at `20 + spill` = 40 MWh, which is the
 entire objective. A port that dropped the spill variable would be **infeasible**
 rather than merely wrong — which is a better failure than most.
 
-**A variable that exists on only some rows can cost a constraint its row.**
-PyPSA masks the spill variable away for units with no inflow. Spelling that here
-as `where: inflow` on the variable, *with a sparse inflow table*, deletes the
-battery's whole energy-balance row rather than just the spill term — a
-constraint mentioning a masked variable loses the row. The battery's stored
-energy then comes from nowhere, the model still solves, and it reports **0.0**
-instead of 3200.
+**The battery has no spill decision at all**, and says so. PyPSA declares the
+spill variable only for units whose inflow is positive somewhere; the port
+matches that with `where: "inflow != 0"`, which is why `spill` has six
+coordinates rather than twelve.
 
-The trap has two halves, and only both together bite. Padding `inflow` with
-explicit zeros for the battery makes `where: inflow` a **no-op**, because a
-`where:` on a bare parameter reads *defined and finite* — and `0.0` is both. So
-the masked and unmasked spellings agree at 3200.0 on the padded table and
-disagree on the sparse one.
+That mask is only safe because of the line beside it. A constraint mentioning a
+masked variable loses its **row**, not just the term — so on its own the mask
+would delete the battery's whole energy balance, its stored energy would come
+from nowhere, and the model would report **0.0** instead of 3200. `absence: zero`
+is what says the missing coordinates hold a spill of zero rather than a quantity
+with no value, so the row stands and the term simply is not in it.
 
-The port takes the padded table and no mask, bounding spill above by `inflow` so
-it is pinned to zero where there is none. Same model, one balance block, and the
-zero rows are PyPSA's own default rather than padding invented here.
+The alternative is to bound `spill` above by `inflow` and let the zero pin it,
+which is what this port did before `absence:` existed. Same answer, six more
+columns, and a model that says *this unit's spill is zero* where it means *this
+unit does not spill*.
+
+**Why the mask compares rather than naming the parameter.** `where: inflow`
+would be a **no-op** here: a `where:` on a bare parameter reads *defined and
+finite*, and the padded `0.0` is both. The zeros cannot simply be dropped from
+the table either — `inflow` is a term on the energy balance's constant side, and
+a sparse parameter there is refused at load, since a missing row read as zero
+would be a bound rather than an absence. So the sparsity that matters is in the
+*value*, and `!= 0` is how the model asks for it.
 
 ## What it exercises
 
-A variable whose upper bound is a time-varying parameter, and an energy balance
-carrying two independent sinks. The `where:`-versus-bound choice above is the
-finding: masking and bounding-to-zero are the same model only when the variable
-appears nowhere a dropped row would matter.
+`absence: zero` on a masked variable — the declaration that keeps a row whose
+term has gone — against an energy balance carrying two independent sinks. Also
+the asymmetry underneath it: a masked **variable** takes its row, while a sparse
+**parameter** on a constant side is refused outright, so the two halves of this
+model's sparsity are spelled in two different ways.

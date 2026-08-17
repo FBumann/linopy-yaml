@@ -47,7 +47,7 @@ parameters:
   inflow:
     description: >-
       energy arriving at a storage unit whether or not it was wanted — zero for
-      a unit that receives none, which is what pins its spill to nothing
+      a unit that receives none
     dims: [snapshot, storage]
   load:
     description: demand at each bus in each snapshot
@@ -81,8 +81,12 @@ variables:
   spill:
     description: >-
       inflow let go rather than kept, and never more than that snapshot's
-      arrival — so a unit with no inflow spills nothing
+      arrival. A unit that receives no inflow has none to let go, which is a
+      spill of zero rather than a quantity with no value — so the energy
+      balance keeps its row there.
     foreach: [snapshot, storage]
+    where: "inflow != 0"
+    absence: zero
     bounds:
       lower: 0
       upper: inflow

@@ -211,6 +211,57 @@ def test_a_term_whose_variable_is_absent_is_not_a_term_worth_zero():
     )
 
 
+def test_absence_zero_says_at_the_declaration_what_two_blocks_said_at_the_rows():
+    """The rewrite the absence rules point at, moved to where the quantity is declared.
+
+    For *the row kept, the missing term read as zero* that page names two
+    constraints under complementary ``where`` clauses. A variable whose absence
+    **is** zero should reach that model from one key — and reaching it is the
+    claim, not merely matching its number: ``differential`` has already made
+    both lanes and the LP file agree before either figure comes back.
+    """
+    minimise_x = '(-1) * x'
+    two_blocks = _objective_of(
+        'x + y >= 60',
+        objective=minimise_x,
+        foreach=['f', 't'],
+        also={'c_unsized': {'foreach': ['f', 't'], 'where': 'NOT y', 'expression': 'x >= 60'}},
+    )
+
+    model = _model('x + y >= 60', objective=minimise_x, foreach=['f', 't'])
+    model['variables']['y']['absence'] = 'zero'
+    with differential(model, DATA, lp=True) as run:
+        declared = float(run.result.objective)
+
+    assert declared == pytest.approx(two_blocks, rel=RTOL), (
+        'absence: zero builds the model the two complementary blocks build'
+    )
+    assert declared == pytest.approx(-(10.0 + 10.0 + 60.0 + 60.0), rel=RTOL), (
+        'f=b keeps its row, and with y worth zero there x carries the whole 60 itself'
+    )
+
+
+def test_absence_zero_does_not_disturb_a_reduction():
+    """Out of a reduction absence never propagated, so the key changes nothing there.
+
+    ``sum(y, over=f)`` was always *the total over the y's that exist* — a
+    reduction is defined when only some of its set is. Declaring the absent
+    coordinates worth zero adds zero to that total, so the two readings have to
+    agree here even though they differ in a bare term.
+    """
+    total = 'sum(y, over=f) <= 40'
+    undefined = _objective_of(total, objective='sum(y, over=f)')
+
+    model = _model(total, objective='sum(y, over=f)')
+    model['variables']['y']['absence'] = 'zero'
+    with differential(model, DATA, lp=True) as run:
+        zero = float(run.result.objective)
+
+    assert zero == pytest.approx(undefined, rel=RTOL), (
+        'a reduction sums what exists under either reading — absence: zero adds zeros to it'
+    )
+
+
 def test_shift_and_a_filled_shift_are_different_operators():
     """``fill=`` is not decoration: it decides whether the row exists at all.
 

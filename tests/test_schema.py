@@ -106,6 +106,31 @@ def test_invalid_domain():
         Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': body}})
 
 
+def test_invalid_absence():
+    body = {'foreach': ['x'], 'where': 'p_max', 'absence': 'nan'}
+    with pytest.raises(SchemaError, match=r'undefined|zero'):
+        Model.model_validate(
+            {
+                'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
+                'parameters': {'p_max': {'dims': ['x']}},
+                'variables': {'v': body},
+            }
+        )
+
+
+def test_absence_without_a_mask_is_refused():
+    """The key describes what a *missing* coordinate means, so one must be missable.
+
+    A variable's only source of absence is its own ``where:`` — ``foreach`` is a
+    product of declared dimensions and holds every coordinate of it. Left
+    unrefused, ``absence: zero`` on an unmasked variable would read as a setting
+    that does something while doing nothing.
+    """
+    body = {'foreach': ['x'], 'absence': 'zero'}
+    with pytest.raises(SchemaError, match=r'needs a `where:`'):
+        Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': body}})
+
+
 def test_invalid_sense():
     with pytest.raises(SchemaError, match=r'minimize|maximize'):
         Model.model_validate({'objective': {'sense': 'unknown', 'expression': 'v'}})
@@ -185,7 +210,7 @@ def test_an_unknown_key_is_rejected(raw, match):
         ),
         pytest.param(
             {'foreach': ['x'], 'zzzz': 1},
-            'Valid keys: bounds, description, domain, foreach, where',
+            'Valid keys: absence, bounds, description, domain, foreach, where',
             id='anything-else-lists-the-valid-keys',
         ),
     ],

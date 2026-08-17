@@ -565,6 +565,25 @@ def test_the_plan_variable_type_matches_the_declared_domains():
     )
 
 
+def test_the_plan_absence_matches_the_declared_absence():
+    """``plan.VariableAbsence`` spells the absence set the language validates.
+
+    The same fence again, and a sharper failure: the lowering casts
+    ``vdef.absence`` straight into the plan, and the compiler tests it with
+    ``== 'undefined'``. A reading added to one home alone would arrive as a
+    string no branch recognises and be sent down the *propagating* path by
+    default — rows deleted under a spelling that asked for the opposite.
+    """
+    from typing import get_args
+
+    from lpspec.language.model import VARIABLE_ABSENCE
+    from lpspec.relational.plan import VariableAbsence
+
+    assert set(get_args(VariableAbsence)) == set(VARIABLE_ABSENCE), (
+        'the two homes of the variable absence vocabulary disagree'
+    )
+
+
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
