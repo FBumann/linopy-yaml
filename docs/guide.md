@@ -52,15 +52,15 @@ variables. → [dispatch](examples/dispatch.md), [absence](reference/language/ab
 ```yaml
 lookups:
   gen_bus: {over: generator, into: bus}  # each generator sits on a bus
-  from: {over: line, into: bus}  # both endpoints are buses
-  to: {over: line, into: bus}
+  line_from: {over: line, into: bus}  # both endpoints are buses
+  line_to: {over: line, into: bus}
 ```
 
 ```yaml
 - expression: >-
     sum(p, by=gen_bus)
-    + sum(f, by=to)
-    - sum(f, by=from)
+    + sum(f, by=line_to)
+    - sum(f, by=line_from)
     == load
 ```
 

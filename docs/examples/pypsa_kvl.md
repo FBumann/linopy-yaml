@@ -34,7 +34,7 @@ PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's volt
 | $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
 | $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
 | $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
+| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
 | $\mathcal{C}$ | index $c$ --- `cycle` --- one independent loop of the network |
 
 #### Parameters
@@ -43,7 +43,7 @@ PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's volt
 |---|---|
 | $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
 | $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- most a line may carry towards its `to` bus |
+| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- most a line may carry towards its `line_to` bus |
 | $\mathit{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ --- most a line may carry the other way, negative by convention |
 | $\mathit{cycle}^{\mathrm{incidence}}$ | `cycle_incidence` over $\mathcal{C} \times \mathcal{L}$ --- the cycle basis, as a sparse table of reactance times direction — a line may belong to several cycles, so this is a parameter over both dimensions rather than a coordinate, and rows are absent where a line is in no cycle |
 | $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
@@ -53,7 +53,7 @@ PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's volt
 | Symbol | Meaning |
 |---|---|
 | $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `to` bus — not chosen, but whatever the voltage law leaves |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
 
 #### Objective
 
@@ -63,7 +63,7 @@ $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit
 
 **`nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_from}(l) = b} f_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 **`kirchhoff_voltage_law`**
 
@@ -114,11 +114,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: the bus a generator sits on
         over: generator
         into: bus
-      from:
+      line_from:
         description: the bus a line leaves
         over: line
         into: bus
-      to:
+      line_to:
         description: the bus a line arrives at
         over: line
         into: bus
@@ -131,7 +131,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: cost of one unit of output
         dims: [generator]
       s_nom:
-        description: most a line may carry towards its `to` bus
+        description: most a line may carry towards its `line_to` bus
         dims: [line]
       neg_s_nom:
         description: most a line may carry the other way, negative by convention
@@ -155,7 +155,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           upper: p_nom
       f:
         description: >-
-          flow on a line, signed towards its `to` bus — not chosen, but whatever
+          flow on a line, signed towards its `line_to` bus — not chosen, but whatever
           the voltage law leaves
         foreach: [snapshot, line]
         bounds:
@@ -168,8 +168,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, bus]
         expression: >-
           sum(p, by=gen_bus)
-          + sum(f, by=to)
-          - sum(f, by=from)
+          + sum(f, by=line_to)
+          - sum(f, by=line_from)
           == load
 
       kirchhoff_voltage_law:
@@ -226,8 +226,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         n.add(
             'Line',
             lines.index,
-            bus0=lines['from'],
-            bus1=lines['to'],
+            bus0=lines['line_from'],
+            bus1=lines['line_to'],
             x=tables['reactance'].set_index('line')['value'],
             r=0.0,
             s_nom=tables['s_nom'].set_index('line')['value'],

@@ -2,7 +2,7 @@
   "snapshot": {"snapshot": [0, 1, 2, 3]},
   "bus": {"bus": ["north", "mid", "south"]},
   "generator": {"generator": ["wind", "gas", "oil"], "gen_bus": ["north", "mid", "south"]},
-  "link": {"link": ["north_mid", "mid_south"], "from": ["north", "mid"], "to": ["mid", "south"]},
+  "link": {"link": ["north_mid", "mid_south"], "link_from": ["north", "mid"], "link_to": ["mid", "south"]},
   "p_nom": {"generator": ["wind", "gas", "oil"], "value": [100.0, 150.0, 80.0]},
   "marginal_cost": {"generator": ["wind", "gas", "oil"], "value": [0.0, 50.0, 80.0]},
   "rating": {"link": ["north_mid", "mid_south"], "value": [60.0, 50.0]},

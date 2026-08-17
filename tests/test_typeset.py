@@ -426,7 +426,7 @@ def test_latex_binary_and_integer_variables_state_their_domain():
 def test_latex_sum_renders_the_coordinate_map_as_a_set_condition():
     tex = to_latex('examples/transport.yaml', legend=False)
     assert r'\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g}' in tex
-    assert r'\sum_{l \in \mathcal{L} \,:\, \mathrm{to}(l) = b} f_{t,l}' in tex
+    assert r'\sum_{l \in \mathcal{L} \,:\, \mathrm{line\_to}(l) = b} f_{t,l}' in tex
 
 
 def test_latex_a_sum_used_as_a_factor_is_bracketed():

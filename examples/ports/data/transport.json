@@ -34,13 +34,13 @@
     ]
   },
   "line": {
-    "from": [
+    "line_from": [
       "north"
     ],
     "line": [
       "n_to_s"
     ],
-    "to": [
+    "line_to": [
       "south"
     ]
   },

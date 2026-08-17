@@ -28,7 +28,7 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 | $\mathcal{S}$ | index $s$ --- `snapshot` --- dispatch periods |
 | $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
 | $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{L}$ | index $\ell$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, each joining two buses |
+| $\mathcal{L}$ | index $\ell$ --- `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, each joining two buses |
 
 #### Parameters
 
@@ -45,7 +45,7 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 | Symbol | Meaning |
 |---|---|
 | $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $f$ | `f` over $\mathcal{S} \times \mathcal{L}$ --- flow on a line, signed towards its `to` bus |
+| $f$ | `f` over $\mathcal{S} \times \mathcal{L}$ --- flow on a line, signed towards its `line_to` bus |
 
 #### Objective
 
@@ -55,7 +55,7 @@ $$\min \sum_{s \in \mathcal{S},\enspace g \in \mathcal{G}} p_{s,g} \cdot c_{g}$$
 
 **`balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{s,g} + \sum_{\ell \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(\ell) = b} f_{s,\ell} - \left( \sum_{\ell \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(\ell) = b} f_{s,\ell} \right) = d_{s,b} \qquad \forall\thinspace s \in \mathcal{S},\enspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{s,g} + \sum_{\ell \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_to}(\ell) = b} f_{s,\ell} - \left( \sum_{\ell \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_from}(\ell) = b} f_{s,\ell} \right) = d_{s,b} \qquad \forall\thinspace s \in \mathcal{S},\enspace b \in \mathcal{B}$$
 
 #### Variable domains
 
@@ -99,11 +99,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: the bus a generator sits on
         over: generator
         into: bus
-      from:
+      line_from:
         description: the bus a line leaves
         over: line
         into: bus
-      to:
+      line_to:
         description: the bus a line arrives at
         over: line
         into: bus
@@ -133,7 +133,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           lower: 0
           upper: p_max
       f:
-        description: flow on a line, signed towards its `to` bus
+        description: flow on a line, signed towards its `line_to` bus
         foreach: [snapshot, line]
         bounds:
           lower: neg_cap
@@ -144,7 +144,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         expression: sum(p, by=gen_bus)
         description: what the generators sitting on a bus produce there
       net_inflow:
-        expression: sum(f, by=to) - sum(f, by=from)
+        expression: sum(f, by=line_to) - sum(f, by=line_from)
         description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
     constraints:
@@ -187,7 +187,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         for gen, bus in zip(tables['generator']['generator'], tables['generator']['gen_bus'], strict=True):
             gen_at.loc[bus, gen] = 1.0
         flow_in = pd.DataFrame(0.0, index=buses, columns=cap.index)
-        for line, src, dst in zip(tables['line']['line'], tables['line']['from'], tables['line']['to'], strict=True):
+        for line, src, dst in zip(
+            tables['line']['line'], tables['line']['line_from'], tables['line']['line_to'], strict=True
+        ):
             flow_in.loc[dst, line] += 1.0
             flow_in.loc[src, line] -= 1.0
 
@@ -205,9 +207,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 ## What it exercises
 
 Three `sum(by=)` calls, and they are what a network *is* in this language.
-A model can declare **lookups** — `gen_bus` maps `generator` onto `bus`, `from`
-and `to` map `line` — and `sum(f, by=to)` sums along a
-line's `to` lookup, landing the result on `bus`. The same `f` is summed
+A model can declare **lookups** — `gen_bus` maps `generator` onto `bus`, `line_from`
+and `line_to` map `line` — and `sum(f, by=line_to)` sums along a
+line's `line_to` lookup, landing the result on `bus`. The same `f` is summed
 twice through two different lookups, once as an inflow and once as an
 outflow.
 

@@ -2,7 +2,7 @@
   "snapshot": {"snapshot": [0, 1, 2, 3]},
   "bus": {"bus": ["north", "mid", "south"]},
   "generator": {"generator": ["wind", "gas", "oil"], "gen_bus": ["north", "mid", "south"]},
-  "line": {"line": ["north_mid", "mid_south", "south_north"], "from": ["north", "mid", "south"], "to": ["mid", "south", "north"]},
+  "line": {"line": ["north_mid", "mid_south", "south_north"], "line_from": ["north", "mid", "south"], "line_to": ["mid", "south", "north"]},
   "cycle": {"cycle": ["c0"]},
 
   "p_nom": {"generator": ["wind", "gas", "oil"], "value": [100.0, 150.0, 80.0]},

@@ -57,7 +57,7 @@ def _drop_offer(sources: dict, offer: str) -> dict:
 
 def _repoint_dangling(sources: dict) -> dict:
     sources['line'] = sources['line'].with_columns(
-        pl.when(pl.col('line') == 'l4').then(pl.lit('b1')).otherwise(pl.col('to')).alias('to')
+        pl.when(pl.col('line') == 'l4').then(pl.lit('b1')).otherwise(pl.col('line_to')).alias('line_to')
     )
     return sources
 
@@ -102,9 +102,11 @@ def test_the_instance_actually_holds_every_shape():
         'the offer set is three-legged — the k-ary case'
     )
     line = port_sources('reserves')['line']
-    endpoints = line.select('from', 'to').to_dicts()
-    assert endpoints.count({'from': 'b2', 'to': 'b1'}) == 2, 'l1 and l2 are parallel edges between one bus pair'
-    assert any(row['to'] is None for row in endpoints), 'l4 dangles: a null leg is a declared open end'
+    endpoints = line.select('line_from', 'line_to').to_dicts()
+    assert endpoints.count({'line_from': 'b2', 'line_to': 'b1'}) == 2, (
+        'l1 and l2 are parallel edges between one bus pair'
+    )
+    assert any(row['line_to'] is None for row in endpoints), 'l4 dangles: a null leg is a declared open end'
     zones_of_g2 = port_sources('reserves')['zone_share'].filter(pl.col('generator') == 'g2')
     assert zones_of_g2.height == 2, 'g2 backs two zones — membership is many-to-many'
     assert set(zones_of_g2['value'].to_list()) == {0.5, 1.0}, 'and at different weights, so the value is a weight'

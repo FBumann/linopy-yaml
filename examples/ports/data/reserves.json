@@ -2,8 +2,8 @@
   "generator": {"generator": ["g1", "g2", "g3"], "gen_bus": ["b1", "b2", "b2"]},
   "line": {
     "line": ["l1", "l2", "l3", "l4"],
-    "from": ["b2", "b2", "b1", "b2"],
-    "to": ["b1", "b1", "b2", null]
+    "line_from": ["b2", "b2", "b1", "b2"],
+    "line_to": ["b1", "b1", "b2", null]
   },
   "offer": {
     "offer": ["o1", "o2", "o3", "o4", "o5"],

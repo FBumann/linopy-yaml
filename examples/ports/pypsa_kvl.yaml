@@ -25,11 +25,11 @@ lookups:
     description: the bus a generator sits on
     over: generator
     into: bus
-  from:
+  line_from:
     description: the bus a line leaves
     over: line
     into: bus
-  to:
+  line_to:
     description: the bus a line arrives at
     over: line
     into: bus
@@ -42,7 +42,7 @@ parameters:
     description: cost of one unit of output
     dims: [generator]
   s_nom:
-    description: most a line may carry towards its `to` bus
+    description: most a line may carry towards its `line_to` bus
     dims: [line]
   neg_s_nom:
     description: most a line may carry the other way, negative by convention
@@ -66,7 +66,7 @@ variables:
       upper: p_nom
   f:
     description: >-
-      flow on a line, signed towards its `to` bus — not chosen, but whatever
+      flow on a line, signed towards its `line_to` bus — not chosen, but whatever
       the voltage law leaves
     foreach: [snapshot, line]
     bounds:
@@ -79,8 +79,8 @@ constraints:
     foreach: [snapshot, bus]
     expression: >-
       sum(p, by=gen_bus)
-      + sum(f, by=to)
-      - sum(f, by=from)
+      + sum(f, by=line_to)
+      - sum(f, by=line_from)
       == load
 
   kirchhoff_voltage_law:

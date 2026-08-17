@@ -70,8 +70,8 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Link',
         links.index,
-        bus0=links['from'],
-        bus1=links['to'],
+        bus0=links['link_from'],
+        bus1=links['link_to'],
         p_nom=tables['rating'].set_index('link')['value'],
         p_min_pu=-1.0,
         efficiency=1.0,
