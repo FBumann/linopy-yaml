@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.184](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.183...v0.0.1-alpha.184) (2026-08-17)
+
+
+### Features
+
+* **ports:** a transmission loss is a fan of tangents, not a piecewise curve ([#964](https://github.com/fluxopt/lpspec/issues/964)) ([3fb4079](https://github.com/fluxopt/lpspec/commit/3fb40799c94c16fb4d9e7cf129de293a5fbc265c))
+
 ## [0.0.1-alpha.183](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.182...v0.0.1-alpha.183) (2026-08-17)
 
 
