@@ -1,0 +1,141 @@
+description: >-
+  PyPSA transmission losses, tangent form: the quadratic loss on a line,
+  underestimated from below by a fan of tangent half-planes and subtracted half
+  at each end. No auxiliary variable and no piecewise construct — a tangent is
+  one linear row per segment and per sign of the flow.
+  Optimum 3692.705905599654, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  bus:
+    description: network nodes
+    dtype: str
+  generator:
+    description: generating units, each sitting on one bus
+    dtype: str
+  line:
+    description: passive branches, each joining two buses
+    dtype: str
+  segment:
+    description: the tangent points the loss curve is approximated at
+    dtype: int
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  from:
+    description: the bus a line leaves
+    over: line
+    into: bus
+  to:
+    description: the bus a line arrives at
+    over: line
+    into: bus
+
+parameters:
+  p_nom:
+    description: installed capacity of a generator
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  s_nom:
+    description: most a line may carry towards its `to` bus
+    dims: [line]
+  neg_s_nom:
+    description: most a line may carry the other way, negative by convention
+    dims: [line]
+  loss_max:
+    description: >-
+      the loss at a line's rating — the top of the curve being approximated,
+      carried as a column because a bound takes a name or a number, and given
+      only for the lines that dissipate anything
+    dims: [line]
+  tangent_slope:
+    description: >-
+      the slope of the loss curve at this segment's tangent point, twice the
+      resistance times the flow there
+    dims: [line, segment]
+  tangent_offset:
+    description: >-
+      where that tangent meets the loss axis — negative, because a tangent to a
+      convex curve through the origin lies below it
+    dims: [line, segment]
+  load:
+    description: demand at each bus in each snapshot
+    dims: [snapshot, bus]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_nom
+  f:
+    description: >-
+      flow on a line, signed towards its `to` bus — unbounded here, because the
+      rating covers the flow *and* its loss and so is a row rather than a bound
+    foreach: [snapshot, line]
+  loss:
+    description: >-
+      the energy a line dissipates carrying its flow — pushed down by the
+      objective and held up by the tangents, so it settles on the approximated
+      curve rather than needing an equality of its own. A line with no
+      resistance dissipates nothing, which is a loss of zero rather than a
+      quantity with no value, so the balances and ratings that name it keep
+      their rows.
+    foreach: [snapshot, line]
+    where: loss_max
+    absence: zero
+    bounds:
+      lower: 0
+      upper: loss_max
+
+constraints:
+  nodal_balance:
+    description: >-
+      what is generated at a bus plus what arrives over the lines meets the load
+      there, less half of each incident line's loss — PyPSA's convention is that
+      a branch dissipates half at either end
+    foreach: [snapshot, bus]
+    expression: >-
+      sum(p, by=gen_bus)
+      + sum(f, by=to) - sum(f, by=from)
+      - 0.5 * sum(loss, by=from) - 0.5 * sum(loss, by=to)
+      == load
+
+  within_rating_forward:
+    description: >-
+      a line's rating limits what it carries plus what it dissipates, so the
+      loss eats into the capacity rather than riding on top of it
+    foreach: [snapshot, line]
+    expression: f + loss <= s_nom
+
+  within_rating_reverse:
+    description: the same limit for flow the other way
+    foreach: [snapshot, line]
+    expression: f - loss >= neg_s_nom
+
+  loss_above_tangent_forward:
+    description: >-
+      the loss sits above every tangent to its curve, which for a convex curve
+      is the whole approximation. Only the lines that have a curve get a fan.
+    foreach: [snapshot, line, segment]
+    where: loss_max
+    expression: loss + tangent_slope * f >= tangent_offset
+
+  loss_above_tangent_reverse:
+    description: the same fan mirrored, because the loss depends on the flow's magnitude
+    foreach: [snapshot, line, segment]
+    where: loss_max
+    expression: loss - tangent_slope * f >= tangent_offset
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run; the losses are paid for as extra generation
+  expression: p * marginal_cost
