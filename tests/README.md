@@ -17,20 +17,28 @@ fraction of the claim.
 that did not come from us (`conftest.port`, `references.json`) — data and
 reference committed *because* the provenance is external.
 
-**A dual is checked against a recording, never against the other lane.** Two
-lanes need not agree on one: an LP with alternative optima has more than one
-optimal dual solution, and they hand HiGHS the same rows in a different order,
-so it settles on a different basis — `genx_piecewise_fuel` matches on the
-objective and disagrees on a quarter of one dual vector ([#992]). Comparing
-them would be a flaky test by construction rather than a strict one, and the
-same holds for primal vectors, which are compared nowhere.
+**Across the lanes, compare the model — not the answer.** The corpus sweep
+compares the two lanes' **coefficient matrices**, constraint by constraint,
+canonically: each constraint as the sorted multiset of its rows, each row as
+the sorted multiset of its coefficients, so the claim survives the two lanes
+numbering rows and columns in their own declaration order. Structure exactly,
+values to a tolerance — the same coefficient reached by a different order of
+operations differs in its last bit, and that is not a difference in the model.
+
+That is the strongest cross-lane claim available, and the one an *answer*
+cannot make. An LP with alternative optima has many optimal primal and dual
+solutions, so comparing answers compares which vertex a solver happened to
+reach: `genx_piecewise_fuel` agrees on the objective to nine decimals and
+disagrees on a quarter of one dual vector, while its two matrices are
+identical to the entry ([#992]). Duals and primals are therefore **never**
+compared lane to lane.
 
 A *recorded* dual is a different claim: that this instance has a **unique**
 one, which is a property of the instance and something a port designs for
-(#938 moved a bound off the optimum to get it). Both lanes therefore owe it
-the same answer, and both are asked — `test_ports` of the relational lane,
-`test_corpus_parity` of the eager one, which is linopy-free `test_ports`
-cannot reach.
+(#938 moved a bound off the optimum to get it). Both lanes owe it the same
+answer, and both are asked — `test_ports` of the relational lane,
+`test_corpus_parity` of the eager one, which linopy-free `test_ports` cannot
+reach.
 
 [#992]: https://github.com/fluxopt/lpspec/pull/992
 
