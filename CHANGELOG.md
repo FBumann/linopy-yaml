@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.186](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.185...v0.0.1-alpha.186) (2026-08-17)
+
+
+### Features
+
+* **ports:** a link may deliver later than it withdrew ([#980](https://github.com/fluxopt/lpspec/issues/980)) ([6e599eb](https://github.com/fluxopt/lpspec/commit/6e599eb94a4b825408aae7eeead48e2e2d93f6f6))
+
 ## [0.0.1-alpha.185](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.184...v0.0.1-alpha.185) (2026-08-17)
 
 
