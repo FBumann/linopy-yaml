@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.178](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.177...v0.0.1-alpha.178) (2026-08-17)
+
+
+### Bug Fixes
+
+* **examples:** the ports row is one row, not three merges of it ([#958](https://github.com/fluxopt/lpspec/issues/958)) ([eb7926b](https://github.com/fluxopt/lpspec/commit/eb7926bd10aa725c12346d2b3e109474e9642c8d))
+
 ## [0.0.1-alpha.177](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.176...v0.0.1-alpha.177) (2026-08-17)
 
 
