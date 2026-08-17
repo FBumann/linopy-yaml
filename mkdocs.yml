@@ -69,6 +69,7 @@ nav:
           - energy totals: examples/pypsa_energy_sum.md
           - fixed by data: examples/pypsa_fixed.md
           - spillage: examples/pypsa_spill.md
+          - the Store component: examples/pypsa_store.md
       - Published optima:
           - Dantzig transport: examples/transport_dantzig.md
           - Dantzig, economies of scale: examples/transport_pwl.md

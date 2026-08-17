@@ -26,13 +26,17 @@ reference implementation. This directory is the source; that is the guided tour.
 | `operators/` | one minimal model per operator in [the operator reference](../docs/reference/language/operators.md), which is where the math on that page comes from |
 <<<<<<< HEAD
 <<<<<<< HEAD
-| `ports/` | 21 models somebody else already solved, checked against an optimum that did not come from us |
+<<<<<<< HEAD
+| `ports/` | 22 models somebody else already solved, checked against an optimum that did not come from us |
 =======
 | `ports/` | eighteen models somebody else already solved, checked against an optimum that did not come from us |
 >>>>>>> 588eb37c (feat(ports): a dispatch or a capacity fixed by data pins only the rows it has)
 =======
 | `ports/` | eighteen models somebody else already solved, checked against an optimum that did not come from us |
 >>>>>>> 32fc5846 (feat(ports): storage that may spill has a second sink)
+=======
+| `ports/` | eighteen models somebody else already solved, checked against an optimum that did not come from us |
+>>>>>>> 51177083 (feat(ports): a Store is one signed power with no rating of its own)
 
 `walkthrough.py` runs one model through YAML → schema → AST → plan → frames →
 LP text → solution, printing what each stage produces, then two models the

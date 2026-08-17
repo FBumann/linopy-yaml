@@ -1,0 +1,17 @@
+{
+  "snapshot": {"snapshot": [0, 1, 2, 3, 4, 5]},
+  "bus": {"bus": ["hub"]},
+  "generator": {"generator": ["cheap", "gas"], "gen_bus": ["hub", "hub"]},
+  "store": {"store": ["tank"], "store_bus": ["hub"]},
+  "p_nom": {"generator": ["cheap", "gas"], "value": [40.0, 100.0]},
+  "marginal_cost": {"generator": ["cheap", "gas"], "value": [10.0, 90.0]},
+  "e_nom_max": {"store": ["tank"], "value": [200.0]},
+  "e_capital_cost": {"store": ["tank"], "value": [5.0]},
+  "e_initial": {"store": ["tank"], "value": [0.0]},
+  "standing_loss": {"store": ["tank"], "value": [0.05]},
+  "load": {
+    "snapshot": [0, 1, 2, 3, 4, 5],
+    "bus": ["hub", "hub", "hub", "hub", "hub", "hub"],
+    "value": [20.0, 20.0, 20.0, 70.0, 70.0, 20.0]
+  }
+}
