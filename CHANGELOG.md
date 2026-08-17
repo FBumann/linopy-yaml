@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.172](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.171...v0.0.1-alpha.172) (2026-08-17)
+
+
+### Bug Fixes
+
+* **language:** a lookup's map says how labels map, not which exist ([#937](https://github.com/fluxopt/lpspec/issues/937)) ([c50596f](https://github.com/fluxopt/lpspec/commit/c50596f4c8816f8537849d09c532893165485480))
+
 ## [0.0.1-alpha.171](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.170...v0.0.1-alpha.171) (2026-08-17)
 
 
