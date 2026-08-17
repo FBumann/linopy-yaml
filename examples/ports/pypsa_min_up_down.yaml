@@ -1,0 +1,118 @@
+description: >-
+  PyPSA minimum up and down times: a unit that has started must stay on, and one
+  that has stopped must stay off. Each window is a backward-looking sum whose
+  length is a property of the generator, and the three units here carry
+  different lengths. Optimum 32750.0, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  generator:
+    description: generating units, each either committed or off
+    dtype: str
+
+parameters:
+  p_nom:
+    description: installed capacity of a generator
+    dims: [generator]
+  p_min_pu:
+    description: share of capacity a committed unit must produce at least
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of output
+    dims: [generator]
+  start_up_cost:
+    description: what bringing a unit up costs, once per start
+    dims: [generator]
+  shut_down_cost:
+    description: what taking a unit down costs, once per stop
+    dims: [generator]
+  min_up_time:
+    description: how many snapshots a unit must stay on once it has started
+    dims: [generator]
+    dtype: int
+  min_down_time:
+    description: how many snapshots a unit must stay off once it has stopped
+    dims: [generator]
+    dtype: int
+  load:
+    description: demand to be met
+    dims: [snapshot]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+  status:
+    description: is this unit committed in this snapshot?
+    foreach: [snapshot, generator]
+    domain: binary
+  start_up:
+    description: does this unit come up entering this snapshot?
+    foreach: [snapshot, generator]
+    domain: binary
+  shut_down:
+    description: does this unit go down entering this snapshot?
+    foreach: [snapshot, generator]
+    domain: binary
+
+constraints:
+  power_balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+
+  commitment_max:
+    description: a committed unit runs at no more than its capacity, an uncommitted one at zero
+    foreach: [snapshot, generator]
+    expression: p - p_nom * status <= 0
+
+  commitment_min:
+    description: a committed unit runs at no less than its minimum, an uncommitted one at zero
+    foreach: [snapshot, generator]
+    expression: p - p_min_pu * p_nom * status >= 0
+
+  start_up_initial:
+    description: >-
+      every unit begins the horizon off, so one that is committed in the first
+      snapshot pays for the start
+    foreach: [snapshot, generator]
+    where: "snapshot == 0"
+    expression: start_up - status >= 0
+
+  start_up:
+    description: a unit whose status rises entering this snapshot pays for a start
+    foreach: [snapshot, generator]
+    expression: start_up - status + shift(status, over=snapshot, by=1) >= 0
+
+  shut_down:
+    description: >-
+      a unit whose status falls entering this snapshot pays for a stop. There is
+      no first-snapshot counterpart: a unit that begins off has nothing to stop,
+      and the row PyPSA emits there holds for every value of both variables.
+    foreach: [snapshot, generator]
+    expression: shut_down + status - shift(status, over=snapshot, by=1) >= 0
+
+  min_up_time:
+    description: >-
+      over the last `min_up_time` snapshots a unit may have started at most as
+      often as it is running now — which is what stops it starting and stopping
+      again inside its own window
+    foreach: [snapshot, generator]
+    where: "snapshot > 0"
+    expression: sum_back(start_up, over=snapshot, within=min_up_time) <= status
+
+  min_down_time:
+    description: >-
+      the mirror: having stopped inside the window and running now cannot both
+      be true
+    foreach: [snapshot, generator]
+    where: "snapshot > 0"
+    expression: status + sum_back(shut_down, over=snapshot, within=min_down_time) <= 1
+
+objective:
+  sense: minimize
+  description: what the fleet costs to run, plus what its starts and stops cost
+  expression: p * marginal_cost + start_up * start_up_cost + shut_down * shut_down_cost

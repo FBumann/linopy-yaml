@@ -64,6 +64,7 @@ nav:
           - rung 6 — AC-DC, two coordinates: examples/pypsa_ac_dc.md
       - PyPSA components and modes:
           - unit commitment: examples/pypsa_unit_commitment.md
+          - minimum up and down times: examples/pypsa_min_up_down.md
           - multi-link: examples/pypsa_multilink.md
           - modular capacity: examples/pypsa_modular.md
           - energy totals: examples/pypsa_energy_sum.md

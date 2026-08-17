@@ -1,0 +1,12 @@
+{
+  "snapshot": {"snapshot": [0, 1, 2, 3, 4, 5, 6, 7]},
+  "generator": {"generator": ["base", "mid", "peak"]},
+  "p_nom": {"generator": ["base", "mid", "peak"], "value": [60.0, 50.0, 100.0]},
+  "p_min_pu": {"generator": ["base", "mid", "peak"], "value": [0.4, 0.3, 0.0]},
+  "marginal_cost": {"generator": ["base", "mid", "peak"], "value": [30.0, 60.0, 200.0]},
+  "start_up_cost": {"generator": ["base", "mid", "peak"], "value": [500.0, 200.0, 0.0]},
+  "shut_down_cost": {"generator": ["base", "mid", "peak"], "value": [200.0, 100.0, 0.0]},
+  "min_up_time": {"generator": ["base", "mid", "peak"], "value": [3, 2, 1]},
+  "min_down_time": {"generator": ["base", "mid", "peak"], "value": [2, 1, 1]},
+  "load": {"snapshot": [0, 1, 2, 3, 4, 5, 6, 7], "value": [120.0, 40.0, 40.0, 130.0, 40.0, 40.0, 130.0, 40.0]}
+}

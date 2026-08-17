@@ -479,9 +479,8 @@ integral.
 commitment variables, and the 24 hours are a representative period that repeats,
 so `shift(edge='wrap')` is exactly right: hour 1 follows hour 24. The six-hour
 minimum up and down times are the same for both plants, so they expand as six
-shifted terms — the macro form the ledger describes. Where the times differ by
-plant, the window becomes an incidence table instead
-([#791](https://github.com/fluxopt/lpspec/issues/791)).
+shifted terms. Where they differ by plant, `sum_back(within=)` reads the width
+off the column — [minimum up and down times](pypsa_min_up_down.md).
 
 **Negative emissions are a coefficient, not a special case.** The biomass plant
 captures 90% of its carbon and the fuel counts its own uptake, so a burned

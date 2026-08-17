@@ -43,6 +43,7 @@ Every page starts from data in the shape the call wants, and
 | | |
 |---|---|
 | [unit commitment](pypsa_unit_commitment.md) | Which generators are *on*, not just how much they produce — a binary per generator per snapshot, with start-up and shut-down charges. |
+| [minimum up and down times](pypsa_min_up_down.md) | A unit that has started must stay on; one that has stopped must stay off. |
 | [multi-link](pypsa_multilink.md) | One `Link`, one input bus, several output buses, each output derated by its own efficiency — PyPSA's spelling for a CHP plant, an electrolyser with waste heat, any conversion with more than one product. |
 | [modular capacity](pypsa_modular.md) | Capacity that comes in whole modules: an integer count decides it, not a continuous bound. |
 | [energy totals](pypsa_energy_sum.md) | A generator's dispatch reduced over every snapshot and bounded: a contracted delivery, a reservoir's season. |
@@ -101,6 +102,7 @@ drift from what the engine builds.
 | [pypsa_energy_sum](pypsa_energy_sum.md) | **✔** 21400 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_fixed](pypsa_fixed.md) | **✔** 49900 | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
+| [pypsa_min_up_down](pypsa_min_up_down.md) | **✔** 32750 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | **✓** |
 | [pypsa_modular](pypsa_modular.md) | **✔** 56700 | · | **✓** | · | · | · | · | **✓** | · | · | **✓** |
 | [pypsa_multilink](pypsa_multilink.md) | **✔** 1100 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_ramp](pypsa_ramp.md) | **✔** 18200 | · | **✓** | · | **✓** | · | · | **✓** | · | · | · |
@@ -161,6 +163,7 @@ that class, and the evidence behind
 | [pypsa_energy_sum](pypsa_energy_sum.md) | 21400.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_energy_sum.py |
 | [pypsa_fixed](pypsa_fixed.md) | 49900.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_fixed.py |
 | [pypsa_kvl](pypsa_kvl.md) | 17000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py |
+| [pypsa_min_up_down](pypsa_min_up_down.md) | 32750.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_min_up_down.py |
 | [pypsa_modular](pypsa_modular.md) | 56700.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_modular.py |
 | [pypsa_multilink](pypsa_multilink.md) | 1100.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_multilink.py |
 | [pypsa_ramp](pypsa_ramp.md) | 18200.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py |
@@ -255,51 +258,14 @@ macro, primitive, or escape.
 | Port | What could not be said | Worked around by | Verdict |
 |---|---|---|---|
 | PyPSA rung 1 | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/lpspec/issues/31). A second model asking for it |
-| PyPSA unit commitment | `min_up_time` — a unit that starts must stay up for *T* snapshots | left at 0, so the constraint is not written | **sayable**, and the row used to say otherwise — below |
 | Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut, which is how every serious TSP code works | [MTZ](tsp_mtz.md), O(n²) and static | **refused, and correctly**: a solve loop is an algorithm, not a model |
 
-`min_up_time` is the row worth reading twice, because it was **wrong** until
-recently and the correction is instructive. The constraint is
-`sum(start_up over the last T snapshots) <= status`. For a *single T fixed in
-the file* that is `start_up + shift(start_up, over=snapshot, by=1, edge=0) + …`
-— a **macro**, free, and `edge=0` because a window reaching before the horizon
-is short a term rather than undefined ([law 8](../reference/language/index.md#ten-rules-the-language-reduces-to)).
+`min_up_time` was the third row until
+[minimum up and down times](pypsa_min_up_down.md) ported it:
+`sum_back(start_up, over=snapshot, within=min_up_time)`, each generator's own
+width read off the column.
 
-For PyPSA's actual signature, where `T` is a column and each generator may have
-its own, this row used to claim the constraint was refused by design, because
-the number of *terms* is read from data. That confused a spelling with the
-constraint. No chain of shifts can be written down — but the window is a
-relation between snapshots, one row per pair inside it, and a relation is an
-incidence table:
-
-```yaml
-lookups:
-  same_moment: {over: snapshot_from, into: snapshot}
-constraints:
-  a_start_turns_it_on:
-    foreach: [unit, snapshot_from]
-    expression: >-
-      started >= at(on, by=same_moment)
-      - shift(at(on, by=same_moment), over=snapshot_from, by=1, edge=0)
-  stays_up_its_own_time:
-    foreach: [unit, snapshot]
-    expression: sum(started * window, over=snapshot_from) <= on
-```
-
-with `window[unit, snapshot, snapshot_from]` built in data preparation. That is
-the shape [`pypsa_kvl`](pypsa_kvl.md) already uses for a cycle basis and
-[UTOPIA](osemosys_utopia.md) for an operational life. The plan's *shape* is
-fixed before any data is read; only its cardinality comes from data, which is
-as true of `foreach: [snapshot]`.
-
-**What it costs is one mirror of the snapshot axis** — the window sum is taken
-on `snapshot_from` while capacity and cost are rows on `snapshot`, and
-[`tsp_mtz`](tsp_mtz.md) carries a mirror for the same reason. It costs nothing
-else: `snapshot_from` maps back to `snapshot` single-valuedly, so the mirror is
-a **lookup**, and `at()` reads the commitment across it. No second commitment
-variable, no identity table. A cost, then, and a small one — not a refusal.
-
-Three rows from 22 ports — a rate worth watching once the corpus has hit
+Two rows from 23 ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 ### Shapes still without a witness
