@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.203](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.202...v0.0.1-alpha.203) (2026-08-18)
+
+
+### Features
+
+* **ports:** a data column decides which boundary regime a storage obeys ([#1038](https://github.com/fluxopt/lpspec/issues/1038)) ([9879cde](https://github.com/fluxopt/lpspec/commit/9879cde42fa4218fd144a9538289a6dbac6dd163))
+
 ## [0.0.1-alpha.202](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.201...v0.0.1-alpha.202) (2026-08-18)
 
 
