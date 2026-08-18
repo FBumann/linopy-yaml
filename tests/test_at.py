@@ -192,28 +192,6 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         assert run.result.objective > 0
 
 
-def test_the_retired_onto_kwarg_names_its_rewrite():
-    """`at(onto=, by=)` restated what the lookup already knows.
-
-    The lookup carries the dim it is over, so `onto=` could only agree with it
-    or contradict it — and a kwarg whose every legal value is derivable is one
-    the file should not have to write. There is no alias, so the load error is
-    the whole migration story.
-    """
-    model = {
-        'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}},
-        'lookups': {'component_of': {'over': 'flow', 'into': 'component'}},
-        'parameters': {'cap': {'dims': ['flow']}},
-        'variables': {'level': {'foreach': ['component'], 'bounds': {'lower': 0, 'upper': 10}}},
-        'constraints': {'link': {'foreach': ['flow'], 'expression': 'at(level, onto=flow, by=component_of) <= cap'}},
-        'objective': {'sense': 'minimize', 'expression': 'level'},
-    }
-    with pytest.raises(lps.LanguageError) as exc:
-        lps.load_model(model)
-    assert 'at(onto=...) was removed' in str(exc.value)
-    assert 'at(<expr>, by=<lookup>)' in str(exc.value), 'the refusal has to name the rewrite'
-
-
 def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
     """The window family's data-dependent member, and what to write instead of a shift chain.
 

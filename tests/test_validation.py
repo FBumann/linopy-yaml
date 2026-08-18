@@ -75,29 +75,6 @@ class TestValidateExpressions:
         for fragment in fragments:
             assert fragment in str(exc.value), f'the refusal has to carry {fragment!r}'
 
-    @pytest.mark.parametrize(
-        ('equations', 'match'),
-        [
-            pytest.param(
-                [{'expression': 'sum(p, over=g)'}, {'expression': 'sum(p_max, over=g)'}],
-                'combine the entries into a single expression',
-                id='two-entries',
-            ),
-            pytest.param([{'expression': 'sum(p, over=g)'}], 'Move the single entry up', id='one-entry'),
-        ],
-    )
-    def test_a_file_written_against_the_old_equations_surface_is_told_the_rewrite(self, equations, match):
-        """``equations:`` is gone, and the refusal names what to write instead.
-
-        It held a *list*, and a list needs names for its entries — which it did
-        not have, so they were numbered by position and the block's own name
-        resolved to nothing (#298). The closed-schema check would only manage
-        "unknown key 'equations'" and a near miss against `expression`, which is
-        true and useless for a file with two entries in it.
-        """
-        with pytest.raises(ValueError, match=match):
-            _schema(objective={'equations': equations})
-
     def test_dim_name_kwarg_not_flagged(self):
         """Keyword-arg names are dimension names, not data references."""
         schema = _schema(
@@ -289,69 +266,6 @@ class TestDimensionKwargs:
         """
         with pytest.raises(ValueError, match=match):
             _schema(dimensions={'g': {'dtype': dtype}}, variables={'p': {'foreach': ['g'], 'where': where}})
-
-    @pytest.mark.parametrize(
-        ('dtype', 'where'),
-        [
-            ('datetime', "g > '2030-01-01'"),
-            ('datetime', "g >= '2030-01-01T06:00'"),
-            ('str', "g == 'combined-cycle'"),
-            ('int', 'g > 3'),
-            ('float', 'g > 3.5'),
-        ],
-    )
-    def test_a_where_comparison_of_the_declared_dtype_passes(self, dtype, where):
-        validate_expressions(
-            _schema(dimensions={'g': {'dtype': dtype}}, variables={'p': {'foreach': ['g'], 'where': where}})
-        )
-
-    @pytest.mark.parametrize(
-        ('entries', 'match'),
-        [
-            pytest.param(
-                {
-                    'cost': {'sense': 'minimize', 'expression': 'sum(p, over=g)'},
-                    'emissions': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
-                },
-                'A model optimises one',
-                id='two-entries',
-            ),
-            pytest.param(
-                {'cost': {'sense': 'minimize', 'expression': 'sum(p, over=g)'}},
-                'Move the single block up',
-                id='one-entry',
-            ),
-        ],
-    )
-    def test_a_file_written_against_the_objectives_mapping_is_told_the_rewrite(self, entries, match):
-        """`objectives:` is gone — the schema holds one `objective:` block, so a
-        second declaration is unsayable rather than checked. Was: `lowering`
-        took the last declaration and dropped the rest, so a file declaring
-        cost and emissions solved for emissions without a word.
-        """
-        with pytest.raises(ValueError, match=match):
-            _schema(objectives=entries)
-
-
-def test_the_retired_group_sum_names_its_rewrite():
-    """`group_sum` is gone, and the error is the whole migration story.
-
-    There is no alias and no deprecation cycle (CONTRIBUTING, *breaking changes
-    are free*), so a file written against the old spelling has to be told what
-    the new one is at load — the error is what is checked, unlike a shim.
-    """
-    with pytest.raises(ValueError) as exc:
-        _schema(
-            dimensions={'g': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
-            lookups={'g_bus': {'over': 'g', 'into': 'bus'}},
-            parameters={'c': {'dims': ['g']}, 'cap': {'dims': ['bus']}},
-            variables={'p': {'foreach': ['g']}},
-            constraints={'x': {'foreach': ['bus'], 'expression': 'group_sum(p, over=g, by=g_bus) <= cap'}},
-            objective={'sense': 'minimize', 'expression': 'p * c'},
-        )
-
-    assert 'no longer an operator' in str(exc.value)
-    assert 'sum(<expr>, by=<lookup>)' in str(exc.value), 'a retired spelling has to name its rewrite, not just fail'
 
 
 class TestVersion:

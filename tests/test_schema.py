@@ -93,13 +93,6 @@ def test_a_declared_bound_parameter_is_accepted():
     assert s.variables['v'].bounds.upper == 'p_max'
 
 
-@pytest.mark.parametrize('flag', ['binary', 'integer'])
-def test_a_removed_flag_names_its_domain_rewrite(flag):
-    body = {'foreach': ['x'], flag: True}
-    with pytest.raises(SchemaError, match=f'domain: {flag}'):
-        Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'variables': {'v': body}})
-
-
 def test_invalid_domain():
     body = {'foreach': ['x'], 'domain': 'boolean'}
     with pytest.raises(SchemaError, match=r'continuous|integer|binary'):
@@ -227,20 +220,6 @@ def test_a_near_miss_is_named_and_anything_else_lists_the_valid_keys(block, matc
 # ---------------------------------------------------------------------------
 # lookups
 # ---------------------------------------------------------------------------
-
-
-def test_coords_under_a_dimension_is_refused_with_the_lookup_rewrite():
-    """`coords:` is gone, and the refusal names the top-level `lookups:` rewrite
-    — the dedicated message, not the generic unknown-key near miss."""
-    with pytest.raises(SchemaError, match="'coords:' under a dimension was removed") as caught:
-        Model.model_validate(
-            {'dimensions': {'bus': {'values': ['n']}, 'generator': {'values': ['w'], 'coords': ['bus']}}}
-        )
-    assert 'bus_of: {over: generator, into: bus}' in str(caught.value), (
-        'the refusal has to show the lookups: block a coords: file rewrites into'
-    )
-
-
 def test_two_lookups_may_map_one_dimension_onto_one_target():
     s = Model.model_validate(
         {

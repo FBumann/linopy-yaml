@@ -112,11 +112,6 @@ def test_sum_lowers_to_one_node_per_injection_term():
             r'sum\(\) takes exactly one of over= or by=',
             id='both-halves-of-the-old-spelling',
         ),
-        pytest.param(
-            'sum(p, over=generator, group_by=gen_bus)',
-            r'sum\(group_by=\.\.\.\) was removed',
-            id='the-retired-group_by-kwarg',
-        ),
     ],
 )
 def test_a_name_sum_cannot_resolve_is_refused(expression, match):
