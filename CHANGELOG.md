@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.197](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.196...v0.0.1-alpha.197) (2026-08-18)
+
+
+### Features
+
+* **api:** a badly scaled model says which declaration is badly scaled ([#993](https://github.com/fluxopt/lpspec/issues/993)) ([ab92e2e](https://github.com/fluxopt/lpspec/commit/ab92e2e692e19c6bf23c7cfeac0855111898cd80))
+* **data:** a declared dtype is what the column has to be ([#1022](https://github.com/fluxopt/lpspec/issues/1022)) ([acbe2e6](https://github.com/fluxopt/lpspec/commit/acbe2e61030e96341ba67fca98a372dbf5ffac03))
+
 ## [0.0.1-alpha.196](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.195...v0.0.1-alpha.196) (2026-08-18)
 
 
