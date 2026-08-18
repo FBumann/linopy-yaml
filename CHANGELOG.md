@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.192](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.191...v0.0.1-alpha.192) (2026-08-18)
+
+
+### Bug Fixes
+
+* **data:** a row carrying no value is refused on both lanes ([#1001](https://github.com/fluxopt/lpspec/issues/1001)) ([795b26f](https://github.com/fluxopt/lpspec/commit/795b26fb858140cc68d23f7e63b61fa2ecb166d3))
+
 ## [0.0.1-alpha.191](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.190...v0.0.1-alpha.191) (2026-08-18)
 
 
