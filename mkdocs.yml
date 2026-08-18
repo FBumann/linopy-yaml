@@ -79,6 +79,7 @@ nav:
           - multi-period investment: examples/pypsa_multi_period.md
           - committable and extendable: examples/pypsa_committable_extendable.md
           - growth limit: examples/pypsa_growth_limit.md
+          - stochastic scenarios: examples/pypsa_stochastic.md
       - Published optima:
           - Dantzig transport: examples/transport_dantzig.md
           - Dantzig, economies of scale: examples/transport_pwl.md

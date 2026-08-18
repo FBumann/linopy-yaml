@@ -1207,5 +1207,47 @@
         ]
       }
     }
+  },
+  "pypsa_stochastic": {
+    "objective": 33940.0,
+    "rtol": 1e-09,
+    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_stochastic.py",
+    "duals": {
+      "power_balance": {
+        "scenario": [
+          "mild",
+          "mild",
+          "mild",
+          "cold",
+          "cold",
+          "cold",
+          "severe",
+          "severe",
+          "severe"
+        ],
+        "snapshot": [
+          0,
+          1,
+          2,
+          0,
+          1,
+          2,
+          0,
+          1,
+          2
+        ],
+        "value": [
+          6.0,
+          6.0,
+          6.0,
+          3.0,
+          21.0,
+          3.0,
+          7.0,
+          127.0,
+          1.0
+        ]
+      }
+    }
   }
 }

@@ -58,6 +58,7 @@ Every page starts from data in the shape the call wants, and
 | [multi-period investment](pypsa_multi_period.md) | A build year and a lifetime decide which rows an asset appears in, and each period's costs carry its own discount. |
 | [committable and extendable](pypsa_committable_extendable.md) | A minimum output that is a share of a capacity still being decided: two variables multiplied, and one constant to take them apart. |
 | [growth limit](pypsa_growth_limit.md) | A cap on new capacity per investment period, which grows with the period before it. The first `shift` in the corpus along an axis that is not time-of-day. |
+| [stochastic scenarios](pypsa_stochastic.md) | Three futures over one network: the fleet is built before anyone knows which arrives, and dispatched after. |
 
 ### Published optima
 
@@ -123,6 +124,7 @@ drift from what the engine builds.
 | [pypsa_multilink](pypsa_multilink.md) | **✔** 1100 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_ramp](pypsa_ramp.md) | **✔** 18200 | · | **✓** | · | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_spill](pypsa_spill.md) | **✔** 3200 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
+| [pypsa_stochastic](pypsa_stochastic.md) | **✔** 33940 | **✓** | · | · | · | · | · | **✓** | · | · | · |
 | [pypsa_storage](pypsa_storage.md) | **✔** 15253.2 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
 | [pypsa_store](pypsa_store.md) | **✔** 7005.5 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
 | [pypsa_transport](pypsa_transport.md) | **✔** 22000 | · | **✓** | · | · | · | · | **✓** | · | · | · |
@@ -191,6 +193,7 @@ that class, and the evidence behind
 | [pypsa_multilink](pypsa_multilink.md) | 1100.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_multilink.py |
 | [pypsa_ramp](pypsa_ramp.md) | 18200.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py |
 | [pypsa_spill](pypsa_spill.md) | 3200.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_spill.py |
+| [pypsa_stochastic](pypsa_stochastic.md) | 33940.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_stochastic.py |
 | [pypsa_storage](pypsa_storage.md) | 15253.178322993519 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_storage.py |
 | [pypsa_store](pypsa_store.md) | 7005.5025000000005 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_store.py |
 | [pypsa_transport](pypsa_transport.md) | 22000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_transport.py |
@@ -288,7 +291,7 @@ macro, primitive, or escape.
 `sum_back(start_up, over=snapshot, within=min_up_time)`, each generator's own
 width read off the column.
 
-Two rows from 30 ports — a rate worth watching once the corpus has hit
+Two rows from 31 ports — a rate worth watching once the corpus has hit
 the ceiling a few more times.
 
 ### Shapes still without a witness
