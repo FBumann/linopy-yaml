@@ -1219,10 +1219,10 @@ def test_a_bad_name_is_reported_without_the_optional_dependency(sweep):
     sweep never held 'q'" into "no module named pandas" — a true statement about
     something the caller did not ask about. Resolving the name first is what
     makes the reader's message the same on every install — while a name the
-    sweep does hold still needs the dependency.
+    sweep does hold still needs the dependency, and says which extra carries it.
     """
     with mock.patch.dict(sys.modules, {'pandas': None}):
         with pytest.raises(lps.LpspecError, match="no variable 'q' in this sweep"):
             sweep.to_pandas('q')
-        with pytest.raises(ImportError):
+        with pytest.raises(ModuleNotFoundError, match=r'pip install "lpspec\[linopy\]"'):
             sweep.to_pandas('p')

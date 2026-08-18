@@ -15,6 +15,7 @@ import json
 import subprocess
 import sys
 import textwrap
+from unittest import mock
 
 import numpy as np
 import polars as pl
@@ -421,6 +422,32 @@ def test_primal_is_a_frame_and_to_pandas_is_the_bridge(dispatch_solution):
     assert list(converted.columns) == frame.columns
     assert len(converted) == frame.height
     assert frame['value'].sum() == pytest.approx(converted['value'].sum())
+
+
+@pytest.mark.parametrize(
+    ('absent', 'bridge'),
+    [
+        pytest.param('pandas', 'to_pandas', id='to_pandas-without-pandas'),
+        pytest.param('xarray', 'to_dataarray', id='to_dataarray-without-xarray'),
+        pytest.param('xarray', 'to_dataset', id='to_dataset-without-xarray'),
+    ],
+)
+def test_a_bridge_out_names_the_extra_that_carries_it(dispatch_solution, absent, bridge):
+    """A bridge out of a bare install says which extra to add.
+
+    pandas and xarray ship with ``[linopy]`` rather than with the engine, so
+    the bare `No module named 'pandas'` names a package no install instruction
+    mentions and leaves the reader to guess. The gurobi sink already answers
+    the same question with the extra; these three did not.
+
+    The assertion is the extra, not the missing package: on an install that
+    has neither, `to_dataarray` fails at the pandas half and reports that one.
+    """
+    with (
+        mock.patch.dict(sys.modules, {absent: None}),
+        pytest.raises(ModuleNotFoundError, match=r'pip install "lpspec\[linopy\]"'),
+    ):
+        getattr(dispatch_solution, bridge)('p')
 
 
 def test_no_operator_registry_anywhere():

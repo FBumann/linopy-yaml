@@ -15,6 +15,7 @@ second vocabulary for one fact is a tax on every one of them
 
 from __future__ import annotations
 
+import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -56,6 +57,15 @@ def unknown_keep_message(keep: object) -> str:
     return f'unknown keep {keep!r}. A solve may keep:\n{options}'
 
 
+#: What the bridges out say when the environment cannot serve them, ``{module}``
+#: being pandas or xarray.
+_NEEDS_THE_EXTRA = (
+    '{module} ships with the [linopy] extra rather than with the engine, so this build cannot bridge out '
+    'to it: pip install "lpspec[linopy]". A result needs nothing added to be read as it stands — primal() '
+    'and dual() return polars frames, and to_parquet() writes one file per declaration.'
+)
+
+
 def tidy_to_pandas(frame: pl.DataFrame) -> pd.DataFrame:
     """A tidy polars frame as pandas, column by column.
 
@@ -64,8 +74,14 @@ def tidy_to_pandas(frame: pl.DataFrame) -> pd.DataFrame:
     comes from — a sweep's is the same frame one slice wider. Built column by
     column because polars' own ``to_pandas`` reaches for pyarrow; pandas itself
     ships with the ``[linopy]`` extra.
+
+    Raises:
+        ModuleNotFoundError: On an install without pandas, naming the extra.
     """
-    import pandas as pd
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(_NEEDS_THE_EXTRA.format(module='pandas')) from exc
 
     return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
 
@@ -74,7 +90,19 @@ def tidy_to_dataarray(frame: pd.DataFrame, name: str) -> xr.DataArray:
     """The same, labelled by its non-``value`` columns.
 
     A scalar declaration has none and comes back 0-dimensional.
+
+    Probed rather than imported, unlike the pandas bridge above: xarray is the
+    oracle lane's, and an ``import xarray`` anywhere under ``relational/`` is
+    what hard rule 2 forbids (``tests/test_architecture.py``). pandas reaches
+    it for us on the line below, and reports it as a missing *package* — this
+    turns that into the extra, before it happens.
+
+    Raises:
+        ModuleNotFoundError: On an install without xarray, naming the extra.
     """
+    if importlib.util.find_spec('xarray') is None:
+        raise ModuleNotFoundError(_NEEDS_THE_EXTRA.format(module='xarray'))
+
     dims = [column for column in frame.columns if column != 'value']
     if not dims:
         return frame['value'].to_xarray().rename(name)
