@@ -90,6 +90,13 @@ MISREADINGS = [
         'e == e_initial * (1 - standing_loss) - store_p',
         id='pypsa_store-the-initial-level-is-not-decayed',
     ),
+    pytest.param(
+        'pypsa_cvar',
+        'tail_definition',
+        '(1 - alpha) * (tail_average - tail_start) >= sum(probability * excess, over=scenario)',
+        '(tail_average - tail_start) >= sum(probability * excess, over=scenario)',
+        id='pypsa_cvar-the-tail-average-is-scaled-by-the-tail-probability',
+    ),
 ]
 
 

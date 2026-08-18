@@ -1,0 +1,119 @@
+description: >-
+  PyPSA's CVaR risk preference on a stochastic network: the plan is chosen
+  against the expectation *and* the tail, which Rockafellar and Uryasev make
+  linear with three auxiliary quantities — an excess per future, the level the
+  tail starts at, and the tail average itself. The risk-averse fleet is not the
+  risk-neutral one.
+  Optimum 35410.0, from PyPSA itself.
+
+dimensions:
+  scenario:
+    description: the futures the fleet is built against, one of which will happen
+    dtype: str
+  snapshot:
+    description: dispatch periods, the same in every future
+    dtype: int
+  generator:
+    description: generating units, each built once and run in every future
+    dtype: str
+
+parameters:
+  probability:
+    description: how likely a future is — the weights the expectation is taken with
+    dims: [scenario]
+  load:
+    description: demand to be met, and the one thing that differs between futures
+    dims: [scenario, snapshot]
+  capex:
+    description: cost of holding one unit of capacity over the horizon
+    dims: [generator]
+  opex:
+    description: cost of one unit of output
+    dims: [generator]
+  alpha:
+    description: >-
+      where the tail begins: the confidence level whose worst 1 - alpha of the
+      probability mass the risk term averages over
+    dims: []
+  omega:
+    description: >-
+      how much of the objective is the tail rather than the expectation — 0 is
+      the risk-neutral plan, 1 prices nothing but the worst futures
+    dims: []
+
+variables:
+  p_nom:
+    description: >-
+      capacity built at a generator — the first-stage decision, taken before
+      anyone knows which future arrived
+    foreach: [generator]
+    bounds:
+      lower: 0
+  p:
+    description: output of a generator in a snapshot of a future
+    foreach: [scenario, snapshot, generator]
+    bounds:
+      lower: 0
+  excess:
+    description: >-
+      how far a future's operating cost runs past the level the tail begins at,
+      and zero for the futures that do not reach it
+    foreach: [scenario]
+    bounds:
+      lower: 0
+  tail_start:
+    description: >-
+      the level the tail begins at — the value at risk, which the epigraph rows
+      pin to the alpha quantile of the operating cost rather than the model
+      declaring it
+    foreach: []
+  tail_average:
+    description: the average operating cost of the futures beyond that level
+    foreach: []
+
+expressions:
+  operating_cost:
+    description: what one future costs to run, over the whole horizon
+    expression: sum(sum(p * opex, over=generator), over=snapshot)
+
+constraints:
+  within_capacity:
+    description: >-
+      a generator produces no more than the capacity built for it, in every
+      snapshot of every future
+    foreach: [scenario, snapshot, generator]
+    expression: p <= p_nom
+
+  power_balance:
+    description: what runs in this snapshot of this future meets the load there
+    foreach: [scenario, snapshot]
+    expression: sum(p, over=generator) == load
+
+  tail_excess:
+    description: >-
+      a future's excess reaches at least past the level the tail begins at,
+      which with the lower bound of zero makes it the positive part
+    foreach: [scenario]
+    expression: excess >= operating_cost - tail_start
+
+  tail_definition:
+    description: >-
+      the tail average is at least the level it starts at plus the expected
+      excess divided by the tail's own probability, both sides multiplied by that
+      probability — the epigraph that makes a quantile average linear, and the
+      objective's weight on it is what pulls it tight
+    foreach: []
+    expression: >-
+      (1 - alpha) * (tail_average - tail_start)
+      >= sum(probability * excess, over=scenario)
+
+objective:
+  sense: minimize
+  description: >-
+    what the fleet costs to build, plus a blend of what it is expected to cost to
+    run and what it costs to run in the tail — capital cost sits outside the
+    blend, so the risk preference prices operation rather than investment
+  expression: >-
+    p_nom * capex
+    + (1 - omega) * probability * operating_cost
+    + omega * tail_average
