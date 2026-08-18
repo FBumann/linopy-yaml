@@ -80,6 +80,7 @@ nav:
           - committable and extendable: examples/pypsa_committable_extendable.md
           - growth limit: examples/pypsa_growth_limit.md
           - stochastic scenarios: examples/pypsa_stochastic.md
+          - CVaR risk preference: examples/pypsa_cvar.md
       - Published optima:
           - Dantzig transport: examples/transport_dantzig.md
           - Dantzig, economies of scale: examples/transport_pwl.md
