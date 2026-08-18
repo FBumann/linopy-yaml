@@ -155,6 +155,40 @@ def sparse_divisor_message(name: str, missing: int) -> str:
     )
 
 
+def coordinates_shown(dims: Sequence[str], rows: Iterable[Sequence[Any]]) -> str:
+    """Coordinates as a refusal prints them: ``f='b'; f='c'``.
+
+    Both lanes format the offenders they found here rather than each in its own
+    frame vocabulary, because ``tests/test_data_parity.py`` compares the two
+    messages as strings. Values arrive as python natives — a numpy scalar reprs
+    as ``np.str_('b')`` under numpy 2 and would break that comparison.
+    """
+    return '; '.join(', '.join(f'{d}={v!r}' for d, v in zip(dims, row, strict=True)) for row in rows)
+
+
+def holes_in_values_message(name: str, holes: int, shown: str) -> str:
+    """A row carrying no value — one wording, both lanes.
+
+    In long form the absence of a value is the absence of the row, so a hole is
+    the one encoding that says both at once: the row claims the coordinate and
+    the value denies it. Refused rather than read as either, because the two
+    readings build different models — a hole read as a row is a zero
+    coefficient, a hole read as no row is what the absence rules then govern.
+
+    NaN is named beside null because pandas has no other spelling: a ``None``
+    in a float column arrives as NaN, so a message naming only null would send
+    half its readers hunting for something their frame cannot hold.
+    """
+    at = f': {shown}' if shown else ''
+    return (
+        f"parameter '{name}' carries {holes} row(s) with no value — null or NaN{at}. "
+        f'In long form the absence of a value is the absence of the row, and such a row '
+        f'says the coordinate exists and denies it in the same breath.\n'
+        f'  Drop them     polars .drop_nulls("value").drop_nans("value"), pandas .dropna(subset=["value"])\n'
+        f'  Supply them   if a number was what was meant'
+    )
+
+
 def null_bounds_message(name: str, rows: int) -> str:
     """A bound with no value — one wording, both lanes.
 

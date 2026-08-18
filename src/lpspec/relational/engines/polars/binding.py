@@ -141,6 +141,7 @@ class _Binder:
             )
         frame = frame.select(wanted).collect(engine='streaming').lazy()
         data_validation.check_one_row_per_coordinate(p, frame, self.dimensions)
+        data_validation.check_values_are_present(p, frame)
         frame = _plain_strings(frame, p.dims)
         if frame.collect_schema()['value'] == pl.Boolean:
             self.boolean.add(p.name)

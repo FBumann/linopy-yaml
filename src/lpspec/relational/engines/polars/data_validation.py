@@ -26,7 +26,13 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from lpspec.errors import DataError, duplicate_coordinate_message, unknown_labels_message
+from lpspec.errors import (
+    DataError,
+    coordinates_shown,
+    duplicate_coordinate_message,
+    holes_in_values_message,
+    unknown_labels_message,
+)
 
 if TYPE_CHECKING:
     from lpspec.relational import plan
@@ -90,6 +96,26 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
         for row in duplicated.iter_rows(named=True)
     )
     raise DataError(duplicate_coordinate_message(p.name, shown, list(p.dims)))
+
+
+def check_values_are_present(p: plan.ParameterDeclaration, frame: pl.LazyFrame) -> None:
+    """Every row carries a value: a null or a NaN is refused rather than read.
+
+    One aggregate on the happy path, over a column the binder has already
+    collected. Naming the offenders costs a second pass, and runs only where
+    the first found something — the same shape the checks above take.
+
+    The NaN half of the question is asked only of a float column: ``is_nan``
+    raises on the others, which have no NaN to hold. A null makes the whole
+    disjunction true on its own, ``is_nan`` being null there rather than false.
+    """
+    value = pl.col('value')
+    holed = value.is_null() | value.is_nan() if frame.collect_schema()['value'].is_float() else value.is_null()
+    holes = int(frame.select(holed.sum()).collect().item())
+    if not holes:
+        return
+    offenders = frame.filter(holed).select(p.dims).head(3).collect().rows() if p.dims else ()
+    raise DataError(holes_in_values_message(p.name, holes, coordinates_shown(p.dims, offenders)))
 
 
 def check_lookups_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -> None:
