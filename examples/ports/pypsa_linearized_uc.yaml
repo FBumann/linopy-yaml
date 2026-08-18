@@ -77,7 +77,7 @@ constraints:
   start_up_initial:
     description: every unit begins the horizon off, so committing in the first snapshot is a start
     foreach: [snapshot, generator]
-    where: "snapshot == 0"
+    where: "snapshot == index(snapshot, 0)"
     expression: start_up - status >= 0
 
   start_up:

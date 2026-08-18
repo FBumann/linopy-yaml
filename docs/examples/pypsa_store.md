@@ -74,7 +74,7 @@ $$e_{t,s} \le e^{\mathrm{nom}}_{s} \qquad \forall\thinspace t \in \mathcal{T},\e
 
 **`energy_balance_initial`**
 
-$$e_{t,s} = e^{\mathrm{initial}}_{s} - \mathit{store}^{\mathrm{p}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace t = 0$$
+$$e_{t,s} = e^{\mathrm{initial}}_{s} - \mathit{store}^{\mathrm{p}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
 
 **`energy_balance`**
 
@@ -200,7 +200,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           the first snapshot's level starts from the initial energy, which the
           standing loss does not decay because nothing was carried into it
         foreach: [snapshot, store]
-        where: "snapshot == 0"
+        where: "snapshot == index(snapshot, 0)"
         expression: e == e_initial - store_p
 
       energy_balance:

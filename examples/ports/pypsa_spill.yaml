@@ -106,7 +106,7 @@ constraints:
   energy_balance_initial:
     description: the first snapshot's level is carried from the initial state of charge
     foreach: [snapshot, storage]
-    where: "snapshot == 0"
+    where: "snapshot == index(snapshot, 0)"
     expression: soc == soc_initial + p_store - p_dispatch + inflow - spill
 
   energy_balance:

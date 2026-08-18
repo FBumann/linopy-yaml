@@ -63,7 +63,7 @@ $$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g
 
 **`energy_balance_initial`**
 
-$$\mathit{soc}_{t,s} = \mathit{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} + \mathit{inflow}_{t,s} - \mathit{spill}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace t = 0$$
+$$\mathit{soc}_{t,s} = \mathit{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} + \mathit{inflow}_{t,s} - \mathit{spill}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
 
 **`energy_balance`**
 
@@ -207,7 +207,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       energy_balance_initial:
         description: the first snapshot's level is carried from the initial state of charge
         foreach: [snapshot, storage]
-        where: "snapshot == 0"
+        where: "snapshot == index(snapshot, 0)"
         expression: soc == soc_initial + p_store - p_dispatch + inflow - spill
 
       energy_balance:
