@@ -9,6 +9,8 @@ before this existed).
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 import polars as pl
 import pytest
 
@@ -97,6 +99,101 @@ def test_a_literal_width_is_the_last_n_positions():
         assert set(zip(held['g'].to_list(), held['t'].to_list(), strict=True)) == {('slow', 4), ('fast', 4)}, (
             'the window reaches back two positions, and only the last one is on the axis'
         )
+
+
+#: A window over an operand that is masked away at one interior position. The
+#: width decides what the mask means: a wider window reaches it *and* live
+#: positions, a width of 1 reaches nothing else at all (#1059, #1060).
+MASKED_WINDOW = {
+    'dimensions': {'t': {'dtype': 'int'}},
+    'parameters': {'usable': {'dims': ['t']}},
+    'variables': {
+        'level': {'foreach': ['t'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
+        'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'held': {'foreach': ['t'], 'expression': 'take <= sum_back(level, over=t, within=1)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)'},
+}
+
+MASKED_WINDOW_SOURCES = {
+    't': pd.Index([0, 1, 2, 3], name='t'),
+    'usable': pd.Series([1.0, 0.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t')),
+}
+
+
+def masked_window_model(window: str) -> dict:
+    """`MASKED_WINDOW` with the window respelled, the rest of it fixed."""
+    model = deepcopy(MASKED_WINDOW)
+    model['constraints']['held']['expression'] = f'take <= sum_back(level, over=t, {window})'
+    return model
+
+
+def test_a_window_that_reaches_nothing_builds_no_row():
+    """A window is short, not empty — until every position it spans is masked.
+
+    Width 1 at the masked snapshot: the window is exactly the slot that is not
+    there, so nothing live is left to sum and the row is a statement about
+    constants alone. It is not built, and `take[1]` — capped by no row —
+    reaches its own bound, which is what tells the two apart from the objective
+    rather than only from the row count (#1059).
+    """
+    with differential(MASKED_WINDOW, MASKED_WINDOW_SOURCES, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, 'the snapshot whose whole window is masked away holds no row'
+        assert run.oracle == pytest.approx(10.0), (
+            'take[1] is capped by nothing — 0.0 would mean a row asserting take <= 0 was built there'
+        )
+
+
+@pytest.mark.parametrize('window', ['within=2', "within=2, edge='wrap'"], ids=['acyclic', 'wrap'])
+def test_a_masked_slot_the_window_reaches_is_a_zero_not_an_absence(window: str):
+    """The masked slot contributes nothing and takes nothing with it.
+
+    Two positions wide, so every snapshot's window reaches at least one live
+    slot even where it also reaches the masked one. Absence stops at a
+    reduction, so all four rows are asserted and every `take` is capped —
+    losing a row would show up as an uncapped `take` worth 10 (#1059, #1060).
+    """
+    with differential(masked_window_model(window), MASKED_WINDOW_SOURCES, lp=True) as run:
+        assert run.engine.diagnostics().rows == 4, 'a window reaching one live slot is a row, masked neighbour or not'
+        assert run.oracle == pytest.approx(0.0), 'every take is capped, so raising one costs more than it earns'
+
+
+#: The same question asked of a width that differs per entity: one unit's
+#: window is the masked slot alone, the other's reaches past it.
+PER_ENTITY_WINDOW = {
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'parameters': {'width': {'dims': ['g'], 'dtype': 'int'}, 'usable': {'dims': ['t']}},
+    'variables': {
+        'level': {'foreach': ['g', 't'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
+        'take': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'held': {'foreach': ['g', 't'], 'expression': 'take <= sum_back(level, over=t, within=width)'}},
+    'objective': {
+        'sense': 'maximize',
+        'expression': 'sum(sum(take, over=g), over=t) - 1000 * sum(sum(level, over=g), over=t)',
+    },
+}
+
+
+def test_a_per_entity_window_reaching_nothing_is_that_entitys_row_alone():
+    """Whose window reached something is asked per entity, not per position.
+
+    `narrow` spans one snapshot and `wide` two, and the masked snapshot is the
+    same one for both. The row `narrow` holds there reaches nothing and is not
+    built; the one `wide` holds reaches the snapshot before it and is. A width
+    read only as a coefficient — zeroing the terms outside it but still
+    counting them as reached — would keep `narrow`'s row asserting `take <= 0`
+    (#1059).
+    """
+    sources = {
+        'g': pd.Index(['narrow', 'wide'], name='g'),
+        't': pd.Index([0, 1, 2, 3], name='t'),
+        'width': pd.Series([1, 2], index=pd.Index(['narrow', 'wide'], name='g')),
+        'usable': pd.Series([1.0, 0.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t')),
+    }
+    with differential(PER_ENTITY_WINDOW, sources, lp=True) as run:
+        assert run.engine.diagnostics().rows == 7, "every row but narrow's at the masked snapshot"
+        assert run.oracle == pytest.approx(10.0), 'take[narrow, 1] is capped by nothing, and no other take is free'
 
 
 WIDTH_REFUSALS = {

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import operator
 from dataclasses import dataclass, field
+from functools import reduce
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, assert_never
 
@@ -765,19 +766,28 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     unreachable lag added to a reachable one would annihilate the whole row
     (v1 §4) — which is right for a shift, whose vacated slot really is
     unknown, and wrong here: a window at the first position is short, not
-    empty. It always contains that position itself, which is why no width
-    reaching 1 can empty a row.
+    empty. That covers a masked slot the window reaches too: absence is not a
+    term, and a reduction is where absence stops (the absence reference).
+
+    Which leaves the window that reaches **nothing** — every position it spans
+    masked away, the whole of it where the width is 1. A zero there would build
+    a row about constants alone, so the fill is paired with the positions any
+    lag actually reached, and a window that reached none of them keeps no row
+    (#1059, #1060).
     """
     card = int(array.sizes[over])
     widest = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
     widest = min(widest, card)
-    total = None
+    terms: list[Any] = []
+    reached: list[Any] = []
     for lag in range(widest):
-        term = _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=0.0, card=card)
+        lagged = _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=None, card=card)
+        live, term = ~lagged.isnull(), _filled(lagged, 0.0)
         if isinstance(within, xr.DataArray):
-            term = term * (within > lag).astype(float)
-        total = term if total is None else total + term
-    return total
+            live, term = live & (within > lag), term * (within > lag).astype(float)
+        terms.append(term)
+        reached.append(live)
+    return reduce(operator.add, terms).where(reduce(operator.or_, reached))
 
 
 def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float | None = None, by: Any = None) -> Any:
@@ -1023,13 +1033,19 @@ def _vacated(shifted: Any, operand: Any, over: str, vacated: Any, fill: float) -
     coordinate — the rule the relational lane states by crossing the edge with
     the other-dim combinations the operand has — and every other slot keeps the
     absence it arrived with.
+    """
+    carried = (~operand.isnull()).any(over)
+    keep = carried & (~shifted.isnull() | vacated)
+    return _filled(shifted, fill).where(keep)
+
+
+def _filled(expression: Any, fill: float) -> Any:
+    """*expression* with every absence in it standing as *fill*.
 
     ``to_linexpr()`` first when the operand is still a bare ``Variable``:
     ``Variable.fillna`` means a label fill on the released line and an
     expression fill on the v1 branch, and only the expression method is stable.
     """
-    carried = (~operand.isnull()).any(over)
-    keep = carried & (~shifted.isnull() | vacated)
-    if hasattr(shifted, 'to_linexpr'):
-        shifted = shifted.to_linexpr()
-    return shifted.fillna(fill).where(keep)
+    if hasattr(expression, 'to_linexpr'):
+        expression = expression.to_linexpr()
+    return expression.fillna(fill)
