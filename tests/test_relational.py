@@ -1145,6 +1145,60 @@ def test_a_model_with_no_objective_has_no_objective_range():
     assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint block is there'
 
 
+#: A coefficient short of its dims, and a bound that is not. Sparse in a
+#: coefficient is the ordinary case — every other position where a missing row
+#: has no reading is refused already (a bound, a comparison's constant side),
+#: so this is the shape where a lost row goes unreported.
+SPARSE_SOURCE = {
+    'dimensions': {'g': {'values': ['wind', 'solar', 'gas']}, 't': {'dtype': 'int', 'values': [0, 1]}},
+    'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g']}},
+    'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
+    'constraints': {'capped': {'foreach': ['t', 'g'], 'expression': 'p * avail <= 1'}},
+    'objective': {'sense': 'minimize', 'expression': 'p'},
+}
+
+SPARSE_SOURCES = {
+    'p_max': pl.DataFrame({'g': ['wind', 'solar', 'gas'], 'value': [1.0, 2.0, 3.0]}),
+    'avail': pl.DataFrame({'t': [0, 0, 1], 'g': ['wind', 'solar', 'wind'], 'value': [1.0, 1.0, 1.0]}),
+}
+
+
+def test_a_parameter_short_of_its_dims_is_reported_rather_than_judged():
+    """Which parameters arrived short, and by how much — not whether they should have.
+
+    A table that lost a row and a `where:` that removed one build the same
+    model, so nothing in the answer distinguishes them and nothing here tries
+    to: what a missing row *means* is the absence rules', and whether it was
+    meant is the caller's. Reporting is the half that can be said without
+    taking the data contract.
+    """
+    with lps.build(SPARSE_SOURCE, SPARSE_SOURCES) as bound:
+        short = bound.diagnostics().sparse_parameters
+
+    assert short.to_dicts() == [{'parameter': 'avail', 'coordinates': 6, 'rows': 3, 'missing': 3}], (
+        'the complete parameter is not a row here — an empty frame is the useful answer for a dense model'
+    )
+
+
+def test_a_model_whose_parameters_all_span_their_dims_reports_none():
+    dense = {
+        **SPARSE_SOURCES,
+        'avail': pl.DataFrame({'t': [0, 0, 0, 1, 1, 1], 'g': ['wind', 'solar', 'gas'] * 2, 'value': [1.0] * 6}),
+    }
+    with lps.build(SPARSE_SOURCE, dense) as bound:
+        assert bound.diagnostics().sparse_parameters.is_empty(), 'empty is what a complete model reports'
+
+
+def test_the_sparsity_report_survives_the_model_being_released():
+    """Summarised at bind from two counts binding already had, so it outlives
+    the frames — the same reason the coefficient range does."""
+    with lps.build(SPARSE_SOURCE, SPARSE_SOURCES) as bound:
+        held = bound.diagnostics()
+    released = bound.diagnostics()
+
+    assert released.sparse_parameters.equals(held.sparse_parameters)
+
+
 def test_the_coefficient_range_survives_the_model_being_released():
     """Read off each share as it is built, so it outlives the frames it came from.
 

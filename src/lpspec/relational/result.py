@@ -160,6 +160,21 @@ class Diagnostics:
     #: package measures hardest.
     omissions: pl.DataFrame
 
+    #: ``(parameter, coordinates, rows, missing)`` — one row per parameter whose
+    #: source is short of the coordinates its dims reach, in declaration order,
+    #: and **empty where every one is complete**. Sparsity is the ordinary case
+    #: here — absence is how a model masks — so this reports it rather than
+    #: judging it: what a missing row means is the absence rules', and whether
+    #: it was meant is the caller's to say. It exists because the two are
+    #: indistinguishable from the answer alone: a table that lost a row and a
+    #: ``where:`` that removed one build the same model, and one of them is a
+    #: mistake nothing else would report.
+    #:
+    #: A parameter over no dims has one coordinate and binding already refuses
+    #: a source that does not carry exactly one row for it, so it is never
+    #: here.
+    sparse_parameters: pl.DataFrame
+
     #: ``(constraint, smallest, largest)`` — the coefficient **magnitudes** each
     #: constraint block put in the matrix, one row per block that kept a term,
     #: in build order. A solver's own ``Matrix range`` line answers this for the

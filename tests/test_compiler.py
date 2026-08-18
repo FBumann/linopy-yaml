@@ -95,6 +95,9 @@ def bound() -> BoundSources:
         parameters=PARAMETERS,
         dimensions=DIMENSIONS,
         cardinality=CARDINALITY,
+        # heights, which only `diagnostics` reads — empty here for the reason
+        # the frames are: compiling reads no rows and cannot count them either.
+        parameter_rows={},
     )
 
 
@@ -423,6 +426,7 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
         parameters={'load': pl.LazyFrame({'snapshot': [0, 1, 2], 'value': [10.0, 20.0, 30.0]})},
         dimensions={'snapshot': snapshots},
         cardinality={'snapshot': 3},
+        parameter_rows={'load': 3},
     )
     q = PolarsCompiler(PROGRAM, sources, VARIABLES)
     shifted = plan.Translate(plan.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)
