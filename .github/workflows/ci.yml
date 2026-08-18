@@ -82,7 +82,7 @@ jobs:
       # they get their own config: a Series annotated as a DataFrame fails
       # here rather than teaching a wrong type on the site.
       - run: uv run --no-sync pyrefly check --output-format=github -c examples/ports/references/linopy/pyrefly.toml examples/ports/references/linopy
-      - run: uv run --no-sync pytest -q
+      - run: uv run --no-sync pytest -q -n auto
 
       # The site, built strictly: `strict: true` in mkdocs.yml turns every
       # warning into a failure, so this gate catches a dead cross-link, a model
@@ -165,7 +165,8 @@ jobs:
       #
       # pytest goes in as a second, unconstrained call: under `lowest-direct`
       # an unpinned direct requirement resolves to pytest 2.0.0, which is a
-      # 2011 sdist that tries to build itself over plain HTTP.
+      # 2011 sdist that tries to build itself over plain HTTP. pytest alone,
+      # so this run stays serial where the dev-group one above is `-n auto`.
       #
       # The floors are a 3.11 claim only, which is the interpreter this job
       # pins: pyyaml 6.0 and numpy 1.26.0 predate 3.13 and have no wheel for

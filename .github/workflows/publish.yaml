@@ -30,7 +30,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --group dev
-      - run: uv run --no-sync pytest -q
+      - run: uv run --no-sync pytest -q -n auto
 
   build:
     name: Build

@@ -21,7 +21,7 @@ imports linopy, xarray, pandas or gurobipy — see *the bare install* below.
 ## The loop
 
 ```bash
-uv run pytest -q  # ~20 s
+uv run pytest -q -n auto  # ~20 s
 uv run ruff check --fix . && uv run ruff format .
 uv run pyrefly check
 ```
