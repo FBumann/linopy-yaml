@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.194](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.193...v0.0.1-alpha.194) (2026-08-18)
+
+
+### Bug Fixes
+
+* **data:** a fractional offset no longer truncates to the position below it ([#1005](https://github.com/fluxopt/lpspec/issues/1005)) ([b453c51](https://github.com/fluxopt/lpspec/commit/b453c510b5a1d4f87c831d5b533c3e47448c16ec))
+
 ## [0.0.1-alpha.193](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.192...v0.0.1-alpha.193) (2026-08-18)
 
 
