@@ -1303,6 +1303,97 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
         )
 
 
+#: `south` is a load-only bus: both generators sit on `north`, so the group
+#: behind `south`'s constant side has no members at all.
+GROUPED_CONSTANT_MODEL = {
+    'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}},
+    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
+    'parameters': {'capacity': {'dims': ['generator']}},
+    'variables': {'imports': {'foreach': ['bus'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {'import_limit': {'foreach': ['bus'], 'expression': 'imports <= sum(capacity, by=gen_bus)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(imports, over=bus)'},
+}
+
+
+def _grouped_constant_sources(capacity=('g1', 'g2')):
+    return {
+        'generator': pl.DataFrame({'generator': ['g1', 'g2'], 'gen_bus': ['north', 'north']}),
+        'capacity': pl.DataFrame({'generator': list(capacity), 'value': [3.0, 4.0][: len(capacity)]}),
+    }
+
+
+def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
+    """A group with no members holds the empty sum, which is a value.
+
+    The coverage check reads what a constant fragment produced, and a label no
+    member maps to is missing from it for the same reason a label whose data was
+    omitted is. Only the first is a value: `capacity` covers every generator it
+    has, and the operator rules say a group with no members contributes nothing.
+
+    Refusing it named a parameter that was complete, and none of the three
+    remedies the message offers existed — there is no row to supply, and the
+    `where` that would mask `south` needs a grouped sum, which the predicate
+    grammar has no atom for.
+    """
+    with differential(GROUPED_CONSTANT_MODEL, _grouped_constant_sources(), lp=True) as run:
+        assert run.result.objective == pytest.approx(7.0, rel=RTOL), 'north imports up to 3 + 4, south up to nothing'
+        built = {row['bus']: row['value'] for row in run.result.primal('imports').to_dicts()}
+
+    assert built['south'] == pytest.approx(0.0), "an empty group caps south's imports at the empty sum"
+
+
+#: The same story with a dim the group does not consume, so the empty label
+#: has to be paired with every snapshot rather than standing on its own.
+SPANNED_GROUPED_CONSTANT_MODEL = {
+    **GROUPED_CONSTANT_MODEL,
+    'dimensions': {**GROUPED_CONSTANT_MODEL['dimensions'], 'snapshot': {'dtype': 'int', 'values': [0, 1]}},
+    'parameters': {'capacity': {'dims': ['snapshot', 'generator']}},
+    'variables': {'imports': {'foreach': ['snapshot', 'bus'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {
+        'import_limit': {'foreach': ['snapshot', 'bus'], 'expression': 'imports <= sum(capacity, by=gen_bus)'}
+    },
+    'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=snapshot)'},
+}
+
+
+def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
+    """The empty label is a row per snapshot, not one row.
+
+    A group consumes one dim and the fragment keeps the rest, so the value an
+    empty group holds is needed at every coordinate of what is kept. One row
+    would leave the others uncovered and refuse the model for the reason the
+    zero was written to remove.
+    """
+    sources = {
+        'generator': pl.DataFrame({'generator': ['g1', 'g2'], 'gen_bus': ['north', 'north']}),
+        'capacity': pl.DataFrame(
+            {'snapshot': [0, 0, 1, 1], 'generator': ['g1', 'g2', 'g1', 'g2'], 'value': [3.0, 4.0, 1.0, 1.0]}
+        ),
+    }
+    with differential(SPANNED_GROUPED_CONSTANT_MODEL, sources, lp=True) as run:
+        assert run.result.objective == pytest.approx(7.0 + 2.0, rel=RTOL), 'north takes both snapshots, south neither'
+        built = {(row['snapshot'], row['bus']): row['value'] for row in run.result.primal('imports').to_dicts()}
+
+    assert built[(0, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
+    assert built[(1, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
+
+
+def test_a_member_with_no_value_is_still_refused_through_a_group():
+    """The group that is empty *because its data is missing* keeps the refusal.
+
+    Both generators sit on `north`, and dropping `g2`'s row leaves `north`'s
+    group with one member and a hole rather than with no members. Nothing
+    downstream can tell those two apart once the fragment is built, which is why
+    the empty group is written down as a zero where the reason is known — this
+    is the case that says the zero is not written down for every absence.
+    """
+    with (
+        pytest.raises(DataError, match="parameter 'capacity' covers 1 fewer"),
+        differential(GROUPED_CONSTANT_MODEL, _grouped_constant_sources(capacity=('g1',))),
+    ):
+        pass
+
+
 ABSENT_VARIABLE_MODEL = {
     'dimensions': {'f': {'values': ['a', 'b']}},
     'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
