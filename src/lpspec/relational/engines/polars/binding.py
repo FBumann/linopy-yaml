@@ -49,13 +49,17 @@ class BoundSources:
 
     ``cardinality`` is a dimension frame's height, cached here because deriving
     it later means collecting the frame again — ``sum`` over an absent dim
-    scales by it. What a parameter's values *are* is not answered here: the
-    declaration says, and binding refuses a column that disagrees.
+    scales by it. ``parameter_rows`` is the same trick one declaration down,
+    and free for the same reason: binding collects each source once, so its
+    height is read off the frame it already has rather than counted later.
+    What a parameter's values *are* is not answered here: the declaration says,
+    and binding refuses a column that disagrees.
     """
 
     parameters: Mapping[str, pl.LazyFrame]
     dimensions: Mapping[str, pl.LazyFrame]
     cardinality: Mapping[str, int]
+    parameter_rows: Mapping[str, int]
 
     def is_enum_encoded(self, dim: str) -> bool:
         """Whether :meth:`_Binder.encode_dimensions` gave *dim* an ``Enum``.
@@ -93,6 +97,7 @@ def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
         parameters=binder.parameters,
         dimensions=binder.dimensions,
         cardinality=binder.cardinality,
+        parameter_rows=binder.parameter_rows,
     )
 
 
@@ -105,6 +110,7 @@ class _Binder:
         self.parameters: dict[str, pl.LazyFrame] = {}
         self.dimensions: dict[str, pl.LazyFrame] = {}
         self.cardinality: dict[str, int] = {}
+        self.parameter_rows: dict[str, int] = {}
 
     # -- parameters --------------------------------------------------------
 
@@ -135,7 +141,9 @@ class _Binder:
                 f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
                 f'the declared dims, or drop the index names to bind positionally.'
             )
-        frame = frame.select(wanted).collect(engine='streaming').lazy()
+        collected = frame.select(wanted).collect(engine='streaming')
+        self.parameter_rows[p.name] = collected.height
+        frame = collected.lazy()
         data_validation.check_one_row_per_coordinate(p, frame, self.dimensions)
         data_validation.check_values_are_present(p, frame)
         data_validation.check_value_dtype(p, frame)

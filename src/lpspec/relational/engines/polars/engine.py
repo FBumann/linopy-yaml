@@ -150,6 +150,10 @@ class PolarsEngine:
         self._expression_thunks: dict[str, Callable[[], plan.Expression]] = {}
         self._variables: dict[str, pl.LazyFrame] = {}
         self._constraints: dict[str, pl.LazyFrame] = {}
+        #: ``name -> (coordinates, rows)`` for each parameter bound short of
+        #: the coordinates its dims reach. Summarised at bind rather than read
+        #: at :meth:`diagnostics`, which answers after the frames are released.
+        self._sparse: dict[str, tuple[int, int]] = {}
         #: ``name -> rows not built``, because every term they had vanished.
         #: Empty for a model whose every declared row reached the solver.
         self._omitted: dict[str, int] = {}
@@ -240,6 +244,7 @@ class PolarsEngine:
         self._program = program
         with _clocked(self._timings, 'bind'):
             self._bound = bind(program, sources)
+        self._sparse = _short_parameters(program, self._bound)
         self._compiler = PolarsCompiler(program, self._bound, self._variables)
 
         with _clocked(self._timings, 'build'):
@@ -800,6 +805,20 @@ class PolarsEngine:
                 },
                 schema={'constraint': pl.String, 'smallest': pl.Float64, 'largest': pl.Float64},
             ),
+            sparse_parameters=pl.DataFrame(
+                {
+                    'parameter': list(self._sparse),
+                    'coordinates': [reach for reach, _ in self._sparse.values()],
+                    'rows': [rows for _, rows in self._sparse.values()],
+                    'missing': [reach - rows for reach, rows in self._sparse.values()],
+                },
+                schema={
+                    'parameter': pl.String,
+                    'coordinates': pl.UInt64,
+                    'rows': pl.UInt64,
+                    'missing': pl.UInt64,
+                },
+            ),
             objective_range=self._objective_range,
             solves=self._solves,
             loads=self._loads,
@@ -1040,6 +1059,29 @@ def _expression_frame(name: str, expr: plan.Expression, compiler: PolarsCompiler
     laid_out = carrier.select(_EXPRESSION_ROW, *dims, total.alias('value')).collect(engine='streaming')
     ordered = labels.in_position_order(laid_out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return ordered.with_columns(pl.col(d).cast(pl.String) for d in dims if compiler.data.is_enum_encoded(d))
+
+
+def _short_parameters(program: plan.Program, bound: BoundSources) -> dict[str, tuple[int, int]]:
+    """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
+
+    Arithmetic over two dicts binding already filled — a dimension's height and
+    a parameter's — so it costs no pass over any source, which is what lets it
+    run on every build rather than behind a flag. The reach is the product of
+    the cardinalities because that is what "spans its dims" means; the check
+    that no row is a duplicate or a stranger has already run, so the height
+    *is* the number of coordinates covered.
+    """
+    short: dict[str, tuple[int, int]] = {}
+    for p in program.parameters:
+        if not p.dims:
+            continue
+        reach = 1
+        for d in p.dims:
+            reach *= bound.cardinality[d]
+        rows = bound.parameter_rows[p.name]
+        if rows < reach:
+            short[p.name] = (reach, rows)
+    return short
 
 
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
