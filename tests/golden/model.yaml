@@ -46,10 +46,10 @@ variables:
     bounds: {upper: 100}
   theta:        # unbounded
     foreach: [bus]
-  on:
+  on:          # a binary domain, which is a set rather than a pair of bounds
     foreach: [snapshot, generator]
     domain: binary
-  units:
+  units:       # an integer domain, which is both: bounds, and where the values live
     foreach: [generator]
     domain: integer
     bounds: {lower: 0, upper: 10}
@@ -71,7 +71,7 @@ variables:
     bounds: {lower: 0, upper: 1}
 
 sos:
-  adjacent:
+  adjacent:   # at most two adjacent members nonzero, one set per snapshot
     variable: weight
     over: generator
     type: 2
@@ -138,11 +138,11 @@ constraints:
     foreach: [snapshot]
     where: "true"
     expression: spill >= 0
-  never:
+  never:      # the other constant mask
     foreach: [snapshot]
     where: "false"
     expression: slack >= 0
 
-objective:
+objective:    # a sense, and the reduction a declaration implies rather than writes
   sense: maximize
   expression: p * cost

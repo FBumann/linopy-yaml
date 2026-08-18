@@ -104,6 +104,7 @@ nav:
       - Python API: reference/api.md
       - Sweeps and rolling horizons: reference/sweeps.md
       - Typeset the math: reference/typeset.md
+      - Every construct, as math: reference/notation.md
   # Everything a reader does not need in order to write or run a model: design
   # notes, measured cost, project direction. One section, so the user path
   # above stays the whole of the top level.
