@@ -252,7 +252,7 @@ def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
 
 def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
     """Bounded halo: a row at ord *o* lands at ord *o + by*, no window."""
-    fragment = compiler().expression(plan.Translate(plan.Variable('p'), 'snapshot', by=1), 'test').terms[0]
+    fragment = compiler().expression(plan.Translate(plan.Variable('p'), 'snapshot', offset=1), 'test').terms[0]
     assert fragment.dims == ('snapshot', 'generator')
     assert columns(fragment.frame) == ['generator', 'snapshot', 'var_label', 'coeff']
     assert joins(fragment.frame) == 2
@@ -260,15 +260,15 @@ def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
 
 
 def test_wrapping_is_modulo_and_acyclic_is_not():
-    cyclic = compiler().expression(plan.Translate(plan.Variable('p'), 'snapshot', by=1, wrap=True), 't').terms[0]
-    acyclic = compiler().expression(plan.Translate(plan.Variable('p'), 'snapshot', by=1, wrap=False), 't').terms[0]
+    cyclic = compiler().expression(plan.Translate(plan.Variable('p'), 'snapshot', offset=1, wrap=True), 't').terms[0]
+    acyclic = compiler().expression(plan.Translate(plan.Variable('p'), 'snapshot', offset=1, wrap=False), 't').terms[0]
     assert '%' in query(cyclic.frame)
     assert '%' not in query(acyclic.frame)
 
 
 def test_a_shape_operator_along_a_dim_the_expression_lacks_is_refused():
     with pytest.raises(LanguageError, match='translation'):
-        compiler().expression(plan.Translate(plan.Parameter('cost'), 'snapshot', by=1), 'test')
+        compiler().expression(plan.Translate(plan.Parameter('cost'), 'snapshot', offset=1), 'test')
 
 
 # ---------------------------------------------------------------------------

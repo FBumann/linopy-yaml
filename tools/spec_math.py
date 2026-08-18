@@ -47,6 +47,7 @@ OPERATORS = {
     "shift(array, over=dim, offset=n, edge='wrap')": 'shift_wrap',
     'shift(array, over=dim, offset=n, edge=v)': 'shift_edge',
     'shift(array, over=dim, offset=p, edge=…)': 'shift_by_parameter',
+    'shift(array, over=dim, offset=n, by=lookup)': 'shift_partitioned',
     'sum_back(array, over=dim, within=n)': 'sum_back',
     'sum_back(array, over=dim, within=p)': 'sum_back_by_parameter',
     "sum_back(array, over=dim, within=p, edge='wrap')": 'sum_back_wrap',

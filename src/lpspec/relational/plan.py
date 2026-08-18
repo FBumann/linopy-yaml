@@ -169,17 +169,24 @@ class Translate(Expression):
     present and contribute it, the ``.fillna(0)`` escape hatch spelled in the
     language. Always ``None`` under ``wrap``, a cyclic map vacating nothing.
 
-    ``by`` is the offset: an integer, or the name of an integer parameter when
-    the offset differs per entity — a construction lead time, a transit time, a
-    minimum up time. A named offset may not depend on the dimension being
-    translated, and carries its sign in the values.
+    ``offset`` is how far back to reach: an integer, or the name of an integer
+    parameter when it differs per entity — a construction lead time, a transit
+    time, a minimum up time. A named offset may not depend on the dimension
+    being translated, and carries its sign in the values.
+
+    ``partition`` names a lookup over ``dimension``, and then the translation
+    happens **inside each group** it makes: the neighbour of a coordinate is the
+    one before it *in its own group*, the edge is that group's edge, and a wrap
+    closes each group onto itself. A coordinate the lookup sends nowhere is in
+    no group and reaches nothing.
     """
 
     operand: Expression
     dimension: str
-    by: int | str
+    offset: int | str
     wrap: bool = True
     fill: float | None = None
+    partition: str | None = None
 
 
 @dataclass(frozen=True)
@@ -534,8 +541,8 @@ def positional_parameters(program: Program) -> dict[str, str]:
     found: dict[str, set[str]] = {}
 
     def walk(e: Expression) -> None:
-        if isinstance(e, Translate) and isinstance(e.by, str):
-            found.setdefault(e.by, set()).add(f'shift(offset={e.by})')
+        if isinstance(e, Translate) and isinstance(e.offset, str):
+            found.setdefault(e.offset, set()).add(f'shift(offset={e.offset})')
         if isinstance(e, Window) and isinstance(e.width, str):
             found.setdefault(e.width, set()).add(f'sum_back(within={e.width})')
         for child in children(e):

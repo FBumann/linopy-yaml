@@ -25,7 +25,7 @@ import pytest
 import yaml as pyyaml
 
 import lpspec as lps
-from lpspec.errors import DataError, LanguageError
+from lpspec.errors import DataError, LanguageError, LpspecError
 from tests.conftest import schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd
@@ -420,9 +420,9 @@ SEASONS_PAGE = Path('docs/examples/seasons.md')
 def _seasons_sources():
     """Snapshots numbered from **1**, and seasons of four and three.
 
-    Both are the model's argument in the data: a clause naming a label would
-    have to know the horizon starts at 1, and no single position along the axis
-    is the last of a four-snapshot season *and* a three-snapshot one.
+    Both are the model's argument in the data: no clause names a label, and no
+    single position along the axis is the last of a four-snapshot season *and*
+    of a three-snapshot one.
     """
     snapshots = [1, 2, 3, 4, 5, 6, 7]
     return {
@@ -430,28 +430,140 @@ def _seasons_sources():
         'season': pl.DataFrame({'season': ['winter', 'summer']}),
         'inflow': pl.DataFrame({'snapshot': snapshots, 'value': [0.0, 10.0, 0.0, 0.0, 0.0, 6.0, 0.0]}),
         'price': pl.DataFrame({'snapshot': snapshots, 'value': [1.0, 2.0, 5.0, 3.0, 4.0, 1.0, 2.0]}),
-        'opening': pl.DataFrame({'season': ['winter', 'summer'], 'value': [20.0, 5.0]}),
-        'reserve': pl.DataFrame({'season': ['winter', 'summer'], 'value': [4.0, 1.0]}),
     }
 
 
 def test_the_seasons_page_number():
     """The optimum `docs/examples/seasons.md` quotes, and the trajectory behind it.
 
-    Both boundaries are load-bearing and neither is reachable ungrouped: the
-    opening level is handed to each season rather than to the horizon, and the
-    reserve is owed at snapshot 4 *and* snapshot 7 — positions that are the last
-    of a four-snapshot season and of a three-snapshot one.
+    Summer is what the numbers are for: it opens holding 6 and sells that at the
+    price-4 snapshot *before* its own inflow arrives, which only a cycle closed
+    per season allows — the 6 is its own, returned by snapshot 7.
     """
     with differential(SEASONS, _seasons_sources()) as run:
-        assert run.oracle == pytest.approx(160.0, rel=RTOL), 'winter 130 and summer 30, agreed by both lanes'
+        assert run.oracle == pytest.approx(74.0, rel=RTOL), 'winter 50 and summer 24, agreed by both lanes'
         released = {int(r['snapshot']): r['value'] for r in run.result.primal('release').to_dicts()}
         held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
 
-    assert held[1] == pytest.approx(20.0), "winter is handed its own opening level, not the horizon's"
-    assert released[3] == pytest.approx(26.0), "and sells all but its reserve at winter's best price"
-    assert held[4] == pytest.approx(4.0), 'leaving the 4 it owes at its own last snapshot'
-    assert held[5] == pytest.approx(0.0), 'summer opens from its own level and owes nothing until its end'
-    assert held[7] == pytest.approx(1.0), 'where it leaves the 1 it owes, three snapshots later rather than four'
+    assert released[3] == pytest.approx(10.0), "winter's inflow leaves at winter's own best price"
+    assert held[4] == pytest.approx(0.0), 'and winter closes where it opened, handing summer nothing'
+    assert released[5] == pytest.approx(6.0), 'summer sells a snapshot before its inflow arrives'
+    assert held[7] == pytest.approx(6.0), 'and closes holding what it opened with, three snapshots later'
 
-    assert '160.0' in SEASONS_PAGE.read_text(), 'the page quotes an optimum this test does not hold'
+    assert '74.0' in SEASONS_PAGE.read_text(), 'the page quotes an optimum this test does not hold'
+
+
+#: One balance row whose edge the case under test swaps in. `release` carries an
+#: upper bound because a dropped row leaves that snapshot's release in no
+#: constraint at all, and an unbounded lane has no optimum to agree on.
+PARTITIONED = """
+dimensions:
+  snapshot: {dtype: int}
+  season: {dtype: str}
+
+lookups:
+  season_of: {over: snapshot, into: season}
+
+parameters:
+  inflow: {dims: [snapshot]}
+  price: {dims: [snapshot]}
+
+variables:
+  soc: {foreach: [snapshot], bounds: {lower: 0, upper: 60}}
+  release: {foreach: [snapshot], bounds: {lower: 0, upper: 100}}
+
+constraints:
+  season_balance:
+    foreach: [snapshot]
+    expression: soc == shift(soc, over=snapshot, offset=1, EDGE) + inflow - release
+
+objective:
+  sense: maximize
+  expression: sum(release * price, over=snapshot)
+"""
+
+
+def _partitioned(edge: str) -> str:
+    return PARTITIONED.replace('EDGE', edge)
+
+
+def test_a_bare_partitioned_shift_vacates_each_group_s_first():
+    """Two rows drop, one per season — not one for the horizon.
+
+    Bare, the vacated position is absent and takes its row with it, and with
+    `by=` the position vacated is each *season's* first rather than the axis's.
+    """
+    model = _partitioned('by=season_of')
+    with differential(model, _seasons_sources()) as run:
+        assert run.result.is_ok, 'both lanes reach the same answer with two rows missing from it'
+    with lps.build(pyyaml.safe_load(model), _seasons_sources()) as built:
+        omitted = {r['constraint']: r['rows_not_built'] for r in built.diagnostics().omissions.to_dicts()}
+    assert omitted['season_balance'] == 2, 'one row per season, not one for the horizon'
+
+
+def test_a_filled_partitioned_edge_builds_every_row():
+    """`edge=0` per group: the row survives and its first snapshot starts empty."""
+    model = _partitioned('edge=0, by=season_of')
+    with differential(model, _seasons_sources()) as run:
+        held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
+    with lps.build(pyyaml.safe_load(model), _seasons_sources()) as built:
+        assert built.diagnostics().omissions.is_empty(), 'a filled edge builds every row'
+    assert held[5] == pytest.approx(0.0), "summer's first snapshot starts from the 0 its own edge was filled with"
+
+
+def test_the_axis_wrap_is_a_different_model():
+    """The same balance wrapped over the horizon leaks across the boundary.
+
+    This is what `by=` is for, and it is not a convenience: without it winter
+    opens on summer's closing level, which is feasible, higher, and wrong.
+    """
+    with differential(_partitioned("edge='wrap'"), _seasons_sources()) as run:
+        assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the horizon as one cycle, worth 6 more to winter'
+        held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
+    assert held[1] == pytest.approx(6.0), "winter's first snapshot opens on what summer left"
+
+    with differential(_partitioned("edge='wrap', by=season_of"), _seasons_sources()) as run:
+        assert run.oracle == pytest.approx(74.0, rel=RTOL), 'each season closed on itself, and 6 poorer for it'
+
+
+def test_coordinates_in_no_group_translate_from_nothing():
+    """Snapshots the lookup sends nowhere are in no group, so they reach nothing.
+
+    **Two** of them, which is the case that separates "in no group" from "in a
+    group of its own": a lane that let the nulls fall together would give the
+    second a predecessor — the first — and write a balance row about a season
+    that does not exist. Under a wrap it would close them onto each other.
+    """
+    sources = _seasons_sources()
+    snapshots = [1, 2, 3, 4, 5, 6, 7, 98, 99]
+    sources['snapshot'] = pl.DataFrame(
+        {'snapshot': snapshots, 'season_of': ['winter'] * 4 + ['summer'] * 3 + [None, None]}
+    )
+    for name in ('inflow', 'price'):
+        sources[name] = pl.concat([sources[name], pl.DataFrame({'snapshot': [98, 99], 'value': [1.0, 1.0]})])
+
+    for edge in ("edge='wrap', by=season_of", 'by=season_of'):
+        model = _partitioned(edge)
+        with differential(model, sources) as run:
+            held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
+        with lps.build(pyyaml.safe_load(model), sources) as built:
+            omitted = {r['constraint']: r['rows_not_built'] for r in built.diagnostics().omissions.to_dicts()}
+
+        expected = 2 if edge.startswith('edge=') else 4  # bare drops each season's first as well
+        assert omitted['season_balance'] == expected, f'{edge}: the two group-less snapshots build no row'
+        assert held[98] == pytest.approx(0.0), f'{edge}: and their levels sit in no balance at all'
+        assert held[99] == pytest.approx(0.0), f'{edge}: neither reads the other'
+
+
+def test_a_lookup_over_another_dimension_cannot_partition_a_translation():
+    """`by=` groups the axis being walked, or no coordinate has a neighbour in one."""
+    model = (
+        _partitioned("edge='wrap', by=plant_season")
+        .replace(
+            'lookups:\n  season_of:',
+            'lookups:\n  plant_season: {over: plant, into: season}\n  season_of:',
+        )
+        .replace('  season: {dtype: str}', '  season: {dtype: str}\n  plant: {dtype: str}')
+    )
+    with pytest.raises(LpspecError, match=r"walks 'snapshot' but groups by a lookup over 'plant'"):
+        schema_of(model)

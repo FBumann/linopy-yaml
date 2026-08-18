@@ -46,6 +46,8 @@ _LAG = '__lag'
 _WIDTH = '__width'
 _ORD_IN = '__ord in__'
 _ORD_OUT = '__ord out__'
+_POS = '__pos in group__'
+_SPAN = '__group size__'
 
 #: Carries the single row of the empty coordinate product. Polars cannot hold a
 #: frame with one row and no columns — collecting one reports ``(0, 0)`` — so the
@@ -886,22 +888,45 @@ class PolarsCompiler:
         card = self.data.cardinality[s.dimension]
         others = [d for d in p.dims if d != s.dimension]
         table = self.data.dimensions[s.dimension]
-        incoming = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_IN))
-        outgoing = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_OUT))
+        if s.partition is not None:
+            # Inside a group the neighbour is decided by position within *that*
+            # group, so both joins read a rank rather than the axis-wide `ord`
+            # and a wrap closes on the group's own size. A coordinate the lookup
+            # sends nowhere ranks null and joins to nothing, which is the null
+            # group everywhere else.
+            grouped = pl.col(s.partition)
+            table = table.with_columns(
+                pl.when(grouped.is_null())
+                .then(None)
+                .otherwise(pl.col('ord').rank('ordinal').over(grouped) - 1)
+                .cast(pl.Int64)
+                .alias(_POS),
+                pl.when(grouped.is_null()).then(None).otherwise(pl.len().over(grouped)).cast(pl.Int64).alias(_SPAN),
+            )
+        position = _POS if s.partition is not None else 'ord'
+        group_cols = [pl.col(s.partition)] if s.partition is not None else []
+        incoming = table.select(
+            pl.col('val').alias(s.dimension),
+            pl.col(position).alias(_ORD_IN),
+            *group_cols,
+            *([pl.col(_SPAN)] if s.partition is not None else []),
+        )
+        outgoing = table.select(pl.col('val').alias(s.dimension), pl.col(position).alias(_ORD_OUT), *group_cols)
 
-        offset_name = s.by if isinstance(s.by, str) else None
+        offset_name = s.offset if isinstance(s.offset, str) else None
         offset_dims: tuple[str, ...] = ()
         if offset_name is not None:
             offset_dims = tuple(self.program.parameter(offset_name).dims)
             moved = pl.col(_ORD_IN) + pl.col(_OFFSET)
         else:
-            assert not isinstance(s.by, str)
-            moved = pl.col(_ORD_IN) + s.by
+            assert not isinstance(s.offset, str)
+            moved = pl.col(_ORD_IN) + s.offset
         if s.wrap:
-            moved = (moved % card + card) % card
+            span = pl.col(_SPAN) if s.partition is not None else pl.lit(card)
+            moved = (moved % span + span) % span
 
         def remap(source: pl.LazyFrame, carried: list[str], source_dims: tuple[str, ...] | None = None) -> pl.LazyFrame:
-            """*source*, with ``s.dimension`` moved by ``s.by``.
+            """*source*, with ``s.dimension`` moved by ``s.offset``.
 
             ``source_dims`` is the caller's, because a presence frame need not
             carry the fragment's: an acyclic shift's presence speaks only about
@@ -921,9 +946,10 @@ class PolarsCompiler:
                     on=list(offset_dims),
                     how='inner',
                 )
+            landing = [_ORD_OUT, s.partition] if s.partition is not None else [_ORD_OUT]
             return (
                 walked.with_columns(moved.alias(_ORD_OUT))
-                .join(outgoing, on=_ORD_OUT, how='inner')
+                .join(outgoing, on=landing, how='inner')
                 .select(*kept, s.dimension, *carried)
             )
 
@@ -950,7 +976,10 @@ class PolarsCompiler:
             """
             if p.presence is None:
                 if s.wrap or s.fill is not None:
-                    return None
+                    # A policy speaks about a group's edge, and a coordinate in
+                    # no group has none — it is absent under every policy, there
+                    # being nothing to come round from or to fill from.
+                    return None if s.partition is None else Presence(self._grouped(s), (s.dimension,))
                 return Presence(self._edge(s, card, vacated=False), (s.dimension,))
 
             source, keyed_by = p.presence.frame, p.presence.keyed_by
@@ -1003,12 +1032,36 @@ class PolarsCompiler:
         keep in step: a fill and the presence set it implies must not disagree
         about which coordinates the edge is. One column wide either way, an
         edge being vacated for *every* combination of the other dims.
+
+        Under a partition the edge is **each group's**, counted along the same
+        within-group rank the translation itself walks: a coordinate reaches
+        outside its own group exactly where it would have reached outside the
+        axis. A coordinate in no group reaches nothing, so it is vacated under
+        every policy — a wrap included, there being no group to come round from.
         """
-        source = pl.col('ord') - s.by
-        outside = (source < 0) | (source >= card)
+        table = self.data.dimensions[s.dimension]
+        if s.partition is not None:
+            grouped = pl.col(s.partition)
+            position = pl.col('ord').rank('ordinal').over(grouped) - 1
+            source = position.cast(pl.Int64) - s.offset
+            span = pl.len().over(grouped).cast(pl.Int64)
+            reaches = (source % span + span) % span if s.wrap else source
+            outside = grouped.is_null() | (reaches < 0) | (reaches >= span)
+        else:
+            source = pl.col('ord') - s.offset
+            outside = (source < 0) | (source >= card)
+        return table.filter(outside if vacated else ~outside).select(pl.col('val').alias(s.dimension))
+
+    def _grouped(self, s: plan.Translate) -> pl.LazyFrame:
+        """The labels the partition lookup actually places in a group.
+
+        The rest belong to none, so a translation reaches nothing for them and
+        their rows are not built — the null reading ``sum(by=)`` gives, and the
+        one an edge policy cannot speak about.
+        """
         return (
             self.data.dimensions[s.dimension]
-            .filter(outside if vacated else ~outside)
+            .filter(pl.col(str(s.partition)).is_not_null())
             .select(pl.col('val').alias(s.dimension))
         )
 

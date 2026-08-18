@@ -439,6 +439,8 @@ def _eval_ast(
                 kwargs[k] = v.name
             elif isinstance(v, EdgeNode):
                 kwargs[k] = v.policy
+            elif isinstance(v, LookupNode):
+                kwargs[k] = _lookup_array(v, ctx)
             else:
                 kwargs[k] = _eval_ast(v, ctx)
         return operator(*args, **kwargs)
@@ -685,6 +687,44 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: f
     return vacated if fill is None else _vacated(vacated, fill)
 
 
+def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: bool, fill: float | None) -> Any:
+    """Translate *array* inside each group *groups* makes, not along the axis.
+
+    The neighbour of a coordinate is the one *offset* back among the coordinates
+    sharing its group, so the gather is by a source ordinal computed per group:
+    a position past the group's start is vacated where the axis edge would
+    vacate, and under *wrap* it comes round to that group's own last.
+
+    A coordinate the lookup sends nowhere belongs to no group, so it reaches
+    nothing — the null reading a partial lookup gets everywhere else.
+
+    The relational lane computes the identical map as a rank over the dim
+    table joined back on ``(group, position)``.
+    """
+    labels = np.asarray(array.indexes[over])
+    keys = np.asarray(groups.sel({over: labels}).values, dtype=object)
+    step = int(offset)
+
+    positions: dict[object, list[int]] = {}
+    for k, key in enumerate(keys):
+        if key is None or key != key:  # nan: what a partial lookup leaves
+            continue
+        positions.setdefault(key, []).append(k)
+
+    source = np.full(len(labels), -1, dtype=int)
+    for members in positions.values():
+        size = len(members)
+        for within, k in enumerate(members):
+            reached = (within - step) % size if wrap else within - step
+            if 0 <= reached < size:
+                source[k] = members[reached]
+
+    inside = xr.DataArray(source >= 0, coords={over: labels}, dims=[over])
+    indexer = xr.DataArray(labels[np.clip(source, 0, len(labels) - 1)], dims=[over])
+    gathered = array.sel({over: indexer}).assign_coords({over: labels}).where(inside)
+    return gathered if fill is None else _vacated(gathered, fill)
+
+
 def _labelled(labels: Any, ordinals: Any, over: str) -> Any:
     """*ordinals* as the coordinate labels they stand for, keeping their dims.
 
@@ -728,7 +768,7 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     return total
 
 
-def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float | None = None) -> Any:
+def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float | None = None, by: Any = None) -> Any:
     """Translate *array* along one dimension — the value at *t - offset*.
 
     YAML: ``shift(soc, over=snapshot, offset=1)``. ``edge`` carries all three
@@ -746,6 +786,15 @@ def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float |
     that differs per entity, which is a gather rather than a shift and is
     :func:`_gather_by_offset`.
     """
+    if by is not None:
+        return _gather_in_groups(
+            array,
+            over,
+            offset,
+            groups=by,
+            wrap=edge == EDGE_WRAP,
+            fill=None if isinstance(edge, str) else edge,
+        )
     if isinstance(offset, xr.DataArray) and offset.ndim:
         return _gather_by_offset(
             array,
