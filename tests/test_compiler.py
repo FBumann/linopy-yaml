@@ -39,6 +39,10 @@ planner stays free to change underneath them.
 
 from __future__ import annotations
 
+from dataclasses import replace
+from types import MappingProxyType
+from typing import TYPE_CHECKING
+
 import polars as pl
 import pytest
 
@@ -46,6 +50,9 @@ from lpspec.errors import LanguageError
 from lpspec.relational import plan
 from lpspec.relational.engines.polars.binding import BoundSources
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 PROGRAM = plan.Program(
     parameters=(
@@ -78,7 +85,7 @@ PARAMETERS = {
 VARIABLES = {'p': pl.LazyFrame(schema={'snapshot': pl.Int64, 'generator': pl.String, 'var_label': pl.Int64})}
 
 
-def bound(boolean_parameters: frozenset[str] = frozenset()) -> BoundSources:
+def bound() -> BoundSources:
     """The data a query is written against — schemas only, no rows.
 
     Compiling reads nothing, so an empty frame of the right schema is a whole
@@ -88,12 +95,24 @@ def bound(boolean_parameters: frozenset[str] = frozenset()) -> BoundSources:
         parameters=PARAMETERS,
         dimensions=DIMENSIONS,
         cardinality=CARDINALITY,
-        boolean_parameters=boolean_parameters,
     )
 
 
-def compiler(boolean_parameters: frozenset[str] = frozenset()) -> PolarsCompiler:
-    return PolarsCompiler(PROGRAM, bound(boolean_parameters), VARIABLES)
+def program(dtypes: Mapping[str, str] = MappingProxyType({})) -> plan.Program:
+    """PROGRAM with the declared dtypes a case needs.
+
+    What a bare name in a where asks is decided by the *declaration* now, so a
+    case that used to hand the compiler a set of boolean parameters redeclares
+    one instead.
+    """
+    return replace(
+        PROGRAM,
+        parameters=tuple(replace(p, dtype=dtypes.get(p.name, p.dtype)) for p in PROGRAM.parameters),
+    )
+
+
+def compiler(dtypes: Mapping[str, str] = MappingProxyType({})) -> PolarsCompiler:
+    return PolarsCompiler(program(dtypes), bound(), VARIABLES)
 
 
 def columns(frame: pl.LazyFrame) -> list[str]:
@@ -309,11 +328,21 @@ def test_the_same_predicate_under_an_or_is_left_joined_again():
     assert 'INNER JOIN' not in text
 
 
-def test_defined_on_a_boolean_parameter_tests_the_value_not_its_finiteness():
+def test_what_a_bare_name_asks_is_decided_by_its_declaration():
+    """Three readings, and the file picks — not the column that turned up.
+
+    Reading it off the storage is what let one set of flags mask and the same
+    flags spelled 1/0 mask nothing, and it is what sent a string parameter into
+    `is_finite`, which polars refuses outright.
+    """
     numeric = query(compiler().frame(('generator',), plan.ParameterDefined('available')))
-    boolean = query(compiler(frozenset({'available'})).frame(('generator',), plan.ParameterDefined('available')))
-    assert 'is_finite' in numeric
-    assert 'is_finite' not in boolean
+    boolean = query(compiler({'available': 'bool'}).frame(('generator',), plan.ParameterDefined('available')))
+    text = query(compiler({'available': 'str'}).frame(('generator',), plan.ParameterDefined('available')))
+
+    assert 'is_finite' in numeric, 'a number has to be finite as well as present'
+    assert 'is_finite' not in boolean, 'a boolean is its own answer'
+    assert 'is_finite' not in text, 'and a string is defined wherever it has a row'
+    assert 'is_not_null' in text
 
 
 def test_a_where_parameter_outside_the_frame_dims_is_refused():
@@ -394,7 +423,6 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
         parameters={'load': pl.LazyFrame({'snapshot': [0, 1, 2], 'value': [10.0, 20.0, 30.0]})},
         dimensions={'snapshot': snapshots},
         cardinality={'snapshot': 3},
-        boolean_parameters=frozenset(),
     )
     q = PolarsCompiler(PROGRAM, sources, VARIABLES)
     shifted = plan.Translate(plan.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)

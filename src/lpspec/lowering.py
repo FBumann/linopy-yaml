@@ -88,7 +88,9 @@ def lower_program(schema: Model) -> plan.Program:
     """
     schema = expand_piecewise(schema)
     ns = Namespace.of(schema)
-    parameters = tuple(plan.ParameterDeclaration(name, tuple(pdef.dims)) for name, pdef in schema.parameters.items())
+    parameters = tuple(
+        plan.ParameterDeclaration(name, tuple(pdef.dims), pdef.dtype) for name, pdef in schema.parameters.items()
+    )
 
     variables = []
     for vname, vdef in schema.variables.items():

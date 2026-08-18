@@ -824,6 +824,8 @@ def _eval_node(
         arr = dataset[node.name]
         if arr.dtype == bool:
             return arr
+        if arr.dtype.kind in 'OUS':
+            return arr.notnull()
         return arr.notnull() & np.isfinite(arr)
 
     if isinstance(node, VariableDefinedNode):

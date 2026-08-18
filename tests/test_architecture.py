@@ -547,6 +547,42 @@ def test_the_engine_dtype_table_matches_the_declared_vocabulary():
     assert set(_DECLARED) == set(DIMENSION_DTYPES), 'the two homes of the dimension dtype vocabulary disagree'
 
 
+def test_both_lanes_accept_the_declared_parameter_dtype_vocabulary():
+    """Every declared dtype has a column table entry on each lane.
+
+    Same fence, same remedy as the dimension table above: neither lane may
+    import the language, and a dtype added to ``PARAMETER_DTYPES`` without an
+    entry here would fail at bind with a ``KeyError`` on the first parameter
+    that declared it, rather than at load with a sentence.
+    """
+    from lpspec.language.model import PARAMETER_DTYPES
+    from lpspec.linopy.loader import _ACCEPTED_KINDS
+    from lpspec.relational.engines.polars.data_validation import _COLUMNS, ACCEPTED_VALUE_TYPES
+
+    assert set(_COLUMNS) == set(PARAMETER_DTYPES), 'the relational column table and the language disagree'
+    assert set(ACCEPTED_VALUE_TYPES) == set(PARAMETER_DTYPES), 'the relational accepted table and the language disagree'
+    assert set(_ACCEPTED_KINDS) == set(PARAMETER_DTYPES), 'the eager kind table and the language disagree'
+
+
+def test_the_one_widening_is_the_only_place_the_lanes_take_a_wider_column():
+    """``int`` serves ``float``, and nothing else is widened on either lane.
+
+    The exception is deliberate and worth pinning: whole numbers are numbers,
+    it is what the shipped instances carry, and a second widening added
+    quietly would put the two lanes' vocabularies back out of step.
+    """
+    from lpspec.linopy.loader import _ACCEPTED_KINDS
+    from lpspec.relational.engines.polars.data_validation import _COLUMNS, ACCEPTED_VALUE_TYPES
+
+    widened = {name: set(types) - set(_COLUMNS[name]) for name, types in ACCEPTED_VALUE_TYPES.items()}
+    assert widened == {'float': set(_COLUMNS['int']), 'int': set(), 'bool': set(), 'str': set()}, (
+        'the relational lane widens exactly int-for-float'
+    )
+    assert _ACCEPTED_KINDS == {'float': 'fiu', 'int': 'iu', 'bool': 'b', 'str': 'OUS'}, (
+        'and the eager lane widens the same one'
+    )
+
+
 def test_the_plan_variable_type_matches_the_declared_domains():
     """``plan.VariableType`` spells the domain set the language validates.
 

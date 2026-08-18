@@ -391,10 +391,16 @@ class DimensionDeclaration:
 
 @dataclass(frozen=True)
 class ParameterDeclaration:
-    """Shape declaration; data is bound at execution time by name."""
+    """Shape declaration; data is bound at execution time by name.
+
+    ``dtype`` is what the declaration claims the values are, and binding
+    refuses a column that is not it — so the engine reads the *declaration*
+    where it used to read the column, and the two cannot disagree.
+    """
 
     name: str
     dims: tuple[str, ...]
+    dtype: str = 'float'
 
 
 @dataclass(frozen=True)
@@ -509,38 +515,6 @@ def parameters_of(*expressions: Expression) -> frozenset[str]:
     for e in expressions:
         walk(e)
     return frozenset(found)
-
-
-def positional_parameters(program: Program) -> dict[str, str]:
-    """Every parameter the program reads as a *position*, and what reads it.
-
-    A named ``shift`` offset and a named ``sum_back`` width are the one class
-    of parameter whose values are structure rather than arithmetic: an offset
-    lands on a coordinate and a width counts positions, so a fractional value
-    has no reading. Lowering checks what the declaration promised — ``dtype:
-    int`` — and this is the set whoever binds the data has to check it kept.
-
-    Returns:
-        Parameter name to the operator spelling that reads it, joined where
-        more than one does, so a refusal can quote the call rather than the
-        rule.
-    """
-    found: dict[str, set[str]] = {}
-
-    def walk(e: Expression) -> None:
-        if isinstance(e, Translate) and isinstance(e.by, str):
-            found.setdefault(e.by, set()).add(f'shift(by={e.by})')
-        if isinstance(e, Window) and isinstance(e.width, str):
-            found.setdefault(e.width, set()).add(f'sum_back(within={e.width})')
-        for child in children(e):
-            walk(child)
-
-    for constraint in program.constraints:
-        walk(constraint.lhs)
-        walk(constraint.rhs)
-    if program.objective is not None:
-        walk(program.objective.expression)
-    return {name: ' and '.join(sorted(spellings)) for name, spellings in found.items()}
 
 
 def divisor_parameters(*expressions: Expression) -> frozenset[str]:

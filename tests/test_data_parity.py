@@ -258,70 +258,129 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
         lpspec_linopy.build(path, sources)
 
 
-#: The two places the language reads a parameter's *values* as positions rather
-#: than as arithmetic. Both take `dtype: int` at load, and neither looked at
-#: what the column actually carried.
-POSITION_MODELS = {
-    'shift(by=lead)': {
-        'dimensions': {'g': {'values': ['a']}, 't': {'dtype': 'int'}},
-        'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
-        'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0}}},
-        'constraints': {'c': {'foreach': ['g', 't'], 'expression': 'shift(x, over=t, by=lead, edge=0) >= demand'}},
-        'objective': {'sense': 'minimize', 'expression': 'x'},
-    },
-    'sum_back(within=lead)': {
-        'dimensions': {'g': {'values': ['a']}, 't': {'dtype': 'int'}},
-        'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
-        'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0}}},
-        'constraints': {'c': {'foreach': ['g', 't'], 'expression': 'sum_back(x, over=t, within=lead) >= demand'}},
-        'objective': {'sense': 'minimize', 'expression': 'x'},
-    },
+#: A model reading a parameter as a position, which is what made the declared
+#: dtype load-bearing before it was checked.
+POSITION_MODEL = {
+    'dimensions': {'g': {'values': ['a']}, 't': {'dtype': 'int'}},
+    'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
+    'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0}}},
+    'constraints': {'c': {'foreach': ['g', 't'], 'expression': 'shift(x, over=t, by=lead, edge=0) >= demand'}},
+    'objective': {'sense': 'minimize', 'expression': 'x'},
 }
 
 _DEMAND = _tidy(g=['a', 'a', 'a'], t=[0, 1, 2], value=[1.0, 2.0, 3.0])
 
 
-def _position_sources(lead: float) -> dict[str, Any]:
+def _position_sources(lead: Any) -> dict[str, Any]:
     return {'t': [0, 1, 2], 'lead': _tidy(g=['a'], value=[lead]), 'demand': _DEMAND}
 
 
-@pytest.mark.parametrize('spelling', sorted(POSITION_MODELS), ids=lambda s: s.split('(')[0])
-@pytest.mark.parametrize('lead', [1.5, 2.6], ids=['rounds-down', 'rounds-down-further'])
-def test_a_fractional_position_is_refused_on_both_lanes(tmp_path: Path, spelling: str, lead: float):
-    """It used to truncate, on both lanes, to the same wrong model.
+def test_an_int_declaration_takes_no_float_column_so_a_fraction_cannot_arrive(tmp_path: Path):
+    """What used to be a value scan is now unrepresentable.
 
-    `by=1.5` built exactly what `by=1` builds and `by=2.6` what `by=2` does, so
-    the differential suite compared two lanes that agreed — the one failure
-    mode a second implementation cannot catch. The declaration promising
-    `dtype: int` is checked at load; that the column kept the promise is a
-    question only data can answer.
+    `by=1.5` once built exactly what `by=1` builds, on both lanes, so the
+    differential suite agreed with itself on the wrong model. The repair is not
+    a scan for fractions: an `int` declaration takes an integer column, and an
+    integer column has no fraction to hold.
     """
     path = tmp_path / 'position.yaml'
-    path.write_text(pyyaml.safe_dump(POSITION_MODELS[spelling]))
+    path.write_text(pyyaml.safe_dump(POSITION_MODEL))
 
-    with pytest.raises(DataError, match='not whole numbers') as relational:
-        lps.build(path, _position_sources(lead)).close()
-    with pytest.raises(DataError, match='not whole numbers') as eager:
-        lpspec_linopy.build(path, _position_sources(lead))
+    with pytest.raises(DataError, match="declared 'int'") as relational:
+        lps.build(path, _position_sources(1.5)).close()
+    with pytest.raises(DataError, match="declared 'int'") as eager:
+        lpspec_linopy.build(path, _position_sources(1.5))
 
-    assert spelling in str(relational.value), 'the message quotes the call that reads it'
     assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    with lps.solve(path, _position_sources(1)) as run:
+        assert run.is_ok, 'and an integer column is the ordinary case'
 
 
-@pytest.mark.parametrize('spelling', sorted(POSITION_MODELS), ids=lambda s: s.split('(')[0])
-def test_a_whole_number_in_a_float_column_is_still_a_position(tmp_path: Path, spelling: str):
-    """`2.0` lands on a coordinate exactly as `2` does, and pandas has no other dtype for it.
+def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
+    """The one widening, and the only mismatch the shipped corpus contains.
 
-    The guard is against a value with something after the point, not against
-    the column's storage — a float offset column is what a pandas-shaped
-    source gives you for a whole number, and refusing it would refuse the
-    ordinary case.
+    `transport_dantzig` and `transport_pwl` declare `capacity` and `demand`
+    `float` and supply whole numbers; refusing that would cost two ports a cast
+    that protects nothing, since an integer is a number.
     """
-    path = tmp_path / 'position.yaml'
-    path.write_text(pyyaml.safe_dump(POSITION_MODELS[spelling]))
+    model = {
+        'dimensions': {'g': {'values': ['a', 'b']}},
+        'parameters': {'cost': {'dims': ['g'], 'dtype': 'float'}},
+        'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
+        'objective': {'sense': 'minimize', 'expression': 'x * cost'},
+    }
+    path = tmp_path / 'widening.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    integral = {'cost': _tidy(g=['a', 'b'], value=[1, 2])}
 
-    with lps.solve(path, _position_sources(2.0)) as floating, lps.solve(path, _position_sources(2)) as integral:
-        assert floating.objective == integral.objective, 'a whole number is a whole number'
+    with lps.solve(path, integral) as run:
+        assert run.is_ok, 'an integer column serves a float declaration'
+    assert lpspec_linopy.build(path, integral) is not None, 'and does so on both lanes'
+
+
+#: A flag, and the three ways a source may spell one. Only the boolean column
+#: satisfies `dtype: bool`, and what the mask means no longer depends on which
+#: spelling arrived.
+FLAG_MODEL = {
+    'dimensions': {'g': {'values': ['a', 'b']}},
+    'parameters': {'active': {'dims': ['g'], 'dtype': 'bool'}},
+    'variables': {'x': {'foreach': ['g'], 'where': 'active', 'bounds': {'lower': 0, 'upper': 1}}},
+    'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
+    'objective': {'sense': 'maximize', 'expression': 'x'},
+}
+
+
+@pytest.mark.parametrize(
+    ('spelling', 'column'),
+    [
+        pytest.param('boolean', _tidy(g=['a', 'b'], value=[True, False]), id='a-boolean-column'),
+        pytest.param('1/0 ints', _tidy(g=['a', 'b'], value=[1, 0]), id='a-1-0-int-column'),
+        pytest.param('1.0/0.0 floats', _tidy(g=['a', 'b'], value=[1.0, 0.0]), id='a-1-0-float-column'),
+    ],
+)
+def test_a_flag_masks_by_its_declaration_rather_than_by_its_storage(tmp_path: Path, spelling: str, column: Any):
+    """`where: active` used to mask only where the source happened to store booleans.
+
+    A 1/0 column read as "defined", which is true of every row, so the same
+    flags in a different spelling built a model with nothing masked out — no
+    error, on either lane. Now the declaration decides, and a column that is
+    not what it declares does not bind at all.
+    """
+    path = tmp_path / 'flag.yaml'
+    path.write_text(pyyaml.safe_dump(FLAG_MODEL))
+    sources = {'active': column}
+
+    if spelling == 'boolean':
+        with lps.solve(path, sources) as run:
+            assert run.objective == pytest.approx(1.0), 'the inactive column is masked away'
+        return
+    with pytest.raises(DataError, match="declared 'bool'"):
+        lps.build(path, sources).close()
+    with pytest.raises(DataError, match="declared 'bool'"):
+        lpspec_linopy.build(path, sources)
+
+
+def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: Path):
+    """It used to reach polars' `is_finite`, which strings do not have.
+
+    `InvalidOperationError: is_finite operation not supported for dtype str` is
+    the opaque exception the error rules exist to prevent, and the declaration
+    that answers it was already in the file.
+    """
+    model = {
+        'dimensions': {'g': {'values': ['a', 'b']}},
+        'parameters': {'fuel': {'dims': ['g'], 'dtype': 'str'}},
+        'variables': {'x': {'foreach': ['g'], 'where': 'fuel', 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
+        'objective': {'sense': 'maximize', 'expression': 'x'},
+    }
+    path = tmp_path / 'fuel.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    sources = {'fuel': _tidy(g=['a'], value=['gas'])}
+
+    with lps.solve(path, sources) as run:
+        assert run.objective == pytest.approx(1.0), 'defined is having a row, and only `a` has one'
 
 
 #: A lookup-carrying dimension: the one index a parameter table cannot stand in
