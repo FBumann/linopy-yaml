@@ -87,13 +87,21 @@ positionally.
 
 ## The data contract
 
-Both lanes bind by these rules.
+Both lanes bind by these rules, and `tests/test_data_parity.py` is what holds
+them to it: the same malformed source, checked for the same verdict and — where
+one defect has one repair — the same sentence.
 
 ### Refused
 
 | | |
 |---|---|
 | a declared parameter with no data | names the parameter |
+| a source nothing can be read as a table from | names the shapes that are read |
+| an `xr.DataArray` | names `to_series()`, this being a lane's output rather than an input |
+| a `dims: []` parameter whose source has more than one row | one value broadcast everywhere has one row |
+| a dict or a sequence for a parameter over more than one dim | each runs along one dimension |
+| a sequence whose length is not the dimension's | positional, so one entry per label |
+| a sequence for a dimension nothing else supplies labels for | names the three ways to supply them |
 | a key naming neither a parameter nor a dimension | names the near miss |
 | a table missing a declared dim column, or `value` | names the columns needed |
 | a label outside the dimension's index | names the parameter and the strays |
@@ -106,6 +114,9 @@ Both lanes bind by these rules.
 | a lookup whose map the file declares and the caller also supplies | names the map and the colliding column |
 | a declared map whose labels nothing supplies | names the map, and asks only for the labels |
 | a declared map keyed by something the labels do not carry | names the lookup and the strays |
+| a divisor with no value where the model divides by it | names the parameter and how many rows ([absence](absence.md)) |
+| a comparison's whole constant side with no value where the row is built | the same, naming the constraint |
+| a bound parameter with no value where the variable exists | names both models the two repairs build |
 
 ### Accepted
 
