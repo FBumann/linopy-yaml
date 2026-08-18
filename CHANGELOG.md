@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.200](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.199...v0.0.1-alpha.200) (2026-08-18)
+
+
+### Features
+
+* **ports:** a risk preference is three variables and two rows ([#1035](https://github.com/fluxopt/lpspec/issues/1035)) ([c3972ff](https://github.com/fluxopt/lpspec/commit/c3972ff6bd840c0ba5cbca634c41f1e87ada3c55))
+* **ports:** capacity is chosen once and dispatch once per future ([#1033](https://github.com/fluxopt/lpspec/issues/1033)) ([96a4572](https://github.com/fluxopt/lpspec/commit/96a4572cb85dbf9a5451e6b4362777c0e0d89928))
+
 ## [0.0.1-alpha.199](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.198...v0.0.1-alpha.199) (2026-08-18)
 
 
