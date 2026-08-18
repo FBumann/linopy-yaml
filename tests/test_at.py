@@ -443,20 +443,27 @@ def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
     have. It widens rather than asking, so this builds at all instead of
     failing on a column named `u`.
 
-    Relational-lane only: the eager lane answers 0.0 here because its `edge: 0`
-    fills every absence rather than the positions the shift vacated (#987), so
-    a differential case would have to assert the wrong number to stay green.
+    Differential, and it is the case that decides both lanes read `edge:` the
+    same way: an absence that arrived *before* the shift is not the edge, so it
+    is not filled, and f3 — mapping nowhere — keeps no row at either t (#987).
     """
+    from tests.differential import differential
+    from tests.oracle import pd
+
     flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
-    sources = {
-        'flow': pl.DataFrame({'flow': flows, 'component_of': DANGLING_MAP}),
-        'component': pl.DataFrame({'component': components}),
-        't': pl.DataFrame({'t': [0, 1]}),
-        'u': pl.DataFrame({'u': ['a', 'b']}),
-    }
-    with lps.build(DANGLING_SHIFTED, sources) as bound:
-        assert bound.diagnostics().rows == 8, 'the flows that map somewhere are asserted at both t, and f3 at neither'
-        with bound.solve() as result:
-            assert result.objective == pytest.approx(40.0), (
-                "f3's four coordinates are held by their own bound alone, every other row by a level worth 1000"
-            )
+    with differential(
+        DANGLING_SHIFTED,
+        {
+            'flow': pd.DataFrame({'flow': flows, 'component_of': DANGLING_MAP}),
+            'component': pd.Index(components, name='component'),
+            't': pd.Index([0, 1], name='t'),
+            'u': pd.Index(['a', 'b'], name='u'),
+        },
+        lp=True,
+    ) as run:
+        assert run.engine.diagnostics().rows == 8, (
+            'the flows that map somewhere are asserted at both t, and f3 at neither'
+        )
+        assert run.oracle == pytest.approx(40.0), (
+            "f3's four coordinates are held by their own bound alone, every other row by a level worth 1000"
+        )

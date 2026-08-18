@@ -21,7 +21,7 @@ from lpspec.relational.plan import (
 )
 from tests.conftest import DISPATCH_MODEL, EXAMPLES_DIR, by_coord, override, resolved, schema_of
 from tests.differential import differential
-from tests.oracle import pd
+from tests.oracle import lpspec_linopy, pd
 
 STORAGE_YAML = EXAMPLES_DIR / 'storage.yaml'
 STORAGE_SCHEMA = schema_of(STORAGE_YAML)
@@ -161,6 +161,120 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
         assert np.allclose(soc[-1], 0.9 * charge[-1] - discharge[-1], atol=1e-6), (
             'at the last snapshot the vacated successor contributes zero, not a wraparound'
         )
+
+
+#: A mask that removes one interior coordinate, so the operand's own absence
+#: sits where no edge is. `edge: 0` may fill the boundary and nothing else, and
+#: the two are one call to `fillna` apart on the eager lane (#987).
+MASKED_INTERIOR = {
+    'dimensions': {'t': {'dtype': 'int'}},
+    'parameters': {'usable': {'dims': ['t']}},
+    'variables': {
+        'level': {'foreach': ['t'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
+        'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'link': {'foreach': ['t'], 'expression': 'take <= shift(level, over=t, offset=1, edge=0)'}},
+    'objective': {
+        'sense': 'maximize',
+        'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)',
+    },
+}
+
+
+def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_there():
+    """`edge:` is the opt-out for the slot the shift vacated, not for the operand.
+
+    Three snapshots and `level` masked away at the middle one. The row at `t=0`
+    is the vacated edge and is filled; the row at `t=2` reads the masked slot,
+    which is absent for a reason the shift had nothing to do with, so it drops
+    and `take[2]` is held by its own bound alone. Filling either alone is
+    indistinguishable from filling both by row count, which is why the
+    objective is asserted too.
+    """
+    sources = {
+        't': pd.Index([0, 1, 2], name='t'),
+        'usable': pd.Series([1.0, 0.0, 1.0], index=pd.Index([0, 1, 2], name='t')),
+    }
+    with differential(MASKED_INTERIOR, sources, lp=True) as run:
+        assert run.engine.diagnostics().rows == 2, 'the boundary row and the one that reads a live slot, and no other'
+        assert run.oracle == pytest.approx(10.0), (
+            'take[2] reaches its bound because no row caps it — 0.0 would mean the masked slot was read as a zero'
+        )
+
+
+#: The same question asked of the two *gathers* — an offset that differs per
+#: entity, and a shift closed inside a group. Both reach the edge through their
+#: own out-of-range mask rather than through `.shift()`, so each needs its own
+#: case or one of the three could fill the whole operand unnoticed.
+BY_PARAMETER = {
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'usable': {'dims': ['t']}},
+    'variables': {
+        'level': {'foreach': ['g', 't'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
+        'take': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'link': {'foreach': ['g', 't'], 'expression': 'take <= shift(level, over=t, offset=lead, edge=0)'}},
+    'objective': {
+        'sense': 'maximize',
+        'expression': 'sum(sum(take, over=g), over=t) - 1000 * sum(sum(level, over=g), over=t)',
+    },
+}
+
+IN_GROUPS = {
+    'dimensions': {'t': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
+    'lookups': {'season_of': {'over': 't', 'into': 'season'}},
+    'parameters': {'usable': {'dims': ['t']}},
+    'variables': {
+        'level': {'foreach': ['t'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
+        'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {
+        'link': {'foreach': ['t'], 'expression': 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)'}
+    },
+    'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)'},
+}
+
+
+def test_a_per_entity_offset_fills_its_own_edge_and_not_the_mask_under_it():
+    """The gather's edge, asked the same way as the scalar shift's.
+
+    One technology, a lead of one month, and `level` masked away at the middle
+    month: `t=0` is the vacated edge and is filled, `t=2` reads the masked slot
+    and drops, so two rows are built and `take` at the last month is capped by
+    nothing.
+
+    Eager lane alone, which is where the three shift paths this fix touches
+    live. The differential it wants is blocked on #1049: the relational lane
+    cannot name the edge of a per-entity offset at all, and raises a polars
+    `ColumnNotFoundError` on this model rather than an answer to compare.
+    """
+    sources = {
+        'g': pd.Index(['a'], name='g'),
+        't': pd.Index([0, 1, 2], name='t'),
+        'lead': pd.Series([1], index=pd.Index(['a'], name='g')),
+        'usable': pd.Series([1.0, 0.0, 1.0], index=pd.Index([0, 1, 2], name='t')),
+    }
+    model = lpspec_linopy.build(BY_PARAMETER, sources)
+    assert model.ncons == 2, 'the vacated month and the one reading a live slot'
+    model.solve(solver_name='highs', output_flag=False)
+    assert float(model.objective.value) == pytest.approx(10.0), 'take at the last month is capped by nothing'
+
+
+def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
+    """And the third path: the edge is per group, the mask is not.
+
+    Two seasons of two snapshots, `level` masked away at the first. Each
+    season's opening snapshot is vacated and filled; the snapshot that reads
+    the masked one drops.
+    """
+    sources = {
+        't': pd.DataFrame({'t': [0, 1, 2, 3], 'season_of': ['s1', 's1', 's2', 's2']}),
+        'season': pd.Index(['s1', 's2'], name='season'),
+        'usable': pd.Series([0.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t')),
+    }
+    with differential(IN_GROUPS, sources, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, "both seasons' opening rows, and the one reading a live slot"
+        assert run.oracle == pytest.approx(10.0), 'the snapshot whose predecessor is masked is capped by nothing'
 
 
 def test_shift_semantics_are_positional_not_lexicographic():

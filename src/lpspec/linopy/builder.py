@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import operator
 from dataclasses import dataclass, field
+from functools import reduce
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, assert_never
 
@@ -682,9 +683,9 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: f
 
     if wrap:
         return gathered(source % card)
-    inside = (source >= 0) & (source < card)
-    vacated = gathered(source.clip(0, card - 1)).where(inside.assign_coords({over: labels}))
-    return vacated if fill is None else _vacated(vacated, fill)
+    inside = ((source >= 0) & (source < card)).assign_coords({over: labels})
+    moved = gathered(source.clip(0, card - 1)).where(inside)
+    return moved if fill is None else _vacated(moved, array, over, ~inside, fill)
 
 
 def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: bool, fill: float | None) -> Any:
@@ -722,7 +723,19 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: 
     inside = xr.DataArray(source >= 0, coords={over: labels}, dims=[over])
     indexer = xr.DataArray(labels[np.clip(source, 0, len(labels) - 1)], dims=[over])
     gathered = array.sel({over: indexer}).assign_coords({over: labels}).where(inside)
-    return gathered if fill is None else _vacated(gathered, fill)
+    return gathered if fill is None else _vacated(gathered, array, over, ~inside, fill)
+
+
+def _off_the_axis(array: Any, over: str, offset: float) -> Any:
+    """Which positions along *over* a scalar shift of *offset* leaves vacated.
+
+    The source a position reads, off both ends, so one expression covers a
+    shift in either direction — the same verdict :func:`_gather_by_offset`
+    reaches with ``inside`` negated.
+    """
+    labels = np.asarray(array.indexes[over])
+    source = xr.DataArray(np.arange(len(labels)), coords={over: labels}, dims=[over]) - int(offset)
+    return (source < 0) | (source >= len(labels))
 
 
 def _labelled(labels: Any, ordinals: Any, over: str) -> Any:
@@ -753,19 +766,28 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     unreachable lag added to a reachable one would annihilate the whole row
     (v1 §4) — which is right for a shift, whose vacated slot really is
     unknown, and wrong here: a window at the first position is short, not
-    empty. It always contains that position itself, which is why no width
-    reaching 1 can empty a row.
+    empty. That covers a masked slot the window reaches too: absence is not a
+    term, and a reduction is where absence stops (the absence reference).
+
+    Which leaves the window that reaches **nothing** — every position it spans
+    masked away, the whole of it where the width is 1. A zero there would build
+    a row about constants alone, so the fill is paired with the positions any
+    lag actually reached, and a window that reached none of them keeps no row
+    (#1059, #1060).
     """
     card = int(array.sizes[over])
     widest = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
     widest = min(widest, card)
-    total = None
+    terms: list[Any] = []
+    reached: list[Any] = []
     for lag in range(widest):
-        term = _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=0.0, card=card)
+        lagged = _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=None, card=card)
+        live, term = ~lagged.isnull(), _filled(lagged, 0.0)
         if isinstance(within, xr.DataArray):
-            term = term * (within > lag).astype(float)
-        total = term if total is None else total + term
-    return total
+            live, term = live & (within > lag), term * (within > lag).astype(float)
+        terms.append(term)
+        reached.append(live)
+    return reduce(operator.add, terms).where(reduce(operator.or_, reached))
 
 
 def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float | None = None, by: Any = None) -> Any:
@@ -819,7 +841,7 @@ def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float |
         return array.shift(amount, fill_value=fill if fill is not None else np.nan)
     if hasattr(array, 'shift'):
         shifted = array.shift(amount)
-        return shifted if fill is None else _vacated(shifted, fill)
+        return shifted if fill is None else _vacated(shifted, array, over, _off_the_axis(array, over, offset), fill)
     raise _unsupported('shift()', array)
 
 
@@ -995,14 +1017,30 @@ def _coefficient(parameter: Any) -> Any:
     return parameter.fillna(0.0)
 
 
-def _vacated(expression: Any, fill: float) -> Any:
-    """A shifted expression with its vacated edge positions filled.
+def _vacated(shifted: Any, operand: Any, over: str, vacated: Any, fill: float) -> Any:
+    """*shifted*, with the positions the shift vacated filled — and only those.
 
     linopy v1 counts ``.shift()`` among the operations that *create* absence
     (v1 §4), so the edge propagates and drops the row — the language's answer too
     (the operator rules, #289). This is the opt-out, reached only from ``shift(...,
-    fill=0)``, and is the escape v1 itself prescribes rather than a rule of
+    edge=0)``, and is the escape v1 itself prescribes rather than a rule of
     ours on top.
+
+    ``fillna`` alone cannot spell it: by the time it runs, the edge the shift
+    just made and a coordinate *operand* never had are both absent, and filling
+    the second builds a row asserting ``x <= 0`` where the model said nothing.
+    So the fill lands where the shift vacated **and** the operand carries the
+    coordinate — the rule the relational lane states by crossing the edge with
+    the other-dim combinations the operand has — and every other slot keeps the
+    absence it arrived with.
+    """
+    carried = (~operand.isnull()).any(over)
+    keep = carried & (~shifted.isnull() | vacated)
+    return _filled(shifted, fill).where(keep)
+
+
+def _filled(expression: Any, fill: float) -> Any:
+    """*expression* with every absence in it standing as *fill*.
 
     ``to_linexpr()`` first when the operand is still a bare ``Variable``:
     ``Variable.fillna`` means a label fill on the released line and an
