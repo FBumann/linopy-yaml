@@ -736,7 +736,31 @@ class PolarsCompiler:
         """
         if g.over not in p.dims:
             raise LanguageError(f"in {context}: GroupSum over '{g.over}' but the expression has dims {list(p.dims)}")
-        return self._remap_fragment(p, g, consumed=g.over, produced=g.into)
+        grouped = self._remap_fragment(p, g, consumed=g.over, produced=g.into)
+        if p.is_term:
+            return grouped
+        return replace(grouped, frame=pl.concat([grouped.frame, self._empty_groups(grouped, g)]))
+
+    def _empty_groups(self, p: TermFragment, g: plan.GroupSum) -> pl.LazyFrame:
+        """The ``into`` labels no member maps to, as constant rows worth zero.
+
+        A group with no members contributes nothing, so on a constant side it
+        holds a *value* — the empty sum — and not a hole. The two are the same
+        missing row to :meth:`PolarsEngine._build_constraint`'s coverage check,
+        which reads what the fragment produced and cannot see why a label is
+        absent, so the value is written down here where the reason is known
+        (#1026).
+
+        Only for a constant part: an empty group contributes no *term*, and a
+        row left with no terms is not built at all.
+        """
+        into = self.data.dimensions[g.into].select(pl.col('val').alias(g.into))
+        reached = self.data.dimensions[g.over].select(pl.col(g.lookup).alias(g.into))
+        empty = into.join(reached, on=g.into, how='anti')
+        spanned = [d for d in p.dims if d != g.into]
+        if spanned:
+            empty = p.frame.select(spanned).unique().join(empty, how='cross')
+        return empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
 
     def _at_fragment(self, p: TermFragment, a: plan.At, context: str) -> TermFragment:
         """Spread ``into`` back out over ``over`` — the adjoint of a group.
