@@ -134,6 +134,7 @@ Sparsity is the absent row.
 | an undeclared column in a table | ignored |
 | a coordinate with no row | sparse data gives sparse variables; what a missing row means where it is read is [absence](absence.md) |
 | a value that is readable and wrong | bound as given; no number is second-guessed |
+| a value that is not the declared `dtype` | bound as given — `dtype` types the language, not the column ([declarations](declarations.md#parameters)) |
 
 ### The index is what makes a stray label a stray
 

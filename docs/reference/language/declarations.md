@@ -33,6 +33,15 @@ parameters:
 | `dtype` | `float`, `int`, `bool`, `str` | default `float` |
 | `description` | free text | default `null` |
 
+**`dtype` types the language, not the column.** It decides what a `where`
+comparison is checked against ([where strings](expressions.md#where-strings))
+and whether the name may stand where an operator reads a *position*. It is not
+a claim the data is checked against: a parameter declared `int` binds `2.7`,
+and the one place that would change the model — a fractional
+[`shift(by=)` or `sum_back(within=)`](operators.md#shift) — is refused when it
+binds, on the values rather than on the declaration
+([data binding](data.md#the-data-contract)).
+
 ## `variables`
 
 What the solver decides — one column per coordinate of `foreach`.
