@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.205](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.204...v0.0.1-alpha.205) (2026-08-18)
+
+
+### Features
+
+* **api:** diagnostics says which parameters arrived short of their dims ([#1067](https://github.com/fluxopt/lpspec/issues/1067)) ([c904400](https://github.com/fluxopt/lpspec/commit/c904400a9e72d6cf731168c1e182076435f70291))
+
 ## [0.0.1-alpha.204](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.203...v0.0.1-alpha.204) (2026-08-18)
 
 
