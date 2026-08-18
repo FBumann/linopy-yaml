@@ -60,7 +60,7 @@ constraints:
   soc_carry:
     foreach: [snapshot]
     where: "snapshot != index(snapshot, 0)"
-    expression: soc == shift(soc, over=snapshot, by=1) + inflow - out
+    expression: soc == shift(soc, over=snapshot, offset=1) + inflow - out
     description: every later period carries the previous one's level
 
 objective:

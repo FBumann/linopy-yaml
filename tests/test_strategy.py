@@ -63,7 +63,7 @@ WINDOW = {
         'soc_step': {
             'foreach': ['t'],
             'where': 't > 0',
-            'expression': 'soc == shift(soc, over=t, by=1) + charge * 0.9 - discharge',
+            'expression': 'soc == shift(soc, over=t, offset=1) + charge * 0.9 - discharge',
         },
     },
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
@@ -104,7 +104,7 @@ MULTI_STORE = {
         'soc_step': {
             'foreach': ['t', 'storage'],
             'where': 't > 0',
-            'expression': 'soc == shift(soc, over=t, by=1) + charge * efficiency - discharge',
+            'expression': 'soc == shift(soc, over=t, offset=1) + charge * efficiency - discharge',
         },
     },
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},

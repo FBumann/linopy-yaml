@@ -170,11 +170,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
       ramp_up:
         foreach: [snapshot, generator]
-        expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
+        expression: p - shift(p, over=snapshot, offset=1) <= ramp_limit_up * p_nom
 
       ramp_down:
         foreach: [snapshot, generator]
-        expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
+        expression: shift(p, over=snapshot, offset=1) - p <= ramp_limit_down * p_nom
 
     objective:
       sense: minimize

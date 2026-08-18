@@ -74,7 +74,7 @@ dimension. → [transport](examples/transport.md)
 ## 4. `shift` reaches along an axis
 
 ```yaml
-- expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
+- expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap') + charge * 0.9 - discharge
 ```
 
 One operator, and `edge=` says what happens at the boundary. `edge='wrap'` is

@@ -321,7 +321,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             over_node = node.kwargs['over']
             if not isinstance(over_node, DimensionNode):
                 raise LanguageError(f'{context}: shift(over=...) must name a dimension')
-            by_node = node.kwargs['by']
+            by_node = node.kwargs['offset']
             sign = 1
             if isinstance(by_node, UnaryOperatorNode) and by_node.op == '-':
                 sign, by_node = -1, by_node.operand
@@ -373,8 +373,8 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
 
     **The right fill is positional**, linopy v1's own reason for refusing to
     pick one (``convention.rst`` §7): 0 is the identity of a sum and 1 of a
-    product, so ``x * shift(eff, over=t, by=1, edge=1)`` wants a different
-    number from ``lam <= seg + shift(seg, over=bp, by=1, edge=0)``. Over data
+    product, so ``x * shift(eff, over=t, offset=1, edge=1)`` wants a different
+    number from ``lam <= seg + shift(seg, over=bp, offset=1, edge=0)``. Over data
     any number is accepted, both lanes filling natively.
 
     Over an operand carrying a **variable** the only representable fill is 0,
@@ -401,24 +401,24 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
 
 
 def _shift_by_message() -> str:
-    """What a ``by=`` may be, now that it may be two things."""
+    """What a ``offset=`` may be, now that it may be two things."""
     return (
-        'shift(by=...) must be a whole number, or the name of an integer '
+        'shift(offset=...) must be a whole number, or the name of an integer '
         'parameter when the offset differs per entity — a lead time, a transit '
         'time, a minimum up time.'
     )
 
 
 def _negated_offset_message(name: str) -> str:
-    """Why ``by=-lead`` is refused rather than negated.
+    """Why ``offset=-lead`` is refused rather than negated.
 
     A literal offset is written with its sign in the call; a named one carries
     it in the values, where the reader of the data can see which way each row
-    points. Allowing both spellings would let one model say ``by=-lead`` and
-    another ``by=lead`` with negative values and mean the same thing.
+    points. Allowing both spellings would let one model say ``offset=-lead`` and
+    another ``offset=lead`` with negative values and mean the same thing.
     """
     return (
-        f'shift(by=-{name}) negates a named offset, which the language does not do.\n'
+        f'shift(offset=-{name}) negates a named offset, which the language does not do.\n'
         f"Put the sign in '{name}' itself — a named offset carries its direction "
         f'in the data, where the row that points backwards says so.'
     )
@@ -498,13 +498,13 @@ def _check_named_offset(
     declared = schema.parameters[name]
     if declared.dtype != 'int':
         raise LanguageError(
-            f"{context}: shift(by={name}) needs an integer parameter, and '{name}' is "
+            f"{context}: shift(offset={name}) needs an integer parameter, and '{name}' is "
             f"declared '{declared.dtype}'. An offset lands on a coordinate, so it counts "
             f'positions rather than measuring a distance.'
         )
     if dimension in declared.dims:
         raise LanguageError(
-            f'{context}: shift(by={name}) is offset by a parameter that itself spans '
+            f'{context}: shift(offset={name}) is offset by a parameter that itself spans '
             f"'{dimension}', the dimension being translated. That moves each position by "
             f'a different amount along the axis it is moving, which is a permutation and '
             f'not a lag — drop the dimension from the parameter, or state the map you mean '
@@ -512,7 +512,7 @@ def _check_named_offset(
         )
     if not wrap and fill is None:
         raise LanguageError(
-            f'{context}: shift(by={name}) leaves the vacated positions absent, which a '
+            f'{context}: shift(offset={name}) leaves the vacated positions absent, which a '
             f'per-entity offset cannot say yet.\n'
             f"Add edge='wrap' for a cyclic translation, or edge=<number> for what the "
             f'vacated positions contribute.'
@@ -531,8 +531,8 @@ def _shift_over_data_message(context: str) -> str:
     return (
         f'{context}: shift() over a variable-free expression leaves vacated positions with no '
         f'value, and inventing one is what silently pinned a bound to zero. Say which you mean:\n'
-        f"  shift(x, over=d, by=n, edge='wrap')   the dimension really is cyclic\n"
-        f'  shift(x, over=d, by=n, edge=0)        the vacated positions contribute zero\n'
+        f"  shift(x, over=d, offset=n, edge='wrap')   the dimension really is cyclic\n"
+        f'  shift(x, over=d, offset=n, edge=0)        the vacated positions contribute zero\n'
         f'  ...and a where: excluding them        the vacated rows should not exist at all\n'
         f'A where: alone does not lift this — it is decided on the expression, before any mask '
         f'is read — and edge=0 alone leaves a row whose bound is that zero.'

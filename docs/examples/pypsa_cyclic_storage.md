@@ -15,8 +15,8 @@ changes by one token: `shift` vacates the first snapshot and drops that row,
 -    where: "snapshot == index(snapshot, 0)"
 -    expression: soc == soc_initial + p_store * ... - p_dispatch / ...
    energy_balance:
--    expression: soc == shift(soc, over=snapshot, by=1) * (1 - standing_loss) + ...
-+    expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') * (1 - standing_loss) + ...
+-    expression: soc == shift(soc, over=snapshot, offset=1) * (1 - standing_loss) + ...
++    expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap') * (1 - standing_loss) + ...
 ```
 
 `soc_initial` leaves the instance with it — a cyclic horizon has no seed to
@@ -253,11 +253,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
       ramp_up:
         foreach: [snapshot, generator]
-        expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
+        expression: p - shift(p, over=snapshot, offset=1) <= ramp_limit_up * p_nom
 
       ramp_down:
         foreach: [snapshot, generator]
-        expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
+        expression: shift(p, over=snapshot, offset=1) - p <= ramp_limit_down * p_nom
 
       energy_balance:
         description: >-
@@ -266,7 +266,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           inherits from the last
         foreach: [snapshot, storage]
         expression: >-
-          soc == shift(soc, over=snapshot, by=1, edge='wrap') * (1 - standing_loss)
+          soc == shift(soc, over=snapshot, offset=1, edge='wrap') * (1 - standing_loss)
           + p_store * efficiency_store
           - p_dispatch / efficiency_dispatch
 

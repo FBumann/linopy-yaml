@@ -270,7 +270,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
             'a_start_turns_it_on': {
                 'foreach': ['unit', 'tf'],
                 'expression': (
-                    'started >= at(on, by=same_moment) - shift(at(on, by=same_moment), over=tf, by=1, edge=0)'
+                    'started >= at(on, by=same_moment) - shift(at(on, by=same_moment), over=tf, offset=1, edge=0)'
                 ),
             },
             'stays_up_its_own_time': {
@@ -443,7 +443,7 @@ DANGLING_SHIFTED = {
     'constraints': {
         'link': {
             'foreach': ['flow', 't', 'u'],
-            'expression': 'take <= shift(at(level, by=component_of), over=t, by=1, edge=0)',
+            'expression': 'take <= shift(at(level, by=component_of), over=t, offset=1, edge=0)',
         }
     },
     'objective': {

@@ -73,7 +73,7 @@ def test_the_base_model_typechecks():
         ('sum(p, over=generator)', {'snapshot'}),
         ('sum(p * cost, over=generator)', {'snapshot'}),
         ('sum(p, by=gen_bus)', {'snapshot', 'bus'}),
-        ("shift(p, over=snapshot, by=1, edge='wrap')", {'snapshot', 'generator'}),
+        ("shift(p, over=snapshot, offset=1, edge='wrap')", {'snapshot', 'generator'}),
     ],
 )
 def test_dim_inference(expr, expected):
@@ -112,7 +112,7 @@ def test_dim_inference(expr, expected):
             id='sum-into-a-dim-the-operand-already-carries',
         ),
         pytest.param(
-            "shift(cost, over=snapshot, by=1, edge='wrap')",
+            "shift(cost, over=snapshot, offset=1, edge='wrap')",
             r'shift\(over=snapshot\) but the expression has dims',
             id='shift-requires-the-dim',
         ),

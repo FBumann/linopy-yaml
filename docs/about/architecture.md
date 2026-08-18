@@ -527,7 +527,7 @@ the plan**. `piecewise.py` is in `language/` by the same test: a formulation
 emits declarations, and declarations are language.
 
 The test cuts the other way too, which is what keeps it from swallowing
-everything. `lowering.py` legitimately refuses **plan shapes** — `shift(by=)`
+everything. `lowering.py` legitimately refuses **plan shapes** — `shift(offset=)`
 must be an integer literal, `sum(by=)` a declared lookup — because
 those are about what a plan node can represent, and a second opinion about them
 is not a bug, it is the other lane's own business. What a consumer may not do is

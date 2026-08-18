@@ -192,12 +192,12 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       start_up:
         description: a unit whose commitment rises entering this snapshot pays for the rise
         foreach: [snapshot, generator]
-        expression: start_up - status + shift(status, over=snapshot, by=1) >= 0
+        expression: start_up - status + shift(status, over=snapshot, offset=1) >= 0
 
       shut_down:
         description: a unit whose commitment falls entering this snapshot pays for the fall
         foreach: [snapshot, generator]
-        expression: shut_down + status - shift(status, over=snapshot, by=1) >= 0
+        expression: shut_down + status - shift(status, over=snapshot, offset=1) >= 0
 
     objective:
       sense: minimize

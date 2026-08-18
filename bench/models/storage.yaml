@@ -55,7 +55,7 @@ constraints:
   # the previous one and the first reaches the last
   soc_balance:
     foreach: [snapshot, store]
-    expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * eta - discharge
+    expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap') + charge * eta - discharge
 
 objective:
   sense: minimize

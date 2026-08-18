@@ -194,7 +194,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           PyPSA declares them binary rather than leaving it to the status, and the
           port matches that.
         foreach: [snapshot, generator]
-        expression: start_up - status + shift(status, over=snapshot, by=1) >= 0
+        expression: start_up - status + shift(status, over=snapshot, offset=1) >= 0
 
       shut_down_initial:
         description: >-
@@ -208,7 +208,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       shut_down:
         description: a unit whose status falls entering this snapshot pays for a stop
         foreach: [snapshot, generator]
-        expression: shut_down + status - shift(status, over=snapshot, by=1) >= 0
+        expression: shut_down + status - shift(status, over=snapshot, offset=1) >= 0
 
     objective:
       sense: minimize

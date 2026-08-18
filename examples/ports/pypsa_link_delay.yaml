@@ -80,7 +80,7 @@ constraints:
     foreach: [snapshot, bus]
     expression: >-
       sum(p, by=gen_bus)
-      + sum(shift(g, over=snapshot, by=delay, edge=0) * efficiency, by=link_to)
+      + sum(shift(g, over=snapshot, offset=delay, edge=0) * efficiency, by=link_to)
       - sum(g, by=link_from)
       == load
 

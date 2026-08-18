@@ -207,7 +207,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           allowance — which is the row PyPSA emits there.
         foreach: [period]
         expression: >-
-          new_capacity - shift(new_capacity, over=period, by=1, edge=0) * max_relative_growth
+          new_capacity - shift(new_capacity, over=period, offset=1, edge=0) * max_relative_growth
           <= max_growth
 
     objective:

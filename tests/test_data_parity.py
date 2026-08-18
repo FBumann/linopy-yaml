@@ -262,11 +262,11 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
 #: than as arithmetic. Both take `dtype: int` at load, and neither looked at
 #: what the column actually carried.
 POSITION_MODELS = {
-    'shift(by=lead)': {
+    'shift(offset=lead)': {
         'dimensions': {'g': {'values': ['a']}, 't': {'dtype': 'int'}},
         'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
         'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0}}},
-        'constraints': {'c': {'foreach': ['g', 't'], 'expression': 'shift(x, over=t, by=lead, edge=0) >= demand'}},
+        'constraints': {'c': {'foreach': ['g', 't'], 'expression': 'shift(x, over=t, offset=lead, edge=0) >= demand'}},
         'objective': {'sense': 'minimize', 'expression': 'x'},
     },
     'sum_back(within=lead)': {

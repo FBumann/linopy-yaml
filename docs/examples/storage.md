@@ -149,7 +149,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           stored, minus what was taken — and it wraps at the horizon, so the first
           snapshot inherits from the last
         foreach: [snapshot]
-        expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
+        expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap') + charge * 0.9 - discharge
 
     objective:
       sense: minimize
@@ -193,7 +193,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
 ## What it exercises
 
-`shift(soc, over=snapshot, by=1, edge='wrap')` is the whole of it. One term reaches one position
+`shift(soc, over=snapshot, offset=1, edge='wrap')` is the whole of it. One term reaches one position
 back along `snapshot`, and `edge='wrap'` wraps — the first snapshot reads the
 last, which is what makes the storage cyclic without a boundary condition
 written out by hand. Omitting `edge=` is the same node without the wrap, where

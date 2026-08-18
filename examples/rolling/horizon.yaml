@@ -52,7 +52,7 @@ constraints:
       everywhere else the level comes from the row before; with no edge given
       the first row drops out on its own, so nothing has to restate the origin
     foreach: [t]
-    expression: soc == shift(soc, over=t, by=1) + charge * 0.9 - discharge
+    expression: soc == shift(soc, over=t, offset=1) + charge * 0.9 - discharge
 
 expressions:
   spend:

@@ -157,7 +157,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         description: every later snapshot of a season carries the one before it
         foreach: [snapshot]
         where: "snapshot != index(snapshot, 0, by=season_of)"
-        expression: soc == shift(soc, over=snapshot, by=1) + inflow - release
+        expression: soc == shift(soc, over=snapshot, offset=1) + inflow - release
       season_ends_stocked:
         description: >-
           and the last snapshot of a season is left holding at least the reserve
