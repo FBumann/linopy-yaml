@@ -78,7 +78,7 @@ $$p_{t - 1,g} - p_{t,g} \le \mathit{ramp\_limit\_down}_{g} \cdot p^{\mathrm{nom}
 
 **`energy_balance_initial`**
 
-$$\mathit{soc}_{t,s} = \mathit{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} \cdot \mathit{efficiency\_store}_{s} - \frac{p^{\mathrm{dispatch}}_{t,s}}{\mathit{efficiency\_dispatch}_{s}} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace t = 0$$
+$$\mathit{soc}_{t,s} = \mathit{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} \cdot \mathit{efficiency\_store}_{s} - \frac{p^{\mathrm{dispatch}}_{t,s}}{\mathit{efficiency\_dispatch}_{s}} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
 
 **`energy_balance`**
 
@@ -261,7 +261,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           decays only what was carried over and PyPSA does not apply it to the
           initial state of charge
         foreach: [snapshot, storage]
-        where: "snapshot == 0"
+        where: "snapshot == index(snapshot, 0)"
         expression: >-
           soc == soc_initial
           + p_store * efficiency_store

@@ -50,6 +50,7 @@ ACCEPTED = [
     'p_max',
     'p_max > 0',
     'snapshot >= 0',
+    'snapshot >= index(snapshot, 0)',
     'NOT p_max > 150',
     'p_max > 0 AND snapshot >= 0',
     'p_max > 0 OR snapshot >= 0',
@@ -108,9 +109,15 @@ def test_every_resolved_predicate_is_parity_tested():
     from typing import get_args
 
     from lpspec.language.resolution import Namespace, where_of
-    from lpspec.language.where_parser import UnresolvedComparisonNode, UnresolvedNameNode, WhereNode
+    from lpspec.language.where_parser import (
+        UnresolvedComparisonNode,
+        UnresolvedNameNode,
+        WhereNode,
+        _UnresolvedPositionNode,
+    )
 
-    unresolved = {UnresolvedNameNode, UnresolvedComparisonNode}  # rewritten by resolution, never evaluated
+    # rewritten by resolution, never evaluated
+    unresolved = {UnresolvedNameNode, UnresolvedComparisonNode, _UnresolvedPositionNode}
     expected = set(get_args(WhereNode)) - unresolved
 
     ns = Namespace(('p',), ('p_max', 'cost', 'load'), ('snapshot', 'generator'))

@@ -52,6 +52,7 @@ from lpspec.language.where_parser import (
     AndNode,
     BooleanLiteralNode,
     DimensionComparisonNode,
+    DimensionPositionNode,
     LookupComparisonNode,
     LookupDefinedNode,
     LookupPairComparisonNode,
@@ -63,6 +64,7 @@ from lpspec.language.where_parser import (
     UnresolvedNameNode,
     VariableDefinedNode,
     WhereNode,
+    _UnresolvedPositionNode,
 )
 from lpspec.relational import plan
 
@@ -581,6 +583,9 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
     if isinstance(node, DimensionComparisonNode):
         return plan.DimensionComparison(node.name, node.op, node.value)
 
+    if isinstance(node, DimensionPositionNode):
+        return plan.DimensionPosition(node.name, node.op, node.position)
+
     if isinstance(node, LookupComparisonNode):
         return plan.LookupComparison(node.name, node.over, node.op, node.value)
 
@@ -590,7 +595,7 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
     if isinstance(node, LookupDefinedNode):
         return plan.LookupDefined(node.name, node.over)
 
-    if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode)):
+    if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, _UnresolvedPositionNode)):
         msg = (
             f'{type(node).__name__} reached lowering unresolved. Where strings '
             f'must go through resolution.where_of() first.'
