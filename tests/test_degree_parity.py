@@ -23,13 +23,20 @@ from tests.conftest import dispatch_model_path
 from tests.oracle import lpspec_linopy  # skips the module without the [linopy] extra
 
 
-#: One entry per way degree 1 can be lost.
+#: One entry per way an expression leaves the language on a binary node — the
+#: three ways degree 1 is lost, and the divisor that adds, which is affine and
+#: refused all the same because a quotient is built as one reciprocal factor.
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
         pytest.param('sum(p * p, over=generator)', 'degree 2', id='variable-times-variable'),
         pytest.param('sum(cost / p, over=generator)', 'divisor contains variables', id='variable-in-a-divisor'),
         pytest.param('sum(p ** 2, over=generator)', r"operator '\*\*'", id='an-operator-outside-the-language'),
+        pytest.param(
+            'sum(p / (1 - cost), over=generator)',
+            'must be a single Constant/Parameter factor',
+            id='a-divisor-that-adds',
+        ),
     ],
 )
 def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, expression, match):
