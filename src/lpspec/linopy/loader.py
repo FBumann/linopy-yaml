@@ -17,7 +17,6 @@ from lpspec.errors import (
     declared_map_needs_labels_message,
     dense_array_message,
     duplicate_coordinate_message,
-    fractional_position_message,
     holes_in_values_message,
     lookups_need_an_index_message,
     missing_lookup_columns_message,
@@ -25,6 +24,7 @@ from lpspec.errors import (
     sparse_divisor_message,
     uncovered_constant_message,
     unknown_source_keys_message,
+    wrong_value_dtype_message,
 )
 from lpspec.frames import as_frame
 from lpspec.language.expression_parser import (
@@ -262,7 +262,7 @@ def load_parameters(
 
     for pname, pdef in schema.parameters.items():
         raw = data[pname]
-        arr = _coerce_to_dataarray(pname, raw, pdef.dims, master_coords)
+        arr = _coerce_to_dataarray(pname, raw, pdef.dims, master_coords, pdef.dtype)
         _validate_dims(pname, arr, pdef.dims)
         _validate_coords(pname, arr, master_coords)
 
@@ -286,8 +286,26 @@ def load_parameters(
     return xr.Dataset(arrays)
 
 
-def _refuse_holes(name: str, values: pd.Series, dims: Sequence[str]) -> None:
-    """A row carrying no value, asked while the source's own shape survives.
+#: The numpy kinds each declared dtype *is* — this lane's ``_COLUMNS``, and
+#: what names the type in the sentence both lanes share.
+_KINDS: dict[str, str] = {'float': 'f', 'int': 'iu', 'bool': 'b', 'str': 'OUS'}
+
+#: What each accepts: the same one widening the relational lane makes, built
+#: the same way, so neither lane can gain a second without the other. Pinned to
+#: the language's ``PARAMETER_DTYPES`` by ``tests/test_architecture.py``.
+_ACCEPTED_KINDS: dict[str, str] = {**_KINDS, 'float': _KINDS['float'] + _KINDS['int']}
+
+
+def _check_values(name: str, values: pd.Series, dims: Sequence[str], declared: str) -> None:
+    """The two questions this lane owes a bound column, while its shape survives.
+
+    The declared dtype is a claim about the values and is checked first: a
+    column that is not what the file says makes the file describe a model the
+    data does not build, and on this lane it also decides what a bare ``where``
+    on the name means.
+
+    The holes are asked first: a column of nothing but them carries no type to
+    check, and "no value here" is the sentence that names the repair.
 
     Of the source and never of the array: ``DataArray.from_series`` unstacks a
     MultiIndex and fills every combination the source did not carry with NaN,
@@ -300,10 +318,13 @@ def _refuse_holes(name: str, values: pd.Series, dims: Sequence[str]) -> None:
     """
     holes = values.isna()
     total = int(holes.sum())
-    if not total:
-        return
-    keys = [_native(key) for key in values.index[holes][:3]] if dims else ()
-    raise DataError(holes_in_values_message(name, total, coordinates_shown(dims, keys)))
+    if total:
+        keys = [_native(key) for key in values.index[holes][:3]] if dims else ()
+        raise DataError(holes_in_values_message(name, total, coordinates_shown(dims, keys)))
+    kind = values.dtype.kind
+    if kind not in _ACCEPTED_KINDS[declared]:
+        arrived = next((name for name, kinds in _KINDS.items() if kind in kinds), str(values.dtype))
+        raise DataError(wrong_value_dtype_message(name, declared, arrived))
 
 
 def _native(key: Any) -> tuple[Any, ...]:
@@ -337,6 +358,7 @@ def _coerce_to_dataarray(
     raw: Any,
     dims: list[str],
     master_coords: dict[str, pd.Index],
+    declared: str = 'float',
 ) -> xr.DataArray:
     """Coerce a user-provided value into an ``xr.DataArray``.
 
@@ -353,10 +375,10 @@ def _coerce_to_dataarray(
         raise DataError(dense_array_message(name))
 
     if isinstance(raw, (str, Path)):
-        return _from_tidy(name, pl.scan_parquet(raw), dims)
+        return _from_tidy(name, pl.scan_parquet(raw), dims, declared)
 
     if isinstance(raw, (int, float, np.integer, np.floating)):
-        _refuse_holes(name, pd.Series([float(raw)]), ())
+        _check_values(name, pd.Series([raw]), (), declared)
         return xr.DataArray(float(raw))
 
     if isinstance(raw, dict):
@@ -382,13 +404,13 @@ def _coerce_to_dataarray(
             raw = raw.copy()
             raw.index.names = dims
         _refuse_duplicate_index(name, raw.index, dims)
-        _refuse_holes(name, raw, dims)
+        _check_values(name, raw, dims, declared)
         return xr.DataArray.from_series(raw)
 
     if not isinstance(raw, (np.ndarray, list, tuple)):
         table = as_frame(raw, dims)
         if table is not None:
-            return _from_tidy(name, table, dims)
+            return _from_tidy(name, table, dims, declared)
 
     if isinstance(raw, (np.ndarray, list, tuple)):
         arr_np = np.asarray(raw)
@@ -403,7 +425,7 @@ def _coerce_to_dataarray(
                     f'{len(master_coords[dim])}.'
                 )
                 raise DataError(msg)
-            _refuse_holes(name, pd.Series(arr_np, index=master_coords[dim]), [dim])
+            _check_values(name, pd.Series(arr_np, index=master_coords[dim]), [dim], declared)
             return xr.DataArray(arr_np, dims=[dim], coords={dim: master_coords[dim]})
         msg = (
             f"Parameter '{name}': a sequence is positional along one dimension, and "
@@ -416,7 +438,7 @@ def _coerce_to_dataarray(
     raise TypeError(msg)
 
 
-def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str]) -> xr.DataArray:
+def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], declared: str = 'float') -> xr.DataArray:
     """A tidy ``(dims…, value)`` frame as the array this lane builds against.
 
     The seam that lets one object reach either lane: everything
@@ -439,13 +461,13 @@ def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str]) -
             f'columns {wanted}. Got {frame.columns}.'
         )
     if not dims:
-        _refuse_holes(name, pd.Series([frame['value'][0]]), ())
+        _check_values(name, pd.Series([frame['value'][0]]), (), declared)
         return xr.DataArray(float(frame['value'][0]))
     columns = [frame[d].to_numpy() for d in dims]
     index = pd.Index(columns[0], name=dims[0]) if len(dims) == 1 else pd.MultiIndex.from_arrays(columns, names=dims)
     _refuse_duplicate_index(name, index, dims)
     series = pd.Series(frame['value'].to_numpy(), index=index)
-    _refuse_holes(name, series, dims)
+    _check_values(name, series, dims, declared)
     return xr.DataArray.from_series(series)
 
 
@@ -509,29 +531,6 @@ def _validate_coords(
                 f"Master '{dim}' coords: {list(master_coords[dim])}"
             )
             raise DataError(msg)
-
-
-def check_positions_are_whole(positions: Mapping[str, str], dataset: Any) -> None:
-    """A parameter read as a position carries whole numbers, or none at all.
-
-    The relational lane's question, asked of the arrays this one binds. Both
-    truncated a fractional offset to the coordinate below it — identically, so
-    the differential suite agreed with itself all the way to the wrong model.
-
-    A NaN is a coordinate the source did not carry, which the reindex put
-    there; it is not a fractional position and is not counted as one.
-    """
-    for name, operator in sorted(positions.items()):
-        values = np.asarray(dataset[name].values, dtype=float) if name in dataset else np.empty(0)
-        if not values.size:
-            continue
-        finite = np.isfinite(values)
-        fractional = (finite & (values != np.floor(values))) | np.isinf(values)
-        count = int(fractional.sum())
-        if not count:
-            continue
-        shown = ', '.join(f'{v:g}' for v in values[fractional][:3])
-        raise DataError(fractional_position_message(name, operator, count, shown))
 
 
 def gaps_under(array: Any, mask: Any) -> int:

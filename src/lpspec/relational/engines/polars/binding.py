@@ -27,11 +27,12 @@ from lpspec.errors import (
     no_index_source_message,
 )
 from lpspec.frames import as_frame
-from lpspec.relational import plan
 from lpspec.relational.engines.polars import data_validation
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from lpspec.relational import plan
 
 #: Scratch column carrying a source row's position while first-occurrence
 #: order is computed. The spaces make it unrepresentable as a declared name, so
@@ -44,19 +45,17 @@ class BoundSources:
     """The data a program is built against, after binding.
 
     ``parameters`` are tidy ``(dims…, value)``; ``dimensions`` are
-    ``(val, ord, lookups…)``. The other two are answers *read off* the data
-    that the query needs and cannot re-derive cheaply: ``sum`` over an absent
-    dim scales by that dim's size, and ``defined`` on a boolean parameter tests
-    the value rather than its finiteness.
+    ``(val, ord, lookups…)``.
 
     ``cardinality`` is a dimension frame's height, cached here because deriving
-    it later means collecting the frame again.
+    it later means collecting the frame again — ``sum`` over an absent dim
+    scales by it. What a parameter's values *are* is not answered here: the
+    declaration says, and binding refuses a column that disagrees.
     """
 
     parameters: Mapping[str, pl.LazyFrame]
     dimensions: Mapping[str, pl.LazyFrame]
     cardinality: Mapping[str, int]
-    boolean_parameters: frozenset[str]
 
     def is_enum_encoded(self, dim: str) -> bool:
         """Whether :meth:`_Binder.encode_dimensions` gave *dim* an ``Enum``.
@@ -94,7 +93,6 @@ def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
         parameters=binder.parameters,
         dimensions=binder.dimensions,
         cardinality=binder.cardinality,
-        boolean_parameters=frozenset(binder.boolean),
     )
 
 
@@ -104,11 +102,9 @@ class _Binder:
     def __init__(self, program: plan.Program, sources: Mapping[str, Any]) -> None:
         self.program = program
         self.sources = sources
-        self.positions = plan.positional_parameters(program)
         self.parameters: dict[str, pl.LazyFrame] = {}
         self.dimensions: dict[str, pl.LazyFrame] = {}
         self.cardinality: dict[str, int] = {}
-        self.boolean: set[str] = set()
 
     # -- parameters --------------------------------------------------------
 
@@ -142,12 +138,8 @@ class _Binder:
         frame = frame.select(wanted).collect(engine='streaming').lazy()
         data_validation.check_one_row_per_coordinate(p, frame, self.dimensions)
         data_validation.check_values_are_present(p, frame)
-        if p.name in self.positions:
-            data_validation.check_positions_are_whole(p.name, self.positions[p.name], frame)
-        frame = _plain_strings(frame, p.dims)
-        if frame.collect_schema()['value'] == pl.Boolean:
-            self.boolean.add(p.name)
-        self.parameters[p.name] = frame
+        data_validation.check_value_dtype(p, frame)
+        self.parameters[p.name] = _plain_strings(frame, p.dims)
 
     def _read(self, source: Any, unreadable: str) -> pl.LazyFrame:
         """A caller's source as a lazy frame, or *unreadable* as a data error.

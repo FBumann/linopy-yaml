@@ -206,25 +206,25 @@ def null_bounds_message(name: str, rows: int) -> str:
     )
 
 
-def fractional_position_message(name: str, operator: str, offenders: int, shown: str) -> str:
-    """A position read off data that is not a whole number of them.
+def wrong_value_dtype_message(name: str, declared: str, arrived: str) -> str:
+    """A column that is not the type its declaration claims — one wording, both lanes.
 
-    The declaration promised ``dtype: int`` and lowering held it to that, which
-    is as far as a check without data can go: the *values* arrive later, and
-    both lanes truncated them — a lead time of 1.5 built the model 1 builds,
-    silently and identically, so no differential test could see it either.
+    Refused rather than read, because the declaration is not decoration: it
+    decides what a ``where`` comparison is checked against, whether the name
+    may stand where an operator reads a position, and what a bare ``where`` on
+    it means. A column that disagrees makes the file describe a model the data
+    does not build.
 
-    Offending values rather than the coordinates they sit at: what a reader
-    needs is the number their column actually holds, and the two lanes format
-    a float the same way where they would not format a numpy label the same
-    way.
+    *arrived* is named in the language's own four words rather than in polars'
+    or numpy's, which is what lets both lanes reach this sentence — and reads
+    as the declaration the caller would have to write instead.
     """
     return (
-        f"parameter '{name}' is read as a position by {operator}, and {offenders} of its "
-        f'values are not whole numbers: {shown}. A position counts coordinates rather than '
-        f'measuring a distance, so there is nothing between one and the next to land on.\n'
-        f'  Round the column in data prep, if that offset is what was meant\n'
-        f'  Or declare the finer axis, if the positions between are real'
+        f"parameter '{name}' is declared '{declared}' and its values arrived as '{arrived}'. "
+        f'A declared dtype is a claim about the values, and it is checked here — the file '
+        f'says what the column is, or the column is not bound.\n'
+        f'  Cast the column to {declared}, if the declaration is what you meant\n'
+        f'  Or declare what the data has: {{dtype: {arrived}}}'
     )
 
 

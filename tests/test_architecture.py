@@ -11,6 +11,8 @@ import ast
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
@@ -545,6 +547,48 @@ def test_the_engine_dtype_table_matches_the_declared_vocabulary():
     from lpspec.language.model import DIMENSION_DTYPES
 
     assert set(_DECLARED) == set(DIMENSION_DTYPES), 'the two homes of the dimension dtype vocabulary disagree'
+
+
+def test_the_relational_lane_accepts_the_declared_parameter_dtype_vocabulary():
+    """Every declared dtype has a column table entry.
+
+    Same fence, same remedy as the dimension table above: the engine may not
+    import the language, and a dtype added to ``PARAMETER_DTYPES`` without an
+    entry here would fail at bind with a ``KeyError`` on the first parameter
+    that declared it, rather than at load with a sentence.
+
+    The widening is pinned with it: ``int`` serves ``float`` and nothing else
+    is widened, because whole numbers are numbers and the shipped instances
+    carry them. A second exception added quietly is what this catches.
+    """
+    from lpspec.language.model import PARAMETER_DTYPES
+    from lpspec.relational.engines.polars.data_validation import _COLUMNS, ACCEPTED_VALUE_TYPES
+
+    assert set(_COLUMNS) == set(PARAMETER_DTYPES), 'the column table and the language disagree'
+    assert set(ACCEPTED_VALUE_TYPES) == set(PARAMETER_DTYPES), 'the accepted table and the language disagree'
+
+    widened = {name: set(types) - set(_COLUMNS[name]) for name, types in ACCEPTED_VALUE_TYPES.items()}
+    assert widened == {'float': set(_COLUMNS['int']), 'int': set(), 'bool': set(), 'str': set()}, (
+        'int-for-float is the only widening'
+    )
+
+
+def test_the_eager_lane_takes_the_same_vocabulary_and_the_same_widening():
+    """The second lane's copy of both, which is where they could drift apart.
+
+    Imported inside the test rather than at module scope: this module runs on
+    the bare-install job, where the ``[linopy]`` extra is absent by design, and
+    a top-level import of the lane would fail collection there rather than skip.
+    """
+    pytest.importorskip('linopy', reason='needs the [linopy] extra')
+
+    from lpspec.language.model import PARAMETER_DTYPES
+    from lpspec.linopy.loader import _ACCEPTED_KINDS, _KINDS
+
+    assert set(_KINDS) == set(PARAMETER_DTYPES), 'the eager kind table and the language disagree'
+    assert _ACCEPTED_KINDS == {'float': 'fiu', 'int': 'iu', 'bool': 'b', 'str': 'OUS'}, (
+        'and the eager lane widens the same one the relational lane does'
+    )
 
 
 def test_the_plan_variable_type_matches_the_declared_domains():
