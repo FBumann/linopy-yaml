@@ -27,12 +27,11 @@ from lpspec.errors import (
     no_index_source_message,
 )
 from lpspec.frames import as_frame
+from lpspec.relational import plan
 from lpspec.relational.engines.polars import data_validation
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from lpspec.relational import plan
 
 #: Scratch column carrying a source row's position while first-occurrence
 #: order is computed. The spaces make it unrepresentable as a declared name, so
@@ -105,6 +104,7 @@ class _Binder:
     def __init__(self, program: plan.Program, sources: Mapping[str, Any]) -> None:
         self.program = program
         self.sources = sources
+        self.positions = plan.positional_parameters(program)
         self.parameters: dict[str, pl.LazyFrame] = {}
         self.dimensions: dict[str, pl.LazyFrame] = {}
         self.cardinality: dict[str, int] = {}
@@ -142,6 +142,8 @@ class _Binder:
         frame = frame.select(wanted).collect(engine='streaming').lazy()
         data_validation.check_one_row_per_coordinate(p, frame, self.dimensions)
         data_validation.check_values_are_present(p, frame)
+        if p.name in self.positions:
+            data_validation.check_positions_are_whole(p.name, self.positions[p.name], frame)
         frame = _plain_strings(frame, p.dims)
         if frame.collect_schema()['value'] == pl.Boolean:
             self.boolean.add(p.name)

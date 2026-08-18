@@ -70,8 +70,14 @@ from lpspec.language.piecewise import expand_piecewise
 from lpspec.language.resolution import Namespace, expression_of
 from lpspec.language.validation import load_model
 from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
-from lpspec.linopy.loader import build_dim_coords, build_master_coords, load_parameters
+from lpspec.linopy.loader import (
+    build_dim_coords,
+    build_master_coords,
+    check_positions_are_whole,
+    load_parameters,
+)
 from lpspec.lowering import lower_expression, lower_program
+from lpspec.relational.plan import positional_parameters
 from lpspec.sources import validate_piecewise_data
 
 if TYPE_CHECKING:
@@ -108,11 +114,12 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
     with note(f'while loading {_named(model)}'):
         original = load_model(model)
         schema = expand_piecewise(original)
-        lower_program(original)
+        program = lower_program(original)
 
         master_coords = build_master_coords(schema, sources)
         dim_coords = build_dim_coords(schema, master_coords, sources)
         dataset = load_parameters(schema, dict(sources), master_coords)
+        check_positions_are_whole(positional_parameters(program), dataset)
         validate_piecewise_data(original, dataset)
 
         built = linopy.Model()

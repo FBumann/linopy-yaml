@@ -258,6 +258,72 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
         lpspec_linopy.build(path, sources)
 
 
+#: The two places the language reads a parameter's *values* as positions rather
+#: than as arithmetic. Both take `dtype: int` at load, and neither looked at
+#: what the column actually carried.
+POSITION_MODELS = {
+    'shift(by=lead)': {
+        'dimensions': {'g': {'values': ['a']}, 't': {'dtype': 'int'}},
+        'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
+        'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0}}},
+        'constraints': {'c': {'foreach': ['g', 't'], 'expression': 'shift(x, over=t, by=lead, edge=0) >= demand'}},
+        'objective': {'sense': 'minimize', 'expression': 'x'},
+    },
+    'sum_back(within=lead)': {
+        'dimensions': {'g': {'values': ['a']}, 't': {'dtype': 'int'}},
+        'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
+        'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0}}},
+        'constraints': {'c': {'foreach': ['g', 't'], 'expression': 'sum_back(x, over=t, within=lead) >= demand'}},
+        'objective': {'sense': 'minimize', 'expression': 'x'},
+    },
+}
+
+_DEMAND = _tidy(g=['a', 'a', 'a'], t=[0, 1, 2], value=[1.0, 2.0, 3.0])
+
+
+def _position_sources(lead: float) -> dict[str, Any]:
+    return {'t': [0, 1, 2], 'lead': _tidy(g=['a'], value=[lead]), 'demand': _DEMAND}
+
+
+@pytest.mark.parametrize('spelling', sorted(POSITION_MODELS), ids=lambda s: s.split('(')[0])
+@pytest.mark.parametrize('lead', [1.5, 2.6], ids=['rounds-down', 'rounds-down-further'])
+def test_a_fractional_position_is_refused_on_both_lanes(tmp_path: Path, spelling: str, lead: float):
+    """It used to truncate, on both lanes, to the same wrong model.
+
+    `by=1.5` built exactly what `by=1` builds and `by=2.6` what `by=2` does, so
+    the differential suite compared two lanes that agreed — the one failure
+    mode a second implementation cannot catch. The declaration promising
+    `dtype: int` is checked at load; that the column kept the promise is a
+    question only data can answer.
+    """
+    path = tmp_path / 'position.yaml'
+    path.write_text(pyyaml.safe_dump(POSITION_MODELS[spelling]))
+
+    with pytest.raises(DataError, match='not whole numbers') as relational:
+        lps.build(path, _position_sources(lead)).close()
+    with pytest.raises(DataError, match='not whole numbers') as eager:
+        lpspec_linopy.build(path, _position_sources(lead))
+
+    assert spelling in str(relational.value), 'the message quotes the call that reads it'
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+
+
+@pytest.mark.parametrize('spelling', sorted(POSITION_MODELS), ids=lambda s: s.split('(')[0])
+def test_a_whole_number_in_a_float_column_is_still_a_position(tmp_path: Path, spelling: str):
+    """`2.0` lands on a coordinate exactly as `2` does, and pandas has no other dtype for it.
+
+    The guard is against a value with something after the point, not against
+    the column's storage — a float offset column is what a pandas-shaped
+    source gives you for a whole number, and refusing it would refuse the
+    ordinary case.
+    """
+    path = tmp_path / 'position.yaml'
+    path.write_text(pyyaml.safe_dump(POSITION_MODELS[spelling]))
+
+    with lps.solve(path, _position_sources(2.0)) as floating, lps.solve(path, _position_sources(2)) as integral:
+        assert floating.objective == integral.objective, 'a whole number is a whole number'
+
+
 #: A lookup-carrying dimension: the one index a parameter table cannot stand in
 #: for, since it carries the label and never what the label maps to.
 LOOKUP_MODEL = {
