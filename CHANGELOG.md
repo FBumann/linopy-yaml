@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.195](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.194...v0.0.1-alpha.195) (2026-08-18)
+
+
+### Features
+
+* **language:** a boundary names its position inside each group ([#1013](https://github.com/fluxopt/lpspec/issues/1013)) ([f6ccac4](https://github.com/fluxopt/lpspec/commit/f6ccac4e67da4e92091d8a2612b47f889090e7cc))
+
+
+### Refactoring
+
+* **language:** by= names a lookup, and an offset has a word of its own ([#1016](https://github.com/fluxopt/lpspec/issues/1016)) ([ce13026](https://github.com/fluxopt/lpspec/commit/ce130263a1620c6740b27e2d516bf801914207bc))
+
 ## [0.0.1-alpha.194](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.193...v0.0.1-alpha.194) (2026-08-18)
 
 
