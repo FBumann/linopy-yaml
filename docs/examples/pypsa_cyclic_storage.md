@@ -12,7 +12,7 @@ changes by one token: `shift` vacates the first snapshot and drops that row,
 
 ```diff
 -  energy_balance_initial:
--    where: "snapshot == 0"
+-    where: "snapshot == index(snapshot, 0)"
 -    expression: soc == soc_initial + p_store * ... - p_dispatch / ...
    energy_balance:
 -    expression: soc == shift(soc, over=snapshot, by=1) * (1 - standing_loss) + ...
