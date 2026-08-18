@@ -61,6 +61,7 @@
 \text{ahead} && p_{t,g} & \le p_{t \oplus 1,g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
 \text{composed} && p_{t - 2,g} & \le p^{\mathrm{max}}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
 \text{uncomposed} && p_{\left( t - 1 \right) - \mathit{lead},g} & \le p^{\mathrm{max}}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
+\text{crossed} && p_{t \ominus 1,g + 1} & \le p^{\mathrm{max}}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
 \text{lead\_time} && p_{t \boxminus_{0} \mathit{lead},g} & \le p^{\mathrm{max}}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
 \text{in\_season} && p_{t,g} & \le p_{t \ominus_{\mathrm{season\_of}(t)} 1,g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
 \text{window} && \sum_{t' \in \mathcal{T} \,:\, 0 \le t - t' < 3} \mathit{on}_{t',g} & \le \mathit{units}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\

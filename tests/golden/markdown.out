@@ -76,6 +76,10 @@ $$p_{t - 2,g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T
 
 $$p_{\left( t - 1 \right) - \mathit{lead},g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
+**`crossed`**
+
+$$p_{t \ominus 1,g + 1} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
 **`lead_time`**
 
 $$p_{t \boxminus_{0} \mathit{lead},g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$

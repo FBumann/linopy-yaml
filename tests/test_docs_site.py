@@ -247,3 +247,56 @@ def test_no_probe_without_a_row():
 
     orphans = sorted(p.stem for p in spec_math.PROBES.glob('*.yaml') if p.stem not in set(spec_math.OPERATORS.values()))
     assert not orphans, f'operator probes nothing renders: {orphans}'
+
+
+# --------------------------------------------------------------------------
+# every construct as math
+
+
+def test_the_notation_page_is_current():
+    """The generated page equals what the fixture renders."""
+    from tools import notation
+
+    assert notation.main(['--check']) == 0, 'stale notation page'
+
+
+def test_the_notation_page_shows_every_declaration_in_the_fixture():
+    """What makes the page's "every construct" true.
+
+    The chain is: `tests/test_typeset.py` holds the fixture to the language, so
+    a construct the language has is a declaration in that file; this asserts
+    every such declaration reaches the page. The fixture is read here rather
+    than through `tools.notation`, which would only prove the tool agrees with
+    itself — a block shape its scanner does not recognise is exactly the way
+    the page would quietly become *most* constructs.
+    """
+    from tools import notation
+
+    declared, section = set(), None
+    for line in notation.MODEL.read_text().splitlines():
+        if top := re.match(r'^(\w+):', line):
+            section = top[1]
+        elif (name := re.match(r'^  (\w+):', line)) and section in notation.SECTIONS:
+            declared.add(name[1] if section != 'objective' else 'objective')
+    shown = {match[1] for match in re.finditer(r'^#### `(.+?)`', notation.PAGE.read_text(), re.MULTILINE)}
+    assert not declared - shown, (
+        f'declarations in {notation.MODEL.name} that the notation page never shows: {sorted(declared - shown)}. '
+        f'Run `uv run python -m tools.notation`.'
+    )
+
+
+def test_the_notation_page_shows_every_way_a_curve_expands():
+    """Three methods, three formulations, and a page showing one of them shows a third.
+
+    `PIECEWISE_METHODS` is the closed set, so a method added to the language
+    fails here until it has a model on the page — which is also the only way
+    the section's `method:` captions can be read as the whole list.
+    """
+    from lpspec.language.model import PIECEWISE_METHODS
+    from tools import notation
+
+    shown = set(re.findall(r'\*\*`method: (\w+)`\*\*', notation.PAGE.read_text()))
+    assert shown == set(PIECEWISE_METHODS), (
+        f"the notation page shows {sorted(shown)} of the language's {sorted(PIECEWISE_METHODS)} — "
+        f'every method expands differently, so each needs a model in tools/notation.PIECEWISE'
+    )
