@@ -153,6 +153,12 @@ class PolarsEngine:
         #: ``name -> rows not built``, because every term they had vanished.
         #: Empty for a model whose every declared row reached the solver.
         self._omitted: dict[str, int] = {}
+        #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint
+        #: block and for the objective. Taken as each share is built, where the
+        #: numbers are still in cache, rather than off the assembled matrix the
+        #: model releases.
+        self._coefficients: dict[str, tuple[float, float]] = {}
+        self._objective_range: tuple[float, float] | None = None
         #: One :class:`_Block` per declaration, one map per label space.
         #: Columns and rows are numbered independently and a model may name a
         #: variable and a constraint alike, so one map keyed by name would
@@ -548,6 +554,9 @@ class PolarsEngine:
             )
         matrix, term_rows = self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
         rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, term_rows, start)
+        spread = _magnitude_range(matrix.get_column('coeff'))
+        if spread is not None:
+            self._coefficients[c.name] = spread
         return rows, matrix
 
     def _drop_termless_rows(
@@ -633,7 +642,9 @@ class PolarsEngine:
         self._refuse_undefined_divisors(stacked, 'objective', o.expression)
         if stacked.get_column('col').n_unique() != stacked.height:
             stacked = stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
-        return _without_zeros(stacked)
+        objective = _without_zeros(stacked)
+        self._objective_range = _magnitude_range(objective.get_column('coeff'))
+        return objective
 
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the engine only supplies the frames
@@ -781,6 +792,15 @@ class PolarsEngine:
                 {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
                 schema={'constraint': pl.String, 'rows_not_built': pl.UInt32},
             ),
+            coefficient_range=pl.DataFrame(
+                {
+                    'constraint': list(self._coefficients),
+                    'smallest': [low for low, _ in self._coefficients.values()],
+                    'largest': [high for _, high in self._coefficients.values()],
+                },
+                schema={'constraint': pl.String, 'smallest': pl.Float64, 'largest': pl.Float64},
+            ),
+            objective_range=self._objective_range,
             solves=self._solves,
             loads=self._loads,
             timings=dict(self._timings),
@@ -1035,6 +1055,24 @@ def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:
     if matrix.height and not matrix['row'].is_sorted():
         return matrix.sort('row')
     return matrix
+
+
+def _magnitude_range(coefficients: pl.Series) -> tuple[float, float] | None:
+    """The smallest and largest ``|coefficient|`` in *coefficients*, or ``None`` if empty.
+
+    Magnitudes rather than signed extremes, which is the question a solver's own
+    ``Matrix range`` line answers and the one that makes the ratio meaningful:
+    a row scaled by ``-1e9`` is as badly scaled as one scaled by ``1e9``, and
+    the signed minimum of a matrix carrying both is not a scale at all.
+
+    Exact zeros are gone by the time this runs (:func:`_without_zeros`,
+    :meth:`PolarsEngine._drop_termless_rows`), so the smallest is a coefficient
+    the solver will actually see.
+    """
+    if not coefficients.len():
+        return None
+    magnitudes = coefficients.abs()
+    return float(magnitudes.min()), float(magnitudes.max())  # pyrefly: ignore[bad-argument-type]
 
 
 def _without_zeros(matrix: pl.DataFrame) -> pl.DataFrame:

@@ -215,6 +215,8 @@ one has made this engine's bookkeeping part of their model.
 | `columns`, `rows`, `nonzeros` | the shape the build produced — what `check` cannot answer, needing no data where this needs all of it, and where a broadcast that multiplied rows shows up first |
 | `sink_columns`, `sink_rows` | what the last solve's solver had to *add* to that shape. Zero unless it had no concept of a set the model declares, in which case this is the binaries and linking rows it was handed instead |
 | `omissions` | rows a constraint declared but did not build ([absence](language/absence.md#a-row-with-no-variable-terms-is-not-built)) |
+| `coefficient_range` | `(constraint, smallest, largest)` — the coefficient **magnitudes** each block put in the matrix. A solver prints one range for the whole model, which says a repair is needed and not where; this says which declaration holds the outlier, and `largest / smallest` over the frame is the conditioning to compare against the solver's own |
+| `objective_range` | the same pair for the costs, or `None` where the model declares no objective. Beside the frame rather than in it: badly scaled costs and a badly scaled matrix are different faults with different repairs |
 | `solves`, `loads` | how many solves ran, and how many of them had to load the model from scratch. A driver on the fast path leaves `loads` at one however many times it goes round; `loads == solves` is the difference between "lpspec is slow" and "this model masks on a parameter that varies" |
 | `timings` | cumulative wall seconds per phase — `bind`, `build`, `handoff`, `solve`, `write` |
 

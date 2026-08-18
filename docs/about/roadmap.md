@@ -66,10 +66,13 @@ tool is not by itself a reason to add anything.
 
 ## Honest snapshot
 
-**Cheaper here, because the model is tables:** model statistics and
-coefficient-range diagnostics; IIS read-back (a join, not a scatter);
-serialization to parquet; elastic relaxation; dualization, since transposing a
-COO matrix is swapping two column names.
+**Cheaper here, because the model is tables:** IIS read-back (a join, not a
+scatter); serialization to parquet; elastic relaxation; dualization, since
+transposing a COO matrix is swapping two column names. Model statistics and
+coefficient ranges were the first of these and already ship — `diagnostics()`
+gives the range *per declaration*, taken as each block is built, which is what
+naming the badly scaled one costs when the matrix arrives a declaration at a
+time.
 
 **Ahead of comparable declarative layers:** sparse-by-construction build with no
 dense intermediate, and a hand-off straight to the solver rather than through a

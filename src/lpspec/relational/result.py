@@ -132,6 +132,22 @@ class Diagnostics:
     #: package measures hardest.
     omissions: pl.DataFrame
 
+    #: ``(constraint, smallest, largest)`` — the coefficient **magnitudes** each
+    #: constraint block put in the matrix, one row per block that kept a term,
+    #: in build order. A solver's own ``Matrix range`` line answers this for the
+    #: whole model; what it cannot say, and what a caller can act on, is which
+    #: *declaration* holds the outlier. ``largest / smallest`` over the frame is
+    #: the conditioning to compare against the solver's. A block whose every row
+    #: went (the absence rules) has no entry, the same way it has no rows.
+    coefficient_range: pl.DataFrame
+
+    #: The same pair for the objective's coefficients, or ``None`` where the
+    #: model declares no objective and where every term of one cancelled.
+    #: Beside the frame rather than in it: it is one declaration and never a
+    #: table, and badly scaled costs and a badly scaled matrix are different
+    #: faults with different repairs.
+    objective_range: tuple[float, float] | None
+
     #: How many times this model has been solved, and how many of those solves
     #: loaded the solver from scratch instead of pushing values onto one that
     #: already held it. Read together: ``loads == 1`` is a driver on the fast
