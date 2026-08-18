@@ -1,0 +1,123 @@
+description: >-
+  PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one
+  network runs both regimes at once: a unit that must end each horizon where it
+  began, beside one handed a level it may simply spend. The two are one rule
+  under complementary masks, and the seeded unit's boundary row is what a cyclic
+  one does not have. Optimum 4800.0, from PyPSA itself.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  bus:
+    description: network nodes
+    dtype: str
+  generator:
+    description: generating units, each sitting on one bus
+    dtype: str
+  storage:
+    description: storage units, each sitting on one bus
+    dtype: str
+
+lookups:
+  gen_bus:
+    description: the bus a generator sits on
+    over: generator
+    into: bus
+  storage_bus:
+    description: the bus a storage unit sits on
+    over: storage
+    into: bus
+
+parameters:
+  cyclic:
+    description: >-
+      whether a unit closes its own horizon. PyPSA's flag, and the one column
+      that decides which of the two balance rules a unit obeys
+    dims: [storage]
+    dtype: bool
+  p_nom:
+    description: installed capacity of a generator
+    dims: [generator]
+  marginal_cost:
+    description: cost of one unit of generation
+    dims: [generator]
+  storage_p_nom:
+    description: how fast a storage unit may charge or discharge
+    dims: [storage]
+  soc_max:
+    description: most energy a storage unit may hold
+    dims: [storage]
+  soc_initial:
+    description: >-
+      the level a seeded unit begins with. A cyclic unit has one in the data and
+      never reads it — its own last snapshot is its opening level
+    dims: [storage]
+  load:
+    description: demand to be met at a bus
+    dims: [snapshot, bus]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_nom
+  p_dispatch:
+    description: power a storage unit puts onto its bus
+    foreach: [snapshot, storage]
+    bounds:
+      lower: 0
+      upper: storage_p_nom
+  p_store:
+    description: power a storage unit takes off its bus
+    foreach: [snapshot, storage]
+    bounds:
+      lower: 0
+      upper: storage_p_nom
+  soc:
+    description: energy in the store at the end of a snapshot
+    foreach: [snapshot, storage]
+    bounds:
+      lower: 0
+      upper: soc_max
+
+constraints:
+  nodal_balance:
+    description: what is generated at a bus, plus what the stores give back, meets the load there
+    foreach: [snapshot, bus]
+    expression: >-
+      sum(p, by=gen_bus)
+      + sum(p_dispatch, by=storage_bus)
+      - sum(p_store, by=storage_bus)
+      == load
+
+  energy_balance_cyclic:
+    description: >-
+      a cyclic unit's level wraps at the horizon, so its first snapshot inherits
+      from its last and it ends every horizon where it began
+    foreach: [snapshot, storage]
+    where: "cyclic"
+    expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap') + p_store - p_dispatch
+
+  energy_balance_carry:
+    description: >-
+      a seeded unit carries from the snapshot before, and has no predecessor at
+      the first — the vacated position is absent, so that row is not built here
+    foreach: [snapshot, storage]
+    where: "NOT cyclic"
+    expression: soc == shift(soc, over=snapshot, offset=1) + p_store - p_dispatch
+
+  energy_balance_seed:
+    description: >-
+      and the row the vacated position left is written here instead, from the
+      level the unit was handed
+    foreach: [snapshot, storage]
+    where: "NOT cyclic AND snapshot == index(snapshot, 0)"
+    expression: soc == soc_initial + p_store - p_dispatch
+
+objective:
+  sense: minimize
+  description: total cost of generation; storage is free to operate here
+  expression: p * marginal_cost

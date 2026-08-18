@@ -75,6 +75,7 @@ nav:
           - fixed by data: examples/pypsa_fixed.md
           - spillage: examples/pypsa_spill.md
           - the Store component: examples/pypsa_store.md
+          - mixed cycling: examples/pypsa_mixed_cycling.md
           - link delay: examples/pypsa_link_delay.md
           - multi-period investment: examples/pypsa_multi_period.md
           - committable and extendable: examples/pypsa_committable_extendable.md
