@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.0.1-alpha.202](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.201...v0.0.1-alpha.202) (2026-08-18)
+
+
+### Bug Fixes
+
+* **tests:** the golden objective reaches the grouping the walk does ([#1056](https://github.com/fluxopt/lpspec/issues/1056)) ([db7b3fb](https://github.com/fluxopt/lpspec/commit/db7b3fbace6d89640820bbaa40371bd09cb9e3f0))
+
+
+### Refactoring
+
+* **ports:** a pre-horizon state of zero is an edge, not a block ([#1057](https://github.com/fluxopt/lpspec/issues/1057)) ([dd12a37](https://github.com/fluxopt/lpspec/commit/dd12a37bcfb0a3d515f4f535efd7798cb3d008c8))
+
+
+### Documentation
+
+* **typeset:** every construct is on one page, as the math it prints ([#1039](https://github.com/fluxopt/lpspec/issues/1039)) ([8c6bcca](https://github.com/fluxopt/lpspec/commit/8c6bcca1ba5fecef16afca055bebe548a86144ab))
+
 ## [0.0.1-alpha.201](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.200...v0.0.1-alpha.201) (2026-08-18)
 
 
