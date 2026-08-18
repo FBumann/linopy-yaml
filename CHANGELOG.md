@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.198](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.197...v0.0.1-alpha.198) (2026-08-18)
+
+
+### Bug Fixes
+
+* **engine:** a group with no members caps a row instead of refusing it ([#1027](https://github.com/fluxopt/lpspec/issues/1027)) ([31ab50a](https://github.com/fluxopt/lpspec/commit/31ab50a514bea7fce4b92be167fa341e62216549))
+
 ## [0.0.1-alpha.197](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.196...v0.0.1-alpha.197) (2026-08-18)
 
 
