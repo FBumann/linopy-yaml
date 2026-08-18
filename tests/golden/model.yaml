@@ -53,12 +53,12 @@ constraints:
     expression: sum(p, by=gen_bus) + spill - slack == load
   ramp:         # roll (cyclic) and shift (acyclic) in one equation
     foreach: [snapshot, generator]
-    expression: p - shift(p, over=snapshot, by=1, edge='wrap') <= shift(p, over=snapshot, by=1) + p_max
+    expression: p - shift(p, over=snapshot, offset=1, edge='wrap') <= shift(p, over=snapshot, offset=1) + p_max
   edges:        # the two translations `ramp` leaves out: a fill, and forwards
     foreach: [snapshot, generator]
     expression: >-
-      shift(p, over=snapshot, by=1, edge=0)
-      <= shift(p, over=snapshot, by=-1, edge=0) + p_max
+      shift(p, over=snapshot, offset=1, edge=0)
+      <= shift(p, over=snapshot, offset=-1, edge=0) + p_max
   pullback:     # at(), which re-indexes through a lookup instead of an offset
     foreach: [snapshot, bus]
     expression: spill <= at(zone_cap, by=zone_of)

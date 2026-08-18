@@ -166,7 +166,7 @@ def test_translation_distinguishes_a_wrapping_edge_from_a_dropping_one(fmt: Form
             'constraints': {
                 'balance': {
                     'foreach': ['snapshot'],
-                    'expression': f'soc == shift(soc, over=snapshot, by=1{edge}) + load',
+                    'expression': f'soc == shift(soc, over=snapshot, offset=1{edge}) + load',
                 }
             },
         }
@@ -198,7 +198,7 @@ def test_a_numeric_edge_is_a_third_translation_and_shows_its_fill(fmt: Format):
             'constraints': {
                 'balance': {
                     'foreach': ['snapshot'],
-                    'expression': f'soc == shift(soc, over=snapshot, by=1{edge}) + load',
+                    'expression': f'soc == shift(soc, over=snapshot, offset=1{edge}) + load',
                 }
             },
         }
@@ -216,7 +216,7 @@ def test_a_numeric_edge_is_a_third_translation_and_shows_its_fill(fmt: Format):
 def test_a_translation_under_a_pullback_survives_it(fmt: Format):
     """``at`` and ``shift`` both re-index at the leaf, and the leaf has one subscript.
 
-    Whoever wrote it last used to win: ``at(shift(cap, over=period, by=1,
+    Whoever wrote it last used to win: ``at(shift(cap, over=period, offset=1,
     edge=0), by=period_of)`` printed `cap_{period_of(t)}`, dropping a
     translation the plan builds. The subscript is a composition, so it renders
     as one.
@@ -232,7 +232,7 @@ def test_a_translation_under_a_pullback_survives_it(fmt: Format):
         'constraints': {
             'within': {
                 'foreach': ['snapshot'],
-                'expression': 'p <= at(shift(cap, over=period, by=1, edge=0), by=period_of)',
+                'expression': 'p <= at(shift(cap, over=period, offset=1, edge=0), by=period_of)',
             }
         },
     }
@@ -254,7 +254,7 @@ def test_a_shift_forward_renders_and_does_not_crash(fmt: Format):
         'dimensions': {'snapshot': {'dtype': 'int'}},
         'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0}}},
         'constraints': {
-            'later': {'foreach': ['snapshot'], 'expression': 'p <= shift(p, over=snapshot, by=-1, edge=0)'}
+            'later': {'foreach': ['snapshot'], 'expression': 'p <= shift(p, over=snapshot, offset=-1, edge=0)'}
         },
         'objective': {'sense': 'minimize', 'expression': 'p'},
     }
@@ -269,7 +269,7 @@ def test_a_shift_forward_renders_and_does_not_crash(fmt: Format):
 def test_translations_that_disagree_at_the_edge_do_not_merge(fmt: Format):
     """Two shifts on one dim collapse to one offset only when they are the same shift.
 
-    ``shift(shift(x, by=1, edge='wrap'), by=1)`` used to print `t ⊖ 2`, which
+    ``shift(shift(x, offset=1, edge='wrap'), offset=1)`` used to print `t ⊖ 2`, which
     the legend defines as *both* steps taken modulo the dimension — while the
     outer one drops its vacated row instead. Composition renders as
     composition; only identical policies add.
@@ -280,7 +280,7 @@ def test_translations_that_disagree_at_the_edge_do_not_merge(fmt: Format):
         'constraints': {
             'b': {
                 'foreach': ['snapshot'],
-                'expression': "soc <= shift(shift(soc, over=snapshot, by=1, edge='wrap'), over=snapshot, by=1)",
+                'expression': "soc <= shift(shift(soc, over=snapshot, offset=1, edge='wrap'), over=snapshot, offset=1)",
             }
         },
     }
@@ -297,7 +297,7 @@ def test_the_legend_explains_wraparound_only_when_it_is_used(fmt: Format):
         'dimensions': {'snapshot': {'dtype': 'int'}},
         'variables': {'soc': {'foreach': ['snapshot'], 'bounds': {'lower': 0}}},
         'constraints': {
-            'b': {'foreach': ['snapshot'], 'expression': "soc == shift(soc, over=snapshot, by=1, edge='wrap')"}
+            'b': {'foreach': ['snapshot'], 'expression': "soc == shift(soc, over=snapshot, offset=1, edge='wrap')"}
         },
     }
     assert 'cyclic translation' in typeset(rolled, fmt)

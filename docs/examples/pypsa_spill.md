@@ -216,7 +216,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           less what was taken and what was let go
         foreach: [snapshot, storage]
         expression: >-
-          soc == shift(soc, over=snapshot, by=1)
+          soc == shift(soc, over=snapshot, offset=1)
           + p_store - p_dispatch + inflow - spill
 
     objective:

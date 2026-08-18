@@ -728,10 +728,10 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     return total
 
 
-def _operator_shift(array: Any, *, over: str, by: float, edge: str | float | None = None) -> Any:
-    """Translate *array* along one dimension — the value at *t - by*.
+def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float | None = None) -> Any:
+    """Translate *array* along one dimension — the value at *t - offset*.
 
-    YAML: ``shift(soc, over=snapshot, by=1)``. ``edge`` carries all three
+    YAML: ``shift(soc, over=snapshot, offset=1)``. ``edge`` carries all three
     policies so no two keywords can disagree: ``edge='wrap'`` is cyclic and
     vacates nothing, a number is what the vacated positions contribute, and
     omitting it leaves them **absent**, which propagates and drops the row.
@@ -742,20 +742,20 @@ def _operator_shift(array: Any, *, over: str, by: float, edge: str | float | Non
     lowering refuses a bare shift over a variable-free operand and that branch
     is only reached under a numeric ``edge=``.
 
-    ``by`` arrives as an array where the model named a parameter — an offset
+    ``offset`` arrives as an array where the model named a parameter — an offset
     that differs per entity, which is a gather rather than a shift and is
     :func:`_gather_by_offset`.
     """
-    if isinstance(by, xr.DataArray) and by.ndim:
+    if isinstance(offset, xr.DataArray) and offset.ndim:
         return _gather_by_offset(
             array,
             over,
-            by,
+            offset,
             wrap=edge == EDGE_WRAP,
             fill=None if isinstance(edge, str) else edge,
             card=int(array.sizes[over]),
         )
-    amount = _translation(over, by)
+    amount = _translation(over, offset)
     if edge == EDGE_WRAP:
         if isinstance(array, xr.DataArray):
             return array.roll(amount, roll_coords=False)

@@ -1330,12 +1330,12 @@ def _reindexed_parameter_model(op: str) -> dict:
     ('op', 'expected'),
     [
         pytest.param(
-            "shift(dt, over=t, by=1, edge='wrap')",
+            "shift(dt, over=t, offset=1, edge='wrap')",
             {0: 7.0, 1: 5.0, 2: 6.0},
             id='cyclic-vacates-nothing-so-t0-reads-the-last-value',
         ),
         pytest.param(
-            'shift(dt, over=t, by=1, edge=0)',
+            'shift(dt, over=t, offset=1, edge=0)',
             {0: 0.0, 1: 5.0, 2: 6.0},
             id='the-vacated-position-contributes-zero-which-pins',
         ),
@@ -1362,7 +1362,7 @@ def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expe
 def test_a_bare_shift_over_data_is_refused_rather_than_filled():
     """The pin, removed at its source (#289).
 
-    ``x <= shift(dt, over=t, by=1)`` used to build ``x <= 0`` at the first coordinate:
+    ``x <= shift(dt, over=t, offset=1)`` used to build ``x <= 0`` at the first coordinate:
     a bound invented from a slot that has no value. Absence would be the
     consistent answer, but a parameter has no absence to propagate — a missing
     row is a zero coefficient (the absence rules) — so this follows linopy v1
@@ -1372,7 +1372,7 @@ def test_a_bare_shift_over_data_is_refused_rather_than_filled():
     Decidable without data, so ``lps.check()`` catches it: the operand is
     variable-free by declaration, not by what arrives in ``sources``.
     """
-    model = _reindexed_parameter_model('shift(dt, over=t, by=1)')
+    model = _reindexed_parameter_model('shift(dt, over=t, offset=1)')
     with pytest.raises(LanguageError) as exc:
         lps.check(model)
     assert 'edge=0' in str(exc.value), 'the refusal must name the escape hatch'

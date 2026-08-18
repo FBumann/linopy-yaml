@@ -209,7 +209,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           the store supplied to its bus
         foreach: [snapshot, store]
         expression: >-
-          e == shift(e, over=snapshot, by=1) * (1 - standing_loss) - store_p
+          e == shift(e, over=snapshot, offset=1) * (1 - standing_loss) - store_p
 
     objective:
       sense: minimize

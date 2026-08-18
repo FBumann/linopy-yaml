@@ -58,7 +58,7 @@ constraints:
       stored, minus what was taken — and it wraps at the horizon, so the first
       snapshot inherits from the last
     foreach: [snapshot]
-    expression: soc == shift(soc, over=snapshot, by=1, edge='wrap') + charge * 0.9 - discharge
+    expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap') + charge * 0.9 - discharge
 
 objective:
   sense: minimize

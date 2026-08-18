@@ -535,7 +535,7 @@ def positional_parameters(program: Program) -> dict[str, str]:
 
     def walk(e: Expression) -> None:
         if isinstance(e, Translate) and isinstance(e.by, str):
-            found.setdefault(e.by, set()).add(f'shift(by={e.by})')
+            found.setdefault(e.by, set()).add(f'shift(offset={e.by})')
         if isinstance(e, Window) and isinstance(e.width, str):
             found.setdefault(e.width, set()).add(f'sum_back(within={e.width})')
         for child in children(e):

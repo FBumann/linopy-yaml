@@ -11,7 +11,7 @@ A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
 The line worth comparing is the cyclic state of charge. The YAML says
-``shift(soc, over=snapshot, by=1, edge='wrap')``; here the wrap is xarray's
+``shift(soc, over=snapshot, offset=1, edge='wrap')``; here the wrap is xarray's
 ``roll``, which sends the last snapshot's charge back to the first. Same
 recurrence, stated against a different substrate — an array axis instead of an
 ordered dimension.

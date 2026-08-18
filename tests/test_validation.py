@@ -190,7 +190,7 @@ class TestDimensionKwargs:
                 id='by-lookup-typo',
             ),
             pytest.param(
-                'shift(p, over=snapshto, by=1) == load',
+                'shift(p, over=snapshto, offset=1) == load',
                 ('does not name a declared dimension',),
                 id='shift-over-typo',
             ),
@@ -208,9 +208,11 @@ class TestDimensionKwargs:
             pytest.param('sum(p, over=generator) == load', ['snapshot'], id='a-sum'),
             pytest.param('sum(p, by=zone) == load', ['snapshot', 'bus'], id='a-grouped-sum'),
             pytest.param(
-                "shift(p, over=snapshot, by=1, edge='wrap') == load", ['snapshot', 'generator'], id='a-wrapping-shift'
+                "shift(p, over=snapshot, offset=1, edge='wrap') == load",
+                ['snapshot', 'generator'],
+                id='a-wrapping-shift',
             ),
-            pytest.param('shift(p, over=snapshot, by=1) == load', ['snapshot', 'generator'], id='a-bare-shift'),
+            pytest.param('shift(p, over=snapshot, offset=1) == load', ['snapshot', 'generator'], id='a-bare-shift'),
         ],
     )
     def test_declared_dimensions_still_pass(self, expression, foreach):

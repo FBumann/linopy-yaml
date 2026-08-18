@@ -529,7 +529,7 @@ _BARE_SHIFT = {
     'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
     'parameters': {'eff': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
-    'constraints': {'c': {'foreach': ['t'], 'expression': 'x <= shift(eff, over=t, by=1)'}},
+    'constraints': {'c': {'foreach': ['t'], 'expression': 'x <= shift(eff, over=t, offset=1)'}},
     'objective': {'sense': 'maximize', 'expression': 'x'},
 }
 

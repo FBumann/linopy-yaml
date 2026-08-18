@@ -340,17 +340,17 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     expressions:
       started_recently:
         expression: >-
-          starting + shift(starting, over=hour, by=1, edge='wrap')
-          + shift(starting, over=hour, by=2, edge='wrap') + shift(starting, over=hour, by=3, edge='wrap')
-          + shift(starting, over=hour, by=4, edge='wrap') + shift(starting, over=hour, by=5, edge='wrap')
+          starting + shift(starting, over=hour, offset=1, edge='wrap')
+          + shift(starting, over=hour, offset=2, edge='wrap') + shift(starting, over=hour, offset=3, edge='wrap')
+          + shift(starting, over=hour, offset=4, edge='wrap') + shift(starting, over=hour, offset=5, edge='wrap')
         description: >-
           units started in this hour or the five before it — the day is a
           representative period that repeats, so the first hour follows the last
       shut_recently:
         expression: >-
-          shutting + shift(shutting, over=hour, by=1, edge='wrap')
-          + shift(shutting, over=hour, by=2, edge='wrap') + shift(shutting, over=hour, by=3, edge='wrap')
-          + shift(shutting, over=hour, by=4, edge='wrap') + shift(shutting, over=hour, by=5, edge='wrap')
+          shutting + shift(shutting, over=hour, offset=1, edge='wrap')
+          + shift(shutting, over=hour, offset=2, edge='wrap') + shift(shutting, over=hour, offset=3, edge='wrap')
+          + shift(shutting, over=hour, offset=4, edge='wrap') + shift(shutting, over=hour, offset=5, edge='wrap')
         description: units shut in this hour or the five before it
 
     constraints:
@@ -391,7 +391,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         description: what is committed changes only by what starts and what shuts
         foreach: [plant, hour]
         where: "commitment == unit"
-        expression: committed - shift(committed, over=hour, by=1, edge='wrap') == starting - shutting
+        expression: committed - shift(committed, over=hour, offset=1, edge='wrap') == starting - shutting
 
       stay_up_once_started:
         description: a unit that started within the last six hours is still committed
@@ -410,7 +410,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [plant, hour]
         where: "commitment == unit"
         expression: >-
-          output - shift(output, over=hour, by=1, edge='wrap')
+          output - shift(output, over=hour, offset=1, edge='wrap')
           <= ramp * unit_size * (committed - starting)
           + start_headroom * unit_size * starting
           - min_output * unit_size * shutting
@@ -419,7 +419,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [plant, hour]
         where: "commitment == unit"
         expression: >-
-          shift(output, over=hour, by=1, edge='wrap') - output
+          shift(output, over=hour, offset=1, edge='wrap') - output
           <= ramp * unit_size * (committed - starting)
           - min_output * unit_size * starting
           + start_headroom * unit_size * shutting

@@ -249,11 +249,11 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
       ramp_up:
         foreach: [snapshot, generator]
-        expression: p - shift(p, over=snapshot, by=1) <= ramp_limit_up * p_nom
+        expression: p - shift(p, over=snapshot, offset=1) <= ramp_limit_up * p_nom
 
       ramp_down:
         foreach: [snapshot, generator]
-        expression: shift(p, over=snapshot, by=1) - p <= ramp_limit_down * p_nom
+        expression: shift(p, over=snapshot, offset=1) - p <= ramp_limit_down * p_nom
 
       energy_balance_initial:
         description: >-
@@ -274,7 +274,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           way out, so the two efficiencies enter on opposite sides of the division
         foreach: [snapshot, storage]
         expression: >-
-          soc == shift(soc, over=snapshot, by=1) * (1 - standing_loss)
+          soc == shift(soc, over=snapshot, offset=1) * (1 - standing_loss)
           + p_store * efficiency_store
           - p_dispatch / efficiency_dispatch
 

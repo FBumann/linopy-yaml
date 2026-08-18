@@ -162,7 +162,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, bus]
         expression: >-
           sum(p, by=gen_bus)
-          + sum(shift(g, over=snapshot, by=delay, edge=0) * efficiency, by=link_to)
+          + sum(shift(g, over=snapshot, offset=delay, edge=0) * efficiency, by=link_to)
           - sum(g, by=link_from)
           == load
 
@@ -236,7 +236,7 @@ about.
 The language **refuses** a per-entity shift with no `edge=` at all:
 
 ```
-LanguageError: constraint 'nodal_balance': shift(by=delay) leaves the vacated
+LanguageError: constraint 'nodal_balance': shift(offset=delay) leaves the vacated
 positions absent, which a per-entity offset cannot say yet.
 Add edge='wrap' for a cyclic translation, or edge=<number> for what the vacated
 positions contribute.
@@ -253,6 +253,6 @@ divided by the ship's 0.9.
 
 ## What it exercises
 
-`shift(x, over=dim, by=p, edge=0)` with `p` an integer column, inside a grouped
+`shift(x, over=dim, offset=p, edge=0)` with `p` an integer column, inside a grouped
 sum that lands on a *different* entity's row — the first model in the corpus
 where a shift moves a quantity between two places rather than along one.

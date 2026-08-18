@@ -203,7 +203,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       start_up:
         description: a unit whose status rises entering this snapshot pays for a start
         foreach: [snapshot, generator]
-        expression: start_up - status + shift(status, over=snapshot, by=1) >= 0
+        expression: start_up - status + shift(status, over=snapshot, offset=1) >= 0
 
       shut_down:
         description: >-
@@ -211,7 +211,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           no first-snapshot counterpart: a unit that begins off has nothing to stop,
           and the row PyPSA emits there holds for every value of both variables.
         foreach: [snapshot, generator]
-        expression: shut_down + status - shift(status, over=snapshot, by=1) >= 0
+        expression: shut_down + status - shift(status, over=snapshot, offset=1) >= 0
 
       min_up_time:
         description: >-

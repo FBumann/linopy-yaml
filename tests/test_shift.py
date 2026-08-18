@@ -1,7 +1,7 @@
 """shift: time-coupled recurrences through both backends.
 
 examples/storage.yaml is dispatch plus a cyclic battery:
-soc == shift(soc, over=snapshot, by=1, edge='wrap") + charge * 0.9 - discharge. The eager backend
+soc == shift(soc, over=snapshot, offset=1, edge='wrap") + charge * 0.9 - discharge. The eager backend
 The eager backend implements `edge='wrap'` with linopy"s circular .roll(); the
 relational backend lowers it to plan.Translate — a pointwise ord-join remap.
 """
@@ -94,8 +94,10 @@ def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inp
     data = {**data, 'load': (data['load'] * 0.93).round(3)}
 
     original = STORAGE_YAML.read_text()
-    assert "shift(soc, over=snapshot, by=1, edge='wrap')" in original
-    acyclic = original.replace("shift(soc, over=snapshot, by=1, edge='wrap')", 'shift(soc, over=snapshot, by=1)')
+    assert "shift(soc, over=snapshot, offset=1, edge='wrap')" in original
+    acyclic = original.replace(
+        "shift(soc, over=snapshot, offset=1, edge='wrap')", 'shift(soc, over=snapshot, offset=1)'
+    )
 
     with differential(acyclic, data) as run:
         soc, charge, discharge = _soc_trace(run.result)
@@ -119,8 +121,10 @@ def test_a_forward_shift_drops_the_row_at_the_far_end_on_both_lanes(storage_inpu
     data = {**data, 'load': (data['load'] * 0.93).round(3)}
 
     original = STORAGE_YAML.read_text()
-    assert "shift(soc, over=snapshot, by=1, edge='wrap')" in original
-    forward = original.replace("shift(soc, over=snapshot, by=1, edge='wrap')", 'shift(soc, over=snapshot, by=-1)')
+    assert "shift(soc, over=snapshot, offset=1, edge='wrap')" in original
+    forward = original.replace(
+        "shift(soc, over=snapshot, offset=1, edge='wrap')", 'shift(soc, over=snapshot, offset=-1)'
+    )
 
     with differential(forward, data) as run:
         soc, charge, discharge = _soc_trace(run.result)
@@ -146,7 +150,7 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
 
     original = STORAGE_YAML.read_text()
     filled = original.replace(
-        "shift(soc, over=snapshot, by=1, edge='wrap')", 'shift(soc, over=snapshot, by=-1, edge=0)'
+        "shift(soc, over=snapshot, offset=1, edge='wrap')", 'shift(soc, over=snapshot, offset=-1, edge=0)'
     )
 
     with differential(filled, data) as run:
@@ -189,7 +193,7 @@ RAMP_MODEL = override(
         'constraints.ramp_up': {
             'foreach': ['snapshot', 'generator'],
             'where': 'snapshot > 0',
-            'expression': 'p - shift(p, over=snapshot, by=1) <= ramp_max',
+            'expression': 'p - shift(p, over=snapshot, offset=1) <= ramp_max',
         },
     },
 )
@@ -232,23 +236,23 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
     ('expression', 'expected'),
     [
         pytest.param(
-            "shift(soc, over=snapshot, by=1, edge='wrap')",
+            "shift(soc, over=snapshot, offset=1, edge='wrap')",
             Translate(Variable('soc'), 'snapshot', 1),
             id='wrap',
         ),
         pytest.param(
-            "shift(soc, over=snapshot, by=-2, edge='wrap')",
+            "shift(soc, over=snapshot, offset=-2, edge='wrap')",
             Translate(Variable('soc'), 'snapshot', -2),
             id='wrap-backwards',
         ),
         pytest.param(
-            'shift(soc, over=snapshot, by=1)',
+            'shift(soc, over=snapshot, offset=1)',
             Translate(Variable('soc'), 'snapshot', 1, wrap=False),
             id='bare',
         ),
         # fill is the field both lanes branch on: None is absence, 0.0 the zero.
         pytest.param(
-            'shift(soc, over=snapshot, by=1, edge=0)',
+            'shift(soc, over=snapshot, offset=1, edge=0)',
             Translate(Variable('soc'), 'snapshot', 1, wrap=False, fill=0.0),
             id='zero-fill',
         ),
@@ -262,26 +266,26 @@ def test_translation_lowers_to_a_bounded_halo(expression, expected):
     ('expression', 'match'),
     [
         pytest.param(
-            "shift(soc, over=nope, by=1, edge='wrap')",
+            "shift(soc, over=nope, offset=1, edge='wrap')",
             r'shift\(over=nope\) does not name a declared dimension',
             id='over-names-no-dimension',
         ),
         pytest.param(
-            "shift(load, over=generator, by=1, edge='wrap')",
+            "shift(load, over=generator, offset=1, edge='wrap')",
             'but the expression has dims',
             id='a-dim-the-expression-lacks',
         ),
         # `edge=` is a closed keyword: one keyword carries all three policies, so
         # "cyclic, and also fill" has no spelling left to be refused.
         pytest.param(
-            'shift(soc, over=snapshot, by=1, edge=nonsense)',
+            'shift(soc, over=snapshot, offset=1, edge=nonsense)',
             'is not an edge policy',
             id='the-edge-keyword-is-closed',
         ),
         # Over a variable only `edge=0` is sayable — a nonzero fill would put a
         # constant where a term was.
         pytest.param(
-            'shift(soc, over=snapshot, by=1, edge=1)',
+            'shift(soc, over=snapshot, offset=1, edge=1)',
             'only fill=0 is representable there',
             id='a-nonzero-fill-over-a-variable',
         ),
@@ -301,7 +305,7 @@ variables:
 constraints:
   c:
     foreach: [t]
-    expression: "x * shift(eff, over=t, by=1, edge=1) <= 10"
+    expression: "x * shift(eff, over=t, offset=1, edge=1) <= 10"
 objective: {sense: maximize, expression: "sum(x, over=t)"}
 """
 
@@ -311,7 +315,7 @@ def test_the_fill_a_product_wants_is_one_not_zero():
 
     linopy v1 refuses to fill on the caller's behalf precisely because the right
     value is positional (``convention.rst`` §7): 0 is the identity of a sum, 1 of
-    a product. ``x * shift(eff, over=t, by=1, edge=0)`` would force ``x`` to zero at the
+    a product. ``x * shift(eff, over=t, offset=1, edge=0)`` would force ``x`` to zero at the
     first coordinate — the pin again, wearing the coefficient's hat — where
     ``fill=1`` leaves it governed by its own bound.
 
@@ -350,7 +354,7 @@ def test_an_edge_policy_is_quoted_or_a_number(edge):
     dimension — so the one closed keyword `edge=` takes has to say it is a
     literal. Numbers need no quotes because a number is never a name.
     """
-    lps.check(_with(f'x - shift(x, over=t, by=1, {edge}) <= 1'))
+    lps.check(_with(f'x - shift(x, over=t, offset=1, {edge}) <= 1'))
 
 
 def test_a_bare_wrap_names_a_dimension_and_is_refused():
@@ -361,7 +365,7 @@ def test_a_bare_wrap_names_a_dimension_and_is_refused():
     the two positions differently and a reader could not.
     """
     with pytest.raises(ValueError) as exc:
-        lps.check(_with('x - shift(x, over=t, by=1, edge=wrap) <= 1'))
+        lps.check(_with('x - shift(x, over=t, offset=1, edge=wrap) <= 1'))
 
     assert 'bare name where a keyword belongs' in str(exc.value)
     assert "edge='wrap'" in str(exc.value), 'the refusal has to name the rewrite'
@@ -382,7 +386,7 @@ def test_a_quoted_keyword_outside_a_kwarg_does_not_parse():
 
 
 def _shift_over_data(where: str | None = None, edge: str | None = None) -> dict[str, object]:
-    shift = f'shift(dt, over=t, by=1, edge={edge})' if edge else 'shift(dt, over=t, by=1)'
+    shift = f'shift(dt, over=t, offset=1, edge={edge})' if edge else 'shift(dt, over=t, offset=1)'
     constraint: dict[str, object] = {'foreach': ['t'], 'expression': f'x <= {shift}'}
     if where is not None:
         constraint['where'] = where
@@ -436,12 +440,12 @@ def test_edge_zero_alone_binds_the_vacated_row_and_a_where_frees_it():
 
 
 NESTED_SHIFTS = {
-    'same-dim': 'shift(shift(p, over=t, by=1), over=t, by=1)',
-    'cross-dim': 'shift(shift(p, over=t, by=1), over=g, by=1)',
-    'cross-dim-reversed': 'shift(shift(p, over=g, by=1), over=t, by=1)',
-    'triple-mixed': 'shift(shift(shift(p, over=t, by=1), over=g, by=1), over=t, by=1)',
-    'inner-fill': 'shift(shift(p, over=t, by=1, edge=0), over=t, by=1)',
-    'outer-wrap': "shift(shift(p, over=t, by=1), over=t, by=1, edge='wrap')",
+    'same-dim': 'shift(shift(p, over=t, offset=1), over=t, offset=1)',
+    'cross-dim': 'shift(shift(p, over=t, offset=1), over=g, offset=1)',
+    'cross-dim-reversed': 'shift(shift(p, over=g, offset=1), over=t, offset=1)',
+    'triple-mixed': 'shift(shift(shift(p, over=t, offset=1), over=g, offset=1), over=t, offset=1)',
+    'inner-fill': 'shift(shift(p, over=t, offset=1, edge=0), over=t, offset=1)',
+    'outer-wrap': "shift(shift(p, over=t, offset=1), over=t, offset=1, edge='wrap')",
 }
 
 
@@ -501,7 +505,7 @@ def test_an_offset_may_differ_per_entity(edge: str):
         'constraints': {
             'arrive': {
                 'foreach': ['g', 't'],
-                'expression': f'shift(order, over=t, by=lead, edge={edge}) >= demand',
+                'expression': f'shift(order, over=t, offset=lead, edge={edge}) >= demand',
             }
         },
         'objective': {'sense': 'minimize', 'expression': 'order * c'},
@@ -552,7 +556,9 @@ def test_a_named_offset_that_cannot_mean_a_lag_is_refused(offset: str, match: st
             'drift': {'dims': ['g', 't'], 'dtype': 'int'},
         },
         'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
-        'constraints': {'k': {'foreach': ['g', 't'], 'expression': f"x >= shift(x, over=t, by={offset}, edge='wrap')"}},
+        'constraints': {
+            'k': {'foreach': ['g', 't'], 'expression': f"x >= shift(x, over=t, offset={offset}, edge='wrap')"}
+        },
         'objective': {'sense': 'minimize', 'expression': 'x * 1.0'},
     }
     with pytest.raises(LanguageError, match=match):
@@ -572,7 +578,7 @@ def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
         'dimensions': {'g': {'dtype': 'str', 'values': ['a']}, 't': {'dtype': 'int', 'values': [0, 1]}},
         'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
         'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
-        'constraints': {'k': {'foreach': ['g', 't'], 'expression': 'x >= shift(x, over=t, by=lead)'}},
+        'constraints': {'k': {'foreach': ['g', 't'], 'expression': 'x >= shift(x, over=t, offset=lead)'}},
         'objective': {'sense': 'minimize', 'expression': 'x * 1.0'},
     }
     with pytest.raises(LanguageError, match='vacated positions absent'):
@@ -585,7 +591,7 @@ def test_a_named_offset_carries_its_sign_in_the_data():
         'dimensions': {'g': {'dtype': 'str', 'values': ['a']}, 't': {'dtype': 'int', 'values': [0, 1]}},
         'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
         'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
-        'constraints': {'k': {'foreach': ['g', 't'], 'expression': "x >= shift(x, over=t, by=-lead, edge='wrap')"}},
+        'constraints': {'k': {'foreach': ['g', 't'], 'expression': "x >= shift(x, over=t, offset=-lead, edge='wrap')"}},
         'objective': {'sense': 'minimize', 'expression': 'x * 1.0'},
     }
     with pytest.raises(LanguageError, match='negates a named offset'):
