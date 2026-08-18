@@ -17,6 +17,7 @@ from lpspec.errors import (
     declared_map_needs_labels_message,
     dense_array_message,
     duplicate_coordinate_message,
+    fractional_position_message,
     holes_in_values_message,
     lookups_need_an_index_message,
     missing_lookup_columns_message,
@@ -508,6 +509,29 @@ def _validate_coords(
                 f"Master '{dim}' coords: {list(master_coords[dim])}"
             )
             raise DataError(msg)
+
+
+def check_positions_are_whole(positions: Mapping[str, str], dataset: Any) -> None:
+    """A parameter read as a position carries whole numbers, or none at all.
+
+    The relational lane's question, asked of the arrays this one binds. Both
+    truncated a fractional offset to the coordinate below it — identically, so
+    the differential suite agreed with itself all the way to the wrong model.
+
+    A NaN is a coordinate the source did not carry, which the reindex put
+    there; it is not a fractional position and is not counted as one.
+    """
+    for name, operator in sorted(positions.items()):
+        values = np.asarray(dataset[name].values, dtype=float) if name in dataset else np.empty(0)
+        if not values.size:
+            continue
+        finite = np.isfinite(values)
+        fractional = (finite & (values != np.floor(values))) | np.isinf(values)
+        count = int(fractional.sum())
+        if not count:
+            continue
+        shown = ', '.join(f'{v:g}' for v in values[fractional][:3])
+        raise DataError(fractional_position_message(name, operator, count, shown))
 
 
 def gaps_under(array: Any, mask: Any) -> int:

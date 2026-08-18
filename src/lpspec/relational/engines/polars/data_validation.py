@@ -30,6 +30,7 @@ from lpspec.errors import (
     DataError,
     coordinates_shown,
     duplicate_coordinate_message,
+    fractional_position_message,
     holes_in_values_message,
     unknown_labels_message,
 )
@@ -116,6 +117,30 @@ def check_values_are_present(p: plan.ParameterDeclaration, frame: pl.LazyFrame) 
         return
     offenders = frame.filter(holed).select(p.dims).head(3).collect().rows() if p.dims else ()
     raise DataError(holes_in_values_message(p.name, holes, coordinates_shown(p.dims, offenders)))
+
+
+def check_positions_are_whole(name: str, operator: str, frame: pl.LazyFrame) -> None:
+    """A parameter read as a position carries whole numbers, or none at all.
+
+    The declared ``dtype`` says ``int`` — lowering refuses anything else — and
+    nothing checked that the column kept the promise. A float column is not
+    itself the defect: pandas has no other dtype for a whole number, and a
+    ``2.0`` lands on a coordinate exactly as ``2`` does. What is refused is a
+    value with something after the point, and an infinity, which is no
+    position at all. A NaN is not counted, and cannot arrive: a supplied hole
+    is refused by ``check_values_are_present`` the line before, and this lane
+    has no reindex to put one there.
+    """
+    if not frame.collect_schema()['value'].is_float():
+        return
+    value = pl.col('value')
+    fractional = value.is_infinite() | (value.is_finite() & (value != value.floor()))
+    offenders = frame.filter(fractional).select('value').head(3).collect()
+    if offenders.height == 0:
+        return
+    count = int(frame.select(fractional.sum()).collect().item())
+    shown = ', '.join(f'{v:g}' for v in offenders['value'].to_list())
+    raise DataError(fractional_position_message(name, operator, count, shown))
 
 
 def check_lookups_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -> None:

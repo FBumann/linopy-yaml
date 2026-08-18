@@ -206,6 +206,28 @@ def null_bounds_message(name: str, rows: int) -> str:
     )
 
 
+def fractional_position_message(name: str, operator: str, offenders: int, shown: str) -> str:
+    """A position read off data that is not a whole number of them.
+
+    The declaration promised ``dtype: int`` and lowering held it to that, which
+    is as far as a check without data can go: the *values* arrive later, and
+    both lanes truncated them — a lead time of 1.5 built the model 1 builds,
+    silently and identically, so no differential test could see it either.
+
+    Offending values rather than the coordinates they sit at: what a reader
+    needs is the number their column actually holds, and the two lanes format
+    a float the same way where they would not format a numpy label the same
+    way.
+    """
+    return (
+        f"parameter '{name}' is read as a position by {operator}, and {offenders} of its "
+        f'values are not whole numbers: {shown}. A position counts coordinates rather than '
+        f'measuring a distance, so there is nothing between one and the next to land on.\n'
+        f'  Round the column in data prep, if that offset is what was meant\n'
+        f'  Or declare the finer axis, if the positions between are real'
+    )
+
+
 def no_duals_message(discrete: Sequence[str], termination_condition: str, sets: Sequence[str] = ()) -> str:
     """Why a solve that *did* leave values still has no duals.
 
