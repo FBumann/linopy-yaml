@@ -682,9 +682,9 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: f
 
     if wrap:
         return gathered(source % card)
-    inside = (source >= 0) & (source < card)
-    vacated = gathered(source.clip(0, card - 1)).where(inside.assign_coords({over: labels}))
-    return vacated if fill is None else _vacated(vacated, fill)
+    inside = ((source >= 0) & (source < card)).assign_coords({over: labels})
+    moved = gathered(source.clip(0, card - 1)).where(inside)
+    return moved if fill is None else _vacated(moved, array, over, ~inside, fill)
 
 
 def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: bool, fill: float | None) -> Any:
@@ -722,7 +722,19 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: 
     inside = xr.DataArray(source >= 0, coords={over: labels}, dims=[over])
     indexer = xr.DataArray(labels[np.clip(source, 0, len(labels) - 1)], dims=[over])
     gathered = array.sel({over: indexer}).assign_coords({over: labels}).where(inside)
-    return gathered if fill is None else _vacated(gathered, fill)
+    return gathered if fill is None else _vacated(gathered, array, over, ~inside, fill)
+
+
+def _off_the_axis(array: Any, over: str, offset: float) -> Any:
+    """Which positions along *over* a scalar shift of *offset* leaves vacated.
+
+    The source a position reads, off both ends, so one expression covers a
+    shift in either direction — the same verdict :func:`_gather_by_offset`
+    reaches with ``inside`` negated.
+    """
+    labels = np.asarray(array.indexes[over])
+    source = xr.DataArray(np.arange(len(labels)), coords={over: labels}, dims=[over]) - int(offset)
+    return (source < 0) | (source >= len(labels))
 
 
 def _labelled(labels: Any, ordinals: Any, over: str) -> Any:
@@ -819,7 +831,7 @@ def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float |
         return array.shift(amount, fill_value=fill if fill is not None else np.nan)
     if hasattr(array, 'shift'):
         shifted = array.shift(amount)
-        return shifted if fill is None else _vacated(shifted, fill)
+        return shifted if fill is None else _vacated(shifted, array, over, _off_the_axis(array, over, offset), fill)
     raise _unsupported('shift()', array)
 
 
@@ -995,19 +1007,29 @@ def _coefficient(parameter: Any) -> Any:
     return parameter.fillna(0.0)
 
 
-def _vacated(expression: Any, fill: float) -> Any:
-    """A shifted expression with its vacated edge positions filled.
+def _vacated(shifted: Any, operand: Any, over: str, vacated: Any, fill: float) -> Any:
+    """*shifted*, with the positions the shift vacated filled — and only those.
 
     linopy v1 counts ``.shift()`` among the operations that *create* absence
     (v1 §4), so the edge propagates and drops the row — the language's answer too
     (the operator rules, #289). This is the opt-out, reached only from ``shift(...,
-    fill=0)``, and is the escape v1 itself prescribes rather than a rule of
+    edge=0)``, and is the escape v1 itself prescribes rather than a rule of
     ours on top.
+
+    ``fillna`` alone cannot spell it: by the time it runs, the edge the shift
+    just made and a coordinate *operand* never had are both absent, and filling
+    the second builds a row asserting ``x <= 0`` where the model said nothing.
+    So the fill lands where the shift vacated **and** the operand carries the
+    coordinate — the rule the relational lane states by crossing the edge with
+    the other-dim combinations the operand has — and every other slot keeps the
+    absence it arrived with.
 
     ``to_linexpr()`` first when the operand is still a bare ``Variable``:
     ``Variable.fillna`` means a label fill on the released line and an
     expression fill on the v1 branch, and only the expression method is stable.
     """
-    if hasattr(expression, 'to_linexpr'):
-        expression = expression.to_linexpr()
-    return expression.fillna(fill)
+    carried = (~operand.isnull()).any(over)
+    keep = carried & (~shifted.isnull() | vacated)
+    if hasattr(shifted, 'to_linexpr'):
+        shifted = shifted.to_linexpr()
+    return shifted.fillna(fill).where(keep)
