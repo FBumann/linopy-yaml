@@ -146,6 +146,6 @@ constraints:
     where: "false"
     expression: slack >= 0
 
-objective:    # a sense, and the reduction a declaration implies rather than writes
+objective:    # a sense, the reduction a declaration implies, and three groups: two terms sharing dims, then two subtracted scalars
   sense: maximize
-  expression: p * cost
+  expression: p * cost + p * p_max - reserve + -headroom
