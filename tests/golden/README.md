@@ -12,11 +12,18 @@ thought to pin, and they survive anything that leaves those substrings intact
 `TypstFormat.summation` to emit `~sum_(...)` failed **no test** before these
 files existed.
 
-`model.yaml` is synthetic on purpose: it is the smallest model that reaches
-every rendering path — each reduction, both translations, every bound shape,
-both variable types, and a `where` with all three connectives. A real model
+`model.yaml` is synthetic on purpose: it reaches every rendering path — each
+operator, every translation, every bound shape, every `where` predicate, both
+constant masks, and a set carried to the solver rather than rows. A real model
 exercises a handful of those and reads better on a gallery page; this one is
 here to be complete rather than to be read.
+
+**Complete is asserted, not claimed.** Three checks in `tests/test_typeset.py`
+hold this file to the language: every operator a format spells is asked for
+while rendering it, every node kind the parsers produce reaches the walk, and
+every line of `walk.py` runs. A construct added to the language lands with a
+case here or one of them goes red — where before, "every rendering path" was a
+sentence in this README, and the symbols no model printed stayed unprinted.
 
 Regenerate after an intended change, then **read the diff** — that is the
 review, and it is the whole point:
