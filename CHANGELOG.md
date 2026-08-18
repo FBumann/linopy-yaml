@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.0.1-alpha.190](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.189...v0.0.1-alpha.190) (2026-08-18)
+
+
+### Features
+
+* **language:** a boundary seed survives the index being relabelled ([#904](https://github.com/fluxopt/lpspec/issues/904)) ([ca76c5a](https://github.com/fluxopt/lpspec/commit/ca76c5aaf66c6c4b99ef5bd315df785e3a628a53))
+* **ports:** what may be built in a period depends on the period before ([#995](https://github.com/fluxopt/lpspec/issues/995)) ([208e9e7](https://github.com/fluxopt/lpspec/commit/208e9e7c42d4bdc4f23b4acad481754edcdd7939))
+
+
+### Bug Fixes
+
+* **tests:** the boundary suite binds its index the way sources does ([#1002](https://github.com/fluxopt/lpspec/issues/1002)) ([9da3b02](https://github.com/fluxopt/lpspec/commit/9da3b02c1b492cc9dcedaec01975d5876f937bdc))
+
+
+### Documentation
+
+* **linopy:** the one construct the eager lane accepts and cannot build ([#990](https://github.com/fluxopt/lpspec/issues/990)) ([e25af73](https://github.com/fluxopt/lpspec/commit/e25af7322f68303b59b5445bb1ad432a98948e6c))
+
 ## [0.0.1-alpha.189](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.188...v0.0.1-alpha.189) (2026-08-17)
 
 
