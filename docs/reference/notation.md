@@ -192,6 +192,18 @@ uncomposed:
 
 $$p_{\left( t - 1 \right) - \mathit{lead},g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
+#### `crossed`
+
+two dimensions translated at one leaf, each with its own policy
+
+```yaml
+crossed:
+  foreach: [snapshot, generator]
+  expression: shift(shift(p, over=snapshot, offset=1, edge='wrap'), over=generator, offset=-1) <= p_max
+```
+
+$$p_{t \ominus 1,g + 1} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
 #### `lead_time`
 
 an offset the data carries, so it prints as a symbol rather than a number
