@@ -36,6 +36,10 @@ VariableType = Literal['continuous', 'binary', 'integer']
 #: nothing and the row stands.
 VariableAbsence = Literal['undefined', 'zero']
 
+#: What a parameter declared about a missing row, or ``None`` where it declared
+#: nothing and the absence rules' own readings apply.
+ParameterAbsence = Literal['error']
+
 
 # --------------------------------------------------------------------------
 # Affine expressions
@@ -409,11 +413,16 @@ class ParameterDeclaration:
     ``dtype`` is what the declaration claims the values are, and binding
     refuses a column that is not it — so the engine reads the *declaration*
     where it used to read the column, and the two cannot disagree.
+
+    ``absence`` is what it says about a row that is *not* there. Left unset, the
+    absence rules read one three ways by position; ``error`` is the declaration
+    that there should be none, and binding refuses the table that has one.
     """
 
     name: str
     dims: tuple[str, ...]
     dtype: str = 'float'
+    absence: ParameterAbsence | None = None
 
 
 @dataclass(frozen=True)

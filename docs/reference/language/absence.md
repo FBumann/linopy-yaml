@@ -167,6 +167,7 @@ Each rule has a spelling for the opposite intent:
 |---|---|
 | the row kept, the missing term read as zero | `absence: zero` on the variable — or, where only one constraint wants it, two constraints under complementary `where` clauses |
 | a vacated shift position to contribute | `shift(x, over=d, offset=n, edge=0)` — the identity of *its* position |
+| a short parameter table refused rather than read as one of the above | `absence: error` on the parameter — the one answer that does not depend on where the name is read |
 | to test whether a variable exists here | its bare name in a `where` |
 | a sparse coefficient to remove the row rather than zero the term | mask on it — `where: "rel_max"` |
 | to divide by a parameter you only have some of | mask the row or the variable — `where: "d"`. The divisor is required where the division survives, not everywhere it is indexed |

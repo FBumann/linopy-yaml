@@ -31,6 +31,7 @@ parameters:
 |---|---|---|
 | `dims` | required — the dimensions it is indexed by; `[]` is a scalar | |
 | `dtype` | `float`, `int`, `bool`, `str` | default `float` |
+| `absence` | `error` | default `null` — the [absence](absence.md) readings |
 | `description` | free text | default `null` |
 
 **`dtype` is a claim about the values, and the column has to be it.** It
@@ -48,6 +49,30 @@ disagrees describes a model the data does not build, and does not bind
 | `int` | an integer column | which is why a fractional position cannot arrive |
 | `bool` | a boolean column | `1`/`0` is not one; cast it, or declare `int` |
 | `str` | a string column | |
+
+**`absence` says what a missing row means**, the same question the variable
+declaration's `absence:` answers — and the parameter side has one sayable
+answer, because [the absence rules](absence.md) already read a missing row
+three ways by position: a zero coefficient, a false `where` operand, a refused
+bound. `error` is the one answer that means the same thing wherever the name
+appears.
+
+| declared | | |
+|---|---|---|
+| omitted | the absence rules' own readings | the ordinary case, and what sparse data is *for* |
+| `error` | there should be no such row | a short table is refused at bind, naming what is missing |
+
+**Reach for it only where the table is conceptually dense** — a cost per
+generator, a load per snapshot, where a missing row is a pipeline accident.
+A parameter that is a relation is a different thing: `reserve_demand` in
+[osemosys_utopia](../../examples/osemosys_utopia.md) carries 105 rows of the
+8820 coordinates its dims reach, and asking `error` of it is asking for the
+other 8715 to be written out. Long-form sparsity is the data model, not a
+defect in it.
+
+It says nothing on a parameter over no dims — that has one coordinate, and
+binding already refuses a source without exactly one row for it — so the
+combination is refused at load rather than being quietly vacuous.
 
 ## `variables`
 

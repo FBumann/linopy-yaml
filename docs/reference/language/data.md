@@ -123,6 +123,7 @@ Sparsity is the absent row.
 | a declared map whose labels nothing supplies | names the map, and asks only for the labels |
 | a declared map keyed by something the labels do not carry | names the lookup and the strays |
 | a column that is not the declared `dtype` | names both, and the declaration the data would satisfy |
+| an `absence: error` parameter missing a coordinate | names how many, and both repairs |
 | a divisor with no value where the model divides by it | names the parameter and how many rows ([absence](absence.md)) |
 | a comparison's whole constant side with no value where the row is built | the same, naming the constraint |
 | a bound parameter with no value where the variable exists | names both models the two repairs build |
@@ -132,7 +133,7 @@ Sparsity is the absent row.
 | | |
 |---|---|
 | an undeclared column in a table | ignored |
-| a coordinate with no row | sparse data gives sparse variables; what a missing row means where it is read is [absence](absence.md) |
+| a coordinate with no row | sparse data gives sparse variables; what a missing row means where it is read is [absence](absence.md). A parameter that declares `absence: error` is the exception, and the only way to ask for one ([declarations](declarations.md#parameters)) |
 | a value that is readable and wrong | bound as given; no number is second-guessed |
 
 ### The index is what makes a stray label a stray

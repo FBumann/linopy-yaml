@@ -28,6 +28,7 @@ import polars as pl
 
 from lpspec.errors import (
     DataError,
+    absent_rows_message,
     coordinates_shown,
     duplicate_coordinate_message,
     holes_in_values_message,
@@ -139,6 +140,37 @@ ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
     **_COLUMNS,
     'float': _COLUMNS['float'] + _COLUMNS['int'],
 }
+
+
+def check_absent_rows(p: plan.ParameterDeclaration, frame: pl.LazyFrame, dimensions: Dimensions) -> None:
+    """An ``absence: error`` parameter has a row for every coordinate.
+
+    Asked as a count, which is exact here and nowhere else: the two checks
+    above have already refused a label outside the index and a second row for
+    one coordinate, so the height *is* the number of distinct coordinates
+    covered, and the product of the cardinalities is the number there are.
+
+    Naming which ones are missing costs the coordinate product and an
+    anti-join, so it runs on the path about to raise and never on a build that
+    is fine. Nothing is asked of a parameter that declared nothing: absence is
+    the language's ordinary case and has its own readings, and this is the
+    opt-in that overrides them.
+    """
+    if p.absence != 'error':
+        return
+    expected = 1
+    for d in p.dims:
+        expected *= dimensions[d].select(pl.len()).collect().item()
+    rows = frame.select(pl.len()).collect().item()
+    if rows == expected:
+        return
+    product = None
+    for d in p.dims:
+        labels = dimensions[d].select(pl.col('val').alias(d))
+        product = labels if product is None else product.join(labels, how='cross')
+    assert product is not None, 'a parameter with no dims cannot declare an absence'
+    absent = product.join(frame, on=list(p.dims), how='anti').head(3).collect().rows()
+    raise DataError(absent_rows_message(p.name, expected - rows, expected, coordinates_shown(p.dims, absent)))
 
 
 def check_value_dtype(p: plan.ParameterDeclaration, frame: pl.LazyFrame) -> None:

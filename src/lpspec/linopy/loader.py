@@ -13,6 +13,7 @@ import xarray as xr
 
 from lpspec.errors import (
     DataError,
+    absent_rows_message,
     coordinates_shown,
     declared_map_needs_labels_message,
     dense_array_message,
@@ -276,14 +277,36 @@ def load_parameters(
                     dims=pdef.dims,
                     coords=reindex_coords,
                 )
-            elif arr.dtype == bool:
-                arr = arr.reindex(reindex_coords, fill_value=False)
             else:
-                arr = arr.reindex(reindex_coords)
+                if pdef.absence == 'error':
+                    _check_absent_rows(pname, arr.notnull().reindex(reindex_coords, fill_value=False), pdef.dims)
+                arr = (
+                    arr.reindex(reindex_coords, fill_value=False) if arr.dtype == bool else arr.reindex(reindex_coords)
+                )
 
         arrays[pname] = arr
 
     return xr.Dataset(arrays)
+
+
+def _check_absent_rows(name: str, covered: Any, dims: Sequence[str]) -> None:
+    """An ``absence: error`` parameter has a value at every master coordinate.
+
+    *covered* is the array's own presence, already reindexed to the master
+    coordinates, so a label the source never mentioned and a hole an unstacked
+    sparse table left read the same — which they are: no row for that
+    coordinate. A dense source cannot fail this and does not reach here.
+
+    Naming the offenders costs the argwhere, and runs only on the path about
+    to raise.
+    """
+    missing = int((~covered).sum())
+    if not missing:
+        return
+    absent = np.argwhere(~covered.transpose(*dims).to_numpy())[:3]
+    labels = [covered.coords[d].to_numpy() for d in dims]
+    shown = coordinates_shown(dims, [_native(tuple(labels[axis][at] for axis, at in enumerate(row))) for row in absent])
+    raise DataError(absent_rows_message(name, missing, int(covered.size), shown))
 
 
 #: The numpy kinds each declared dtype *is* — this lane's ``_COLUMNS``, and

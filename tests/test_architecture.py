@@ -628,6 +628,25 @@ def test_the_plan_absence_matches_the_declared_absence():
     )
 
 
+def test_the_plan_parameter_absence_matches_the_declared_one():
+    """``plan.ParameterAbsence`` spells the set the language validates.
+
+    The same fence, and the failure it prevents is the quiet one: the lowering
+    casts ``pdef.absence`` straight into the plan and the binder tests it with
+    ``!= 'error'``, so an answer added to one home alone would arrive as a
+    string no branch recognises and be read as *no check at all* — a
+    declaration that refuses a missing row and is never asked.
+    """
+    from typing import get_args
+
+    from lpspec.language.model import PARAMETER_ABSENCE
+    from lpspec.relational.plan import ParameterAbsence
+
+    assert set(get_args(ParameterAbsence)) == set(PARAMETER_ABSENCE), (
+        'the two homes of the parameter absence vocabulary disagree'
+    )
+
+
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 

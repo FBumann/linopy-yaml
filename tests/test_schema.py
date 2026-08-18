@@ -61,6 +61,35 @@ def test_an_undeclared_name_is_rejected(section, body, match):
         Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, section: body})
 
 
+@pytest.mark.parametrize(
+    ('body', 'match'),
+    [
+        pytest.param({'dims': ['x'], 'absence': 'zero'}, 'absence must be one of', id='a-variables-answer'),
+        pytest.param({'dims': ['x'], 'absence': 'undefined'}, 'absence must be one of', id='the-other-one'),
+        pytest.param({'dims': [], 'absence': 'error'}, 'says nothing', id='on-a-parameter-with-no-dims'),
+    ],
+)
+def test_a_parameter_absence_that_cannot_mean_anything_is_refused_at_load(body, match):
+    """Two ways to write one that cannot.
+
+    `zero` and `undefined` are the *variable* vocabulary, and a parameter's
+    missing row is read three ways by position, so neither would mean one
+    thing. A parameter over no dims has one coordinate and one row, so `error`
+    is true of it whatever binds — a field that could only mislead.
+    """
+    with pytest.raises(SchemaError, match=match):
+        Model.model_validate({'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'parameters': {'a': body}})
+
+
+def test_a_parameters_absence_is_unset_unless_the_file_says_otherwise():
+    """The default is the readings the absence rules give, which is what keeps
+    this opt-in: no existing model changes meaning by being loaded again."""
+    schema = Model.model_validate(
+        {'dimensions': {'x': {'values': [1], 'dtype': 'int'}}, 'parameters': {'a': {'dims': ['x']}}}
+    )
+    assert schema.parameters['a'].absence is None
+
+
 def test_an_omitted_bound_means_unbounded_all_the_way_down():
     """A declaration that omits a bound means unbounded, exactly as in
     ``linopy.Model.add_variables`` — never an implicit ``>= 0``.

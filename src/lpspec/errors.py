@@ -189,6 +189,24 @@ def holes_in_values_message(name: str, holes: int, shown: str) -> str:
     )
 
 
+def absent_rows_message(name: str, missing: int, expected: int, shown: str) -> str:
+    """An ``absence: error`` parameter with rows it does not have — one wording, both lanes.
+
+    The declaration is the whole reason this can be said at all: a short table
+    and a ``where:`` build the same model, so nothing but the file can tell a
+    gap that was meant from one that was lost. Both repairs are named because
+    they build different models, which is why neither is inferred.
+    """
+    at = f': {shown}' if shown else ''
+    return (
+        f"parameter '{name}' declares absence: error and is missing {missing} of "
+        f'{expected} coordinates{at}. The declaration says a coordinate with no '
+        f'row is a data error rather than the model speaking.\n'
+        f'  Supply them   if the rows were lost\n'
+        f'  Drop          absence: error, if a missing row is meant to read as the absence rules say'
+    )
+
+
 def null_bounds_message(name: str, rows: int) -> str:
     """A bound with no value — one wording, both lanes.
 

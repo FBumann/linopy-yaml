@@ -184,6 +184,69 @@ def test_the_table_covers_both_verdicts():
     assert verdicts == {ACCEPTED, DataError}, f'expected both verdicts to be exercised; got {verdicts}'
 
 
+#: The same model with `cost` declaring what a missing row means. The table
+#: above has the identical short binding under `coefficient sparse`, ACCEPTED —
+#: the declaration is the whole difference, which is what makes it worth having.
+DECLARED = {**MODEL, 'parameters': {'cost': {'dims': ['f'], 'absence': 'error'}, 'cap': {'dims': ['f']}}}
+
+
+@pytest.fixture(scope='module')
+def declared_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    path = tmp_path_factory.mktemp('absence') / 'm.yaml'
+    path.write_text(pyyaml.safe_dump(DECLARED))
+    return path
+
+
+def _short(good_r: dict[str, Any], good_e: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    return (
+        {**good_r, 'cost': _tidy(f=['a'], value=[1.0])},
+        {**good_e, 'cost': pd.Series({'a': 1.0})},
+    )
+
+
+def test_a_parameter_declaring_absence_error_is_refused_short_on_both_lanes(declared_path: Path):
+    """The one absence a declaration can ask to have refused, in one sentence.
+
+    Both lanes reach it from opposite representations — a row count against a
+    coordinate product, and a presence mask reindexed to the master coords —
+    so the message is shared rather than reached twice, and this is what says
+    the two spellings agree about *which* coordinate is missing too.
+    """
+    good_r = {'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+    good_e = {'cost': pd.Series({'a': 1.0, 'b': 2.0}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
+    short_r, short_e = _short(good_r, good_e)
+
+    with pytest.raises(DataError) as relational:
+        lps.solve(declared_path, short_r)
+    with pytest.raises(DataError) as eager:
+        lpspec_linopy.build(declared_path, short_e)
+
+    assert "absence: error and is missing 1 of 2 coordinates: f='b'" in str(relational.value)
+    assert str(eager.value).startswith(str(relational.value)), 'one wording, both lanes'
+
+
+def test_a_declaration_on_one_parameter_says_nothing_about_another(declared_path: Path):
+    """`cap` declares nothing and keeps the readings it always had.
+
+    Sparse there is refused for a reason of its own — `cap` bounds `x`, and law
+    8 grants no default in a bound — which is what the sentence has to say, not
+    the one this PR added.
+    """
+    short_cap_r = {'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a'], value=[5.0])}
+    short_cap_e = {'cost': pd.Series({'a': 1.0, 'b': 2.0}), 'cap': pd.Series({'a': 5.0})}
+    with pytest.raises(DataError) as refused:
+        lps.solve(declared_path, short_cap_r)
+    assert 'absence: error' not in str(refused.value), "cap declared nothing, so the bound's own rule is what fires"
+    assert _verdict_eager(declared_path, short_cap_e) is DataError
+
+
+def test_a_declaration_costs_a_complete_table_nothing(declared_path: Path):
+    good_r = {'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+    good_e = {'cost': pd.Series({'a': 1.0, 'b': 2.0}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
+    assert _verdict_relational(declared_path, good_r) == ACCEPTED
+    assert _verdict_eager(declared_path, good_e) == ACCEPTED
+
+
 def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(model_path: Path):
     """`x * cost` divides by nothing, and the message used to say it did.
 

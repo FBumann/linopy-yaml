@@ -81,6 +81,15 @@ DIMENSION_DTYPES = frozenset({'float', 'int', 'str', 'datetime'})
 #: fence keeps the engine from reaching the language.
 PARAMETER_DTYPES = frozenset({'float', 'int', 'bool', 'str'})
 
+#: What a *parameter's* missing row means, where the declaration overrides the
+#: readings the absence rules give it. One member, and only one is sayable: a
+#: parameter's absence is read three ways by position — a zero coefficient, a
+#: false ``where`` operand, a refused bound — so the only answer that means the
+#: same thing wherever the name appears is that there should be no such row.
+#: Matches the plan's ``ParameterAbsence`` vocabulary (``relational/plan.py``),
+#: pinned by a test for the same fence reason as the tables around it.
+PARAMETER_ABSENCE = frozenset({'error'})
+
 #: The domains a variable may declare (the declaration rules). Matches the plan's
 #: ``VariableType`` vocabulary (``relational/plan.py``), pinned by a test for
 #: the same fence reason as the dtype table above.
@@ -180,6 +189,7 @@ class ParameterBlock(_StrictBlock):
 
     dims: list[str]
     dtype: str = 'float'
+    absence: str | None = None
     description: str | None = None
 
     @property
@@ -191,6 +201,28 @@ class ParameterBlock(_StrictBlock):
     @classmethod
     def _check_dtype(cls, v: str) -> str:
         return _one_of(v, PARAMETER_DTYPES, 'dtype')
+
+    @field_validator('absence')
+    @classmethod
+    def _check_absence(cls, v: str | None) -> str | None:
+        return v if v is None else _one_of(v, PARAMETER_ABSENCE, 'absence')
+
+    @model_validator(mode='after')
+    def _absence_needs_dims(self) -> ParameterBlock:
+        """A parameter over nothing has one coordinate and one row already.
+
+        The answer would be true of it whatever the data, so the field could
+        only mislead: refused at load, where the sentence can say the rule that
+        already covers it.
+        """
+        if self.absence is not None and not self.dims:
+            msg = (
+                f'absence: {self.absence} on a parameter with no dims says nothing — '
+                f'a parameter over no dims has one coordinate, and binding already '
+                f'refuses a source that does not carry exactly one row for it'
+            )
+            raise ValueError(msg)
+        return self
 
 
 class BoundsBlock(_StrictBlock):

@@ -139,6 +139,7 @@ class _Binder:
         data_validation.check_one_row_per_coordinate(p, frame, self.dimensions)
         data_validation.check_values_are_present(p, frame)
         data_validation.check_value_dtype(p, frame)
+        data_validation.check_absent_rows(p, frame, self.dimensions)
         self.parameters[p.name] = _plain_strings(frame, p.dims)
 
     def _read(self, source: Any, unreadable: str) -> pl.LazyFrame:
