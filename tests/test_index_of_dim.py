@@ -73,13 +73,13 @@ SNAPSHOTS = [4, 5, 6]
 
 
 def _inputs(snapshots=SNAPSHOTS):
-    data = {
+    index = pd.Index(snapshots, name='snapshot')
+    return {
+        'snapshot': index,
         'soc_initial': 20.0,
-        'inflow': pd.Series([5.0, 5.0, 5.0], index=pd.Index(snapshots, name='snapshot')),
-        'price': pd.Series([1.0, 2.0, 3.0], index=pd.Index(snapshots, name='snapshot')),
+        'inflow': pd.Series([5.0, 5.0, 5.0], index=index),
+        'price': pd.Series([1.0, 2.0, 3.0], index=index),
     }
-    coords = {'snapshot': pd.Index(snapshots, name='snapshot')}
-    return data, coords
 
 
 # ---------------------------------------------------------------------------
@@ -97,8 +97,8 @@ def test_a_boundary_survives_the_horizon_being_relabelled():
     The seeded row is what caps it: without it nothing ties the first period's
     level to `soc_initial`, and the total stops being 35 at all.
     """
-    data, coords = _inputs()
-    with differential(MODEL, data, coords, lp=True) as run:
+    sources = _inputs()
+    with differential(MODEL, sources, lp=True) as run:
         assert run.oracle == pytest.approx(35 * 3.0, rel=RTOL)
         levels = dict(run.result.primal('soc').select('snapshot', 'value').iter_rows())
 
@@ -112,8 +112,8 @@ def test_the_label_that_happens_to_be_first_is_not_the_rule():
     Which is the claim: the clause names the position, so relabelling the index
     moves the boundary with it rather than silently seeding nothing.
     """
-    data, coords = _inputs(snapshots=[0, 1, 2])
-    with differential(MODEL, data, coords) as run:
+    sources = _inputs(snapshots=[0, 1, 2])
+    with differential(MODEL, sources) as run:
         assert run.oracle == pytest.approx(105.0, rel=RTOL)
 
 
@@ -129,9 +129,9 @@ def test_the_hardcoded_label_is_what_this_replaces():
     Held here so the replacement has something to be better than, and so the
     number says how wrong it was rather than that it was wrong.
     """
-    data, coords = _inputs()
+    sources = _inputs()
     hardcoded = pyyaml.safe_load(MODEL.replace('index(snapshot, 0)', '0'))
-    with lps.solve(hardcoded, _relational(data, coords)) as result:
+    with lps.solve(hardcoded, _relational(sources)) as result:
         assert result.is_ok, 'the point is that nothing complains'
         assert result.objective == pytest.approx(420.0), (
             'an unanchored recurrence releases energy the model never had — 420 against the true 105'
@@ -140,7 +140,7 @@ def test_the_hardcoded_label_is_what_this_replaces():
 
 def test_a_negative_position_counts_from_the_end():
     """`-1` is the last coordinate — the cyclic boundary's other half."""
-    data, coords = _inputs()
+    sources = _inputs()
     cyclic = MODEL.replace(
         'expression: soc == soc_initial + inflow - out',
         'expression: soc == soc_initial + inflow - out',
@@ -154,7 +154,7 @@ def test_a_negative_position_counts_from_the_end():
 
 objective:""",
     )
-    with differential(cyclic, data, coords) as run:
+    with differential(cyclic, sources) as run:
         assert run.oracle == pytest.approx(25 * 3.0, rel=RTOL), (
             'ten held back at the end is ten not sold at the top price'
         )
@@ -165,12 +165,13 @@ objective:""",
 # ---------------------------------------------------------------------------
 
 
-def _relational(data, coords):
+def _relational(sources):
+    snapshots = list(sources['snapshot'])
     return {
-        'snapshot': pl.DataFrame({'snapshot': list(coords['snapshot'])}),
-        'soc_initial': pl.DataFrame({'value': [data['soc_initial']]}),
-        'inflow': pl.DataFrame({'snapshot': list(coords['snapshot']), 'value': list(data['inflow'])}),
-        'price': pl.DataFrame({'snapshot': list(coords['snapshot']), 'value': list(data['price'])}),
+        'snapshot': pl.DataFrame({'snapshot': snapshots}),
+        'soc_initial': pl.DataFrame({'value': [sources['soc_initial']]}),
+        'inflow': pl.DataFrame({'snapshot': snapshots, 'value': list(sources['inflow'])}),
+        'price': pl.DataFrame({'snapshot': snapshots, 'value': list(sources['price'])}),
     }
 
 
@@ -182,18 +183,18 @@ def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, positio
     lanes have to say so — a lane that quietly matched nothing would put the
     model back where the hardcoded label left it.
     """
-    data, coords = _inputs()
+    sources = _inputs()
     model = MODEL.replace('index(snapshot, 0)', f'index(snapshot, {position})')
     path = tmp_path / 'model.yaml'
     path.write_text(model)
 
     with pytest.raises(DataError, match=r'which has 3 coordinate\(s\)'):
-        lps.solve(pyyaml.safe_load(model), _relational(data, coords))
+        lps.solve(pyyaml.safe_load(model), _relational(sources))
 
     from tests.oracle import lpspec_linopy
 
     with pytest.raises(DataError, match=r'which has 3 coordinate\(s\)'):
-        lpspec_linopy.build(path, data, coords=coords)
+        lpspec_linopy.build(path, sources)
 
 
 @pytest.mark.parametrize(
