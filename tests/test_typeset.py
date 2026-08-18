@@ -14,13 +14,22 @@ Three kinds of test, and the split is the point:
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
+from collections.abc import Iterator, Mapping
+from dataclasses import is_dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, get_args
 
+import coverage
 import pytest
 
 import lpspec as lps
-from lpspec.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
+from lpspec.language.expression_parser import ArithmeticNode, ComparisonNode, FunctionCallNode
+from lpspec.language.operators import BUILTIN_NAMES
+from lpspec.language.resolution import Namespace, expression_of, where_of
+from lpspec.language.where_parser import WhereNode
+from lpspec.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset, walk
 from lpspec.typeset.format import OPERATOR_NAMES
 from lpspec.typeset.symbols import _derive_name_symbol
 from tests import golden
@@ -410,17 +419,30 @@ def test_latex_a_missing_bound_is_not_silently_zero(bounds: dict[str, object], e
     assert expected in to_latex(model)
 
 
-def test_latex_binary_and_integer_variables_state_their_domain():
-    model = override(
-        DISPATCH,
-        **{
-            'variables.on': {'foreach': ['snapshot', 'generator'], 'domain': 'binary'},
-            'variables.n': {'foreach': ['generator'], 'domain': 'integer', 'bounds': {'lower': 0, 'upper': 5}},
-        },
-    )
-    tex = to_latex(model)
-    assert r'\{0, 1\}' in tex
-    assert r'\in \mathbb{Z}' in tex
+@pytest.mark.parametrize(
+    ('declaration', 'expected'),
+    [
+        pytest.param(
+            {'foreach': ['snapshot', 'generator'], 'domain': 'binary'},
+            r'n_{t,g} & \in \{0, 1\}',
+            id='binary',
+        ),
+        pytest.param(
+            {'foreach': ['generator'], 'domain': 'integer', 'bounds': {'lower': 0, 'upper': 5}},
+            r'0 \le n_{g} & \le 5, n_{g} \in \mathbb{Z}',
+            id='integer-with-bounds',
+        ),
+        pytest.param({'foreach': ['generator'], 'domain': 'integer'}, r'n_{g} & \in \mathbb{Z}', id='integer-free'),
+    ],
+)
+def test_latex_a_variable_states_its_domain(declaration: dict[str, object], expected: str):
+    """An integer with bounds says both; one without says only where it lives.
+
+    The free integer is here because it shares every line of the walk with the
+    other two — the ternary picking the set is one statement — so nothing but
+    an assertion on the output can tell that arm from its neighbour.
+    """
+    assert expected in to_latex(override(DISPATCH, **{'variables.n': declaration}))
 
 
 def test_latex_sum_renders_the_coordinate_map_as_a_set_condition():
@@ -768,6 +790,210 @@ def test_the_output_matches_the_committed_golden_file(name: str):
         f'{expected.relative_to(Path.cwd())} is stale.\n'
         f'If the change was intended: `uv run python -m tests.golden`, then read the diff.'
     )
+
+
+class _Recorded:
+    """*fmt*, spelling exactly as it does, remembering what it was asked to spell.
+
+    The walk reaches every operator through ``format.operators[name]``, so a
+    recording mapping in that one place is the whole census — and it is a
+    census of what the *walk asked for*, not of what appears in the output,
+    where ``min`` is a substring of a parameter called ``min_up`` and a symbol
+    that never rendered would pass.
+    """
+
+    def __init__(self, fmt: Format) -> None:
+        self._fmt = fmt
+        self.asked: set[str] = set()
+        self.operators = _Asked(fmt.operators, self.asked)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._fmt, name)
+
+
+class _Asked(Mapping):
+    def __init__(self, operators: Mapping[str, str], asked: set[str]) -> None:
+        self._operators, self._asked = operators, asked
+
+    def __getitem__(self, key: str) -> str:
+        self._asked.add(key)
+        return self._operators[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._operators)
+
+    def __len__(self) -> int:
+        return len(self._operators)
+
+
+def test_the_golden_model_asks_for_every_operator_the_vocabulary_spells():
+    """The fixture reaches every symbol, so the committed output shows them all.
+
+    Without this the fixture is only exhaustive on the day someone read it:
+    ``sum_back``, the three ``where`` predicates over lookups and both
+    constant masks were all in the language and in none of the golden output,
+    and nothing failed. A symbol a format spells and no model prints is either
+    a construct the fixture is missing or vocabulary nothing needs, and both
+    are worth being told about.
+
+    The one exemption is derived rather than listed: a model declares one
+    objective sense, so the other one cannot be asked for from here.
+    """
+    recorder = _Recorded(LATEX)
+    typeset(golden.MODEL, recorder, standalone=True)
+    sense = lps.load_model(golden.MODEL).objective.sense
+    unreachable = {'minimize', 'maximize'} - {sense}
+    assert recorder.asked == OPERATOR_NAMES - unreachable, (
+        f'tests/golden/model.yaml no longer prints every operator: '
+        f'{sorted(OPERATOR_NAMES - unreachable - recorder.asked)} unrendered, '
+        f'{sorted(recorder.asked - OPERATOR_NAMES)} unspelled. '
+        f'Add the construct that prints it, or drop the spelling.'
+    )
+
+
+def _kinds(node: object, found: set[str]) -> set[str]:
+    """Every node type in *node*'s tree, by class name, including the leaves."""
+    found.add(type(node).__name__)
+    for value in vars(node).values():
+        for child in value.values() if isinstance(value, dict) else value if isinstance(value, list) else [value]:
+            if is_dataclass(child):
+                _kinds(child, found)
+    return found
+
+
+def _rendered_trees() -> Iterator[object]:
+    """Every resolved tree the walk is handed for the golden model."""
+    schema = lps.load_model(golden.MODEL)
+    namespace = Namespace.of(schema)
+    yield expression_of(schema.objective.expression, schema, namespace, 'the objective')
+    for name, block in schema.constraints.items():
+        yield expression_of(block.expression, schema, namespace, f'constraint {name!r}')
+        if (mask := where_of(block.where, namespace, f'constraint {name!r}')) is not None:
+            yield mask
+    for name, block in schema.variables.items():
+        if (mask := where_of(block.where, namespace, f'variable {name!r}', self_variable=name)) is not None:
+            yield mask
+
+
+#: What resolution never hands the walk: the three nodes it types away, and the
+#: two an expression only carries before names are resolved. The walk raises on
+#: each rather than rendering it, so a fixture reaching one would be a bug in
+#: resolution rather than a case worth committing output for.
+UNRESOLVED = {
+    'UnresolvedNameNode',
+    'UnresolvedComparisonNode',
+    '_UnresolvedPositionNode',
+    'NameNode',
+    'KeywordNode',
+}
+
+
+def test_the_golden_model_carries_every_node_kind_the_walk_renders():
+    """A construct added to the language is a case this fixture owes output for.
+
+    The operator census above is about the *symbols*; this is about the
+    *branches*. Two constructs can share every symbol and still render
+    differently — ``at`` and ``sum(by=)`` both print a coordinate map — so a
+    walk arm no fixture reaches is one whose output nobody has ever read.
+    """
+    kinds: set[str] = set()
+    for tree in _rendered_trees():
+        _kinds(tree, kinds)
+    declared = {node.__name__ for node in (*get_args(WhereNode), *get_args(ArithmeticNode), ComparisonNode)}
+    assert kinds == declared - UNRESOLVED, (
+        f'tests/golden/model.yaml reaches {sorted(kinds - declared)} and misses '
+        f'{sorted(declared - UNRESOLVED - kinds)}. Every node the walk renders needs a case here, '
+        f'or its arm ships output nobody has read.'
+    )
+
+
+def test_the_golden_model_calls_every_operator_in_the_language():
+    """``BUILTINS`` is the closed set, so a new operator lands with its case here."""
+    calls = {call.name for tree in _rendered_trees() for call in _calls(tree)}
+    assert calls == BUILTIN_NAMES, (
+        f'tests/golden/model.yaml never calls {sorted(BUILTIN_NAMES - calls)}. '
+        f'An operator with no case here renders untested.'
+    )
+
+
+def _calls(node: object) -> Iterator[FunctionCallNode]:
+    if isinstance(node, FunctionCallNode):
+        yield node
+    for value in vars(node).values():
+        for child in value.values() if isinstance(value, dict) else value if isinstance(value, list) else [value]:
+            if is_dataclass(child):
+                yield from _calls(child)
+
+
+#: What the fixture cannot reach, by the source text of the line, in two
+#: groups. The **guards** — every line of the two ``resolve … first`` arms and
+#: the one asserting a constraint is a comparison — are what the walk raises
+#: when resolution hands it something it types away, so a model reaching one is
+#: a bug upstream rather than a case worth committing output for. The
+#: **absent objective** is the arm a *different* model takes: a file declares
+#: at most one, so a fixture that has one cannot also be a fixture that has
+#: none, and `test_a_model_with_no_objective_prints_the_rest` covers it instead.
+UNREACHABLE = {
+    'if isinstance(node, (NameNode, KeywordNode, DimensionNode, LookupNode, EdgeNode)):',
+    "msg = f'{type(node).__name__} reached the typesetter; resolve the expression first.'",
+    'if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, _UnresolvedPositionNode)):',
+    "msg = f'{type(node).__name__} reached the typesetter; resolve the where string first.'",
+    'if not isinstance(node, ComparisonNode):',
+    "msg = f'{context}: expected a comparison, got {type(node).__name__}'",
+    'raise AssertionError(msg)',
+    'assert_never(node)',
+    'if block is None:',
+    'return []',
+}
+
+
+def test_the_golden_model_reaches_every_line_of_the_walk(tmp_path: Path):
+    """The strongest form of what the fixture claims about itself.
+
+    The two censuses above are about *symbols* and *node kinds*; nine of the
+    fixture's cases differ from each other in neither. A width taken from a
+    parameter rather than a number, a translation partitioned by a lookup, an
+    integer variable with no bounds, a declaration with an empty ``foreach`` —
+    each is an arm of the walk, each renders differently, and deleting any of
+    them left both censuses green.
+
+    So the arm itself is what gets counted. A branch added to the walk with no
+    case here fails this the moment it lands, which is the point: output nobody
+    has read is what a golden file is supposed to prevent.
+
+    The render runs in a subprocess because the walk is imported long before
+    any test starts, and a measurement that begins after the import counts
+    every ``def`` and ``import`` line as unreached.
+    """
+    data = tmp_path / 'walk.coverage'
+    render = tmp_path / 'render.py'
+    render.write_text(f'from lpspec import to_latex\nto_latex({str(golden.MODEL)!r})\n')
+    subprocess.run(
+        [sys.executable, '-m', 'coverage', 'run', f'--data-file={data}', '--include=*/typeset/walk.py', str(render)],
+        check=True,
+    )
+    measured = coverage.Coverage(data_file=str(data))
+    measured.load()
+    _, _, missing, _ = measured.analysis(walk.__file__)
+    source = Path(walk.__file__).read_text().splitlines()
+    unread = {line: source[line - 1].strip() for line in missing if source[line - 1].strip() not in UNREACHABLE}
+    assert not unread, (
+        f'tests/golden/model.yaml never renders {len(unread)} line(s) of the walk:\n'
+        + '\n'.join(f'  {walk.__name__}:{line}  {text}' for line, text in sorted(unread.items()))
+        + '\nAdd the case that reaches it, or say in UNREACHABLE why no model can.'
+    )
+
+
+def test_a_model_with_no_objective_prints_the_rest():
+    """The one arm the fixture structurally cannot take. See :data:`UNREACHABLE`."""
+    model = {
+        'dimensions': {'t': {'dtype': 'int'}},
+        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0}}},
+        'constraints': {'cap': {'foreach': ['t'], 'expression': 'x <= 1'}},
+    }
+    rendered = to_latex(model)
+    assert 'Objective' not in rendered, 'a model with no objective prints no objective section'
+    assert 'Subject to' in rendered, 'the rest of a model with no objective still prints'
 
 
 # ---------------------------------------------------------------------------

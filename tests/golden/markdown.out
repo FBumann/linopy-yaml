@@ -6,10 +6,11 @@ every character a notation escapes, set as text: link_to, 100% & #1 costs $5 {ne
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ |
-| $\mathcal{B}$ | index $b$ --- `bus` with $\mathrm{zone\_of}: \mathcal{B} \to \mathcal{Z}$ |
+| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}$ |
+| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ carrying label $\mathrm{tech}$ |
+| $\mathcal{B}$ | index $b$ --- `bus` with $\mathrm{zone\_of}: \mathcal{B} \to \mathcal{Z},\enspace \mathrm{area\_of}: \mathcal{B} \to \mathcal{Z}$ |
 | $\mathcal{Z}$ | index $z$ --- `zone` |
+| $\mathcal{S}$ | index $s$ --- `season` |
 
 #### Parameters
 
@@ -21,6 +22,9 @@ every character a notation escapes, set as text: link_to, 100% & #1 costs $5 {ne
 | $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ |
 | $\mathit{is\_flexible}$ | `is_flexible` over $\mathcal{G}$ |
 | $\mathit{zone}^{\mathrm{cap}}$ | `zone_cap` over $\mathcal{Z}$ |
+| $\mathit{min\_up}$ | `min_up` over $\mathcal{G}$ |
+| $\mathit{lead}$ | `lead` over $\mathcal{G}$ |
+| $\mathit{budget}$ | `budget` (scalar) |
 
 #### Variables
 
@@ -32,6 +36,11 @@ every character a notation escapes, set as text: link_to, 100% & #1 costs $5 {ne
 | $\mathit{theta}$ | `theta` over $\mathcal{B}$ |
 | $\mathit{on}$ | `on` over $\mathcal{T} \times \mathcal{G}$ |
 | $\mathit{units}$ | `units` over $\mathcal{G}$ |
+| $\mathit{spare}$ | `spare` over $\mathcal{G}$ |
+| $\mathit{reserve}$ | `reserve` (scalar) |
+| $\mathit{headroom}$ | `headroom` (scalar) |
+| $\mathit{void}$ | `void` over $\mathcal{B}$ |
+| $\mathit{weight}$ | `weight` over $\mathcal{T} \times \mathcal{G}$ |
 
 $t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound --- terms translated past the edge are simply absent.
 
@@ -55,6 +64,34 @@ $$p_{t,g} - p_{t \ominus 1,g} \le p_{t - 1,g} + p^{\mathrm{max}}_{g} \qquad \for
 
 $$p_{t \boxminus_{0} 1,g} \le p_{t \boxplus_{0} 1,g} + p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
+**`ahead`**
+
+$$p_{t,g} \le p_{t \oplus 1,g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`composed`**
+
+$$p_{t - 2,g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`uncomposed`**
+
+$$p_{\left( t - 1 \right) - \mathit{lead},g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`lead_time`**
+
+$$p_{t \boxminus_{0} \mathit{lead},g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`in_season`**
+
+$$p_{t,g} \le p_{t \ominus_{\mathrm{season\_of}(t)} 1,g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`window`**
+
+$$\sum_{t' \in \mathcal{T} \thinspace:\thinspace 0 \le t - t' < 3} \mathit{on}_{t',g} \le \mathit{units}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`history`**
+
+$$\sum_{t' \in \mathcal{T} \thinspace:\thinspace 0 \le t \ominus t' < \mathit{min\_up}} \mathit{on}_{t',g} \le \mathit{units}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
 **`pullback`**
 
 $$\mathit{spill}_{t} \le \mathit{zone}^{\mathrm{cap}}_{\mathrm{zone\_of}(b)} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
@@ -62,6 +99,30 @@ $$\mathit{spill}_{t} \le \mathit{zone}^{\mathrm{cap}}_{\mathrm{zone\_of}(b)} \qq
 **`arithmetic`**
 
 $$\sum_{g \in \mathcal{G}} \left( \frac{p_{t,g}}{2} + -\mathit{cost}_{g} \right) \ge \left( -\left( \sum_{g \in \mathcal{G}} p_{t,g} \right) \right) \cdot 3 \qquad \forall\thinspace t \in \mathcal{T}$$
+
+**`scalar`**
+
+$$\mathit{units}_{g} \le \mathit{budget} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\thinspace \mathit{cost}_{g} \text{ is defined}$$
+
+**`running`**
+
+$$\mathit{theta}_{b} \le \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{theta}_{b} \text{ exists} \wedge t \ge 3$$
+
+**`first`**
+
+$$\mathit{on}_{t,g} = 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \left( t = \mathrm{index}(\mathcal{T}, 0) \vee t = \mathrm{index}(\mathcal{T}, 0, \mathrm{season\_of}(t)) \right)$$
+
+**`northern`**
+
+$$\mathit{slack}_{t} \le \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{zone\_of}(b) = \text{north} \wedge \mathrm{zone\_of}(b) \neq \mathrm{area\_of}(b) \wedge \mathrm{zone\_of}(b) \text{ is defined}$$
+
+**`always`**
+
+$$\mathit{spill}_{t} \ge 0 \qquad \forall\thinspace t \in \mathcal{T} \thinspace:\thinspace \top$$
+
+**`never`**
+
+$$\mathit{slack}_{t} \ge 0 \qquad \forall\thinspace t \in \mathcal{T} \thinspace:\thinspace \bot$$
 
 #### Variable domains
 
@@ -88,3 +149,27 @@ $$\mathit{on}_{t,g} \in \{0, 1\} \qquad \forall\thinspace t \in \mathcal{T},\ens
 **`units`**
 
 $$0 \le \mathit{units}_{g} \le 10, \mathit{units}_{g} \in \mathbb{Z} \qquad \forall\thinspace g \in \mathcal{G}$$
+
+**`spare`**
+
+$$\mathit{spare}_{g} \in \mathbb{Z} \qquad \forall\thinspace g \in \mathcal{G}$$
+
+**`reserve`**
+
+$$\mathit{reserve} \ge 0$$
+
+**`headroom`**
+
+$$\mathit{headroom} \ge 0 \qquad \text{where } \mathit{budget} \text{ is defined}$$
+
+**`void`**
+
+$$\infty \le \mathit{void}_{b} \le -\infty \qquad \forall\thinspace b \in \mathcal{B}$$
+
+**`weight`**
+
+$$0 \le \mathit{weight}_{t,g} \le 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+
+**`weight sos`**
+
+$$\left( \mathit{weight}_{t,g} \right)_{g \in \mathcal{G}} \in \mathrm{SOS}2 \qquad \forall\thinspace t \in \mathcal{T}$$
