@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.204](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.203...v0.0.1-alpha.204) (2026-08-18)
+
+
+### Bug Fixes
+
+* **compat:** the eager lane's edge fills the shift's own vacated slot ([#1050](https://github.com/fluxopt/lpspec/issues/1050)) ([3f965f7](https://github.com/fluxopt/lpspec/commit/3f965f7c2cff126b21e61c77e523b42270ddc309))
+* **engine:** a per-entity offset's edge is per entity ([#1053](https://github.com/fluxopt/lpspec/issues/1053)) ([53fc3f7](https://github.com/fluxopt/lpspec/commit/53fc3f71228ce0c313557b26aac9004cd8af4d7c))
+
 ## [0.0.1-alpha.203](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.202...v0.0.1-alpha.203) (2026-08-18)
 
 
