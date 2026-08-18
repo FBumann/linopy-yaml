@@ -52,6 +52,7 @@ def test_inside_the_language(patch):
         ),
         pytest.param(_objective('sum(p * p, over=generator)'), 'degree 2', id='degree-two'),
         pytest.param(_objective('sum(cost / p, over=generator)'), 'divisor contains variables', id='variable-divisor'),
+        pytest.param(_objective('sum(p / (p_max - 1), over=generator)'), 'divisor is a sum', id='sum-divisor'),
     ],
 )
 def test_outside_the_language_is_a_load_error(patch, match):

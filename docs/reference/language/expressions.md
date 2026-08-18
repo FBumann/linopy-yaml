@@ -25,10 +25,15 @@ Every expression is **affine in the variables**:
 
 - `*` needs at least one variable-free factor — `p * cost` is fine, `p * on` is
   not;
-- `/` needs a variable-free divisor, and a single factor rather than a sum;
+- `/` needs a variable-free divisor, and a single factor rather than a sum —
+  `x / rate` and `x / (rate * hours)` divide, `x / (1 - share)` does not, at any
+  depth inside the divisor. Add before you bind, and divide by the column;
 - `**` parses but is **not in the language**. It is rejected at load time, so
   the refusal can name the operator and its rewrite. A variable base breaks
   degree 1; over parameters alone it is data prep.
+
+All three are refused at load, by `lps.check()` with nothing bound, and in the
+same words on both lanes.
 
 This is the ceiling the whole design sits under, not a missing feature — what
 that buys, and what it costs, is [the ceiling](../../about/ceiling.md).

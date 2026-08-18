@@ -15,6 +15,13 @@ consumer **asks**; none answers. A copy of the rule in a lane is a second
 spelling of one language rule, and the copy is the one no differential test
 covers.
 
+The divisor rule rides here for the same reason. A divisor that is a *sum*
+carries no variable and so loses no degree, but it is refused by the same
+clause of the reference and at the same node, and it was the second rule a
+lane answered for itself — the relational engine held one fragment per added
+term and raised when a divisor arrived as several, while the eager lane
+divided and said nothing.
+
 The decision is deliberately narrow: :func:`check_binary` decides a *binary
 operator node*, which is the only place degree can be lost. Everything else
 either preserves degree (``+``, unary ``-``, a reduction) or cannot introduce
@@ -79,6 +86,19 @@ def carries_variable(node: ExpressionNode) -> bool:
     assert_never(node)
 
 
+def carries_addition(node: ExpressionNode) -> bool:
+    """Whether *node* adds anywhere inside it, at any depth.
+
+    Depth is what makes this more than a look at the top operator: a reduction
+    maps over the parts it is handed rather than combining them, so
+    ``sum(a + b, over=d)`` reaches a divisor as two of them just as ``a + b``
+    does.
+    """
+    if isinstance(node, BinaryOperatorNode) and node.op in {'+', '-'}:
+        return True
+    return any(carries_addition(c) for c in children(node))
+
+
 def check_binary(node: BinaryOperatorNode, context: str | None = None) -> None:
     """Check that *node* stays inside degree 1.
 
@@ -87,7 +107,8 @@ def check_binary(node: BinaryOperatorNode, context: str | None = None) -> None:
 
     Raises:
         LanguageError: Both factors of a product carrying variables, a divisor
-            carrying one, or an operator the language does not have.
+            carrying one or made of several, or an operator the language does
+            not have.
     """
     where = f'{context}: ' if context else ''
     if node.op not in ARITHMETIC_OPERATORS:
@@ -107,6 +128,12 @@ def check_binary(node: BinaryOperatorNode, context: str | None = None) -> None:
         raise LanguageError(
             f'{where}the divisor contains variables, which is not affine. '
             f'Divide by a parameter, or precompute the reciprocal as one.'
+        )
+    if node.op == '/' and carries_addition(node.right):
+        raise LanguageError(
+            f'{where}the divisor is a sum of terms rather than one factor. '
+            f'Precompute it as a single parameter — adding before dividing is '
+            f'data prep, and the data is where it costs nothing.'
         )
 
 

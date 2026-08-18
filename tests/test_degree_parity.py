@@ -30,6 +30,7 @@ from tests.oracle import lpspec_linopy  # skips the module without the [linopy] 
         pytest.param('sum(p * p, over=generator)', 'degree 2', id='variable-times-variable'),
         pytest.param('sum(cost / p, over=generator)', 'divisor contains variables', id='variable-in-a-divisor'),
         pytest.param('sum(p ** 2, over=generator)', r"operator '\*\*'", id='an-operator-outside-the-language'),
+        pytest.param('sum(p / (p_max - 1), over=generator)', 'divisor is a sum', id='a-sum-in-a-divisor'),
     ],
 )
 def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_model_inputs, expression, match):
