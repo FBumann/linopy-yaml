@@ -79,7 +79,7 @@ constraints:
       every unit begins the horizon off, so one that is committed in the first
       snapshot pays for the start
     foreach: [snapshot, generator]
-    where: "snapshot == 0"
+    where: "snapshot == index(snapshot, 0)"
     expression: start_up - status >= 0
 
   start_up:

@@ -71,7 +71,7 @@ $$p_{t,g} - p^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} \cdot \mathit{sta
 
 **`start_up_initial`**
 
-$$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace t = 0$$
+$$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
 
 **`start_up`**
 
@@ -186,7 +186,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       start_up_initial:
         description: every unit begins the horizon off, so committing in the first snapshot is a start
         foreach: [snapshot, generator]
-        where: "snapshot == 0"
+        where: "snapshot == index(snapshot, 0)"
         expression: start_up - status >= 0
 
       start_up:
