@@ -107,14 +107,14 @@ $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leav
 
 #### `objective`
 
-a sense, and the reduction a declaration implies rather than writes
+a sense, and one summation per run of terms carrying the same dims
 
 ```yaml
 sense: maximize
-expression: p * cost
+expression: p * cost + p * p_min - spill + -reserve
 ```
 
-$$\max \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g}$$
+$$\max \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{cost}_{g} + p_{t,g} \cdot p^{\mathrm{min}}_{g} \right) - \sum_{t \in \mathcal{T}} \mathit{spill}_{t} - \mathit{reserve}$$
 
 ### Constraints
 

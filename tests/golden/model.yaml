@@ -146,6 +146,6 @@ constraints:
     where: "false"
     expression: slack >= 0
 
-objective:    # a sense, and the reduction a declaration implies rather than writes
+objective:    # a sense, and one summation per run of terms carrying the same dims
   sense: maximize
-  expression: p * cost
+  expression: p * cost + p * p_min - spill + -reserve

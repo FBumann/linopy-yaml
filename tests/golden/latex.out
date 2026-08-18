@@ -50,7 +50,7 @@
 
 \paragraph{Objective}
 \begin{align}
- && \max & \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g}
+ && \max & \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{cost}_{g} + p_{t,g} \cdot p^{\mathrm{min}}_{g} \right) - \sum_{t \in \mathcal{T}} \mathit{spill}_{t} - \mathit{reserve}
 \end{align}
 
 \paragraph{Subject to}
