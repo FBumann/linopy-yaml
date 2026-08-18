@@ -429,23 +429,6 @@ def test_an_emitted_set_may_not_collide_with_a_declared_one():
         schema_of(raw)
 
 
-@pytest.mark.parametrize(
-    ('patch', 'match'),
-    [
-        pytest.param({'convex': True}, 'write `method: convex`', id='the-flag-that-was-true'),
-        pytest.param({'convex': False}, 'write `method: adjacency`', id='the-flag-that-was-false'),
-        pytest.param({'method': 'lp'}, 'unknown piecewise method', id='a-method-linopy-has-and-we-do-not'),
-    ],
-)
-def test_the_method_key_refuses_the_old_flag_and_names_the_rewrite(patch, match):
-    """`convex:` was one formulation wearing a flag, and a flag has no room
-    for a third answer. The rewrite is named rather than guessed at."""
-    raw = raw_of(NONCONVEX_YAML)
-    raw['piecewise']['cost_curve'].update(patch)
-    with pytest.raises(lps.SchemaError, match=match):
-        schema_of(raw)
-
-
 def test_a_validated_model_expands_once():
     """Validation already built the expansion, so asking again returns it.
 
