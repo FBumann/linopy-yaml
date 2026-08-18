@@ -51,6 +51,8 @@ PyPSA linearized unit commitment: commitment with the status continuous in [0, 1
 | $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ --- how much of this unit comes up entering this snapshot |
 | $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ --- how much of this unit goes down entering this snapshot |
 
+$t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
+
 #### Objective
 
 $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \mathit{start\_up}_{t,g} \cdot \mathit{start\_up\_cost}_{g} + \mathit{shut\_down}_{t,g} \cdot \mathit{shut\_down\_cost}_{g} \right)$$
@@ -69,13 +71,9 @@ $$p_{t,g} - p^{\mathrm{nom}}_{g} \cdot \mathit{status}_{t,g} \le 0 \qquad \foral
 
 $$p_{t,g} - p^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} \cdot \mathit{status}_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
-**`start_up_initial`**
-
-$$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
-
 **`start_up`**
 
-$$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} + \mathit{status}_{t - 1,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} + \mathit{status}_{t \boxminus_{0} 1,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 **`shut_down`**
 
@@ -183,16 +181,10 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         foreach: [snapshot, generator]
         expression: p - p_min_pu * p_nom * status >= 0
 
-      start_up_initial:
-        description: every unit begins the horizon off, so committing in the first snapshot is a start
-        foreach: [snapshot, generator]
-        where: "snapshot == index(snapshot, 0)"
-        expression: start_up - status >= 0
-
       start_up:
         description: a unit whose commitment rises entering this snapshot pays for the rise
         foreach: [snapshot, generator]
-        expression: start_up - status + shift(status, over=snapshot, offset=1) >= 0
+        expression: start_up - status + shift(status, over=snapshot, offset=1, edge=0) >= 0
 
       shut_down:
         description: a unit whose commitment falls entering this snapshot pays for the fall
