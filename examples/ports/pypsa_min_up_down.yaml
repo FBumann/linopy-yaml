@@ -74,18 +74,13 @@ constraints:
     foreach: [snapshot, generator]
     expression: p - p_min_pu * p_nom * status >= 0
 
-  start_up_initial:
-    description: >-
-      every unit begins the horizon off, so one that is committed in the first
-      snapshot pays for the start
-    foreach: [snapshot, generator]
-    where: "snapshot == index(snapshot, 0)"
-    expression: start_up - status >= 0
-
   start_up:
-    description: a unit whose status rises entering this snapshot pays for a start
+    description: >-
+      a unit whose status rises entering this snapshot pays for a start. Every
+      unit begins the horizon off, which is the 0 the first snapshot reads where
+      it has no predecessor
     foreach: [snapshot, generator]
-    expression: start_up - status + shift(status, over=snapshot, offset=1) >= 0
+    expression: start_up - status + shift(status, over=snapshot, offset=1, edge=0) >= 0
 
   shut_down:
     description: >-

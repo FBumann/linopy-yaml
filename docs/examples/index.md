@@ -117,7 +117,7 @@ drift from what the engine builds.
 | [pypsa_global_limits](pypsa_global_limits.md) | **✔** 127212 | **✓** | **✓** | **✓** | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_growth_limit](pypsa_growth_limit.md) | **✔** 47110 | **✓** | **✓** | **✓** | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
-| [pypsa_linearized_uc](pypsa_linearized_uc.md) | **✔** 5540 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | · |
+| [pypsa_linearized_uc](pypsa_linearized_uc.md) | **✔** 5540 | **✓** | · | · | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_link_delay](pypsa_link_delay.md) | **✔** 4311.11 | · | **✓** | · | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_losses](pypsa_losses.md) | **✔** 24114.2 | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_min_up_down](pypsa_min_up_down.md) | **✔** 32750 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | **✓** |
