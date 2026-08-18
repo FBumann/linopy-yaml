@@ -14,7 +14,12 @@ costs are where capacity-expansion models actually hurt (#997).
 
 **An integer column is never scaled.** ``s·x'`` is integral only for integral
 ``s``, so those columns pin at 1 and whatever spread they carry survives. On a
-model that is mostly integer, that is most of the spread.
+model that is mostly integer that is most of the spread, and it is a limit
+rather than a shortfall: within any row — the objective included — the
+entries on integer columns keep their ratio to each other whatever the scaling
+does, the row's own factor multiplying all of them and no column factor being
+available. A model whose every cost sits on a binary therefore has a floor this
+reaches and cannot pass (#998), and what moves it is a tighter formulation.
 
 The factors are chosen by Ruiz equilibration in log space: alternately centre
 every row's largest and smallest log-magnitude on zero, then every column's.
@@ -35,10 +40,11 @@ import polars as pl
 if TYPE_CHECKING:
     import numpy.typing as npt
 
-#: How many alternating row/column passes an equilibration takes. Ruiz
-#: converges geometrically and the models this exists for are within a few
-#: percent of their floor by five; the sweeps are the cost, so there is no
-#: tolerance loop to stop early on and nothing to tune.
+#: How many alternating row/column passes an equilibration takes. Five lands
+#: within a few percent of the best any integrality-preserving diagonal scaling
+#: reaches, and more sweeps buy that few percent at a multiple of the cost
+#: (#998); the sweeps *are* the cost, so there is no tolerance loop to stop
+#: early on and nothing to tune.
 SWEEPS = 5
 
 

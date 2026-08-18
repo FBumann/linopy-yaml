@@ -252,7 +252,12 @@ Three reasons it is off by default:
 - it gives up the `rebind` fast path — coefficients are what a loaded solver
   may not have moved, and scaling folds costs and right-hand sides into them;
 - **an integer column is never scaled**, no factor keeping it integral, so a
-  mostly-integer model has little to gain. `scaled_range` is where that shows.
+  mostly-integer model has little to gain — and what little it gets is already
+  all there is. Within any row, the objective included, the entries on integer
+  columns keep their ratio to each other whatever the scaling does, so a model
+  whose every cost sits on a binary has a floor scaling reaches and cannot pass
+  (#998). `scaled_range` is what the solver saw; what is left is the
+  formulation's to fix, not the scaling's.
 
 The first repair is still the cheaper one: annualise the capital cost, get the
 snapshot weights right, and pick a money unit that puts the largest cost near 1.
