@@ -359,6 +359,29 @@ class PolarsCompiler:
                 ),
             )
 
+        def join_group_offset(p: plan.DimensionPosition) -> str:
+            """One column: the row's ordinal minus its own group's target ordinal."""
+            if p.dimension not in dims:
+                raise LanguageError(
+                    f"where-comparison on dimension '{p.dimension}' is outside the foreach dims "
+                    f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
+                )
+            table = self.data.dimensions[p.dimension]
+            _refuse_short_groups(p, table)
+            group = pl.col(str(p.by))
+            within = pl.col('ord').rank('ordinal').over(group).cast(pl.Int64) - 1
+            size = pl.len().over(group).cast(pl.Int64)
+            target = pl.lit(p.position) if p.position >= 0 else size + p.position
+            offset = pl.when(group.is_null()).then(None).otherwise(within - target)
+            return carrier.once(
+                f'__where ord {p.dimension} by {p.by}__',
+                lambda f, alias: f.join(
+                    table.select(pl.col('val').alias(p.dimension), offset.alias(alias)),
+                    on=p.dimension,
+                    how='left',
+                ),
+            )
+
         def join_lookup(lookup: str, over: str) -> str:
             if over not in dims:
                 raise LanguageError(
@@ -386,6 +409,8 @@ class PolarsCompiler:
                     )
                 return _compare(_dimension_column(p.dimension, p.value), p.op, p.value)
             if isinstance(p, plan.DimensionPosition):
+                if p.by is not None:
+                    return _falsy_if_null(_COLUMN_COMPARISONS[p.op](pl.col(join_group_offset(p)), pl.lit(0)))
                 at = _position_ordinal(p, self.data.cardinality[p.dimension])
                 return _COLUMN_COMPARISONS[p.op](pl.col(join_ordinal(p.dimension)), pl.lit(at))
             if isinstance(p, plan.LookupComparison):
@@ -1081,6 +1106,28 @@ def _certain_parameters(pred: plan.Predicate) -> frozenset[str]:
     if isinstance(pred, plan.VariableDefined):
         return frozenset({pred.variable})
     return frozenset()
+
+
+def _refuse_short_groups(p: plan.DimensionPosition, table: pl.LazyFrame) -> None:
+    """Refuse a position no coordinate of some group occupies.
+
+    The ungrouped counterpart is :func:`_position_ordinal`, and the reason is
+    the same one construct-wide: a boundary clause that silently seeds no row
+    leaves that group's recurrence unanchored. Grouping only multiplies the
+    chance — one short period is enough — so it is checked per group, which
+    costs one pass over the dim table the mask is about to join anyway.
+    """
+    needed = p.position + 1 if p.position >= 0 else -p.position
+    sizes = table.select(pl.col(str(p.by))).drop_nulls().group_by(str(p.by)).len().collect()
+    short = sorted(str(g) for g, n in sizes.iter_rows() if n < needed)
+    if short:
+        msg = (
+            f'where: index({p.dimension}, {p.position}, by={p.by}) names position '
+            f'{p.position} within each group, and {len(short)} of them are shorter than '
+            f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
+            f'was to seed unseeded.'
+        )
+        raise DataError(msg)
 
 
 def _falsy_if_null(condition: pl.Expr) -> pl.Expr:

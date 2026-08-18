@@ -265,6 +265,11 @@ class DimensionPosition(Predicate):
     against the *bound* coordinate order rather than lowered to a label, so a
     relabelled index moves the boundary with it. Negative counts from the end.
 
+    ``by`` names a lookup over the same dimension, and then the position is
+    counted **within each group** it makes: ``index(snapshot, 0, by=period_of)``
+    is every period's first snapshot. A coordinate its lookup sends nowhere is
+    in no group and matches nothing, as a null group does everywhere else.
+
     Every consuming lane already holds that order — the dim table's ``ord``
     here, the master index on the eager side — so this needs no new source.
     """
@@ -272,6 +277,7 @@ class DimensionPosition(Predicate):
     dimension: str
     op: ComparisonOperator
     position: int
+    by: str | None = None
 
 
 @dataclass(frozen=True)

@@ -18,6 +18,8 @@ which every case below checks differentially.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import polars as pl
 import pytest
 import yaml as pyyaml
@@ -243,3 +245,213 @@ def resolved_where(where: str):
 
     schema = schema_of(MODEL)
     return where_of(where, Namespace.of(schema), 't')
+
+
+# ---------------------------------------------------------------------------
+# by=lookup — the boundary of each group
+# ---------------------------------------------------------------------------
+
+#: Irregular on purpose: two snapshots in the first period, three in the second,
+#: and one belonging to no period at all. A rectangular grid would let a wrong
+#: implementation pass by counting along the whole axis.
+GROUPED_SNAPSHOTS = [10, 11, 20, 21, 22, 99]
+GROUPED_PERIODS = [0, 0, 1, 1, 1, None]
+
+MASK = """
+dimensions:
+  snapshot: {dtype: int}
+  period: {dtype: int}
+
+lookups:
+  period_of: {over: snapshot, into: period}
+
+parameters:
+  price: {dims: [snapshot]}
+
+variables:
+  soc: {foreach: [snapshot], bounds: {lower: 0, upper: 100}}
+
+constraints:
+  pin:
+    foreach: [snapshot]
+    where: "WHERE"
+    expression: soc == 5
+
+objective:
+  sense: minimize
+  expression: sum(soc * price, over=snapshot)
+"""
+
+
+def _grouped_sources():
+    """One mapping both lanes take, the lookup arriving as a column of the index.
+
+    Arrow tables rather than pandas: a partial lookup read out of a pandas frame
+    arrives as ``float64`` beside an ``i64`` target, which is a binding question
+    of its own and not the one under test here.
+    """
+    return {
+        'snapshot': pl.DataFrame({'snapshot': GROUPED_SNAPSHOTS, 'period_of': GROUPED_PERIODS}),
+        'period': pl.DataFrame({'period': [0, 1]}),
+        'price': pl.DataFrame({'snapshot': GROUPED_SNAPSHOTS, 'value': [1.0] * len(GROUPED_SNAPSHOTS)}),
+    }
+
+
+def _masked(where: str) -> list[int]:
+    """The snapshots *where* selects, agreed by both lanes.
+
+    Read off the primal rather than the plan: minimising a positive price holds
+    `soc` at zero everywhere the row was not built, so what comes back non-zero
+    is exactly the mask — which is the thing under test, and the one an engine
+    could get wrong on its own.
+    """
+    with differential(MASK.replace('WHERE', where), _grouped_sources()) as run:
+        rows = run.result.primal('soc').filter(pl.col('value') > 1e-9)
+        return sorted(int(s) for s in rows.select('snapshot').to_series())
+
+
+def test_each_group_is_seeded_at_its_own_first_position():
+    """The whole point: one boundary per group, not one for the axis."""
+    assert _masked('snapshot == index(snapshot, 0, by=period_of)') == [10, 20], (
+        "each period's first snapshot, not just the horizon's"
+    )
+    assert _masked('snapshot == index(snapshot, 0)') == [10], 'and the ungrouped spelling still names one'
+
+
+def test_a_negative_position_is_each_group_s_last():
+    """`-1` per group — the tail an ungrouped `index` cannot reach.
+
+    With periods of different lengths there is no single position that is the
+    last of both, which is why this is the case that decided the design.
+    """
+    assert _masked('snapshot == index(snapshot, -1, by=period_of)') == [11, 22]
+
+
+def test_a_comparator_reads_the_same_grouped_as_ungrouped():
+    """`>=` is 'at or after that position in my group', for every group.
+
+    A guard against arithmetic that only works at zero: the offsets a row is
+    compared through are signed, and an unsigned rank subtracted past zero
+    wraps to a huge positive number instead — which `==` cannot see and every
+    other comparator reads backwards.
+    """
+    assert _masked('snapshot >= index(snapshot, 1, by=period_of)') == [11, 21, 22], (
+        "everything from each period's second snapshot on"
+    )
+    assert _masked('snapshot < index(snapshot, 1, by=period_of)') == [10, 20], 'and its complement'
+
+
+def test_a_coordinate_in_no_group_has_no_boundary():
+    """Snapshot 99 maps nowhere, so no group's boundary is its own.
+
+    The same reading a null lookup value gets everywhere else — it belongs to
+    no group, so `sum(by=)` places its terms nowhere and this places no row.
+    """
+    for where in (
+        'snapshot == index(snapshot, 0, by=period_of)',
+        'snapshot == index(snapshot, -1, by=period_of)',
+        'snapshot >= index(snapshot, 0, by=period_of)',
+    ):
+        assert 99 not in _masked(where), f'{where} claimed a coordinate that is in no group'
+
+
+def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
+    """Not a mask that is false there: one short period would go unseeded.
+
+    Position 2 exists in the three-snapshot period and not in the two-snapshot
+    one, which is precisely the failure grouping makes easy to write and
+    impossible to see in the answer.
+    """
+    model = MASK.replace('WHERE', 'snapshot == index(snapshot, 2, by=period_of)')
+    path = tmp_path / 'model.yaml'
+    path.write_text(model)
+    sources = _grouped_sources()
+
+    with pytest.raises(DataError, match=r'1 of them are shorter than that'):
+        lps.solve(pyyaml.safe_load(model), sources)
+
+    from tests.oracle import lpspec_linopy
+
+    with pytest.raises(DataError, match=r'1 of them are shorter than that'):
+        lpspec_linopy.build(path, sources)
+
+
+@pytest.mark.parametrize(
+    ('by', 'match'),
+    [
+        pytest.param('price', r"groups by 'price', which is a parameter", id='by-a-parameter'),
+        pytest.param('period', r"groups by 'period', which is a dimension", id='by-a-dimension'),
+        pytest.param('nowhere', r"groups by 'nowhere', which is not declared", id='by-nothing'),
+    ],
+)
+def test_by_takes_a_lookup(by, match):
+    """`by=` is the same word it is in `sum(by=)` and `at(by=)`, or it is nothing."""
+    model = MASK.replace('WHERE', f'snapshot == index(snapshot, 0, by={by})')
+    with pytest.raises(LanguageError, match=match):
+        schema_of(model)
+
+
+def test_a_lookup_over_another_dimension_carries_no_position():
+    """Grouping needs a lookup over the dimension being counted.
+
+    A lookup over something else names groups no row of this dimension is in,
+    so there is no position within a group for the clause to be about.
+    """
+    model = (
+        MASK.replace('WHERE', 'snapshot == index(snapshot, 0, by=plant_period)')
+        .replace('  period: {dtype: int}', '  period: {dtype: int}\n  plant: {dtype: str}')
+        .replace(
+            '  period_of: {over: snapshot, into: period}',
+            '  period_of: {over: snapshot, into: period}\n  plant_period: {over: plant, into: period}',
+        )
+    )
+    with pytest.raises(LanguageError, match=r"counts positions along 'snapshot' but groups by a lookup over 'plant'"):
+        schema_of(model)
+
+
+# ---------------------------------------------------------------------------
+# the teaching model
+# ---------------------------------------------------------------------------
+
+SEASONS = Path('examples/seasons.yaml')
+SEASONS_PAGE = Path('docs/examples/seasons.md')
+
+
+def _seasons_sources():
+    """Snapshots numbered from **1**, and seasons of four and three.
+
+    Both are the model's argument in the data: a clause naming a label would
+    have to know the horizon starts at 1, and no single position along the axis
+    is the last of a four-snapshot season *and* a three-snapshot one.
+    """
+    snapshots = [1, 2, 3, 4, 5, 6, 7]
+    return {
+        'snapshot': pl.DataFrame({'snapshot': snapshots, 'season_of': ['winter'] * 4 + ['summer'] * 3}),
+        'season': pl.DataFrame({'season': ['winter', 'summer']}),
+        'inflow': pl.DataFrame({'snapshot': snapshots, 'value': [0.0, 10.0, 0.0, 0.0, 0.0, 6.0, 0.0]}),
+        'price': pl.DataFrame({'snapshot': snapshots, 'value': [1.0, 2.0, 5.0, 3.0, 4.0, 1.0, 2.0]}),
+        'opening': pl.DataFrame({'season': ['winter', 'summer'], 'value': [20.0, 5.0]}),
+        'reserve': pl.DataFrame({'season': ['winter', 'summer'], 'value': [4.0, 1.0]}),
+    }
+
+
+def test_the_seasons_page_number():
+    """The optimum `docs/examples/seasons.md` quotes, and the trajectory behind it.
+
+    Both boundaries are load-bearing and neither is reachable ungrouped: the
+    opening level is handed to each season rather than to the horizon, and the
+    reserve is owed at snapshot 4 *and* snapshot 7 — positions that are the last
+    of a four-snapshot season and of a three-snapshot one.
+    """
+    with differential(SEASONS, _seasons_sources()) as run:
+        assert run.oracle == pytest.approx(160.0, rel=RTOL), 'winter 130 and summer 30, agreed by both lanes'
+        released = {int(r['snapshot']): r['value'] for r in run.result.primal('release').to_dicts()}
+        held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
+
+    assert held[1] == pytest.approx(20.0), "winter is handed its own opening level, not the horizon's"
+    assert released[3] == pytest.approx(26.0), "and sells all but its reserve at winter's best price"
+    assert held[4] == pytest.approx(4.0), 'leaving the 4 it owes at its own last snapshot'
+    assert held[5] == pytest.approx(0.0), 'summer opens from its own level and owes nothing until its end'
+    assert held[7] == pytest.approx(1.0), 'where it leaves the 1 it owes, three snapshots later rather than four'
+
+    assert '160.0' in SEASONS_PAGE.read_text(), 'the page quotes an optimum this test does not hold'
