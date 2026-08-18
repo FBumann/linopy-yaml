@@ -60,7 +60,7 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace s \in \mathcal{S}} \left( p_{t,g} \cdot \mathit{marginal\_cost}_{g} + e^{\mathrm{nom}}_{s} \cdot e^{\mathrm{capital,cost}}_{s} \right)$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \sum_{s \in \mathcal{S}} e^{\mathrm{nom}}_{s} \cdot e^{\mathrm{capital,cost}}_{s}$$
 
 #### Subject to
 

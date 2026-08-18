@@ -47,7 +47,7 @@ Uncapacitated facility location, OR-Library instance cap71: 16 possible warehous
 
 #### Objective
 
-$$\min \sum_{w \in \mathcal{W},\enspace c \in \mathcal{C}} \left( \mathit{is\_open}_{w} \cdot \mathit{fixed\_cost}_{w} + \mathit{serve}_{w,c} \cdot \mathit{serve}^{\mathrm{cost}}_{w,c} \right)$$
+$$\min \sum_{w \in \mathcal{W}} \mathit{is\_open}_{w} \cdot \mathit{fixed\_cost}_{w} + \sum_{w \in \mathcal{W},\enspace c \in \mathcal{C}} \mathit{serve}_{w,c} \cdot \mathit{serve}^{\mathrm{cost}}_{w,c}$$
 
 #### Subject to
 

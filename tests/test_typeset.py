@@ -58,6 +58,30 @@ DISPATCH = {
 }
 
 
+#: An objective whose two terms carry different dims — dispatch over (t, g)
+#: and a capital cost over (g) alone. No constraints, so every summation in the
+#: rendered document is one the objective asked for.
+MIXED = {
+    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+    'parameters': {'cost': {'dims': ['generator']}, 'capex': {'dims': ['generator']}},
+    'variables': {
+        'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0}},
+        'p_nom': {'foreach': ['generator'], 'bounds': {'lower': 0}},
+    },
+    'objective': {'sense': 'minimize', 'expression': 'p * cost + p_nom * capex'},
+}
+
+
+def _summations(text: str, fmt: Format) -> int:
+    """How many summations *text* opens, derived from the format's own spelling."""
+    return text.count(fmt.summation('DOMAIN', 'BODY').split('DOMAIN')[0])
+
+
+def _over_generators(fmt: Format) -> str:
+    """``sum over g in G``, opened but not filled — what the capital term is under."""
+    return fmt.summation(f'g {fmt.operators["in"]} {fmt.script("G")}', '').rstrip()
+
+
 # ---------------------------------------------------------------------------
 # shared: properties of the walk, asserted for every format
 # ---------------------------------------------------------------------------
@@ -370,6 +394,36 @@ def test_an_underscore_is_only_a_qualifier_when_its_head_is_a_symbol(name: str, 
     assert _derive_name_symbol(name, frozenset({'p', 'soc'}), LATEX) == expected
 
 
+@EVERY_FORMAT
+def test_the_objective_sums_each_term_over_the_dims_that_term_carries(fmt: Format):
+    """One summation per group of terms, not one over the union of their dims.
+
+    An addition stacks its sides, so a term reaches the objective keyed by its
+    own dims: the capital term below is summed over generators and nothing
+    else. Under one summation over the union it would be shown once per
+    snapshot as well, which is the objective of a different model (#1040).
+    """
+    text = typeset(MIXED, fmt, legend=False)
+    assert _summations(text, fmt) == 2, 'a term carrying fewer dims gets its own summation'
+    assert _over_generators(fmt) in text, 'the capital term is summed over generators alone'
+
+
+@EVERY_FORMAT
+def test_adjacent_objective_terms_with_the_same_dims_share_one_summation(fmt: Format):
+    """The other half of the rule: splitting per term regardless would spell
+    an objective whose terms agree as a row of identical summations."""
+    text = typeset(override(MIXED, **{'objective.expression': 'p * cost + p * cost'}), fmt, legend=False)
+    assert _summations(text, fmt) == 1, 'terms carrying the same dims stay under one summation'
+
+
+@EVERY_FORMAT
+def test_a_subtracted_objective_term_keeps_its_sign_outside_its_own_summation(fmt: Format):
+    """The sign belongs to the term, and the term is what is summed — so it
+    lands between the two summations rather than inside the second."""
+    text = typeset(override(MIXED, **{'objective.expression': 'p * cost - p_nom * capex'}), fmt, legend=False)
+    assert f'{fmt.operators["minus"]} {_over_generators(fmt)}' in text
+
+
 # ---------------------------------------------------------------------------
 # LaTeX
 # ---------------------------------------------------------------------------
@@ -547,12 +601,10 @@ DIVERGENT = {
         'inner sum where the model reaches it through a named expression.'
     ),
     'multi_period': (
-        "renders the objective as one sum over the union of both terms' dims. The "
-        'capex term carries (period, generator) and the operating term carries '
-        '(snapshot, generator), and the engine sums each over its own dims — so the '
-        'rendered sum over t as well would multiply capex by the snapshots per '
-        'period. Reproducing it would need the generator to split an additive '
-        'objective into one sum per term.'
+        'writes the pullback in reader notation: a hatted p for the capacity variable '
+        'and period() for the lookup, where the generator spells the declarations — '
+        'p^nom and period_of(). Matching would take a symbol table, not a renderer '
+        'change.'
     ),
     'storage': (
         'writes soc_{s-1}, ordinary index arithmetic. The model rolls, and a roll '

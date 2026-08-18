@@ -60,7 +60,7 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace i \in \mathcal{I},\enspace m \in \mathcal{M},\enspace y \in \mathcal{Y},\enspace v \in \mathcal{V}} \left( \mathit{build}_{t,v} \cdot \mathit{build}^{\mathrm{cost}}_{t,v} + \left( \sum_{v \in \mathcal{V}} \mathit{build}_{t,v} \cdot \mathit{still\_live}_{t,y,v} \right) \cdot \mathit{holding\_cost}_{t,y} + \mathit{activity}_{i,t,m,y} \cdot \mathit{running\_cost}_{i,t,m,y} + \mathit{residual\_holding} \right)$$
+$$\min \sum_{t \in \mathcal{T},\enspace v \in \mathcal{V}} \mathit{build}_{t,v} \cdot \mathit{build}^{\mathrm{cost}}_{t,v} + \sum_{t \in \mathcal{T},\enspace y \in \mathcal{Y}} \left( \sum_{v \in \mathcal{V}} \mathit{build}_{t,v} \cdot \mathit{still\_live}_{t,y,v} \right) \cdot \mathit{holding\_cost}_{t,y} + \sum_{t \in \mathcal{T},\enspace i \in \mathcal{I},\enspace m \in \mathcal{M},\enspace y \in \mathcal{Y}} \mathit{activity}_{i,t,m,y} \cdot \mathit{running\_cost}_{i,t,m,y} + \mathit{residual\_holding}$$
 
 #### Subject to
 

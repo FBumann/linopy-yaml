@@ -64,7 +64,7 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 
 #### Objective
 
-$$\min \sum_{s \in \mathcal{S},\enspace t \in \mathcal{T},\enspace g \in \mathcal{G}} \left( p_{s,t,g} \cdot \mathit{opex}_{g} \cdot \mathit{probability}_{s} + p^{\mathrm{nom}}_{g} \cdot \mathit{capex}_{g} \right)$$
+$$\min \sum_{s \in \mathcal{S},\enspace t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{s,t,g} \cdot \mathit{opex}_{g} \cdot \mathit{probability}_{s} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathit{capex}_{g}$$
 
 #### Subject to
 

@@ -72,7 +72,7 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 
 #### Objective
 
-$$\min \sum_{g \in \mathcal{G},\enspace o \in \mathcal{O}} \left( p_{g} \cdot \mathit{energy\_cost}_{g} + r_{o} \cdot \mathit{offer}^{\mathrm{cost}}_{o} \right)$$
+$$\min \sum_{g \in \mathcal{G}} p_{g} \cdot \mathit{energy\_cost}_{g} + \sum_{o \in \mathcal{O}} r_{o} \cdot \mathit{offer}^{\mathrm{cost}}_{o}$$
 
 #### Subject to
 
