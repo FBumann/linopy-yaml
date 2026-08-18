@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.196](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.195...v0.0.1-alpha.196) (2026-08-18)
+
+
+### Features
+
+* **language:** a translation stops at the edge of its own group ([#1023](https://github.com/fluxopt/lpspec/issues/1023)) ([aa747b5](https://github.com/fluxopt/lpspec/commit/aa747b5b003cb120ab7f96350445f6b99f47d898))
+
 ## [0.0.1-alpha.195](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.194...v0.0.1-alpha.195) (2026-08-18)
 
 
