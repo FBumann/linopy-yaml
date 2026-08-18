@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.191](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.190...v0.0.1-alpha.191) (2026-08-18)
+
+
+### Bug Fixes
+
+* **examples:** every seeding clause names the position, not the label ([#1004](https://github.com/fluxopt/lpspec/issues/1004)) ([4f57d5a](https://github.com/fluxopt/lpspec/commit/4f57d5a818cdff9bbbc99e7de0cf911d045172af))
+
 ## [0.0.1-alpha.190](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.189...v0.0.1-alpha.190) (2026-08-18)
 
 
