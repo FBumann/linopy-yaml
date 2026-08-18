@@ -21,7 +21,6 @@ from dataclasses import is_dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, get_args
 
-import coverage
 import pytest
 
 import lpspec as lps
@@ -965,6 +964,9 @@ def test_the_golden_model_reaches_every_line_of_the_walk(tmp_path: Path):
     any test starts, and a measurement that begins after the import counts
     every ``def`` and ``import`` line as unreached.
     """
+    coverage = pytest.importorskip(
+        'coverage', reason='the bare-install job has no dev tools; the guard runs wherever they are'
+    )
     data = tmp_path / 'walk.coverage'
     render = tmp_path / 'render.py'
     render.write_text(f'from lpspec import to_latex\nto_latex({str(golden.MODEL)!r})\n')
