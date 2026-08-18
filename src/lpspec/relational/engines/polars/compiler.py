@@ -1018,10 +1018,10 @@ class PolarsCompiler:
                     # no group has none — it is absent under every policy, there
                     # being nothing to come round from or to fill from.
                     return None if s.partition is None else Presence(self._grouped(s), (s.dimension,))
-                return Presence(self._edge(s, card, vacated=False), (s.dimension,))
+                return Presence(self._edge(s, card, vacated=False), (s.dimension, *self.offset_dims(s)))
 
             source, keyed_by = p.presence.frame, p.presence.keyed_by
-            if keyed_by is not None and s.dimension not in keyed_by:
+            if keyed_by is not None and not {s.dimension, *self.offset_dims(s)}.issubset(keyed_by):
                 source, keyed_by = self._widen(source, keyed_by, p.dims), None
             moved_presence = remap(source, [], keyed_by)
             if s.wrap or s.fill is None:
@@ -1059,17 +1059,33 @@ class PolarsCompiler:
         so this is always the const branch and never invents a ``var_label``.
         """
         edge = self._edge(s, card, vacated=True)
+        keyed = self.offset_dims(s)
         for d in others:
+            if d in keyed:
+                continue
             edge = edge.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
         return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval')).select(*others, s.dimension, 'cval')
 
+    def offset_dims(self, s: plan.Translate) -> tuple[str, ...]:
+        """The dims a per-entity offset varies over — empty where it is a number.
+
+        An edge is keyed by them as well as by the translated dimension: how
+        far back a row reaches decides which rows have nothing to reach, so
+        under a named offset the two entities of one coordinate need not agree
+        about whether it is the edge.
+        """
+        if not isinstance(s.offset, str):
+            return ()
+        return tuple(self.program.parameter(s.offset).dims)
+
     def _edge(self, s: plan.Translate, card: int, *, vacated: bool) -> pl.LazyFrame:
-        """The labels of ``s.dimension`` an acyclic shift vacates, or keeps.
+        """The coordinates an acyclic shift vacates, or keeps.
 
         Exact complements, so one filter negated rather than two conditions to
         keep in step: a fill and the presence set it implies must not disagree
-        about which coordinates the edge is. One column wide either way, an
-        edge being vacated for *every* combination of the other dims.
+        about which coordinates the edge is. One column wide under a numeric
+        offset, an edge then being vacated for *every* combination of the other
+        dims; under a named one, one column per :meth:`offset_dims` as well.
 
         Under a partition the edge is **each group's**, counted along the same
         within-group rank the translation itself walks: a coordinate reaches
@@ -1080,15 +1096,30 @@ class PolarsCompiler:
         table = self.data.dimensions[s.dimension]
         if s.partition is not None:
             grouped = pl.col(s.partition)
-            position = pl.col('ord').rank('ordinal').over(grouped) - 1
-            source = position.cast(pl.Int64) - s.offset
-            span = pl.len().over(grouped).cast(pl.Int64)
-            reaches = (source % span + span) % span if s.wrap else source
-            outside = grouped.is_null() | (reaches < 0) | (reaches >= span)
+            table = table.with_columns(
+                (pl.col('ord').rank('ordinal').over(grouped) - 1).cast(pl.Int64).alias(_POS),
+                pl.len().over(grouped).cast(pl.Int64).alias(_SPAN),
+            )
+            position, span = pl.col(_POS), pl.col(_SPAN)
         else:
-            source = pl.col('ord') - s.offset
-            outside = (source < 0) | (source >= card)
-        return table.filter(outside if vacated else ~outside).select(pl.col('val').alias(s.dimension))
+            position, span = pl.col('ord'), pl.lit(card, dtype=pl.Int64)
+        dims = self.offset_dims(s)
+        if dims:
+            assert isinstance(s.offset, str)
+            table = table.join(
+                self.data.parameters[s.offset].select(*dims, pl.col('value').cast(pl.Int64).alias(_OFFSET)),
+                how='cross',
+            )
+            offset = pl.col(_OFFSET)
+        else:
+            assert not isinstance(s.offset, str)
+            offset = pl.lit(s.offset, dtype=pl.Int64)
+        source = position - offset
+        reaches = (source % span + span) % span if s.wrap else source
+        outside = (reaches < 0) | (reaches >= span)
+        if s.partition is not None:
+            outside = pl.col(s.partition).is_null() | outside
+        return table.filter(outside if vacated else ~outside).select(pl.col('val').alias(s.dimension), *dims)
 
     def _grouped(self, s: plan.Translate) -> pl.LazyFrame:
         """The labels the partition lookup actually places in a group.
@@ -1125,7 +1156,9 @@ class PolarsCompiler:
             return edge
         have = p.presence.keys(p.dims)
         source = p.presence.frame if all(d in have for d in others) else self._widen(p.presence.frame, have, p.dims)
-        return source.select(*others).unique().join(edge, how='cross')
+        keys = [d for d in self.offset_dims(s) if d in others]
+        rows = source.select(*others).unique()
+        return rows.join(edge, on=keys, how='inner') if keys else rows.join(edge, how='cross')
 
     # ------------------------------------------------------------------
     # assembly helpers used by the engine
