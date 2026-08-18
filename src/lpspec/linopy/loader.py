@@ -13,9 +13,11 @@ import xarray as xr
 
 from lpspec.errors import (
     DataError,
+    coordinates_shown,
     declared_map_needs_labels_message,
     dense_array_message,
     duplicate_coordinate_message,
+    holes_in_values_message,
     lookups_need_an_index_message,
     missing_lookup_columns_message,
     no_index_source_message,
@@ -35,7 +37,7 @@ from lpspec.language.expression_parser import (
 from lpspec.sources import check_declared_map_keys, check_index_ownership
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
     from lpspec.language.expression_parser import ExpressionNode
     from lpspec.language.model import Model
@@ -283,6 +285,36 @@ def load_parameters(
     return xr.Dataset(arrays)
 
 
+def _refuse_holes(name: str, values: pd.Series, dims: Sequence[str]) -> None:
+    """A row carrying no value, asked while the source's own shape survives.
+
+    Of the source and never of the array: ``DataArray.from_series`` unstacks a
+    MultiIndex and fills every combination the source did not carry with NaN,
+    so a sparse parameter would read as holed the moment it became one. Asked
+    per input shape for the same reason — a dict, a sequence and a tidy frame
+    each stop being a list of supplied rows at a different line.
+
+    This lane cannot tell a null from a NaN and does not try: pandas spells
+    both NaN, which is the reason the refusal covers the pair.
+    """
+    holes = values.isna()
+    total = int(holes.sum())
+    if not total:
+        return
+    keys = [_native(key) for key in values.index[holes][:3]] if dims else ()
+    raise DataError(holes_in_values_message(name, total, coordinates_shown(dims, keys)))
+
+
+def _native(key: Any) -> tuple[Any, ...]:
+    """One index key as the python natives the shared message formats.
+
+    A numpy scalar reprs as ``np.str_('b')`` under numpy 2, and the relational
+    lane's wording has no numpy in it to match.
+    """
+    values = key if isinstance(key, tuple) else (key,)
+    return tuple(v.item() if hasattr(v, 'item') else v for v in values)
+
+
 def _refuse_duplicate_index(name: str, index: pd.Index, dims: list[str]) -> None:
     """Two values for one coordinate, before xarray sees it.
 
@@ -323,6 +355,7 @@ def _coerce_to_dataarray(
         return _from_tidy(name, pl.scan_parquet(raw), dims)
 
     if isinstance(raw, (int, float, np.integer, np.floating)):
+        _refuse_holes(name, pd.Series([float(raw)]), ())
         return xr.DataArray(float(raw))
 
     if isinstance(raw, dict):
@@ -348,6 +381,7 @@ def _coerce_to_dataarray(
             raw = raw.copy()
             raw.index.names = dims
         _refuse_duplicate_index(name, raw.index, dims)
+        _refuse_holes(name, raw, dims)
         return xr.DataArray.from_series(raw)
 
     if not isinstance(raw, (np.ndarray, list, tuple)):
@@ -368,6 +402,7 @@ def _coerce_to_dataarray(
                     f'{len(master_coords[dim])}.'
                 )
                 raise DataError(msg)
+            _refuse_holes(name, pd.Series(arr_np, index=master_coords[dim]), [dim])
             return xr.DataArray(arr_np, dims=[dim], coords={dim: master_coords[dim]})
         msg = (
             f"Parameter '{name}': a sequence is positional along one dimension, and "
@@ -403,11 +438,14 @@ def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str]) -
             f'columns {wanted}. Got {frame.columns}.'
         )
     if not dims:
+        _refuse_holes(name, pd.Series([frame['value'][0]]), ())
         return xr.DataArray(float(frame['value'][0]))
     columns = [frame[d].to_numpy() for d in dims]
     index = pd.Index(columns[0], name=dims[0]) if len(dims) == 1 else pd.MultiIndex.from_arrays(columns, names=dims)
     _refuse_duplicate_index(name, index, dims)
-    return xr.DataArray.from_series(pd.Series(frame['value'].to_numpy(), index=index))
+    series = pd.Series(frame['value'].to_numpy(), index=index)
+    _refuse_holes(name, series, dims)
+    return xr.DataArray.from_series(series)
 
 
 def _tidy_series(name: str, frame: pd.DataFrame, dims: list[str]) -> pd.Series:

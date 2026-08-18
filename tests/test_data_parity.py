@@ -5,7 +5,7 @@ accepted or refused identically, because hard rule 3 says both lanes accept
 exactly the same language. Nothing said the same about the same **data**, and
 the checks are written twice — 15 `DataError` sites in `relational/engines/polars/engine.py`
 against 16 in `linopy/loader.py`, with only the wording of two of them shared
-(#351). Two of the six cases below diverged when this table was written:
+(#351). Two of the cases below diverged when this table was written:
 
 - an unknown label was **accepted** by the relational lane, worth two thirds of
   the objective on the model here (#350);
@@ -13,6 +13,9 @@ against 16 in `linopy/loader.py`, with only the wording of two of them shared
   `ValueError` eagerly — which the error rules name as the failure mode to avoid, "an
   opaque xarray or solver exception with no pointer back to a YAML
   declaration".
+
+A third pair diverged on a hole in a value column, one lane refusing it as an
+undefined divisor that was not there while the other read it as a missing row.
 
 The table is the contract the decoupling in #351 has to preserve. It is also
 what makes "decoupled" mean something: without it, the next divergence lands
@@ -107,6 +110,27 @@ def _cases() -> list[Case]:
             # Present and unaddressable is a typo, not sparsity (#350).
             DataError,
         ),
+        Case(
+            'a null value',
+            {**good_r, 'cost': _tidy(f=['a', 'b'], value=[1.0, None])},
+            {**good_e, 'cost': pd.Series({'a': 1.0, 'b': None})},
+            # A row claiming the coordinate while its value denies it says both at once.
+            DataError,
+        ),
+        Case(
+            'a NaN value',
+            {**good_r, 'cost': _tidy(f=['a', 'b'], value=[1.0, float('nan')])},
+            {**good_e, 'cost': pd.Series({'a': 1.0, 'b': float('nan')})},
+            # The same hole, in the only spelling pandas has for one.
+            DataError,
+        ),
+        Case(
+            'a hole in a bound',
+            {**good_r, 'cap': _tidy(f=['a', 'b'], value=[5.0, None])},
+            {**good_e, 'cap': pd.Series({'a': 5.0, 'b': None})},
+            # Refused at bind, where `null_bounds_message` caught it at assembly.
+            DataError,
+        ),
     ]
 
 
@@ -158,6 +182,80 @@ def test_the_table_covers_both_verdicts():
     """
     verdicts = {c.verdict for c in CASES}
     assert verdicts == {ACCEPTED, DataError}, f'expected both verdicts to be exercised; got {verdicts}'
+
+
+def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(model_path: Path):
+    """`x * cost` divides by nothing, and the message used to say it did.
+
+    The relational lane read a null coefficient in the assembled matrix as an
+    undefined divisor, which is the only way one used to arise — so a hole in
+    an ordinary coefficient printed `parameter ''`, naming no parameter at all,
+    while the eager lane read the same hole as a missing row and solved. Both
+    now refuse it at bind, in one sentence, before anything is assembled.
+    """
+    holed = {'cost': _tidy(f=['a', 'b'], value=[1.0, None]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+    eager = {'cost': pd.Series({'a': 1.0, 'b': None}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
+
+    with pytest.raises(DataError, match="parameter 'cost'") as relational_error:
+        lps.build(model_path, holed).close()
+    with pytest.raises(DataError, match="parameter 'cost'") as eager_error:
+        lpspec_linopy.build(model_path, eager)
+
+    assert 'divisor' not in str(relational_error.value), (
+        'the message names the hole, not a divisor the model has not got'
+    )
+    assert "f='b'" in str(relational_error.value), 'and names the coordinate the hole sits at'
+    assert str(relational_error.value) == str(eager_error.value), 'one defect, one sentence'
+
+
+@pytest.mark.parametrize(
+    'holed',
+    [
+        pytest.param(float('nan'), id='a-scalar'),
+        pytest.param([1.0, float('nan')], id='a-sequence'),
+        pytest.param({'a': 1.0, 'b': None}, id='a-dict'),
+        pytest.param(_tidy(f=['a', 'b'], value=[1.0, None]), id='a-tidy-frame'),
+    ],
+)
+def test_a_hole_is_refused_in_every_shape_a_source_arrives_in(model_path: Path, holed: Any):
+    """One source object, both lanes — these four shapes are nobody's dialect.
+
+    Each stops being a list of supplied rows at a different line: a dict and a
+    sequence are spread over the master coordinates, a scalar is broadcast, a
+    tidy frame is unstacked. The eager lane asks its question at four sites for
+    that reason, and a guard no test reaches is a guard that rots.
+    """
+    sources = {'cost': holed, 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+
+    with pytest.raises(DataError, match='no value'):
+        lps.build(model_path, sources).close()
+    with pytest.raises(DataError, match='no value'):
+        lpspec_linopy.build(model_path, sources)
+
+
+def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
+    """`dims: []` binds one value, and one value that is a hole is still a hole.
+
+    A scalar is the shape where reading a hole as a row would be least visible:
+    it broadcasts everywhere, so one unsupplied number reaches every
+    coordinate. The eager lane takes its own branch for it — one row, no index
+    to unstack — which is why the question is asked there separately.
+    """
+    model = {
+        'dimensions': {'f': {'values': ['a', 'b']}},
+        'parameters': {'rate': {'dims': []}},
+        'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'k': {'foreach': ['f'], 'expression': 'x <= 1'}},
+        'objective': {'sense': 'maximize', 'expression': 'x * rate'},
+    }
+    path = tmp_path / 'scalar.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    sources = {'rate': _tidy(value=[None])}
+
+    with pytest.raises(DataError, match='no value'):
+        lps.build(path, sources).close()
+    with pytest.raises(DataError, match='no value'):
+        lpspec_linopy.build(path, sources)
 
 
 #: A lookup-carrying dimension: the one index a parameter table cannot stand in
