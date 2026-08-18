@@ -21,7 +21,7 @@ from lpspec.relational.plan import (
 )
 from tests.conftest import DISPATCH_MODEL, EXAMPLES_DIR, by_coord, override, resolved, schema_of
 from tests.differential import differential
-from tests.oracle import lpspec_linopy, pd
+from tests.oracle import pd
 
 STORAGE_YAML = EXAMPLES_DIR / 'storage.yaml'
 STORAGE_SCHEMA = schema_of(STORAGE_YAML)
@@ -243,10 +243,8 @@ def test_a_per_entity_offset_fills_its_own_edge_and_not_the_mask_under_it():
     and drops, so two rows are built and `take` at the last month is capped by
     nothing.
 
-    Eager lane alone, which is where the three shift paths this fix touches
-    live. The differential it wants is blocked on #1049: the relational lane
-    cannot name the edge of a per-entity offset at all, and raises a polars
-    `ColumnNotFoundError` on this model rather than an answer to compare.
+    Where a *named* offset stops being a detail: which coordinates are vacated
+    is per entity, so the edge cannot be one column of labels (#1049).
     """
     sources = {
         'g': pd.Index(['a'], name='g'),
@@ -254,10 +252,9 @@ def test_a_per_entity_offset_fills_its_own_edge_and_not_the_mask_under_it():
         'lead': pd.Series([1], index=pd.Index(['a'], name='g')),
         'usable': pd.Series([1.0, 0.0, 1.0], index=pd.Index([0, 1, 2], name='t')),
     }
-    model = lpspec_linopy.build(BY_PARAMETER, sources)
-    assert model.ncons == 2, 'the vacated month and the one reading a live slot'
-    model.solve(solver_name='highs', output_flag=False)
-    assert float(model.objective.value) == pytest.approx(10.0), 'take at the last month is capped by nothing'
+    with differential(BY_PARAMETER, sources, lp=True) as run:
+        assert run.engine.diagnostics().rows == 2, 'the vacated month and the one reading a live slot'
+        assert run.oracle == pytest.approx(10.0), 'take at the last month is capped by nothing'
 
 
 def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
@@ -275,6 +272,35 @@ def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
     with differential(IN_GROUPS, sources, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, "both seasons' opening rows, and the one reading a live slot"
         assert run.oracle == pytest.approx(10.0), 'the snapshot whose predecessor is masked is capped by nothing'
+
+
+#: A nonzero edge over a variable-free operand, reached with a per-entity
+#: offset: the other reader of the edge frame, and the other half of #1049.
+BY_PARAMETER_CONSTANT = {
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'eff': {'dims': ['g', 't']}},
+    'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'link': {'foreach': ['g', 't'], 'expression': 'x * shift(eff, over=t, offset=lead, edge=1) <= 10'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(sum(x, over=g), over=t)'},
+}
+
+
+def test_a_per_entity_offset_writes_a_nonzero_edge_where_that_entity_vacates():
+    """The fill is a value, so the vacated coordinate is written rather than
+    left out — and with a lead of one month only the first month is vacated.
+
+    Efficiencies of 1, 2 and 4 give caps of 10, 10 and 5: the first from the
+    edge's own 1, the second and third from the month before.
+    """
+    sources = {
+        'g': pd.Index(['a'], name='g'),
+        't': pd.Index([0, 1, 2], name='t'),
+        'lead': pd.Series([1], index=pd.Index(['a'], name='g')),
+        'eff': pd.Series([1.0, 2.0, 4.0], index=pd.MultiIndex.from_product([['a'], [0, 1, 2]], names=['g', 't'])),
+    }
+    with differential(BY_PARAMETER_CONSTANT, sources, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, 'every month is capped, the first by the edge it was given'
+        assert run.oracle == pytest.approx(25.0), '10 + 10 + 5'
 
 
 def test_shift_semantics_are_positional_not_lexicographic():
