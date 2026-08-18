@@ -321,6 +321,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             over_node = node.kwargs['over']
             if not isinstance(over_node, DimensionNode):
                 raise LanguageError(f'{context}: shift(over=...) must name a dimension')
+            partition = _partition_of(node)
             by_node = node.kwargs['offset']
             sign = 1
             if isinstance(by_node, UnaryOperatorNode) and by_node.op == '-':
@@ -346,7 +347,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             else:
                 assert isinstance(by_node, NumberNode)
                 by = sign * int(by_node.value)
-            return plan.Translate(operand, over_node.name, by=by, wrap=wrap, fill=fill)
+            return plan.Translate(operand, over_node.name, offset=by, wrap=wrap, fill=fill, partition=partition)
 
         raise LanguageError(f"{context}: built-in '{node.name}' declares no lowering case")
 
@@ -398,6 +399,20 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
             f'expression instead.'
         )
     return fill
+
+
+def _partition_of(node: FunctionCallNode) -> str | None:
+    """The lookup a translation walks inside, if the call names one.
+
+    That it is a lookup *over the translated dimension* is checked at load with
+    the other dim rules (``language/dimensions.py``), where a model is refused
+    before any data is read.
+    """
+    by_node = node.kwargs.get('by')
+    if by_node is None:
+        return None
+    assert isinstance(by_node, LookupNode)
+    return by_node.name
 
 
 def _shift_by_message() -> str:

@@ -1,35 +1,34 @@
 # seasons
 
-A store handed a level at the start of every season and required to leave one at
-the end, with seasons of different lengths — every boundary row is named by its
-position inside its own season, so no clause depends on which snapshot label
-happens to sit at an edge.
+A store that cycles inside each season rather than across the horizon, with
+seasons of different lengths — one balance row says it, because the wrap is the
+season's own and no level is carried from one season into the next.
 
 ## The problem
 
-A store run in blocks needs two rows said about each block: the block's first
-snapshot starts from a level it is handed, and the block's last leaves the
-reserve it owes. Written against labels, both are claims about *which snapshot*
-sits at an edge:
+A store that must come back to where it started needs its first position to read
+its last. `edge='wrap'` says that about **the axis**:
 
 ```yaml
-where: "snapshot == 1"   # winter opens
-where: "snapshot == 7"   # summer's reserve
+soc == shift(soc, over=snapshot, offset=1, edge='wrap') + inflow - release
 ```
 
-Both are true only of this instance. Renumber the horizon from zero, extend it,
-or move a snapshot between seasons, and each clause either lands on the wrong
-row or matches nothing — and matching nothing is the quiet failure: the level is
-never handed over, the reserve is never required, and the model still solves.
+which on this instance links snapshot 7 to snapshot 1 and makes the whole
+horizon one cycle: winter opens holding what summer left, and sells it at
+winter's best price. That is a different model, and a plausible-looking one —
+it solves, and its objective is *higher*.
 
-The edges a model means are **positions inside a season**:
+The cycle a multi-period model means is per period, and `by=` says which:
 
-$$\mathit{soc}_{t} = \mathit{opening}_{\mathrm{season\_of}(t)} + \mathit{inflow}_{t} - \mathit{release}_{t}
-\qquad \forall\thinspace t = \mathrm{index}(\mathcal{T}, 0, \mathrm{season\_of}(t))$$
+```yaml
+soc == shift(soc, over=snapshot, offset=1, edge='wrap', by=season_of) + inflow - release
+```
 
-`index(snapshot, 0, by=season_of)` is the first snapshot **of each season** and
-`-1` is each season's last, whatever length each season happens to be. The two
-seasons here are four snapshots and three, and nothing in the file says so.
+$$\mathit{soc}_{t} = \mathit{soc}_{t \ominus_{\mathrm{season\_of}(t)} 1} + \mathit{inflow}_{t} - \mathit{release}_{t}$$
+
+The translation walks inside the group the lookup makes, so a season's first
+snapshot reads that season's last, whatever length each season happens to be —
+four snapshots and three here, and nothing in the file says so.
 
 ## The model
 
@@ -37,14 +36,14 @@ seasons here are four snapshots and three, and nothing in the file says so.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-A store handed a level at the start of every season and required to leave one at the end, with seasons of different lengths — every boundary row is named by its position inside its own season, so no clause depends on which snapshot label happens to sit at an edge.
+A store that cycles inside each season rather than across the horizon, with seasons of different lengths — one balance row says it, because the wrap is the season's own and no level is carried from one season into the next.
 
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
 | $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}$ --- dispatch periods in order |
-| $\mathcal{S}$ | index $s$ --- `season` --- the blocks the store is handed over and handed back |
+| $\mathcal{S}$ | index $s$ --- `season` --- the blocks the store cycles over |
 
 #### Parameters
 
@@ -52,8 +51,6 @@ A store handed a level at the start of every season and required to leave one at
 |---|---|
 | $\mathit{inflow}$ | `inflow` over $\mathcal{T}$ --- energy arriving in a snapshot, whether or not it is wanted then |
 | $\mathit{price}$ | `price` over $\mathcal{T}$ --- what one unit of release earns in a snapshot |
-| $\mathit{opening}$ | `opening` over $\mathcal{S}$ --- the level the store is handed at the start of a season |
-| $\mathit{reserve}$ | `reserve` over $\mathcal{S}$ --- the level a season must leave behind when it ends |
 
 #### Variables
 
@@ -62,23 +59,17 @@ A store handed a level at the start of every season and required to leave one at
 | $\mathit{soc}$ | `soc` over $\mathcal{T}$ --- energy held at the end of a snapshot |
 | $\mathit{release}$ | `release` over $\mathcal{T}$ --- energy released in a snapshot |
 
+$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound --- terms translated past the edge are simply absent.
+
 #### Objective
 
 $$\max \sum_{t \in \mathcal{T}} \mathit{release}_{t} \cdot \mathit{price}_{t}$$
 
 #### Subject to
 
-**`season_opens`**
+**`season_balance`**
 
-$$\mathit{soc}_{t} = \mathit{opening}_{\mathrm{season\_of}(t)} + \mathit{inflow}_{t} - \mathit{release}_{t} \qquad \forall\thinspace t \in \mathcal{T} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0, \mathrm{season\_of}(t))$$
-
-**`season_carries`**
-
-$$\mathit{soc}_{t} = \mathit{soc}_{t - 1} + \mathit{inflow}_{t} - \mathit{release}_{t} \qquad \forall\thinspace t \in \mathcal{T} \thinspace:\thinspace t \neq \mathrm{index}(\mathcal{T}, 0, \mathrm{season\_of}(t))$$
-
-**`season_ends_stocked`**
-
-$$\mathit{soc}_{t} \ge \mathit{reserve}_{\mathrm{season\_of}(t)} \qquad \forall\thinspace t \in \mathcal{T} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, -1, \mathrm{season\_of}(t))$$
+$$\mathit{soc}_{t} = \mathit{soc}_{t \ominus_{\mathrm{season\_of}(t)} 1} + \mathit{inflow}_{t} - \mathit{release}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
 #### Variable domains
 
@@ -99,17 +90,16 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
 
     ```yaml
     description: >-
-      A store handed a level at the start of every season and required to leave one
-      at the end, with seasons of different lengths — every boundary row is named by
-      its position inside its own season, so no clause depends on which snapshot
-      label happens to sit at an edge.
+      A store that cycles inside each season rather than across the horizon, with
+      seasons of different lengths — one balance row says it, because the wrap is
+      the season's own and no level is carried from one season into the next.
 
     dimensions:
       snapshot:
         description: dispatch periods in order
         dtype: int
       season:
-        description: the blocks the store is handed over and handed back
+        description: the blocks the store cycles over
         dtype: str
 
     lookups:
@@ -125,12 +115,6 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
       price:
         description: what one unit of release earns in a snapshot
         dims: [snapshot]
-      opening:
-        description: the level the store is handed at the start of a season
-        dims: [season]
-      reserve:
-        description: the level a season must leave behind when it ends
-        dims: [season]
 
     variables:
       soc:
@@ -146,25 +130,13 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           lower: 0
 
     constraints:
-      season_opens:
+      season_balance:
         description: >-
-          the first snapshot of a season starts from that season's opening level,
-          never from what the previous season happened to leave behind
+          the level carried into a snapshot is the previous snapshot's, and a
+          season's first snapshot carries from that season's own last — so each
+          season ends where it began and hands the next one nothing
         foreach: [snapshot]
-        where: "snapshot == index(snapshot, 0, by=season_of)"
-        expression: soc == at(opening, by=season_of) + inflow - release
-      season_carries:
-        description: every later snapshot of a season carries the one before it
-        foreach: [snapshot]
-        where: "snapshot != index(snapshot, 0, by=season_of)"
-        expression: soc == shift(soc, over=snapshot, offset=1) + inflow - release
-      season_ends_stocked:
-        description: >-
-          and the last snapshot of a season is left holding at least the reserve
-          that season owes, whichever snapshot that turns out to be
-        foreach: [snapshot]
-        where: "snapshot == index(snapshot, -1, by=season_of)"
-        expression: soc >= at(reserve, by=season_of)
+        expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap', by=season_of) + inflow - release
 
     objective:
       sense: maximize
@@ -175,50 +147,45 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     ```python
     # sources: parameter name -> frame or parquet path
     with lps.solve('examples/seasons.yaml', sources) as solution:
-        solution.objective  # 160.0
+        solution.objective  # 74.0
         solution.primal('soc')
     ```
-
-## Why the boundary is a position
-
-The instance deliberately numbers its snapshots from **1**, and the seasons are
-of different lengths:
-
-```text
-snapshot  1  2  3  4  |  5  6  7
-season    winter      |  summer
-```
-
-Every clause survives that, and would survive the same horizon numbered from
-zero, dated, or cut in half:
-
-| Clause | What it names |
-|---|---|
-| `snapshot == index(snapshot, 0, by=season_of)` | 1 and 5 — each season's first |
-| `snapshot != index(snapshot, 0, by=season_of)` | 2, 3, 4, 6, 7 — everything that carries |
-| `snapshot == index(snapshot, -1, by=season_of)` | 4 and 7 — each season's last |
-
-The third row is the one no ungrouped spelling reaches. `index(snapshot, -1)` is
-the last snapshot of the *horizon*, so it would put a reserve on summer and none
-on winter; there is no single position along the axis that is the last of a
-four-snapshot season *and* of a three-snapshot one.
 
 ## What the answer looks like
 
 ```text
 snapshot  season  price  inflow  release  soc
-1         winter  1      0       0        20   ← handed 20
-2         winter  2      10      0        30
-3         winter  5      0       26       4    ← sells all but the reserve, at winter's best price
-4         winter  3      0       0        4    ← leaves the 4 it owes
-5         summer  4      0       5        0    ← handed 5, sells it at the best price it will see
+1         winter  1      0       0        0
+2         winter  2      10      0        10
+3         winter  5      0       10       0    ← winter's inflow, at winter's best price
+4         winter  3      0       0        0    ← closes where it opened
+5         summer  4      0       6        0    ← sells *before* its inflow arrives
 6         summer  1      6       0        6
-7         summer  2      0       5        1    ← leaves the 1 it owes
+7         summer  2      0       0        6    ← closes where it opened, three snapshots later
 ```
 
-Objective **160.0**. Winter's opening level and summer's are independent — no row
-links snapshot 4 to snapshot 5 — so what winter leaves is *its* reserve, not
-summer's opening stock. The seasons share an axis and nothing else.
+Objective **74.0**. Summer is the half worth reading: it opens holding 6, sells
+that at the price-4 snapshot before its own inflow has arrived, and the inflow at
+snapshot 6 puts the 6 back so the season closes where it opened. Nothing
+constrains the level a season starts at except that it must return to it — which
+is what a cycle is, and what no clause here has to name.
+
+Written against the axis instead, the same instance gives **80.0**: the extra 6
+comes out of winter, which had it to give only because summer's closing level
+leaked across the boundary.
+
+## Why it is one row
+
+Per-season cycling is expressible without this operator, as a level each season
+begins and ends at: a variable per season, an opening row that reads it, and a
+closing row that pins it. Substituting the closing row into the opening one
+gives exactly the equation above — three constraints and an auxiliary variable
+saying what one `by=` says, and the substitution is the proof they are the same
+model.
+
+What the operator adds is that the boundary stops being something the file has to
+mention. There is no first snapshot named anywhere, so there is nothing to
+re-check when the horizon is renumbered, extended, or cut into different seasons.
 
 ## The grouping is data
 
@@ -243,12 +210,10 @@ shape: (7, 2)
 └──────────┴───────────┘
 ```
 
-A snapshot the column leaves null belongs to no season, so it is no season's
-first or last — the same reading a null gets in
-[`sum(by=)`](../reference/language/operators.md) — and a season shorter than a
-position the model asks for is an error when the data binds, not a boundary that
-quietly seeds nothing.
+A snapshot the column leaves null belongs to no season, so it reaches nothing and
+its row is not built — the same reading a null gets in
+[`sum(by=)`](../reference/language/operators.md).
 
 Compare [monthly budget](monthly_budget.md), where such a column groups a *sum*,
 and [multi-period](multi_period.md), where it carries a capacity decision down
-onto the snapshots it covers. One construct, three jobs.
+onto the snapshots it covers. One lookup, three jobs.

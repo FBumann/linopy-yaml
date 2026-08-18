@@ -1,15 +1,14 @@
 description: >-
-  A store handed a level at the start of every season and required to leave one
-  at the end, with seasons of different lengths — every boundary row is named by
-  its position inside its own season, so no clause depends on which snapshot
-  label happens to sit at an edge.
+  A store that cycles inside each season rather than across the horizon, with
+  seasons of different lengths — one balance row says it, because the wrap is
+  the season's own and no level is carried from one season into the next.
 
 dimensions:
   snapshot:
     description: dispatch periods in order
     dtype: int
   season:
-    description: the blocks the store is handed over and handed back
+    description: the blocks the store cycles over
     dtype: str
 
 lookups:
@@ -25,12 +24,6 @@ parameters:
   price:
     description: what one unit of release earns in a snapshot
     dims: [snapshot]
-  opening:
-    description: the level the store is handed at the start of a season
-    dims: [season]
-  reserve:
-    description: the level a season must leave behind when it ends
-    dims: [season]
 
 variables:
   soc:
@@ -46,25 +39,13 @@ variables:
       lower: 0
 
 constraints:
-  season_opens:
+  season_balance:
     description: >-
-      the first snapshot of a season starts from that season's opening level,
-      never from what the previous season happened to leave behind
+      the level carried into a snapshot is the previous snapshot's, and a
+      season's first snapshot carries from that season's own last — so each
+      season ends where it began and hands the next one nothing
     foreach: [snapshot]
-    where: "snapshot == index(snapshot, 0, by=season_of)"
-    expression: soc == at(opening, by=season_of) + inflow - release
-  season_carries:
-    description: every later snapshot of a season carries the one before it
-    foreach: [snapshot]
-    where: "snapshot != index(snapshot, 0, by=season_of)"
-    expression: soc == shift(soc, over=snapshot, offset=1) + inflow - release
-  season_ends_stocked:
-    description: >-
-      and the last snapshot of a season is left holding at least the reserve
-      that season owes, whichever snapshot that turns out to be
-    foreach: [snapshot]
-    where: "snapshot == index(snapshot, -1, by=season_of)"
-    expression: soc >= at(reserve, by=season_of)
+    expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap', by=season_of) + inflow - release
 
 objective:
   sense: maximize
