@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.201](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.200...v0.0.1-alpha.201) (2026-08-18)
+
+
+### Bug Fixes
+
+* **language:** a divisor that adds is refused at load, not at build ([#1048](https://github.com/fluxopt/lpspec/issues/1048)) ([4153653](https://github.com/fluxopt/lpspec/commit/41536535aada5712e1942c1ab8cf37756fa5d28e))
+* **typeset:** an objective term is shown summed over the dims it carries ([#1045](https://github.com/fluxopt/lpspec/issues/1045)) ([3e29596](https://github.com/fluxopt/lpspec/commit/3e29596a2590177199d7d5cf2240485181d7ab17))
+
 ## [0.0.1-alpha.200](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.199...v0.0.1-alpha.200) (2026-08-18)
 
 
