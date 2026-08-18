@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.193](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.192...v0.0.1-alpha.193) (2026-08-18)
+
+
+### Documentation
+
+* **language:** one home for the binding rule, one page for the two grammars ([#1010](https://github.com/fluxopt/lpspec/issues/1010)) ([e004661](https://github.com/fluxopt/lpspec/commit/e00466177325b0c308f80a975d3245e50a0ee400))
+
 ## [0.0.1-alpha.192](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.191...v0.0.1-alpha.192) (2026-08-18)
 
 
