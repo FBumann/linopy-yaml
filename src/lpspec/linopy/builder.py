@@ -575,6 +575,41 @@ def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:
     return picked.reindex({dim: mapping[dim]})
 
 
+def _group_offsets(node: DimensionPositionNode, groups: np.ndarray) -> np.ndarray:
+    """Each coordinate's distance from the boundary of *its own* group.
+
+    Zero marks the coordinate the position names, so every comparator reads the
+    same as it does ungrouped. ``nan`` where the lookup sends a coordinate
+    nowhere: in no group, so no group's boundary. The relational lane computes
+    the identical column with a rank over the dim table.
+
+    Raises:
+        DataError: If any group is shorter than the position names, which would
+            leave that group's rows unseeded and the model quietly unanchored.
+    """
+    counts: dict[object, int] = {}
+    within = np.empty(len(groups), dtype=float)
+    for k, g in enumerate(groups):
+        if g is None or g != g:  # nan: the null a partial lookup leaves, and never equal to itself
+            within[k] = np.nan
+            continue
+        within[k] = counts.get(g, 0)
+        counts[g] = int(within[k]) + 1
+    needed = node.position + 1 if node.position >= 0 else -node.position
+    short = sorted(str(g) for g, n in counts.items() if n < needed)
+    if short:
+        msg = (
+            f'where: index({node.name}, {node.position}, by={node.by}) names position '
+            f'{node.position} within each group, and {len(short)} of them are shorter than '
+            f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
+            f'was to seed unseeded.'
+        )
+        raise DataError(msg)
+    sizes = np.array([counts.get(g, 0) if not (g is None or g != g) else 0 for g in groups], dtype=float)
+    target = node.position if node.position >= 0 else sizes + node.position
+    return within - target
+
+
 def _bound_lookup(
     name: str,
     over: str,
@@ -850,6 +885,11 @@ def _eval_node(
 
     if isinstance(node, DimensionPositionNode):
         labels = master_coords[node.name]
+        if node.by is not None:
+            groups = _bound_lookup(node.by, node.name, dim_coords)
+            offsets = _group_offsets(node, groups.values)
+            arr = xr.DataArray(offsets, coords={node.name: labels}, dims=[node.name])
+            return (_PREDICATE_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
         at = node.position + len(labels) if node.position < 0 else node.position
         if not 0 <= at < len(labels):
             msg = (

@@ -584,7 +584,7 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
         return plan.DimensionComparison(node.name, node.op, node.value)
 
     if isinstance(node, DimensionPositionNode):
-        return plan.DimensionPosition(node.name, node.op, node.position)
+        return plan.DimensionPosition(node.name, node.op, node.position, node.by)
 
     if isinstance(node, LookupComparisonNode):
         return plan.LookupComparison(node.name, node.over, node.op, node.value)

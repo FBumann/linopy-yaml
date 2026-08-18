@@ -535,6 +535,11 @@ REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 #: Declared rather than assumed: `test_every_summary_declares_itself` fails on a
 #: page in neither list, so a new summary cannot quietly opt out of the check.
 DIVERGENT = {
+    'seasons': (
+        'states one boundary row rather than the model: the page is about where a '
+        'clause points, so its summary shows the opening equation alone and names '
+        "the position with the generator's own index() notation."
+    ),
     'reserves': (
         'compresses two constraints into reader notation: phi, sigma and the barred '
         'p_max stand in for the spelled-out parameter names the generator '

@@ -24,6 +24,7 @@ Every page starts from data in the shape the call wants, and
 | [special-ordered sets](sos.md) | A piecewise-linear cost curve stated as a **special-ordered set** — [piecewise](piecewise.md) with one line changed, handed to the solver as a set it branches on itself. |
 | [monthly budget](monthly_budget.md) | A cap on what each technology may generate per calendar month — an aggregate over a *coarser grouping of time*, written with the same operator that places a generator on a bus. |
 | [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
+| [seasons](seasons.md) | A store handed a level at the start of every season and required to leave one at the end, with seasons of different lengths — every boundary row is named by its position inside its own season, so no clause depends on which snapshot label happens to sit at an edge. |
 | [reserves](reserves.md) | Energy and reserve co-optimization on a two-bus grid: offers are (generator, market, tranche) triples, reserve zones overlap, and one line dangles. The model exists to prove a claim — every many-to-many shape the language covers, in one instance, each one load-bearing. |
 | [walkthrough](walkthrough.md) | The dispatch model plus a macro and a named expression — the one used to print every pipeline stage. |
 
@@ -97,6 +98,7 @@ drift from what the engine builds.
 | [multi_period](multi_period.md) | **✔** 10020 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
 | [piecewise](piecewise.md) | **✔** 3850 | **✓** | · | · | · | · | · | **✓** | **✓** | · | · |
 | [reserves](reserves.md) | **✔** 915 | **✓** | **✓** | **✓** | · | · | · | **✓** | · | · | · |
+| [seasons](seasons.md) | · | · | · | **✓** | **✓** | · | **✓** | **✓** | · | · | · |
 | [sos](sos.md) | · | **✓** | · | · | · | · | · | **✓** | **✓** | **✓** | · |
 | [storage](storage.md) | **✔** 5650 | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
 | [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | · | **✓** | · | · | · |
