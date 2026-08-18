@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.199](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.198...v0.0.1-alpha.199) (2026-08-18)
+
+
+### Bug Fixes
+
+* **api:** a bridge out of a bare install says which extra to add ([#1029](https://github.com/fluxopt/lpspec/issues/1029)) ([ce60c03](https://github.com/fluxopt/lpspec/commit/ce60c031c7714551449326af6e37e3479e00448b))
+
+
+### Documentation
+
+* **ceiling:** a tracked-metric vocabulary is a dimension and a named expression ([#1031](https://github.com/fluxopt/lpspec/issues/1031)) ([ab9d241](https://github.com/fluxopt/lpspec/commit/ab9d241f059cdc73aa6a4969290e1aaa3fec1bff))
+
 ## [0.0.1-alpha.198](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.197...v0.0.1-alpha.198) (2026-08-18)
 
 
