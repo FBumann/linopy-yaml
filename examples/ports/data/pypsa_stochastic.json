@@ -1,0 +1,9 @@
+{
+  "scenario": {"scenario": ["mild", "cold", "severe"]},
+  "snapshot": {"snapshot": [0, 1, 2]},
+  "generator": {"generator": ["base", "peak"]},
+  "probability": {"scenario": ["mild", "cold", "severe"], "value": [0.6, 0.3, 0.1]},
+  "load": {"scenario": ["mild", "mild", "mild", "cold", "cold", "cold", "severe", "severe", "severe"], "snapshot": [0, 1, 2, 0, 1, 2, 0, 1, 2], "value": [100.0, 120.0, 90.0, 130.0, 160.0, 110.0, 170.0, 210.0, 140.0]},
+  "capex": {"generator": ["base", "peak"], "value": [150.0, 120.0]},
+  "opex": {"generator": ["base", "peak"], "value": [10.0, 70.0]}
+}

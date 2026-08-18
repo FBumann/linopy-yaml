@@ -1,0 +1,69 @@
+description: >-
+  PyPSA stochastic optimisation: one network and three futures, where capacity
+  is chosen once and dispatch is chosen after the load is known. The two stages
+  differ only in which dimension they span — the capacity variable has no
+  scenario, the dispatch variable does — and the objective is the
+  probability-weighted expectation over them.
+  Optimum 33940.0, from PyPSA itself.
+
+dimensions:
+  scenario:
+    description: the futures the fleet is built against, one of which will happen
+    dtype: str
+  snapshot:
+    description: dispatch periods, the same in every future
+    dtype: int
+  generator:
+    description: generating units, each built once and run in every future
+    dtype: str
+
+parameters:
+  probability:
+    description: how likely a future is — the weights the expectation is taken with
+    dims: [scenario]
+  load:
+    description: demand to be met, and the one thing that differs between futures
+    dims: [scenario, snapshot]
+  capex:
+    description: cost of holding one unit of capacity over the horizon
+    dims: [generator]
+  opex:
+    description: cost of one unit of output
+    dims: [generator]
+
+variables:
+  p_nom:
+    description: >-
+      capacity built at a generator — the first-stage decision, which spans no
+      scenario because it is taken before anyone knows which future arrived
+    foreach: [generator]
+    bounds:
+      lower: 0
+  p:
+    description: >-
+      output of a generator in a snapshot of a future — the second-stage
+      decision, one per scenario
+    foreach: [scenario, snapshot, generator]
+    bounds:
+      lower: 0
+
+constraints:
+  within_capacity:
+    description: >-
+      a generator produces no more than the capacity built for it, in every
+      snapshot of every future — one capacity spanning three scenarios of rows
+    foreach: [scenario, snapshot, generator]
+    expression: p <= p_nom
+
+  power_balance:
+    description: what runs in this snapshot of this future meets the load there
+    foreach: [scenario, snapshot]
+    expression: sum(p, over=generator) == load
+
+objective:
+  sense: minimize
+  description: >-
+    what the fleet costs to build, plus what it is expected to cost to run —
+    operating cost weighted by how likely the future it is incurred in is, and
+    capital cost paid once whichever future arrives
+  expression: p * opex * probability + p_nom * capex
