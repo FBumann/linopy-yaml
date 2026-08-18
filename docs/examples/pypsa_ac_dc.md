@@ -66,7 +66,7 @@ PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose generators
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E},\enspace l \in \mathcal{L},\enspace i \in \mathcal{I}} \left( p_{t,e} \cdot \mathit{marginal\_cost}_{e} + p^{\mathrm{nom}}_{e} \cdot \mathit{gen\_capital\_cost}_{e} + s^{\mathrm{nom}}_{l} \cdot \mathit{line}^{\mathrm{capital,cost}}_{l} + \mathit{link}^{\mathrm{p,nom}}_{i} \cdot \mathit{link}^{\mathrm{capital,cost}}_{i} \right)$$
+$$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E}} p_{t,e} \cdot \mathit{marginal\_cost}_{e} + \sum_{e \in \mathcal{E}} p^{\mathrm{nom}}_{e} \cdot \mathit{gen\_capital\_cost}_{e} + \sum_{l \in \mathcal{L}} s^{\mathrm{nom}}_{l} \cdot \mathit{line}^{\mathrm{capital,cost}}_{l} + \sum_{i \in \mathcal{I}} \mathit{link}^{\mathrm{p,nom}}_{i} \cdot \mathit{link}^{\mathrm{capital,cost}}_{i}$$
 
 #### Subject to
 

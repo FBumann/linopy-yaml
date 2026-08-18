@@ -55,7 +55,7 @@ PyPSA multi-period investment: a build year and a lifetime decide which periods 
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E},\enspace g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{opex}_{g} \cdot \mathit{period}^{\mathrm{weight}}_{\mathrm{period\_of}(t)} + p^{\mathrm{nom}}_{g} \cdot \mathit{capex}_{g} \cdot \mathit{activity}_{e,g} \cdot \mathit{period}^{\mathrm{weight}}_{e} \right)$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{opex}_{g} \cdot \mathit{period}^{\mathrm{weight}}_{\mathrm{period\_of}(t)} + \sum_{e \in \mathcal{E},\enspace g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathit{capex}_{g} \cdot \mathit{activity}_{e,g} \cdot \mathit{period}^{\mathrm{weight}}_{e}$$
 
 #### Subject to
 

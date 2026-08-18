@@ -65,7 +65,7 @@ PyPSA's global constraints: four limits over four different selected sets — th
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E},\enspace l \in \mathcal{L}} \left( p_{t,e} \cdot \mathit{marginal\_cost}_{e} + p^{\mathrm{nom}}_{e} \cdot \mathit{gen\_capital\_cost}_{e} + \mathit{link}^{\mathrm{p,nom}}_{l} \cdot \mathit{link}^{\mathrm{capital,cost}}_{l} \right)$$
+$$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E}} p_{t,e} \cdot \mathit{marginal\_cost}_{e} + \sum_{e \in \mathcal{E}} p^{\mathrm{nom}}_{e} \cdot \mathit{gen\_capital\_cost}_{e} + \sum_{l \in \mathcal{L}} \mathit{link}^{\mathrm{p,nom}}_{l} \cdot \mathit{link}^{\mathrm{capital,cost}}_{l}$$
 
 #### Subject to
 

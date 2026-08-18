@@ -75,7 +75,7 @@ $t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of t
 
 #### Objective
 
-$$\min \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H},\enspace t \in \mathcal{T}} \left( \mathit{output}_{p,h} \cdot \mathit{run\_cost}_{p} \cdot \mathit{weight}_{h} + \mathit{burned}_{p,h} \cdot \mathit{fuel\_price}_{p,h} \cdot \mathit{weight}_{h} + \mathit{burned}^{\mathrm{starting}}_{p,h} \cdot \mathit{fuel\_price}_{p,h} \cdot \mathit{weight}_{h} + \mathit{starting}_{p,h} \cdot \mathit{start\_cost}_{p} \cdot \mathit{weight}_{h} + \mathit{shed}_{t,h} \cdot \mathit{shed}^{\mathrm{cost}}_{t} \cdot \mathit{weight}_{h} + \mathit{burned}_{p,h} \cdot \mathit{captured}_{p} \cdot \mathit{weight}_{h} + \mathit{burned}^{\mathrm{starting}}_{p,h} \cdot \mathit{captured}^{\mathrm{start}}_{p} \cdot \mathit{weight}_{h} \right)$$
+$$\min \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \left( \mathit{output}_{p,h} \cdot \mathit{run\_cost}_{p} \cdot \mathit{weight}_{h} + \mathit{burned}_{p,h} \cdot \mathit{fuel\_price}_{p,h} \cdot \mathit{weight}_{h} + \mathit{burned}^{\mathrm{starting}}_{p,h} \cdot \mathit{fuel\_price}_{p,h} \cdot \mathit{weight}_{h} + \mathit{starting}_{p,h} \cdot \mathit{start\_cost}_{p} \cdot \mathit{weight}_{h} \right) + \sum_{h \in \mathcal{H},\enspace t \in \mathcal{T}} \mathit{shed}_{t,h} \cdot \mathit{shed}^{\mathrm{cost}}_{t} \cdot \mathit{weight}_{h} + \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \left( \mathit{burned}_{p,h} \cdot \mathit{captured}_{p} \cdot \mathit{weight}_{h} + \mathit{burned}^{\mathrm{starting}}_{p,h} \cdot \mathit{captured}^{\mathrm{start}}_{p} \cdot \mathit{weight}_{h} \right)$$
 
 #### Subject to
 
