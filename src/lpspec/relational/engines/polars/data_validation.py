@@ -30,9 +30,9 @@ from lpspec.errors import (
     DataError,
     coordinates_shown,
     duplicate_coordinate_message,
-    fractional_position_message,
     holes_in_values_message,
     unknown_labels_message,
+    wrong_value_dtype_message,
 )
 
 if TYPE_CHECKING:
@@ -119,28 +119,44 @@ def check_values_are_present(p: plan.ParameterDeclaration, frame: pl.LazyFrame) 
     raise DataError(holes_in_values_message(p.name, holes, coordinates_shown(p.dims, offenders)))
 
 
-def check_positions_are_whole(name: str, operator: str, frame: pl.LazyFrame) -> None:
-    """A parameter read as a position carries whole numbers, or none at all.
+#: The column each declared dtype *is*, in polars types. Pinned to the
+#: language's ``PARAMETER_DTYPES`` by ``tests/test_architecture.py`` — a test
+#: rather than an import, because the engine may not reach the language.
+_COLUMNS: Mapping[str, tuple[type[pl.DataType], ...]] = {
+    'float': (pl.Float32, pl.Float64),
+    'int': (pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64),
+    'bool': (pl.Boolean,),
+    'str': (pl.String, pl.Categorical, pl.Enum),
+}
 
-    The declared ``dtype`` says ``int`` — lowering refuses anything else — and
-    nothing checked that the column kept the promise. A float column is not
-    itself the defect: pandas has no other dtype for a whole number, and a
-    ``2.0`` lands on a coordinate exactly as ``2`` does. What is refused is a
-    value with something after the point, and an infinity, which is no
-    position at all. A NaN is not counted, and cannot arrive: a supplied hole
-    is refused by ``check_values_are_present`` the line before, and this lane
-    has no reindex to put one there.
+#: What each declared dtype accepts. ``int`` serving ``float`` is the one
+#: widening: whole numbers *are* numbers, it is the only conversion between two
+#: declared types that loses nothing, and it is what real instance data looks
+#: like. Every other direction is refused — including a float column under
+#: ``int``, which is what makes a fractional offset unrepresentable rather than
+#: checked.
+ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
+    **_COLUMNS,
+    'float': _COLUMNS['float'] + _COLUMNS['int'],
+}
+
+
+def check_value_dtype(p: plan.ParameterDeclaration, frame: pl.LazyFrame) -> None:
+    """The bound column is the type the declaration claims.
+
+    A schema comparison rather than a scan: what the file declares is a
+    property of the column, so nothing here reads a value. That is also what
+    makes it cheap enough to run on every parameter.
+
+    Asked *after* the holes, so a column of nothing but nulls — which polars
+    types ``Null``, no dtype at all — is told it has no values rather than that
+    it has the wrong kind of them.
     """
-    if not frame.collect_schema()['value'].is_float():
+    column = frame.collect_schema()['value']
+    if column in ACCEPTED_VALUE_TYPES[p.dtype]:
         return
-    value = pl.col('value')
-    fractional = value.is_infinite() | (value.is_finite() & (value != value.floor()))
-    offenders = frame.filter(fractional).select('value').head(3).collect()
-    if offenders.height == 0:
-        return
-    count = int(frame.select(fractional.sum()).collect().item())
-    shown = ', '.join(f'{v:g}' for v in offenders['value'].to_list())
-    raise DataError(fractional_position_message(name, operator, count, shown))
+    arrived = next((name for name, types in _COLUMNS.items() if column in types), str(column))
+    raise DataError(wrong_value_dtype_message(p.name, p.dtype, arrived))
 
 
 def check_lookups_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -> None:

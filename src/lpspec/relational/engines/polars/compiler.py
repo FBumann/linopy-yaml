@@ -184,6 +184,23 @@ class CompiledExpression:
     consts: tuple[TermFragment, ...]
 
 
+def _defined(col: pl.Expr, dtype: str) -> pl.Expr:
+    """What a bare parameter name in a ``where`` asks of *col*.
+
+    Three readings, and the declaration picks: a ``bool`` is its own answer, a
+    ``str`` is defined wherever the table has a row, and a number has to be
+    finite as well. Read off the declaration rather than the column, which is
+    the same thing since binding refuses a column that is not what the file
+    declared — and unlike the column it cannot be ``is_finite`` over strings,
+    which polars refuses outright.
+    """
+    if dtype == 'bool':
+        return col.is_not_null() & col.cast(pl.Boolean)
+    if dtype == 'str':
+        return col.is_not_null()
+    return col.is_not_null() & col.is_finite()
+
+
 @dataclass(frozen=True)
 class PolarsCompiler:
     """Turn plan nodes into polars queries over the model's tidy frames.
@@ -427,10 +444,7 @@ class PolarsCompiler:
             if isinstance(p, plan.LookupDefined):
                 return pl.col(join_lookup(p.lookup, p.over)).is_not_null()
             if isinstance(p, plan.ParameterDefined):
-                col = pl.col(join_param(p.parameter))
-                if p.parameter in self.data.boolean_parameters:
-                    return col.is_not_null() & col.cast(pl.Boolean)
-                return col.is_not_null() & col.is_finite()
+                return _defined(pl.col(join_param(p.parameter)), self.program.parameter(p.parameter).dtype)
             if isinstance(p, plan.VariableDefined):
                 on = list(self.program.variable(p.variable).dims)
                 coordinates = self.variables[p.variable].select(*on)
