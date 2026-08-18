@@ -605,14 +605,14 @@ class PolarsCompiler:
             return CompiledExpression(terms, consts)
 
         def quotient(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
-            """``a / b``, where *b* must be a single variable-free factor."""
+            """``a / b``, where *b* is one variable-free factor.
+
+            That it is *one* is ``degree.check_binary``'s answer, given at load
+            with no data bound, so a divisor that adds never reaches a plan.
+            """
             if b.terms:
                 raise LanguageError(f'nonlinear quotient in {context}: the divisor contains variables')
-            if len(b.consts) != 1:
-                raise LanguageError(
-                    f'in {context}: a divisor must be a single Constant/Parameter factor, '
-                    f'not a sum — rewrite as multiplication by a precomputed parameter'
-                )
+            assert len(b.consts) == 1, 'a divisor that adds is refused at load'
             inv = b.consts[0]
             terms = tuple(_join_mul(t, inv, is_term=True, divide=True) for t in a.terms)
             consts = tuple(_join_mul(x, inv, is_term=False, divide=True) for x in a.consts)
