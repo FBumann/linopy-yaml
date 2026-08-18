@@ -48,7 +48,7 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{marginal\_cost}_{g} + p^{\mathrm{nom}}_{g} \cdot \mathit{capital\_cost}_{g} \right)$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathit{capital\_cost}_{g}$$
 
 #### Subject to
 

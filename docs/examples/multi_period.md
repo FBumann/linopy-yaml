@@ -76,7 +76,7 @@ Least-cost investment and dispatch together: capacity is decided once per period
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E},\enspace g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{opex}_{g} \cdot \mathit{weight}_{t} + p^{\mathrm{nom}}_{e,g} \cdot \mathit{capex}_{g,e} \right)$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{opex}_{g} \cdot \mathit{weight}_{t} + \sum_{e \in \mathcal{E},\enspace g \in \mathcal{G}} p^{\mathrm{nom}}_{e,g} \cdot \mathit{capex}_{g,e}$$
 
 #### Subject to
 

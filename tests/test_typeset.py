@@ -423,6 +423,54 @@ def test_latex_binary_and_integer_variables_state_their_domain():
     assert r'\in \mathbb{Z}' in tex
 
 
+def test_latex_an_objective_sums_each_term_over_the_dims_that_term_carries():
+    """A capital cost paid per generator, added to an operating cost paid per
+    (snapshot, generator), is two sums.
+
+    One sum around both would read as capital cost paid once per snapshot as
+    well — the engine pays it once, so the page would be stating a different
+    objective than the one that solves, in the block whose whole promise is
+    that it is the same model.
+    """
+    model = override(
+        DISPATCH,
+        **{
+            'variables.p_nom': {'foreach': ['generator'], 'bounds': {'lower': 0}},
+            'objective.expression': 'p * cost + p_nom * p_max',
+        },
+    )
+    tex = to_latex(model)
+    assert (
+        r'\sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g} '
+        r'+ \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot p^{\mathrm{max}}_{g}' in tex
+    ), tex
+
+
+def test_latex_terms_that_carry_the_same_dims_share_one_sum():
+    """The common case is left alone: two terms over the same dims read as one
+    sum of both, not as two sums added, which is the same math and the shorter
+    line."""
+    model = override(DISPATCH, **{'objective.expression': 'p * cost + p * p_max'})
+    tex = to_latex(model)
+    assert (
+        r'\sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{cost}_{g} '
+        r'+ p_{t,g} \cdot p^{\mathrm{max}}_{g} \right)' in tex
+    ), tex
+
+
+def test_latex_a_dimensionless_term_carries_no_sum_at_all():
+    """A term over no dimension is one scalar, and a sum sign over nothing in
+    front of it would be notation with no referent."""
+    model = override(
+        DISPATCH,
+        **{
+            'variables.slack': {'foreach': [], 'bounds': {'lower': 0}},
+            'objective.expression': 'p * cost + slack',
+        },
+    )
+    assert r'} p_{t,g} \cdot \mathit{cost}_{g} + \mathit{slack}' in to_latex(model)
+
+
 def test_latex_sum_renders_the_coordinate_map_as_a_set_condition():
     tex = to_latex('examples/transport.yaml', legend=False)
     assert r'\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g}' in tex
@@ -547,12 +595,9 @@ DIVERGENT = {
         'inner sum where the model reaches it through a named expression.'
     ),
     'multi_period': (
-        "renders the objective as one sum over the union of both terms' dims. The "
-        'capex term carries (period, generator) and the operating term carries '
-        '(snapshot, generator), and the engine sums each over its own dims — so the '
-        'rendered sum over t as well would multiply capex by the snapshots per '
-        'period. Reproducing it would need the generator to split an additive '
-        'objective into one sum per term.'
+        'writes a hatted capacity and spells the lookup as period(t). The generator '
+        'derives p^nom from the declared name and writes period_of(t) — a committed '
+        'symbol table renames the first, and a lookup is not a name it can rename.'
     ),
     'storage': (
         'writes soc_{s-1}, ordinary index arithmetic. The model rolls, and a roll '

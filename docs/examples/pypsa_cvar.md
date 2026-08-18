@@ -65,7 +65,7 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 
 #### Objective
 
-$$\min \sum_{s \in \mathcal{S},\enspace g \in \mathcal{G}} \left( p^{\mathrm{nom}}_{g} \cdot \mathit{capex}_{g} + \left( 1 - \mathit{omega} \right) \cdot \mathit{probability}_{s} \cdot \left( \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{s,t,g} \cdot \mathit{opex}_{g} \right) + \mathit{omega} \cdot \mathit{tail\_average} \right)$$
+$$\min \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathit{capex}_{g} + \sum_{s \in \mathcal{S}} \left( 1 - \mathit{omega} \right) \cdot \mathit{probability}_{s} \cdot \left( \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{s,t,g} \cdot \mathit{opex}_{g} \right) + \mathit{omega} \cdot \mathit{tail\_average}$$
 
 #### Subject to
 

@@ -55,6 +55,7 @@ from lpspec.typeset.format import Entry, Glossary, Line
 
 if TYPE_CHECKING:
     import datetime
+    from collections.abc import Iterator
 
     from lpspec.language.model import Model, SosBlock
     from lpspec.language.resolution import Namespace
@@ -65,6 +66,21 @@ if TYPE_CHECKING:
 #: with ``+``: an unbracketed sum reads as capturing whatever follows it, so as
 #: a factor it has to be bracketed.
 _PRECEDENCE = {'+': 1, '-': 1, '*': 2, '/': 2}
+
+
+def _terms(node: ArithmeticNode, sign: int = 1) -> Iterator[tuple[int, ArithmeticNode]]:
+    """*node*'s added terms in source order, each with the sign it carries.
+
+    A unary minus stays inside its term: it is one factor's sign, not a
+    separation between two terms.
+    """
+    if isinstance(node, BinaryOperatorNode) and node.op in ('+', '-'):
+        yield from _terms(node.left, sign)
+        yield from _terms(node.right, sign if node.op == '+' else -sign)
+    else:
+        yield sign, node
+
+
 _ATOM = 5
 
 _RELATIONS = {'==': 'equal', '<=': 'le', '>=': 'ge'}
@@ -498,8 +514,11 @@ class Walk:
     def objective(self) -> list[Line]:
         """The objective's line, with its implied reduction made explicit.
 
-        An objective sums each term over every dim it carries; the reduction is
-        implied by the declaration, so it is spelled out rather than assumed.
+        An objective sums **each term** over the dims that term carries; the
+        reduction is implied by the declaration, so it is spelled out rather
+        than assumed. A capital cost over generators added to an operating cost
+        over generators and snapshots is paid once per generator, and one
+        summation around both would say it is paid once per snapshot as well.
         The line carries no label: the block has no name, and the section
         heading already says what it is.
         """
@@ -510,13 +529,51 @@ class Walk:
         context = 'the objective'
         node = expression_of(block.expression, self.schema, self.namespace, context)
         assert not isinstance(node, ComparisonNode)
-        ctx = self.context()
-        dims = self._sorted(dims_of(node, self.schema, context))
-        body = self.reduction_body(node, ctx) if dims else self.arithmetic(node, ctx)
-        if dims:
-            domain = self.format.joined([self.membership(d) for d in dims], '')
-            body = self.format.summation(domain, body)
-        return [Line(label='', left=sense, right=body)]
+        return [Line(label='', left=sense, right=self.reduced_terms(node, self.context(), context))]
+
+    def reduced_terms(self, node: ArithmeticNode, ctx: _Context, context: str) -> str:
+        """*node*'s added terms, each under a summation over its own dims.
+
+        Terms that carry the same dims share one summation, so an objective
+        whose terms agree — nearly all of them — reads as the single sum it
+        always did, and only a mixed one grows a second.
+
+        The split runs through every ``+`` and ``-``, brackets included, because
+        that is what the engine does: an objective is a flat sum of leaf terms,
+        each reduced over what it spans, and parenthesising some of them changes
+        no coefficient.
+        """
+        groups: list[tuple[list[str], list[tuple[int, ArithmeticNode]]]] = []
+        for sign, term in _terms(node):
+            dims = self._sorted(dims_of(term, self.schema, context))
+            if groups and groups[-1][0] == dims:
+                groups[-1][1].append((sign, term))
+            else:
+                groups.append((dims, [(sign, term)]))
+
+        text = ''
+        for position, (dims, members) in enumerate(groups):
+            body = self._term_body(members, ctx)
+            if dims:
+                domain = self.format.joined([self.membership(d) for d in dims], '')
+                body = self.format.summation(domain, body)
+            sign = members[0][0]
+            if position == 0:
+                text = f'{self.op("minus")}{body}' if sign < 0 else body
+            else:
+                text = self.format.joined([text, body], self.op('plus' if sign > 0 else 'minus'))
+        return text
+
+    def _term_body(self, members: list[tuple[int, ArithmeticNode]], ctx: _Context) -> str:
+        """One summation's body: its terms, bracketed where the sum would swallow a ``+``."""
+        _, first = members[0]
+        text = self.reduction_body(first, ctx) if len(members) == 1 else self.arithmetic(first, ctx)
+        for sign, term in members[1:]:
+            text = self.format.joined(
+                [text, self.arithmetic(term, ctx, need=_PRECEDENCE['+'] + (0 if sign > 0 else 1))],
+                self.op('plus' if sign > 0 else 'minus'),
+            )
+        return self.format.parenthesise(text) if len(members) > 1 else text
 
     def constraints(self) -> list[Line]:
         lines = []
