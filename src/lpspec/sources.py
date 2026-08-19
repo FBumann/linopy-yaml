@@ -616,7 +616,8 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
 
     Raises:
         PiecewiseExpansionError: Breakpoints that are not strictly increasing,
-            or a curve of the curvature the method is not exact for.
+            a ``method: lp`` curve with no segment, or a curve of the curvature
+            the method is not exact for.
     """
     import numpy as np
 
@@ -643,6 +644,13 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
         xa, ya = xr.broadcast(xa, ya)
         if (order := _breakpoint_order(pw.over, values)) is not None:
             xa, ya = xa.reindex({pw.over: order}), ya.reindex({pw.over: order})
+        if pw.method == 'lp' and xa.sizes[pw.over] < 2:
+            raise PiecewiseExpansionError(
+                f"{ctx}: method: lp needs at least two breakpoints, and '{pw.over}' has "
+                f'{xa.sizes[pw.over]} — the method is its segment lines, and a curve of one '
+                f'point has no segment for them to state, so the bounded link would be left '
+                f'free. Use method: adjacency, sos2 or convex, which pin it to the one point.'
+            )
         other = [d for d in xa.dims if d != pw.over]
         stacked_x = xa.transpose(*other, pw.over).values.reshape(-1, xa.sizes[pw.over])
         stacked_y = ya.transpose(*other, pw.over).values.reshape(-1, ya.sizes[pw.over])

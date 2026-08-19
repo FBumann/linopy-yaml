@@ -269,25 +269,20 @@ def test_a_one_breakpoint_curve_is_that_point_under_the_weight_methods(method):
         )
 
 
-@pytest.mark.xfail(
-    reason='#1121 — the first breakpoint has no chord, so a curve of one leaves the link unbounded', strict=True
-)
-def test_a_one_breakpoint_curve_still_pins_the_bounded_link():
-    """A curve of one point is a point, and every other method puts the link on it.
+def test_a_one_breakpoint_curve_is_refused_rather_than_dropped():
+    """A curve of one point has no segment, which is the whole of what lp states.
 
     The chord row is written at the later of the two breakpoints it joins, so
-    a single breakpoint writes none — and the two domain rows pin only the
-    *pinned* link. The bounded one is left to its own bound, which under
-    minimisation is 0 against a curve that says 25. `adjacency`, `sos2` and
-    `convex` all reach 75 on this data; refusing the block would be the other
-    remedy, but silently dropping the curve is not one.
+    a single breakpoint wrote none — and the two domain rows pin only the
+    *pinned* link, leaving the bounded one on its own bound: 0 under
+    minimisation against a curve that says 25 (#1121). The three weight methods
+    do reach 25 on this data and keep it, so the refusal names them.
     """
     point = _relational(load=[10.0, 10.0, 10.0], xs=[10.0], ys=[25.0])
 
-    with lps.solve(pyyaml.safe_load(MODEL), point) as result:
-        assert result.objective == pytest.approx(3 * 25.0, rel=RTOL), (
-            'the cost sits on the one point the curve has, as it does under every other method'
-        )
+    with pytest.raises(PiecewiseExpansionError, match='needs at least two breakpoints') as refusal:
+        lps.build(pyyaml.safe_load(MODEL), point)
+    assert 'adjacency' in str(refusal.value), 'and names the methods a one-point curve does mean something under'
 
 
 # ---------------------------------------------------------------------------
@@ -398,12 +393,12 @@ def test_a_curve_bound_to_a_path_is_checked_like_one_in_memory(tmp_path):
 def test_a_concave_curve_is_refused_whatever_the_breakpoints_are_measured_in():
     """The guard's tolerance has to be in the units of what it compares.
 
-    `diff(diff(ys) / dx)` is a difference of slopes — y per x, per x — and it
-    is judged against `1e-9 * max(|y|)`, which carries no x at all. Stretch
-    the same curve along x and the second difference shrinks under a tolerance
-    that does not, so a curve concave by 3000 cost units passes: `lp` then
-    returns 4502000 where the curve says 4497500, optimal and wrong, which is
-    the one outcome this guard is here to prevent.
+    `diff(diff(ys) / dx)` is a difference of slopes, y per x, and it is judged
+    against `1e-9 * max(|y|)`, which carries no x at all. Stretch the same
+    curve along x and the difference shrinks under a tolerance that does not,
+    so a curve concave by 3000 cost units passes: `lp` then returns 4502000
+    where the curve says 4497500, optimal and wrong, which is the one outcome
+    this guard is here to prevent.
     """
     xs = [0.0, 1e6, 2e6, 3e6]
     concave = [0.0, 1e6, 2e6 - 1000.0, 3e6 - 3000.0]
