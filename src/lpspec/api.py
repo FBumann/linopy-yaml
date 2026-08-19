@@ -29,6 +29,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from lpspec.errors import DataError, LpspecWarning
+from lpspec.language.boundedness import unbounded_notes
+from lpspec.language.piecewise import expand_piecewise
 from lpspec.language.validation import load_model
 from lpspec.lowering import advice, expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
@@ -62,11 +64,12 @@ def check(model: str | Path | dict[str, Any] | Model) -> Model:
 
     Warns:
         LpspecWarning: Advice short of an error — a declared dimension nothing
-            uses as an axis, say. Issued here and nowhere else.
+            uses as an axis, a variable the objective drives to infinity with
+            nothing to stop it. Issued here and nowhere else.
     """
     schema = load_model(model)
     program = lower_program(schema)
-    for note in advice(program):
+    for note in (*unbounded_notes(expand_piecewise(schema)), *advice(program)):
         warnings.warn(note, LpspecWarning, stacklevel=2)
     return schema
 
