@@ -389,16 +389,14 @@ def test_a_curve_bound_to_a_path_is_checked_like_one_in_memory(tmp_path):
             lane(pyyaml.safe_load(MODEL), sources)
 
 
-@pytest.mark.xfail(reason='#1124 — the tolerance is scaled by y where the quantity it bounds is a slope', strict=True)
 def test_a_concave_curve_is_refused_whatever_the_breakpoints_are_measured_in():
-    """The guard's tolerance has to be in the units of what it compares.
+    """The guard's tolerance is in the units of what it compares, so x cancels.
 
-    `diff(diff(ys) / dx)` is a difference of slopes, y per x, and it is judged
-    against `1e-9 * max(|y|)`, which carries no x at all. Stretch the same
-    curve along x and the difference shrinks under a tolerance that does not,
-    so a curve concave by 3000 cost units passes: `lp` then returns 4502000
-    where the curve says 4497500, optimal and wrong, which is the one outcome
-    this guard is here to prevent.
+    `diff(diff(ys) / dx)` is a difference of slopes, y per x. Judged against
+    `1e-9 * max(|y|)`, which carries no x, the same curve stretched along x
+    slipped under a tolerance that did not shrink with it: this one is concave
+    by 3000 cost units, and `lp` returned 4502000 where the curve says 4497500
+    — optimal and wrong, the outcome the guard exists to prevent (#1124).
     """
     xs = [0.0, 1e6, 2e6, 3e6]
     concave = [0.0, 1e6, 2e6 - 1000.0, 3e6 - 3000.0]

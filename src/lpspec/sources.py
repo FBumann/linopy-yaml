@@ -611,6 +611,14 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     (:func:`_breakpoint_order`); reading it in the row order it happened to
     arrive in judged an order the model never builds, in both directions.
 
+    **The bend is measured against a slope**, because that is what it is: a
+    difference of two slopes, in y per x. Judged against a share of ``y`` it
+    tracked the unit x happens to be measured in — stretch a curve along x and
+    a real bend passed, shrink it and a straight line was refused. The
+    tolerance is not zero because an exactly collinear curve need not difference
+    to exactly zero: ``[0, 0.1, 0.3]`` over ``[0, 1, 3]`` gives ``-1.4e-17``,
+    negative, which is the sign that refuses a convex curve.
+
     Only the curvature check needs xarray, for the broadcast over dims, so the
     import waits until a block that needs it is found.
 
@@ -663,8 +671,8 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
                     f'{ctx}: method: {pw.method} requires strictly increasing breakpoints in '
                     f"'{x_link.values}' (got {xs.tolist()})"
                 )
-            curvature = np.diff(np.diff(ys) / dx)
-            tol = 1e-9 * max(1.0, float(np.abs(ys).max()))
+            slopes = np.diff(ys) / dx
+            curvature, tol = np.diff(slopes), 1e-9 * float(np.abs(slopes).max(initial=0.0))
             rises, falls = bool((curvature > tol).any()), bool((curvature < -tol).any())
             wrong_bend = (rises and falls) if required == 'either' else (falls if required == 'convex' else rises)
             if wrong_bend:
