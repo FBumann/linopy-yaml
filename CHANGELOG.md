@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.213](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.212...v0.0.1-alpha.213) (2026-08-19)
+
+
+### Features
+
+* **language:** check names the variable that makes a model unbounded ([#909](https://github.com/fluxopt/lpspec/issues/909)) ([7781e22](https://github.com/fluxopt/lpspec/commit/7781e2253da5e027a4a803b2ff1f00cd40ce09f1))
+
 ## [0.0.1-alpha.212](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.211...v0.0.1-alpha.212) (2026-08-19)
 
 
