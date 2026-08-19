@@ -177,12 +177,13 @@ def _dense_pairs(path: str, index: pd.Series, columns: pd.Series) -> pd.Series:
     structural sparsity becomes NaN padding. Done in the open, because doing it
     at all is the point of the sparse cases.
 
-    Indexed by the pair rather than laid out wide: both lanes read a table by
-    the names of its dims, and a wide frame says nothing about which axis is
-    which.
+    Tidy — a column per dim and a `value` — rather than laid out wide: both
+    lanes read a table by the names of its dims, and a wide frame says nothing
+    about which axis is which.
     """
     pairs = pd.MultiIndex.from_product([index, columns], names=[index.name, columns.name])
-    return pd.read_parquet(path).set_index([index.name, columns.name])['value'].reindex(pairs).fillna(0.0)
+    dense = pd.read_parquet(path).set_index([index.name, columns.name])['value'].reindex(pairs).fillna(0.0)
+    return dense.rename('value').reset_index()
 
 
 # --------------------------------------------------------------------------
@@ -372,7 +373,7 @@ def _nodal_eager(paths: dict[str, str]) -> dict[str, Any]:
     data = {
         'installed': installed,
         'cost': cost,
-        'demand': demand.set_index(['snapshot', 'node'])['value'],
+        'demand': demand,
     }
     index = {
         'snapshot': pd.Index(sorted(demand['snapshot'].unique()), name='snapshot'),
@@ -457,7 +458,7 @@ def _sector_eager(paths: dict[str, str]) -> dict[str, Any]:
         'installed': installed,
         'produces': produces,
         'cost': pd.read_parquet(paths['cost']).set_index('tech')['value'],
-        'demand': demand.set_index(['snapshot', 'node', 'carrier'])['value'],
+        'demand': demand,
     }
     index = {
         'snapshot': pd.Index(sorted(demand['snapshot'].unique()), name='snapshot'),
@@ -523,7 +524,7 @@ def _transport_eager(paths: dict[str, str]) -> dict[str, Any]:
         'cost': pd.read_parquet(paths['cost']).set_index('generator')['value'],
         'cap': pd.read_parquet(paths['cap']).set_index('line')['value'],
         'neg_cap': pd.read_parquet(paths['neg_cap']).set_index('line')['value'],
-        'load': load.set_index(['snapshot', 'bus'])['value'],
+        'load': load,
     }
     index = {
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),
@@ -721,7 +722,7 @@ def _profiled_eager(paths: dict[str, str]) -> dict[str, Any]:
     data = {
         'availability': availability,
         'cost': pd.read_parquet(paths['cost']).set_index('tech')['value'],
-        'demand': demand.set_index(['snapshot', 'node'])['value'],
+        'demand': demand,
     }
     index = {
         'snapshot': pd.Index(snapshots, name='snapshot'),

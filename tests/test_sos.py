@@ -167,9 +167,7 @@ def test_both_lanes_and_the_enumeration_agree(sos_type):
     """
     from tests.differential import differential
 
-    eager = {
-        name: _table(v).to_pandas().set_index(['site', 'size'])['value'] for name, v in (('value', VALUE), ('cap', CAP))
-    }
+    eager = {name: _table(v).to_pandas() for name, v in (('value', VALUE), ('cap', CAP))}
     with differential(model(sos_type), eager) as run:
         assert run.result.objective == pytest.approx(best(sos_type)), 'the set does not restrict what it claims to'
 

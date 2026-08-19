@@ -45,7 +45,7 @@ def _inputs(gens, lines, load):
         'cost': gens.set_index('generator')['cost'],
         'cap': lines.set_index('line')['cap'],
         'neg_cap': -lines.set_index('line')['cap'],
-        'load': load.set_index(['snapshot', 'bus'])['value'],
+        'load': load,
     }
     return data | {
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),

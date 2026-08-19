@@ -632,6 +632,69 @@ def test_a_stray_lookup_value_reads_the_same_over_an_int_labelled_target(tmp_pat
     assert str(relational.value) == str(eager.value), 'one defect, one sentence'
 
 
+def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
+    """The one pandas shape with no counterpart in the frames underneath.
+
+    An index carries the dims a parameter is over *and* how many of them there
+    are, and the second is a claim the declaration already makes — so the two
+    can disagree with nothing able to say which was meant. A depth check would
+    catch the disagreement; refusing the shape removes it, and a tidy frame
+    says the same thing in the vocabulary the other five accepted shapes use.
+
+    Refused at `tidy_sources`, which is the one door both lanes enter by, so
+    neither can drift a second wording for it.
+    """
+    path = tmp_path / 'lookup.yaml'
+    path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
+    deep = pd.MultiIndex.from_tuples([('w', 0), ('s', 0)], names=['g', 'k'])
+    sources = {
+        'p_max': pd.Series([5.0, 5.0], index=deep),
+        'g': _tidy(g=['w', 's'], gen_bus=['n', 'e']),
+    }
+
+    with pytest.raises(DataError, match='MultiIndex is not a source') as relational:
+        lps.build(path, sources).close()
+    with pytest.raises(DataError, match='MultiIndex is not a source') as eager:
+        lpspec_linopy.build(path, sources)
+
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    assert "['g', 'value']" in str(eager.value), 'and it names the tidy frame the caller should pass'
+
+
+def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_path):
+    """The other half of the same disagreement, once a MultiIndex cannot arrive.
+
+    A Series is one index level deep, so it says the parameter has one dim. A
+    declaration of any other arity contradicts it, and the two shapes that are
+    also one level deep — a dict and a sequence — have said so all along.
+    `_series_to_frame` answered by handing pandas the declared dims as names for
+    that one level, which raised `ValueError: Length of new names must be 1, got
+    2` — naming neither the parameter nor the repair, on the lane whose sibling
+    shapes had the sentence to hand.
+
+    The index is deliberately *unnamed*: a named one binds by its own name and
+    goes wrong further downstream, where the missing column is what gets
+    reported.
+    """
+    model = {
+        'dimensions': {'g': {'values': ['w', 's']}, 'b': {'values': ['n', 'e']}},
+        'parameters': {'p_max': {'dims': ['g', 'b']}},
+        'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    path = tmp_path / 'shallow.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    sources = {'p_max': pd.Series([5.0, 5.0], index=pd.Index(['w', 's']))}
+
+    with pytest.raises(DataError, match='runs along one dimension') as relational:
+        lps.build(path, sources).close()
+    with pytest.raises(DataError, match='runs along one dimension') as eager:
+        lpspec_linopy.build(path, sources)
+
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    assert "['g', 'b', 'value']" in str(eager.value), 'and it names the table that carries both dims'
+
+
 def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_path):
     """Ignoring it is a silent fallback, which is the one thing we do not do.
 

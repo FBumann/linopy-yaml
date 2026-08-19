@@ -96,7 +96,7 @@ def _inputs(technologies=('wind', 'sun')):
     )
     return {
         'cost': index.assign(value=[1.0, 2.0, 3.0, 4.0]).set_index('generator')['value'],
-        'limit': limits.set_index(['bus', 'technology'])['value'],
+        'limit': limits,
         'demand': 20.0,
         'generator': index,
         'bus': pd.Index(['a', 'b'], name='bus'),
@@ -140,8 +140,9 @@ def test_a_combination_no_member_lands_on_is_a_group_of_nothing():
     :func:`test_an_empty_combination_does_not_take_its_row_with_it` is for.
     """
     sources = _inputs()
-    sources['limit'] = sources['limit'].copy()
-    sources['limit'][('b', 'sun')] = 0.0
+    limit = sources['limit'].copy()
+    limit.loc[(limit['bus'] == 'b') & (limit['technology'] == 'sun'), 'value'] = 0.0
+    sources['limit'] = limit
     with differential(MODEL, sources) as run:
         assert run.oracle == pytest.approx(35.0, rel=RTOL), 'a limit on an empty group binds nothing'
 

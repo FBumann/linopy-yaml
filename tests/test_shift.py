@@ -353,7 +353,7 @@ def test_a_per_entity_offset_writes_a_nonzero_edge_where_that_entity_vacates():
         'g': pd.Index(['a'], name='g'),
         't': pd.Index([0, 1, 2], name='t'),
         'lead': pd.Series([1], index=pd.Index(['a'], name='g')),
-        'eff': pd.Series([1.0, 2.0, 4.0], index=pd.MultiIndex.from_product([['a'], [0, 1, 2]], names=['g', 't'])),
+        'eff': pd.DataFrame({'g': ['a'] * 3, 't': [0, 1, 2], 'value': [1.0, 2.0, 4.0]}),
     }
     with differential(BY_PARAMETER_CONSTANT, sources, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, 'every month is capped, the first by the edge it was given'
