@@ -1,5 +1,7 @@
 """The LP sink renders doubles exactly, and writes the same bytes twice.
 
+The renderer under test is ``writers.base``'s and so is shared with the MPS
+sink; it is pinned here because this is where the trade it buys is made.
 ``lp_file`` writes numbers by casting them to string, because emit is almost
 entirely float-to-text and a cast is far cheaper than a format string. That
 trade is only free if the cast is shortest-*round-trip* and not merely
@@ -23,7 +25,8 @@ import pytest
 
 import lpspec as lps
 from lpspec.relational.sinks.writers import lp_file
-from lpspec.relational.sinks.writers.lp_file import _number, _signed
+from lpspec.relational.sinks.writers.base import number
+from lpspec.relational.sinks.writers.lp_file import _signed
 from tests.conftest import DISPATCH_MODEL, override
 
 #: Doubles that break naive formatters: repeating binary fractions, the
@@ -67,8 +70,8 @@ def _bits(x: float) -> bytes:
 
 @pytest.mark.parametrize('value', AWKWARD, ids=repr)
 def test_plain_cast_round_trips(value: float) -> None:
-    """``_number`` — how bounds and right-hand sides are written."""
-    (text,) = _rendered(_number, [value])
+    """``number`` — how bounds and right-hand sides are written."""
+    (text,) = _rendered(number, [value])
     assert _bits(float(text)) == _bits(value)
 
 
@@ -99,7 +102,7 @@ def test_negative_zero_coefficient_is_written_once() -> None:
 
 def test_extremes_do_not_become_infinite() -> None:
     """A formatter that drops exponent digits turns ``1e308`` into ``inf``."""
-    for text in _rendered(_number, [1.7976931348623157e308, 5e-324]):
+    for text in _rendered(number, [1.7976931348623157e308, 5e-324]):
         assert math.isfinite(float(text))
         assert float(text) != 0.0
 

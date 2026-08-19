@@ -257,9 +257,14 @@ They are applied when Gurobi's environment is created, which is what
 lps.write('model.yaml', sources, 'model.lp')
 ```
 
-The **suffix** picks the writer — `.lp` today, anything else a `ValueError`
-listing what can be written. It is checked before the build, so a format
-nothing can write costs no model.
+The **suffix** picks the writer — `.lp` and `.mps`, anything else a
+`ValueError` listing what can be written. It is checked before the build, so a
+format nothing can write costs no model.
+
+The two describe one model and name their columns and rows the same way, so a
+reader holding both files is reading one thing twice. Which to write is the
+reader's, not the model's: LP is the one a person diffs, MPS the one a
+decade-old toolchain accepts.
 
 ## A model four ways
 

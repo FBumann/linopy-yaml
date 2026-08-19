@@ -4,9 +4,6 @@ Portability, debugging, and the differential oracle. Every section is a lazy
 frame sunk straight into the open file, so the rendered text is polars' to
 stream and no byte is written twice.
 
-Numbers go through polars' float cast, which round-trips exactly: the text a
-solver reads back is the double the engine computed.
-
 **Every section is written in label order.** A solver does not care, but a
 reader diffing two LP files does, and so does anyone checking that a model
 builds the same bytes twice (#109).
@@ -15,11 +12,12 @@ builds the same bytes twice (#109).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import IO, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import polars as pl
 
 from lpspec.relational.sinks.tables import SENSE_CODES
+from lpspec.relational.sinks.writers.base import digits, number, sink
 
 if TYPE_CHECKING:
     from lpspec.relational.sinks.tables import ModelTables
@@ -39,20 +37,6 @@ _LP_SENSE = {sense: '=' if sense == '==' else sense for sense in SENSE_CODES}
 EMIT_BUDGET = 2_000_000
 
 
-def _sink(frame: pl.LazyFrame, f: IO[bytes]) -> None:
-    """Append a one-column frame to *f*, one raw line per row.
-
-    A CSV writer with the CSV switched off, straight into the handle the caller
-    holds: polars writes through its buffer, so an ``f.write()`` between two
-    sinks lands between them and no concatenation pass rereads the file.
-
-    ``maintain_order`` is polars' default, stated rather than inherited because
-    the parameter is documented as unstable and a flipped default would make
-    the bytes non-reproducible in silence (#109).
-    """
-    frame.sink_csv(f, include_header=False, quote_style='never', maintain_order=True)
-
-
 def write_lp_file(model: ModelTables, path: str | Path) -> None:
     """Write the model as LP text.
 
@@ -69,7 +53,7 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
             pl.concat_str(
                 _bound(pl.col('lb'), '-infinity').alias('lb'),
                 pl.lit(' <= x').alias('open'),
-                _digits(pl.col('col')),
+                digits(pl.col('col')),
                 pl.lit(' <= ').alias('close'),
                 _bound(pl.col('ub'), '+infinity').alias('ub'),
             )
@@ -80,25 +64,25 @@ def write_lp_file(model: ModelTables, path: str | Path) -> None:
         f.write((b'min' if model.objective_sense == 'min' else b'max') + b'\n\nobj:\n')
         if model.objective_constant:
             f.write(f'{model.objective_constant:+.17g}\n'.encode())
-        _sink(objective, f)
+        sink(objective, f)
 
         f.write(b'\ns.t.\n\n')
         for block in model.row_blocks(EMIT_BUDGET):
-            _sink(_constraint_lines(model, block.lo, block.hi, model.matrix_block(block.lo, block.hi)), f)
+            sink(_constraint_lines(model, block.lo, block.hi, model.matrix_block(block.lo, block.hi)), f)
 
         f.write(b'\nbounds\n')
-        _sink(bounds, f)
+        sink(bounds, f)
 
         for variable_type, keyword in (('binary', 'binary'), ('integer', 'general')):
             chosen = model.cols.lazy().with_row_index('col').filter(pl.col('vtype') == variable_type)
             if chosen.select(pl.len()).collect().item() == 0:
                 continue
             f.write(f'\n{keyword}\n'.encode())
-            _sink(chosen.select(pl.concat_str(pl.lit('x'), _digits(pl.col('col')))), f)
+            sink(chosen.select(pl.concat_str(pl.lit('x'), digits(pl.col('col')))), f)
 
         if model.sos.height:
             f.write(b'\nsos\n')
-            _sink(_set_lines(model), f)
+            sink(_set_lines(model), f)
 
         f.write(b'\nend\n')
 
@@ -125,16 +109,16 @@ def _set_lines(model: ModelTables) -> pl.LazyFrame:
         .group_by('set', maintain_order=True)
         .agg(
             pl.col('type').first(),
-            pl.concat_str(pl.lit('x'), _digits(pl.col('col')), pl.lit(':'), _digits(pl.col('weight')))
+            pl.concat_str(pl.lit('x'), digits(pl.col('col')), pl.lit(':'), digits(pl.col('weight')))
             .str.join(' ')
             .alias('members'),
         )
         .select(
             pl.concat_str(
                 pl.lit('s'),
-                _digits(pl.col('set')),
+                digits(pl.col('set')),
                 pl.lit(': S'),
-                _digits(pl.col('type')),
+                digits(pl.col('type')),
                 pl.lit(' :: '),
                 pl.col('members'),
             )
@@ -175,7 +159,7 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
     matrix = entries.lazy()
     header = rows.select(
         _key(pl.lit(0, dtype=pl.Int64)),
-        pl.concat_str(pl.lit('c').alias('c'), _digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),
+        pl.concat_str(pl.lit('c').alias('c'), digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),
     )
     placeholder = rows.join(matrix.select('row'), on='row', how='anti').select(
         _key(pl.lit(1, dtype=pl.Int64)),
@@ -190,7 +174,7 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
         pl.concat_str(
             pl.col('sense').replace_strict(_LP_SENSE, return_dtype=pl.String),
             pl.lit(' '),
-            _number(pl.col('rhs')),
+            number(pl.col('rhs')),
         ).alias('line'),
     )
     return pl.concat([header, placeholder, terms, footer]).sort('key').select('line')
@@ -202,12 +186,7 @@ def _term(coeff: pl.Expr, col: pl.Expr) -> pl.Expr:
     Chaining ``+`` would make each of the four pieces its own pass over a
     full-width string column.
     """
-    return pl.concat_str(*_signed(coeff), pl.lit(' x'), _digits(col))
-
-
-def _number(value: pl.Expr) -> pl.Expr:
-    """A float as LP text."""
-    return value.cast(pl.String)
+    return pl.concat_str(*_signed(coeff), pl.lit(' x'), digits(col))
 
 
 def _signed(value: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
@@ -225,15 +204,10 @@ def _signed(value: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
     """
     return (
         pl.when(value >= 0).then(pl.lit('+')).otherwise(pl.lit('')).alias('sign'),
-        pl.when(value == 0).then(pl.lit('0.0')).otherwise(_number(value)).alias('magnitude'),
+        pl.when(value == 0).then(pl.lit('0.0')).otherwise(number(value)).alias('magnitude'),
     )
 
 
 def _bound(value: pl.Expr, infinite: str) -> pl.Expr:
     """A bound, with the LP format's own spelling for an unbounded one."""
-    return pl.when(value.is_infinite()).then(pl.lit(infinite)).otherwise(_number(value))
-
-
-def _digits(value: pl.Expr) -> pl.Expr:
-    """An index as text — never in scientific notation, whatever its size."""
-    return value.cast(pl.Int64).cast(pl.String)
+    return pl.when(value.is_infinite()).then(pl.lit(infinite)).otherwise(number(value))

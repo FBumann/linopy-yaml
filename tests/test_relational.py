@@ -38,7 +38,7 @@ from lpspec.relational.plan import (
 )
 from lpspec.relational.sinks import SOLVERS
 from lpspec.relational.sinks.solvers.highs import Highs
-from tests.conftest import by_coord, override, solve_lp_file
+from tests.conftest import by_coord, override, solve_written_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, transport_eager_objective, xr
 
@@ -141,7 +141,7 @@ def test_dispatch_roundtrip(dispatch_data, tmp_path):
 
         lp = tmp_path / 'dispatch.lp'
         engine.write(lp)
-        assert solve_lp_file(lp) == pytest.approx(oracle, rel=RTOL)
+        assert solve_written_file(lp) == pytest.approx(oracle, rel=RTOL)
 
         primal = result.to_pandas('p')
         n_active = int((gens['p_max'] > 0).sum())
@@ -234,7 +234,7 @@ def test_transport_roundtrip(transport_data, tmp_path):
 
         lp = tmp_path / 'transport.lp'
         engine.write(lp)
-        assert solve_lp_file(lp) == pytest.approx(oracle, rel=RTOL)
+        assert solve_written_file(lp) == pytest.approx(oracle, rel=RTOL)
 
         primal_f = result.to_pandas('f')
         caps = lines.set_index('line')['cap']

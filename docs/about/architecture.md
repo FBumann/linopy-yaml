@@ -81,7 +81,7 @@ flowchart TB
             BIND["binding.py<br/>→ BoundSources, frozen"] --> ENGINE["engine.py + labels.py<br/>assemble the model frames"]
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A · sos"]
-        TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file (mps planned)"]
+        TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
         TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi (extra)"]
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
@@ -144,7 +144,7 @@ flowchart LR
     AST["<b>the whole model</b> — <code>Model</code><br/>names typed, dims checked, degree judged<br/><i>before a byte of data is read</i>"]
     AST --> SHOW["<b>show it</b><br/>typeset · CLI<br/><i>no data, no solver</i>"]
     AST --> CHECK["<b>check it</b><br/>parse → expand → validate → lower<br/><i>no data, no solver</i>"]
-    AST --> RUN["<b>run it</b><br/>solver · LP file · linopy"]
+    AST --> RUN["<b>run it</b><br/>solver · LP/MPS file · linopy"]
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> RUN
     RUN --> ANS(["<b>your answers</b><br/>tables you can join"])
     classDef built fill:#eef6ee,stroke:#3a7d44,stroke-width:1.5px,color:#111
@@ -218,7 +218,7 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | **run it** | stream it straight into a solver | `solve`, or `build` → `BoundModel` to drive several sinks off one build | **yes** |
 | | re-solve one built model with new numbers | `bound.rebind(...)` — the label contract, spent | **yes** |
 | | how big is it, how is it scaled, what did the build and its solves do, and where did the time go | `bound.diagnostics()` → `columns` · `rows` · `nonzeros` · `sink_columns` · `sink_rows` · `omissions` · `coefficient_range` · `objective_range` · `solves` · `loads` · `timings`, all advisory | **yes** |
-| | write an LP file for anything else | `write` | **yes** |
+| | write an LP or MPS file for anything else | `write` | **yes** |
 | | solve it once per scenario, window or period | `solve_over` over a `EachCoordinate` / `EachWindow` axis | **yes** |
 | | build the same math as a `linopy.Model` | `lpspec.linopy.build` — `lps.build`'s own signature | **yes** |
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |

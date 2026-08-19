@@ -86,7 +86,7 @@ string and *uncalled* macro template.
 (labelled DataArrays vs tidy tables — `to_dataarray` bridges), debugging (IIS
 via Gurobi, `print()` of a row), lifecycle (mutate, re-solve, warm start,
 `relax`/`fix`), solver breadth (ten backends and four handoffs vs HiGHS-direct
-plus LP files), and the variable types and capabilities behind the capability
+plus files), and the variable types and capabilities behind the capability
 model.
 
 **The ranking this implies:** indexed access blocks whole model classes today;

@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from lpspec.relational.sinks.writers.lp_file import write_lp_file
+from lpspec.relational.sinks.writers.mps_file import write_mps_file
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -23,7 +24,7 @@ __all__ = ['WRITERS', 'writer']
 
 #: What can be written today, by suffix. Closed, for
 #: :data:`~lpspec.relational.sinks.solvers.SOLVERS`' reason.
-WRITERS: Mapping[str, Write] = {'.lp': write_lp_file}
+WRITERS: Mapping[str, Write] = {'.lp': write_lp_file, '.mps': write_mps_file}
 
 
 def writer(suffix: str) -> Write:

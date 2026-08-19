@@ -12,7 +12,7 @@ takes the tables and renders them to a file. Everything else follows.
 | answers | a `Solver` subclass holding one model | `(tables, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
-| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), over `base.py` | `lp_file.py` (nothing beyond polars) |
+| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `base.py` |
 
 `sos.py` belongs to neither, which is what it is for: see *the one uneven
 stream* below.
@@ -100,11 +100,25 @@ chunks by and the objective's sense and constant — those last two live outside
 the tables because a constant has no column to attach to.
 
 A sink never learns how the tables were filled, and the engine never learns
-how they are drained. That is the point: adding `mps` is a new module in
-`writers/`, not another method on `PolarsEngine`.
+how they are drained. That is the point: `mps_file.py` is a module beside
+`lp_file.py`, not another method on `PolarsEngine`.
 
 The one thing sinks may share is a *projection* of those frames, never a step
-of the work — `ModelTables.dense_columns`, which both solvers read.
+of the work — `ModelTables.dense_columns`, which both solvers read — or a
+family `base`, which holds no member's own answer: `solvers/base.py` is the
+lifecycle without a solver in it, `writers/base.py` the three renderings
+without a format in them.
+
+## Row-major, and the one format that is not
+
+`matrix` is CSR, so every sink but one walks it by row and slices rather than
+sorts. MPS is column-major — it hands a reader each column with its whole
+column of the matrix — so `mps_file` sorts the matrix into `(col, row)` order
+once and builds its own offsets from the result. That sort is the writer's
+peak, and it is the only place in `sinks/` where the format, rather than the
+engine, decides the order. The engine holds no column index because this is
+its one consumer, and building one on every build to serve it would be paid by
+every caller who never writes a file.
 
 ## The one uneven stream
 
@@ -145,6 +159,8 @@ and pin the copy in `tests/test_solve_status.py`, including anywhere you
 deliberately diverge.
 
 **A writer:** `writers/<format>.py`, one line in `WRITERS` keyed by suffix.
+Render through `base.py` rather than casting in the module — that is what
+makes two files describe one model to a reader holding both.
 
 Either way: stream — nothing here may materialise the model a second time —
 and nothing above changes. No method on the engine, no branch in `api.py`,

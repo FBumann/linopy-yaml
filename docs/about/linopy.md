@@ -14,7 +14,7 @@ of the docs noisy:
 ## 1. It is not a runtime dependency
 
 `lps.solve`, `lps.build`, `lps.write` and `lps.check` go YAML → polars → HiGHS
-or LP file, and import nothing from linopy, xarray or pandas. CI proves it: the
+or file, and import nothing from linopy, xarray or pandas. CI proves it: the
 bare-install job runs the whole suite with none of them present.
 
 `pip install "lpspec[linopy]"` adds linopy, xarray and pandas, which buys two
