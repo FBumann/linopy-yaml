@@ -138,9 +138,19 @@ row.sense  # '=='
 row.rhs  # 80.0
 ```
 
-A printed row stops at `display_terms` and says how many it dropped: a line
-that scrolled off the screen has answered nothing, and the frame is what the
-rest of a three-hundred-term row is for.
+A row too wide to spell out **summarises rather than truncating** — twelve
+terms of three hundred are twelve arbitrary ones:
+
+```python
+print(bound.row('balance', t=0))
+# balance[t=0]: 301 terms — p: 300 (|coef| 0.001…0.3), slack: 1 (|coef| 1000) >= 5
+```
+
+That is the two questions a wide row is actually asked, on one line: how much
+of it each declaration contributes, and whether its coefficients span an order
+of magnitude the solve will pay for. The thousand-fold spread above is the
+fault `diagnostics().coefficient_range` reports per *declaration* and nothing
+reported per row. `display_terms` is where a line stops spelling terms out.
 
 It reads the **built** row, which is the whole of its value:
 

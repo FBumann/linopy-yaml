@@ -83,14 +83,41 @@ def test_printing_a_row_gives_the_line_linopy_gives() -> None:
     assert printed == 'commit[t=1, g=gas]: +1 p[1, gas] -200 u[1, gas] <= 0'
 
 
-def test_a_row_too_wide_to_read_is_cut_rather_than_scrolled() -> None:
-    """A line that ran off the screen would have answered nothing, and the
-    frame is what the rest of a wide row is for."""
+def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
+    """Twelve terms of three hundred are twelve arbitrary ones.
+
+    What a wide row is actually asked is how much of it each declaration
+    contributes and whether its coefficients span an order of magnitude the
+    solve will pay for — both of which fit the same line. The model here has a
+    thousand-fold spread *inside one row*, which is the fault
+    ``coefficient_range`` reports per declaration and nothing reported per row.
+    """
+    generators = [f'g{i}' for i in range(300)]
+    model = {
+        'dimensions': {'t': {'dtype': 'int', 'values': [0]}, 'g': {'values': generators}},
+        'parameters': {'cost': {'dims': ['g']}, 'load': {'dims': ['t']}},
+        'variables': {
+            'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 100}},
+            'slack': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 9}},
+        },
+        'constraints': {'balance': {'foreach': ['t'], 'expression': 'sum(p * cost, over=g) + slack * 1000 >= load'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+    }
+    data = {
+        'cost': pl.DataFrame({'g': generators, 'value': [0.001 * (i + 1) for i in range(300)]}),
+        'load': pl.DataFrame({'t': [0], 'value': [5.0]}),
+    }
+    with lps.build(model, data) as bound:
+        row = bound.row('balance', t=0)
+
+    assert row.terms.height == 301, 'the frame keeps every term whatever the line does'
+    assert str(row) == 'balance[t=0]: 301 terms — p: 300 (|coef| 0.001…0.3), slack: 1 (|coef| 1000) >= 5'
+
+
+def test_a_declaration_whose_coefficients_are_all_one_says_so_once() -> None:
+    """A single magnitude prints as itself, not as a range against itself."""
     generators = [f'g{i}' for i in range(30)]
-    model = override(
-        DISPATCH_MODEL,
-        **{'dimensions.generator.values': generators},
-    )
+    model = override(DISPATCH_MODEL, **{'dimensions.generator.values': generators})
     data = {
         'p_max': pl.DataFrame({'generator': generators, 'value': [10.0] * 30}),
         'cost': pl.DataFrame({'generator': generators, 'value': [1.0] * 30}),
@@ -98,12 +125,7 @@ def test_a_row_too_wide_to_read_is_cut_rather_than_scrolled() -> None:
         'load': pl.DataFrame({'snapshot': [0], 'value': [5.0]}),
     }
     with lps.build(model, data) as bound:
-        row = bound.row('balance', snapshot=0)
-
-    assert row.terms.height == 30, 'the frame keeps every term'
-    printed = str(row)
-    assert '… (18 more terms)' in printed, 'the line stops at display_terms and says how many it dropped'
-    assert printed.count('p[') == 12
+        assert str(bound.row('balance', snapshot=0)) == 'balance[snapshot=0]: 30 terms — p: 30 (|coef| 1) == 5'
 
 
 def test_it_answers_on_a_model_that_was_never_solved() -> None:

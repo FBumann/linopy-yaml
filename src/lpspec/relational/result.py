@@ -152,27 +152,55 @@ class ConstraintRow:
     sense: str
     rhs: float
 
-    #: How many terms print before the line is cut. A row wider than this is
-    #: one to read as :attr:`terms`, and a line that scrolled off the screen
-    #: would have answered nothing.
+    #: How many terms a line spells out before it summarises instead. The
+    #: number *is* the decision: past it the terms no longer fit a line worth
+    #: reading, and an arbitrary dozen of three hundred answers nothing that
+    #: their count and their spread does not answer better.
     display_terms = 12
 
     def __str__(self) -> str:
-        """The row as one line: ``balance[snapshot=1]: +1 p[…] + 50 p[…] >= 60``.
+        """The row as one line: ``balance[snapshot=1]: +1 p[…] +50 p[…] >= 60``.
 
         linopy's shape for the same job, since a reader arriving from there
         should not have to learn a second way to read a constraint.
+
+        **A row too wide to spell out summarises rather than truncating.**
+        Twelve terms of three hundred are twelve arbitrary ones; the count per
+        declaration and the spread of the coefficients are what a wide row is
+        actually asked about, and they fit the same line.
         """
-        shown = self.terms.head(self.display_terms)
-        rendered = ' '.join(
-            f'{coefficient:+g} {variable}[{coordinate}]' for variable, coordinate, coefficient in shown.iter_rows()
-        )
-        if self.terms.height > self.display_terms:
-            rendered += f' … ({self.terms.height - self.display_terms} more terms)'
-        if not self.terms.height:
-            rendered = '(no terms)'
         where = ', '.join(f'{dim}={label}' for dim, label in self.coordinate.items())
-        return f'{self.name}[{where}]: {rendered} {self.sense} {self.rhs:g}'
+        return f'{self.name}[{where}]: {self._body()} {self.sense} {self.rhs:g}'
+
+    def _body(self) -> str:
+        """The terms, spelled out or summarised — the part that depends on width."""
+        if not self.terms.height:
+            return '(no terms)'
+        if self.terms.height <= self.display_terms:
+            return ' '.join(
+                f'{coefficient:+g} {variable}[{coordinate}]'
+                for variable, coordinate, coefficient in self.terms.iter_rows()
+            )
+        return f'{self.terms.height} terms — {self._per_declaration()}'
+
+    def _per_declaration(self) -> str:
+        """``p: 300 (|coef| 1…50)`` per variable, in the row's own term order.
+
+        The two questions a row too wide to read is asked: how much of it each
+        declaration contributes, and whether its coefficients span an order of
+        magnitude that will cost the solve.
+        """
+        import polars as pl
+
+        grouped = self.terms.group_by('variable', maintain_order=True).agg(
+            pl.len().alias('terms'),
+            pl.col('coefficient').abs().min().alias('low'),
+            pl.col('coefficient').abs().max().alias('high'),
+        )
+        return ', '.join(
+            f'{variable}: {terms} (|coef| {low:g})' if low == high else f'{variable}: {terms} (|coef| {low:g}…{high:g})'
+            for variable, terms, low, high in grouped.iter_rows()
+        )
 
 
 @dataclass(frozen=True)
