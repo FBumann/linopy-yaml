@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.206](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.205...v0.0.1-alpha.206) (2026-08-19)
+
+
+### Bug Fixes
+
+* **packaging:** the linopy extra resolves again after upstream merged v1 ([#1073](https://github.com/fluxopt/lpspec/issues/1073)) ([aafac01](https://github.com/fluxopt/lpspec/commit/aafac01d025edc8ebdcabd6b0c2af6d00a8e1d19))
+
 ## [0.0.1-alpha.205](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.204...v0.0.1-alpha.205) (2026-08-18)
 
 
