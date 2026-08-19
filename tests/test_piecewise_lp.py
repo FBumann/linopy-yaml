@@ -269,6 +269,26 @@ def test_a_one_breakpoint_curve_is_that_point_under_the_weight_methods(method):
         )
 
 
+def test_a_ragged_curve_down_to_one_point_is_refused():
+    """The count that decides is the curve's, and `points:` makes them differ.
+
+    `bp` carries three breakpoints and unit `b` declares one of them, so a
+    check asking the *dimension* clears a curve that has no segment: `b`'s
+    chord row is excluded as its own first point, its two domain rows pin only
+    `p`, and `op_cost` settles on its lower bound for an objective of 0 where
+    `b`'s single point says 25. Its neighbour with two points is the same model
+    built one breakpoint longer, and solves.
+    """
+    ragged = pyyaml.safe_load(PER_UNIT_MODEL)
+    ragged['piecewise']['cost_curve']['points'] = 'bp_x'
+
+    with lps.solve(ragged, _per_unit_points(short=False)) as result:
+        assert result.objective == pytest.approx(25.0, rel=RTOL), 'two points is one segment, and that is enough'
+
+    with pytest.raises(PiecewiseExpansionError, match='this curve carries 1'):
+        lps.build(ragged, _per_unit_points(short=True))
+
+
 def test_a_one_breakpoint_curve_is_refused_rather_than_dropped():
     """A curve of one point has no segment, which is the whole of what lp states.
 
@@ -481,4 +501,18 @@ def _per_unit(first, second):
                 'value': [*first, *second],
             }
         ),
+    }
+
+
+def _per_unit_points(short):
+    rows = [('a', 0), ('a', 1), ('a', 2), *([('b', 0)] if short else [('b', 0), ('b', 1)])]
+    xs = [0.0, 10.0, 20.0, *([5.0] if short else [5.0, 15.0])]
+    ys = [0.0, 10.0, 30.0, *([25.0] if short else [25.0, 60.0])]
+    return {
+        'snapshot': pl.DataFrame({'snapshot': [0]}),
+        'unit': pl.DataFrame({'unit': ['a', 'b']}),
+        'bp': pl.DataFrame({'bp': [0, 1, 2]}),
+        'load': pl.DataFrame({'snapshot': [0], 'value': [5.0]}),
+        'bp_x': pl.DataFrame({'unit': [u for u, _ in rows], 'bp': [k for _, k in rows], 'value': xs}),
+        'bp_y': pl.DataFrame({'unit': [u for u, _ in rows], 'bp': [k for _, k in rows], 'value': ys}),
     }

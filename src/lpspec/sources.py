@@ -622,6 +622,14 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     Only the curvature check needs xarray, for the broadcast over dims, so the
     import waits until a block that needs it is found.
 
+    **A count is per curve, not per dimension.** ``method: lp`` needs a segment
+    to state a line for, and how many points a curve carries is its own
+    property: a block spans one breakpoint dimension but as many curves as its
+    frame has rows, and under ``points:`` the two no longer agree. Asking the
+    dimension clears a curve that has no segment — its chord row excluded as
+    its own first point, its domain rows pinning only the pinned link, and the
+    bounded one left on its bound.
+
     Raises:
         PiecewiseExpansionError: Breakpoints that are not strictly increasing,
             a ``method: lp`` curve with no segment, or a curve of the curvature
@@ -652,19 +660,19 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
         xa, ya = xr.broadcast(xa, ya)
         if (order := _breakpoint_order(pw.over, values)) is not None:
             xa, ya = xa.reindex({pw.over: order}), ya.reindex({pw.over: order})
-        if pw.method == 'lp' and xa.sizes[pw.over] < 2:
-            raise PiecewiseExpansionError(
-                f"{ctx}: method: lp needs at least two breakpoints, and '{pw.over}' has "
-                f'{xa.sizes[pw.over]} — the method is its segment lines, and a curve of one '
-                f'point has no segment for them to state, so the bounded link would be left '
-                f'free. Use method: adjacency, sos2 or convex, which pin it to the one point.'
-            )
         other = [d for d in xa.dims if d != pw.over]
         stacked_x = xa.transpose(*other, pw.over).values.reshape(-1, xa.sizes[pw.over])
         stacked_y = ya.transpose(*other, pw.over).values.reshape(-1, ya.sizes[pw.over])
         for xs_all, ys_all in zip(stacked_x, stacked_y, strict=False):
             live = ~(np.isnan(xs_all) | np.isnan(ys_all))
             xs, ys = xs_all[live], ys_all[live]
+            if pw.method == 'lp' and xs.size < 2:
+                raise PiecewiseExpansionError(
+                    f'{ctx}: method: lp needs at least two breakpoints and this curve carries '
+                    f'{xs.size} — the method *is* its segment lines, so a curve with no segment '
+                    f'states nothing and leaves the bounded link on its own bound. Use method: '
+                    f'adjacency, sos2 or convex, which pin it to the points it does have.'
+                )
             dx = np.diff(xs)
             if not (dx > 0).all():
                 raise PiecewiseExpansionError(
