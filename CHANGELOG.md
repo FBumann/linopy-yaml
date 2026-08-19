@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.215](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.214...v0.0.1-alpha.215) (2026-08-19)
+
+
+### Features
+
+* **language:** a capacity limit may be grouped by location and technology at once ([#899](https://github.com/fluxopt/lpspec/issues/899)) ([2cabc65](https://github.com/fluxopt/lpspec/commit/2cabc650154a765fb6fc09b6d35e76e0772d1f5c))
+
 ## [0.0.1-alpha.214](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.213...v0.0.1-alpha.214) (2026-08-19)
 
 
