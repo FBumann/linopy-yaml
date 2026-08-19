@@ -12,11 +12,13 @@ uv run pre-commit install  # once per clone
 ```
 
 `uv sync` installs the `[linopy]` extra too, because the differential test
-suite needs a second lane to compare against, and `[gurobi]`, because the
-second solver sink needs a second solver to compare against — gurobipy's wheel
-carries a size-limited licence, so those tests run on a plain checkout with no
-licence of your own. They skip where it is absent. The engine itself never
-imports linopy, xarray, pandas or gurobipy — see *the bare install* below.
+suite needs a second lane to compare against, and `[gurobi]` and `[xpress]`,
+because a solver sink is checked against another solver. Both of those wheels
+carry a size-limited licence of their own — gurobipy's needs nothing, and
+xpress's Community licence is active on import — so those tests run on a plain
+checkout with no licence of your own. They skip where the package is absent.
+The engine itself never imports linopy, xarray, pandas, gurobipy or xpress —
+see *the bare install* below.
 
 ## The loop
 

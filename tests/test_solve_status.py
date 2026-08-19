@@ -27,6 +27,7 @@ import lpspec as lps
 from lpspec.errors import NoSolutionError
 from lpspec.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
 from lpspec.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
+from lpspec.relational.sinks.solvers.xpress import _BEYOND_LINOPY, _CONDITION_OF_SOL_STATUS
 from lpspec.relational.status import STATUS_TO_TERMINATION_CONDITIONS, SolveStatus
 
 INFEASIBLE = {
@@ -83,6 +84,34 @@ def test_the_gurobi_mapping_matches_linopy_where_it_claims_to():
             assert _CONDITION_OF_GUROBI_STATUS[code] == condition
 
 
+def test_the_xpress_mapping_matches_linopy():
+    """Copied entry for entry, with nothing claimed as an exception.
+
+    The map is keyed by ``SolStatus`` *value* here and by the enum member
+    there, the sink not being allowed to import xpress at module level — so
+    the enum is what the two are compared through, and a member renamed
+    upstream fails here rather than silently dropping an entry.
+    """
+    xpress = pytest.importorskip('xpress', reason='the xpress sink needs the [xpress] extra')
+    theirs = _linopy_condition_map('Xpress', ast.Attribute, 'attr', ast.Constant, 'value')
+    assert theirs, 'linopy no longer spells its Xpress map as SolStatus attributes against strings'
+    assert {int(xpress.SolStatus[name]): condition for name, condition in theirs.items()} == _CONDITION_OF_SOL_STATUS
+
+
+def test_the_xpress_sink_adds_to_linopys_answer_rather_than_contradicting_it():
+    """``_BEYOND_LINOPY`` is an addition, so it names no status code.
+
+    The distinction is the point: gurobi's ``_LINOPY_DIVERGENCES`` overrides a
+    verdict linopy gives, and is checked against it in both directions. This
+    reads a second axis linopy never looks at, so there is nothing to disagree
+    with — and the word it reports still has to be one linopy defines.
+    """
+    assert _BEYOND_LINOPY, 'the sink reads solvestatus for a reason — it belongs in the table'
+    every = set().union(*STATUS_TO_TERMINATION_CONDITIONS.values())
+    assert set(_CONDITION_OF_SOL_STATUS.values()) <= every
+    assert 'internal_solver_error' in every, 'the condition the second axis reports is linopy vocabulary'
+
+
 def test_every_gurobi_divergence_stays_inside_linopys_vocabulary():
     """Diverging on a verdict is not licence to invent a word for it. Every
     condition this package reports is one linopy also defines, which is what
@@ -90,12 +119,19 @@ def test_every_gurobi_divergence_stays_inside_linopys_vocabulary():
     assert set(_CONDITION_OF_GUROBI_STATUS.values()) <= set().union(*STATUS_TO_TERMINATION_CONDITIONS.values())
 
 
-def _linopy_condition_map(solver: str, node: type[ast.expr], attribute: str) -> dict[Any, Any]:
+def _linopy_condition_map(
+    solver: str,
+    node: type[ast.expr],
+    attribute: str,
+    value_node: type[ast.expr] | None = None,
+    value_attribute: str | None = None,
+) -> dict[Any, Any]:
     """linopy's ``CONDITION_MAP`` for *solver*, read out of its source.
 
     Each solver spells the map differently — HiGHS keys it by
-    ``HighsModelStatus`` attributes, Gurobi by integer literals — so the node
-    type and the attribute holding the value are arguments.
+    ``HighsModelStatus`` attributes, Gurobi by integer literals, Xpress by
+    ``SolStatus`` attributes against plain strings — so the node type and the
+    attribute holding the value are arguments, and the two sides may differ.
 
     Brittle to a linopy refactor, deliberately: the map is a local inside a
     method, so there is nothing to import, and a copy nobody checks is a copy
@@ -115,10 +151,11 @@ def _linopy_condition_map(solver: str, node: type[ast.expr], attribute: str) -> 
         if isinstance(n.value, ast.Dict)
     ]
     assert literals, f'linopy no longer defines {solver}.CONDITION_MAP as a dict literal — re-verify by hand'
+    values, value_of = value_node or node, value_attribute or attribute
     return {
-        getattr(key, attribute): getattr(value, attribute)
+        getattr(key, attribute): getattr(value, value_of)
         for key, value in zip(literals[0].keys, literals[0].values, strict=True)
-        if isinstance(key, node) and isinstance(value, node)
+        if isinstance(key, node) and isinstance(value, values)
     }
 
 

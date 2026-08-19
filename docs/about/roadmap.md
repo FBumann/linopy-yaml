@@ -85,8 +85,8 @@ string and *uncalled* macro template.
 **Behind linopy**, and none of it a ceiling question: the post-solve object
 (labelled DataArrays vs tidy tables — `to_dataarray` bridges), debugging (IIS
 via Gurobi, `print()` of a row), lifecycle (mutate, re-solve, warm start,
-`relax`/`fix`), solver breadth (ten backends and four handoffs vs HiGHS-direct
-plus files), and the variable types and capabilities behind the capability
+`relax`/`fix`), solver breadth (ten backends and four handoffs vs three
+direct sinks plus files), and the variable types and capabilities behind the capability
 model.
 
 **The ranking this implies:** indexed access blocks whole model classes today;

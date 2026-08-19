@@ -134,6 +134,7 @@ def _tables(model: dict[str, Any], given: dict[str, Any]) -> Any:
 SIMPLEX_ITERATIONS = {
     'highs': lambda solver: int(solver._handle.getInfo().simplex_iteration_count),
     'gurobi': lambda solver: int(solver._m.IterCount),
+    'xpress': lambda solver: int(solver._p.attributes.simplexiter),
 }
 
 

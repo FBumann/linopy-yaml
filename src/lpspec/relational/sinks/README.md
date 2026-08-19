@@ -12,7 +12,7 @@ takes the tables and renders them to a file. Everything else follows.
 | answers | a `Solver` subclass holding one model | `(tables, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
-| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `base.py` |
+| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `base.py` |
 
 `sos.py` belongs to neither, which is what it is for: see *the one uneven
 stream* below.
@@ -145,6 +145,23 @@ properties make that a family decision rather than a member's:
 
 A *writer* needs none of this today: LP text carries a set, and so does MPS.
 It is `solvers/`' function for that reason, not `sinks/`'.
+
+## How the three take the matrix
+
+`matrix` is CSR, and two of the three want it that way: `highs.py` hands over
+the three arrays and `xpress.py` hands `addRows` the same triple a block
+already is. `gurobi.py` is the exception — its matrix API takes a matrix
+*object*, which is what the `[gurobi]` extra's scipy is for.
+
+The rest of what separates them is each library's own spelling, and the two
+places it bites are worth naming because neither is a choice:
+
+- **The objective's constant.** HiGHS and Gurobi have an attribute for it;
+  Xpress spells it as the objective coefficient of column `-1`, *negated*.
+- **Discarding a solve.** `Model.reset()` on Gurobi keeps the model and drops
+  the solution, which is exactly `forget()`. `problem.reset()` on Xpress
+  clears the problem itself, so there `forget()` is the `keepbasis` control
+  instead.
 
 ## Adding one
 

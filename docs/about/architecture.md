@@ -82,7 +82,7 @@ flowchart TB
         end
         ENG --> TABLES["sinks/tables.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
-        TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi (extra)"]
+        TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
@@ -452,9 +452,10 @@ not.** A new one is a module named for it and a line in `SOLVERS` — no method
 on the engine, no branch in `api.py`, no name on the Python surface. Members
 share the projection of `cols` and `obj` onto the solver's column index, which
 lives on `ModelTables` so two solvers cannot drift into loading different
-models; they never share hand-off code, because the currencies differ (HiGHS
-takes the three CSR arrays, gurobipy a matrix object) and because `gurobipy`
-must stay off the import path of a caller who does not use it.
+models; they never share hand-off code, because the currencies differ (HiGHS and
+Xpress take the three CSR arrays, gurobipy a matrix object) and because an
+optional package must stay off the import path of a caller who does not use
+it.
 
 ## Module map
 
