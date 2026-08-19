@@ -94,15 +94,25 @@ def is_multi_indexed(obj: object) -> bool:
     return pd is not None and isinstance(obj, pd.Series) and obj.index.nlevels > 1
 
 
-def _series_to_frame(series: Any, dims: Sequence[str]) -> Any:
-    """A pandas Series with its index promoted to columns.
+def _series_to_frame(series: Any, dims: Sequence[str]) -> Any | None:
+    """A pandas Series with its one index level promoted to a column.
 
-    One level, so one dim: :func:`is_multi_indexed` has already refused the
-    rest. Where the caller named the level it binds by that name — renaming it
-    to *dims* would transpose the data when two dims share a label space, which
+    One level is all a Series can carry here — :func:`is_multi_indexed` refuses
+    the rest — so it runs along one dimension exactly as a dict and a sequence
+    do, and a declaration of any other arity is that same mismatch. Declined
+    rather than reported: this module writes no messages, and
+    ``sources._spread`` already has the wording for a shape one dimension deep.
+
+    Where the caller named the level it binds by that name — renaming it to
+    *dims* would transpose the data when two dims share a label space, which
     nothing downstream can catch.
+
+    Returns:
+        The tidy frame, or ``None`` where the declaration is not one dimension.
     """
-    if any(n is None for n in series.index.names):
+    if len(dims) != 1:
+        return None
+    if series.index.name is None:
         series = series.rename_axis(dims)
     return series.rename('value').reset_index()
 
