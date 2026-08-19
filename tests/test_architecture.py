@@ -532,7 +532,7 @@ def test_each_sink_family_is_its_directory_and_its_registry():
         assert held.unavailable_message, f'{name} does not say what to do when is_available() is False'
         assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
-    assert {w.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers')
+    assert {w.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {'base'}
     assert all(s.startswith('.') for s in WRITERS), 'writers are keyed by file suffix'
 
 

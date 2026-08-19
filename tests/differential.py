@@ -39,7 +39,7 @@ import pytest
 from lpspec.lowering import expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
-from tests.conftest import raw_of, schema_of, solve_lp_file
+from tests.conftest import raw_of, schema_of, solve_written_file
 from tests.oracle import linopy, lpspec_linopy
 
 if TYPE_CHECKING:
@@ -126,7 +126,7 @@ def differential(
             if lp:
                 lp_path = work / 'model.lp'
                 engine.write(lp_path)
-                assert solve_lp_file(lp_path) == pytest.approx(oracle, rel=rel)
+                assert solve_written_file(lp_path) == pytest.approx(oracle, rel=rel)
 
             yield Agreement(oracle=oracle, model=m, result=result, schema=schema, engine=engine, lp=lp_path)
 

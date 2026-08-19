@@ -309,7 +309,7 @@ def write(
     Args:
         model: A YAML path, a mapping, or a loaded :class:`Model`.
         sources: As :func:`build` takes them.
-        out: Where to write; ``.lp`` is what ships.
+        out: Where to write; ``.lp`` and ``.mps`` are what ship.
 
     Returns:
         The path written.

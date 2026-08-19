@@ -24,7 +24,7 @@ import pytest
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError
 from lpspec.relational.sinks import sos as sos_sink
-from tests.conftest import solve_lp_file
+from tests.conftest import solve_written_file
 
 SITES = ['north', 'south']
 SIZES = [0, 1, 2, 3]
@@ -223,7 +223,7 @@ def test_highs_refuses_the_written_section_which_is_why_it_reformulates(tmp_path
     """
     path = lps.write(model(1), DATA, tmp_path / 'model.lp')
     with pytest.raises(AssertionError):
-        solve_lp_file(path)
+        solve_written_file(path)
 
 
 # ---------------------------------------------------------------------------

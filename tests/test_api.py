@@ -29,7 +29,7 @@ from tests.conftest import (
     DISPATCH_P_MAX,
     _dispatch_load,
     schema_of,
-    solve_lp_file,
+    solve_written_file,
 )
 
 
@@ -57,7 +57,7 @@ def test_build_context_manager_and_write(dispatch_yaml, dispatch_frame_inputs, t
         objective_direct = result.objective
 
     lp = lps.write(dispatch_yaml, sources, tmp_path / 'm.lp')
-    assert solve_lp_file(lp) == pytest.approx(objective_direct, rel=1e-9)
+    assert solve_written_file(lp) == pytest.approx(objective_direct, rel=1e-9)
 
 
 def test_parquet_path_sources(dispatch_yaml, dispatch_frame_inputs, tmp_path):
