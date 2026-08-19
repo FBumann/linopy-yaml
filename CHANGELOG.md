@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.211](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.210...v0.0.1-alpha.211) (2026-08-19)
+
+
+### Refactoring
+
+* **language:** a closed vocabulary is a type, not a string plus a check ([#1083](https://github.com/fluxopt/lpspec/issues/1083)) ([92f615e](https://github.com/fluxopt/lpspec/commit/92f615eeb1200ec3321dc1b446544c97b332b793))
+
 ## [0.0.1-alpha.210](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.209...v0.0.1-alpha.210) (2026-08-19)
 
 
