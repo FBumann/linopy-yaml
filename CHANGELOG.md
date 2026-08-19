@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.217](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.216...v0.0.1-alpha.217) (2026-08-19)
+
+
+### Bug Fixes
+
+* **data:** a piecewise curve short of a breakpoint is refused, not read as the origin ([#1105](https://github.com/fluxopt/lpspec/issues/1105)) ([af93d7e](https://github.com/fluxopt/lpspec/commit/af93d7eb7f860d7520dfe106a5c0621cf841147d))
+
 ## [0.0.1-alpha.216](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.215...v0.0.1-alpha.216) (2026-08-19)
 
 
