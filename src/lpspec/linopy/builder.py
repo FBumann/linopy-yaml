@@ -697,7 +697,10 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: 
     vacate, and under *wrap* it comes round to that group's own last.
 
     A coordinate the lookup sends nowhere belongs to no group, so it reaches
-    nothing — the null reading a partial lookup gets everywhere else.
+    nothing — the null reading a partial lookup gets everywhere else. That is
+    not the same as reaching *off* a group's edge, which is what a policy
+    speaks for, so the two are tracked apart and only the second is filled
+    (#1061).
 
     The relational lane computes the identical map as a rank over the dim
     table joined back on ``(group, position)``.
@@ -707,9 +710,11 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: 
     step = int(offset)
 
     positions: dict[object, list[int]] = {}
+    grouped = np.zeros(len(labels), dtype=bool)
     for k, key in enumerate(keys):
         if key is None or key != key:  # nan: what a partial lookup leaves
             continue
+        grouped[k] = True
         positions.setdefault(key, []).append(k)
 
     source = np.full(len(labels), -1, dtype=int)
@@ -723,7 +728,10 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: 
     inside = xr.DataArray(source >= 0, coords={over: labels}, dims=[over])
     indexer = xr.DataArray(labels[np.clip(source, 0, len(labels) - 1)], dims=[over])
     gathered = array.sel({over: indexer}).assign_coords({over: labels}).where(inside)
-    return gathered if fill is None else _vacated(gathered, array, over, ~inside, fill)
+    if fill is None:
+        return gathered
+    vacated = xr.DataArray((source < 0) & grouped, coords={over: labels}, dims=[over])
+    return _vacated(gathered, array, over, vacated, fill)
 
 
 def _off_the_axis(array: Any, over: str, offset: float) -> Any:

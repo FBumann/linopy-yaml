@@ -1090,13 +1090,14 @@ class PolarsCompiler:
         Under a partition the edge is **each group's**, counted along the same
         within-group rank the translation itself walks: a coordinate reaches
         outside its own group exactly where it would have reached outside the
-        axis. A coordinate in no group reaches nothing, so it is vacated under
-        every policy — a wrap included, there being no group to come round from.
+        axis. A coordinate in no group is neither — it is absent, the reading
+        :meth:`_grouped` gives it, so it is dropped here rather than counted as
+        an edge a policy could speak for (#1061).
         """
         table = self.data.dimensions[s.dimension]
         if s.partition is not None:
             grouped = pl.col(s.partition)
-            table = table.with_columns(
+            table = table.filter(grouped.is_not_null()).with_columns(
                 (pl.col('ord').rank('ordinal').over(grouped) - 1).cast(pl.Int64).alias(_POS),
                 pl.len().over(grouped).cast(pl.Int64).alias(_SPAN),
             )
@@ -1117,8 +1118,6 @@ class PolarsCompiler:
         source = position - offset
         reaches = (source % span + span) % span if s.wrap else source
         outside = (reaches < 0) | (reaches >= span)
-        if s.partition is not None:
-            outside = pl.col(s.partition).is_null() | outside
         return table.filter(outside if vacated else ~outside).select(pl.col('val').alias(s.dimension), *dims)
 
     def _grouped(self, s: plan.Translate) -> pl.LazyFrame:

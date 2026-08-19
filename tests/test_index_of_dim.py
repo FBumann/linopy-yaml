@@ -533,6 +533,9 @@ def test_coordinates_in_no_group_translate_from_nothing():
     group of its own": a lane that let the nulls fall together would give the
     second a predecessor — the first — and write a balance row about a season
     that does not exist. Under a wrap it would close them onto each other.
+
+    All three edge policies, because a numeric one is the case that used to
+    read "reached nothing" as "the shift vacated this" and fill it (#1061).
     """
     sources = _seasons_sources()
     snapshots = [1, 2, 3, 4, 5, 6, 7, 98, 99]
@@ -542,7 +545,7 @@ def test_coordinates_in_no_group_translate_from_nothing():
     for name in ('inflow', 'price'):
         sources[name] = pl.concat([sources[name], pl.DataFrame({'snapshot': [98, 99], 'value': [1.0, 1.0]})])
 
-    for edge in ("edge='wrap', by=season_of", 'by=season_of'):
+    for edge in ("edge='wrap', by=season_of", 'edge=0, by=season_of', 'by=season_of'):
         model = _partitioned(edge)
         with differential(model, sources) as run:
             held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
