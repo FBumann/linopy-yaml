@@ -94,8 +94,9 @@ def _column_major(model: ModelTables) -> tuple[pl.DataFrame, npt.NDArray[np.int6
     instead of filtering the matrix once per chunk.
 
     The sort is the format's, not a choice: a column's entries have to reach
-    consecutive lines. It is also the whole of this writer's peak, and the one
-    thing the LP writer does not pay.
+    consecutive lines. It is also the whole of this writer's peak — more than
+    loading the model into a solver costs, and well over twice what the LP
+    writer pays (#1102), which is the price of the speed above it.
     """
     entries = model.matrix_block(0, model.row_count).sort('col', 'row')
     counts = np.bincount(entries['col'].to_numpy(), minlength=model.column_count)
