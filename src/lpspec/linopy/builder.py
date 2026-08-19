@@ -56,7 +56,7 @@ from lpspec.language.where_parser import (
     WhereNode,
     _UnresolvedPositionNode,
 )
-from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover, gaps_under
+from lpspec.linopy.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping

@@ -495,6 +495,7 @@ it.
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
 | `linopy/__init__.py` | opt-in lane: `build` constructing a `linopy.Model`, and `expression` reading a named quantity off a solved one |
 | `linopy/loader.py` | data coercion to `xr.Dataset`, master coords |
+| `linopy/coverage.py` | the two positions an absent row has no reading for: a divisor and a constant side |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
 
 **Four subpackages, and the directory *is* the rule in every case.** Everything
