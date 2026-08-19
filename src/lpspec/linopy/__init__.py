@@ -70,13 +70,9 @@ from lpspec.language.piecewise import expand_piecewise
 from lpspec.language.resolution import Namespace, expression_of
 from lpspec.language.validation import load_model
 from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
-from lpspec.linopy.loader import (
-    build_dim_coords,
-    build_master_coords,
-    load_parameters,
-)
+from lpspec.linopy.loader import dimension_coords, load_parameters
 from lpspec.lowering import lower_expression, lower_program
-from lpspec.sources import validate_curve_extent, validate_piecewise_data
+from lpspec.sources import tidy_sources, validate_curve_extent, validate_piecewise_data
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -114,10 +110,10 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
         schema = expand_piecewise(original)
         lower_program(original)
 
-        master_coords = build_master_coords(schema, sources)
-        dim_coords = build_dim_coords(schema, master_coords, sources)
-        validate_curve_extent(original, dict(sources))
-        dataset = load_parameters(schema, dict(sources), master_coords)
+        tidy = tidy_sources(schema, sources)
+        validate_curve_extent(original, tidy)
+        master_coords, dim_coords = dimension_coords(schema, tidy)
+        dataset = load_parameters(schema, tidy, master_coords)
         validate_piecewise_data(original, dataset)
 
         built = linopy.Model()
@@ -168,9 +164,9 @@ def expression(
             )
         lower_program(original)
         lower_expression(schema, name)
-        master_coords = build_master_coords(schema, sources)
-        dim_coords = build_dim_coords(schema, master_coords, sources)
-        dataset = load_parameters(schema, dict(sources), master_coords)
+        tidy = tidy_sources(schema, sources)
+        master_coords, dim_coords = dimension_coords(schema, tidy)
+        dataset = load_parameters(schema, tidy, master_coords)
         ns = Namespace.of(schema)
         ast = expression_of(schema.expressions[name].expression, schema, ns, f"named expression '{name}'")
         assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'

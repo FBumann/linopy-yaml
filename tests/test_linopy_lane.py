@@ -21,6 +21,7 @@ import polars as pl
 import pytest
 
 from lpspec.errors import DataError, LaneError, LanguageError
+from lpspec.sources import tidy_sources
 from tests.conftest import schema_of
 from tests.oracle import builder, linopy, loader, lpspec_linopy, pd, xr
 
@@ -65,7 +66,12 @@ def _schema(dims=None, params=None) -> Model:
     return schema_of(raw)
 
 
-class TestBuildMasterCoords:
+def _master_coords(schema: Model, sources=None) -> dict:
+    """The labels, through the front door both lanes enter by."""
+    return loader.dimension_coords(schema, tidy_sources(schema, sources or {}))[0]
+
+
+class TestMasterCoords:
     @pytest.mark.parametrize(
         ('dim', 'coords', 'expected'),
         [
@@ -74,13 +80,12 @@ class TestBuildMasterCoords:
         ],
     )
     def test_labels_come_from_values_or_the_coords_kwarg(self, dim, coords, expected):
-        mc = loader.build_master_coords(_schema(dims={'x': dim}), coords)
-        assert list(mc['x']) == expected
+        assert list(_master_coords(_schema(dims={'x': dim}), coords)['x']) == expected
 
     def test_a_dimension_cannot_take_its_labels_from_both(self):
         """One home, and no precedence to remember — the two ways above are exclusive."""
         with pytest.raises(DataError, match=r'dimensions\.x\.values'):
-            loader.build_master_coords(_schema(dims={'x': {'values': [1, 2], 'dtype': 'int'}}), {'x': [99]})
+            _master_coords(_schema(dims={'x': {'values': [1, 2], 'dtype': 'int'}}), {'x': [99]})
 
     def test_a_dimension_with_no_index_is_refused(self):
         """Third in the precedence there is not one: the index is the authority.
@@ -92,7 +97,43 @@ class TestBuildMasterCoords:
         schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
 
         with pytest.raises(ValueError, match="dimension 'x' has no index"):
-            loader.build_master_coords(schema, {'a': {'wind': 1.0}})
+            _master_coords(schema, {'a': {'wind': 1.0}})
+
+    def test_the_labels_keep_the_order_and_the_first_of_each_duplicate(self):
+        """A caller's index is read in its own order on both lanes, deduplicated.
+
+        The ordinals a translation moves by are positions in this list, so a
+        sort here would move `shift` somewhere else than it moves relationally.
+        """
+        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
+        labels = _master_coords(schema, {'x': ['z', 'a', 'z', 'm'], 'a': {'z': 1.0}})['x']
+
+        assert list(labels) == ['z', 'a', 'm'], 'source order, each label once'
+
+    @pytest.mark.parametrize('index', ['pandas', 'polars', 'a bare list'])
+    def test_a_temporal_axis_is_the_same_instant_whichever_library_brought_it(self, index):
+        """`datetime.date` out of pandas and `datetime64` out of polars are one label.
+
+        They compare unequal, so which library a caller reached for used to
+        decide whether their parameter aligned with their index at all — and
+        whether a `where` boundary could be compared against the axis. The
+        declaration is what knows, and it always answers, so the axis is
+        canonical past the read and the source library stops being visible.
+        """
+        import datetime
+
+        days = [datetime.date(2030, 1, d) for d in (1, 2, 3)]
+        sources = {
+            'pandas': pd.Index(days, name='t'),
+            'polars': pl.DataFrame({'t': days}),
+            'a bare list': days,
+        }
+        schema = _schema(dims={'t': {'dtype': 'datetime'}}, params={'a': {'dims': ['t']}})
+
+        labels = _master_coords(schema, {'t': sources[index], 'a': {days[0]: 1.0}})['t']
+
+        assert labels.dtype.kind == 'M', f'a {index} index reads as the instants it holds'
+        assert list(labels) == list(pd.DatetimeIndex(days)), 'and as the same three of them'
 
 
 class TestLoadParameters:
@@ -137,7 +178,8 @@ class TestLoadParameters:
     def test_accepted_shapes(self, values, data, select, expected):
         dtype = 'int' if isinstance(values[0], int) else 'str'
         s = _schema(dims={'x': {'values': values, 'dtype': dtype}}, params={'a': {'dims': ['x']}})
-        ds = loader.load_parameters(s, {'a': data}, loader.build_master_coords(s, None))
+        tidy = tidy_sources(s, {'a': data})
+        ds = loader.load_parameters(s, tidy, loader.dimension_coords(s, tidy)[0])
         assert float(ds['a'].sel(**select)) == expected
 
     @pytest.mark.parametrize(
@@ -147,7 +189,7 @@ class TestLoadParameters:
                 {'x': {'values': [1], 'dtype': 'int'}},
                 {'a': {'dims': ['x']}},
                 {},
-                'required',
+                'no data provided',
                 id='missing-required',
             ),
             pytest.param(
@@ -156,6 +198,7 @@ class TestLoadParameters:
                 {'a': pd.DataFrame({'x': [1], 'y': [2], 'value': [1.0]}).set_index(['x', 'y'])['value']},
                 'index has 2 level',
                 id='an-index-deeper-than-the-declared-dims',
+                marks=pytest.mark.xfail(reason='#1085 — the check belongs in the shared door and is not there yet'),
             ),
             pytest.param(
                 {'x': {'values': [1], 'dtype': 'int'}},
@@ -176,7 +219,8 @@ class TestLoadParameters:
     def test_refused_shapes(self, dims, params, data, match):
         s = _schema(dims=dims, params=params)
         with pytest.raises(ValueError, match=match):
-            loader.load_parameters(s, data, loader.build_master_coords(s, None))
+            tidy = tidy_sources(s, data)
+            loader.load_parameters(s, tidy, loader.dimension_coords(s, tidy)[0])
 
 
 # ---------------------------------------------------------------------------

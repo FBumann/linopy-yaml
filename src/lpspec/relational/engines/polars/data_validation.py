@@ -31,6 +31,8 @@ from lpspec.errors import (
     coordinates_shown,
     duplicate_coordinate_message,
     holes_in_values_message,
+    lookup_not_single_valued_message,
+    lookup_values_are_not_labels_message,
     unknown_labels_message,
     wrong_value_dtype_message,
 )
@@ -169,14 +171,8 @@ def check_lookups_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -
         return
     counts = frame.group_by(d).agg(pl.col(c).n_unique().alias(c) for c in names).collect()
     bad = {c: n for c in names if (n := int((counts[c] > 1).sum()))}
-    if not bad:
-        return
-    listed = '; '.join(f"'{c}' ({n} label(s))" for c, n in sorted(bad.items()))
-    raise DataError(
-        f"dimension '{d}' carries more than one value per label for lookup(s): "
-        f'{listed}. A lookup is single-valued per label — reduce the source to '
-        f'one row per {d}, or model the relation as a parameter instead.'
-    )
+    if bad:
+        raise DataError(lookup_not_single_valued_message(d, bad))
 
 
 def check_lookup_containment(d: str, lookup: str, target: str, dimensions: Dimensions) -> None:
@@ -192,17 +188,9 @@ def check_lookup_containment(d: str, lookup: str, target: str, dimensions: Dimen
         .select(lookup)
         .filter(pl.col(lookup).is_not_null())
         .join(known, on=lookup, how='anti')
-        .unique()
+        .unique(maintain_order=True)
         .head(5)
         .collect()
     )
-    if bad.height == 0:
-        return
-    shown = ', '.join(repr(v) for v in bad[lookup].to_list())
-    raise DataError(
-        f"dimension '{d}' lookup '{lookup}' has value(s) that are not "
-        f"'{target}' labels: {shown}. Every value must be a declared "
-        f"'{target}' label — otherwise sum(by={lookup}) drops "
-        f'those terms in the join that places them, and the model builds and '
-        f'solves without them.'
-    )
+    if bad.height:
+        raise DataError(lookup_values_are_not_labels_message(d, lookup, target, bad[lookup].to_list()))

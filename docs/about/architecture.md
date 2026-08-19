@@ -36,14 +36,28 @@ neither belongs to the side it hands to. Drawing them inside `relational/`
 would be a lie about the fence — the engine imports nothing from the package,
 while both of these read the schema.
 
-**Data enters below the seam, and each lane coerces its own** — `sources.py` for
-a relational build, `linopy/loader.py` for the linopy one, separate on purpose
-since one produces tidy polars frames and the other an `xr.Dataset`. They take
-the same shapes; only what they produce differs. Their one shared
-piece is the `method: convex` curvature guard, which needs values rather than a schema
-and so lives with the data. What matters for the waist is the direction: data
-goes no further **up** than these two, so nothing above the seam has ever seen a
-value — which is what makes `show it` and `check it` free.
+**Data enters below the seam through one door.** `sources.tidy_sources` reads
+every shape a caller may pass — a frame of any library, a dict, a sequence, a
+bare number, a parquet path — into tidy polars frames, and **both lanes enter
+by it**. The relational engine executes its plan against those frames directly;
+`linopy/loader.py` converts them to pandas and xarray at its own boundary,
+which is all the eager lane is. Polars is therefore the one representation, and
+pandas a bridge at the edge of the extra that wants it — which is also what the
+dependency set says, pandas being declared with `[linopy]` rather than as a
+runtime dependency.
+
+**One reader, because two disagreed.** The lanes used to read the caller's
+object each in its own library, and the same instant then had two spellings — a
+`datetime.date` out of pandas, a `pl.Date` out of polars — costing a
+reconciling guard at every place the two met, one of which was always missing.
+A conversion cannot disagree with itself: past `tidy_sources` nothing about the
+library a caller reached for survives. It is paid for in a copy the eager lane
+makes of what a pandas caller passed, which is the trade named in #1076.
+
+The `method: convex` curvature guard sits with the data for the neighbouring
+reason — it needs values rather than a schema. What matters for the waist is
+the direction: data goes no further **up** than here, so nothing above the seam
+has ever seen a value — which is what makes `show it` and `check it` free.
 
 ```mermaid
 flowchart TB
@@ -494,7 +508,7 @@ it.
 | `relational/sinks/sos.py` | the one stream a sink may not be able to ingest, written as two it can: sets → binaries and linking rows |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md) |
 | `linopy/__init__.py` | opt-in lane: `build` constructing a `linopy.Model`, and `expression` reading a named quantity off a solved one |
-| `linopy/loader.py` | data coercion to `xr.Dataset`, master coords |
+| `linopy/loader.py` | the crossing into pandas and xarray: `tidy_sources`' frames as master coords and an `xr.Dataset` |
 | `linopy/coverage.py` | the two positions an absent row has no reading for: a divisor and a constant side |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
 

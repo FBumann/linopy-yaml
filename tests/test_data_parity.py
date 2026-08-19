@@ -406,14 +406,38 @@ _P_MAX = {'p_max': _tidy(g=['w', 's'], value=[5.0, 5.0])}
             'missing declared lookup column',
             id='an-index-without-the-lookup-column',
         ),
+        pytest.param(
+            {**_P_MAX, 'g': _tidy(gg=['w', 's'], gen_bus=['n', 'e'])},
+            "without a 'g' column",
+            id='an-index-without-the-label-column',
+        ),
+        pytest.param(
+            {**_P_MAX, 'g': _tidy(g=['w', 's'], gen_bus=['n', 'zz'])},
+            'not .b. labels',
+            id='a-lookup-value-that-is-no-label-of-its-target',
+        ),
+        pytest.param(
+            {**_P_MAX, 'g': _tidy(g=['w', 'w', 's'], gen_bus=['n', 'e', 'e'])},
+            'more than one value per label',
+            id='a-lookup-with-two-values-for-one-label',
+        ),
+        pytest.param(
+            {**_P_MAX, 'g': _tidy(g=['w', 'w', 's'], gen_bus=[None, 'n', 'e'])},
+            'more than one value per label',
+            id='a-lookup-null-in-one-row-and-set-in-another',
+        ),
     ],
 )
 def test_a_lookup_index_defect_reads_the_same_on_both_lanes(tmp_path, sources, match):
     """One wording, not two — the same rule `no_index_source_message` follows.
 
-    These two were written twice and drifted: the relational lane named the
+    The first two were written twice and drifted: the relational lane named the
     `sources` key and the eager one a separate argument, for one defect a caller
-    fixes the same way whichever lane they were on.
+    fixes the same way whichever lane they were on. The rest are the same
+    duplication one function further in, where the eager lane read the index
+    itself: a missing label column reached the caller as a raw polars
+    `ColumnNotFoundError` on one lane, and the two lookup refusals had a
+    sentence each, one of them missing the repair clause entirely.
     """
     path = tmp_path / 'lookup.yaml'
     path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
@@ -424,6 +448,61 @@ def test_a_lookup_index_defect_reads_the_same_on_both_lanes(tmp_path, sources, m
         lpspec_linopy.build(path, sources)
 
     assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+
+
+def test_an_index_a_declared_map_is_read_against_is_checked_before_the_read(tmp_path):
+    """The one shape where the front door, not the engine, owes the sentence.
+
+    A map the file declares is read against the caller's labels while the
+    sources are adapted, which is upstream of every binder — so an index
+    without its label column reached polars there and came back as
+    `ColumnNotFoundError: unable to find column "g"`, the opaque exception the
+    error rules exist to prevent, on a lane whose binder has the right sentence
+    for it two calls later.
+    """
+    model = {**LOOKUP_MODEL, 'lookups': {'gen_bus': {'over': 'g', 'into': 'b', 'values': {'w': 'n', 's': 'e'}}}}
+    path = tmp_path / 'declared_map.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    sources = {**_P_MAX, 'g': _tidy(gg=['w', 's'])}
+
+    with pytest.raises(DataError, match="without a 'g' column") as relational:
+        lps.build(path, sources).close()
+    with pytest.raises(DataError, match="without a 'g' column") as eager:
+        lpspec_linopy.build(path, sources)
+
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+
+
+def test_a_lookup_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_path):
+    """Counting nulls is what makes the refusal reach the case that costs an answer.
+
+    pandas `nunique()` skips nulls where polars `n_unique()` counts them, so a
+    label carrying a null in one row and a real value in another read as
+    single-valued on the eager lane — and the null won, that row being the
+    first. The member then belonged to no group, its terms left the constraint
+    that was to hold them, and the model solved: 8.0 against the 3.0 both lanes
+    give the same index deduplicated.
+    """
+    model = {
+        **LOOKUP_MODEL,
+        'dimensions': {'g': {}, 'b': {'values': ['n']}},
+        'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 3'}},
+    }
+    path = tmp_path / 'null_lookup.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    clean = {**_P_MAX, 'g': _tidy(g=['w', 's'], gen_bus=['n', 'n'])}
+    holed = {**_P_MAX, 'g': _tidy(g=['w', 'w', 's'], gen_bus=[None, 'n', 'n'])}
+
+    with lps.solve(path, clean) as run:
+        assert run.objective == pytest.approx(3.0), 'both members are on the bus, and the bus caps them'
+    built = lpspec_linopy.build(path, clean)
+    built.solve(solver_name='highs', output_flag=False)
+    assert float(built.objective.value) == pytest.approx(3.0), 'and the eager lane agrees where the index is clean'
+
+    with pytest.raises(DataError, match='more than one value per label'):
+        lps.build(path, holed).close()
+    with pytest.raises(DataError, match='more than one value per label'):
+        lpspec_linopy.build(path, holed)
 
 
 def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
@@ -441,6 +520,116 @@ def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
         assert relational.is_ok
     built = lpspec_linopy.build(path, sources)
     assert set(built.variables['x'].coords['g'].to_numpy()) == {'w', 's'}, 'the eager lane read the same index'
+
+
+def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monkeypatch):
+    """The `[linopy]` extra ships pandas and xarray, and nothing says it ships pyarrow.
+
+    The eager lane read an index path with `polars.read_parquet().to_pandas()`,
+    which wants pyarrow for anything Arrow-backed — so the way the runner
+    documents passing an index, a path under the dimension's own key, raised
+    `ModuleNotFoundError: No module named 'pyarrow'` on a supported install.
+    Blocked here rather than assumed absent, the extra's own resolution being
+    free to bring it in.
+    """
+    import sys
+
+    path = tmp_path / 'lookup.yaml'
+    path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
+    index = tmp_path / 'g.parquet'
+    _tidy(g=['w', 's'], gen_bus=['n', 'e']).write_parquet(index)
+    sources = {**_P_MAX, 'g': str(index)}
+
+    monkeypatch.setitem(sys.modules, 'pyarrow', None)
+    with lps.solve(path, sources) as relational:
+        assert relational.is_ok
+    built = lpspec_linopy.build(path, sources)
+    assert set(built.variables['x'].coords['g'].to_numpy()) == {'w', 's'}, 'the eager lane read the same path'
+
+
+#: The same shape one column over: a lookup whose *target* is the temporal
+#: dimension, rather than the dimension the index is of.
+TEMPORAL_LOOKUP_MODEL = {
+    'dimensions': {'g': {}, 'd': {'dtype': 'datetime'}},
+    'lookups': {'day_of': {'over': 'g', 'into': 'd'}},
+    'parameters': {'p_max': {'dims': ['g']}, 'cap': {'dims': ['d']}},
+    'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
+    'constraints': {'k': {'foreach': ['d'], 'expression': 'sum(x, by=day_of) <= cap'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
+}
+
+
+@pytest.mark.parametrize('library', ['pandas', 'polars', 'a parquet path'])
+def test_a_lookup_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, library):
+    """A lookup's values are labels of the dimension it targets, in that spelling.
+
+    The label column is canonicalised against the declared `dtype: datetime`
+    because a `datetime.date` and a `datetime64` are one instant that compares
+    unequal — and a targeted lookup's *values* are labels of a dimension too,
+    so the same instant reaches the same containment check by the other route.
+    Read without it, whichever library the caller brought the index in decided
+    whether every value looked like a stranger: refused eagerly through pandas
+    and accepted through polars, for one index saying one thing.
+
+    Both members map to the same day, so the cap that day carries binds them
+    together — a group that quietly lost a member would leave `p_max` the only
+    ceiling and answer 10.0.
+
+    A pandas frame of `datetime.date` and a polars `pl.Date` are the two
+    spellings a caller writes by hand. A nanosecond one is a third and is not
+    settled here: `datetime[ns]` reaches the relational lane's own join as a
+    key it will not match, and out of pandas both lanes refuse it alike — see
+    the follow-ups on #1076.
+    """
+    import datetime
+
+    days = [datetime.date(2030, 1, 1), datetime.date(2030, 1, 2)]
+    path = tmp_path / 'temporal_lookup.yaml'
+    path.write_text(pyyaml.safe_dump(TEMPORAL_LOOKUP_MODEL))
+    index = _tidy(g=['w', 's'], day_of=[days[0], days[0]])
+    if library == 'a parquet path':
+        index.write_parquet(tmp_path / 'g.parquet')
+    sources = {
+        **_P_MAX,
+        'cap': _tidy(d=days, value=[3.0, 7.0]),
+        'd': days,
+        'g': {
+            'pandas': lambda: pd.DataFrame({'g': ['w', 's'], 'day_of': [days[0], days[0]]}),
+            'polars': lambda: index,
+            'a parquet path': lambda: str(tmp_path / 'g.parquet'),
+        }[library](),
+    }
+
+    with lps.solve(path, sources) as run:
+        assert run.objective == pytest.approx(3.0), 'one day, one cap, both members under it'
+    built = lpspec_linopy.build(path, sources)
+    built.solve(solver_name='highs', output_flag=False)
+    assert float(built.objective.value) == pytest.approx(3.0), 'and the eager lane groups them the same way'
+
+
+def test_a_stray_lookup_value_reads_the_same_over_an_int_labelled_target(tmp_path):
+    """One sentence, and the labels in it spelled as the caller wrote them.
+
+    The eager lane took its offending values off a pandas frame and printed
+    them as they came, so an `int` dimension read back `np.int64(99)` where the
+    relational lane said `99` — one defect, two sentences again, and invisible
+    to a table whose every label is a string.
+    """
+    model = {
+        **LOOKUP_MODEL,
+        'dimensions': {'g': {}, 'b': {'dtype': 'int', 'values': [1, 2]}},
+    }
+    path = tmp_path / 'int_labels.yaml'
+    path.write_text(pyyaml.safe_dump(model))
+    sources = {**_P_MAX, 'g': _tidy(g=['w', 's'], gen_bus=[1, 99])}
+
+    with pytest.raises(DataError, match=r'not .b. labels') as relational:
+        lps.build(path, sources).close()
+    with pytest.raises(DataError, match=r'not .b. labels') as eager:
+        lpspec_linopy.build(path, sources)
+
+    assert '99.' in str(eager.value), 'the label as the caller wrote it, not as numpy holds it'
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
 
 
 def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_path):

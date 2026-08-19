@@ -20,7 +20,7 @@ import difflib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
 
 class LpspecError(ValueError):
@@ -369,6 +369,54 @@ def lookups_need_an_index_message(dim: str, lookups: list[str], got: str) -> str
 def missing_lookup_columns_message(dim: str, missing: list[str], available: list[str]) -> str:
     """An index that is present and short of a declared lookup — one wording, both lanes."""
     return f"index for dimension '{dim}' is missing declared lookup column(s) {sorted(missing)} (has {available})"
+
+
+def index_without_its_label_column_message(dim: str, available: Sequence[str]) -> str:
+    """An index table carrying everything but the labels — one wording, both lanes.
+
+    The column is named after the dimension because that is what a lookup
+    column is named after too: an index is a table about one dimension, and
+    nothing else in it would say which column the members are.
+    """
+    return (
+        f"index for dimension '{dim}' is a table without a '{dim}' column (has "
+        f'{list(available)}). The label column is named after the dimension.'
+    )
+
+
+def lookup_not_single_valued_message(dim: str, offenders: Mapping[str, int]) -> str:
+    """A label with two lookup values — one wording, both lanes.
+
+    Every offending lookup is named rather than the first, so the rest are not
+    found one build at a time. A null counts as a value: a label mapped
+    nowhere in one row and somewhere in another does not have one answer
+    either, and reading the two as agreeing is what let a member fall out of
+    the group that was to hold it.
+    """
+    listed = '; '.join(f"'{name}' ({count} label(s))" for name, count in sorted(offenders.items()))
+    return (
+        f"dimension '{dim}' carries more than one value per label for lookup(s): "
+        f'{listed}. A lookup is single-valued per label — reduce the source to '
+        f'one row per {dim}, or model the relation as a parameter instead.'
+    )
+
+
+def lookup_values_are_not_labels_message(dim: str, lookup: str, target: str, values: Sequence[Any]) -> str:
+    """A lookup value naming no label of the dimension it targets — one wording, both lanes.
+
+    A *null* is not one: the label belongs to no group, which is the
+    row-absence idiom the rest of the language uses. Only a value that is
+    present and unknown is a typo, and that one drops terms in the join that
+    places them rather than raising anywhere.
+    """
+    shown = ', '.join(repr(v) for v in values)
+    return (
+        f"dimension '{dim}' lookup '{lookup}' has value(s) that are not "
+        f"'{target}' labels: {shown}. Every value must be a declared "
+        f"'{target}' label — otherwise sum(by={lookup}) drops "
+        f'those terms in the join that places them, and the model builds and '
+        f'solves without them.'
+    )
 
 
 def declared_index_also_supplied_message(dim: str, declares: str, where: str) -> str:
