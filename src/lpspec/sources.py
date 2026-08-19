@@ -308,8 +308,8 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
             import xarray as xr
         except ImportError as exc:
             msg = (
-                f"piecewise '{name}': convex curvature validation currently "
-                f'requires xarray — pip install "lpspec[linopy]" '
+                f"piecewise '{name}': method: {pw.method} needs its curve's curvature "
+                f'checked, which currently requires xarray — pip install "lpspec[linopy]" '
                 f'(see issue #27: make this check numpy-only)'
             )
             raise ModuleNotFoundError(msg) from exc
