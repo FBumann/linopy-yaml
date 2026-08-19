@@ -106,6 +106,25 @@
       }
     }
   },
+  "piecewise_lp": {
+    "objective": 3850.0,
+    "rtol": 1e-09,
+    "provenance": "the same instance as piecewise, whose optimum and duals linopy 0.9.0 fixes via examples/ports/references/linopy/piecewise.py — the two formulations agreeing is the claim",
+    "duals": {
+      "balance": {
+        "snapshot": [
+          0,
+          1,
+          2
+        ],
+        "value": [
+          15.0,
+          25.0,
+          15.0
+        ]
+      }
+    }
+  },
   "pypsa_ac_dc": {
     "objective": 18441021.477729216,
     "rtol": 1e-09,

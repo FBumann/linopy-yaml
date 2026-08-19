@@ -50,6 +50,7 @@ nav:
           - storage: examples/storage.md
           - transport: examples/transport.md
           - piecewise: examples/piecewise.md
+          - piecewise segment lines: examples/piecewise_lp.md
           - special-ordered sets: examples/sos.md
           - monthly budget: examples/monthly_budget.md
           - multi-period: examples/multi_period.md

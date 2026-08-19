@@ -56,13 +56,16 @@ PORT_REFERENCES: dict[str, dict[str, Any]] = json.loads((PORTS_DIR / 'references
 def bindable_on_this_install(name: str) -> None:
     """Skip the referenced models the bare install cannot bind.
 
-    ``piecewise`` declares ``method: convex``, whose curvature guard needs
-    xarray until issue #27 makes it numpy-only. The guard runs at bind, so
-    ``lps.check`` stays exercised on every install and only the data-touching
-    tests skip.
+    A ``method:`` whose exactness depends on the curve's *shape* — ``convex``
+    and ``lp`` — is guarded against the breakpoint values, and that guard needs
+    xarray until issue #27 makes it numpy-only. Read off the model rather than
+    listed by name, so a third such model is covered the day it lands. The
+    guard runs at bind, so ``lps.check`` stays exercised on every install and
+    only the data-touching tests skip.
     """
-    if name == 'piecewise':
-        pytest.importorskip('xarray', reason="piecewise's convex curvature guard needs xarray until #27")
+    schema = load_model(port_model(name))
+    if any(pw.curvature_required is not None for pw in schema.piecewise.values()):
+        pytest.importorskip('xarray', reason=f"{name}'s curvature guard needs xarray until #27")
 
 
 def port_sources(name: str) -> dict[str, Any]:

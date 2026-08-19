@@ -613,6 +613,11 @@ REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 #: Declared rather than assumed: `test_every_summary_declares_itself` fails on a
 #: page in neither list, so a new summary cannot quietly opt out of the check.
 DIVERGENT = {
+    'piecewise_lp': (
+        'states the identity the method rests on rather than the rows it emits: a convex '
+        'curve is the upper envelope of its own segment lines, which is why bounding the '
+        'cost above every line needs no weights. The rows themselves are in the block below.'
+    ),
     'seasons': (
         'states one boundary row rather than the model: the page is about where a '
         'clause points, so its summary shows the opening equation alone and names '

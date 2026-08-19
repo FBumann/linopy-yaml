@@ -429,6 +429,15 @@ def test_an_emitted_set_may_not_collide_with_a_declared_one():
         schema_of(raw)
 
 
+def test_a_method_this_project_does_not_have_is_refused():
+    """`incremental` is linopy's fourth formulation and not one of ours. The
+    refusal names the formulations that exist rather than picking one."""
+    raw = raw_of(NONCONVEX_YAML)
+    raw['piecewise']['cost_curve']['method'] = 'incremental'
+    with pytest.raises(lps.SchemaError, match='unknown piecewise method'):
+        schema_of(raw)
+
+
 def test_a_validated_model_expands_once():
     """Validation already built the expansion, so asking again returns it.
 

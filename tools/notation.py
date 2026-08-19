@@ -51,6 +51,7 @@ PIECEWISE = {
     'adjacency': ROOT / 'examples' / 'ports' / 'transport_pwl.yaml',
     'sos2': ROOT / 'examples' / 'sos.yaml',
     'convex': ROOT / 'examples' / 'piecewise.yaml',
+    'lp': ROOT / 'examples' / 'piecewise_lp.yaml',
 }
 BEGIN, END = '<!-- notation:begin -->', '<!-- notation:end -->'
 
