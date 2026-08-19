@@ -41,10 +41,17 @@ _MPS_SENSE = {sense: {'<=': 'L', '>=': 'G', '==': 'E'}[sense] for sense in SENSE
 #: thing to keep identical between two writes of one model.
 _MARKER = "    MARKER 'MARKER' '{}'"
 
-#: Nonzeros per column chunk, :data:`~lpspec.relational.sinks.writers.lp_file.EMIT_BUDGET`'s
-#: twin: a chunk's rendered lines live in memory until it is sunk, and the
-#: column-major matrix they are rendered from does not.
-EMIT_BUDGET = 2_000_000
+#: Nonzeros per column chunk — a chunk's rendered lines live in memory until it
+#: is sunk, so this bounds the writer's peak rather than its speed.
+#:
+#: **A quarter of :data:`~lpspec.relational.sinks.writers.lp_file.EMIT_BUDGET`,
+#: because a nonzero costs more text here.** An MPS entry names its column on
+#: every line where an LP term names it once per row, so the same nonzero count
+#: holds several times the bytes and the twin budget bounded nothing: the wider
+#: setting rendered a 2M-entry model in one chunk (#1102). Narrower than this
+#: starts costing wall — the ladder turns at about this width and is 3.4x by
+#: 20,000 — so it is the last value that is free.
+EMIT_BUDGET = 500_000
 
 
 def write_mps_file(model: ModelTables, path: str | Path) -> None:
@@ -94,9 +101,9 @@ def _column_major(model: ModelTables) -> tuple[pl.DataFrame, npt.NDArray[np.int6
     instead of filtering the matrix once per chunk.
 
     The sort is the format's, not a choice: a column's entries have to reach
-    consecutive lines. It is also the whole of this writer's peak — more than
-    loading the model into a solver costs, and well over twice what the LP
-    writer pays (#1102), which is the price of the speed above it.
+    consecutive lines. It is what this writer holds that the LP writer does
+    not, and it is a floor rather than the peak: what dominates is a chunk's
+    rendered lines, which is :data:`EMIT_BUDGET`'s to bound (#1102).
     """
     entries = model.matrix_block(0, model.row_count).sort('col', 'row')
     counts = np.bincount(entries['col'].to_numpy(), minlength=model.column_count)
