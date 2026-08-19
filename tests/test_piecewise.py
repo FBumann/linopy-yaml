@@ -652,7 +652,7 @@ OUT_OF_ORDER_BP = pd.Index([2, 0, 1], name='bp')
 
 
 @pytest.mark.xfail(
-    reason='the guard walks the frame in its row order, where the model walks the dimension in its own',
+    reason='#1122 — the guard walks the frame in its row order, where the model walks the dimension in its own',
     raises=PiecewiseExpansionError,
     strict=True,
 )
@@ -696,7 +696,7 @@ def test_the_eager_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp
         lpspec_linopy.build(path, {**nonconvex_inputs, 'bp': pd.Index([2, 1, 0], name='bp')})
 
 
-@pytest.mark.xfail(reason='the guard never reads the index, so it cannot see the order it sets', strict=True)
+@pytest.mark.xfail(reason='#1122 — the guard never reads the index, so it cannot see the order it sets', strict=True)
 def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
     """The other half of the same blindness, and this one builds a wrong model.
 

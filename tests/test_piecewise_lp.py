@@ -269,7 +269,9 @@ def test_a_one_breakpoint_curve_is_that_point_under_the_weight_methods(method):
         )
 
 
-@pytest.mark.xfail(reason='the first breakpoint has no chord, so a curve of one leaves the link unbounded', strict=True)
+@pytest.mark.xfail(
+    reason='#1121 — the first breakpoint has no chord, so a curve of one leaves the link unbounded', strict=True
+)
 def test_a_one_breakpoint_curve_still_pins_the_bounded_link():
     """A curve of one point is a point, and every other method puts the link on it.
 
@@ -371,7 +373,7 @@ def test_each_curve_of_a_frame_is_checked_on_its_own():
     assert str(concave) in str(refusal.value), 'the refusal quotes the curve that bends the wrong way'
 
 
-@pytest.mark.xfail(reason='the guard reads what is laid out in process, and a path is not', strict=True)
+@pytest.mark.xfail(reason='#1123 — the guard reads what is laid out in process, and a path is not', strict=True)
 def test_a_curve_bound_to_a_path_is_checked_like_one_in_memory(tmp_path):
     """The same numbers, and the check turns on how they were handed over.
 
@@ -390,7 +392,7 @@ def test_a_curve_bound_to_a_path_is_checked_like_one_in_memory(tmp_path):
         lps.build(pyyaml.safe_load(MODEL), sources)
 
 
-@pytest.mark.xfail(reason='the tolerance is scaled by y where the quantity it bounds is a slope', strict=True)
+@pytest.mark.xfail(reason='#1124 — the tolerance is scaled by y where the quantity it bounds is a slope', strict=True)
 def test_a_concave_curve_is_refused_whatever_the_breakpoints_are_measured_in():
     """The guard's tolerance has to be in the units of what it compares.
 
