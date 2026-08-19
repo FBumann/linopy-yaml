@@ -90,9 +90,13 @@ jobs:
         if: steps.scope.outputs.inert != 'true'
         run: |
           cat > "$RUNNER_TEMP/install-tex.sh" <<SH
-          apt-get update -qq &&
-            apt-get install -y --no-install-recommends \
-              texlive-latex-base texlive-fonts-recommended
+          set -x
+          for attempt in 1 2 3; do
+            timeout 120 apt-get update -qq && break
+            echo "apt-get update did not finish in 120s (attempt \$attempt of 3)"
+          done
+          apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+            texlive-latex-base texlive-fonts-recommended
           echo \$? > "$RUNNER_TEMP/tex-status.part"
           mv "$RUNNER_TEMP/tex-status.part" "$RUNNER_TEMP/tex-status"
           SH
@@ -130,10 +134,19 @@ jobs:
       # The install started before the suite; this is where it is waited on,
       # so a failure reports apt's exit status and log rather than a missing
       # `pdflatex` further down.
+      #
+      # The budget is generous because it is not a performance number: the
+      # install overlaps the suite, so every second here is one apt was going
+      # to take anyway, and the only thing a tight budget buys is a red run
+      # that has to be re-run. It has to cover the worst case the script above
+      # allows — three 120s update attempts and the install itself — with room
+      # over, because the runner's apt mirror is occasionally slow rather than
+      # broken (2026-08-19: four runs across three branches, `main` included,
+      # died on the old 300s).
       - name: Collect the TeX install
         if: steps.scope.outputs.inert != 'true'
         run: |
-          for _ in $(seq 300); do
+          for _ in $(seq 900); do
             if [ -f "$RUNNER_TEMP/tex-status" ]; then
               status=$(cat "$RUNNER_TEMP/tex-status")
               [ "$status" = 0 ] && exit 0
@@ -143,7 +156,7 @@ jobs:
             fi
             sleep 1
           done
-          echo 'the TeX install had not finished 300s after the suite; its log:'
+          echo 'the TeX install had not finished 900s after the suite; its log:'
           cat "$RUNNER_TEMP/tex-install.log"
           exit 1
 
