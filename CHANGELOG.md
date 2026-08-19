@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.207](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.206...v0.0.1-alpha.207) (2026-08-19)
+
+
+### Performance
+
+* **ci:** the LaTeX gate stops costing a minute a run ([#1075](https://github.com/fluxopt/lpspec/issues/1075)) ([661e7e0](https://github.com/fluxopt/lpspec/commit/661e7e0e218a3e8e41d5bab04d50a6d65dec747a))
+
 ## [0.0.1-alpha.206](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.205...v0.0.1-alpha.206) (2026-08-19)
 
 
