@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.1-alpha.220](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.219...v0.0.1-alpha.220) (2026-08-19)
+
+
+### Features
+
+* **data:** a parameter's dims arrive in columns, never in a pandas index ([#1088](https://github.com/fluxopt/lpspec/issues/1088)) ([d06a601](https://github.com/fluxopt/lpspec/commit/d06a601c49468e842e980215a8f60168c785b161))
+
+
+### Refactoring
+
+* **data:** both lanes read their data through one front door ([#1076](https://github.com/fluxopt/lpspec/issues/1076)) ([8923df9](https://github.com/fluxopt/lpspec/commit/8923df987fc91f77bc4442cd6da85a480b505046))
+* **linopy:** the builder groups by what it translates ([#1092](https://github.com/fluxopt/lpspec/issues/1092)) ([380cdbe](https://github.com/fluxopt/lpspec/commit/380cdbeefb1b26ab49bddcae47654ffc5ba8ee67))
+
 ## [0.0.1-alpha.219](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.218...v0.0.1-alpha.219) (2026-08-19)
 
 
