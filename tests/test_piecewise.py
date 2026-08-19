@@ -902,17 +902,17 @@ def test_a_masked_breakpoint_declares_no_segment_binary(short_curve_inputs):
     [
         pytest.param(
             {('A', 0): True, ('A', 1): True, ('A', 2): True, ('B', 0): True, ('B', 1): False, ('B', 2): True},
-            'not a prefix',
+            'not consecutive',
             id='a-gap-in-the-mask',
         ),
         pytest.param(
             {('A', 0): True, ('A', 1): True, ('A', 2): True, ('B', 0): False, ('B', 1): False, ('B', 2): False},
-            'not a prefix',
+            'not consecutive',
             id='a-curve-of-no-points-at-all',
         ),
     ],
 )
-def test_a_mask_that_is_not_a_prefix_is_refused(short_curve_inputs, present, match):
+def test_a_mask_with_a_gap_in_it_is_refused(short_curve_inputs, present, match):
     """The emitted rows read the mask as a length, so a gap builds a different curve.
 
     The chord joins a breakpoint to the one before it and the upper domain row
@@ -984,6 +984,77 @@ def test_values_the_mask_leaves_out_are_left_alone(short_curve_inputs):
 def test_a_mask_the_block_cannot_use_is_a_load_error(patch, match):
     with pytest.raises(PiecewiseExpansionError, match=match):
         lps.check(override(raw_of(SHORT_CURVE), **patch))
+
+
+@pytest.mark.parametrize('method', ['adjacency', 'sos2', 'convex', 'lp'])
+def test_points_may_name_the_curve_that_already_says_how_long_it_is(short_curve_inputs, method):
+    """`points: bp_x` — no mask table, because a length is a fact of the curve.
+
+    What the second table was for is still done: every other link is checked
+    against the one named, so a row missing from `bp_y` is refused. What is
+    given up is a row missing from `bp_x` itself, which is the parameter the
+    file nominated as the length.
+    """
+    raw = override(
+        raw_of(SHORT_CURVE), **{'piecewise.cost_curve.points': 'bp_x', 'piecewise.cost_curve.method': method}
+    )
+    del raw['parameters']['bp_present']
+    if method == 'lp':
+        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+    data = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
+
+    assert lps.solve(raw, data).objective == pytest.approx(155.0), 'the same curve, one table fewer'
+
+    thin = {k: v for k, v in A_AND_SHORT_B['y'].items() if k != ('A', 2)}
+    with pytest.raises(DataError, match=r"'bp_y' has no value at"):
+        lps.solve(raw, {**data, 'bp_y': curve_frame(thin)})
+
+
+def test_a_nominated_curve_is_read_for_its_rows_not_its_values(short_curve_inputs):
+    """A breakpoint at zero is a breakpoint, so the mask cannot be the values' truthiness."""
+    raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.points': 'bp_x'})
+    del raw['parameters']['bp_present']
+    data = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
+
+    result = lps.solve(raw, data)
+
+    at_zero = [row for row in result.primal('cost_curve_lam').to_dicts() if (row['generator'], row['bp']) == ('A', 0)]
+    assert at_zero, "A's curve starts at x = 0, and that breakpoint carries a weight like any other"
+
+
+def test_a_curve_may_start_anywhere_on_the_axis(short_curve_inputs):
+    """Contiguous, not a prefix: what the rows need is a predecessor, not the axis head.
+
+    `lp` is the method that used to need the axis' own first and last
+    breakpoint; it reads each curve's own now, so a curve numbered from 1 is
+    the same curve one label along.
+    """
+    shifted_x = {('A', 1): 0.0, ('A', 2): 10.0, ('B', 1): 10.0, ('B', 2): 20.0}
+    shifted_y = {('A', 1): 0.0, ('A', 2): 50.0, ('B', 1): 100.0, ('B', 2): 130.0}
+    raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.points': 'bp_x', 'piecewise.cost_curve.method': 'lp'})
+    del raw['parameters']['bp_present']
+    raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+    data = {
+        **{k: v for k, v in short_curve_inputs.items() if k != 'bp_present'},
+        'load': pl.DataFrame({'value': [15.0]}),
+        'bp_x': curve_frame(shifted_x),
+        'bp_y': curve_frame(shifted_y),
+    }
+
+    assert lps.solve(raw, data).objective == pytest.approx(115.0), (
+        'B runs at 15 on its own domain and A stays off — a curve one label along is the same curve'
+    )
+
+
+def test_a_curve_with_a_gap_is_still_refused(short_curve_inputs):
+    """Contiguity is what the chord row needs; the axis head was never the point."""
+    gapped = {('A', 0): 0.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0}
+    raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.points': 'bp_x'})
+    del raw['parameters']['bp_present']
+    data = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
+
+    with pytest.raises(DataError, match='not consecutive'):
+        tidy_sources(schema_of(raw), {**data, 'bp_x': curve_frame(gapped)})
 
 
 # ---------------------------------------------------------------------------

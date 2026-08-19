@@ -234,21 +234,21 @@ def curve_with_a_hole_message(block: str, name: str, shown: str, expected: int, 
     )
 
 
-def curve_mask_is_not_a_prefix_message(block: str, points: str, over: str, shown: str) -> str:
-    """A ``points:`` mask with a gap in it — one wording, both lanes.
+def curve_mask_is_not_contiguous_message(block: str, points: str, over: str, shown: str) -> str:
+    """A curve whose breakpoints are not consecutive — one wording, both lanes.
 
-    The mask says how far a curve runs, not which breakpoints it picks, and the
-    emitted rows read it that way twice: a chord joins a breakpoint to the one
-    before it, and the upper domain row is written where the mask stops. A gap
-    would leave a chord joining across it and a domain row inside the curve,
-    both of which build and neither of which says what the file does.
+    Where a curve *starts* does not matter: every row that reads the mask asks
+    for a predecessor or for an end, and all of those are the curve's own. A
+    gap matters twice over — a chord would join across it, and a domain row
+    would sit inside the curve rather than at its edge. Both build, and neither
+    says what the file does.
     """
     at = f' at {shown}' if shown else ''
     return (
-        f"piecewise '{block}': the points mask '{points}' is not a prefix of '{over}'{at} — it "
-        f'marks a breakpoint after one it leaves out, or marks none at all. A curve runs from '
-        f'the first breakpoint to its own last one.\n'
-        f"  Mark a prefix   true up to each curve's last breakpoint, false after it\n"
+        f"piecewise '{block}': the breakpoints '{points}' marks along '{over}'{at} are not "
+        f'consecutive — there is a gap in them, or nothing is marked at all. A curve may sit '
+        f'anywhere along the axis, on breakpoints that follow one another.\n'
+        f'  Close the gap   a curve is its points and the ones between them\n'
         f'  A curve of none is not a curve: leave the block to the members that have one'
     )
 
