@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.218](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.217...v0.0.1-alpha.218) (2026-08-19)
+
+
+### Features
+
+* **solver:** a model arrives on the solver its author licences ([#1107](https://github.com/fluxopt/lpspec/issues/1107)) ([262872a](https://github.com/fluxopt/lpspec/commit/262872a9eb6eb836254908ff63e79ae9c4d44010))
+
 ## [0.0.1-alpha.217](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.216...v0.0.1-alpha.217) (2026-08-19)
 
 
