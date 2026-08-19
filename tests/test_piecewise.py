@@ -641,6 +641,79 @@ def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex
 
 
 # ---------------------------------------------------------------------------
+# the data guard reads the curve in the order the model builds it
+# ---------------------------------------------------------------------------
+
+
+#: `nonconvex_inputs`' three breakpoints, labelled the same and written in
+#: another order. A tidy table carries its coordinates in its labels, so this
+#: is the same curve — the engine joins it by label and reaches one model.
+OUT_OF_ORDER_BP = pd.Index([2, 0, 1], name='bp')
+
+
+@pytest.mark.xfail(
+    reason='the guard walks the frame in its row order, where the model walks the dimension in its own',
+    raises=PiecewiseExpansionError,
+    strict=True,
+)
+def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
+    """A row order is not a breakpoint order, and only the second is the model's.
+
+    Rows reach a lane in whatever order the join or the group-by that made
+    them left behind; what orders the breakpoints is the `bp` index, which is
+    ascending here. So this table is the fixture's curve, and refusing it
+    refuses a model that builds and solves correctly on the eager lane, where
+    the loader lays the values out on the index before the guard reads them.
+    """
+    shuffled = {
+        **nonconvex_inputs,
+        'bp_x': pd.Series([100.0, 0.0, 40.0], index=OUT_OF_ORDER_BP),
+        'bp_y': pd.Series([55.0, 0.0, 30.0], index=OUT_OF_ORDER_BP),
+    }
+
+    tidy_sources(schema_of(CONVEX_MODEL), shuffled)
+
+
+def test_the_eager_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp_path):
+    """Which of the two lanes is right, pinned — the loader lays the values out first.
+
+    So the order the guard walks is the dimension's, and the row order the
+    table happened to arrive in is nothing: the shuffled curve binds and the
+    backwards index is refused. Hard rule 3 says the streaming lane owes the
+    same two answers.
+    """
+    path = tmp_path / 'convex.yaml'
+    path.write_text(pyyaml.safe_dump(CONVEX_MODEL))
+    shuffled = {
+        **nonconvex_inputs,
+        'bp_x': pd.Series([100.0, 0.0, 40.0], index=OUT_OF_ORDER_BP),
+        'bp_y': pd.Series([55.0, 0.0, 30.0], index=OUT_OF_ORDER_BP),
+    }
+
+    lpspec_linopy.build(path, shuffled)  # a row order is not a breakpoint order
+
+    with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
+        lpspec_linopy.build(path, {**nonconvex_inputs, 'bp': pd.Index([2, 1, 0], name='bp')})
+
+
+@pytest.mark.xfail(reason='the guard never reads the index, so it cannot see the order it sets', strict=True)
+def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
+    """The other half of the same blindness, and this one builds a wrong model.
+
+    A dimension's index is its order — `shift` walks it and `index(bp, 0)`
+    names its first label — so an index written `[2, 1, 0]` puts the fixture's
+    breakpoints at x = 100, 40, 0. `adjacency` then pairs segments that are
+    not neighbours, and `lp` writes its chords against a negative run. The
+    eager lane refuses exactly this, having laid the values out on the index
+    first.
+    """
+    backwards = {**nonconvex_inputs, 'bp': pd.Index([2, 1, 0], name='bp')}
+
+    with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
+        tidy_sources(schema_of(CONVEX_MODEL), backwards)
+
+
+# ---------------------------------------------------------------------------
 # the data guard: a curve carries a value at every breakpoint it is built over
 # ---------------------------------------------------------------------------
 

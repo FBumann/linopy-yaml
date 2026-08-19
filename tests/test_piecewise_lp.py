@@ -83,6 +83,50 @@ objective:
   description: total operating cost
 """
 
+PER_UNIT_MODEL = """
+description: the same curve, one per unit — the shape a corpus of cost curves arrives in
+
+dimensions:
+  snapshot: {dtype: int, description: dispatch periods}
+  unit: {dtype: str, description: dispatchable units}
+  bp: {dtype: int, description: breakpoints of the cost curve}
+
+parameters:
+  load: {dims: [snapshot], description: demand to be met}
+  bp_x: {dims: [unit, bp], description: 'breakpoint output levels, one curve per unit'}
+  bp_y: {dims: [unit, bp], description: 'cost at each breakpoint, one curve per unit'}
+
+variables:
+  p:
+    foreach: [snapshot, unit]
+    bounds: {lower: 0, upper: 100}
+    description: dispatched power
+  op_cost:
+    foreach: [snapshot, unit]
+    bounds: {lower: 0}
+    description: operating cost, read off the unit's own curve
+
+piecewise:
+  cost_curve:
+    description: each unit's cost bounded below by its own segment lines
+    over: bp
+    links:
+      - [p, bp_x]
+      - [op_cost, bp_y, '>=']
+    method: lp
+
+constraints:
+  balance:
+    foreach: [snapshot]
+    expression: sum(p, over=unit) == load
+    description: the fleet meets demand
+
+objective:
+  sense: minimize
+  expression: sum(op_cost)
+  description: total operating cost
+"""
+
 #: Slopes 1, 2 then 3 — convex, and strictly increasing in x.
 BREAKPOINTS_X = [0.0, 10.0, 20.0, 30.0]
 BREAKPOINTS_Y = [0.0, 10.0, 30.0, 60.0]
@@ -176,6 +220,74 @@ def test_the_domain_rows_hold_the_output_inside_the_curve():
         assert not result.is_ok, 'a load past the last breakpoint is outside the curve, not on its last slope'
 
 
+def test_the_bounded_link_may_be_written_first():
+    """Which link is the curve's x is the sign, not the position in `links:`.
+
+    `PiecewiseBlock.curve` reads the pinned link as x wherever it sits, so the
+    two spellings of one block are one model — and the chord rows have to come
+    out against `bp_x` either way round.
+    """
+    swapped = pyyaml.safe_load(MODEL)
+    swapped['piecewise']['cost_curve']['links'] = [['op_cost', 'bp_y', '>='], ['p', 'bp_x']]
+
+    with lps.solve(swapped, _relational()) as result:
+        assert result.objective == pytest.approx(sum(_on_the_curve(x) for x in LOAD), rel=RTOL), (
+            'the bounded link written first is the same curve, not a curve with the axes swapped'
+        )
+
+
+def test_a_convex_curve_that_falls_is_still_convex():
+    """Convexity is the slopes rising, which says nothing about their sign.
+
+    A curve of falling cost — the returns-to-scale shape — has slopes -3, -2,
+    -1, so it is convex and `>=` is exact on it. Nothing in the chord row's
+    derivation assumes a rise, and the run it is multiplied through by is
+    positive here as everywhere.
+    """
+    falling = [60.0, 30.0, 10.0, 0.0]
+    loads = [0.0, 10.0, 30.0]
+    with lps.solve(pyyaml.safe_load(MODEL), _relational(load=loads, ys=falling)) as result:
+        assert result.objective == pytest.approx(60.0 + 30.0 + 0.0, rel=RTOL), (
+            'each load sits on a breakpoint of a falling convex curve, so the total is read off it'
+        )
+
+
+@pytest.mark.parametrize('method', ['adjacency', 'sos2', 'convex'])
+def test_a_one_breakpoint_curve_is_that_point_under_the_weight_methods(method):
+    """What the answer on a degenerate curve is, taken from the three that agree.
+
+    One weight, forced to 1 by the convexity row, puts both links on the only
+    breakpoint there is. This is the number the case below asks `lp` for.
+    """
+    point = pyyaml.safe_load(MODEL)
+    point['piecewise']['cost_curve']['method'] = method
+    point['piecewise']['cost_curve']['links'] = [['p', 'bp_x'], ['op_cost', 'bp_y']]
+
+    with lps.solve(point, _relational(load=[10.0, 10.0, 10.0], xs=[10.0], ys=[25.0])) as result:
+        assert result.objective == pytest.approx(3 * 25.0, rel=RTOL), (
+            f'method: {method} pins the cost to the one breakpoint the curve has'
+        )
+
+
+@pytest.mark.xfail(reason='the first breakpoint has no chord, so a curve of one leaves the link unbounded', strict=True)
+def test_a_one_breakpoint_curve_still_pins_the_bounded_link():
+    """A curve of one point is a point, and every other method puts the link on it.
+
+    The chord row is written at the later of the two breakpoints it joins, so
+    a single breakpoint writes none — and the two domain rows pin only the
+    *pinned* link. The bounded one is left to its own bound, which under
+    minimisation is 0 against a curve that says 25. `adjacency`, `sos2` and
+    `convex` all reach 75 on this data; refusing the block would be the other
+    remedy, but silently dropping the curve is not one.
+    """
+    point = _relational(load=[10.0, 10.0, 10.0], xs=[10.0], ys=[25.0])
+
+    with lps.solve(pyyaml.safe_load(MODEL), point) as result:
+        assert result.objective == pytest.approx(3 * 25.0, rel=RTOL), (
+            'the cost sits on the one point the curve has, as it does under every other method'
+        )
+
+
 # ---------------------------------------------------------------------------
 # what it costs
 # ---------------------------------------------------------------------------
@@ -242,6 +354,63 @@ def test_breakpoints_that_do_not_increase_are_refused():
         lps.solve(model, _relational(xs=[0.0, 10.0, 10.0, 30.0]))
 
 
+def test_each_curve_of_a_frame_is_checked_on_its_own():
+    """A block carries one curve per frame row, and one bad one is enough.
+
+    The guard broadcasts over the dims the values carry and walks the
+    breakpoints of each row, so a concave curve hidden among convex ones is
+    refused on its own account — which is the shape a per-unit corpus arrives
+    in.
+    """
+    convex, concave = [0.0, 10.0, 30.0, 60.0], [0.0, 30.0, 50.0, 60.0]
+
+    lps.build(pyyaml.safe_load(PER_UNIT_MODEL), _per_unit(convex, convex)).close()  # every curve convex, nothing to say
+
+    with pytest.raises(PiecewiseExpansionError, match='is not convex') as refusal:
+        lps.build(pyyaml.safe_load(PER_UNIT_MODEL), _per_unit(convex, concave))
+    assert str(concave) in str(refusal.value), 'the refusal quotes the curve that bends the wrong way'
+
+
+@pytest.mark.xfail(reason='the guard reads what is laid out in process, and a path is not', strict=True)
+def test_a_curve_bound_to_a_path_is_checked_like_one_in_memory(tmp_path):
+    """The same numbers, and the check turns on how they were handed over.
+
+    A concave curve under `>=` is the silent case the guard exists for, and
+    written to parquet it reaches the solver: on this data the answer comes
+    back optimal at 155 where the curve says 110. `validate_curve_extent`
+    scans a path for the same reason and pays two columns of I/O for it.
+    """
+    concave = [0.0, 30.0, 50.0, 60.0]
+    sources = _relational(ys=concave)
+    for name in ('bp_x', 'bp_y'):
+        sources[name].write_parquet(tmp_path / f'{name}.parquet')
+        sources[name] = tmp_path / f'{name}.parquet'
+
+    with pytest.raises(PiecewiseExpansionError, match='exact only for a convex curve'):
+        lps.build(pyyaml.safe_load(MODEL), sources)
+
+
+@pytest.mark.xfail(reason='the tolerance is scaled by y where the quantity it bounds is a slope', strict=True)
+def test_a_concave_curve_is_refused_whatever_the_breakpoints_are_measured_in():
+    """The guard's tolerance has to be in the units of what it compares.
+
+    `diff(diff(ys) / dx)` is a difference of slopes — y per x, per x — and it
+    is judged against `1e-9 * max(|y|)`, which carries no x at all. Stretch
+    the same curve along x and the second difference shrinks under a tolerance
+    that does not, so a curve concave by 3000 cost units passes: `lp` then
+    returns 4502000 where the curve says 4497500, optimal and wrong, which is
+    the one outcome this guard is here to prevent.
+    """
+    xs = [0.0, 1e6, 2e6, 3e6]
+    concave = [0.0, 1e6, 2e6 - 1000.0, 3e6 - 3000.0]
+
+    stretched = pyyaml.safe_load(MODEL)
+    stretched['variables']['p']['bounds']['upper'] = 3e6
+
+    with pytest.raises(PiecewiseExpansionError, match='exact only for a convex curve'):
+        lps.build(stretched, _relational(load=[5e5, 1.5e6, 2.5e6], xs=xs, ys=concave))
+
+
 # ---------------------------------------------------------------------------
 # the shape lp needs, refused at load
 # ---------------------------------------------------------------------------
@@ -291,4 +460,28 @@ def _relational(load=None, xs=None, ys=None):
         'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': LOAD if load is None else load}),
         'bp_x': pl.DataFrame({'bp': list(range(len(xs))), 'value': xs}),
         'bp_y': pl.DataFrame({'bp': list(range(len(ys))), 'value': ys}),
+    }
+
+
+def _per_unit(first, second):
+    units = ['a', 'b']
+    return {
+        'snapshot': pl.DataFrame({'snapshot': SNAPSHOTS}),
+        'unit': pl.DataFrame({'unit': units}),
+        'bp': pl.DataFrame({'bp': list(range(len(BREAKPOINTS_X)))}),
+        'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': LOAD}),
+        'bp_x': pl.DataFrame(
+            {
+                'unit': [u for u in units for _ in BREAKPOINTS_X],
+                'bp': list(range(len(BREAKPOINTS_X))) * 2,
+                'value': BREAKPOINTS_X * 2,
+            }
+        ),
+        'bp_y': pl.DataFrame(
+            {
+                'unit': [u for u in units for _ in BREAKPOINTS_X],
+                'bp': list(range(len(BREAKPOINTS_X))) * 2,
+                'value': [*first, *second],
+            }
+        ),
     }
