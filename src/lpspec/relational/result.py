@@ -119,6 +119,63 @@ def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) ->
 
 
 @dataclass(frozen=True)
+class ConstraintRow:
+    """One built constraint row, spelled back out — what :meth:`~lpspec.api.BoundModel.row` returns.
+
+    The row a model actually built at one coordinate: every term with its
+    coefficient, and the comparison and right-hand side it was built against.
+    Read off the built model, so it needs no solve — and it is the *built*
+    row, after ``where`` masking and after any term whose variable was absent
+    dropped out, which is exactly what makes it worth reading when a model
+    says something other than what its author wrote.
+
+    Printing it gives the row as one line of math, which is what reading a row
+    usually means; :attr:`terms` is the same content as a frame, for the row
+    too wide to read and for anything that filters or joins.
+
+    Attributes:
+        name: The constraint this row belongs to.
+        coordinate: Where in that declaration it sits.
+        terms: ``(variable, coordinate, coefficient)``, one row per term, in
+            the solver's own column order. ``coordinate`` is the term's labels
+            in its variable's dim order — what goes in the brackets — rendered
+            rather than spread across dim columns, since two terms of one row
+            may come from variables with different dims and so cannot share
+            them.
+        sense: ``<=``, ``>=`` or ``==``.
+        rhs: What the left-hand side is compared against.
+    """
+
+    name: str
+    coordinate: Mapping[str, object]
+    terms: pl.DataFrame
+    sense: str
+    rhs: float
+
+    #: How many terms print before the line is cut. A row wider than this is
+    #: one to read as :attr:`terms`, and a line that scrolled off the screen
+    #: would have answered nothing.
+    display_terms = 12
+
+    def __str__(self) -> str:
+        """The row as one line: ``balance[snapshot=1]: +1 p[…] + 50 p[…] >= 60``.
+
+        linopy's shape for the same job, since a reader arriving from there
+        should not have to learn a second way to read a constraint.
+        """
+        shown = self.terms.head(self.display_terms)
+        rendered = ' '.join(
+            f'{coefficient:+g} {variable}[{coordinate}]' for variable, coordinate, coefficient in shown.iter_rows()
+        )
+        if self.terms.height > self.display_terms:
+            rendered += f' … ({self.terms.height - self.display_terms} more terms)'
+        if not self.terms.height:
+            rendered = '(no terms)'
+        where = ', '.join(f'{dim}={label}' for dim, label in self.coordinate.items())
+        return f'{self.name}[{where}]: {rendered} {self.sense} {self.rhs:g}'
+
+
+@dataclass(frozen=True)
 class Diagnostics:
     """What a build and its solves did that the answer does not show.
 

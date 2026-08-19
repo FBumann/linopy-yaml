@@ -33,12 +33,13 @@ from lpspec.errors import (
     null_bounds_message,
     sparse_divisor_message,
     uncovered_constant_message,
+    unknown_name_message,
 )
 from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
 from lpspec.relational.engines.polars.compiler import PolarsCompiler, Presence, TermFragment
-from lpspec.relational.result import KEEPS, Diagnostics, Keep, Result, unknown_keep_message
+from lpspec.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
 from lpspec.relational.sinks.tables import SENSE
 
 if TYPE_CHECKING:
@@ -673,6 +674,111 @@ class PolarsEngine:
             row_count=self._n_rows,
             objective_sense=self._obj_sense,
             objective_constant=self._obj_const,
+        )
+
+    def row(self, name: str, coordinate: Mapping[str, Any]) -> ConstraintRow:
+        """One built constraint row, spelled back out. See :meth:`~lpspec.api.BoundModel.row`.
+
+        Three lookups against frames the build already keeps, and no scan of
+        the matrix: the constraint's own coordinate frame carries the global
+        row index, ``row_starts`` says where that row's entries lie, and each
+        variable's frame carries the global column index its terms point at.
+        So the cost is the row's own width rather than the model's.
+        """
+        if self._matrix is None or self._rows is None:
+            raise LpspecError(
+                f"there is no built model to read '{name}' out of: it was closed, or a rebind raised "
+                'and released it. Build it again — rebind() with data it can bind, or build() from '
+                'the start.'
+            )
+        if name not in self._constraints:
+            raise KeyError(unknown_name_message('constraint', name, sorted(self._constraints)))
+
+        at = self._row_index(name, coordinate)
+        entries = self._matrix.slice(
+            int(self._matrix_starts[at]), int(self._matrix_starts[at + 1] - self._matrix_starts[at])
+        )
+        stated = self._rows.lazy().filter(pl.col('row') == at).collect()
+        return ConstraintRow(
+            name=name,
+            coordinate=dict(coordinate),
+            terms=self._named_terms(entries),
+            sense=str(stated.item(0, 'sense')) if stated.height else '>=',
+            rhs=float(stated.item(0, 'rhs')) if stated.height else -math.inf,
+        )
+
+    def _row_index(self, name: str, coordinate: Mapping[str, Any]) -> int:
+        """The global row index constraint *name* built at *coordinate*.
+
+        The coordinate has to name **every** dim of the declaration: a partial
+        one matches a set of rows, and a verb that quietly answered about the
+        first of them would be reporting one row as if it were the block.
+
+        Raises:
+            LpspecError: The coordinate names the wrong dims, or names dims
+                correctly and matches no row the build produced — which is a
+                row masked out by ``where`` or dropped for having no terms,
+                and is itself the answer to why a model says nothing here.
+        """
+        frame = self._constraints[name]
+        dims = tuple(d for d in frame.collect_schema().names() if d != 'row')
+        if set(coordinate) != set(dims):
+            raise LpspecError(
+                f"constraint '{name}' is declared over {list(dims)}, and a row is read at all of them "
+                f'— got {sorted(coordinate)}. A partial coordinate names a set of rows, not one.'
+            )
+        found = frame.filter([pl.col(d) == v for d, v in coordinate.items()]).collect() if dims else frame.collect()
+        if not found.height:
+            raise LpspecError(
+                f"constraint '{name}' built no row at {dict(coordinate)}. Either a `where` masked the "
+                'coordinate out, every term it had was absent, or the labels are not ones the '
+                'dimension holds — and which of those it is, is what diagnostics() reports as an '
+                'omission.'
+            )
+        return int(found.item(0, 'row'))
+
+    def _named_terms(self, entries: pl.DataFrame) -> pl.DataFrame:
+        """``(variable, coordinate, coefficient)`` for one row's matrix entries.
+
+        A column index is global and each declaration owns a contiguous run of
+        them, so which variable a term belongs to is a range test rather than
+        a join against the whole column space — and only the declarations this
+        row actually touches are read at all.
+
+        ``coordinate`` is rendered rather than spread across dim columns
+        because one row's terms may come from variables with *different* dims,
+        which no single frame schema holds. It carries the **labels alone**,
+        in the declaration's dim order — linopy's ``p[1, wind]`` bracket, so a
+        reader arriving from there reads a term the way they already do, and
+        so a printed row does not repeat a dim name once per term.
+        """
+        wanted = entries['col'].to_numpy()
+        named = []
+        for variable, block in self._variable_blocks.items():
+            inside = wanted[(wanted >= block.start) & (wanted < block.start + block.height)]
+            if not inside.size:
+                continue
+            frame = self._variables[variable]
+            dims = [d for d in frame.collect_schema().names() if d != 'var_label']
+            rendered = pl.concat_str([pl.col(d).cast(pl.String) for d in dims], separator=', ') if dims else pl.lit('')
+            named.append(
+                frame.filter(pl.col('var_label').is_in(inside))
+                .select(
+                    pl.col('var_label').alias('col'),
+                    pl.lit(variable).alias('variable'),
+                    rendered.alias('coordinate'),
+                )
+                .collect()
+            )
+        labelled = (
+            pl.concat(named)
+            if named
+            else pl.DataFrame(schema={'col': pl.Int64, 'variable': pl.String, 'coordinate': pl.String})
+        )
+        return (
+            entries.with_columns(pl.col('col').cast(pl.Int64))
+            .join(labelled.with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left')
+            .select('variable', 'coordinate', pl.col('coeff').alias('coefficient'))
         )
 
     def write(self, path: str | Path) -> None:

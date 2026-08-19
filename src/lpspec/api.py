@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from lpspec.language.model import Model
-    from lpspec.relational.result import Diagnostics, Keep, Result
+    from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a
 #: consumer that binds no data (``typeset``) must be able to reach it without
@@ -197,6 +197,41 @@ class BoundModel:
             ValueError: A suffix nothing writes.
         """
         self._engine.write(path)
+
+    def row(self, name: str, **coordinate: Any) -> ConstraintRow:
+        """One built constraint row at one coordinate — its terms, sense and right-hand side.
+
+        The verb for *this row is wrong and I do not know why*. ``to_latex``
+        and its siblings render the model as math before any data, and
+        :meth:`~lpspec.relational.result.Result.dual` gives a row's number
+        without its terms; this gives the row the build actually produced, at
+        the coordinate you name.
+
+        Reads the **built** model and needs no solve, so it answers on a model
+        that never reached a solver — and it is the built row, so a term whose
+        variable was absent is missing from it and a row a ``where`` masked out
+        is not there at all. That is the point: it shows what the model says
+        rather than what the file appears to say.
+
+        Args:
+            name: A declared constraint.
+            coordinate: One label per dim of that declaration, all of them —
+                a partial coordinate names a set of rows rather than one.
+
+        Returns:
+            The terms as ``(variable, coordinate, coefficient)``, beside the
+            comparison and the right-hand side.
+
+        Raises:
+            KeyError: No constraint is called *name*.
+            LpspecError: The coordinate names the wrong dims, matches no row
+                the build produced, or the model has been closed.
+
+        Example:
+            >>> print(bound.row('balance', snapshot=1))  # doctest: +SKIP
+            balance[snapshot=1]: +1 p[1, wind] +50 p[1, gas] >= 60
+        """
+        return self._engine.row(name, coordinate)
 
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show.

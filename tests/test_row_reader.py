@@ -1,0 +1,213 @@
+"""``bound.row`` — the verb for *this row is wrong and I do not know why*.
+
+`typeset` renders the model as math before any data, and `Result.dual` gives a
+row's number without its terms. Neither answers what a named row at a named
+coordinate actually says, which is the question a model with a hundred thousand
+rows is debugged by.
+
+The claim that makes it worth having is that it reads the **built** row and not
+the declared one: a coefficient that data scaled, a term whose variable was
+absent, a row a ``where`` removed. Every test here is a case where the file and
+the built row differ, because a reader that only agrees with the file would be
+`typeset` with extra steps.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+import polars as pl
+import pytest
+
+import lpspec as lps
+from lpspec.errors import LpspecError
+from tests.conftest import DISPATCH_MODEL, override
+
+if TYPE_CHECKING:
+    from lpspec.relational.result import ConstraintRow
+
+DATA = {
+    'p_max': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [40.0, 200.0]}),
+    'cost': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [1.0, 50.0]}),
+    'snapshot': pl.DataFrame({'snapshot': [0, 1, 2, 3]}),
+    'load': pl.DataFrame({'snapshot': [0, 1, 2, 3], 'value': [80.0, 60.0, 100.0, 45.0]}),
+}
+
+#: Two variables in one row, and a coefficient that only data knows — the two
+#: things a rendered coordinate and a built read exist for.
+COMMITMENT: dict[str, Any] = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}, 'g': {'values': ['wind', 'gas']}},
+    'parameters': {'p_max': {'dims': ['g']}, 'load': {'dims': ['t']}},
+    'variables': {
+        'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}},
+        'u': {'foreach': ['t', 'g'], 'domain': 'binary'},
+    },
+    'constraints': {
+        'commit': {'foreach': ['t', 'g'], 'expression': 'p <= p_max * u'},
+        'balance': {'foreach': ['t'], 'expression': 'sum(p, over=g) == load'},
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+}
+
+COMMITMENT_DATA = {
+    'p_max': pl.DataFrame({'g': ['wind', 'gas'], 'value': [40.0, 200.0]}),
+    'load': pl.DataFrame({'t': [0, 1], 'value': [80.0, 60.0]}),
+}
+
+
+def _terms(row: ConstraintRow) -> list[tuple[str, str, float]]:
+    """The row's terms as tuples, for a readable assertion."""
+    return list(row.terms.iter_rows())
+
+
+def test_a_row_is_its_terms_its_comparison_and_its_right_hand_side() -> None:
+    """The whole shape, on a row whose right-hand side only the data knows."""
+    with lps.build(DISPATCH_MODEL, DATA) as bound:
+        row = bound.row('balance', snapshot=2)
+
+    assert _terms(row) == [('p', '2, wind', 1.0), ('p', '2, gas', 1.0)]
+    assert (row.sense, row.rhs) == ('==', 100.0), 'the right-hand side is the bound value, not the parameter name'
+
+
+def test_printing_a_row_gives_the_line_linopy_gives() -> None:
+    """The form this verb is read in, and it is deliberately linopy's.
+
+    Their ``Constraint.print()`` renders ``+1 p[1, wind] + 50 p[1, gas] … >=
+    60.0``; a reader arriving from there should not have to learn a second way
+    to read a constraint. What is added is the row's own identity on the same
+    line, where linopy prints it as a header.
+    """
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound:
+        printed = str(bound.row('commit', t=1, g='gas'))
+
+    assert printed == 'commit[t=1, g=gas]: +1 p[1, gas] -200 u[1, gas] <= 0'
+
+
+def test_a_row_too_wide_to_read_is_cut_rather_than_scrolled() -> None:
+    """A line that ran off the screen would have answered nothing, and the
+    frame is what the rest of a wide row is for."""
+    generators = [f'g{i}' for i in range(30)]
+    model = override(
+        DISPATCH_MODEL,
+        **{'dimensions.generator.values': generators},
+    )
+    data = {
+        'p_max': pl.DataFrame({'generator': generators, 'value': [10.0] * 30}),
+        'cost': pl.DataFrame({'generator': generators, 'value': [1.0] * 30}),
+        'snapshot': pl.DataFrame({'snapshot': [0]}),
+        'load': pl.DataFrame({'snapshot': [0], 'value': [5.0]}),
+    }
+    with lps.build(model, data) as bound:
+        row = bound.row('balance', snapshot=0)
+
+    assert row.terms.height == 30, 'the frame keeps every term'
+    printed = str(row)
+    assert '… (18 more terms)' in printed, 'the line stops at display_terms and says how many it dropped'
+    assert printed.count('p[') == 12
+
+
+def test_it_answers_on_a_model_that_was_never_solved() -> None:
+    """The reason this is ``BoundModel``'s and not ``Result``'s.
+
+    A model too wrong to solve is exactly the model whose rows need reading,
+    so the verb may not require a solver to have run — or even to exist.
+    """
+    with lps.build(DISPATCH_MODEL, DATA) as bound:
+        assert bound.diagnostics().solves == 0, 'nothing has been solved, and the row still reads'
+        assert bound.row('balance', snapshot=0).rhs == 80.0
+
+
+def test_a_row_spanning_two_declarations_names_both() -> None:
+    """Why ``coordinate`` is rendered rather than spread across dim columns.
+
+    ``p <= p_max * u`` puts a term from each of two variables in one row. They
+    happen to share dims here; a frame schema still cannot promise that, and
+    the coefficient on ``u`` is the one the *data* supplied.
+    """
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound:
+        row = bound.row('commit', t=1, g='gas')
+
+    assert _terms(row) == [('p', '1, gas', 1.0), ('u', '1, gas', -200.0)], (
+        'p - p_max*u <= 0, with p_max the bound value for gas'
+    )
+    assert (row.sense, row.rhs) == ('<=', 0.0)
+
+
+def test_the_coefficient_is_the_one_data_produced_not_the_one_declared() -> None:
+    """The claim `typeset` cannot make: the file says ``p_max``, the row says 40."""
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound:
+        terms = bound.row('commit', t=0, g='wind').terms
+    wind = dict(zip(terms['variable'].to_list(), terms['coefficient'].to_list(), strict=True))
+    assert wind['u'] == -40.0, "wind's bound, where the same declaration gives gas -200"
+
+
+def test_a_term_whose_variable_is_absent_is_absent_from_the_row() -> None:
+    """A built row, so a masked variable leaves a *shorter* row and shows it.
+
+    This is the failure the verb exists for: the file says the row sums over
+    both generators, and the built row has one term. Reading the file cannot
+    tell you that; reading the row can.
+    """
+    model = override(COMMITMENT, **{'variables.p.where': 'p_max > 100'})
+    with lps.build(model, COMMITMENT_DATA) as bound:
+        row = bound.row('balance', t=0)
+
+    assert _terms(row) == [('p', '0, gas', 1.0)], 'wind is masked out of p, so the balance row lost its term'
+
+
+def test_a_row_a_where_removed_says_so_rather_than_answering() -> None:
+    """The coordinate is legal and the row does not exist — which is the answer."""
+    model = override(COMMITMENT, **{'constraints.commit.where': 'p_max > 100'})
+    with lps.build(model, COMMITMENT_DATA) as bound, pytest.raises(LpspecError, match='built no row'):
+        bound.row('commit', t=0, g='wind')
+
+
+def test_a_partial_coordinate_is_refused_rather_than_answered_about_one_row() -> None:
+    """A verb that answered about the first matching row would be reporting a
+    block as if it were a row — the one wrong answer a debugging verb may not
+    give."""
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound, pytest.raises(LpspecError, match='declared over'):
+        bound.row('commit', t=0)
+
+
+def test_an_unknown_constraint_lists_the_declared_ones() -> None:
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound, pytest.raises(KeyError, match='balance'):
+        bound.row('nope', t=0, g='wind')
+
+
+def test_a_closed_model_says_it_was_closed() -> None:
+    bound = lps.build(DISPATCH_MODEL, DATA)
+    bound.close()
+    with pytest.raises(LpspecError, match='no built model'):
+        bound.row('balance', snapshot=0)
+
+
+def test_a_rebind_moves_what_the_row_says() -> None:
+    """The row is read off the current build, not the one that was first bound."""
+    with lps.build(DISPATCH_MODEL, DATA) as bound:
+        assert bound.row('balance', snapshot=0).rhs == 80.0
+        moved = {**DATA, 'load': pl.DataFrame({'snapshot': [0, 1, 2, 3], 'value': [7.0, 7.0, 7.0, 7.0]})}
+        assert bound.rebind(moved).row('balance', snapshot=0).rhs == 7.0
+
+
+def test_the_row_read_is_the_row_the_solver_was_given() -> None:
+    """The strongest available check, and the one a hand-written expectation
+    cannot make: every term of every row, against the matrix handed to the sink.
+
+    A reader that resolved the row index or the column ranges wrongly would
+    still return plausible terms — this is what says they are *that* row's.
+    """
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound:
+        tables = bound._engine._tables()
+        for name in ('commit', 'balance'):
+            block = bound._engine._constraint_blocks[name]
+            coordinates = bound._engine._constraints[name].collect()
+            for offset in range(block.height):
+                at = block.start + offset
+                given = tables.matrix_block(at, at + 1)
+                where = {d: coordinates.item(offset, d) for d in coordinates.columns if d != 'row'}
+                read = bound.row(name, **where)
+                assert read.terms['coefficient'].to_list() == pytest.approx(given['coeff'].to_list()), (
+                    f'{name} at {where} does not carry the coefficients the sink was handed for row {at}'
+                )
+                assert read.terms.height == given.height
