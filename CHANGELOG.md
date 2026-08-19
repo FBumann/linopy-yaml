@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.212](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.211...v0.0.1-alpha.212) (2026-08-19)
+
+
+### Bug Fixes
+
+* **compat:** the lane says in its own words what it cannot build ([#1087](https://github.com/fluxopt/lpspec/issues/1087)) ([b6a90df](https://github.com/fluxopt/lpspec/commit/b6a90df53f1051c6a1bc93666a129cc818c3eaa9))
+
 ## [0.0.1-alpha.211](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.210...v0.0.1-alpha.211) (2026-08-19)
 
 
