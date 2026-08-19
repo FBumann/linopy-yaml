@@ -8,10 +8,12 @@ is a row that stops failing.
 """
 
 import json
+from typing import get_args
 
 import pytest
 
 from lpspec.errors import SchemaError
+from lpspec.language import model
 from lpspec.language.model import Model
 from tools import schema
 
@@ -496,20 +498,35 @@ def test_no_definition_refers_only_to_itself():
 
 
 @pytest.mark.parametrize(
-    ('block', 'field', 'vocabulary'),
+    ('block', 'field', 'alias'),
     [
-        pytest.param('ObjectiveBlock', 'sense', ['maximize', 'minimize'], id='sense'),
-        pytest.param('VariableBlock', 'domain', ['binary', 'continuous', 'integer'], id='domain'),
-        pytest.param('VariableBlock', 'absence', ['undefined', 'zero'], id='absence'),
-        pytest.param('ParameterBlock', 'dtype', ['bool', 'float', 'int', 'str'], id='parameter-dtype'),
-        pytest.param('DimensionBlock', 'dtype', ['datetime', 'float', 'int', 'str'], id='dimension-dtype'),
-        pytest.param('PiecewiseBlock', 'method', ['adjacency', 'convex', 'sos2'], id='method'),
-        pytest.param('SosBlock', 'type', [1, 2], id='sos-type'),
+        pytest.param('ObjectiveBlock', 'sense', model.ObjectiveSense, id='sense'),
+        pytest.param('VariableBlock', 'domain', model.VariableDomain, id='domain'),
+        pytest.param('VariableBlock', 'absence', model.VariableAbsence, id='absence'),
+        pytest.param('ParameterBlock', 'dtype', model.ParameterDtype, id='parameter-dtype'),
+        pytest.param('DimensionBlock', 'dtype', model.DimensionDtype, id='dimension-dtype'),
+        pytest.param('LookupBlock', 'dtype', model.DimensionDtype, id='lookup-dtype'),
+        pytest.param('PiecewiseBlock', 'method', model.PiecewiseMethod, id='method'),
+        pytest.param('SosBlock', 'type', model.SosType, id='sos-type'),
     ],
 )
-def test_a_closed_vocabulary_is_published_as_an_enum(block, field, vocabulary):
-    """A field checked by a validator says `string` to pydantic, so each closed
-    set feeds its own enum — the completion an editor offers is this list."""
-    doc = json.loads(schema.PATH.read_text())
-    published = doc['$defs'][block]['properties'][field]
-    assert published.get('enum') == vocabulary, f'{block}.{field} stopped publishing its closed vocabulary'
+def test_a_closed_vocabulary_is_published_as_an_enum(block, field, alias):
+    """The completion an editor offers is the annotation's own vocabulary.
+
+    Read off the `Literal` rather than restated, so widening one is a one-line
+    change and a field that quietly stops publishing is a failure here.
+    """
+    published = json.loads(schema.PATH.read_text())['$defs'][block]['properties'][field]
+    enum = published.get('enum') or next(
+        (branch['enum'] for branch in published.get('anyOf', []) if 'enum' in branch), None
+    )
+    assert enum == list(get_args(alias)), f'{block}.{field} stopped publishing its closed vocabulary'
+
+
+def test_the_piecewise_method_vocabulary_has_one_home():
+    """`PiecewiseMethod` types the field and `PIECEWISE_METHODS` says what each
+    one emits, so the two spell the same set or the error message offers a
+    method the annotation refuses."""
+    assert set(get_args(model.PiecewiseMethod)) == set(model.PIECEWISE_METHODS), (
+        'the piecewise method annotation and the table of what each emits disagree'
+    )
