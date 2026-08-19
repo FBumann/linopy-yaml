@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import polars as pl
 import pytest
 
 import lpspec as lps
@@ -195,6 +196,59 @@ def test_a_set_reaches_the_solver_natively() -> None:
     assert int(problem.attributes.sets) == 2, 'both declared sets reached the solver as sets'
     problem.optimize()
     assert float(problem.attributes.objval) == pytest.approx(best(2))
+
+
+#: A model whose optimum leaves a row **slack**. Every case in ``CASES`` binds
+#: every constraint, so ``rhs - slack`` and ``rhs`` agree there and the
+#: subtraction is invisible — this is the model that separates them.
+SLACK = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
+    'parameters': {'cap': {'dims': ['t']}, 'price': {'dims': ['t']}},
+    'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {'lim': {'foreach': ['t'], 'expression': 'p <= cap'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * price, over=t) + 0'},
+}
+
+SLACK_DATA = {
+    'cap': pl.DataFrame({'t': [0, 1], 'value': [10.0, 20.0]}),
+    'price': pl.DataFrame({'t': [0, 1], 'value': [1.0, 2.0]}),
+}
+
+
+def test_activity_is_the_row_value_and_not_its_right_hand_side() -> None:
+    """A non-binding row, which no case in ``CASES`` has.
+
+    Xpress reports a *slack* and this sink subtracts it from the right-hand
+    side to recover the row's own value. Every model above binds every row, so
+    slack is zero and the subtraction cannot be seen — here the minimum parks
+    both variables at 0 against caps of 10 and 20, so activity and rhs differ
+    by the whole of each bound.
+    """
+    with lps.solve(SLACK, SLACK_DATA, solver_name='xpress') as solution:
+        assert solution.activity('lim')['value'].to_list() == pytest.approx([0.0, 0.0]), (
+            'activity is the row value at the solution, not the bound it was compared against'
+        )
+
+
+def test_a_solve_that_errored_is_not_reported_as_unknown() -> None:
+    """The second axis, which linopy's map does not read.
+
+    A unit probe rather than a solve: making the Optimizer *fail* is not
+    something the suite can arrange reliably, and the branch is one line —
+    what it has to answer is that a failure and a model nobody solved do not
+    arrive as the same word.
+    """
+    from types import SimpleNamespace
+
+    from lpspec.relational.sinks.solvers.xpress import _status_of
+
+    failed = _status_of(SimpleNamespace(attributes=SimpleNamespace(solvestatus=2, solstatus=0)))
+    assert failed.termination_condition == 'internal_solver_error'
+    assert failed.status == 'error'
+    assert not failed.has_primal
+
+    unsolved = _status_of(SimpleNamespace(attributes=SimpleNamespace(solvestatus=0, solstatus=0)))
+    assert unsolved.termination_condition == 'unknown', 'nothing solved yet is not a solver failure'
 
 
 def test_the_missing_extra_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
