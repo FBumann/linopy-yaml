@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
-from lpspec.errors import DataError, LanguageError
+from lpspec.errors import DataError, LaneError, LanguageError
 from tests.conftest import schema_of
 from tests.oracle import builder, linopy, loader, lpspec_linopy, pd, xr
 
@@ -550,6 +550,40 @@ def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
         lpspec_linopy.build(_BARE_SHIFT, {'eff': {0: 1.0, 1: 2.0, 2: 3.0}})
 
     assert str(native.value) == str(eager.value), 'one refusal, one wording, whichever lane was asked'
+
+
+#: The one construct this lane accepts and cannot build: a bare parameter term
+#: in the objective, which linopy has no slot for. `osemosys_utopia` owes one
+#: as the fixed cost of capacity that already stood in 1990.
+OBJECTIVE_CONSTANT = {
+    'dimensions': {'t': {'dtype': 'int'}},
+    'parameters': {'standing': {'dims': []}},
+    'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x) + standing'},
+}
+
+
+def test_a_construct_this_lane_cannot_build_is_refused_in_its_own_words():
+    """The mirror of the test above: the streaming lane builds this one.
+
+    So it is not a refusal of the *language* — the model is sayable, lowers,
+    and solves relationally. What the reader has to be told is that the wall
+    is this lane's, which linopy's `Constant values in objective function not
+    supported.` cannot say: it names no file, no declaration and no other
+    route. Before #894 that sentence was what escaped, from a linopy setter
+    two frames down.
+    """
+    import lpspec as lps
+
+    assert lps.solve(OBJECTIVE_CONSTANT, {'t': [0, 1], 'standing': 5.0}).objective == pytest.approx(5.0), (
+        'the streaming lane builds it, so the model is not the problem'
+    )
+    with pytest.raises(LaneError) as refusal:
+        lpspec_linopy.build(OBJECTIVE_CONSTANT, {'t': [0, 1], 'standing': 5.0})
+
+    assert str(refusal.value) == builder.OBJECTIVE_CONSTANT_IS_A_LANE_GAP, (
+        "the sentence is the lane's own, which is the whole of the fix"
+    )
 
 
 def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():

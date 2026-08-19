@@ -25,6 +25,7 @@ from typing import Any
 import polars as pl
 import pytest
 
+from lpspec.errors import LaneError
 from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_model, port_sources
 from tests.differential import differential
 
@@ -32,17 +33,19 @@ from tests.differential import differential
 #: does not declare — ``port_sources`` filters those out, as it should.
 PORTS_DATA = PORTS_DIR / 'data'
 
-#: What the eager lane cannot build yet, keyed by model, valued by the issue
-#: that owns it and the error it raises today. Strict, so the day a fix lands
-#: these XPASS, the suite goes red, and the entry comes out in the same PR.
-LANE_BUGS: dict[str, tuple[str, type[Exception]]] = {
-    'osemosys_utopia': ('#894 — linopy has no objective-constant slot', ValueError),
+#: What the eager lane accepts and cannot build, keyed by model. `LaneError` is
+#: the point of the pair: it pins the xfail to *this* refusal, where the bare
+#: `ValueError` it used to name was satisfied by any bug that raised one.
+#: Strict, so the day linopy grows an objective-constant slot these XPASS, the
+#: suite goes red, and the entry comes out with the check in the same PR.
+LANE_GAPS: dict[str, str] = {
+    'osemosys_utopia': '#894 — linopy has no objective-constant slot',
 }
 
 
 def _case(name: str) -> Any:
-    reason, raises = LANE_BUGS.get(name, (None, None))
-    marks = [pytest.mark.xfail(reason=reason, raises=raises, strict=True)] if reason else []
+    reason = LANE_GAPS.get(name)
+    marks = [pytest.mark.xfail(reason=reason, raises=LaneError, strict=True)] if reason else []
     return pytest.param(name, marks=marks, id=name)
 
 

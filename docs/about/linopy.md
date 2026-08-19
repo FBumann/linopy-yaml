@@ -104,8 +104,12 @@ recalibrate every differential test on such a model to the wrong number.
 Adding it back as a variable pinned to `[1, 1]` reaches the right answer and
 was refused too — it puts a column on the caller's model that the other lane
 does not have.
-[#894](https://github.com/fluxopt/lpspec/issues/894) holds the gap, the
-alternatives, and the clear refusal that is to replace the upstream error.
+So the lane says it in its own words: `builder.py` checks for a constant before
+linopy is asked and raises `LaneError`, naming the wall and the route that does
+build the model. `tests/test_corpus_parity.py` carries the strict xfail, typed
+to that error rather than to any `ValueError`, so the day linopy grows a slot it
+XPASSes and the check comes out with it
+([#894](https://github.com/fluxopt/lpspec/issues/894)).
 
 It takes the same *data* too, which it did not always
 ([#60](https://github.com/fluxopt/lpspec/issues/60)). A parameter is a parquet

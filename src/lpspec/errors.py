@@ -67,6 +67,16 @@ class PiecewiseExpansionError(LanguageError):
 # ---------------------------------------------------------------------------
 
 
+class LaneError(LpspecError):
+    """A lane cannot **build** a model it accepts — the other one can.
+
+    Not a :class:`LanguageError`: the file is sayable, lowers, and reaches an
+    answer by the other route, so the fix is which lane runs it rather than
+    what the file says. Its own class because that is the difference a caller
+    running both acts on.
+    """
+
+
 class DataError(LpspecError):
     """Data bound to a valid model is missing or the wrong shape."""
 

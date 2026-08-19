@@ -26,6 +26,7 @@ from lpspec.api import build, check, load_model, solve, write
 from lpspec.errors import (
     DataError,
     DimensionError,
+    LaneError,
     LanguageError,
     LpspecError,
     PiecewiseExpansionError,
@@ -40,6 +41,7 @@ __all__ = [
     'DimensionError',
     'EachCoordinate',
     'EachWindow',
+    'LaneError',
     'LanguageError',
     'LpspecError',
     'Model',
