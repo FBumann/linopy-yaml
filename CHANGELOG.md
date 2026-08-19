@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.209](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.208...v0.0.1-alpha.209) (2026-08-19)
+
+
+### Features
+
+* **language:** the YAML surface has a machine-readable schema ([#718](https://github.com/fluxopt/lpspec/issues/718)) ([d3c2611](https://github.com/fluxopt/lpspec/commit/d3c26113bcfdf6c2584fb02d56c3afea31b7e372))
+
 ## [0.0.1-alpha.208](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.207...v0.0.1-alpha.208) (2026-08-19)
 
 
