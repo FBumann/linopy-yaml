@@ -613,6 +613,11 @@ REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 #: Declared rather than assumed: `test_every_summary_declares_itself` fails on a
 #: page in neither list, so a new summary cannot quietly opt out of the check.
 DIVERGENT = {
+    'piecewise_ragged': (
+        "names each curve's own breakpoint set as K_g, which is what the page is about and "
+        'what the generator has no notation for: the weights it writes run over the whole '
+        'axis, and points: is a mask on their declaration rather than a smaller index set.'
+    ),
     'piecewise_lp': (
         'states the identity the method rests on rather than the rows it emits: a convex '
         'curve is the upper envelope of its own segment lines, which is why bounding the '
