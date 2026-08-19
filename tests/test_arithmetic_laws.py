@@ -58,7 +58,7 @@ DATA = {
 def _model(
     expression: str,
     *,
-    objective: str = 'sum(x, over=f)',
+    objective: str = 'sum(x)',
     foreach: list[str] | None = None,
     also: dict | None = None,
 ) -> dict:
@@ -84,7 +84,7 @@ def _model(
 
 def _objective_of(
     expression: str,
-    objective: str = 'sum(x, over=f)',
+    objective: str = 'sum(x)',
     foreach: list[str] | None = None,
     also: dict | None = None,
 ) -> float:
@@ -194,7 +194,7 @@ def test_a_term_whose_variable_is_absent_is_not_a_term_worth_zero():
     constraints under complementary ``where`` clauses — so the test states the
     *difference between the two intents* rather than the behaviour alone.
     """
-    minimise_x = '(-1) * x'
+    minimise_x = 'sum((-1) * x)'
     propagated = _objective_of('x + y >= 60', objective=minimise_x, foreach=['f', 't'])
     zero_filled = _objective_of(
         'x + y >= 60',
@@ -220,7 +220,7 @@ def test_absence_zero_says_at_the_declaration_what_two_blocks_said_at_the_rows()
     claim, not merely matching its number: ``differential`` has already made
     both lanes and the LP file agree before either figure comes back.
     """
-    minimise_x = '(-1) * x'
+    minimise_x = 'sum((-1) * x)'
     two_blocks = _objective_of(
         'x + y >= 60',
         objective=minimise_x,
@@ -250,9 +250,9 @@ def test_absence_zero_does_not_disturb_a_reduction():
     agree here even though they differ in a bare term.
     """
     total = 'sum(y, over=f) <= 40'
-    undefined = _objective_of(total, objective='sum(y, over=f)')
+    undefined = _objective_of(total, objective='sum(y)')
 
-    model = _model(total, objective='sum(y, over=f)')
+    model = _model(total, objective='sum(y)')
     model['variables']['y']['absence'] = 'zero'
     with differential(model, DATA, lp=True) as run:
         zero = float(run.result.objective)
@@ -320,7 +320,7 @@ def _wide_objective_of(expression: str, *, foreach: list[str]) -> float:
             'v': {'foreach': ['f', 't'], 'where': 'gate2', 'bounds': {'lower': 0, 'upper': 50}},
         },
         'constraints': {'c': {'foreach': foreach, 'expression': expression}},
-        'objective': {'sense': 'maximize', 'expression': 'x'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     with differential(model, WIDE_DATA | (WIDE_COORDS if grouped else PLAIN_COORDS), lp=True) as run:
         return float(run.result.objective)
@@ -390,7 +390,7 @@ def test_a_mask_on_a_dim_the_reduction_does_not_touch_still_propagates():
             'y': {'foreach': ['f', 't'], 'where': 'tgate', 'bounds': {'lower': 0, 'upper': 50}},
         },
         'constraints': {'c': {'foreach': ['t'], 'expression': 'sum(x + y, over=f) <= 120'}},
-        'objective': {'sense': 'maximize', 'expression': 'x'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     data = {'tgate': pd.Series([True], index=pd.Index([0], name='t'))}
     index = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
@@ -429,7 +429,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
             'v': {'foreach': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
         },
         'constraints': {'c': {'foreach': ['t'], 'expression': 'sum(x + shift(v, over=t, offset=1), over=f) <= 120'}},
-        'objective': {'sense': 'maximize', 'expression': 'x'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     index = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
@@ -446,7 +446,7 @@ DIVISOR_MODEL = {
     'parameters': {'d': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'foreach': ['f'], 'expression': 'x / d <= 10'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(x, over=f)'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
 #: ``d`` covers ``a`` and not ``b`` — the gap every case below turns on.

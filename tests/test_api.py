@@ -142,7 +142,7 @@ _TWO_DIMS = {
     'dimensions': {'g': {'values': ['wind', 'gas']}, 't': {'dtype': 'int', 'values': [0, 1]}},
     'parameters': {'cap': {'dims': ['g', 't']}},
     'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-    'objective': {'sense': 'maximize', 'expression': 'x'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
 
@@ -233,8 +233,8 @@ def test_check_and_load_model_need_no_data(dispatch_yaml):
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
-        pytest.param('sum(p ** 2, over=generator)', r"operator '\*\*'", id='an-operator-outside-the-language'),
-        pytest.param('sum(p * p, over=generator)', 'degree 2', id='degree-2-caught-with-no-data-bound'),
+        pytest.param('sum(p ** 2)', r"operator '\*\*'", id='an-operator-outside-the-language'),
+        pytest.param('sum(p * p)', 'degree 2', id='degree-2-caught-with-no-data-bound'),
     ],
 )
 def test_check_reports_language_errors_before_any_data_is_bound(
@@ -506,7 +506,7 @@ TWO_VARIABLE_MODEL = {
             'expression': 'sum(p, over=generator) + shed == load',
         }
     },
-    'objective': {'sense': 'minimize', 'expression': 'shed'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(shed)'},
 }
 
 

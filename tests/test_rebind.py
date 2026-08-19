@@ -58,7 +58,7 @@ REACH = {
     'constraints': {'meet': {'foreach': ['zone'], 'expression': 'sum(reach * p, over=plant) >= demand'}},
     #: `levy` is the objective's **constant** — the one term with no column, so
     #: it reaches a solver by neither of the two routes the others take.
-    'objective': {'sense': 'minimize', 'expression': 'p * cost + levy'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost) + levy'},
 }
 
 
@@ -89,7 +89,7 @@ KNAPSACK = {
     'parameters': {'worth': {'dims': ['item']}, 'weight': {'dims': ['item']}, 'capacity': {'dims': []}},
     'variables': {'take': {'foreach': ['item'], 'domain': 'binary'}},
     'constraints': {'fits': {'foreach': [], 'expression': 'sum(weight * take, over=item) <= capacity'}},
-    'objective': {'sense': 'maximize', 'expression': 'take * worth'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(take * worth)'},
 }
 
 
@@ -588,7 +588,7 @@ def test_a_rebind_can_grow_a_dimension():
                 'expression': 'theta >= cut_const + sum(cut_slope * cap, over=generator)',
             }
         },
-        'objective': {'sense': 'minimize', 'expression': 'cap * invest + theta'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(cap * invest) + theta'},
     }
     invest = pl.DataFrame({'generator': ['wind', 'gas'], 'value': [90.0, 30.0]})
 

@@ -24,7 +24,7 @@ constraints:
     foreach: [snapshot]
     expression: sum(p, over=generator) == 5
 objective:
-  expression: sum(p * cost, over=generator)
+  expression: sum(p * cost)
 """
 
 

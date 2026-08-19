@@ -63,4 +63,4 @@ constraints:
 objective:
   sense: minimize
   description: total cost of generation; storing and releasing energy is free here
-  expression: p * cost
+  expression: sum(p * cost)

@@ -30,4 +30,4 @@ constraints:
 
 objective:
   sense: minimize
-  expression: short
+  expression: sum(short)

@@ -235,7 +235,7 @@ constraints:
     expression: total_generation == load
 objective:
   sense: minimize
-  expression: weighted_sum(p, cost, over=generator)
+  expression: sum(weighted_sum(p, cost, over=generator))
 """
 
 

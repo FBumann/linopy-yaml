@@ -273,10 +273,10 @@ objective:
     the day's cost, scaled to the year — running, fuel, starts, shed demand and
     the capture the carbon-capture plants pay for
   expression: >-
-    output * run_cost * weight
-    + burned * fuel_price * weight
-    + burned_starting * fuel_price * weight
-    + starting * start_cost * weight
-    + shed * shed_cost * weight
-    + burned * captured * weight
-    + burned_starting * captured_start * weight
+    sum(output * run_cost * weight)
+    + sum(burned * fuel_price * weight)
+    + sum(burned_starting * fuel_price * weight)
+    + sum(starting * start_cost * weight)
+    + sum(shed * shed_cost * weight)
+    + sum(burned * captured * weight)
+    + sum(burned_starting * captured_start * weight)

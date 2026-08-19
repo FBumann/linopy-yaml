@@ -281,9 +281,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       sense: minimize
       description: what the fleet costs to run, plus what the generation and link capacity cost to build
       expression: >-
-        p * marginal_cost
-        + p_nom * gen_capital_cost
-        + link_p_nom * link_capital_cost
+        sum(p * marginal_cost)
+        + sum(p_nom * gen_capital_cost)
+        + sum(link_p_nom * link_capital_cost)
     ```
 
     ```python

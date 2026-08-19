@@ -216,8 +216,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         operating and capacity cost, each discounted by the weight of the period it
         falls in — capacity once per period the generator stands in
       expression: >-
-        p * opex * at(period_weight, by=period_of)
-        + p_nom * capex * activity * period_weight
+        sum(p * opex * at(period_weight, by=period_of))
+        + sum(p_nom * capex * activity * period_weight)
     ```
 
     ```python

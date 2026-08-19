@@ -181,7 +181,7 @@ objective:
   sense: minimize
   description: what the fleet costs to run, plus what the generation and network capacity cost to build
   expression: >-
-    p * marginal_cost
-    + p_nom * gen_capital_cost
-    + s_nom * line_capital_cost
-    + link_p_nom * link_capital_cost
+    sum(p * marginal_cost)
+    + sum(p_nom * gen_capital_cost)
+    + sum(s_nom * line_capital_cost)
+    + sum(link_p_nom * link_capital_cost)

@@ -62,4 +62,4 @@ expressions:
 objective:
   sense: minimize
   description: cost of running the fleet over the window
-  expression: spend
+  expression: sum(spend)

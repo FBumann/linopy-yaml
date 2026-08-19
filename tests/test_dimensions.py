@@ -40,7 +40,7 @@ BASE = {
             'expression': 'sum(p, by=gen_bus) == load',
         }
     },
-    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
 

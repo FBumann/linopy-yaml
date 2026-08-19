@@ -474,7 +474,7 @@ EDGE_MODEL = {
     'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}, 'wrap': {'dtype': 'str', 'values': ['a', 'b']}},
     'parameters': {'c': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t', 'wrap'], 'bounds': {'lower': 0, 'upper': 5}}},
-    'objective': {'sense': 'maximize', 'expression': 'x * c'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * c)'},
 }
 
 
@@ -535,7 +535,7 @@ def _shift_over_data(where: str | None = None, edge: str | None = None) -> dict[
         'parameters': {'dt': {'dims': ['t']}},
         'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'c': constraint},
-        'objective': {'sense': 'maximize', 'expression': 'x'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
 
 
@@ -608,7 +608,7 @@ def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
         'parameters': {'c': {'dims': ['g']}},
         'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'k': {'foreach': ['t', 'g'], 'expression': f'p <= 0.5 * {rhs} + 1'}},
-        'objective': {'sense': 'maximize', 'expression': 'p * c'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(p * c)'},
     }
     data = {'c': pd.Series([1.0, 2.0], index=pd.Index(['a', 'b'], name='g'))}
     with differential(model, data) as run:
@@ -648,7 +648,7 @@ def test_an_offset_may_differ_per_entity(edge: str):
                 'expression': f'shift(order, over=t, offset=lead, edge={edge}) >= demand',
             }
         },
-        'objective': {'sense': 'minimize', 'expression': 'order * c'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(order * c)'},
     }
     data = {
         'lead': pd.Series([lead[u] for u in units], index=pd.Index(units, name='g')),
@@ -699,7 +699,7 @@ def test_a_named_offset_that_cannot_mean_a_lag_is_refused(offset: str, match: st
         'constraints': {
             'k': {'foreach': ['g', 't'], 'expression': f"x >= shift(x, over=t, offset={offset}, edge='wrap')"}
         },
-        'objective': {'sense': 'minimize', 'expression': 'x * 1.0'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x * 1.0)'},
     }
     with pytest.raises(LanguageError, match=match):
         lps.check(model)
@@ -719,7 +719,7 @@ def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
         'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
         'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': ['g', 't'], 'expression': 'x >= shift(x, over=t, offset=lead)'}},
-        'objective': {'sense': 'minimize', 'expression': 'x * 1.0'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x * 1.0)'},
     }
     with pytest.raises(LanguageError, match='vacated positions absent'):
         lps.check(model)
@@ -732,7 +732,7 @@ def test_a_named_offset_carries_its_sign_in_the_data():
         'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
         'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': ['g', 't'], 'expression': "x >= shift(x, over=t, offset=-lead, edge='wrap')"}},
-        'objective': {'sense': 'minimize', 'expression': 'x * 1.0'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x * 1.0)'},
     }
     with pytest.raises(LanguageError, match='negates a named offset'):
         lps.check(model)

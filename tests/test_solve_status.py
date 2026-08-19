@@ -34,7 +34,7 @@ INFEASIBLE = {
     'parameters': {'load': {'dims': ['snapshot']}},
     'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'meet': {'foreach': ['snapshot'], 'expression': 'p == load'}},
-    'objective': {'sense': 'minimize', 'expression': 'p'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
 }
 
 

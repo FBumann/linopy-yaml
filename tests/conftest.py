@@ -117,7 +117,7 @@ DISPATCH_MODEL: dict[str, Any] = {
     },
     'variables': {'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'balance': {'foreach': ['snapshot'], 'expression': 'sum(p, over=generator) == load'}},
-    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
 

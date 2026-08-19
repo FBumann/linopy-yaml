@@ -141,7 +141,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     objective:
       sense: maximize
       description: revenue from what the store releases
-      expression: release * price
+      expression: sum(release * price)
     ```
 
     ```python

@@ -108,7 +108,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: dollars a day, which is what the variables already are
-      expression: spend
+      expression: sum(spend)
     ```
 
     ```python

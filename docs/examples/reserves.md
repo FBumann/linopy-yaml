@@ -261,7 +261,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     objective:
       sense: minimize
       description: what the energy costs to generate, plus what the reserve costs to hold
-      expression: p * energy_cost + r * offer_cost
+      expression: sum(p * energy_cost) + sum(r * offer_cost)
     ```
 
     ```python

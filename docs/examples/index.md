@@ -101,10 +101,10 @@ drift from what the engine builds.
 | [multi_period](multi_period.md) | **✔** 10020 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
 | [piecewise](piecewise.md) | **✔** 3850 | **✓** | · | · | · | · | · | **✓** | **✓** | · | · |
 | [reserves](reserves.md) | **✔** 915 | **✓** | **✓** | **✓** | · | · | · | **✓** | · | · | · |
-| [seasons](seasons.md) | · | · | · | · | · | **✓** | · | **✓** | · | · | · |
+| [seasons](seasons.md) | · | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
 | [sos](sos.md) | · | **✓** | · | · | · | · | · | **✓** | **✓** | **✓** | · |
 | [storage](storage.md) | **✔** 5650 | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
-| [transport](transport.md) | **✔** 4400 | · | **✓** | · | · | · | · | **✓** | · | · | · |
+| [transport](transport.md) | **✔** 4400 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [walkthrough](walkthrough.md) | · | **✓** | · | · | · | · | **✓** | **✓** | · | · | · |
 | [facility_location](facility_location.md) | **✔** 932616 | **✓** | · | · | · | · | · | **✓** | · | · | **✓** |
 | [genx_piecewise_fuel](genx_piecewise_fuel.md) | **✔** 2341.82 | **✓** | · | · | · | **✓** | **✓** | **✓** | · | · | · |
@@ -112,26 +112,26 @@ drift from what the engine builds.
 | [pypsa_ac_dc](pypsa_ac_dc.md) | **✔** 1.8441e+07 | **✓** | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_committable_extendable](pypsa_committable_extendable.md) | **✔** 21700 | **✓** | · | · | · | · | **✓** | **✓** | · | · | **✓** |
 | [pypsa_cvar](pypsa_cvar.md) | **✔** 35410 | **✓** | · | · | · | · | · | **✓** | · | · | · |
-| [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | **✔** 17228.8 | · | **✓** | · | **✓** | **✓** | · | **✓** | · | · | · |
+| [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | **✔** 17228.8 | **✓** | **✓** | · | **✓** | **✓** | · | **✓** | · | · | · |
 | [pypsa_energy_sum](pypsa_energy_sum.md) | **✔** 21400 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | · |
-| [pypsa_fixed](pypsa_fixed.md) | **✔** 49900 | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
+| [pypsa_fixed](pypsa_fixed.md) | **✔** 49900 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_global_limits](pypsa_global_limits.md) | **✔** 127212 | **✓** | **✓** | **✓** | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_growth_limit](pypsa_growth_limit.md) | **✔** 47110 | **✓** | **✓** | **✓** | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_linearized_uc](pypsa_linearized_uc.md) | **✔** 5540 | **✓** | · | · | **✓** | · | · | **✓** | · | · | · |
-| [pypsa_link_delay](pypsa_link_delay.md) | **✔** 4311.11 | · | **✓** | · | **✓** | · | · | **✓** | · | · | · |
-| [pypsa_losses](pypsa_losses.md) | **✔** 24114.2 | · | **✓** | · | · | · | **✓** | **✓** | · | · | · |
+| [pypsa_link_delay](pypsa_link_delay.md) | **✔** 4311.11 | **✓** | **✓** | · | **✓** | · | · | **✓** | · | · | · |
+| [pypsa_losses](pypsa_losses.md) | **✔** 24114.2 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_min_up_down](pypsa_min_up_down.md) | **✔** 32750 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | **✓** |
-| [pypsa_mixed_cycling](pypsa_mixed_cycling.md) | **✔** 4800 | · | **✓** | · | **✓** | **✓** | **✓** | **✓** | · | · | · |
-| [pypsa_modular](pypsa_modular.md) | **✔** 56700 | · | **✓** | · | · | · | · | **✓** | · | · | **✓** |
+| [pypsa_mixed_cycling](pypsa_mixed_cycling.md) | **✔** 4800 | **✓** | **✓** | · | **✓** | **✓** | **✓** | **✓** | · | · | · |
+| [pypsa_modular](pypsa_modular.md) | **✔** 56700 | **✓** | **✓** | · | · | · | · | **✓** | · | · | **✓** |
 | [pypsa_multi_period](pypsa_multi_period.md) | **✔** 85300 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
 | [pypsa_multilink](pypsa_multilink.md) | **✔** 1100 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
-| [pypsa_ramp](pypsa_ramp.md) | **✔** 18200 | · | **✓** | · | **✓** | · | · | **✓** | · | · | · |
-| [pypsa_spill](pypsa_spill.md) | **✔** 3200 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
+| [pypsa_ramp](pypsa_ramp.md) | **✔** 18200 | **✓** | **✓** | · | **✓** | · | · | **✓** | · | · | · |
+| [pypsa_spill](pypsa_spill.md) | **✔** 3200 | **✓** | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
 | [pypsa_stochastic](pypsa_stochastic.md) | **✔** 33940 | **✓** | · | · | · | · | · | **✓** | · | · | · |
-| [pypsa_storage](pypsa_storage.md) | **✔** 15253.2 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
-| [pypsa_store](pypsa_store.md) | **✔** 7005.5 | · | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
-| [pypsa_transport](pypsa_transport.md) | **✔** 22000 | · | **✓** | · | · | · | · | **✓** | · | · | · |
+| [pypsa_storage](pypsa_storage.md) | **✔** 15253.2 | **✓** | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
+| [pypsa_store](pypsa_store.md) | **✔** 7005.5 | **✓** | **✓** | · | **✓** | · | **✓** | **✓** | · | · | · |
+| [pypsa_transport](pypsa_transport.md) | **✔** 22000 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_unit_commitment](pypsa_unit_commitment.md) | **✔** 24900 | **✓** | · | · | **✓** | · | **✓** | **✓** | · | · | **✓** |
 | [stigler_diet](stigler_diet.md) | **✔** 0.108662 | **✓** | · | · | · | · | · | **✓** | · | · | · |
 | [telephone_routing](telephone_routing.md) | **✔** 380 | **✓** | **✓** | · | · | · | · | **✓** | · | · | **✓** |

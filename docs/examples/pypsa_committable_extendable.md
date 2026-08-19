@@ -190,7 +190,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: what the fleet costs to run, plus what its capacity costs to build
-      expression: p * marginal_cost + p_nom * capital_cost
+      expression: sum(p * marginal_cost) + sum(p_nom * capital_cost)
     ```
 
     ```python

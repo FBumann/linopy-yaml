@@ -167,7 +167,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: weighted operating cost over the horizon, plus what the capacity costs to hold
-      expression: p * opex * weight + p_nom * capex
+      expression: sum(p * opex * weight) + sum(p_nom * capex)
     ```
 
     ```python

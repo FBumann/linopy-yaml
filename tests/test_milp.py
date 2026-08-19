@@ -46,7 +46,7 @@ constraints:
 
 objective:
   sense: minimize
-  expression: sum(p * cost, over=generator) + sum(u * fix_cost, over=generator)
+  expression: sum(p * cost) + sum(u * fix_cost)
 """
 
 

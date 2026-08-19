@@ -96,4 +96,4 @@ constraints:
 objective:
   sense: minimize
   description: total cost of generation; the lines carry power for nothing
-  expression: p * marginal_cost
+  expression: sum(p * marginal_cost)

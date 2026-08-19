@@ -77,7 +77,7 @@ constraints:
     expression: sum(p, over=generator) == load
 objective:
   sense: minimize
-  expression: p * cost
+  expression: sum(p * cost)
 ```
 <!--model-end-->
 

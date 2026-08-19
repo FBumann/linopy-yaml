@@ -155,7 +155,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: what the fleet costs to run, each snapshot weighted by the hours it stands for
-      expression: p * marginal_cost * weighting
+      expression: sum(p * marginal_cost * weighting)
     ```
 
     ```python

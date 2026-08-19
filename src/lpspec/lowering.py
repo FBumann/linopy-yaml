@@ -18,8 +18,8 @@ Semantics mirror the eager builder exactly:
 - a constraint is **one rule** carrying its own name, so a row is read back by
   the name the file writes, with no positional suffix to guess (#298);
 - a file declares one objective, likewise one expression;
-- an objective sums each term over the dims that term carries, which term
-  fragments do for free and the eager lane has to distribute for.
+- an objective is scalar, so every reduction in it is one the file wrote and
+  neither lane sums anything on its own behalf.
 """
 
 from __future__ import annotations

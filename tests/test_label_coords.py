@@ -269,7 +269,7 @@ NETWORK = {
     'parameters': {'cap': {'dims': ['line']}, 'price': {'dims': ['line']}},
     'variables': {'f': {'foreach': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'ceiling': {'foreach': ['line'], 'expression': 'f <= cap'}},
-    'objective': {'sense': 'maximize', 'expression': 'f * price'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(f * price)'},
 }
 
 LINES = ['ring_a', 'ring_b', 'loop', 'spur']
@@ -483,7 +483,7 @@ DECLARED = {
     'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
     'variables': {'p': {'foreach': ['generator'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'balance': {'foreach': ['bus'], 'expression': 'sum(p, by=gen_bus) >= load'}},
-    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
 DECLARED_SOURCES = {

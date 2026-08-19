@@ -60,4 +60,4 @@ constraints:
 objective:
   sense: minimize
   description: total operating cost, taken off the curves rather than from a marginal rate
-  expression: op_cost
+  expression: sum(op_cost)

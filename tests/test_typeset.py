@@ -62,7 +62,7 @@ DISPATCH = {
             'expression': 'sum(p, over=generator) == load',
         }
     },
-    'objective': {'sense': 'minimize', 'expression': 'p * cost'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
 
@@ -76,7 +76,7 @@ MIXED = {
         'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0}},
         'p_nom': {'foreach': ['generator'], 'bounds': {'lower': 0}},
     },
-    'objective': {'sense': 'minimize', 'expression': 'p * cost + p_nom * capex'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(p_nom * capex)'},
 }
 
 
@@ -119,7 +119,7 @@ def test_a_dimension_index_never_steals_a_letter_a_variable_owns(fmt: Format):
         'dimensions': {'plant': {'dtype': 'str'}, 'snapshot': {'dtype': 'int'}},
         'parameters': {'cost': {'dims': ['plant']}},
         'variables': {'p': {'foreach': ['snapshot', 'plant'], 'bounds': {'lower': 0}}},
-        'objective': {'expression': 'p * cost'},
+        'objective': {'expression': 'sum(p * cost)'},
     }
     text = typeset(model, fmt)
     assert fmt.subscript('p', ['t', 'p']) not in text
@@ -288,7 +288,7 @@ def test_a_shift_forward_renders_and_does_not_crash(fmt: Format):
         'constraints': {
             'later': {'foreach': ['snapshot'], 'expression': 'p <= shift(p, over=snapshot, offset=-1, edge=0)'}
         },
-        'objective': {'sense': 'minimize', 'expression': 'p'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
     text = typeset(model, fmt, legend=False)
     assert fmt.subscript(fmt.operators['edge_plus'], ['0']) in text, (
@@ -403,33 +403,36 @@ def test_an_underscore_is_only_a_qualifier_when_its_head_is_a_symbol(name: str, 
 
 
 @EVERY_FORMAT
-def test_the_objective_sums_each_term_over_the_dims_that_term_carries(fmt: Format):
-    """One summation per group of terms, not one over the union of their dims.
+def test_the_objective_shows_the_summations_the_file_wrote(fmt: Format):
+    """One summation per ``sum`` in the expression, over the dims it took.
 
-    An addition stacks its sides, so a term reaches the objective keyed by its
-    own dims: the capital term below is summed over generators and nothing
-    else. Under one summation over the union it would be shown once per
-    snapshot as well, which is the objective of a different model (#1040).
+    The objective is scalar, so nothing is implied and nothing is grouped: the
+    capital term below is summed over generators alone because that is what its
+    own bracket closes over. A walk that reduced the objective itself would
+    have to decide where each summation begins, and #1046 is what that cost.
     """
     text = typeset(MIXED, fmt, legend=False)
-    assert _summations(text, fmt) == 2, 'a term carrying fewer dims gets its own summation'
+    assert _summations(text, fmt) == 2, 'each written sum is one summation'
     assert _over_generators(fmt) in text, 'the capital term is summed over generators alone'
 
 
 @EVERY_FORMAT
-def test_adjacent_objective_terms_with_the_same_dims_share_one_summation(fmt: Format):
-    """The other half of the rule: splitting per term regardless would spell
-    an objective whose terms agree as a row of identical summations."""
-    text = typeset(override(MIXED, **{'objective.expression': 'p * cost + p * cost'}), fmt, legend=False)
-    assert _summations(text, fmt) == 1, 'terms carrying the same dims stay under one summation'
+def test_two_sums_of_the_same_dims_stay_two_summations(fmt: Format):
+    """The file's structure survives to the page, even where it repeats itself.
+
+    Merging the pair would read better and say something the file does not:
+    that one bracket covers both terms. The walk renders what is written.
+    """
+    text = typeset(override(MIXED, **{'objective.expression': 'sum(p * cost) + sum(p * cost)'}), fmt, legend=False)
+    assert _summations(text, fmt) == 2, 'two written sums are two summations'
 
 
 @EVERY_FORMAT
-def test_a_subtracted_objective_term_keeps_its_sign_outside_its_own_summation(fmt: Format):
-    """The sign belongs to the term, and the term is what is summed — so it
-    lands between the two summations rather than inside the second."""
-    text = typeset(override(MIXED, **{'objective.expression': 'p * cost - p_nom * capex'}), fmt, legend=False)
-    assert f'{fmt.operators["minus"]} {_over_generators(fmt)}' in text
+def test_a_subtracted_summation_keeps_the_sign_outside_it(fmt: Format):
+    """The sign is applied to the whole reduction, and the bracket says so."""
+    text = typeset(override(MIXED, **{'objective.expression': 'sum(p * cost) - sum(p_nom * capex)'}), fmt, legend=False)
+    opener = fmt.parenthesise('BODY').split('BODY')[0] + _over_generators(fmt)
+    assert f'{fmt.operators["minus"]} {opener}' in text
 
 
 # ---------------------------------------------------------------------------
@@ -449,7 +452,7 @@ def test_a_subtracted_objective_term_keeps_its_sign_outside_its_own_summation(fm
         ),
         pytest.param(
             r'\sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathit{cost}_{g}',
-            id='objective-sums-over-every-dim-its-term-carries',
+            id='a-sum-naming-no-dim-puts-them-all-in-its-domain',
         ),
         pytest.param(r'0 \le p_{t,g} & \le p^{\mathrm{max}}_{g}', id='bounds-become-a-domain-line'),
         pytest.param(r'\text{power\_balance}', id='names-are-escaped-in-text-mode'),
@@ -1118,7 +1121,7 @@ TYPST_SYMBOLS = {
 
 WITH_MARGINAL_COST = override(
     DISPATCH,
-    **{'parameters.marginal_cost': {'dims': ['generator']}, 'objective.expression': 'p * marginal_cost'},
+    **{'parameters.marginal_cost': {'dims': ['generator']}, 'objective.expression': 'sum(p * marginal_cost)'},
 )
 
 

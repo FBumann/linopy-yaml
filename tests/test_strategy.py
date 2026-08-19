@@ -66,7 +66,7 @@ WINDOW = {
             'expression': 'soc == shift(soc, over=t, offset=1) + charge * 0.9 - discharge',
         },
     },
-    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
 #: The same storage, but two of them — so `soc` is over `(t, storage)` and the
@@ -107,7 +107,7 @@ MULTI_STORE = {
             'expression': 'soc == shift(soc, over=t, offset=1) + charge * efficiency - discharge',
         },
     },
-    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
 #: A myopic pathway: what a period builds is what the next period already has.

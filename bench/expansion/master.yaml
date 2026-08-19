@@ -40,4 +40,4 @@ constraints:
 
 objective:
   sense: minimize
-  expression: cap * invest + theta
+  expression: sum(cap * invest) + theta

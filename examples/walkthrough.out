@@ -11,16 +11,16 @@ model: examples/walkthrough.yaml
     macros       weighted_sum   <- tier 2, still present
 
 [2] expand macros / named expressions -> core AST  (expansion.py)
-    written      'weighted_sum(p, cost, over=generator)'
-    parsed       FunctionCallNode(name='weighted_sum', args=[NameNode(name='p'), NameNode(name='cost')], kwargs={'over': NameNode(name='generator')})
-    expanded     FunctionCallNode(name='sum', args=[BinaryOperatorNode(op='*', left=NameNode(name='p'), right=NameNode(name='cost'))], kwargs={'over': NameNode(name='generator')})
+    written      'sum(weighted_sum(p, cost, over=generator))'
+    parsed       FunctionCallNode(name='sum', args=[FunctionCallNode(name='weighted_sum', args=[NameNode(name='p'), NameNode(name='cost')], kwargs={'over': NameNode(name='generator')})], kwargs={})
+    expanded     FunctionCallNode(name='sum', args=[FunctionCallNode(name='sum', args=[BinaryOperatorNode(op='*', left=NameNode(name='p'), right=NameNode(name='cost'))], kwargs={'over': NameNode(name='generator')})], kwargs={})
                  ^ the macro is gone: sum(p * cost, over=generator)
 
 [3] core AST -> relational IR  (lowering.py)
     Program(
       VariableDeclaration(name='p', dims=('snapshot', 'generator'), where=ParameterComparison(parameter='p_max', op='>', value=0.0), lower=Constant(value=0.0), upper=Parameter(name='p_max'), variable_type='continuous', absence='undefined')
       ConstraintDeclaration(name='power_balance', dims=('snapshot',), lhs=Sum(operand=Variable(name='p'), over=('generator',)), sense='==', rhs=Parameter(name='load'), where=None)
-      ObjectiveDeclaration(sense='min', expression=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)))
+      ObjectiveDeclaration(sense='min', expression=Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',)))
     )
     ^ frozen dataclasses, no macro, no YAML, no linopy, no engine
 

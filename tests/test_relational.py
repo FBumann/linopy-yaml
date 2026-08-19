@@ -335,7 +335,7 @@ def test_a_dimension_named_n_is_still_a_legal_dimension():
         'parameters': {'cost': {'dims': ['n']}},
         'variables': {'x': {'foreach': ['n'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'c': {'foreach': ['n'], 'expression': 'x <= 5'}},
-        'objective': {'sense': 'maximize', 'expression': 'x * cost'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
     }
     with lps.solve(model, {'cost': pl.DataFrame({'n': [1, 2], 'value': [1.0, 2.0]})}) as result:
         assert result.objective == pytest.approx(15.0)
@@ -553,7 +553,7 @@ def test_an_objective_naming_a_variable_twice_sums_its_coefficients():
         'parameters': {'lb': {'dims': ['i']}},
         'variables': {'x': {'foreach': ['i'], 'bounds': {'lower': 'lb'}}},
         'constraints': {'c': {'foreach': ['i'], 'expression': 'x >= lb'}},
-        'objective': {'sense': 'minimize', 'expression': 'x + 4 * x'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x) + sum(4 * x)'},
     }
     with lps.build(model, {'lb': pl.DataFrame({'i': [0], 'value': [2.0]})}) as bound:
         assert bound._engine._tables().obj.height == 1
@@ -797,12 +797,12 @@ def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(ends):
 @pytest.mark.parametrize(
     ('expression', 'expected'),
     [
-        pytest.param('p * cost', {0: 2.0, 1: 3.0}, id='one-fragment-one-row-per-column'),
-        pytest.param('p * cost + p * cost', {0: 4.0, 1: 6.0}, id='two-fragments-summed-onto-one-column'),
+        pytest.param('sum(p * cost)', {0: 2.0, 1: 3.0}, id='one-fragment-one-row-per-column'),
+        pytest.param('sum(p * cost) + sum(p * cost)', {0: 4.0, 1: 6.0}, id='two-fragments-summed-onto-one-column'),
     ],
 )
 def test_the_objective_sums_the_coefficients_that_land_on_one_column(expression, expected):
-    """`p * cost` is one row per column; `p * cost + p * cost` is two, summed."""
+    """`sum(p * cost)` is one row per column; the same twice over is two, summed."""
     base = {
         'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}},
         'parameters': {'cost': {'dims': ['i']}, 'lb': {'dims': ['i']}},
@@ -834,7 +834,7 @@ def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows():
         'parameters': {'price': {'dims': ['snapshot', 'generator']}, 'load': {'dims': ['snapshot']}},
         'variables': {'q': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'floor': {'foreach': ['snapshot'], 'expression': 'q >= load'}},
-        'objective': {'sense': 'minimize', 'expression': 'sum(q * price, over=generator)'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(q * price)'},
     }
     sources = {
         'snapshot': pl.DataFrame({'snapshot': [0, 1]}),
@@ -1154,7 +1154,7 @@ SPARSE_SOURCE = {
     'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g']}},
     'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'capped': {'foreach': ['t', 'g'], 'expression': 'p * avail <= 1'}},
-    'objective': {'sense': 'minimize', 'expression': 'p'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
 }
 
 SPARSE_SOURCES = {
@@ -1667,7 +1667,7 @@ SCALAR_MASKED_MODEL = {
         'slack': {'foreach': [], 'where': 'budget > 1000', 'bounds': {'lower': 0, 'upper': 10}},
     },
     'constraints': {'cap': {'foreach': [], 'expression': 'sum(x, over=f) - slack <= budget'}},
-    'objective': {'sense': 'maximize', 'expression': 'x * cost'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
 }
 
 
@@ -1713,7 +1713,7 @@ BROADCAST_MASK_MODEL = {
     'constraints': {
         'balance': {'foreach': ['node', 'carrier'], 'expression': 'sum(p * produces, over=tech) == demand'},
     },
-    'objective': {'sense': 'minimize', 'expression': 'p * cost'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
 
@@ -1754,7 +1754,7 @@ LABEL_MODEL = {
     'parameters': {'cost': {'dims': ['f']}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'foreach': ['f'], 'expression': 'x <= cap'}},
-    'objective': {'sense': 'maximize', 'expression': 'x * cost'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
 }
 _CAP = pl.DataFrame({'f': ['a', 'b'], 'value': [5.0, 5.0]})
 
@@ -1813,7 +1813,7 @@ TWO_BAD_COORDS_MODEL = {
     'parameters': {'cap': {'dims': ['line']}},
     'variables': {'f': {'foreach': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'foreach': ['line'], 'expression': 'f <= cap'}},
-    'objective': {'sense': 'maximize', 'expression': 'f'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(f)'},
 }
 
 
@@ -1912,7 +1912,7 @@ DENSE_BOUND_MODEL = {
     'parameters': {'avail': {'dims': ['t', 'n']}, 'cost': {'dims': ['n']}},
     'variables': {'p': {'foreach': ['t', 'n'], 'bounds': {'lower': 0, 'upper': 'avail'}}},
     'constraints': {'cap': {'foreach': ['t'], 'expression': 'sum(p, over=n) <= 100'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(p * cost, over=n)'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(p * cost)'},
 }
 
 #: The same numbers the oracle sees, with the coordinates deliberately out of
@@ -1954,7 +1954,7 @@ FLAT_MODEL = {
     'parameters': {'avail': {'dims': ['n']}, 'cost': {'dims': ['n']}},
     'variables': {'p': {'foreach': ['n'], 'bounds': {'lower': 0, 'upper': 'avail'}}},
     'constraints': {'cap': {'foreach': [], 'expression': 'sum(p, over=n) <= 100'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(p * cost, over=n)'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(p * cost)'},
 }
 
 
@@ -2033,7 +2033,7 @@ def test_an_empty_index_keeps_the_dimension_s_declared_dtype(declared, dtype, gr
         'dimensions': {'cut': declared},
         'parameters': {'c': {'dims': ['cut']}},
         'variables': {'x': {'foreach': ['cut'], 'bounds': {'lower': 0}}},
-        'objective': {'sense': 'minimize', 'expression': 'x * c'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x * c)'},
     }
     empty = pl.DataFrame(schema={'cut': dtype, 'value': pl.Float64})
     with lps.build(model, {'c': empty} | {'cut': []}) as bound:
@@ -2114,7 +2114,7 @@ def test_a_row_of_only_zeros_stays_the_infeasibility_it_is():
 def test_a_zero_objective_coefficient_is_not_handed_to_the_solver():
     """A cost of zero and no cost at all are the same instruction."""
     a = _spelled_zeros([[1.0, 1.0]])
-    model = override(SPELLED_ZEROS_MODEL, objective={'sense': 'minimize', 'expression': 'x * cost'})
+    model = override(SPELLED_ZEROS_MODEL, objective={'sense': 'minimize', 'expression': 'sum(x * cost)'})
     model['parameters'] = {**model['parameters'], 'cost': {'dims': ['j']}}
     cost = pl.DataFrame({'j': [0, 1], 'value': [0.0, 5.0]})
     with lps.build(model, {'a': a, 'cost': cost}) as bound:

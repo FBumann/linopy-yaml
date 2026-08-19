@@ -206,7 +206,7 @@ SCALAR_ROW_MODEL = {
         'slack': {'foreach': [], 'bounds': {'lower': 0, 'upper': 10}},
     },
     'constraints': {'budget_row': {'foreach': [], 'expression': 'sum(x, over=f) - slack <= budget'}},
-    'objective': {'sense': 'maximize', 'expression': 'x * cost'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
 }
 
 
@@ -275,7 +275,7 @@ DATETIME_MODEL = {
             'expression': 'sum(p, over=generator) == load',
         }
     },
-    'objective': {'sense': 'minimize', 'expression': 'p * cost'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
 

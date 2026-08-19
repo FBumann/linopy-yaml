@@ -661,7 +661,7 @@ constraints:
 
 objective:
   sense: minimize
-  expression: sum(gen_cost, over=generator)
+  expression: sum(gen_cost)
 """
 
 

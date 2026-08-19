@@ -1,15 +1,19 @@
 """What an objective sums, when its terms do not carry the same dims.
 
-The rule is one line of the declaration rules — an objective is a scalar, so every dim it
-names is summed — and the whole content of these tests is *which* dims belong
-to *what*. A term is summed over the dims that term carries. A term is not
-repeated because a sibling term carries a dim it does not.
+An objective is one number and says so: the expression is scalar or the file
+does not load, so every reduction in it is one somebody wrote. What these
+tests hold is that the two readings a bracket allows are **both sayable and
+different** — ``sum(a) + sum(b)`` totals each term over its own dims, while
+``sum(a + b)`` broadcasts and counts each once per coordinate of the other.
 
 That distinction is invisible while every term of an objective has the same
 dims, which is every model the rest of the suite builds. It becomes an 8x
 error the moment an objective spans a sparse ``(snapshot, node, tech)``
 variable and a dense ``(snapshot, node, carrier)`` one — the shape a real cost
-function has, and the shape that found #197.
+function has, and the shape that found #197. What #197 fixed by *rule* — the
+implied sum distributing over addition — is now spelled at the call site, and
+#1069 is why: the rule was invisible in the file and the math block disagreed
+with the LP about it (#1046).
 """
 
 from __future__ import annotations
@@ -33,7 +37,7 @@ DISJOINT_MODEL = {
         'y': {'foreach': ['j'], 'bounds': {'lower': 1, 'upper': 1}},
     },
     'constraints': {'floor': {'foreach': ['i'], 'expression': 'x >= 0'}},
-    'objective': {'sense': 'minimize', 'expression': 'x * a + y * b'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x * a) + sum(y * b)'},
 }
 
 
@@ -52,34 +56,76 @@ def data():
 
 
 @pytest.mark.parametrize(
-    ('expression', 'expected', 'broadcast_would_give'),
+    ('expression', 'expected'),
     [
-        pytest.param('x * a + y * b', 32.0, 66.0, id='a-sum-of-two-terms'),
-        pytest.param('x * a - y * b', -28.0, -54.0, id='a-difference'),
-        pytest.param('-(x * a + y * b)', -32.0, -66.0, id='negated'),
-        pytest.param('(x * a + y * b) * c', 6400.0, 13200.0, id='an-operator-applied-to-the-group'),
-        pytest.param('(x * a + y * b) / 2', 16.0, 33.0, id='a-divisor-applied-to-the-group'),
-        pytest.param(
-            'sum(x * a, over=i) + sum(y * b, over=j)',
-            32.0,
-            32.0,
-            id='already-scalar-per-term-the-control-that-always-agreed',
-        ),
+        pytest.param('sum(x * a) + sum(y * b)', 32.0, id='a-sum-per-term'),
+        pytest.param('sum(x * a + y * b)', 66.0, id='one-sum-around-both-broadcasts'),
+        pytest.param('sum(x * a) - sum(y * b)', -28.0, id='a-difference'),
+        pytest.param('-(sum(x * a) + sum(y * b))', -32.0, id='negated'),
+        pytest.param('sum(x * a * c) + sum(y * b * c)', 6400.0, id='a-factor-in-each-term'),
+        pytest.param('sum((x * a + y * b) * c)', 13200.0, id='a-factor-over-the-broadcast-group'),
+        pytest.param('(sum(x * a) + sum(y * b)) / 2', 16.0, id='a-divisor-applied-to-the-group'),
+        pytest.param('sum(x * a, over=i) + sum(y * b, over=j)', 32.0, id='the-dims-named-one-at-a-time'),
     ],
 )
-def test_a_term_is_summed_over_its_own_dims(data, expression, expected, broadcast_would_give):
-    """Each term totals its own dims, whatever is wrapped around the group.
+def test_where_the_sum_is_written_decides_what_it_counts(data, expression, expected):
+    """Two readings, both sayable, and the bracket is what picks.
 
     ``differential`` already asserts the two lanes agree; what it cannot know is
     whether they agree on the *right* number, and before #197 they disagreed in
-    exactly this shape. The operator cases are what say the rule survives
-    something applied to the group rather than holding only at the top of the
-    expression.
+    exactly this shape. The pairs here are what make the rule readable rather
+    than remembered: 32 against 66, and 6400 against 13200, differ only in
+    where the sum's bracket closes.
     """
     model = {**DISJOINT_MODEL, 'objective': {'sense': 'minimize', 'expression': expression}}
     with differential(model, data) as run:
         assert run.oracle == pytest.approx(expected)
-        assert run.oracle != pytest.approx(broadcast_would_give) or expected == broadcast_would_give
+
+
+#: #1046's model: a bracketed addition under a product, its branches on
+#: different dims. The two readings differ by a factor of |j| on the first
+#: term, and the file used to pick one while the math block printed the other.
+BRACKETED_MODEL = {
+    'dimensions': {'i': {'dtype': 'int', 'values': [0, 1]}, 'j': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'parameters': {'c': {'dims': ['i']}},
+    'variables': {
+        'x': {'foreach': ['i'], 'bounds': {'lower': 1, 'upper': 1}},
+        'y': {'foreach': ['j'], 'bounds': {'lower': 1, 'upper': 1}},
+    },
+    'constraints': {'floor': {'foreach': ['i'], 'expression': 'x >= 0'}},
+}
+
+
+@pytest.mark.parametrize(
+    ('expression', 'expected'),
+    [
+        pytest.param('sum(c * (x + y))', 660.0, id='the-bracket-broadcasts-and-the-page-says-so'),
+        pytest.param('sum(c * x) + sum(c * y)', 440.0, id='distributed-by-hand-is-a-different-model'),
+    ],
+)
+def test_a_bracketed_addition_under_a_product_means_what_it_prints(expression, expected):
+    """#1046: the shape whose math block and LP file disagreed.
+
+    ``c * (x + y)`` carried dims, so it is now refused outright and both
+    readings have to be written down — 30 per unit of ``x[0]`` where the sum
+    closes outside the bracket, 10 where it closes around each term. What made
+    the old spelling a silent bug is that the page showed the first and the
+    solver was handed the second.
+    """
+    data = {'c': pd.Series([10.0, 100.0], index=pd.Index([0, 1], name='i'))}
+    model = {**BRACKETED_MODEL, 'objective': {'sense': 'minimize', 'expression': expression}}
+    with differential(model, data, lp=True) as run:
+        assert run.oracle == pytest.approx(expected)
+
+
+def test_an_objective_carrying_dims_is_refused_with_the_wrapper_named():
+    """The rule that used to be implied is now the load error that asks for it."""
+    import lpspec as lps
+    from lpspec.errors import DimensionError
+
+    model = {**DISJOINT_MODEL, 'objective': {'sense': 'minimize', 'expression': 'x * a + y * b'}}
+    with pytest.raises(DimensionError, match=r"carries dims \['i', 'j'\].*Wrap each additive term"):
+        lps.load_model(model)
 
 
 #: No `objective:` at all — the constraints are the whole question, and the

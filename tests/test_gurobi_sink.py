@@ -63,7 +63,7 @@ INFEASIBLE = {
     'parameters': {'load': {'dims': ['t']}},
     'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'meet': {'foreach': ['t'], 'expression': 'p == load'}},
-    'objective': {'sense': 'minimize', 'expression': 'p'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
 }
 
 #: Each case is the ``(model, data)`` pair a call site unpacks:

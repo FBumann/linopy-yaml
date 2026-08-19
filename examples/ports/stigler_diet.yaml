@@ -38,4 +38,4 @@ constraints:
 objective:
   sense: minimize
   description: dollars a day, which is what the variables already are
-  expression: spend
+  expression: sum(spend)

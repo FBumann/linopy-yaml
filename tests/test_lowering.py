@@ -78,8 +78,8 @@ def test_lower_program_structure(dispatch_schema):
     assert c.rhs == Parameter('load')
 
     assert program.objective.sense == 'min'
-    assert program.objective.expression == Variable('p') * Parameter('cost'), (
-        'no sum: an objective totals every dim it carries, so writing one would restate it'
+    assert program.objective.expression == Sum(Variable('p') * Parameter('cost'), ('generator', 'snapshot')), (
+        'the objective carries the sum the file wrote, over the dims it named none of'
     )
 
 
@@ -146,7 +146,7 @@ NETWORK = {
     'dimensions': {'from_bus': {'values': ['n1', 'n2']}, 'to_bus': {'values': ['n1', 'n2']}},
     'parameters': {'cap': {'dims': ['from_bus', 'to_bus']}},
     'variables': {'f': {'foreach': ['from_bus', 'to_bus'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-    'objective': {'sense': 'maximize', 'expression': 'f'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(f)'},
 }
 
 #: Asymmetric, so a transposition changes the answer rather than hiding in it.

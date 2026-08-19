@@ -29,11 +29,11 @@ from tests.oracle import lpspec_linopy  # skips the module without the [linopy] 
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
-        pytest.param('sum(p * p, over=generator)', 'degree 2', id='variable-times-variable'),
-        pytest.param('sum(cost / p, over=generator)', 'divisor contains variables', id='variable-in-a-divisor'),
-        pytest.param('sum(p ** 2, over=generator)', r"operator '\*\*'", id='an-operator-outside-the-language'),
+        pytest.param('sum(p * p)', 'degree 2', id='variable-times-variable'),
+        pytest.param('sum(cost / p)', 'divisor contains variables', id='variable-in-a-divisor'),
+        pytest.param('sum(p ** 2)', r"operator '\*\*'", id='an-operator-outside-the-language'),
         pytest.param(
-            'sum(p / (1 - cost), over=generator)',
+            'sum(p / (1 - cost))',
             'must be a single Constant/Parameter factor',
             id='a-divisor-that-adds',
         ),
@@ -65,6 +65,6 @@ def test_the_eager_lane_still_accepts_an_affine_product(tmp_path, dispatch_model
     would be caught here rather than by every other test at once.
     """
     data = dispatch_model_inputs
-    path = dispatch_model_path(tmp_path, **{'objective.expression': 'sum(p * cost, over=generator)'})
+    path = dispatch_model_path(tmp_path, **{'objective.expression': 'sum(p * cost)'})
     model = lpspec_linopy.build(path, data)
     assert model.objective is not None
