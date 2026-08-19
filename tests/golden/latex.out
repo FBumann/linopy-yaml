@@ -68,6 +68,7 @@
 \text{history} && \sum_{t' \in \mathcal{T} \,:\, 0 \le t \ominus t' < \mathit{min\_up}} \mathit{on}_{t',g} & \le \mathit{units}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
 \text{pullback} && \mathit{spill}_{t} & \le \mathit{zone}^{\mathrm{cap}}_{\mathrm{zone\_of}(b)} && \forall\, t \in \mathcal{T},\ b \in \mathcal{B} \\
 \text{arithmetic} && \sum_{g \in \mathcal{G}} \left( \frac{p_{t,g}}{2} + -\mathit{cost}_{g} \right) & \ge \left( -\left( \sum_{g \in \mathcal{G}} p_{t,g} \right) \right) \cdot 3 && \forall\, t \in \mathcal{T} \\
+\text{total} && \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} & \le \mathit{budget} \\
 \text{scalar} && \mathit{units}_{g} & \le \mathit{budget} && \forall\, g \in \mathcal{G} \,:\, \mathit{cost}_{g} \text{ is defined} \\
 \text{running} && \mathit{theta}_{b} & \le \mathit{load}_{t,b} && \forall\, t \in \mathcal{T},\ b \in \mathcal{B} \,:\, \mathit{theta}_{b} \text{ exists} \wedge t \ge 3 \\
 \text{first} && \mathit{on}_{t,g} & = 1 && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \left( t = \mathrm{index}(\mathcal{T}, 0) \vee t = \mathrm{index}(\mathcal{T}, 0, \mathrm{season\_of}(t)) \right) \\

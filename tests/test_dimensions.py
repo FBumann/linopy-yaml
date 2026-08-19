@@ -70,6 +70,8 @@ def test_the_base_model_typechecks():
         ('p', {'snapshot', 'generator'}),
         ('-p', {'snapshot', 'generator'}),
         ('p * cost', {'snapshot', 'generator'}),
+        ('sum(p)', set()),
+        ('sum(p * cost)', set()),
         ('sum(p, over=generator)', {'snapshot'}),
         ('sum(p * cost, over=generator)', {'snapshot'}),
         ('sum(p, by=gen_bus)', {'snapshot', 'bus'}),
@@ -89,6 +91,11 @@ def test_dim_inference(expr, expected):
             'sum(p, over=bus)',
             r'sum\(over=bus\) but the expression has dims',
             id='sum-over-an-absent-dim-is-an-error-not-a-noop',
+        ),
+        pytest.param(
+            'sum(sum(p))',
+            r'the expression is already a scalar',
+            id='a-bare-sum-of-a-scalar-is-an-error-not-a-noop',
         ),
         pytest.param(
             'sum(load, by=gen_bus)',

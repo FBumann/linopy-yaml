@@ -121,6 +121,9 @@ constraints:
     # tests rather than from here.
     foreach: [snapshot]
     expression: sum(p / 2 + -cost, over=generator) >= -sum(p, over=generator) * 3
+  total:        # a sum naming no dim, whose domain is the one place the dims it took are said
+    foreach: []
+    expression: sum(p) <= budget
   scalar:       # a parameter over nothing, and a mask that is a bare parameter
     foreach: [generator]
     where: "cost"

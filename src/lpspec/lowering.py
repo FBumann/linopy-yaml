@@ -271,6 +271,8 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             by_node = node.kwargs.get('by')
             _check_dim_rules(node, schema, context)
             operand = _lower_expr(node.args[0], schema, context)
+            if by_node is None and 'over' not in node.kwargs:
+                return plan.Sum(operand, tuple(sorted(dims_of(node.args[0], schema, context))))
             if by_node is None:
                 over_node = node.kwargs['over']
                 if not isinstance(over_node, DimensionNode):
