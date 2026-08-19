@@ -12,6 +12,7 @@ model, nothing retained. What is left to pin is that it puts nothing on
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import textwrap
@@ -220,6 +221,74 @@ class TestLoadParameters:
         with pytest.raises(ValueError, match=match):
             tidy = tidy_sources(s, data)
             loader.load_parameters(s, tidy, loader.dimension_coords(s, tidy)[0])
+
+
+# ---------------------------------------------------------------------------
+# builder: the operand shapes an operator refuses
+# ---------------------------------------------------------------------------
+
+
+class TestOperandShapesAnOperatorRefuses:
+    """Reachable only by a hand-built call, and therefore only from here.
+
+    `validation.py` refuses every one of these at load, so a model cannot carry
+    them and no end-to-end test can reach the guards. Deleting any of the four
+    left the whole suite green, which is the case the rules say gets a
+    purpose-built probe rather than a shrug: they are the difference between a
+    caller of `lpspec.linopy.builder` seeing the sentence and seeing an
+    `AttributeError` from inside xarray.
+    """
+
+    @pytest.mark.parametrize(
+        ('call', 'kwargs'),
+        [
+            pytest.param(
+                builder._operator_grouped_sum, {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}}, id='sum-by'
+            ),
+            pytest.param(builder._operator_at, {'into': ('b',)}, id='at'),
+        ],
+    )
+    def test_a_lookup_that_is_not_an_array_names_what_arrived(self, call, kwargs):
+        array = xr.DataArray([1.0, 2.0], dims=['g'], coords={'g': ['w', 's']})
+
+        with pytest.raises(TypeError, match='lookup must be an array'):
+            call(array, ({'w': 'n'},), **kwargs)
+
+    @pytest.mark.parametrize(
+        ('call', 'kwargs'),
+        [
+            pytest.param(
+                builder._operator_grouped_sum, {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}}, id='sum-by'
+            ),
+            pytest.param(builder._operator_at, {'into': ('b',)}, id='at'),
+        ],
+    )
+    def test_a_lookup_over_two_dims_is_refused_as_language(self, call, kwargs):
+        """A lookup is one column of one index, so two dims is not a shape it has."""
+        array = xr.DataArray([1.0, 2.0], dims=['g'], coords={'g': ['w', 's']})
+        wide = xr.DataArray([['n', 'e']], dims=['t', 'g'], coords={'t': [0], 'g': ['w', 's']})
+
+        with pytest.raises(LanguageError, match='exactly one dimension'):
+            call(array, (wide,), **kwargs)
+
+    @pytest.mark.parametrize(
+        ('call', 'kwargs', 'named'),
+        [
+            pytest.param(
+                builder._operator_grouped_sum,
+                {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}},
+                'sum(by=)',
+                id='sum-by',
+            ),
+            pytest.param(builder._operator_at, {'into': ('b',)}, 'at()', id='at'),
+        ],
+    )
+    def test_an_operand_the_operator_cannot_read_names_the_call(self, call, kwargs, named):
+        """The operand reaches the guard, not xarray — so the message says which operator."""
+        mapping = xr.DataArray(['n', 'n'], dims=['g'], coords={'g': ['w', 's']})
+
+        with pytest.raises(TypeError, match=re.escape(named)):
+            call(object(), (mapping,), **kwargs)
 
 
 # ---------------------------------------------------------------------------
