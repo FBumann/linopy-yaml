@@ -7,10 +7,13 @@ stated as tables: a new rule is a row, and a rule that silently stops firing
 is a row that stops failing.
 """
 
+import json
+
 import pytest
 
 from lpspec.errors import SchemaError
 from lpspec.language.model import Model
+from tools import schema
 
 
 def test_empty_schema():
@@ -446,3 +449,67 @@ def test_an_unknown_key_in_a_named_expression_is_rejected():
     body = {'expression': 'sum(p, over=g)', 'describtion': 'typo'}
     with pytest.raises(SchemaError, match=r"unknown key 'describtion' in a named expression"):
         Model.model_validate({**EXPRESSIONS, 'expressions': {'e': body}})
+
+
+# ---------------------------------------------------------------------------
+# the published JSON Schema is these models, verbatim
+# ---------------------------------------------------------------------------
+
+
+def test_the_checked_in_json_schema_has_not_drifted():
+    assert schema.PATH.read_text() == schema.rendered(), (
+        'schema/lpspec.schema.json no longer matches the models — run `uv run python -m tools.schema`'
+    )
+
+
+def test_the_json_schema_admits_what_the_loader_admits():
+    """The two shorthands live in before-validators, which pydantic's generated
+    schema cannot see — each needs its own schema hook in model.py, and losing a
+    hook loses the shorthand from every editor silently."""
+    doc = json.loads(schema.PATH.read_text())
+    link = doc['$defs']['PiecewiseLink']
+    assert any(form.get('type') == 'array' for form in link.get('anyOf', [])), (
+        'the schema lost the `[expression, values, sign?]` link shorthand the loader accepts'
+    )
+    expression = doc['$defs']['ExpressionBlock']
+    assert {'type': 'string'} in expression.get('anyOf', []), (
+        'the schema lost the bare-string form a named expression is written in'
+    )
+
+
+def test_no_definition_refers_only_to_itself():
+    """A widened block must inline its mapping form, not point back at its own entry.
+
+    `handler()` inside a `__get_pydantic_json_schema__` override returns a
+    `$ref` on some pydantic versions and the definition itself on others. Wrap
+    the ref and the entry becomes `{anyOf: [{$ref: itself}, ...]}` — a loop
+    that leaves the mapping form unreachable, which is a broken artefact rather
+    than a drifted one. Rendered here, not read from the file, so it fails on
+    whichever pydantic is installed.
+    """
+    doc = json.loads(schema.rendered())
+    for name, entry in doc['$defs'].items():
+        branches = entry.get('anyOf', [])
+        assert {'$ref': f'#/$defs/{name}'} not in branches, (
+            f'{name} lists a $ref to itself as an anyOf branch, so the form it widens is unreachable'
+        )
+
+
+@pytest.mark.parametrize(
+    ('block', 'field', 'vocabulary'),
+    [
+        pytest.param('ObjectiveBlock', 'sense', ['maximize', 'minimize'], id='sense'),
+        pytest.param('VariableBlock', 'domain', ['binary', 'continuous', 'integer'], id='domain'),
+        pytest.param('VariableBlock', 'absence', ['undefined', 'zero'], id='absence'),
+        pytest.param('ParameterBlock', 'dtype', ['bool', 'float', 'int', 'str'], id='parameter-dtype'),
+        pytest.param('DimensionBlock', 'dtype', ['datetime', 'float', 'int', 'str'], id='dimension-dtype'),
+        pytest.param('PiecewiseBlock', 'method', ['adjacency', 'convex', 'sos2'], id='method'),
+        pytest.param('SosBlock', 'type', [1, 2], id='sos-type'),
+    ],
+)
+def test_a_closed_vocabulary_is_published_as_an_enum(block, field, vocabulary):
+    """A field checked by a validator says `string` to pydantic, so each closed
+    set feeds its own enum — the completion an editor offers is this list."""
+    doc = json.loads(schema.PATH.read_text())
+    published = doc['$defs'][block]['properties'][field]
+    assert published.get('enum') == vocabulary, f'{block}.{field} stopped publishing its closed vocabulary'
