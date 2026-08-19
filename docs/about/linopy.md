@@ -84,6 +84,42 @@ file allowed to reference names it did not declare, and paying for that
 exception across the whole language layer bought one use case. Build a second
 model and merge it.
 
+### What a construct becomes
+
+The whole translation, in one place — what `lpspec.linopy.build` calls for each
+thing a file can say. `linopy/builder.py` is where each row lives, one section
+per group below.
+
+| Declaration | linopy |
+|---|---|
+| `variables:` | `Model.add_variables(lower, upper, coords, name, mask, binary, integer)` |
+| `sos:` | `Model.add_sos_constraints(variable, sos_type, sos_dim, big_m)` — the block handed over, not a formulation rebuilt |
+| `constraints:` | `Model.add_constraints(lhs, sign, rhs, name, mask)`, one rule per declaration |
+| `objective:` | `Model.add_objective(expr, sense)`, each additive term summed over the dims it carries |
+| `expressions:` | evaluated on the solved model, and linopy's own `.solution` handed back |
+
+| In an expression | linopy or xarray |
+|---|---|
+| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `absence: zero` |
+| `p` — a parameter | its `xr.DataArray`, `.fillna(0.0)` where it stands as a coefficient |
+| `+` `-` `*` `/` | the Python operators linopy overloads |
+| `sum(x, over=t)` | `.sum('t')` |
+| `sum(x, by=lk)` | the lookup attached as a coordinate, then `.groupby()`, reindexed onto the target dimension's declared labels — one key per lookup, so `by=[lk1, lk2]` groups by both at once |
+| `at(p, by=lk)` | `.sel({into: lookup})` — xarray's vectorised selection *is* the pullback, and one entry per lookup reads a tuple of labels at once |
+| `shift(x, over=t, offset=n)` | `.shift({t: n})`; `.roll({t: n})` under `edge: wrap`; a `.sel()` gather where the offset differs per entity or `by=` groups it |
+| `sum_back(x, over=t, within=w)` | a sum of `w` scalar gathers, each unreachable position contributing zero |
+
+| A `where:` | linopy |
+|---|---|
+| on a declaration | the `mask=` argument — a mask that excludes nothing is passed as `None` |
+| `defined(x)` | `Model.variables['x'].labels != -1`, linopy's own marker for an absent slot |
+| a comparison | the Python comparison operators element-wise, absence reading as false |
+
+Absence is the one thing with no single row: it is positional, so a missing
+parameter row is zero in a coefficient, an error in `bounds:`, and false in a
+`where` operand. The `Absence, as this lane spells it` section of
+`linopy/builder.py` holds all four spellings together.
+
 ### The same language, and the same data
 
 The lane accepts **exactly the same language** — that equality is what makes the

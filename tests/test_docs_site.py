@@ -354,3 +354,28 @@ def test_no_row_without_a_class():
         f'{ERROR_TABLE.name} has a row for {sorted(_tabled_errors() - _public_errors())}, '
         'which lpspec.errors does not define'
     )
+
+
+# the lane, as a translation
+
+
+def test_the_translation_table_names_every_built_in_operator():
+    """`What a construct becomes` is a copy of the builder, so something checks it.
+
+    The page's own rule, one section up: a copy nobody checks is a copy that
+    rots. What it would rot into is a reader believing the lane translates a
+    construct it no longer has, or — worse for the oracle — missing one it
+    gained, since an operator with no row is an operator nobody wrote down the
+    linopy call for.
+    """
+    from lpspec.language.operators import BUILTIN_NAMES
+
+    page = (DOCS / 'about' / 'linopy.md').read_text()
+    section = page.split('### What a construct becomes')[1].split('### The same language')[0]
+    expressions = section.split('| In an expression |')[1].split('| A `where:` |')[0]
+    shown = set(re.findall(r'^\| `(\w+)\(', expressions, re.MULTILINE))
+
+    assert shown == set(BUILTIN_NAMES), (
+        f"the translation table shows {sorted(shown)} against the language's "
+        f'{sorted(BUILTIN_NAMES)} — every built-in needs the linopy call it becomes'
+    )

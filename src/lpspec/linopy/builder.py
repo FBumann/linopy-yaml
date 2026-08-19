@@ -13,6 +13,10 @@ exist to make; ``AST evaluation`` for what an expression is worth;
 and its own machinery after; ``Where-mask evaluation`` for a predicate as a
 boolean array; and ``Absence`` for the four positions an absent value is
 spelled differently in.
+
+*Which* linopy call each construct becomes is the table in
+``docs/about/linopy.md`` — one page rather than a comment per site, and
+``tests/test_docs_site.py`` holds it to the operator list.
 """
 
 from __future__ import annotations
