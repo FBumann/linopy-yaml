@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.219](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.218...v0.0.1-alpha.219) (2026-08-19)
+
+
+### Documentation
+
+* **language:** the short-curve remedy names the two methods that refuse it ([#1111](https://github.com/fluxopt/lpspec/issues/1111)) ([a22f099](https://github.com/fluxopt/lpspec/commit/a22f0991b4796041503d6b39596cf85dd9e41c99))
+
 ## [0.0.1-alpha.218](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.217...v0.0.1-alpha.218) (2026-08-19)
 
 
