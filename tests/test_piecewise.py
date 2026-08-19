@@ -749,6 +749,212 @@ def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
 
 
 # ---------------------------------------------------------------------------
+# points: a curve shorter than its breakpoint dimension
+# ---------------------------------------------------------------------------
+
+SHORT_CURVE = """
+dimensions:
+  generator: {dtype: str}
+  bp: {dtype: int}
+
+parameters:
+  p_max: {dims: [generator]}
+  load: {dims: []}
+  bp_x: {dims: [generator, bp]}
+  bp_y: {dims: [generator, bp]}
+  bp_present: {dims: [generator, bp], dtype: bool}
+
+variables:
+  p:
+    foreach: [generator]
+    bounds: {lower: 0, upper: p_max}
+  op_cost:
+    foreach: [generator]
+    bounds: {lower: 0}
+
+piecewise:
+  cost_curve:
+    over: bp
+    points: bp_present
+    links:
+      - [p, bp_x]
+      - [op_cost, bp_y]
+
+constraints:
+  balance:
+    foreach: []
+    expression: sum(p, over=generator) == load
+
+objective:
+  sense: minimize
+  expression: sum(op_cost, over=generator)
+"""
+
+#: A three-breakpoint dimension where B is a two-point curve starting at (10, 100):
+#: at a load of 25 the cheap answer runs B at 20 and A at 5, for 155.
+A_AND_SHORT_B = {
+    'x': {('A', 0): 0.0, ('A', 1): 10.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0},
+    'y': {('A', 0): 0.0, ('A', 1): 50.0, ('A', 2): 140.0, ('B', 0): 100.0, ('B', 1): 130.0},
+}
+
+
+def curve_frame(values):
+    return pl.DataFrame(
+        {
+            'generator': [g for g, _ in values],
+            'bp': [k for _, k in values],
+            'value': list(values.values()),
+        }
+    )
+
+
+@pytest.fixture
+def short_curve_inputs():
+    """B's rows stop at its second breakpoint, and the mask says so."""
+    present = {(g, k): ((g, k) in A_AND_SHORT_B['x']) for g in ('A', 'B') for k in range(3)}
+    return {
+        'generator': ['A', 'B'],
+        'bp': [0, 1, 2],
+        'load': pl.DataFrame({'value': [25.0]}),
+        'p_max': pl.DataFrame({'generator': ['A', 'B'], 'value': [20.0, 20.0]}),
+        'bp_x': curve_frame(A_AND_SHORT_B['x']),
+        'bp_y': curve_frame(A_AND_SHORT_B['y']),
+        'bp_present': curve_frame(present),
+    }
+
+
+@pytest.mark.parametrize('method', ['adjacency', 'sos2', 'convex', 'lp'])
+def test_a_masked_curve_reaches_the_optimum_its_own_points_put_it_at(short_curve_inputs, method):
+    """Every method reads the mask, and two of them have no other way to take a short curve.
+
+    `convex` and `lp` require strictly increasing breakpoints, so the padding
+    that serves `adjacency` and `sos2` is refused there — before this the
+    shorter curve could not be written at all.
+    """
+    raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
+    if method == 'lp':
+        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+
+    result = lps.solve(raw, short_curve_inputs)
+
+    assert result.objective == pytest.approx(155.0), 'B runs at 20 on its own two points, A at 5'
+
+
+def test_the_mask_is_smaller_than_padding_the_curve_out(short_curve_inputs):
+    """What the mask buys: the padded breakpoint costs a weight and a binary."""
+    padded = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
+    padded['bp_x'] = curve_frame({**A_AND_SHORT_B['x'], ('B', 2): 20.0})
+    padded['bp_y'] = curve_frame({**A_AND_SHORT_B['y'], ('B', 2): 130.0})
+    unmasked = raw_of(SHORT_CURVE)
+    del unmasked['piecewise']['cost_curve']['points']
+    del unmasked['parameters']['bp_present']
+
+    with lps.build(raw_of(SHORT_CURVE), short_curve_inputs) as masked_model:
+        masked = masked_model.diagnostics()
+        assert masked_model.solve('highs').objective == pytest.approx(155.0)
+    with lps.build(unmasked, padded) as padded_model:
+        grown = padded_model.diagnostics()
+        assert padded_model.solve('highs').objective == pytest.approx(155.0), 'the same answer, larger'
+
+    assert masked.columns < grown.columns, 'a masked breakpoint declares no weight and no segment binary'
+
+
+def test_a_masked_breakpoint_declares_no_segment_binary(short_curve_inputs):
+    """The mask is on the declarations, and the binaries are half of what it saves.
+
+    The answer alone cannot see this: an unmasked binary at a breakpoint no
+    weight reaches is slack the solver never uses, so the objective is right
+    either way and the MILP is bigger for nothing.
+    """
+    result = lps.solve(raw_of(SHORT_CURVE), short_curve_inputs)
+
+    built = {(row['generator'], row['bp']) for row in result.primal('cost_curve_seg').to_dicts()}
+
+    assert ('B', 2) not in built, "B's curve stops at bp 1, so bp 2 has no segment to pick"
+    assert ('A', 2) in built, 'A runs the whole axis'
+
+
+def test_both_lanes_take_the_mask(short_curve_inputs, tmp_path):
+    """The mask is ordinary `where:` by the time either lane sees it (hard rule 3)."""
+    path = tmp_path / 'short_curve.yaml'
+    path.write_text(SHORT_CURVE)
+
+    built = lpspec_linopy.build(path, short_curve_inputs)
+    built.solve('highs', output_flag=False)
+
+    assert float(built.objective.value) == pytest.approx(155.0)
+
+
+@pytest.mark.parametrize(
+    ('present', 'match'),
+    [
+        pytest.param(
+            {('A', 0): True, ('A', 1): True, ('A', 2): True, ('B', 0): True, ('B', 1): False, ('B', 2): True},
+            'not a prefix',
+            id='a-gap-in-the-mask',
+        ),
+        pytest.param(
+            {('A', 0): True, ('A', 1): True, ('A', 2): True, ('B', 0): False, ('B', 1): False, ('B', 2): False},
+            'not a prefix',
+            id='a-curve-of-no-points-at-all',
+        ),
+    ],
+)
+def test_a_mask_that_is_not_a_prefix_is_refused(short_curve_inputs, present, match):
+    """The emitted rows read the mask as a length, so a gap builds a different curve.
+
+    The chord joins a breakpoint to the one before it and the upper domain row
+    is written where the mask stops; across a gap both are wrong, and neither
+    is wrong in a way the answer shows.
+    """
+    data = {**short_curve_inputs, 'bp_present': curve_frame(present)}
+
+    with pytest.raises(DataError, match=match):
+        tidy_sources(schema_of(raw_of(SHORT_CURVE)), data)
+
+
+def test_values_missing_where_the_mask_says_present_are_still_refused(short_curve_inputs):
+    """#1105's guard follows the mask rather than the whole product."""
+    thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
+    data = {**short_curve_inputs, 'bp_x': curve_frame(thin)}
+
+    with pytest.raises(DataError, match=r"'bp_x' has no value at"):
+        tidy_sources(schema_of(raw_of(SHORT_CURVE)), data)
+
+
+def test_values_the_mask_leaves_out_are_left_alone(short_curve_inputs):
+    """A table wider than the block uses is ordinary, not an error."""
+    spare = {**A_AND_SHORT_B['x'], ('B', 2): 999.0}
+    data = {**short_curve_inputs, 'bp_x': curve_frame(spare)}
+
+    assert lps.solve(raw_of(SHORT_CURVE), data).objective == pytest.approx(155.0), 'the masked row is not read'
+
+
+@pytest.mark.parametrize(
+    ('patch', 'match'),
+    [
+        pytest.param({'piecewise.cost_curve.points': 'nope'}, 'undeclared parameter', id='names-nothing'),
+        pytest.param(
+            {'parameters.bp_present': {'dims': ['generator'], 'dtype': 'bool'}},
+            "must carry dim 'bp'",
+            id='does-not-run-along-the-breakpoints',
+        ),
+        pytest.param(
+            {
+                'dimensions.zone': {'dtype': 'str'},
+                'parameters.bp_present': {'dims': ['zone', 'bp'], 'dtype': 'bool'},
+            },
+            'which the links do not',
+            id='carries-a-dim-the-block-does-not',
+        ),
+    ],
+)
+def test_a_mask_the_block_cannot_use_is_a_load_error(patch, match):
+    with pytest.raises(PiecewiseExpansionError, match=match):
+        lps.check(override(raw_of(SHORT_CURVE), **patch))
+
+
+# ---------------------------------------------------------------------------
 # the counterweight: convex piecewise with no formulation at all
 # ---------------------------------------------------------------------------
 

@@ -26,6 +26,7 @@ import polars as pl
 from lpspec.errors import (
     DataError,
     PiecewiseExpansionError,
+    curve_mask_is_not_a_prefix_message,
     curve_with_a_hole_message,
     declared_index_also_supplied_message,
     declared_map_needs_labels_message,
@@ -356,42 +357,112 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> N
             names to a frame or a path.
 
     Raises:
-        DataError: A link's values parameter with a hole in the product of the
-            dims it declares.
+        DataError: A link's values parameter with a hole where the block builds
+            a weight, or a ``points:`` mask that is not a prefix of the
+            breakpoint axis.
     """
     for block, pw in schema.piecewise.items():
+        mask = _prefix_mask(schema, block, pw, sources) if pw.points else None
         for link in pw.links:
             dims = list(schema.parameters[link.values].dims)
             present = _coordinates(sources.get(link.values), dims)
             if present is None:
                 continue
             extents = {d: _label_frame(d, sources, present) for d in dims}
-            expected = 1
-            for labels in extents.values():
-                expected *= labels.select(pl.len()).collect().item()
-            found = present.select(pl.len()).collect().item()
-            if found < expected:
+            if mask is None:
+                expected = 1
+                for labels in extents.values():
+                    expected *= labels.select(pl.len()).collect().item()
+                found = present.select(pl.len()).collect().item()
+                if found < expected:
+                    grid = _grid(extents, dims, present)
+                    raise DataError(
+                        curve_with_a_hole_message(block, link.values, _a_hole(grid, present, dims), expected, found)
+                    )
+                continue
+            required = _required_under_mask(mask, extents, dims, present)
+            counts = pl.collect_all([required.select(pl.len()), present.select(pl.len())])
+            if required.join(present, on=dims, how='anti').head(1).collect().height:
                 raise DataError(
-                    curve_with_a_hole_message(block, link.values, _a_hole(extents, present, dims), expected, found)
+                    curve_with_a_hole_message(
+                        block,
+                        link.values,
+                        _a_hole(required, present, dims),
+                        counts[0].item(),
+                        counts[1].item(),
+                    )
                 )
 
 
-def _coordinates(source: object, dims: Sequence[str]) -> pl.LazyFrame | None:
+def _prefix_mask(schema: Model, block: str, pw: Any, sources: Mapping[str, TidySource]) -> pl.LazyFrame | None:
+    """The coordinates ``points:`` marks present, checked to be a prefix per curve.
+
+    The emitted rows lean on the shape twice — the chord row on "my predecessor
+    is present", the upper domain row on "present here and absent next" — so a
+    mask with a gap in it, or one naming no breakpoint at all, builds a
+    formulation that says something other than the curve it came from.
+
+    Returns ``None`` where the mask is bound to something this cannot read,
+    which binding refuses on its own terms.
+    """
+    dims = list(schema.parameters[pw.points].dims)
+    table = _coordinates(sources.get(pw.points), dims, keep_value=True)
+    if table is None:
+        return None
+    order = _label_frame(pw.over, sources, table).with_row_index('_ord')
+    frame_dims = [d for d in dims if d != pw.over]
+    marked = table.filter(pl.col('value').cast(pl.Boolean)).join(order, on=pw.over, how='inner').select([*dims, '_ord'])
+    run_length = (pl.len().alias('marked'), pl.col('_ord').max().alias('last'))
+    summary = marked.group_by(frame_dims).agg(*run_length) if frame_dims else marked.select(*run_length)
+    broken = summary.filter(pl.col('last') + 1 != pl.col('marked')).head(1).collect()
+    if not broken.height and frame_dims:
+        extents = {d: _label_frame(d, sources, table) for d in frame_dims}
+        broken = _grid(extents, frame_dims, table).join(marked, on=frame_dims, how='anti').head(1).collect()
+    if broken.height:
+        shown = ', '.join(f'{d}={broken.row(0, named=True)[d]!r}' for d in frame_dims)
+        raise DataError(curve_mask_is_not_a_prefix_message(block, pw.points, pw.over, shown))
+    return marked.select(dims)
+
+
+def _required_under_mask(
+    mask: pl.LazyFrame, extents: Mapping[str, pl.LazyFrame], dims: Sequence[str], present: pl.LazyFrame
+) -> pl.LazyFrame:
+    """The coordinates a link's values must carry: the mask, widened to its dims.
+
+    A mask need not carry every dim the values do — one shared by every
+    generator is a curve length along ``over`` alone — so the dims it does not
+    name are crossed back in at their full extent.
+    """
+    dtypes = present.collect_schema()
+    shared = [d for d in dims if d in mask.collect_schema().names()]
+    required = mask.select(shared).unique()
+    for d in dims:
+        if d not in shared:
+            required = required.join(extents[d].select(pl.col(d).cast(dtypes[d])), how='cross')
+    return required.select(dims)
+
+
+def _coordinates(source: object, dims: Sequence[str], keep_value: bool = False) -> pl.LazyFrame | None:
     """The coordinates *source* carries, or ``None`` where it carries all of them.
 
     ``None`` covers both "dense by construction" and "not readable here" — a
     source binding refuses is refused there, with the message that knows what
-    the declaration wanted.
+    the declaration wanted. *keep_value* keeps the value column too, which the
+    ``points:`` mask is read from rather than merely counted.
     """
     if isinstance(source, (str, Path)):
         table = pl.scan_parquet(source)
     elif isinstance(source, Mapping) and len(dims) == 1:
-        return pl.LazyFrame({dims[0]: list(source.keys())})
+        keys = pl.LazyFrame({dims[0]: list(source.keys())})
+        return keys.with_columns(pl.Series('value', list(source.values())).implode().explode()) if keep_value else keys
     else:
         table = as_frame(source, tuple(dims))
     if table is None or not set(dims) <= set(table.collect_schema().names()):
         return None
-    return table.select(dims)
+    columns = [*dims, 'value'] if keep_value else list(dims)
+    if keep_value and 'value' not in table.collect_schema().names():
+        return None
+    return table.select(columns)
 
 
 def _label_frame(dim: str, sources: Mapping[str, TidySource], present: pl.LazyFrame) -> pl.LazyFrame:
@@ -404,27 +475,34 @@ def _label_frame(dim: str, sources: Mapping[str, TidySource], present: pl.LazyFr
     Falls back to the labels the curve itself carries, which is what a
     dimension with no index of its own is bound against: there the curve cannot
     be short of a breakpoint nothing else declares.
+
+    **Order is kept.** A count does not care, but the ``points:`` prefix check
+    numbers these labels to say where a curve stops, and an unordered unique
+    hands it a permutation — which fails, or does not, run to run.
     """
     source = sources.get(dim)
     if source is None:
-        return present.select(dim).unique()
+        return present.select(dim).unique(maintain_order=True)
     table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
-    return table.select(dim).unique()
+    return table.select(dim).unique(maintain_order=True)
 
 
-def _a_hole(extents: Mapping[str, pl.LazyFrame], present: pl.LazyFrame, dims: Sequence[str]) -> str:
-    """One coordinate the curve does not carry, written as the reader would look for it.
-
-    Built only on the way to raising, since the product it crosses is the whole
-    grid the curve was meant to cover. There is always such a coordinate: the
-    caller has counted fewer rows than that grid holds, and a repeated row can
-    only make the count larger.
-    """
+def _grid(extents: Mapping[str, pl.LazyFrame], dims: Sequence[str], present: pl.LazyFrame) -> pl.LazyFrame:
+    """Every coordinate the block builds a weight for, where nothing masks them."""
     dtypes = present.collect_schema()
     grid = extents[dims[0]].select(pl.col(dims[0]).cast(dtypes[dims[0]]))
     for dim in dims[1:]:
         grid = grid.join(extents[dim].select(pl.col(dim).cast(dtypes[dim])), how='cross')
-    row = grid.join(present, on=list(dims), how='anti').head(1).collect().row(0, named=True)
+    return grid
+
+
+def _a_hole(required: pl.LazyFrame, present: pl.LazyFrame, dims: Sequence[str]) -> str:
+    """One coordinate the curve does not carry, written as the reader would look for it.
+
+    Built only on the way to raising. There is always such a coordinate: the
+    caller reached here by carrying fewer than *required* holds.
+    """
+    row = required.join(present, on=list(dims), how='anti').head(1).collect().row(0, named=True)
     return '(' + ', '.join(f'{d}={row[d]!r}' for d in dims) + ')'
 
 
@@ -474,7 +552,9 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
         other = [d for d in xa.dims if d != pw.over]
         stacked_x = xa.transpose(*other, pw.over).values.reshape(-1, xa.sizes[pw.over])
         stacked_y = ya.transpose(*other, pw.over).values.reshape(-1, ya.sizes[pw.over])
-        for xs, ys in zip(stacked_x, stacked_y, strict=False):
+        for xs_all, ys_all in zip(stacked_x, stacked_y, strict=False):
+            live = ~(np.isnan(xs_all) | np.isnan(ys_all))
+            xs, ys = xs_all[live], ys_all[live]
             dx = np.diff(xs)
             if not (dx > 0).all():
                 raise PiecewiseExpansionError(

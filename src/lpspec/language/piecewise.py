@@ -74,6 +74,12 @@ def expand_piecewise(schema: Model) -> Model:
     leaving the first lambda unconstrained by segment selection — a wrong MILP
     with no error, which is why #289 kept the escape hatch.
 
+    ``points:`` masks the *declarations* — the weights and the segment binaries
+    — and no constraint. Every emitted row either reduces over the breakpoint
+    axis, where absence does not spread, or carries a masked weight, which
+    takes the row with it: a second ``where:`` on the adjacency row builds the
+    same model down to the column.
+
     Building the expanded ``Model`` validates it, so the result is memoised
     on *schema* — a validated schema already carries the expansion its own
     validation built (:class:`Model` expands as a check on the way in), and
@@ -100,6 +106,7 @@ def expand_piecewise(schema: Model) -> Model:
 
         raw['variables'][lam] = {
             'foreach': [*frame, pw.over],
+            **({'where': pw.points} if pw.points else {}),
             'bounds': {'lower': 0.0, 'upper': 1.0},
             'description': 'convex-combination weight on a breakpoint',
         }
@@ -118,6 +125,7 @@ def expand_piecewise(schema: Model) -> Model:
         elif pw.method == 'adjacency':
             raw['variables'][seg] = {
                 'foreach': [*frame, pw.over],
+                **({'where': pw.points} if pw.points else {}),
                 'domain': 'binary',
                 'bounds': {},
             }
@@ -154,24 +162,42 @@ def _expand_lp(raw: dict[str, Any], name: str, pw: PiecewiseBlock, frame: tuple[
     A segment line does not stop where its segment does, so the two domain rows
     are what keeps the formulation inside the curve's own range. They are
     ``linopy``'s ``_add_lp`` rows under its own names.
+
+    Under ``points:`` the upper one moves off the breakpoint axis: the last
+    breakpoint is then each curve's own, and ``where:`` takes no operators to
+    find it with. ``points - shift(points, offset=-1)`` is 1 exactly where a
+    curve ends, so the bound is read as a sum over the axis instead of a row
+    sitting on one coordinate of it — which is why the mask has to be a prefix.
     """
     x_link, y_link = pw.curve
     d = pw.over
     run = f'({x_link.values} - shift({x_link.values}, over={d}, offset=1, edge=0))'
     rise = f'({y_link.values} - shift({y_link.values}, over={d}, offset=1, edge=0))'
+    interior = f'{d} != index({d}, 0)'
     raw['constraints'][f'{name}_chord'] = {
         'foreach': [*frame, d],
-        'where': f'{d} != index({d}, 0)',
+        'where': f'{pw.points} AND {interior}' if pw.points else interior,
         'expression': (
             f'({y_link.expression}) * {run} {y_link.sign} '
             f'{rise} * (({x_link.expression}) - {x_link.values}) + {y_link.values} * {run}'
         ),
     }
-    for suffix, sense, position in (('domain_lo', '>=', 0), ('domain_hi', '<=', -1)):
-        raw['constraints'][f'{name}_{suffix}'] = {
+    raw['constraints'][f'{name}_domain_lo'] = {
+        'foreach': [*frame, d],
+        'where': f'{d} == index({d}, 0)',
+        'expression': f'({x_link.expression}) >= {x_link.values}',
+    }
+    if pw.points:
+        last = f'({pw.points} - shift({pw.points}, over={d}, offset=-1, edge=0))'
+        raw['constraints'][f'{name}_domain_hi'] = {
+            'foreach': list(frame),
+            'expression': f'({x_link.expression}) <= sum({x_link.values} * {last}, over={d})',
+        }
+    else:
+        raw['constraints'][f'{name}_domain_hi'] = {
             'foreach': [*frame, d],
-            'where': f'{d} == index({d}, {position})',
-            'expression': f'({x_link.expression}) {sense} {x_link.values}',
+            'where': f'{d} == index({d}, -1)',
+            'expression': f'({x_link.expression}) <= {x_link.values}',
         }
 
 
@@ -213,6 +239,21 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 raise PiecewiseExpansionError(f"{ctx}: active expression must not carry the breakpoint dim '{pw.over}'")
             if d not in frame:
                 frame.append(d)
+
+    if pw.points is not None:
+        if pw.points not in schema.parameters:
+            raise PiecewiseExpansionError(f"{ctx}: points references undeclared parameter '{pw.points}'")
+        mask = schema.parameters[pw.points].dims
+        if pw.over not in mask:
+            raise PiecewiseExpansionError(
+                f"{ctx}: points parameter '{pw.points}' must carry dim '{pw.over}' — "
+                f'it says how far each curve runs along it (has {mask})'
+            )
+        if stray := [d for d in mask if d != pw.over and d not in frame]:
+            raise PiecewiseExpansionError(
+                f"{ctx}: points parameter '{pw.points}' carries {stray}, which the links do not — "
+                f"a mask says which of the block's own coordinates exist, and cannot add coordinates"
+            )
 
     emitted_constraints = (
         f'{name}_convexity',

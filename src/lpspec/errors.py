@@ -222,6 +222,25 @@ def curve_with_a_hole_message(block: str, name: str, shown: str, expected: int, 
     )
 
 
+def curve_mask_is_not_a_prefix_message(block: str, points: str, over: str, shown: str) -> str:
+    """A ``points:`` mask with a gap in it — one wording, both lanes.
+
+    The mask says how far a curve runs, not which breakpoints it picks, and the
+    emitted rows read it that way twice: a chord joins a breakpoint to the one
+    before it, and the upper domain row is written where the mask stops. A gap
+    would leave a chord joining across it and a domain row inside the curve,
+    both of which build and neither of which says what the file does.
+    """
+    at = f' at {shown}' if shown else ''
+    return (
+        f"piecewise '{block}': the points mask '{points}' is not a prefix of '{over}'{at} — it "
+        f'marks a breakpoint after one it leaves out, or marks none at all. A curve runs from '
+        f'the first breakpoint to its own last one.\n'
+        f"  Mark a prefix   true up to each curve's last breakpoint, false after it\n"
+        f'  A curve of none is not a curve: leave the block to the members that have one'
+    )
+
+
 def null_bounds_message(name: str, rows: int) -> str:
     """A bound with no value — one wording, both lanes.
 
