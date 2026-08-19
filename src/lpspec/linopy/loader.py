@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
 import pandas as pd
 import polars as pl
 import xarray as xr
@@ -14,272 +12,185 @@ import xarray as xr
 from lpspec.errors import (
     DataError,
     coordinates_shown,
-    declared_map_needs_labels_message,
-    dense_array_message,
     duplicate_coordinate_message,
     holes_in_values_message,
+    lookup_not_single_valued_message,
+    lookup_values_are_not_labels_message,
     lookups_need_an_index_message,
     missing_lookup_columns_message,
     no_index_source_message,
-    sparse_divisor_message,
-    uncovered_constant_message,
-    unknown_source_keys_message,
     wrong_value_dtype_message,
 )
-from lpspec.frames import as_frame
-from lpspec.language.expression_parser import (
-    BinaryOperatorNode,
-    ComparisonNode,
-    NameNode,
-    ParameterNode,
-    VariableNode,
-    children,
-)
-from lpspec.sources import check_declared_map_keys, check_index_ownership
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
 
-    from lpspec.language.expression_parser import ExpressionNode
     from lpspec.language.model import Model
+    from lpspec.sources import TidySource
 
 
-def build_master_coords(schema: Model, sources: Mapping[str, Any] | None = None) -> dict[str, pd.Index]:
-    """Assemble master coordinate indices for every declared dimension.
+def dimension_coords(
+    schema: Model,
+    tidy: Mapping[str, TidySource],
+) -> tuple[dict[str, pd.Index], dict[str, dict[str, xr.DataArray]]]:
+    """Every dimension's labels, and the lookup columns that arrived beside them.
 
-    Where the index comes from, per the data-binding rules: a key in
-    ``sources``, or the ``values:`` the YAML declares — and never both, which
-    :func:`~lpspec.sources.check_index_ownership` refuses first. There is no fourth step: a dimension without an index has no
-    way to tell a mistyped label from a new one.
+    *tidy* is :func:`~lpspec.sources.tidy_sources`' output — the one front door,
+    which every lane enters through and which has already read each index into
+    polars. This converts, which is what this lane is: linopy's libraries,
+    entered at their boundary. Nothing about the object a caller passed
+    survives that crossing, so a `datetime.date` out of pandas and a `pl.Date`
+    out of polars are one instant by construction rather than by a guard at
+    every place the two used to meet.
 
-    Raises:
-        DataError: A dimension with no index, or one the file and the caller
-            both claim.
-    """
-    master: dict[str, pd.Index] = {}
-
-    sources = sources or {}
-    check_index_ownership(schema, sources)
-    for dim_name, dim_def in schema.dimensions.items():
-        supplied = supplied_index(schema, dim_name, sources)
-        if supplied is not None:
-            master[dim_name] = dim_index_of(supplied, dim_name)
-        elif dim_def.values is not None:
-            master[dim_name] = pd.Index(dim_def.values, name=dim_name)
-        else:
-            declared = schema.declared_maps(dim_name)
-            if declared:
-                raise DataError(declared_map_needs_labels_message(dim_name, declared))
-            carried = sorted({**schema.targeted_of(dim_name), **schema.labels_of(dim_name)})
-            if carried:
-                raise DataError(lookups_need_an_index_message(dim_name, carried, 'nothing'))
-            raise DataError(no_index_source_message(dim_name))
-
-    return master
-
-
-def supplied_index(schema: Model, dim_name: str, sources: Mapping[str, Any] = MappingProxyType({})) -> Any:
-    """The index for *dim_name* the caller passed, or the one the file declares.
-
-    Where the labels come from, which is the relational lane's rule: a key in
-    ``sources``, or the dimension's own ``values:`` — never both, refused before
-    this runs. A lookup's ``values:`` supplies no
-    labels; where the caller brings them, each declared map is read against
-    them here, so nothing downstream distinguishes a map that was declared from
-    one that arrived as a column.
+    Both halves come back from one call because they come from one read of the
+    sources — an index is small, but reading it twice is two chances to
+    disagree about what it said.
 
     Returns:
-        A frame, path or label sequence, or ``None`` where none supplies one.
+        The master coordinates by dimension, and by dimension the array each
+        declared lookup carries over it. A dimension declaring no lookup is
+        absent from the second.
+
+    Raises:
+        DataError: A dimension with no index, an index short of a declared
+            lookup column, a lookup that is not single-valued per label, or a
+            lookup value that is not a label of the dimension it targets.
     """
-    supplied = sources.get(dim_name)
-    maps = schema.declared_maps(dim_name)
-    if supplied is None:
-        declared = schema.declared_index(dim_name)
-        return None if declared is None else pd.DataFrame(declared)
-    if not maps:
-        return supplied
-    frame = _index_frame(supplied, dim_name)
-    frame = pd.DataFrame({dim_name: list(supplied)}) if frame is None else frame
-    check_declared_map_keys(dim_name, maps, frame[dim_name].tolist())
-    for name, values in maps.items():
-        right = pd.DataFrame({dim_name: list(values), name: list(values.values())})
-        frame = frame.merge(right, on=dim_name, how='left')
-    return frame
+    frames: dict[str, pd.DataFrame] = {}
+    for dim in schema.dimensions:
+        table = tidy.get(dim)
+        if table is None:
+            carried = sorted({**schema.targeted_of(dim), **schema.labels_of(dim)})
+            if carried:
+                raise DataError(lookups_need_an_index_message(dim, carried, 'nothing'))
+            raise DataError(no_index_source_message(dim))
+        frames[dim] = _through_numpy(collected(table))
+
+    master = {dim: pd.Index(pd.unique(frames[dim][dim]), name=dim) for dim in schema.dimensions}
+    return master, _lookup_arrays(schema, frames, master)
 
 
-def dim_index_of(source: Any, dim_name: str) -> pd.Index:
-    """A dimension index from a label sequence, or from any table carrying the labels.
+def collected(source: TidySource) -> pl.DataFrame:
+    """A bound source in hand, scanning the path the engine would have streamed.
 
-    Table first, sequence second: everything :func:`_index_frame` recognises is
-    read for its label column, and what it cannot make a table of is taken as
-    the labels themselves.
+    The engine keeps a parquet parameter lazy so its scan lands inside the
+    query; linopy holds the whole model in memory anyway, so this lane reads it
+    where the engine would push it down.
     """
-    frame = _index_frame(source, dim_name)
-    if frame is not None:
-        if dim_name not in frame.columns:
-            msg = (
-                f"the index for '{dim_name}' is a table without a '{dim_name}' column "
-                f'(has {list(frame.columns)}). The label column must be named after '
-                f'the dimension.'
-            )
-            raise DataError(msg)
-        return pd.Index(pd.unique(frame[dim_name]), name=dim_name)
-    return pd.Index(source, name=dim_name)
+    frame = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
+    return frame.collect()
 
 
-def build_dim_coords(
+def _through_numpy(table: pl.DataFrame) -> pd.DataFrame:
+    """A polars frame as pandas, column by column, without reaching for pyarrow.
+
+    A dictionary-encoded column is widened first: it carries a writer's own
+    codes, and the labels have to compare the way every other arrival's do.
+    """
+    encoded = [name for name, kind in table.schema.items() if kind in (pl.Categorical, pl.Enum)]
+    if encoded:
+        table = table.with_columns(pl.col(name).cast(pl.String) for name in encoded)
+    return pd.DataFrame({name: table[name].to_numpy() for name in table.columns})
+
+
+def _lookup_arrays(
     schema: Model,
-    master_coords: dict[str, pd.Index],
-    sources: Mapping[str, Any] | None = None,
+    frames: Mapping[str, pd.DataFrame],
+    master: Mapping[str, pd.Index],
 ) -> dict[str, dict[str, xr.DataArray]]:
-    """Assemble declared lookups, checked against the dimension they target.
+    """Each declared lookup as an array over the dimension it is over.
 
-    A lookup is a column of its ``over`` dimension's index source, so it
-    arrives under that dimension's key as any table carrying the label column
-    plus one column per lookup — the shapes the relational lane takes there,
-    read through the same recogniser. The containment check mirrors the relational
-    lane's: a value that is not a label of the target dimension would
-    otherwise be dropped by xarray's inner-join alignment, silently losing
-    the term it carries. A null value passes the check: it means "this label
-    belongs to no group" — row absence, not a typo.
+    A lookup is a column of its dimension's index, so both checks are of that
+    index: single-valued per label, and — for a *targeted* lookup — every value
+    a label of the dimension it targets. A label-space lookup owns its values,
+    so there is no dimension for them to be contained in and nothing the second
+    check could ask.
 
-    Only a *targeted* lookup is checked. A label-space lookup owns its
-    values, so there is no dimension for them to be contained in and nothing
-    the check could ask.
+    Containment matters here for a reason of this lane's own: a value that is
+    not a label of the target would be dropped by xarray's inner-join
+    alignment, losing the term it carries with no error anywhere.
     """
-    sources = sources or {}
     out: dict[str, dict[str, xr.DataArray]] = {}
-
-    for dim_name in schema.dimensions:
-        declared = {**schema.targeted_of(dim_name), **schema.labels_of(dim_name)}
+    for dim, frame in frames.items():
+        declared = {**schema.targeted_of(dim), **schema.labels_of(dim)}
         if not declared:
             continue
-        supplied = supplied_index(schema, dim_name, sources)
-        source = _index_frame(supplied, dim_name)
-        if source is None:
-            got = 'nothing' if supplied is None else 'a shape no table can be made of'
-            raise DataError(lookups_need_an_index_message(dim_name, list(declared), got))
-        missing = [c for c in sorted(declared) if c not in source.columns]
+        names = sorted(declared)
+        missing = [name for name in names if name not in frame.columns]
         if missing:
-            raise DataError(missing_lookup_columns_message(dim_name, missing, list(source.columns)))
+            raise DataError(missing_lookup_columns_message(dim, missing, list(frame.columns)))
+        _refuse_many_valued_lookups(dim, names, frame)
 
-        labels = master_coords[dim_name]
-        first = source.drop_duplicates(subset=[dim_name]).set_index(dim_name)
-        counts = source.groupby(dim_name, sort=False)[sorted(declared)].nunique()
-        out[dim_name] = {}
-        targeted = schema.targeted_of(dim_name)
-        for cname in declared:
-            if (counts[cname] > 1).any():
-                offending = sorted(counts.index[counts[cname] > 1].astype(str))[:5]
-                msg = (
-                    f"Dimension '{dim_name}': label(s) {offending} carry more than one "
-                    f"value for lookup '{cname}'. A lookup is single-valued per "
-                    f'label.'
-                )
-                raise DataError(msg)
-            series = first[cname].reindex(labels)
-            if cname in targeted:
-                target = targeted[cname]
-                known = set(master_coords[target])
-                unknown = sorted({str(v) for v in series if not pd.isna(v) and v not in known})[:5]
-                if unknown:
-                    msg = (
-                        f"Dimension '{dim_name}' lookup '{cname}' has value(s) that are "
-                        f"not '{target}' labels: {', '.join(unknown)}. Every value must "
-                        f"be a declared '{target}' label — otherwise "
-                        f'sum(by={cname}) drops those terms and the '
-                        f'model builds and solves without them.'
-                    )
-                    raise DataError(msg)
-            out[dim_name][cname] = xr.DataArray(
-                series.to_numpy(),
-                dims=[dim_name],
-                coords={dim_name: labels},
-                name=cname,
-            )
-
+        labels = master[dim]
+        first = frame.drop_duplicates(subset=[dim]).set_index(dim)
+        targeted = schema.targeted_of(dim)
+        out[dim] = {}
+        for name in names:
+            series = first[name].reindex(labels)
+            if name in targeted:
+                _refuse_values_outside(dim, name, targeted[name], series, master)
+            out[dim][name] = xr.DataArray(series.to_numpy(), dims=[dim], coords={dim: labels}, name=name)
     return out
 
 
-def _index_frame(source: Any, dim: str) -> pd.DataFrame | None:
-    """A dimension's index source as the pandas frame the lookups are read off.
+def _refuse_many_valued_lookups(dim: str, names: list[str], frame: pd.DataFrame) -> None:
+    """One label, one lookup value — counting a null among the values.
 
-    Every table shape a parameter may arrive in, plus a parquet path — the
-    dimension side of a caller's ``sources`` should take what the parameter
-    side does, and a lookup lives in a column either way.
-
-    Returns:
-        The frame, or ``None`` for a source no table can be made of.
+    ``dropna=False`` is what makes this the relational lane's question rather
+    than a weaker one: polars counts a null as a value, so a label mapped
+    nowhere in one row and somewhere in another disagrees with itself on both
+    lanes. Left out, the null won — ``drop_duplicates`` keeps the first row —
+    and the member silently left the group that was to hold it.
     """
-    if isinstance(source, pd.DataFrame):
-        return source
-    if source is None:
-        return None
-    if isinstance(source, (str, Path)):
-        return pl.scan_parquet(source).collect().to_pandas()
-    table = as_frame(source, (dim,))
-    if table is None:
-        return None
-    frame = table.collect() if isinstance(table, pl.LazyFrame) else table
-    return pd.DataFrame({name: frame[name].to_numpy() for name in frame.columns})
+    counts = frame.groupby(dim, sort=False)[names].nunique(dropna=False)
+    offenders = {name: int((counts[name] > 1).sum()) for name in names if (counts[name] > 1).any()}
+    if offenders:
+        raise DataError(lookup_not_single_valued_message(dim, offenders))
+
+
+def _refuse_values_outside(dim: str, name: str, target: str, values: pd.Series, master: Mapping[str, pd.Index]) -> None:
+    """Every value of a targeted lookup is a label of the dimension it targets.
+
+    A null is not a value here: it says the label belongs to no group, which is
+    row absence rather than a typo.
+    """
+    known = set(master[target])
+    strangers = pd.unique(values[~values.isna() & ~values.isin(known)])
+    if len(strangers):
+        raise DataError(lookup_values_are_not_labels_message(dim, name, target, strangers[:5].tolist()))
 
 
 def load_parameters(
     schema: Model,
-    data: dict[str, Any] | None,
-    master_coords: dict[str, pd.Index],
+    tidy: Mapping[str, TidySource],
+    master_coords: Mapping[str, pd.Index],
 ) -> xr.Dataset:
-    """Load, coerce, and validate all declared parameters.
+    """Every declared parameter as the dataset this lane builds against.
 
-    Dim and coordinate checking happens here rather than per input shape:
-    every branch of ``_coerce_to_dataarray`` produces a DataArray, and every
-    one of them owes the same two guarantees.
-
-    A key naming a *dimension* is a dimension index, read by
-    :func:`build_master_coords` and :func:`build_dim_coords` rather than here,
-    and passes through untouched — one ``sources`` mapping carries both, as it
-    does on the relational lane. A key naming neither is refused there and here
-    alike.
+    *tidy* is :func:`~lpspec.sources.tidy_sources`' output, so every shape a
+    caller may pass — a frame of any library, a dict, a sequence, a bare
+    number, a parquet path — has already been read into one tidy
+    ``(dims…, value)`` frame, and what is left here is the crossing into
+    xarray. A source that is missing, unreadable or the wrong shape was refused
+    at that front door, in the sentence the other lane gives for it.
 
     Returns:
-        One DataArray per parameter, aligned to the master coordinates.
+        One DataArray per parameter, reindexed onto the master coordinates.
 
     Raises:
-        DataError: A parameter missing, or dims or labels other than the ones
-            declared.
+        DataError: A parameter whose values are not the dtype it declares, or
+            whose labels are not the ones its dimensions hold.
     """
-    data = data or {}
     arrays: dict[str, xr.DataArray] = {}
-
-    known = {**schema.parameters, **schema.dimensions}
-    if unknown := set(data) - set(known):
-        raise DataError(unknown_source_keys_message(unknown, known))
-
-    for pname in schema.parameters:
-        if pname not in data:
-            msg = f"Parameter '{pname}' is required but was not provided in data.\nAdd '{pname}' to the data= argument."
-            raise DataError(msg)
-
     for pname, pdef in schema.parameters.items():
-        raw = data[pname]
-        arr = _coerce_to_dataarray(pname, raw, pdef.dims, master_coords, pdef.dtype)
+        arr = _from_tidy(pname, collected(tidy[pname]), pdef.dims, pdef.dtype)
         _validate_dims(pname, arr, pdef.dims)
         _validate_coords(pname, arr, master_coords)
 
         if pdef.dims:
-            reindex_coords = {d: master_coords[d] for d in pdef.dims}
-            if arr.ndim == 0:
-                scalar_val = float(arr.values)
-                shape = tuple(len(master_coords[d]) for d in pdef.dims)
-                arr = xr.DataArray(
-                    np.full(shape, scalar_val),
-                    dims=pdef.dims,
-                    coords=reindex_coords,
-                )
-            elif arr.dtype == bool:
-                arr = arr.reindex(reindex_coords, fill_value=False)
-            else:
-                arr = arr.reindex(reindex_coords)
+            onto = {d: master_coords[d] for d in pdef.dims}
+            arr = arr.reindex(onto, fill_value=False) if arr.dtype == bool else arr.reindex(onto)
 
         arrays[pname] = arr
 
@@ -353,91 +264,6 @@ def _refuse_duplicate_index(name: str, index: pd.Index, dims: list[str]) -> None
     raise DataError(duplicate_coordinate_message(name, shown, dims))
 
 
-def _coerce_to_dataarray(
-    name: str,
-    raw: Any,
-    dims: list[str],
-    master_coords: dict[str, pd.Index],
-    declared: str = 'float',
-) -> xr.DataArray:
-    """Coerce a user-provided value into an ``xr.DataArray``.
-
-    Tables in: a ``Series`` keeps its dims in an index and a ``DataFrame`` in
-    columns, and each binds **by name**, so a caller hands the same object to
-    either lane. A dense ``xarray.DataArray`` is refused rather than taken —
-    xarray is what this lane *builds*, not what it reads.
-
-    A dict, a sequence and a bare number are the plain-Python shapes, spread
-    over the master coordinates the same way the relational front door spreads
-    them.
-    """
-    if isinstance(raw, xr.DataArray):
-        raise DataError(dense_array_message(name))
-
-    if isinstance(raw, (str, Path)):
-        return _from_tidy(name, pl.scan_parquet(raw), dims, declared)
-
-    if isinstance(raw, (int, float, np.integer, np.floating)):
-        _check_values(name, pd.Series([raw]), (), declared)
-        return xr.DataArray(float(raw))
-
-    if isinstance(raw, dict):
-        if len(dims) != 1:
-            msg = f"Parameter '{name}': dict input is only supported for 1-D parameters, but declared dims are {dims}."
-            raise DataError(msg)
-        series = pd.Series(raw)
-        series.index.name = dims[0]
-        raw = series
-
-    if isinstance(raw, pd.DataFrame):
-        raw = _tidy_series(name, raw, dims)
-
-    if isinstance(raw, pd.Series):
-        if raw.index.nlevels != len(dims):
-            msg = (
-                f"Parameter '{name}' is over {dims}, and its index has "
-                f'{raw.index.nlevels} level(s). Set the index to the dims the '
-                f'parameter declares — set_index({dims}) on a tidy frame.'
-            )
-            raise DataError(msg)
-        if any(n is None for n in raw.index.names):
-            raw = raw.copy()
-            raw.index.names = dims
-        _refuse_duplicate_index(name, raw.index, dims)
-        _check_values(name, raw, dims, declared)
-        return xr.DataArray.from_series(raw)
-
-    if not isinstance(raw, (np.ndarray, list, tuple)):
-        table = as_frame(raw, dims)
-        if table is not None:
-            return _from_tidy(name, table, dims, declared)
-
-    if isinstance(raw, (np.ndarray, list, tuple)):
-        arr_np = np.asarray(raw)
-        if arr_np.ndim == 0:
-            return xr.DataArray(float(arr_np))
-        if arr_np.ndim == 1 and len(dims) == 1:
-            dim = dims[0]
-            if len(arr_np) != len(master_coords[dim]):
-                msg = (
-                    f"Parameter '{name}': array length {len(arr_np)} does not "
-                    f"match master coordinate '{dim}' length "
-                    f'{len(master_coords[dim])}.'
-                )
-                raise DataError(msg)
-            _check_values(name, pd.Series(arr_np, index=master_coords[dim]), [dim], declared)
-            return xr.DataArray(arr_np, dims=[dim], coords={dim: master_coords[dim]})
-        msg = (
-            f"Parameter '{name}': a sequence is positional along one dimension, and "
-            f"'{name}' is over {dims}. Pass a table carrying {[*dims, 'value']} instead."
-        )
-        raise DataError(msg)
-
-    type_name = type(raw).__name__
-    msg = f"Parameter '{name}': unsupported type '{type_name}'."
-    raise TypeError(msg)
-
-
 def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], declared: str = 'float') -> xr.DataArray:
     """A tidy ``(dims…, value)`` frame as the array this lane builds against.
 
@@ -471,31 +297,6 @@ def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], d
     return xr.DataArray.from_series(series)
 
 
-def _tidy_series(name: str, frame: pd.DataFrame, dims: list[str]) -> pd.Series:
-    """A tidy ``(dims…, value)`` frame as the indexed series the rest reads.
-
-    The one reading of a ``DataFrame``, so the same object means the same thing
-    on both lanes. A frame indexed by the dims already — no ``value`` column,
-    one data column — is taken as it stands, which is what ``reset_index()``
-    round-trips to.
-    """
-    if 'value' not in frame.columns:
-        missing = [d for d in dims if d not in frame.columns and d not in (frame.index.names or [])]
-        if missing or frame.shape[1] != 1:
-            raise DataError(
-                f"Parameter '{name}': a frame is read tidy — one row per coordinate, with "
-                f'columns {[*dims, "value"]}. Got columns {list(frame.columns)}.'
-            )
-        return frame.iloc[:, 0].rename('value')
-    named = [d for d in dims if d in frame.columns]
-    if len(named) != len(dims):
-        raise DataError(
-            f"Parameter '{name}': a frame is read tidy — one row per coordinate, with "
-            f'columns {[*dims, "value"]}. Got columns {list(frame.columns)}.'
-        )
-    return frame.set_index(named)['value']
-
-
 def _validate_dims(
     name: str,
     arr: xr.DataArray,
@@ -515,7 +316,7 @@ def _validate_dims(
 def _validate_coords(
     name: str,
     arr: xr.DataArray,
-    master_coords: dict[str, pd.Index],
+    master_coords: Mapping[str, pd.Index],
 ) -> None:
     """Check that all coordinate values exist in the master coordinate."""
     for dim in arr.dims:
@@ -531,95 +332,3 @@ def _validate_coords(
                 f"Master '{dim}' coords: {list(master_coords[dim])}"
             )
             raise DataError(msg)
-
-
-def gaps_under(array: Any, mask: Any) -> int:
-    """How many slots of *array* are null where *mask* still admits the row.
-
-    The eager lane's one way of asking "is this parameter defined where it is
-    needed" — a bound, a divisor and a constant side all ask it, and a second
-    spelling is a second chance to forget the mask and refuse a model whose
-    ``where`` had already answered. ``None`` means nothing narrows the question.
-    """
-    missing = array.isnull()
-    if mask is not None:
-        missing = missing & mask
-    return int(missing.sum())
-
-
-def check_constant_side_covers(name: str, node: ComparisonNode, schema: Model, dataset: Any, mask: Any) -> None:
-    """A comparison's constant side must have values wherever the row is built.
-
-    The divisor argument, one position over. A missing row is read as 0, and on
-    a side with no variable that zero *is* the bound — `x <= cap` becomes
-    `x <= 0`, which binds rather than vanishing, and the solve reports optimal.
-
-    Keyed to the rows the declaration builds, not to the coordinate product:
-    a `where` that removed the coordinate has already answered the question,
-    which is what makes masking the escape rather than a workaround.
-
-    The relational lane asks the same thing from the other end — it left-joins
-    the constant parts and looks for a null before the fill. Same answer,
-    reached by the shape each lane has to hand.
-    """
-    for side in (node.left, node.right):
-        if _names_of(side, schema.variables):
-            continue
-        params = _names_of(side, schema.parameters)
-        if not params:
-            continue
-        for param in sorted(params):
-            missing = gaps_under(dataset[param], mask)
-            if missing:
-                raise DataError(uncovered_constant_message(param, missing, name))
-
-
-def check_divisors_cover(name: str, node: ExpressionNode, schema: Model, dataset: Any, mask: Any, model: Any) -> None:
-    """A divisor must have a value wherever this declaration divides by it.
-
-    Not "wherever it is indexed": sparse data is the ordinary case, and a check
-    keyed to the coordinate product would refuse models that never touch the
-    gap. Two things can already have removed a coordinate — the row's own
-    ``where``, and the mask on a variable in the numerator — and either is
-    enough, so the requirement is their conjunction.
-
-    The relational lane asks the same question from the other end: it left-joins
-    the divisor and looks for a null coefficient in the assembled matrix, which
-    only survives if the row was built and the numerator existed. Same answer,
-    reached by the shape each lane has to hand.
-
-    Reached before ``_eval_ast``, the last moment the gap is visible:
-    ``builder._coefficient`` fills an uncovered slot with 0.0 at the parameter
-    leaf, and from there the division yields an infinity and the row is masked
-    out — silently, and identically on both lanes until #312.
-    """
-    for quotient in _quotients(node):
-        params = _names_of(quotient.right, schema.parameters)
-        if not params:
-            continue
-        needed = mask
-        for variable in _names_of(quotient.left, schema.variables):
-            present = model.variables[variable].labels != -1
-            needed = present if needed is None else (needed & present)
-        for param in sorted(params):
-            missing = gaps_under(dataset[param], needed)
-            if missing:
-                raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
-
-
-def _quotients(node: ExpressionNode) -> list[BinaryOperatorNode]:
-    """Every division node under *node*."""
-    out = [node] if isinstance(node, BinaryOperatorNode) and node.op == '/' else []
-    for child in children(node):
-        out.extend(_quotients(child))
-    return out
-
-
-def _names_of(node: ExpressionNode, declared: Iterable[str]) -> set[str]:
-    """Declared names under *node*, whether the AST is resolved or not."""
-    found: set[str] = set()
-    if isinstance(node, (NameNode, ParameterNode, VariableNode)) and node.name in declared:
-        found.add(node.name)
-    for child in children(node):
-        found |= _names_of(child, declared)
-    return found

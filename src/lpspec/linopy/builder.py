@@ -56,7 +56,7 @@ from lpspec.language.where_parser import (
     WhereNode,
     _UnresolvedPositionNode,
 )
-from lpspec.linopy.loader import check_constant_side_covers, check_divisors_cover, gaps_under
+from lpspec.linopy.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
@@ -984,7 +984,7 @@ def _eval_node(
                 dims=[node.name],
             )
 
-        result = _PREDICATE_OPS[node.op](arr, node.value)
+        result = _PREDICATE_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value))
         return result.fillna(False).astype(bool)
 
     if isinstance(node, DimensionPositionNode):
@@ -1028,6 +1028,18 @@ def _eval_node(
         return evaluate(node.left) | evaluate(node.right)
 
     assert_never(node)
+
+
+def _as_the_axis_spells_it(arr: Any, value: Any) -> Any:
+    """A where literal in the spelling the axis it is compared against uses.
+
+    A quoted ISO date resolves to a ``datetime.date`` (the where rules), and a
+    temporal axis arrives as ``datetime64`` — numpy compares the two by
+    raising, so the axis decides, a literal carrying no dtype of its own.
+    """
+    if getattr(arr, 'dtype', None) is not None and arr.dtype.kind == 'M':
+        return np.datetime64(value)
+    return value
 
 
 def _coefficient(parameter: Any) -> Any:

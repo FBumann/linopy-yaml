@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import polars as pl
 
@@ -30,6 +30,7 @@ from lpspec.errors import (
     declared_index_also_supplied_message,
     declared_map_needs_labels_message,
     dense_array_message,
+    index_without_its_label_column_message,
     map_keys_are_not_labels_message,
     unknown_source_keys_message,
 )
@@ -39,14 +40,21 @@ if TYPE_CHECKING:
     from lpspec.language.model import Model
 
 
-def tidy_sources(schema: Model, data: dict[str, object]) -> dict[str, object]:
+#: What a source is once :func:`tidy_sources` has read it: a tidy
+#: ``(dims…, value)`` frame, or the parquet path the engine scans for itself. A
+#: dimension index is always the frame — :func:`polars_index` reads every shape
+#: one supports, a path included, because a declared map may have to be joined
+#: onto it.
+TidySource: TypeAlias = pl.LazyFrame | str | Path
+
+
+def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySource]:
     """Adapt the caller's ``sources`` mapping to engine sources.
 
     Every in-memory source becomes a tidy :class:`polars.LazyFrame` with columns
     ``(dims…, value)``; parquet paths pass through untouched for the engine to
-    scan directly. A dimension index comes from ``data`` under the dimension's
-    own key, or from what the YAML declares — one of the two, which
-    :func:`check_index_ownership` settles before anything is read.
+    scan directly. The indices come from :func:`dimension_sources`, which both
+    lanes read.
 
     Normalising here rather than at the engine is what lets the piecewise
     curvature guard see every in-memory shape alike (:mod:`frames`
@@ -56,10 +64,10 @@ def tidy_sources(schema: Model, data: dict[str, object]) -> dict[str, object]:
     shapes :func:`_spread` accepts — a sequence, one number for every
     coordinate — are meaningless without the labels they are spread over.
 
-    Whether a source carries the columns its declaration needs is *not* asked
-    here. Binding asks it of every source, path or frame, so a copy of the
-    question on this side would answer only for the in-memory half — a second
-    wording for one defect, and the narrower one.
+    Whether a *parameter* source carries the columns its declaration needs is
+    *not* asked here. Binding asks it of every source, path or frame, so a copy
+    of the question on this side would answer only for the in-memory half — a
+    second wording for one defect, and the narrower one.
 
     Raises:
         DataError: A key naming nothing the model declares, a declared parameter
@@ -69,28 +77,11 @@ def tidy_sources(schema: Model, data: dict[str, object]) -> dict[str, object]:
     known = {**schema.parameters, **schema.dimensions}
     if unknown := set(data) - set(known):
         raise DataError(unknown_source_keys_message(unknown, known))
-    check_index_ownership(schema, data)
 
-    sources: dict[str, object] = {}
-    for dname, ddef in schema.dimensions.items():
-        if dname in data:
-            src = data[dname]
-        elif (declared := schema.declared_index(dname)) is not None:
-            sources[dname] = pl.LazyFrame(declared)
-            continue
-        elif ddef.values is not None:
-            src = ddef.values
-        elif maps_only := schema.declared_maps(dname):
-            raise DataError(declared_map_needs_labels_message(dname, maps_only))
-        else:
-            continue
-        maps = schema.declared_maps(dname)
-        if isinstance(src, (str, Path)) and not maps:
-            sources[dname] = src
-            continue
-        table = pl.scan_parquet(src) if isinstance(src, (str, Path)) else as_frame(src, (dname,))
-        table = table if table is not None else labels_frame(dname, src, ddef.dtype)
-        sources[dname] = _read_declared_maps_against(table, dname, maps)
+    sources: dict[str, TidySource] = {
+        dname: polars_index(source, dname, schema.dimensions[dname].dtype, schema.declared_maps(dname))
+        for dname, source in dimension_sources(schema, data).items()
+    }
 
     for pname, pdef in schema.parameters.items():
         if pname not in data:
@@ -108,6 +99,67 @@ def tidy_sources(schema: Model, data: dict[str, object]) -> dict[str, object]:
     validate_piecewise_data(schema, sources)
 
     return sources
+
+
+def dimension_sources(schema: Model, data: Mapping[str, object]) -> dict[str, object]:
+    """Which object supplies each dimension's index — the rule, in one place.
+
+    A key in *data*, or the ``values:`` the YAML declares, never both
+    (:func:`check_index_ownership`). What comes back is what the caller or the
+    file passed and nothing more — a path, a table, a sequence of labels —
+    because each lane reads it into its own frame library
+    (:func:`polars_index` here, ``linopy/loader.py`` there), and a shared frame
+    would make one of them convert twice over.
+
+    A dimension nothing supplies an index for is simply absent: which
+    dimensions *need* one is the caller's question — the engine asks it of the
+    dims its program spans, the eager lane of every dim the file declares.
+
+    A declared map does not travel with the source. It is
+    :meth:`~lpspec.language.model.Model.declared_maps`, which both readers ask
+    for themselves, so a map the file declares is read against the labels the
+    same way whether those came from the file or from the caller.
+
+    Raises:
+        DataError: A dimension whose index two authors claim, or whose maps the
+            file declares and whose labels nothing does.
+    """
+    check_index_ownership(schema, data)
+
+    sources: dict[str, object] = {}
+    for dname, ddef in schema.dimensions.items():
+        if dname in data:
+            sources[dname] = data[dname]
+        elif ddef.values is not None:
+            sources[dname] = ddef.values
+        elif maps_only := schema.declared_maps(dname):
+            raise DataError(declared_map_needs_labels_message(dname, maps_only))
+
+    return sources
+
+
+def polars_index(source: object, dim: str, dtype: str, maps: Mapping[str, Mapping[Any, Any]]) -> pl.LazyFrame:
+    """One dimension's index, read once — the only read of one in the package.
+
+    :func:`dimension_sources` says which object supplies an index; this turns
+    that object into labels. A lane wanting another library **converts this
+    frame** rather than reading the source a second time, which is what makes a
+    caller's choice of dataframe invisible past this line: two readers gave one
+    instant two spellings and needed a guard per place they met.
+
+    A parquet path stays lazy — :func:`polars.scan_parquet` is the scan, not
+    the read — so the engine still hands the file to the query it builds.
+
+    Raises:
+        DataError: A table with no column named after the dimension, labels no
+            frame can be made of, or a map keyed by something they do not hold.
+    """
+    table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else as_frame(source, (dim,))
+    table = table if table is not None else labels_frame(dim, source, dtype)
+    available = table.collect_schema().names()
+    if dim not in available:
+        raise DataError(index_without_its_label_column_message(dim, available))
+    return _read_declared_maps_against(table, dim, maps) if maps else table
 
 
 def _spread(name: str, obj: object, dims: list[str], sources: Mapping[str, object]) -> pl.LazyFrame:
@@ -251,7 +303,7 @@ def check_declared_map_keys(dim: str, maps: Mapping[str, Mapping[Any, Any]], lab
             raise DataError(map_keys_are_not_labels_message(dim, name, strays, [str(x) for x in labels]))
 
 
-def _read_declared_maps_against(table: pl.LazyFrame, dim: str, maps: dict[str, dict[Any, Any]]) -> pl.LazyFrame:
+def _read_declared_maps_against(table: pl.LazyFrame, dim: str, maps: Mapping[str, Mapping[Any, Any]]) -> pl.LazyFrame:
     """*table*'s labels, with each declared map read against them as a column.
 
     The labels are the caller's and stay exactly as they arrive — order
@@ -280,14 +332,14 @@ def _column_names(source: Any, dim: str) -> frozenset[str]:
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
 
 
-def validate_curve_extent(schema: Model, sources: Mapping[str, object]) -> None:
+def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> None:
     """Refuse a ``piecewise:`` curve that is not supplied everywhere it is built.
 
     A block emits one weight per breakpoint over the whole coordinate product —
     the λ it declares carries no mask — so a values parameter short of a row
-    does not build a shorter curve. Both lanes call this, since both take the
-    caller's mapping and both would otherwise read that row as a zero
-    coefficient and put a breakpoint at the origin.
+    does not build a shorter curve. Both lanes call this, and both reach it with
+    what :func:`tidy_sources` returned, or would otherwise read that row as a
+    zero coefficient and put a breakpoint at the origin.
 
     Sequences and single numbers are skipped: each is dense by construction,
     spread over labels the dimension supplies. A parquet path is scanned, since
@@ -297,7 +349,8 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, object]) -> None:
     Args:
         schema: The model as written — ``piecewise:`` blocks name the
             parameters, and the expansion has none.
-        sources: Parameter and dimension names to what the caller bound.
+        sources: What :func:`tidy_sources` returned — parameter and dimension
+            names to a frame or a path.
 
     Raises:
         DataError: A link's values parameter with a hole in the product of the
@@ -309,7 +362,7 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, object]) -> None:
             present = _coordinates(sources.get(link.values), dims)
             if present is None:
                 continue
-            extents = {d: _label_frame(schema, d, sources, present) for d in dims}
+            extents = {d: _label_frame(d, sources, present) for d in dims}
             expected = 1
             for labels in extents.values():
                 expected *= labels.select(pl.len()).collect().item()
@@ -338,21 +391,21 @@ def _coordinates(source: object, dims: Sequence[str]) -> pl.LazyFrame | None:
     return table.select(dims)
 
 
-def _label_frame(schema: Model, dim: str, sources: Mapping[str, object], present: pl.LazyFrame) -> pl.LazyFrame:
+def _label_frame(dim: str, sources: Mapping[str, TidySource], present: pl.LazyFrame) -> pl.LazyFrame:
     """*dim*'s labels as one column, from wherever the model's index comes from.
+
+    *sources* is what :func:`tidy_sources` returned, so a dimension with an
+    index — declared by the file or passed by the caller — is already a frame
+    here, and which of the two it was stopped mattering at that door.
 
     Falls back to the labels the curve itself carries, which is what a
     dimension with no index of its own is bound against: there the curve cannot
     be short of a breakpoint nothing else declares.
     """
     source = sources.get(dim)
-    if source is None and (declared := schema.declared_index(dim)) is not None:
-        source = declared[dim]
     if source is None:
         return present.select(dim).unique()
-    table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else as_frame(source, (dim,))
-    if table is None:
-        table = labels_frame(dim, source, schema.dimensions[dim].dtype)
+    table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
     return table.select(dim).unique()
 
 

@@ -22,6 +22,7 @@ import polars as pl
 
 from lpspec.errors import (
     DataError,
+    index_without_its_label_column_message,
     lookups_need_an_index_message,
     missing_lookup_columns_message,
     no_index_source_message,
@@ -227,10 +228,7 @@ class _Binder:
         )
         available = frame.collect_schema().names()
         if d not in available:
-            raise DataError(
-                f"explicit index for dimension '{d}' must be a table polars can read "
-                f"with a '{d}' column, or a parquet path (has {available})"
-            )
+            raise DataError(index_without_its_label_column_message(d, available))
         missing = [c for c in names if c not in available]
         if missing:
             raise DataError(missing_lookup_columns_message(d, missing, available))
