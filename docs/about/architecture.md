@@ -510,6 +510,7 @@ it.
 | `linopy/__init__.py` | opt-in lane: `build` constructing a `linopy.Model`, and `expression` reading a named quantity off a solved one |
 | `linopy/loader.py` | the crossing into pandas and xarray: `tidy_sources`' frames as master coords and an `xr.Dataset` |
 | `linopy/coverage.py` | the two positions an absent row has no reading for: a divisor and a constant side |
+| `linopy/absence.py` | the four positions an absent value is spelled differently in — absence is positional in this lane |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
 
 **Four subpackages, and the directory *is* the rule in every case.** Everything

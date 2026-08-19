@@ -4,6 +4,19 @@ Also the eager evaluation of every built-in operator. The operator *names* are t
 language (``operators.py``, imported by the linopy-free lane); these
 xarray/linopy evaluations are this backend's private business, mirrored on the
 relational side by lowering cases rather than shared code.
+
+**One section per kind of translation**, in the order a build performs them:
+the four declarations (``Variables``, ``Special-ordered sets``,
+``Constraints``, ``Objectives``) each ending in the ``model.add_*`` call they
+exist to make; ``AST evaluation`` for what an expression is worth;
+``Built-in operators`` for the five the language has, each entry point first
+and its own machinery after; ``Where-mask evaluation`` for a predicate as a
+boolean array. The four positions an absent value is spelled differently in
+are ``absence.py``, called qualified from here.
+
+*Which* linopy call each construct becomes is the table in
+``docs/about/linopy.md`` — one page rather than a comment per site, and
+``tests/test_docs_site.py`` holds it to the operator list.
 """
 
 from __future__ import annotations
@@ -56,6 +69,7 @@ from lpspec.language.where_parser import (
     WhereNode,
     _UnresolvedPositionNode,
 )
+from lpspec.linopy import absence
 from lpspec.linopy.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
 
 if TYPE_CHECKING:
@@ -194,37 +208,6 @@ def _resolve_bound(
     return value
 
 
-def _variable_term(name: str, ctx: EvaluationContext) -> Any:
-    """The variable as it enters an expression, carrying its declared ``absence:``.
-
-    The mask stays on the variable either way — it is what keeps the absent
-    coordinates out of the model, and dropping it to pin them at zero instead
-    would hand the solver a column per absent coordinate that the relational
-    lane never emits.
-
-    What differs is the *arithmetic*. This lane sets
-    ``linopy.options['semantics'] = 'v1'`` on import (see the module docstring),
-    under which an absent slot propagates and takes its row — the default, and
-    ``absence: undefined``. ``fillna(0)`` is linopy's own per-expression escape
-    back to the other reading: the slot contributes nothing and the row stands.
-    Per use rather than per model, which is the granularity a declaration needs
-    and the reason the global option alone could not express this.
-    """
-    variable = ctx.model.variables[name]
-    return variable.fillna(0) if ctx.schema.variables[name].absence == 'zero' else variable
-
-
-def _as_linopy_mask(mask: xr.DataArray) -> xr.DataArray | None:
-    """Convert an evaluated where mask to linopy's ``mask=`` argument.
-
-    linopy expects ``None`` for "no mask"; a 0-d True mask means exactly
-    that. Everything else (including 0-d False) passes through.
-    """
-    if mask.ndim == 0 and bool(mask):
-        return None
-    return mask
-
-
 # ---------------------------------------------------------------------------
 # Special-ordered sets
 # ---------------------------------------------------------------------------
@@ -316,6 +299,32 @@ def _build_objective(ctx: EvaluationContext) -> None:
         ctx.model.add_objective(expr, overwrite=True, sense=sense)
 
 
+#: The one construct this lane accepts and cannot build, as the sentence a user
+#: reads. Module-level so the test that pins the wording has something to name.
+OBJECTIVE_CONSTANT_IS_A_LANE_GAP = (
+    "the objective carries a constant term, and this lane cannot build one: linopy's objective "
+    'takes no constant — there is no `objective_constant` slot anywhere in the package, which is '
+    'why PyPSA carries its own out of band. The relational lane builds it and returns the right '
+    'number, so the model is sayable and only this lane is short: run it with `lpspec.solve` / '
+    '`lpspec.build`. Dropping the constant here is refused deliberately — it would answer a '
+    'different model, and this lane is the differential oracle, so every test on such a file '
+    "would be calibrated to the shortened objective's number (#894)."
+)
+
+
+def _refuse_an_objective_constant(expr: Any) -> None:
+    """Refuse an objective this lane cannot build, before linopy is asked.
+
+    linopy's own refusal names neither the file nor the other lane, and arrives
+    from a setter two frames down. A check rather than a `try`, because the
+    upstream message is not a contract and a nonzero constant is the whole of
+    what it means.
+    """
+    const = getattr(expr, 'const', None)
+    if const is not None and bool(np.any(np.asarray(const) != 0)):
+        raise LaneError(OBJECTIVE_CONSTANT_IS_A_LANE_GAP)
+
+
 # ---------------------------------------------------------------------------
 # AST evaluation
 # ---------------------------------------------------------------------------
@@ -327,21 +336,23 @@ def _eval_ast(
 ) -> Any:
     """Evaluate an expression AST node against the model namespace.
 
+    One node kind per branch, and each is a line: a variable is its linopy
+    term, a parameter its filled array, arithmetic the Python operator linopy
+    overloads, and a call is :func:`_call`. The node kinds that reach here only
+    through a bug say so rather than evaluating to something.
+
     Binary nodes go through ``degree.check_binary`` first: ``**``, a quadratic
     product and a variable divisor are all refused by ``language/degree.py``,
     the same verdict the relational lane asks for and in the same sentence.
-
-    Unknown operator names were rejected by ``validation.py`` at load time; the
-    guard on ``_OPERATORS`` covers hand-built calls that skipped it.
     """
     if isinstance(node, NumberNode):
         return node.value
 
     if isinstance(node, VariableNode):
-        return _variable_term(node.name, ctx)
+        return absence.variable_term(ctx.model.variables[node.name], ctx.schema.variables[node.name].absence)
 
     if isinstance(node, ParameterNode):
-        return _coefficient(ctx.dataset[node.name])
+        return absence.coefficient(ctx.dataset[node.name])
 
     if isinstance(node, EdgeNode):
         msg = f'EdgeNode({node.policy!r}) reached the evaluator: an edge policy is a shift() kwarg, not a value.'
@@ -376,30 +387,52 @@ def _eval_ast(
         return _ARITHMETIC_OPS[node.op](left, right)
 
     if isinstance(node, FunctionCallNode):
-        if node.name not in _OPERATORS:
-            raise NameError(unknown_operator_message(node.name))
-        operator = _OPERATORS[node.name]
-        args = [_eval_ast(a, ctx) for a in node.args]
-        if node.name == 'at':
-            by = node.kwargs['by']
-            assert isinstance(by, LookupNode)
-            return _operator_at(args[0], _lookup_arrays(by, ctx), into=by.into)
-        if node.name == 'sum' and (by := node.kwargs.get('by')) is not None:
-            assert isinstance(by, LookupNode)
-            return _operator_grouped_sum(args[0], _lookup_arrays(by, ctx), into=by.into, labels=ctx.master_coords)
-        kwargs: dict[str, Any] = {}
-        for k, v in node.kwargs.items():
-            if isinstance(v, DimensionNode):
-                kwargs[k] = v.name
-            elif isinstance(v, EdgeNode):
-                kwargs[k] = v.policy
-            elif isinstance(v, LookupNode):
-                kwargs[k] = _lookup_arrays(v, ctx)[0]  # a partition names one lookup, refused plural at load
-            else:
-                kwargs[k] = _eval_ast(v, ctx)
-        return operator(*args, **kwargs)
+        return _call(node, ctx)
 
     assert_never(node)
+
+
+def _call(node: FunctionCallNode, ctx: EvaluationContext) -> Any:
+    """One operator call, its operands and keywords evaluated.
+
+    Two names in :data:`_OPERATORS` do not reach it by that table. ``by=`` names
+    a lookup rather than an operand, and it decides *which* operation runs:
+    ``at`` reads through the lookup and ``sum(by=)`` groups along it, where
+    plain ``sum`` reduces a dim. Both take the group's own labels, so both are
+    spelled out here rather than passed a keyword.
+
+    Every other keyword is translated to what its operator takes: a dim as its
+    name, an edge as its policy, a lookup as its array, anything else evaluated
+    as an expression.
+
+    Raises:
+        NameError: An operator name ``validation.py`` would have refused at
+            load, which only a hand-built call can still carry.
+    """
+    if node.name not in _OPERATORS:
+        raise NameError(unknown_operator_message(node.name))
+    args = [_eval_ast(a, ctx) for a in node.args]
+
+    if node.name == 'at':
+        by = node.kwargs['by']
+        assert isinstance(by, LookupNode)
+        return _operator_at(args[0], _lookup_arrays(by, ctx), into=by.into)
+    if node.name == 'sum' and (by := node.kwargs.get('by')) is not None:
+        assert isinstance(by, LookupNode)
+        return _operator_grouped_sum(args[0], _lookup_arrays(by, ctx), into=by.into, labels=ctx.master_coords)
+
+    return _OPERATORS[node.name](*args, **{k: _keyword(v, ctx) for k, v in node.kwargs.items()})
+
+
+def _keyword(value: Any, ctx: EvaluationContext) -> Any:
+    """One operator keyword, as the operator below takes it."""
+    if isinstance(value, DimensionNode):
+        return value.name
+    if isinstance(value, EdgeNode):
+        return value.policy
+    if isinstance(value, LookupNode):
+        return _lookup_arrays(value, ctx)[0]  # a partition names one lookup, refused plural at load
+    return _eval_ast(value, ctx)
 
 
 def _lookup_arrays(by: LookupNode, ctx: EvaluationContext) -> tuple[Any, ...]:
@@ -441,33 +474,6 @@ def _operator_sum(array: Any, *, over: str | None = None) -> Any:
     if over in getattr(array, 'dims', ()):
         return array.sum(over)
     return array
-
-
-def _checked_mappings(call: str, mappings: tuple[Any, ...], into: tuple[str, ...]) -> tuple[Any, ...]:
-    """*mappings* renamed to the dims they target, refusing a shape no lane has.
-
-    Each arrives as the lookup's values over the dim being grouped; renaming
-    it to its target is what makes the group's own name the dim that comes
-    out, and it is the one thing both arities need.
-    """
-    renamed = []
-    for mapping, target in zip(mappings, into, strict=True):
-        if not isinstance(mapping, xr.DataArray):
-            msg = f'{call} lookup must be an array (got {type(mapping).__name__}). Usage: {call[:-2]}(expr, by=lookup)'
-            raise TypeError(msg)
-        if mapping.ndim != 1:
-            msg = f'{call} mapping must have exactly one dimension, got {list(mapping.dims)}'
-            raise LanguageError(msg)
-        renamed.append(mapping.rename(target))
-    return tuple(renamed)
-
-
-def _present(mappings: tuple[Any, ...]) -> Any:
-    """The members every mapping has a value for, as a boolean over their dim."""
-    keep = mappings[0].notnull()
-    for mapping in mappings[1:]:
-        keep = keep & mapping.notnull()
-    return keep
 
 
 def _operator_grouped_sum(
@@ -512,29 +518,6 @@ def _operator_grouped_sum(
     return _reindexed(summed, into=into, labels=labels)
 
 
-def _reindexed(summed: Any, *, into: tuple[str, ...], labels: Mapping[str, pd.Index]) -> Any:
-    """*summed* over exactly the declared labels, empty groups filled with an empty sum.
-
-    A grouped parameter is a plain ``DataArray``, where the empty sum is 0. A
-    grouped expression is a ``LinearExpression``, whose empty term is spelled
-    per-variable — linopy's own ``_fill_value`` cannot be used, its ``const:
-    nan`` propagates through the arithmetic that follows and poisons the row.
-
-    The unstacked multi-key groupby has already invented the combinations no
-    member lands on, and filled them with linopy's ``_fill_value`` — the same
-    ``const: nan``, which reindex never sees because those labels are present.
-    So the fill comes first and the reindex second, and a (bus, technology)
-    pair nothing sits at is an empty sum for the same reason a bus nothing sits
-    on is. No other NaN reaches here: a grouped sum zeroes its members' NaN
-    constants, and a hole in the data is refused at bind (#1001).
-    """
-    index = {d: labels[d] for d in into}
-    if hasattr(summed, 'const'):
-        fill = {'vars': -1, 'coeffs': 0.0, 'const': 0.0}
-        return summed.fillna({'const': 0.0}).reindex(index, fill_value=fill)
-    return summed.fillna(0.0).reindex(index, fill_value=0)
-
-
 def _operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...]) -> Any:
     """Read *array* through declared lookups — the adjoint of a group.
 
@@ -573,252 +556,6 @@ def _operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...]
     kept = present.to_numpy()
     picked = array.sel(dict(zip(into, (m.isel({dim: kept}) for m in mappings), strict=True)))
     return picked.reindex({dim: mappings[0][dim]})
-
-
-def _group_offsets(node: DimensionPositionNode, groups: np.ndarray) -> np.ndarray:
-    """Each coordinate's distance from the boundary of *its own* group.
-
-    Zero marks the coordinate the position names, so every comparator reads the
-    same as it does ungrouped. ``nan`` where the lookup sends a coordinate
-    nowhere: in no group, so no group's boundary. The relational lane computes
-    the identical column with a rank over the dim table.
-
-    Raises:
-        DataError: If any group is shorter than the position names, which would
-            leave that group's rows unseeded and the model quietly unanchored.
-    """
-    counts: dict[object, int] = {}
-    within = np.empty(len(groups), dtype=float)
-    for k, g in enumerate(groups):
-        if g is None or g != g:  # nan: the null a partial lookup leaves, and never equal to itself
-            within[k] = np.nan
-            continue
-        within[k] = counts.get(g, 0)
-        counts[g] = int(within[k]) + 1
-    needed = node.position + 1 if node.position >= 0 else -node.position
-    short = sorted(str(g) for g, n in counts.items() if n < needed)
-    if short:
-        msg = (
-            f'where: index({node.name}, {node.position}, by={node.by}) names position '
-            f'{node.position} within each group, and {len(short)} of them are shorter than '
-            f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
-            f'was to seed unseeded.'
-        )
-        raise DataError(msg)
-    sizes = np.array([counts.get(g, 0) if not (g is None or g != g) else 0 for g in groups], dtype=float)
-    target = node.position if node.position >= 0 else sizes + node.position
-    return within - target
-
-
-def _bound_lookup(
-    name: str,
-    over: str,
-    dim_coords: Mapping[str, Mapping[str, xr.DataArray]],
-) -> xr.DataArray:
-    """A lookup's bound values as an array over the dim it is over.
-
-    The where counterpart of :func:`_lookup_arrays`, which reads the same store
-    for a grouped sum. Kept separate because the failure differs: a predicate
-    can be evaluated before any variable exists, so the message names the
-    source that was wanted rather than the helper call that wanted it.
-    """
-    try:
-        return dim_coords[over][name]
-    except KeyError:
-        msg = (
-            f"where reads lookup '{name}' over dimension '{over}', which has no bound "
-            f"values. Pass sources={{'{over}': <table with '{over}' and '{name}' columns>}}."
-        )
-        raise DataError(msg) from None
-
-
-#: The one construct this lane accepts and cannot build, as the sentence a user
-#: reads. Module-level so the test that pins the wording has something to name.
-OBJECTIVE_CONSTANT_IS_A_LANE_GAP = (
-    "the objective carries a constant term, and this lane cannot build one: linopy's objective "
-    'takes no constant — there is no `objective_constant` slot anywhere in the package, which is '
-    'why PyPSA carries its own out of band. The relational lane builds it and returns the right '
-    'number, so the model is sayable and only this lane is short: run it with `lpspec.solve` / '
-    '`lpspec.build`. Dropping the constant here is refused deliberately — it would answer a '
-    'different model, and this lane is the differential oracle, so every test on such a file '
-    "would be calibrated to the shortened objective's number (#894)."
-)
-
-
-def _refuse_an_objective_constant(expr: Any) -> None:
-    """Refuse an objective this lane cannot build, before linopy is asked.
-
-    linopy's own refusal names neither the file nor the other lane, and arrives
-    from a setter two frames down. A check rather than a `try`, because the
-    upstream message is not a contract and a nonzero constant is the whole of
-    what it means.
-    """
-    const = getattr(expr, 'const', None)
-    if const is not None and bool(np.any(np.asarray(const) != 0)):
-        raise LaneError(OBJECTIVE_CONSTANT_IS_A_LANE_GAP)
-
-
-def _unsupported(call: str, array: Any) -> TypeError:
-    """One wording for an operand shape an operator cannot take.
-
-    Reached only from a hand-built call: every operator's operands come from
-    ``_eval_ast``, so a lane running the language proper never sees this.
-    """
-    return TypeError(f"{call} does not support type '{type(array).__name__}'.")
-
-
-def _translation(over: str, by: float) -> Mapping[Hashable, int]:
-    """The ``{dim: n}`` mapping xarray and linopy both take."""
-    if int(by) != by:
-        msg = f'shift() by must be an integer, got {by!r}'
-        raise TypeError(msg)
-    return {over: int(by)}
-
-
-def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: float | None, card: int) -> Any:
-    """Translate *array* along *over* by an offset that differs per entity.
-
-    A scalar shift is one call; a per-entity one is a **gather**: every output
-    position reads a source position of its own, so the index is an array over
-    the offset's dims and *over* rather than a number.
-
-    Selection is by *label* rather than by ordinal, because that is what linopy
-    passes through to its own labels — the positions are turned back into
-    coordinate values here, which also keeps a non-integer axis (a datetime
-    snapshot) working for free.
-
-    Out-of-range positions are clipped so the gather stays on the axis, then
-    emptied again by ``where``, so an edge means the same thing it does for a
-    scalar shift: absent by default, and :func:`_vacated` fills it where the
-    model asked. Under ``wrap`` nothing is out of range and the modulo is the
-    whole of it.
-    """
-    labels = np.asarray(array.indexes[over])
-    ordinal = xr.DataArray(np.arange(card), coords={over: labels}, dims=[over])
-    source = (ordinal - offset).astype(int)
-
-    def gathered(ordinals: Any) -> Any:
-        # The indexer carries no coordinate, so the result comes back with the
-        # axis unlabelled; the output position *t* still means "at t", so the
-        # original labels go back on before anything is combined with it.
-        picked = array.sel({over: _labelled(labels, ordinals, over)})
-        return picked.assign_coords({over: labels})
-
-    if wrap:
-        return gathered(source % card)
-    inside = ((source >= 0) & (source < card)).assign_coords({over: labels})
-    moved = gathered(source.clip(0, card - 1)).where(inside)
-    return moved if fill is None else _vacated(moved, array, over, ~inside, fill)
-
-
-def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: bool, fill: float | None) -> Any:
-    """Translate *array* inside each group *groups* makes, not along the axis.
-
-    The neighbour of a coordinate is the one *offset* back among the coordinates
-    sharing its group, so the gather is by a source ordinal computed per group:
-    a position past the group's start is vacated where the axis edge would
-    vacate, and under *wrap* it comes round to that group's own last.
-
-    A coordinate the lookup sends nowhere belongs to no group, so it reaches
-    nothing — the null reading a partial lookup gets everywhere else. That is
-    not the same as reaching *off* a group's edge, which is what a policy
-    speaks for, so the two are tracked apart and only the second is filled
-    (#1061).
-
-    The relational lane computes the identical map as a rank over the dim
-    table joined back on ``(group, position)``.
-    """
-    labels = np.asarray(array.indexes[over])
-    keys = np.asarray(groups.sel({over: labels}).values, dtype=object)
-    step = int(offset)
-
-    positions: dict[object, list[int]] = {}
-    grouped = np.zeros(len(labels), dtype=bool)
-    for k, key in enumerate(keys):
-        if key is None or key != key:  # nan: what a partial lookup leaves
-            continue
-        grouped[k] = True
-        positions.setdefault(key, []).append(k)
-
-    source = np.full(len(labels), -1, dtype=int)
-    for members in positions.values():
-        size = len(members)
-        for within, k in enumerate(members):
-            reached = (within - step) % size if wrap else within - step
-            if 0 <= reached < size:
-                source[k] = members[reached]
-
-    inside = xr.DataArray(source >= 0, coords={over: labels}, dims=[over])
-    indexer = xr.DataArray(labels[np.clip(source, 0, len(labels) - 1)], dims=[over])
-    gathered = array.sel({over: indexer}).assign_coords({over: labels}).where(inside)
-    if fill is None:
-        return gathered
-    vacated = xr.DataArray((source < 0) & grouped, coords={over: labels}, dims=[over])
-    return _vacated(gathered, array, over, vacated, fill)
-
-
-def _off_the_axis(array: Any, over: str, offset: float) -> Any:
-    """Which positions along *over* a scalar shift of *offset* leaves vacated.
-
-    The source a position reads, off both ends, so one expression covers a
-    shift in either direction — the same verdict :func:`_gather_by_offset`
-    reaches with ``inside`` negated.
-    """
-    labels = np.asarray(array.indexes[over])
-    source = xr.DataArray(np.arange(len(labels)), coords={over: labels}, dims=[over]) - int(offset)
-    return (source < 0) | (source >= len(labels))
-
-
-def _labelled(labels: Any, ordinals: Any, over: str) -> Any:
-    """*ordinals* as the coordinate labels they stand for, keeping their dims.
-
-    Carries no coordinates of its own: an indexer that keeps the axis's own
-    coordinate asserts the values it holds *are* that axis, and after a gather
-    they are not — which xarray reports as a size conflict rather than a
-    mislabelling.
-    """
-    return xr.DataArray(labels[ordinals.transpose(*ordinals.dims).values], dims=ordinals.dims)
-
-
-def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None = None) -> Any:
-    """Sum *array* over a trailing window along one dimension.
-
-    YAML: ``sum_back(started, over=snapshot, within=min_up)``. The result at
-    *t* is the sum from *t - within + 1* through *t*, so a width of 1 is the
-    operand itself and ``edge='wrap'`` lets the window reach around the axis.
-
-    Written as a sum of scalar gathers, one per position of the widest window
-    the data asks for. That bound is read from data, which is only sound
-    because it decides how many *terms* are added rather than what the plan
-    does — the same reading under which cardinality is data's.
-
-    A position the window cannot reach contributes a **zero**, never an
-    absence. linopy counts absence among the things that propagate, so an
-    unreachable lag added to a reachable one would annihilate the whole row
-    (v1 §4) — which is right for a shift, whose vacated slot really is
-    unknown, and wrong here: a window at the first position is short, not
-    empty. That covers a masked slot the window reaches too: absence is not a
-    term, and a reduction is where absence stops (the absence reference).
-
-    Which leaves the window that reaches **nothing** — every position it spans
-    masked away, the whole of it where the width is 1. A zero there would build
-    a row about constants alone, so the fill is paired with the positions any
-    lag actually reached, and a window that reached none of them keeps no row
-    (#1059, #1060).
-    """
-    card = int(array.sizes[over])
-    widest = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
-    widest = min(widest, card)
-    terms: list[Any] = []
-    reached: list[Any] = []
-    for lag in range(widest):
-        lagged = _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=None, card=card)
-        live, term = ~lagged.isnull(), _filled(lagged, 0.0)
-        if isinstance(within, xr.DataArray):
-            live, term = live & (within > lag), term * (within > lag).astype(float)
-        terms.append(term)
-        reached.append(live)
-    return reduce(operator.add, terms).where(reduce(operator.or_, reached))
 
 
 def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float | None = None, by: Any = None) -> Any:
@@ -872,8 +609,223 @@ def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float |
         return array.shift(amount, fill_value=fill if fill is not None else np.nan)
     if hasattr(array, 'shift'):
         shifted = array.shift(amount)
-        return shifted if fill is None else _vacated(shifted, array, over, _off_the_axis(array, over, offset), fill)
+        return (
+            shifted if fill is None else absence.vacated(shifted, array, over, _off_the_axis(array, over, offset), fill)
+        )
     raise _unsupported('shift()', array)
+
+
+def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None = None) -> Any:
+    """Sum *array* over a trailing window along one dimension.
+
+    YAML: ``sum_back(started, over=snapshot, within=min_up)``. The result at
+    *t* is the sum from *t - within + 1* through *t*, so a width of 1 is the
+    operand itself and ``edge='wrap'`` lets the window reach around the axis.
+
+    Written as a sum of scalar gathers, one per position of the widest window
+    the data asks for. That bound is read from data, which is only sound
+    because it decides how many *terms* are added rather than what the plan
+    does — the same reading under which cardinality is data's.
+
+    A position the window cannot reach contributes a **zero**, never an
+    absence. linopy counts absence among the things that propagate, so an
+    unreachable lag added to a reachable one would annihilate the whole row
+    (v1 §4) — which is right for a shift, whose vacated slot really is
+    unknown, and wrong here: a window at the first position is short, not
+    empty. That covers a masked slot the window reaches too: absence is not a
+    term, and a reduction is where absence stops (the absence reference).
+
+    Which leaves the window that reaches **nothing** — every position it spans
+    masked away, the whole of it where the width is 1. A zero there would build
+    a row about constants alone, so the fill is paired with the positions any
+    lag actually reached, and a window that reached none of them keeps no row
+    (#1059, #1060).
+    """
+    card = int(array.sizes[over])
+    widest = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
+    widest = min(widest, card)
+    terms: list[Any] = []
+    reached: list[Any] = []
+    for lag in range(widest):
+        lagged = _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=None, card=card)
+        live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
+        if isinstance(within, xr.DataArray):
+            live, term = live & (within > lag), term * (within > lag).astype(float)
+        terms.append(term)
+        reached.append(live)
+    return reduce(operator.add, terms).where(reduce(operator.or_, reached))
+
+
+def _checked_mappings(call: str, mappings: tuple[Any, ...], into: tuple[str, ...]) -> tuple[Any, ...]:
+    """*mappings* renamed to the dims they target, refusing a shape no lane has.
+
+    Each arrives as the lookup's values over the dim being grouped; renaming
+    it to its target is what makes the group's own name the dim that comes
+    out, and it is the one thing both arities need.
+    """
+    renamed = []
+    for mapping, target in zip(mappings, into, strict=True):
+        if not isinstance(mapping, xr.DataArray):
+            msg = f'{call} lookup must be an array (got {type(mapping).__name__}). Usage: {call[:-2]}(expr, by=lookup)'
+            raise TypeError(msg)
+        if mapping.ndim != 1:
+            msg = f'{call} mapping must have exactly one dimension, got {list(mapping.dims)}'
+            raise LanguageError(msg)
+        renamed.append(mapping.rename(target))
+    return tuple(renamed)
+
+
+def _present(mappings: tuple[Any, ...]) -> Any:
+    """The members every mapping has a value for, as a boolean over their dim."""
+    keep = mappings[0].notnull()
+    for mapping in mappings[1:]:
+        keep = keep & mapping.notnull()
+    return keep
+
+
+def _reindexed(summed: Any, *, into: tuple[str, ...], labels: Mapping[str, pd.Index]) -> Any:
+    """*summed* over exactly the declared labels, empty groups filled with an empty sum.
+
+    A grouped parameter is a plain ``DataArray``, where the empty sum is 0. A
+    grouped expression is a ``LinearExpression``, whose empty term is spelled
+    per-variable — linopy's own ``_fill_value`` cannot be used, its ``const:
+    nan`` propagates through the arithmetic that follows and poisons the row.
+
+    The unstacked multi-key groupby has already invented the combinations no
+    member lands on, and filled them with linopy's ``_fill_value`` — the same
+    ``const: nan``, which reindex never sees because those labels are present.
+    So the fill comes first and the reindex second, and a (bus, technology)
+    pair nothing sits at is an empty sum for the same reason a bus nothing sits
+    on is. No other NaN reaches here: a grouped sum zeroes its members' NaN
+    constants, and a hole in the data is refused at bind (#1001).
+    """
+    index = {d: labels[d] for d in into}
+    if hasattr(summed, 'const'):
+        fill = {'vars': -1, 'coeffs': 0.0, 'const': 0.0}
+        return summed.fillna({'const': 0.0}).reindex(index, fill_value=fill)
+    return summed.fillna(0.0).reindex(index, fill_value=0)
+
+
+def _translation(over: str, by: float) -> Mapping[Hashable, int]:
+    """The ``{dim: n}`` mapping xarray and linopy both take."""
+    if int(by) != by:
+        msg = f'shift() by must be an integer, got {by!r}'
+        raise TypeError(msg)
+    return {over: int(by)}
+
+
+def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: float | None, card: int) -> Any:
+    """Translate *array* along *over* by an offset that differs per entity.
+
+    A scalar shift is one call; a per-entity one is a **gather**: every output
+    position reads a source position of its own, so the index is an array over
+    the offset's dims and *over* rather than a number.
+
+    Selection is by *label* rather than by ordinal, because that is what linopy
+    passes through to its own labels — the positions are turned back into
+    coordinate values here, which also keeps a non-integer axis (a datetime
+    snapshot) working for free.
+
+    Out-of-range positions are clipped so the gather stays on the axis, then
+    emptied again by ``where``, so an edge means the same thing it does for a
+    scalar shift: absent by default, and :func:`~lpspec.linopy.absence.vacated` fills it where the
+    model asked. Under ``wrap`` nothing is out of range and the modulo is the
+    whole of it.
+    """
+    labels = np.asarray(array.indexes[over])
+    ordinal = xr.DataArray(np.arange(card), coords={over: labels}, dims=[over])
+    source = (ordinal - offset).astype(int)
+
+    def gathered(ordinals: Any) -> Any:
+        # The indexer carries no coordinate, so the result comes back with the
+        # axis unlabelled; the output position *t* still means "at t", so the
+        # original labels go back on before anything is combined with it.
+        picked = array.sel({over: _labelled(labels, ordinals, over)})
+        return picked.assign_coords({over: labels})
+
+    if wrap:
+        return gathered(source % card)
+    inside = ((source >= 0) & (source < card)).assign_coords({over: labels})
+    moved = gathered(source.clip(0, card - 1)).where(inside)
+    return moved if fill is None else absence.vacated(moved, array, over, ~inside, fill)
+
+
+def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: bool, fill: float | None) -> Any:
+    """Translate *array* inside each group *groups* makes, not along the axis.
+
+    The neighbour of a coordinate is the one *offset* back among the coordinates
+    sharing its group, so the gather is by a source ordinal computed per group:
+    a position past the group's start is vacated where the axis edge would
+    vacate, and under *wrap* it comes round to that group's own last.
+
+    A coordinate the lookup sends nowhere belongs to no group, so it reaches
+    nothing — the null reading a partial lookup gets everywhere else. That is
+    not the same as reaching *off* a group's edge, which is what a policy
+    speaks for, so the two are tracked apart and only the second is filled
+    (#1061).
+
+    The relational lane computes the identical map as a rank over the dim
+    table joined back on ``(group, position)``.
+    """
+    labels = np.asarray(array.indexes[over])
+    keys = np.asarray(groups.sel({over: labels}).values, dtype=object)
+    step = int(offset)
+
+    positions: dict[object, list[int]] = {}
+    grouped = np.zeros(len(labels), dtype=bool)
+    for k, key in enumerate(keys):
+        if key is None or key != key:  # nan: what a partial lookup leaves
+            continue
+        grouped[k] = True
+        positions.setdefault(key, []).append(k)
+
+    source = np.full(len(labels), -1, dtype=int)
+    for members in positions.values():
+        size = len(members)
+        for within, k in enumerate(members):
+            reached = (within - step) % size if wrap else within - step
+            if 0 <= reached < size:
+                source[k] = members[reached]
+
+    inside = xr.DataArray(source >= 0, coords={over: labels}, dims=[over])
+    indexer = xr.DataArray(labels[np.clip(source, 0, len(labels) - 1)], dims=[over])
+    gathered = array.sel({over: indexer}).assign_coords({over: labels}).where(inside)
+    if fill is None:
+        return gathered
+    emptied = xr.DataArray((source < 0) & grouped, coords={over: labels}, dims=[over])
+    return absence.vacated(gathered, array, over, emptied, fill)
+
+
+def _off_the_axis(array: Any, over: str, offset: float) -> Any:
+    """Which positions along *over* a scalar shift of *offset* leaves vacated.
+
+    The source a position reads, off both ends, so one expression covers a
+    shift in either direction — the same verdict :func:`_gather_by_offset`
+    reaches with ``inside`` negated.
+    """
+    labels = np.asarray(array.indexes[over])
+    source = xr.DataArray(np.arange(len(labels)), coords={over: labels}, dims=[over]) - int(offset)
+    return (source < 0) | (source >= len(labels))
+
+
+def _labelled(labels: Any, ordinals: Any, over: str) -> Any:
+    """*ordinals* as the coordinate labels they stand for, keeping their dims.
+
+    Carries no coordinates of its own: an indexer that keeps the axis's own
+    coordinate asserts the values it holds *are* that axis, and after a gather
+    they are not — which xarray reports as a size conflict rather than a
+    mislabelling.
+    """
+    return xr.DataArray(labels[ordinals.transpose(*ordinals.dims).values], dims=ordinals.dims)
+
+
+def _unsupported(call: str, array: Any) -> TypeError:
+    """One wording for an operand shape an operator cannot take.
+
+    Reached only from a hand-built call: every operator's operands come from
+    ``_eval_ast``, so a lane running the language proper never sees this.
+    """
+    return TypeError(f"{call} does not support type '{type(array).__name__}'.")
 
 
 #: Eager evaluation of every name in ``operators.BUILTIN_NAMES``. The two must
@@ -1030,6 +982,74 @@ def _eval_node(
     assert_never(node)
 
 
+def _group_offsets(node: DimensionPositionNode, groups: np.ndarray) -> np.ndarray:
+    """Each coordinate's distance from the boundary of *its own* group.
+
+    Zero marks the coordinate the position names, so every comparator reads the
+    same as it does ungrouped. ``nan`` where the lookup sends a coordinate
+    nowhere: in no group, so no group's boundary. The relational lane computes
+    the identical column with a rank over the dim table.
+
+    Raises:
+        DataError: If any group is shorter than the position names, which would
+            leave that group's rows unseeded and the model quietly unanchored.
+    """
+    counts: dict[object, int] = {}
+    within = np.empty(len(groups), dtype=float)
+    for k, g in enumerate(groups):
+        if g is None or g != g:  # nan: the null a partial lookup leaves, and never equal to itself
+            within[k] = np.nan
+            continue
+        within[k] = counts.get(g, 0)
+        counts[g] = int(within[k]) + 1
+    needed = node.position + 1 if node.position >= 0 else -node.position
+    short = sorted(str(g) for g, n in counts.items() if n < needed)
+    if short:
+        msg = (
+            f'where: index({node.name}, {node.position}, by={node.by}) names position '
+            f'{node.position} within each group, and {len(short)} of them are shorter than '
+            f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
+            f'was to seed unseeded.'
+        )
+        raise DataError(msg)
+    sizes = np.array([counts.get(g, 0) if not (g is None or g != g) else 0 for g in groups], dtype=float)
+    target = node.position if node.position >= 0 else sizes + node.position
+    return within - target
+
+
+def _bound_lookup(
+    name: str,
+    over: str,
+    dim_coords: Mapping[str, Mapping[str, xr.DataArray]],
+) -> xr.DataArray:
+    """A lookup's bound values as an array over the dim it is over.
+
+    The where counterpart of :func:`_lookup_arrays`, which reads the same store
+    for a grouped sum. Kept separate because the failure differs: a predicate
+    can be evaluated before any variable exists, so the message names the
+    source that was wanted rather than the helper call that wanted it.
+    """
+    try:
+        return dim_coords[over][name]
+    except KeyError:
+        msg = (
+            f"where reads lookup '{name}' over dimension '{over}', which has no bound "
+            f"values. Pass sources={{'{over}': <table with '{over}' and '{name}' columns>}}."
+        )
+        raise DataError(msg) from None
+
+
+def _as_linopy_mask(mask: xr.DataArray) -> xr.DataArray | None:
+    """Convert an evaluated where mask to linopy's ``mask=`` argument.
+
+    linopy expects ``None`` for "no mask"; a 0-d True mask means exactly
+    that. Everything else (including 0-d False) passes through.
+    """
+    if mask.ndim == 0 and bool(mask):
+        return None
+    return mask
+
+
 def _as_the_axis_spells_it(arr: Any, value: Any) -> Any:
     """A where literal in the spelling the axis it is compared against uses.
 
@@ -1040,55 +1060,3 @@ def _as_the_axis_spells_it(arr: Any, value: Any) -> Any:
     if getattr(arr, 'dtype', None) is not None and arr.dtype.kind == 'M':
         return np.datetime64(value)
     return value
-
-
-def _coefficient(parameter: Any) -> Any:
-    """A parameter in a coefficient position, its uncovered slots at zero.
-
-    Where this lane answers linopy's v1 absence convention (linopy's
-    ``doc/design/convention.rst``): the answer is *positional* — one missing
-    row means zero in a coefficient, an error in ``bounds:``, false in a
-    ``where`` operand — so it lives at the read, not as one fill in
-    ``load_parameters`` that would be wrong for the other two. A tidy
-    parameter table is a compressed dense array, not a record of absence:
-    rows only for the live coordinates says the coefficient is zero elsewhere
-    (the data-binding rules). ``load_parameters`` reindexes to the master coordinates, so an
-    uncovered slot arrives as NaN — and v1 §5 refuses a NaN in a
-    user-supplied constant. Correct under the legacy convention too, so not
-    conditional on ``linopy.options['semantics']``.
-    """
-    return parameter.fillna(0.0)
-
-
-def _vacated(shifted: Any, operand: Any, over: str, vacated: Any, fill: float) -> Any:
-    """*shifted*, with the positions the shift vacated filled — and only those.
-
-    linopy v1 counts ``.shift()`` among the operations that *create* absence
-    (v1 §4), so the edge propagates and drops the row — the language's answer too
-    (the operator rules, #289). This is the opt-out, reached only from ``shift(...,
-    edge=0)``, and is the escape v1 itself prescribes rather than a rule of
-    ours on top.
-
-    ``fillna`` alone cannot spell it: by the time it runs, the edge the shift
-    just made and a coordinate *operand* never had are both absent, and filling
-    the second builds a row asserting ``x <= 0`` where the model said nothing.
-    So the fill lands where the shift vacated **and** the operand carries the
-    coordinate — the rule the relational lane states by crossing the edge with
-    the other-dim combinations the operand has — and every other slot keeps the
-    absence it arrived with.
-    """
-    carried = (~operand.isnull()).any(over)
-    keep = carried & (~shifted.isnull() | vacated)
-    return _filled(shifted, fill).where(keep)
-
-
-def _filled(expression: Any, fill: float) -> Any:
-    """*expression* with every absence in it standing as *fill*.
-
-    ``to_linexpr()`` first when the operand is still a bare ``Variable``:
-    ``Variable.fillna`` means a label fill on the released line and an
-    expression fill on the v1 branch, and only the expression method is stable.
-    """
-    if hasattr(expression, 'to_linexpr'):
-        expression = expression.to_linexpr()
-    return expression.fillna(fill)
