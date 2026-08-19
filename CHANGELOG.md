@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.210](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.209...v0.0.1-alpha.210) (2026-08-19)
+
+
+### Features
+
+* **language:** a sum can take every dim its operand carries ([#1071](https://github.com/fluxopt/lpspec/issues/1071)) ([9874d64](https://github.com/fluxopt/lpspec/commit/9874d649a947814909231eb8120f1e1cefab8c4b))
+* **language:** an objective spells the sums that make it one number ([#1077](https://github.com/fluxopt/lpspec/issues/1077)) ([d40ca88](https://github.com/fluxopt/lpspec/commit/d40ca88f84686e63d6aacc6f5802db5149bf9c24))
+
 ## [0.0.1-alpha.209](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.208...v0.0.1-alpha.209) (2026-08-19)
 
 
