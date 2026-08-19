@@ -117,8 +117,9 @@ per group below.
 
 Absence is the one thing with no single row: it is positional, so a missing
 parameter row is zero in a coefficient, an error in `bounds:`, and false in a
-`where` operand. The `Absence, as this lane spells it` section of
-`linopy/builder.py` holds all four spellings together.
+`where` operand. `linopy/absence.py` holds all four spellings together, and the
+builder calls them qualified — `absence.coefficient(...)` — so a reader meets
+the name at the call rather than only at the definition.
 
 ### The same language, and the same data
 

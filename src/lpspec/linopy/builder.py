@@ -11,8 +11,8 @@ the four declarations (``Variables``, ``Special-ordered sets``,
 exist to make; ``AST evaluation`` for what an expression is worth;
 ``Built-in operators`` for the five the language has, each entry point first
 and its own machinery after; ``Where-mask evaluation`` for a predicate as a
-boolean array; and ``Absence`` for the four positions an absent value is
-spelled differently in.
+boolean array. The four positions an absent value is spelled differently in
+are ``absence.py``, called qualified from here.
 
 *Which* linopy call each construct becomes is the table in
 ``docs/about/linopy.md`` — one page rather than a comment per site, and
@@ -69,6 +69,7 @@ from lpspec.language.where_parser import (
     WhereNode,
     _UnresolvedPositionNode,
 )
+from lpspec.linopy import absence
 from lpspec.linopy.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
 
 if TYPE_CHECKING:
@@ -348,10 +349,10 @@ def _eval_ast(
         return node.value
 
     if isinstance(node, VariableNode):
-        return _variable_term(node.name, ctx)
+        return absence.variable_term(ctx.model.variables[node.name], ctx.schema.variables[node.name].absence)
 
     if isinstance(node, ParameterNode):
-        return _coefficient(ctx.dataset[node.name])
+        return absence.coefficient(ctx.dataset[node.name])
 
     if isinstance(node, EdgeNode):
         msg = f'EdgeNode({node.policy!r}) reached the evaluator: an edge policy is a shift() kwarg, not a value.'
@@ -608,7 +609,9 @@ def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float |
         return array.shift(amount, fill_value=fill if fill is not None else np.nan)
     if hasattr(array, 'shift'):
         shifted = array.shift(amount)
-        return shifted if fill is None else _vacated(shifted, array, over, _off_the_axis(array, over, offset), fill)
+        return (
+            shifted if fill is None else absence.vacated(shifted, array, over, _off_the_axis(array, over, offset), fill)
+        )
     raise _unsupported('shift()', array)
 
 
@@ -645,7 +648,7 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     reached: list[Any] = []
     for lag in range(widest):
         lagged = _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=None, card=card)
-        live, term = ~lagged.isnull(), _filled(lagged, 0.0)
+        live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
         if isinstance(within, xr.DataArray):
             live, term = live & (within > lag), term * (within > lag).astype(float)
         terms.append(term)
@@ -725,7 +728,7 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: f
 
     Out-of-range positions are clipped so the gather stays on the axis, then
     emptied again by ``where``, so an edge means the same thing it does for a
-    scalar shift: absent by default, and :func:`_vacated` fills it where the
+    scalar shift: absent by default, and :func:`~lpspec.linopy.absence.vacated` fills it where the
     model asked. Under ``wrap`` nothing is out of range and the modulo is the
     whole of it.
     """
@@ -744,7 +747,7 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, wrap: bool, fill: f
         return gathered(source % card)
     inside = ((source >= 0) & (source < card)).assign_coords({over: labels})
     moved = gathered(source.clip(0, card - 1)).where(inside)
-    return moved if fill is None else _vacated(moved, array, over, ~inside, fill)
+    return moved if fill is None else absence.vacated(moved, array, over, ~inside, fill)
 
 
 def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: bool, fill: float | None) -> Any:
@@ -789,8 +792,8 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: Any, wrap: 
     gathered = array.sel({over: indexer}).assign_coords({over: labels}).where(inside)
     if fill is None:
         return gathered
-    vacated = xr.DataArray((source < 0) & grouped, coords={over: labels}, dims=[over])
-    return _vacated(gathered, array, over, vacated, fill)
+    emptied = xr.DataArray((source < 0) & grouped, coords={over: labels}, dims=[over])
+    return absence.vacated(gathered, array, over, emptied, fill)
 
 
 def _off_the_axis(array: Any, over: str, offset: float) -> Any:
@@ -1057,80 +1060,3 @@ def _as_the_axis_spells_it(arr: Any, value: Any) -> Any:
     if getattr(arr, 'dtype', None) is not None and arr.dtype.kind == 'M':
         return np.datetime64(value)
     return value
-
-
-# ---------------------------------------------------------------------------
-# Absence, as this lane spells it
-# ---------------------------------------------------------------------------
-
-
-def _variable_term(name: str, ctx: EvaluationContext) -> Any:
-    """The variable as it enters an expression, carrying its declared ``absence:``.
-
-    The mask stays on the variable either way — it is what keeps the absent
-    coordinates out of the model, and dropping it to pin them at zero instead
-    would hand the solver a column per absent coordinate that the relational
-    lane never emits.
-
-    What differs is the *arithmetic*. This lane sets
-    ``linopy.options['semantics'] = 'v1'`` on import (see the module docstring),
-    under which an absent slot propagates and takes its row — the default, and
-    ``absence: undefined``. ``fillna(0)`` is linopy's own per-expression escape
-    back to the other reading: the slot contributes nothing and the row stands.
-    Per use rather than per model, which is the granularity a declaration needs
-    and the reason the global option alone could not express this.
-    """
-    variable = ctx.model.variables[name]
-    return variable.fillna(0) if ctx.schema.variables[name].absence == 'zero' else variable
-
-
-def _coefficient(parameter: Any) -> Any:
-    """A parameter in a coefficient position, its uncovered slots at zero.
-
-    Where this lane answers linopy's v1 absence convention (linopy's
-    ``doc/design/convention.rst``): the answer is *positional* — one missing
-    row means zero in a coefficient, an error in ``bounds:``, false in a
-    ``where`` operand — so it lives at the read, not as one fill in
-    ``load_parameters`` that would be wrong for the other two. A tidy
-    parameter table is a compressed dense array, not a record of absence:
-    rows only for the live coordinates says the coefficient is zero elsewhere
-    (the data-binding rules). ``load_parameters`` reindexes to the master coordinates, so an
-    uncovered slot arrives as NaN — and v1 §5 refuses a NaN in a
-    user-supplied constant. Correct under the legacy convention too, so not
-    conditional on ``linopy.options['semantics']``.
-    """
-    return parameter.fillna(0.0)
-
-
-def _vacated(shifted: Any, operand: Any, over: str, vacated: Any, fill: float) -> Any:
-    """*shifted*, with the positions the shift vacated filled — and only those.
-
-    linopy v1 counts ``.shift()`` among the operations that *create* absence
-    (v1 §4), so the edge propagates and drops the row — the language's answer too
-    (the operator rules, #289). This is the opt-out, reached only from ``shift(...,
-    edge=0)``, and is the escape v1 itself prescribes rather than a rule of
-    ours on top.
-
-    ``fillna`` alone cannot spell it: by the time it runs, the edge the shift
-    just made and a coordinate *operand* never had are both absent, and filling
-    the second builds a row asserting ``x <= 0`` where the model said nothing.
-    So the fill lands where the shift vacated **and** the operand carries the
-    coordinate — the rule the relational lane states by crossing the edge with
-    the other-dim combinations the operand has — and every other slot keeps the
-    absence it arrived with.
-    """
-    carried = (~operand.isnull()).any(over)
-    keep = carried & (~shifted.isnull() | vacated)
-    return _filled(shifted, fill).where(keep)
-
-
-def _filled(expression: Any, fill: float) -> Any:
-    """*expression* with every absence in it standing as *fill*.
-
-    ``to_linexpr()`` first when the operand is still a bare ``Variable``:
-    ``Variable.fillna`` means a label fill on the released line and an
-    expression fill on the v1 branch, and only the expression method is stable.
-    """
-    if hasattr(expression, 'to_linexpr'):
-        expression = expression.to_linexpr()
-    return expression.fillna(fill)
