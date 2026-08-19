@@ -76,7 +76,7 @@ from lpspec.linopy.loader import (
     load_parameters,
 )
 from lpspec.lowering import lower_expression, lower_program
-from lpspec.sources import validate_piecewise_data
+from lpspec.sources import validate_curve_extent, validate_piecewise_data
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -116,6 +116,7 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
 
         master_coords = build_master_coords(schema, sources)
         dim_coords = build_dim_coords(schema, master_coords, sources)
+        validate_curve_extent(original, dict(sources))
         dataset = load_parameters(schema, dict(sources), master_coords)
         validate_piecewise_data(original, dataset)
 

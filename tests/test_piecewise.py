@@ -17,11 +17,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import polars as pl
 import pytest
 import yaml as pyyaml
 
 import lpspec as lps
-from lpspec.errors import DimensionError
+from lpspec.errors import DataError, DimensionError
 from lpspec.language.piecewise import PiecewiseExpansionError, expand_piecewise
 from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources, validate_piecewise_data
@@ -632,6 +633,114 @@ def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex
     bad = {**data, 'bp_x': BACKWARDS_BP_X}
     with pytest.raises(PiecewiseExpansionError, match='strictly increasing'):
         tidy_sources(schema, bad)
+
+
+# ---------------------------------------------------------------------------
+# the data guard: a curve carries a value at every breakpoint it is built over
+# ---------------------------------------------------------------------------
+
+
+def ragged_curve(points):
+    """A per-generator curve as a tidy frame — B two breakpoints where bp has three."""
+    return pl.DataFrame(
+        {
+            'generator': [g for g, _ in points],
+            'bp': [k for _, k in points],
+            'value': list(points.values()),
+        }
+    )
+
+
+@pytest.fixture
+def ragged_inputs():
+    """Generator B supplies two of the three breakpoints the dimension declares.
+
+    B's curve starts at (10, 100), so the row it never wrote is not a harmless
+    repeat of its first point: read as a zero coefficient it is a vertex at
+    (0, 0), and the weights mix onto it to run B below the minimum output its
+    own curve states.
+    """
+    return {
+        'snapshot': [0],
+        'generator': ['A', 'B'],
+        'bp': [0, 1, 2],
+        'load': pd.Series([25.0], index=pd.RangeIndex(1, name='snapshot')),
+        'bp_x': ragged_curve({('A', 0): 0.0, ('A', 1): 10.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0}),
+        'bp_y': ragged_curve({('A', 0): 0.0, ('A', 1): 50.0, ('A', 2): 140.0, ('B', 0): 100.0, ('B', 1): 130.0}),
+    }
+
+
+def test_a_curve_short_of_a_breakpoint_is_refused(ragged_inputs):
+    """A missing breakpoint row read as a zero coefficient is a vertex at the origin.
+
+    It built, and the answer was wrong with nothing to see: on this fixture B
+    interpolated between its real (20, 130) and the (0, 0) it never declared,
+    for an optimum of 147.5 where its own two points put it at 195.
+    """
+    schema = schema_of(raw_of(TWO_DIM_YAML))
+
+    with pytest.raises(DataError, match=r"'bp_x' has no value at"):
+        tidy_sources(schema, dict(ragged_inputs))
+
+
+def test_the_curve_guard_fires_on_the_eager_lane_too(ragged_inputs, tmp_path):
+    """Both lanes take the same sources, so both refuse the same table (hard rule 3)."""
+    path = tmp_path / 'two_dim.yaml'
+    path.write_text(TWO_DIM_YAML)
+
+    with pytest.raises(DataError, match=r"'bp_x' has no value at"):
+        lpspec_linopy.build(path, dict(ragged_inputs))
+
+
+def test_a_curve_supplied_at_every_breakpoint_passes(ragged_inputs):
+    """The guard is about holes, not about how the table is written."""
+    whole = dict(ragged_inputs)
+    whole['bp_x'] = ragged_curve(
+        {('A', 0): 0.0, ('A', 1): 10.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0, ('B', 2): 30.0}
+    )
+    whole['bp_y'] = ragged_curve(
+        {('A', 0): 0.0, ('A', 1): 50.0, ('A', 2): 140.0, ('B', 0): 100.0, ('B', 1): 130.0, ('B', 2): 200.0}
+    )
+
+    tidy_sources(schema_of(raw_of(TWO_DIM_YAML)), whole)
+
+
+def test_a_dict_shaped_curve_is_read_for_holes_too(ragged_inputs, tmp_path):
+    """The eager lane takes the caller's mapping unspread, so the guard reads that spelling.
+
+    A ``{label: value}`` curve is the one plain-Python shape that can be short:
+    a sequence and a single number are dense against the labels they spread
+    over, a dict carries only the keys it was written with.
+    """
+    path = tmp_path / 'one_dim.yaml'
+    path.write_text(NONCONVEX_YAML)
+    data = {
+        'snapshot': [0],
+        'bp': [0, 1, 2],
+        'load': pd.Series([25.0], index=pd.RangeIndex(1, name='snapshot')),
+        'bp_x': {0: 0.0, 1: 10.0},
+        'bp_y': {0: 0.0, 1: 50.0},
+    }
+
+    with pytest.raises(DataError, match=r"'bp_x' has no value at"):
+        lpspec_linopy.build(path, data)
+
+
+def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
+    """The guard runs before the index is bound, and must not answer for its absence.
+
+    Where nothing declares the breakpoints, the curve's own labels are all
+    there is — it cannot be short of a breakpoint no one declared — so a
+    complete curve has to reach the message that names the missing index.
+    """
+    whole = {k: v for k, v in ragged_inputs.items() if k != 'bp'}
+    whole['bp_x'] = ragged_curve({('A', 0): 0.0, ('A', 1): 20.0, ('B', 0): 10.0, ('B', 1): 20.0})
+    whole['bp_y'] = ragged_curve({('A', 0): 0.0, ('A', 1): 140.0, ('B', 0): 100.0, ('B', 1): 130.0})
+
+    tidy_sources(schema_of(raw_of(TWO_DIM_YAML)), whole)  # the guard has nothing to say
+
+    with pytest.raises(DataError, match='has no index'):
+        lps.build(raw_of(TWO_DIM_YAML), whole)
 
 
 # ---------------------------------------------------------------------------
