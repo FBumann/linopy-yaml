@@ -43,6 +43,7 @@ OPERATORS = {
     'sum(array)': 'sum_all',
     'sum(array, over=dim)': 'sum',
     'sum(array, by=lookup)': 'sum_by',
+    'sum(array, by=[lookup, …])': 'sum_by_lookups',
     'at(array, by=lookup)': 'at',
     'shift(array, over=dim, offset=n)': 'shift',
     "shift(array, over=dim, offset=n, edge='wrap')": 'shift_wrap',

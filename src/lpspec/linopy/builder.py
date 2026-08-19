@@ -29,6 +29,7 @@ from lpspec.language.expression_parser import (
     FunctionCallNode,
     KeywordNode,
     LookupNode,
+    NameListNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -353,9 +354,10 @@ def _eval_ast(
             f'where no kwarg expects one.'
         )
         raise AssertionError(msg)
-    if isinstance(node, (NameNode, DimensionNode, LookupNode)):
+    if isinstance(node, (NameNode, NameListNode, DimensionNode, LookupNode)):
+        shown = node.name if isinstance(node, (NameNode, DimensionNode)) else node.shown
         msg = (
-            f'{type(node).__name__}({node.name!r}) reached the evaluator. '
+            f'{type(node).__name__}({shown!r}) reached the evaluator. '
             f'Expressions must go through resolution.expression_of() first '
             f'(docs/about/architecture.md hard rule 1).'
         )
@@ -381,12 +383,10 @@ def _eval_ast(
         if node.name == 'at':
             by = node.kwargs['by']
             assert isinstance(by, LookupNode)
-            return _operator_at(args[0], _lookup_array(by, ctx), into=by.into)
+            return _operator_at(args[0], _lookup_arrays(by, ctx), into=by.into)
         if node.name == 'sum' and (by := node.kwargs.get('by')) is not None:
             assert isinstance(by, LookupNode)
-            return _operator_grouped_sum(
-                args[0], _lookup_array(by, ctx), into=by.into, labels=ctx.master_coords[by.into]
-            )
+            return _operator_grouped_sum(args[0], _lookup_arrays(by, ctx), into=by.into, labels=ctx.master_coords)
         kwargs: dict[str, Any] = {}
         for k, v in node.kwargs.items():
             if isinstance(v, DimensionNode):
@@ -394,7 +394,7 @@ def _eval_ast(
             elif isinstance(v, EdgeNode):
                 kwargs[k] = v.policy
             elif isinstance(v, LookupNode):
-                kwargs[k] = _lookup_array(v, ctx)
+                kwargs[k] = _lookup_arrays(v, ctx)[0]  # a partition names one lookup, refused plural at load
             else:
                 kwargs[k] = _eval_ast(v, ctx)
         return operator(*args, **kwargs)
@@ -402,21 +402,25 @@ def _eval_ast(
     assert_never(node)
 
 
-def _lookup_array(by: LookupNode, ctx: EvaluationContext) -> Any:
-    """The declared lookup ``by`` as an array over the dimension it is over.
+def _lookup_arrays(by: LookupNode, ctx: EvaluationContext) -> tuple[Any, ...]:
+    """The declared lookups ``by`` as arrays over the dimension they are over.
 
-    Looked up rather than evaluated as an operand: the lookup lives on the
-    dimension, not in the parameter dataset.
+    Looked up rather than evaluated as operands: a lookup lives on the
+    dimension, not in the parameter dataset. One array per name, in the
+    order written, so the caller can pair each with the dim it targets.
     """
-    try:
-        return ctx.dim_coords[by.dimension][by.name]
-    except KeyError:
-        msg = (
-            f"lookup '{by.name}' over dimension '{by.dimension}' has no bound values. "
-            f"Pass sources={{'{by.dimension}': <table with '{by.dimension}' and "
-            f"'{by.name}' columns>}}."
-        )
-        raise DataError(msg) from None
+    arrays = []
+    for name in by.names:
+        try:
+            arrays.append(ctx.dim_coords[by.dimension][name])
+        except KeyError:
+            msg = (
+                f"lookup '{name}' over dimension '{by.dimension}' has no bound values. "
+                f"Pass sources={{'{by.dimension}': <table with '{by.dimension}' and "
+                f"'{name}' columns>}}."
+            )
+            raise DataError(msg) from None
+    return tuple(arrays)
 
 
 # ---------------------------------------------------------------------------
@@ -439,68 +443,110 @@ def _operator_sum(array: Any, *, over: str | None = None) -> Any:
     return array
 
 
-def _operator_grouped_sum(array: Any, mapping: Any, *, into: str, labels: pd.Index) -> Any:
-    """Sum *array* through a declared lookup, producing dimension *into*.
+def _checked_mappings(call: str, mappings: tuple[Any, ...], into: tuple[str, ...]) -> tuple[Any, ...]:
+    """*mappings* renamed to the dims they target, refusing a shape no lane has.
 
-    YAML: ``sum(p, by=gen_bus)``. *mapping* is the lookup's values as a
-    one-dimensional array over the dim being grouped, from
-    ``EvaluationContext.dim_coords``; that dim is summed out and *into*
-    holds the group labels.
+    Each arrives as the lookup's values over the dim being grouped; renaming
+    it to its target is what makes the group's own name the dim that comes
+    out, and it is the one thing both arities need.
+    """
+    renamed = []
+    for mapping, target in zip(mappings, into, strict=True):
+        if not isinstance(mapping, xr.DataArray):
+            msg = f'{call} lookup must be an array (got {type(mapping).__name__}). Usage: {call[:-2]}(expr, by=lookup)'
+            raise TypeError(msg)
+        if mapping.ndim != 1:
+            msg = f'{call} mapping must have exactly one dimension, got {list(mapping.dims)}'
+            raise LanguageError(msg)
+        renamed.append(mapping.rename(target))
+    return tuple(renamed)
+
+
+def _present(mappings: tuple[Any, ...]) -> Any:
+    """The members every mapping has a value for, as a boolean over their dim."""
+    keep = mappings[0].notnull()
+    for mapping in mappings[1:]:
+        keep = keep & mapping.notnull()
+    return keep
+
+
+def _operator_grouped_sum(
+    array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...], labels: Mapping[str, pd.Index]
+) -> Any:
+    """Sum *array* through declared lookups, producing dimensions *into*.
+
+    YAML: ``sum(p, by=gen_bus)`` or ``sum(p, by=[gen_bus, gen_tech])``.
+    *mappings* are the lookups' values as one-dimensional arrays over the dim
+    being grouped, from ``EvaluationContext.dim_coords``; that dim is summed
+    out and *into* holds the group labels, one dim per lookup.
 
     A null lookup value says the label belongs to no group, so its terms
     contribute nowhere. linopy refuses to group by NaN at all, so those members
-    are dropped before grouping rather than after.
+    are dropped before grouping rather than after — and with several lookups a
+    member missing *any* of them belongs to no group at all.
 
-    *labels* is ``into``'s declared index, and the result is reindexed onto it:
-    a groupby yields only the labels some member actually points at, in xarray's
-    sort order, so without this a label no member reaches is missing and a
-    declared order that is not sorted is lost. Either one makes linopy v1 refuse
-    the next combination with a coordinate mismatch, since it aligns on
-    membership *and* order. Lookup values are validated against ``into``'s
-    labels when they are loaded, so this only ever adds a label, never drops a
-    term.
+    Several groups go through the coordinate-name grouper rather than the
+    single-array one, because that is the form whose result is one dim per key
+    rather than one stacked ``group`` dim.
+
+    *labels* holds each target's declared index, and the result is reindexed
+    onto them: a groupby yields only the labels some member actually points at,
+    in xarray's sort order, so without this a label no member reaches is
+    missing and a declared order that is not sorted is lost. Either one makes
+    linopy v1 refuse the next combination with a coordinate mismatch, since it
+    aligns on membership *and* order. Lookup values are validated against their
+    target's labels when they are loaded, so this only ever adds a label, never
+    drops a term.
     """
-    if not isinstance(mapping, xr.DataArray):
-        msg = f'sum(by=) lookup must be an array (got {type(mapping).__name__}). Usage: sum(expr, by=lookup)'
-        raise TypeError(msg)
-    if mapping.ndim != 1:
-        msg = f'sum(by=) mapping must have exactly one dimension, got {list(mapping.dims)}'
-        raise LanguageError(msg)
-
-    group = mapping.rename(into)
-    present = group.notnull()
+    mappings = _checked_mappings('sum(by=)', mappings, into)
+    present = _present(mappings)
+    dim = str(mappings[0].dims[0])
     if not bool(present.all()):
-        dim = str(group.dims[0])
-        group = group.isel({dim: present.to_numpy()})
-        array = array.isel({dim: present.to_numpy()})
-    if isinstance(array, xr.DataArray) or hasattr(array, 'groupby'):
-        return _reindexed(array.groupby(group).sum(), into=into, labels=labels)
-    raise _unsupported('sum(by=)', array)
+        mask = present.to_numpy()
+        mappings = tuple(m.isel({dim: mask}) for m in mappings)
+        array = array.isel({dim: mask})
+    if not (isinstance(array, xr.DataArray) or hasattr(array, 'groupby')):
+        raise _unsupported('sum(by=)', array)
+    attached = array.assign_coords({target: (dim, m.to_numpy()) for target, m in zip(into, mappings, strict=True)})
+    summed = attached.groupby(list(into)).sum()
+    return _reindexed(summed, into=into, labels=labels)
 
 
-def _reindexed(summed: Any, *, into: str, labels: pd.Index) -> Any:
-    """*summed* over exactly *labels*, empty groups filled with an empty sum.
+def _reindexed(summed: Any, *, into: tuple[str, ...], labels: Mapping[str, pd.Index]) -> Any:
+    """*summed* over exactly the declared labels, empty groups filled with an empty sum.
 
     A grouped parameter is a plain ``DataArray``, where the empty sum is 0. A
     grouped expression is a ``LinearExpression``, whose empty term is spelled
     per-variable — linopy's own ``_fill_value`` cannot be used, its ``const:
     nan`` propagates through the arithmetic that follows and poisons the row.
+
+    The unstacked multi-key groupby has already invented the combinations no
+    member lands on, and filled them with linopy's ``_fill_value`` — the same
+    ``const: nan``, which reindex never sees because those labels are present.
+    So the fill comes first and the reindex second, and a (bus, technology)
+    pair nothing sits at is an empty sum for the same reason a bus nothing sits
+    on is. No other NaN reaches here: a grouped sum zeroes its members' NaN
+    constants, and a hole in the data is refused at bind (#1001).
     """
-    fill = {'vars': -1, 'coeffs': 0.0, 'const': 0.0} if hasattr(summed, 'const') else 0
-    return summed.reindex({into: labels}, fill_value=fill)
+    index = {d: labels[d] for d in into}
+    if hasattr(summed, 'const'):
+        fill = {'vars': -1, 'coeffs': 0.0, 'const': 0.0}
+        return summed.fillna({'const': 0.0}).reindex(index, fill_value=fill)
+    return summed.fillna(0.0).reindex(index, fill_value=0)
 
 
-def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:
-    """Read *array* through a declared lookup — the adjoint of a group.
+def _operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...]) -> Any:
+    """Read *array* through declared lookups — the adjoint of a group.
 
-    YAML: ``at(on, by=component)``. *mapping* is the same one-dimensional
-    array ``sum`` takes; grouping sums *along* it, this indexes *through* it,
-    so the operand must carry ``into`` and the result carries the mapping's
-    own dim.
+    YAML: ``at(on, by=component)``. *mappings* are the same one-dimensional
+    arrays ``sum`` takes; grouping sums *along* them, this indexes *through*
+    them, so the operand must carry every dim in ``into`` and the result
+    carries the mappings' own dim.
 
     xarray's vectorised selection is the pullback exactly — one ``into`` label
-    read once per fine label pointing at it — so the fan-out is the indexer's
-    doing rather than a broadcast arranged here.
+    read once per fine label pointing at it, and with several lookups one
+    *tuple* of labels read once — so the fan-out is the indexer's doing rather
+    than a broadcast arranged here.
 
     A null lookup value reads nothing and its row is absent, the same reading
     ``sum`` gives a null group. It cannot be selected — there is no ``into``
@@ -515,22 +561,18 @@ def _operator_at(array: Any, mapping: Any, *, into: str) -> Any:
     membership, so a result short of a label refuses the next arithmetic
     outright, which is how #897 surfaced.
     """
-    if not isinstance(mapping, xr.DataArray):
-        msg = f'at() lookup must be an array (got {type(mapping).__name__}). Usage: at(expr, by=lookup)'
-        raise TypeError(msg)
-    if mapping.ndim != 1:
-        msg = f'at() mapping must have exactly one dimension, got {list(mapping.dims)}'
-        raise LanguageError(msg)
+    mappings = _checked_mappings('at()', mappings, into)
     if not (isinstance(array, xr.DataArray) or hasattr(array, 'sel')):
         raise _unsupported('at()', array)
 
-    present = mapping.notnull()
+    present = _present(mappings)
     if bool(present.all()):
-        return array.sel({into: mapping.rename(into)})
+        return array.sel(dict(zip(into, mappings, strict=True)))
 
-    dim = str(mapping.dims[0])
-    picked = array.sel({into: mapping.isel({dim: present.to_numpy()}).rename(into)})
-    return picked.reindex({dim: mapping[dim]})
+    dim = str(mappings[0].dims[0])
+    kept = present.to_numpy()
+    picked = array.sel(dict(zip(into, (m.isel({dim: kept}) for m in mappings), strict=True)))
+    return picked.reindex({dim: mappings[0][dim]})
 
 
 def _group_offsets(node: DimensionPositionNode, groups: np.ndarray) -> np.ndarray:
@@ -575,7 +617,7 @@ def _bound_lookup(
 ) -> xr.DataArray:
     """A lookup's bound values as an array over the dim it is over.
 
-    The where counterpart of :func:`_lookup_array`, which reads the same store
+    The where counterpart of :func:`_lookup_arrays`, which reads the same store
     for a grouped sum. Kept separate because the failure differs: a predicate
     can be evaluated before any variable exists, so the message names the
     source that was wanted rather than the helper call that wanted it.

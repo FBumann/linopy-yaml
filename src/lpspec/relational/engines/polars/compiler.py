@@ -725,24 +725,28 @@ class PolarsCompiler:
         return TermFragment(keep, frame, p.is_term)
 
     def _group_fragment(self, p: TermFragment, g: plan.GroupSum, context: str) -> TermFragment:
-        """Relabel dim ``over`` to ``into`` through a declared lookup.
+        """Relabel dim ``over`` to ``into`` through declared coordinates.
 
         No aggregate either: the dim table holds one row per label and its
-        lookup was checked for containment at build time, so the join
+        coordinates were checked for containment at build time, so the join
         neither duplicates nor drops a term, and rows landing on one ``into``
         are added by the terminal aggregate as ``Sum``'s are. A group is a sum,
         so v1 §13 applies and this constructs rather than ``replace``s — see
         :meth:`_sum_fragment`.
+
+        Grouping through several coordinates costs nothing extra here: they
+        ride the same dim table and the same single join, which is why the
+        surface is a list rather than a composition of calls.
         """
         if g.over not in p.dims:
             raise LanguageError(f"in {context}: GroupSum over '{g.over}' but the expression has dims {list(p.dims)}")
-        grouped = self._remap_fragment(p, g, consumed=g.over, produced=g.into)
+        grouped = self._remap_fragment(p, g, consumed=(g.over,), produced=g.into)
         if p.is_term:
             return grouped
         return replace(grouped, frame=pl.concat([grouped.frame, self._empty_groups(grouped, g)]))
 
     def _empty_groups(self, p: TermFragment, g: plan.GroupSum) -> pl.LazyFrame:
-        """The ``into`` labels no member maps to, as constant rows worth zero.
+        """The ``into`` combinations no member maps to, as constant rows worth zero.
 
         A group with no members contributes nothing, so on a constant side it
         holds a *value* — the empty sum — and not a hole. The two are the same
@@ -751,13 +755,22 @@ class PolarsCompiler:
         absent, so the value is written down here where the reason is known
         (#1026).
 
+        Several coordinates land on a *product* of targets, and a combination
+        no member sits at is empty for the reason one unreached label is — so
+        what the reached set is subtracted from is that product.
+
         Only for a constant part: an empty group contributes no *term*, and a
         row left with no terms is not built at all.
         """
-        into = self.data.dimensions[g.into].select(pl.col('val').alias(g.into))
-        reached = self.data.dimensions[g.over].select(pl.col(g.lookup).alias(g.into))
-        empty = into.join(reached, on=g.into, how='anti')
-        spanned = [d for d in p.dims if d != g.into]
+        universe = self.data.dimensions[g.into[0]].select(pl.col('val').alias(g.into[0]))
+        for target in g.into[1:]:
+            labels = self.data.dimensions[target].select(pl.col('val').alias(target))
+            universe = universe.join(labels, how='cross')
+        reached = self.data.dimensions[g.over].select(
+            *(pl.col(c).alias(i) for c, i in zip(g.coordinate, g.into, strict=True))
+        )
+        empty = universe.join(reached, on=list(g.into), how='anti')
+        spanned = [d for d in p.dims if d not in g.into]
         if spanned:
             empty = p.frame.select(spanned).unique().join(empty, how='cross')
         return empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
@@ -766,9 +779,9 @@ class PolarsCompiler:
         """Spread ``into`` back out over ``over`` — the adjoint of a group.
 
         The same mapping table as :meth:`_group_fragment`, joined on the other
-        column, so the join **fans out**: one row per ``into`` lands on every
-        ``over`` sharing it. Still one equi-join against a table the frame
-        holds, so the locality class does not move.
+        columns, so the join **fans out**: one row per ``into`` tuple lands on
+        every ``over`` sharing it. Still one equi-join against a table the
+        frame holds, so the locality class does not move.
 
         A pullback duplicates a label — the same ``var_label`` at every fine
         coordinate of its component — so a later reduction can bring two copies
@@ -778,9 +791,10 @@ class PolarsCompiler:
         pointwise, so what the fine coordinate has is whatever the coarse slot
         it reads has, and a slot with nothing has to take the row with it.
         """
-        if a.into not in p.dims:
-            raise LanguageError(f"in {context}: At through '{a.into}' but the expression has dims {list(p.dims)}")
-        remapped = self._remap_fragment(p, a, consumed=a.into, produced=a.over)
+        absent = [d for d in a.into if d not in p.dims]
+        if absent:
+            raise LanguageError(f'in {context}: At through {absent} but the expression has dims {list(p.dims)}')
+        remapped = self._remap_fragment(p, a, consumed=a.into, produced=(a.over,))
         return replace(remapped, presence=self._pulled_back_presence(p, a))
 
     def _pulled_back_presence(self, p: TermFragment, a: plan.At) -> Presence | None:
@@ -794,6 +808,10 @@ class PolarsCompiler:
         its row survives to assert something the model never said: `x <= 0`
         where the model said nothing (#968).
 
+        Reading through several coordinates at once, a label reaches its slot
+        only where *every* one of them maps: one null anywhere in the tuple
+        leaves nothing to read, the same as one null in a single lookup.
+
         A total lookup over an operand with nothing to report yields ``None``
         rather than a restriction admitting everything, so a model with no
         absence in it does not pay for the machinery that carries one.
@@ -802,39 +820,49 @@ class PolarsCompiler:
         widens the fragment's dims while this frame keeps the one column that
         matters — the hazard :class:`Presence` names.
         """
-        mapping = self.data.dimensions[a.over].select(pl.col('val').alias(a.over), pl.col(a.lookup).alias(a.into))
-        reachable = mapping.filter(pl.col(a.into).is_not_null())
+        mapping = self.data.dimensions[a.over].select(
+            pl.col('val').alias(a.over),
+            *(pl.col(c).alias(i) for c, i in zip(a.coordinate, a.into, strict=True)),
+        )
+        reachable = mapping.filter(pl.all_horizontal([pl.col(i).is_not_null() for i in a.into]))
         if p.presence is None:
-            partial = mapping.select(pl.col(a.into).null_count()).collect().item() > 0
+            partial = mapping.select(pl.any_horizontal([pl.col(i).is_null() for i in a.into]).any()).collect().item()
             return Presence(reachable.select(a.over), (a.over,)) if partial else None
 
         keys = p.presence.keys(p.dims)
         if not keys:
             return Presence(p.presence.restrict(reachable.select(a.over), keys), (a.over,))
+        carries_targets = all(i in keys for i in a.into)
         source, keys = (
-            (p.presence.frame, keys) if a.into in keys else (self._widen(p.presence.frame, keys, p.dims), p.dims)
+            (p.presence.frame, keys) if carries_targets else (self._widen(p.presence.frame, keys, p.dims), p.dims)
         )
-        kept = tuple(k for k in keys if k != a.into)
-        return Presence(source.join(reachable, on=a.into, how='inner').select(*kept, a.over), (*kept, a.over))
+        kept = tuple(k for k in keys if k not in a.into)
+        return Presence(source.join(reachable, on=list(a.into), how='inner').select(*kept, a.over), (*kept, a.over))
 
     def _remap_fragment(
-        self, p: TermFragment, node: plan.GroupSum | plan.At, *, consumed: str, produced: str
+        self, p: TermFragment, node: plan.GroupSum | plan.At, *, consumed: tuple[str, ...], produced: tuple[str, ...]
     ) -> TermFragment:
-        """Trade dim *consumed* for *produced* through *node*'s lookup.
+        """Trade dims *consumed* for *produced* through *node*'s coordinates.
 
-        The mapping table is the declared lookup read as two columns —
-        ``val`` as ``over``, the lookup as ``into`` — and the rewrite is a
-        single inner equi-join on *consumed*. A group consumes ``over``
-        (:meth:`_group_fragment`); an ``At`` reads the same table backwards
-        (:meth:`_at_fragment`). Written once so the adjoints cannot drift: a
-        change to how the mapping joins is a change to both.
+        The mapping table is the declared coordinates read as columns —
+        ``val`` as ``over``, each coordinate as the dim it targets — and the
+        rewrite is a single inner equi-join on *consumed*. A group consumes
+        ``over`` (:meth:`_group_fragment`); an ``At`` reads the same table
+        backwards (:meth:`_at_fragment`). Written once so the adjoints cannot
+        drift: a change to how the mapping joins is a change to both.
+
+        One of the two sides is always a single dim — a group consumes the one
+        the coordinates are over, a pullback produces it — so exactly one join
+        happens whatever the arity.
         """
-        keep = tuple(x for x in p.dims if x != consumed)
+        dropped = set(consumed)
+        keep = tuple(x for x in p.dims if x not in dropped)
         mapping = self.data.dimensions[node.over].select(
-            pl.col('val').alias(node.over), pl.col(node.lookup).alias(node.into)
+            pl.col('val').alias(node.over),
+            *(pl.col(c).alias(i) for c, i in zip(node.coordinate, node.into, strict=True)),
         )
-        frame = p.frame.join(mapping, on=consumed, how='inner').select(*keep, produced, *p.carried)
-        return TermFragment((*keep, produced), frame, p.is_term)
+        frame = p.frame.join(mapping, on=list(consumed), how='inner').select(*keep, *produced, *p.carried)
+        return TermFragment((*keep, *produced), frame, p.is_term)
 
     def _window_fragment(self, p: TermFragment, s: plan.Window, context: str) -> TermFragment:
         """A one-to-many remap of the dim through its ord.

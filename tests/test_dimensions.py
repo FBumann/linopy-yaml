@@ -99,7 +99,7 @@ def test_dim_inference(expr, expected):
         ),
         pytest.param(
             'sum(load, by=gen_bus)',
-            r"sum\(by=gen_bus\) consumes 'generator', the dim the lookup is over",
+            r"sum\(by=gen_bus\) consumes 'generator', the dim it maps out of",
             id='sum-requires-the-grouped-dim',
         ),
         # `(inner - {over}) | {into}` is a union, and a union absorbs a collision.

@@ -930,7 +930,7 @@ def _rendered_trees() -> Iterator[object]:
 
 
 #: What resolution never hands the walk: the three nodes it types away, and the
-#: two an expression only carries before names are resolved. The walk raises on
+#: three an expression only carries before names are resolved. The walk raises on
 #: each rather than rendering it, so a fixture reaching one would be a bug in
 #: resolution rather than a case worth committing output for.
 UNRESOLVED = {
@@ -938,6 +938,7 @@ UNRESOLVED = {
     'UnresolvedComparisonNode',
     '_UnresolvedPositionNode',
     'NameNode',
+    'NameListNode',
     'KeywordNode',
 }
 
@@ -988,7 +989,7 @@ def _calls(node: object) -> Iterator[FunctionCallNode]:
 #: at most one, so a fixture that has one cannot also be a fixture that has
 #: none, and `test_a_model_with_no_objective_prints_the_rest` covers it instead.
 UNREACHABLE = {
-    'if isinstance(node, (NameNode, KeywordNode, DimensionNode, LookupNode, EdgeNode)):',
+    'if isinstance(node, (NameNode, NameListNode, KeywordNode, DimensionNode, LookupNode, EdgeNode)):',
     "msg = f'{type(node).__name__} reached the typesetter; resolve the expression first.'",
     'if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, _UnresolvedPositionNode)):',
     "msg = f'{type(node).__name__} reached the typesetter; resolve the where string first.'",

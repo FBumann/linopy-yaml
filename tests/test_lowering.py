@@ -207,7 +207,7 @@ def test_a_divisor_under_a_pullback_is_still_named():
     and a test that needed data to reach it would be testing the assembly.
     """
     quotient = Divide(Variable('x'), Parameter('rate'))
-    pulled = At(quotient, over='flow', lookup='component', into='component')
+    pulled = At(quotient, over='flow', coordinate=('component',), into=('component',))
 
     assert divisor_parameters(pulled) == frozenset({'rate'})
     assert divisor_parameters(Sum(pulled, ('flow',))) == frozenset({'rate'})

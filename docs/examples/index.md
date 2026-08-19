@@ -115,7 +115,7 @@ drift from what the engine builds.
 | [pypsa_cyclic_storage](pypsa_cyclic_storage.md) | **✔** 17228.8 | **✓** | **✓** | · | **✓** | **✓** | · | **✓** | · | · | · |
 | [pypsa_energy_sum](pypsa_energy_sum.md) | **✔** 21400 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_fixed](pypsa_fixed.md) | **✔** 49900 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | · |
-| [pypsa_global_limits](pypsa_global_limits.md) | **✔** 127212 | **✓** | **✓** | **✓** | · | · | **✓** | **✓** | · | · | · |
+| [pypsa_global_limits](pypsa_global_limits.md) | **✔** 127212 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | · |
 | [pypsa_growth_limit](pypsa_growth_limit.md) | **✔** 47110 | **✓** | **✓** | **✓** | **✓** | · | · | **✓** | · | · | · |
 | [pypsa_kvl](pypsa_kvl.md) | **✔** 17000 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [pypsa_linearized_uc](pypsa_linearized_uc.md) | **✔** 5540 | **✓** | · | · | **✓** | · | · | **✓** | · | · | · |

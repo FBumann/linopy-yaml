@@ -5,10 +5,11 @@ every character a notation escapes, set as text: link\_to, 100% & \#1 costs \$5 
 
 == Sets
 / $cal(T)$: index $t$ --- `snapshot` with $upright("season_of"): cal(T) arrow.r cal(S)$
-/ $cal(G)$: index $g$ --- `generator` with $upright("gen_bus"): cal(G) arrow.r cal(B)$ carrying label $upright("tech")$
+/ $cal(G)$: index $g$ --- `generator` with $upright("gen_bus"): cal(G) arrow.r cal(B), upright("gen_tech"): cal(G) arrow.r cal(E)$ carrying label $upright("tech")$
 / $cal(B)$: index $b$ --- `bus` with $upright("zone_of"): cal(B) arrow.r cal(Z), upright("area_of"): cal(B) arrow.r cal(Z)$
 / $cal(Z)$: index $z$ --- `zone`
 / $cal(S)$: index $s$ --- `season`
+/ $cal(E)$: index $e$ --- `technology`
 
 == Parameters
 / $p^(upright("max"))$: `p_max` over $cal(G)$
@@ -17,6 +18,7 @@ every character a notation escapes, set as text: link\_to, 100% & \#1 costs \$5 
 / $italic("load")$: `load` over $cal(T) times cal(B)$
 / $italic("is_flexible")$: `is_flexible` over $cal(G)$
 / $italic("zone")^(upright("cap"))$: `zone_cap` over $cal(Z)$
+/ $italic("tech_cap")$: `tech_cap` over $cal(B) times cal(E)$
 / $italic("min_up")$: `min_up` over $cal(G)$
 / $italic("lead")$: `lead` over $cal(G)$
 / $italic("budget")$: `budget` (scalar)
@@ -56,6 +58,8 @@ $ upright("balance") & sum_(g in cal(G) colon upright("gen_bus")(g) = b) p_(t,g)
   upright("window") & sum_(t' in cal(T) colon 0 <= t - t' < 3) italic("on")_(t',g) & <= italic("units")_(g) & forall t in cal(T), g in cal(G) \
   upright("history") & sum_(t' in cal(T) colon 0 <= t minus.o t' < italic("min_up")) italic("on")_(t',g) & <= italic("units")_(g) & forall t in cal(T), g in cal(G) \
   upright("pullback") & italic("spill")_(t) & <= italic("zone")^(upright("cap"))_(upright("zone_of")(b)) & forall t in cal(T), b in cal(B) \
+  upright("grouped_twice") & sum_(g in cal(G) colon upright("gen_bus")(g) = b and upright("gen_tech")(g) = e) p_(t,g) & <= italic("tech_cap")_(b,e) & forall t in cal(T), b in cal(B), e in cal(E) \
+  upright("pulled_back_twice") & italic("units")_(g) & <= italic("tech_cap")_(upright("gen_bus")(g),upright("gen_tech")(g)) & forall g in cal(G) \
   upright("arithmetic") & sum_(g in cal(G)) (frac(p_(t,g), 2) + -italic("cost")_(g)) & >= (-(sum_(g in cal(G)) p_(t,g))) dot 3 & forall t in cal(T) \
   upright("total") & sum_(t in cal(T), g in cal(G)) p_(t,g) & <= italic("budget") \
   upright("scalar") & italic("units")_(g) & <= italic("budget") & forall g in cal(G) colon italic("cost")_(g) upright(" is defined") \

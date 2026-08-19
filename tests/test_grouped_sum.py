@@ -85,8 +85,8 @@ def test_sum_lowers_to_one_node_per_injection_term():
     (c,) = program.constraints
     assert c.dims == ('snapshot', 'bus')
     terms = _flatten(c.lhs)
-    assert GroupSum(Variable('p'), over='generator', lookup='gen_bus', into='bus') in terms
-    assert GroupSum(Variable('f'), over='line', lookup='line_to', into='bus') in terms
+    assert GroupSum(Variable('p'), over='generator', coordinate=('gen_bus',), into=('bus',)) in terms
+    assert GroupSum(Variable('f'), over='line', coordinate=('line_to',), into=('bus',)) in terms
 
 
 @pytest.mark.parametrize(
@@ -137,7 +137,7 @@ def test_a_lookup_over_another_dim_is_a_dim_error_not_a_resolution_one():
     """
     schema = schema_of(TRANSPORT_YAML)
     node = resolved('sum(p, by=line_to)', schema)
-    with pytest.raises(LanguageError, match=r"sum\(by=line_to\) consumes 'line', the dim the lookup is over"):
+    with pytest.raises(LanguageError, match=r"sum\(by=line_to\) consumes 'line', the dim it maps out of"):
         _lower_expr(node, schema, 't')
 
 

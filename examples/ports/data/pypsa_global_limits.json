@@ -28,8 +28,7 @@
   "link_capital_cost": {"link": ["north_south", "east_south"], "value": [200.0, 400.0]},
   "link_length": {"link": ["north_south", "east_south"], "value": [100.0, 50.0]},
   "energy_cap": {"carrier": ["gas"], "value": [380.0]},
-  "capped_carrier": {"carrier": ["wind", "gas", "oil"], "value": [1.0, 0.0, 0.0]},
-  "bus_capacity_cap": {"bus": ["east"], "value": [17.0]},
+  "bus_capacity_cap": {"bus": ["east"], "carrier": ["wind"], "value": [17.0]},
   "volume_cap": 3400.0,
   "expansion_cost_cap": 10500.0
 }

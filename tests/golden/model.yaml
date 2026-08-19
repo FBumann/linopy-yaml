@@ -14,9 +14,11 @@ dimensions:
   bus: {dtype: str}
   zone: {dtype: str}
   season: {dtype: str}
+  technology: {dtype: str}
 
 lookups:
   gen_bus: {over: generator, into: bus}
+  gen_tech: {over: generator, into: technology}   # a second map out of `generator`, to group through both at once
   zone_of: {over: bus, into: zone}
   area_of: {over: bus, into: zone}   # a second map into the same set, to compare against
   season_of: {over: snapshot, into: season}
@@ -29,6 +31,7 @@ parameters:
   load: {dims: [snapshot, bus]}
   is_flexible: {dims: [generator], dtype: bool}
   zone_cap: {dims: [zone]}
+  tech_cap: {dims: [bus, technology]}
   min_up: {dims: [generator], dtype: int}
   lead: {dims: [generator], dtype: int}
   budget: {dims: []}                 # scalar: the legend says so rather than printing an empty product
@@ -115,6 +118,12 @@ constraints:
   pullback:     # at(), which re-indexes through a lookup instead of an offset
     foreach: [snapshot, bus]
     expression: spill <= at(zone_cap, by=zone_of)
+  grouped_twice:  # one grouping through two maps: the domain carries both conditions
+    foreach: [snapshot, bus, technology]
+    expression: sum(p, by=[gen_bus, gen_tech]) <= tech_cap
+  pulled_back_twice:  # its adjoint, reading one slot through a pair of labels
+    foreach: [generator]
+    expression: units <= at(tech_cap, by=[gen_bus, gen_tech])
   arithmetic:   # division, unary minus, nested reduction, bracketing
     # No `**`: the walk renders it, but `lower_program` rejects it, so a model
     # using it would not be a model. Format.power stays exercised by unit
