@@ -300,3 +300,57 @@ def test_the_notation_page_shows_every_way_a_curve_expands():
         f"the notation page shows {sorted(shown)} of the language's {sorted(PIECEWISE_METHODS)} — "
         f'every method expands differently, so each needs a model in tools/notation.PIECEWISE'
     )
+
+
+# --------------------------------------------------------------------------
+# the error tree
+
+
+#: The one table telling a caller which exception is which.
+ERROR_TABLE = LANGUAGE / 'errors.md'
+
+
+def _tabled_errors() -> set[str]:
+    """Every class named in the first column of the error table."""
+    section = ERROR_TABLE.read_text().split('## Which error you get', 1)[1].split('\n\n\n', 1)[0]
+    return set(re.findall(r'^\| `(\w+Error)` \|', section, re.MULTILINE))
+
+
+def _public_errors() -> set[str]:
+    """Every exception `lpspec.errors` defines, which is what a caller can catch.
+
+    `LpspecWarning` is not one: it is raised by nothing and carries advice, and
+    the paragraph under the table is where it is documented.
+    """
+    from lpspec import errors
+
+    return {
+        name
+        for name, obj in vars(errors).items()
+        if isinstance(obj, type)
+        and issubclass(obj, Exception)
+        and not issubclass(obj, Warning)
+        and obj.__module__ == errors.__name__
+    }
+
+
+def test_every_error_class_has_a_row():
+    """A class a caller catches, and a table that says which is which.
+
+    The table is the only place the tree is written down for a reader, so a
+    class added without a row leaves it quietly claiming to be all of them —
+    which is what happened to `LaneError` (#1087), found by reading rather than
+    by anything failing.
+    """
+    assert _public_errors() <= _tabled_errors(), (
+        f'{ERROR_TABLE.name} names no row for {sorted(_public_errors() - _tabled_errors())} — '
+        'every class in lpspec.errors is one a caller may catch, so each needs its line'
+    )
+
+
+def test_no_row_without_a_class():
+    """The reverse: a row naming an exception that no longer exists."""
+    assert _tabled_errors() <= _public_errors(), (
+        f'{ERROR_TABLE.name} has a row for {sorted(_tabled_errors() - _public_errors())}, '
+        'which lpspec.errors does not define'
+    )
