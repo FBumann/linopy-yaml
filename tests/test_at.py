@@ -367,6 +367,52 @@ def test_at_through_a_null_lookup_agrees_between_lanes():
         assert run.engine.diagnostics().rows == 2, 'the two flows that map somewhere have a row, and f3 has none'
 
 
+#: Two coordinates read at once, one of them partial. `f3` maps to a component
+#: but to no kind, so the *tuple* it would read does not exist — and the null is
+#: in the second of the pair, where checking the first alone would miss it.
+DANGLING_PAIR = {
+    'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}, 'kind': {'dtype': 'str'}},
+    'lookups': {
+        'component_of': {'over': 'flow', 'into': 'component'},
+        'kind_of': {'over': 'flow', 'into': 'kind'},
+    },
+    'variables': {
+        'level': {'foreach': ['component', 'kind'], 'bounds': {'lower': 0, 'upper': 10}},
+        'take': {'foreach': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'link': {'foreach': ['flow'], 'expression': 'take <= at(level, by=[component_of, kind_of])'}},
+    'objective': {
+        'sense': 'maximize',
+        'expression': 'sum(take, over=flow) - 1000 * sum(sum(level, over=component), over=kind)',
+    },
+}
+
+
+def test_at_through_one_null_of_a_pair_takes_the_row_with_it():
+    """A pullback reads a *tuple* of labels, so one null anywhere leaves nothing.
+
+    The single-lookup case above says a label mapping nowhere has no value to
+    read. Reading through two at once, `f3` still maps to a component — so a
+    lane that checked the first coordinate and stopped would find a slot, build
+    `take[f3] <= 0`, and pin a flow the model never spoke about.
+    """
+    from tests.differential import differential
+    from tests.oracle import pd
+
+    flows = ['f1', 'f2', 'f3']
+    with differential(
+        DANGLING_PAIR,
+        {
+            'flow': pd.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c1'], 'kind_of': ['k1', 'k1', None]}),
+            'component': pd.Index(['c1', 'c2'], name='component'),
+            'kind': pd.Index(['k1'], name='kind'),
+        },
+        lp=True,
+    ) as run:
+        assert run.oracle == pytest.approx(10.0), 'take[f3] is held by its own bound, not by a row reading nothing'
+        assert run.engine.diagnostics().rows == 2, 'the two flows whose whole tuple maps have a row, and f3 has none'
+
+
 #: The same shape with a *total* lookup, so the absence is the operand's own:
 #: `c2` exists as a label and every flow maps somewhere, but `level` is masked
 #: away there, and a fine coordinate reading a masked slot reads nothing.

@@ -10,10 +10,11 @@
 \paragraph{Sets}
 \begin{description}
 \item[$\mathcal{T}$] index $t$ --- \texttt{snapshot} with $\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}$
-\item[$\mathcal{G}$] index $g$ --- \texttt{generator} with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ carrying label $\mathrm{tech}$
+\item[$\mathcal{G}$] index $g$ --- \texttt{generator} with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{gen\_tech}: \mathcal{G} \to \mathcal{E}$ carrying label $\mathrm{tech}$
 \item[$\mathcal{B}$] index $b$ --- \texttt{bus} with $\mathrm{zone\_of}: \mathcal{B} \to \mathcal{Z},\ \mathrm{area\_of}: \mathcal{B} \to \mathcal{Z}$
 \item[$\mathcal{Z}$] index $z$ --- \texttt{zone}
 \item[$\mathcal{S}$] index $s$ --- \texttt{season}
+\item[$\mathcal{E}$] index $e$ --- \texttt{technology}
 \end{description}
 
 \paragraph{Parameters}
@@ -24,6 +25,7 @@
 \item[$\mathit{load}$] \texttt{load} over $\mathcal{T} \times \mathcal{B}$
 \item[$\mathit{is\_flexible}$] \texttt{is\_flexible} over $\mathcal{G}$
 \item[$\mathit{zone}^{\mathrm{cap}}$] \texttt{zone\_cap} over $\mathcal{Z}$
+\item[$\mathit{tech\_cap}$] \texttt{tech\_cap} over $\mathcal{B} \times \mathcal{E}$
 \item[$\mathit{min\_up}$] \texttt{min\_up} over $\mathcal{G}$
 \item[$\mathit{lead}$] \texttt{lead} over $\mathcal{G}$
 \item[$\mathit{budget}$] \texttt{budget} (scalar)
@@ -67,6 +69,8 @@
 \text{window} && \sum_{t' \in \mathcal{T} \,:\, 0 \le t - t' < 3} \mathit{on}_{t',g} & \le \mathit{units}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
 \text{history} && \sum_{t' \in \mathcal{T} \,:\, 0 \le t \ominus t' < \mathit{min\_up}} \mathit{on}_{t',g} & \le \mathit{units}_{g} && \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \\
 \text{pullback} && \mathit{spill}_{t} & \le \mathit{zone}^{\mathrm{cap}}_{\mathrm{zone\_of}(b)} && \forall\, t \in \mathcal{T},\ b \in \mathcal{B} \\
+\text{grouped\_twice} && \sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b \wedge \mathrm{gen\_tech}(g) = e} p_{t,g} & \le \mathit{tech\_cap}_{b,e} && \forall\, t \in \mathcal{T},\ b \in \mathcal{B},\ e \in \mathcal{E} \\
+\text{pulled\_back\_twice} && \mathit{units}_{g} & \le \mathit{tech\_cap}_{\mathrm{gen\_bus}(g),\mathrm{gen\_tech}(g)} && \forall\, g \in \mathcal{G} \\
 \text{arithmetic} && \sum_{g \in \mathcal{G}} \left( \frac{p_{t,g}}{2} + -\mathit{cost}_{g} \right) & \ge \left( -\left( \sum_{g \in \mathcal{G}} p_{t,g} \right) \right) \cdot 3 && \forall\, t \in \mathcal{T} \\
 \text{total} && \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} & \le \mathit{budget} \\
 \text{scalar} && \mathit{units}_{g} & \le \mathit{budget} && \forall\, g \in \mathcal{G} \,:\, \mathit{cost}_{g} \text{ is defined} \\

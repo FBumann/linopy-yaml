@@ -159,9 +159,9 @@ def test_dispatch_roundtrip(dispatch_data, tmp_path):
 
 def transport_program() -> Program:
     injection = (
-        GroupSum(Variable('p'), over='generator', lookup='gen_bus', into='bus')
-        + GroupSum(Variable('f'), over='line', lookup='to', into='bus')
-        - GroupSum(Variable('f'), over='line', lookup='from', into='bus')
+        GroupSum(Variable('p'), over='generator', coordinate=('gen_bus',), into=('bus',))
+        + GroupSum(Variable('f'), over='line', coordinate=('to',), into=('bus',))
+        - GroupSum(Variable('f'), over='line', coordinate=('from',), into=('bus',))
     )
     return Program(
         parameters=(
@@ -1430,6 +1430,50 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
 
     assert built[(0, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
     assert built[(1, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
+
+
+#: Two coordinates at once, so what the reached set is subtracted from is the
+#: *product* of the targets: `south` reaches neither technology, and `north`
+#: reaches both, so two of the four combinations have no members.
+PLURAL_GROUPED_CONSTANT_MODEL = {
+    **GROUPED_CONSTANT_MODEL,
+    'dimensions': {**GROUPED_CONSTANT_MODEL['dimensions'], 'technology': {'values': ['wind', 'solar']}},
+    'lookups': {
+        'gen_bus': {'over': 'generator', 'into': 'bus'},
+        'gen_tech': {'over': 'generator', 'into': 'technology'},
+    },
+    'variables': {'imports': {'foreach': ['bus', 'technology'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {
+        'import_limit': {
+            'foreach': ['bus', 'technology'],
+            'expression': 'imports <= sum(capacity, by=[gen_bus, gen_tech])',
+        }
+    },
+    'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=technology)'},
+}
+
+
+def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
+    """A combination no member sits at is empty for the reason one label is.
+
+    Grouping through two coordinates lands on a product of targets, and the
+    unreached part of that product is what holds the empty sum — so subtracting
+    the reached labels of each dim in turn would leave `(north, solar)` looking
+    reached when nothing sits there.
+    """
+    sources = {
+        'generator': pl.DataFrame(
+            {'generator': ['g1', 'g2'], 'gen_bus': ['north', 'north'], 'gen_tech': ['wind', 'solar']}
+        ),
+        'capacity': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [3.0, 4.0]}),
+    }
+    with differential(PLURAL_GROUPED_CONSTANT_MODEL, sources, lp=True) as run:
+        assert run.result.objective == pytest.approx(3.0 + 4.0, rel=RTOL), 'south holds nothing at either technology'
+        built = {(row['bus'], row['technology']): row['value'] for row in run.result.primal('imports').to_dicts()}
+
+    assert built[('south', 'wind')] == pytest.approx(0.0), 'no generator sits at (south, wind)'
+    assert built[('south', 'solar')] == pytest.approx(0.0), 'no generator sits at (south, solar)'
+    assert built[('north', 'solar')] == pytest.approx(4.0), 'one generator sits at (north, solar), and it is g2'
 
 
 def test_a_member_with_no_value_is_still_refused_through_a_group():

@@ -39,6 +39,7 @@ from lpspec.language.expression_parser import (
     FunctionCallNode,
     KeywordNode,
     LookupNode,
+    NameListNode,
     NameNode,
     NumberNode,
     ParameterNode,
@@ -234,9 +235,10 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             f'by its kwarg during resolution (docs/about/architecture.md hard rule 1).'
         )
         raise AssertionError(msg)
-    if isinstance(node, (NameNode, DimensionNode, LookupNode)):
+    if isinstance(node, (NameNode, NameListNode, DimensionNode, LookupNode)):
+        shown = node.name if isinstance(node, (NameNode, DimensionNode)) else node.shown
         msg = (
-            f'{type(node).__name__}({node.name!r}) reached lowering. Expressions '
+            f'{type(node).__name__}({shown!r}) reached lowering. Expressions '
             f'must go through resolution.expression_of() first '
             f'(docs/about/architecture.md hard rule 1).'
         )
@@ -283,7 +285,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             return plan.GroupSum(
                 operand,
                 over=by_node.dimension,
-                lookup=by_node.name,
+                coordinate=by_node.names,
                 into=by_node.into,
             )
 
@@ -295,7 +297,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             return plan.At(
                 _lower_expr(node.args[0], schema, context),
                 over=by_node.dimension,
-                lookup=by_node.name,
+                coordinate=by_node.names,
                 into=by_node.into,
             )
 
@@ -408,15 +410,15 @@ def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool)
 def _partition_of(node: FunctionCallNode) -> str | None:
     """The lookup a translation walks inside, if the call names one.
 
-    That it is a lookup *over the translated dimension* is checked at load with
-    the other dim rules (``language/dimensions.py``), where a model is refused
-    before any data is read.
+    That it is a *single* lookup, and one *over the translated dimension*, is
+    checked at load with the other dim rules (``language/dimensions.py``), where
+    a model is refused before any data is read.
     """
     by_node = node.kwargs.get('by')
     if by_node is None:
         return None
     assert isinstance(by_node, LookupNode)
-    return by_node.name
+    return by_node.names[0]
 
 
 def _shift_by_message() -> str:
@@ -689,7 +691,7 @@ def _produced_axes(e: plan.Expression) -> set[str]:
     """
     out: set[str] = set()
     if isinstance(e, plan.GroupSum):
-        out.add(e.into)
+        out |= set(e.into)
     if isinstance(e, plan.At):
         out.add(e.over)
     for child in plan.children(e):

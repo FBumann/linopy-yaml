@@ -264,7 +264,7 @@ def test_sum_over_an_absent_dim_scales_by_that_dims_cardinality():
 
 
 def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
-    node = plan.GroupSum(plan.Variable('p'), over='generator', lookup='bus', into='bus')
+    node = plan.GroupSum(plan.Variable('p'), over='generator', coordinate=('bus',), into=('bus',))
     fragment = compiler().expression(node, 'test').terms[0]
     assert fragment.dims == ('snapshot', 'bus')
     assert columns(fragment.frame) == ['snapshot', 'bus', 'var_label', 'coeff']

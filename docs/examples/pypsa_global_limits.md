@@ -16,7 +16,7 @@ group, against a bound only some rows carry**.
 | PyPSA | what it selects | the port's row |
 |---|---|---|
 | `operational_limit` | generators burning a carrier | `sum(sum(p, by=gen_carrier), over=snapshot) <= energy_cap` |
-| per-`(bus, carrier)` capacity cap | that carrier's capacity at one bus | `sum(p_nom * at(capped_carrier, by=gen_carrier), by=gen_bus) <= bus_capacity_cap` |
+| per-`(bus, carrier)` capacity cap | that carrier's capacity at one bus | `sum(p_nom, by=[gen_bus, gen_carrier]) <= bus_capacity_cap` |
 | `transmission_volume_expansion_limit` | extendable links, weighted by length | `sum(link_p_nom * link_length, over=link) <= volume_cap` |
 | `transmission_expansion_cost_limit` | the same links, weighted by money | `sum(link_p_nom * link_capital_cost, over=link) <= expansion_cost_cap` |
 
@@ -49,8 +49,7 @@ PyPSA's global constraints: four limits over four different selected sets — th
 | $\mathit{link}^{\mathrm{capital,cost}}$ | `link_capital_cost` over $\mathcal{L}$ --- annualised cost of a unit of link capacity |
 | $\mathit{link}^{\mathrm{length}}$ | `link_length` over $\mathcal{L}$ --- how far a link reaches — what turns built capacity into a volume |
 | $\mathit{energy\_cap}$ | `energy_cap` over $\mathcal{C}$ --- energy a carrier may deliver over the whole horizon, for the carriers that have such a limit |
-| $\mathit{capped\_carrier}$ | `capped_carrier` over $\mathcal{C}$ --- 1 for the carrier the per-bus capacity caps are about, 0 for the rest — the selection PyPSA writes into a column name, written here as data |
-| $\mathit{bus}^{\mathrm{capacity,cap}}$ | `bus_capacity_cap` over $\mathcal{B}$ --- capacity of that carrier a bus may hold, for the buses that cap it |
+| $\mathit{bus}^{\mathrm{capacity,cap}}$ | `bus_capacity_cap` over $\mathcal{B} \times \mathcal{C}$ --- capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA writes the carrier into a column name (`nom_max_wind`), so the pair is the limit's own key |
 | $\mathit{volume\_cap}$ | `volume_cap` (scalar) --- capacity times length the whole network may build |
 | $\mathit{expansion\_cost\_cap}$ | `expansion_cost_cap` (scalar) --- money the whole network may spend building links |
 
@@ -87,7 +86,7 @@ $$\sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E} \thinspace:\thinspace \mathrm
 
 **`carrier_capacity_at_bus`**
 
-$$\sum_{e \in \mathcal{E} \thinspace:\thinspace \mathrm{gen\_bus}(e) = b} p^{\mathrm{nom}}_{e} \cdot \mathit{capped\_carrier}_{\mathrm{gen\_carrier}(e)} \le \mathit{bus}^{\mathrm{capacity,cap}}_{b} \qquad \forall\thinspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bus}^{\mathrm{capacity,cap}}_{b} \text{ is defined}$$
+$$\sum_{e \in \mathcal{E} \thinspace:\thinspace \mathrm{gen\_bus}(e) = b \wedge \mathrm{gen\_carrier}(e) = c} p^{\mathrm{nom}}_{e} \le \mathit{bus}^{\mathrm{capacity,cap}}_{b,c} \qquad \forall\thinspace b \in \mathcal{B},\enspace c \in \mathcal{C} \thinspace:\thinspace \mathit{bus}^{\mathrm{capacity,cap}}_{b,c} \text{ is defined}$$
 
 **`transmission_volume`**
 
@@ -189,15 +188,12 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           energy a carrier may deliver over the whole horizon, for the carriers that
           have such a limit
         dims: [carrier]
-      capped_carrier:
-        description: >-
-          1 for the carrier the per-bus capacity caps are about, 0 for the rest —
-          the selection PyPSA writes into a column name, written here as data
-        dims: [carrier]
       bus_capacity_cap:
         description: >-
-          capacity of that carrier a bus may hold, for the buses that cap it
-        dims: [bus]
+          capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA
+          writes the carrier into a column name (`nom_max_wind`), so the pair is the
+          limit's own key
+        dims: [bus, carrier]
       volume_cap:
         description: capacity times length the whole network may build
         dims: []
@@ -256,12 +252,12 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
       carrier_capacity_at_bus:
         description: >-
-          a bus that caps the capped carrier holds no more of it than that — the
-          capacity is grouped onto the bus and masked to the one carrier, because a
-          sum cannot yet group through two lookups at once
-        foreach: [bus]
+          a bus that caps a carrier holds no more of it than that — one grouping
+          lands the built capacity on the (bus, carrier) pair the limit is keyed by,
+          so no selector column and no mask stand between the two
+        foreach: [bus, carrier]
         where: bus_capacity_cap
-        expression: sum(p_nom * at(capped_carrier, by=gen_carrier), by=gen_bus) <= bus_capacity_cap
+        expression: sum(p_nom, by=[gen_bus, gen_carrier]) <= bus_capacity_cap
 
       transmission_volume:
         description: >-
@@ -370,12 +366,16 @@ exactly: 27.83 MW and 12.33 MW solve `100a + 50b = 3400` and
 
 **The selection is data, not a construct.** PyPSA selects by querying its own
 tables — `carrier == "gas"` — and writes the per-bus one into a *column name*,
-`nom_max_wind`. The port groups through the `gen_carrier` lookup for the first
-and masks with `capped_carrier` for the second. The mask is there because a sum
-cannot group through two lookups at once yet
-([#704](https://github.com/fluxopt/lpspec/issues/704)); with that, the second
-row becomes `sum(p_nom, by=[gen_carrier, gen_bus]) <= cap` over a
-`(bus, carrier)` table and the mask disappears.
+`nom_max_wind`. That column name is a `(bus, carrier)` pair, and the port says
+so: one grouping through both maps lands the built capacity on exactly that
+pair, and `bus_capacity_cap` is a table keyed by it.
+
+The alternative is what this port shipped before
+[#704](https://github.com/fluxopt/lpspec/issues/704): a 0/1 `capped_carrier`
+column pulled down with `at()` and multiplied in, which caps **one** carrier
+and re-spells the `gen_carrier` lookup as data a second time. Losing it is the
+point — a lookup's values are checked against the dimension they target when
+they are bound, where a parameter's are not.
 
 ## The fifth limit, which PyPSA does not build
 
@@ -401,6 +401,6 @@ name.
 ## What it exercises
 
 A reduction over two dimensions at once (`sum(sum(p, by=gen_carrier), over=snapshot)`),
-a masked capacity sum grouped onto a second axis, and two scalar-bounded sums
-over one set with different weights. No construct here is new — which is the
+one grouping landing on a pair of dimensions (`sum(p_nom, by=[gen_bus, gen_carrier])`),
+and two scalar-bounded sums over one set with different weights. No construct here is new — which is the
 result, for five constraints PyPSA implements in five functions.

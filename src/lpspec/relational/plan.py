@@ -12,7 +12,7 @@ tables; actual data is bound at execution time via a source registry.
 
 Expressions support operator sugar so plans read naturally in Python:
 
-    balance = GroupSum(Variable("p"), over="generator", lookup="bus", into="bus") - Parameter("load")
+    balance = GroupSum(Variable("p"), over="generator", coordinate=("bus",), into=("bus",)) - Parameter("load")
 """
 
 from __future__ import annotations
@@ -122,18 +122,22 @@ class Sum(Expression):
 
 @dataclass(frozen=True)
 class GroupSum(Expression):
-    """Sum ``operand`` through a lookup declared on dim ``over``.
+    """Sum ``operand`` through coordinates declared on dim ``over``.
 
-    ``lookup`` names a lookup carried by dim ``over`` whose values are labels
-    of dim ``into``; the result replaces ``over`` with ``into``. All three are
-    resolved before lowering, so the engine needs no schema lookup to place
-    the terms.
+    ``coordinate`` names coordinates carried by dim ``over`` whose values are
+    labels of the matching dim in ``into``; the result replaces ``over`` with
+    all of them. Everything is resolved before lowering, so the engine needs
+    no schema lookup to place the terms.
+
+    Several coordinates are one grouping into a product of targets, not a
+    composition of groupings — they are consumed in a single join, so the pair
+    of tuples is always the same length and their order pairs them up.
     """
 
     operand: Expression
     over: str
-    lookup: str
-    into: str
+    coordinate: tuple[str, ...]
+    into: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -146,14 +150,14 @@ class At(Expression):
     reads as one relation; the surface says which end you stand on
     (``sum(by=)`` consumes it, ``at(by=)`` produces it, the lookup names the map).
 
-    The join fans out, many ``over`` labels sharing one ``into`` — the fan-out
-    ``GroupSum`` pays in reverse, so the locality class is unchanged.
+    The join fans out, many ``over`` labels sharing one ``into`` tuple — the
+    fan-out ``GroupSum`` pays in reverse, so the locality class is unchanged.
     """
 
     operand: Expression
     over: str
-    lookup: str
-    into: str
+    coordinate: tuple[str, ...]
+    into: tuple[str, ...]
 
 
 @dataclass(frozen=True)

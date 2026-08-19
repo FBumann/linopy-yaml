@@ -64,15 +64,12 @@ parameters:
       energy a carrier may deliver over the whole horizon, for the carriers that
       have such a limit
     dims: [carrier]
-  capped_carrier:
-    description: >-
-      1 for the carrier the per-bus capacity caps are about, 0 for the rest —
-      the selection PyPSA writes into a column name, written here as data
-    dims: [carrier]
   bus_capacity_cap:
     description: >-
-      capacity of that carrier a bus may hold, for the buses that cap it
-    dims: [bus]
+      capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA
+      writes the carrier into a column name (`nom_max_wind`), so the pair is the
+      limit's own key
+    dims: [bus, carrier]
   volume_cap:
     description: capacity times length the whole network may build
     dims: []
@@ -131,12 +128,12 @@ constraints:
 
   carrier_capacity_at_bus:
     description: >-
-      a bus that caps the capped carrier holds no more of it than that — the
-      capacity is grouped onto the bus and masked to the one carrier, because a
-      sum cannot yet group through two lookups at once
-    foreach: [bus]
+      a bus that caps a carrier holds no more of it than that — one grouping
+      lands the built capacity on the (bus, carrier) pair the limit is keyed by,
+      so no selector column and no mask stand between the two
+    foreach: [bus, carrier]
     where: bus_capacity_cap
-    expression: sum(p_nom * at(capped_carrier, by=gen_carrier), by=gen_bus) <= bus_capacity_cap
+    expression: sum(p_nom, by=[gen_bus, gen_carrier]) <= bus_capacity_cap
 
   transmission_volume:
     description: >-
