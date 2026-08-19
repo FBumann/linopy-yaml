@@ -55,7 +55,7 @@ consuming lane's business, and curvature is a property of the breakpoint
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import LanguageError, PiecewiseExpansionError
 from lpspec.language.degree import check_expression
@@ -63,6 +63,9 @@ from lpspec.language.dimensions import dims_of
 from lpspec.language.expression_parser import ComparisonNode, parse_expression
 from lpspec.language.model import Model, PiecewiseBlock
 from lpspec.language.resolution import Namespace, resolve_expression
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def expand_piecewise(schema: Model) -> Model:
@@ -100,7 +103,7 @@ def expand_piecewise(schema: Model) -> Model:
     for name, pw in schema.piecewise.items():
         frame = _validate_block(schema, name, pw)
         if pw.method == 'lp':
-            _expand_lp(raw, name, pw, frame)
+            _expand_lp(raw, name, pw, frame, schema.parameters[pw.points].dims if pw.points else ())
             continue
         lam, seg = f'{name}_lam', f'{name}_seg'
 
@@ -144,7 +147,9 @@ def expand_piecewise(schema: Model) -> Model:
     return expanded
 
 
-def _expand_lp(raw: dict[str, Any], name: str, pw: PiecewiseBlock, frame: tuple[str, ...]) -> None:
+def _expand_lp(
+    raw: dict[str, Any], name: str, pw: PiecewiseBlock, frame: tuple[str, ...], schema_dims: Sequence[str]
+) -> None:
     """Emit the segment-line form: a row per segment, and the two domain rows.
 
     Three things a change here could break unknowingly:
@@ -182,22 +187,19 @@ def _expand_lp(raw: dict[str, Any], name: str, pw: PiecewiseBlock, frame: tuple[
             f'{rise} * (({x_link.expression}) - {x_link.values}) + {y_link.values} * {run}'
         ),
     }
-    raw['constraints'][f'{name}_domain_lo'] = {
-        'foreach': [*frame, d],
-        'where': f'{d} == index({d}, 0)',
-        'expression': f'({x_link.expression}) >= {x_link.values}',
-    }
-    if pw.points:
-        last = f'({pw.points} - shift({pw.points}, over={d}, offset=-1, edge=0))'
-        raw['constraints'][f'{name}_domain_hi'] = {
-            'foreach': list(frame),
-            'expression': f'({x_link.expression}) <= sum({x_link.values} * {last}, over={d})',
-        }
-    else:
-        raw['constraints'][f'{name}_domain_hi'] = {
+    edges = (('domain_lo', '>=', f'{name}_starts'), ('domain_hi', '<=', f'{name}_ends'))
+    axis = (('domain_lo', '>=', f'{d} == index({d}, 0)'), ('domain_hi', '<=', f'{d} == index({d}, -1)'))
+    for suffix, sense, at in edges if pw.points else axis:
+        if pw.points:
+            raw.setdefault('parameters', {})[at] = {
+                'dims': list(schema_dims),
+                'dtype': 'bool',
+                'description': f'the {"first" if sense == ">=" else "last"} breakpoint of each curve',
+            }
+        raw['constraints'][f'{name}_{suffix}'] = {
             'foreach': [*frame, d],
-            'where': f'{d} == index({d}, -1)',
-            'expression': f'({x_link.expression}) <= {x_link.values}',
+            'where': at,
+            'expression': f'({x_link.expression}) {sense} {x_link.values}',
         }
 
 
@@ -266,6 +268,7 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
     )
     for kind, emitted, declared in (
         ('variable', (f'{name}_lam', f'{name}_seg'), schema.variables),
+        ('parameter', (f'{name}_starts', f'{name}_ends'), schema.parameters),
         ('constraint', emitted_constraints, schema.constraints),
         ('sos', (name,), schema.sos),
     ):

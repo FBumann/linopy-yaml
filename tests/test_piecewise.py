@@ -823,6 +823,29 @@ def short_curve_inputs():
     }
 
 
+@pytest.mark.parametrize('method', ['adjacency', 'convex', 'lp'])
+def test_both_lanes_agree_on_a_masked_curve(short_curve_inputs, method, tmp_path):
+    """Whatever the mask reaches has to reach it on both lanes (hard rule 3).
+
+    `lp` is the one whose rows the mask reaches directly, and the one whose
+    domain rows sit on each curve's own first and last breakpoint rather than
+    the axis'. Testing only the default method left that pair unbuilt on the
+    eager lane, where the constant-side coverage guard refuses a curve its
+    breakpoints stop short of.
+    """
+    raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
+    if method == 'lp':
+        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+    path = tmp_path / 'masked.yaml'
+    path.write_text(pyyaml.safe_dump(raw))
+
+    built = lpspec_linopy.build(path, short_curve_inputs)
+    built.solve('highs', output_flag=False)
+
+    assert float(built.objective.value) == pytest.approx(155.0)
+    assert lps.solve(raw, short_curve_inputs).objective == pytest.approx(155.0), 'and the same on the other lane'
+
+
 @pytest.mark.parametrize('method', ['adjacency', 'sos2', 'convex', 'lp'])
 def test_a_masked_curve_reaches_the_optimum_its_own_points_put_it_at(short_curve_inputs, method):
     """Every method reads the mask, and two of them have no other way to take a short curve.
@@ -872,17 +895,6 @@ def test_a_masked_breakpoint_declares_no_segment_binary(short_curve_inputs):
 
     assert ('B', 2) not in built, "B's curve stops at bp 1, so bp 2 has no segment to pick"
     assert ('A', 2) in built, 'A runs the whole axis'
-
-
-def test_both_lanes_take_the_mask(short_curve_inputs, tmp_path):
-    """The mask is ordinary `where:` by the time either lane sees it (hard rule 3)."""
-    path = tmp_path / 'short_curve.yaml'
-    path.write_text(SHORT_CURVE)
-
-    built = lpspec_linopy.build(path, short_curve_inputs)
-    built.solve('highs', output_flag=False)
-
-    assert float(built.objective.value) == pytest.approx(155.0)
 
 
 @pytest.mark.parametrize(

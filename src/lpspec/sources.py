@@ -64,7 +64,9 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
 
     **Dimensions are resolved first**, because the plain-Python parameter
     shapes :func:`_spread` accepts — a sequence, one number for every
-    coordinate — are meaningless without the labels they are spread over.
+    coordinate — are meaningless without the labels they are spread over. A
+    ``piecewise:`` block's derived flags come next, before the parameter loop
+    asks for data no caller can have (:func:`derive_curve_edges`).
 
     Whether a *parameter* source carries the columns its declaration needs is
     *not* asked here. Binding asks it of every source, path or frame, so a copy
@@ -85,7 +87,11 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
         for dname, source in dimension_sources(schema, data).items()
     }
 
+    sources = derive_curve_edges(schema, sources, data)
+
     for pname, pdef in schema.parameters.items():
+        if pname in sources:
+            continue
         if pname not in data:
             raise DataError(f"no data provided for parameter '{pname}'")
         obj = data[pname]
@@ -334,6 +340,43 @@ def _column_names(source: Any, dim: str) -> frozenset[str]:
         return frozenset(pl.scan_parquet(source).collect_schema().names())
     table = as_frame(source, (dim,))
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
+
+
+def derive_curve_edges(
+    schema: Model, sources: dict[str, TidySource], data: Mapping[str, object]
+) -> dict[str, TidySource]:
+    """Mark where each masked curve starts and ends, for the rows that sit on them.
+
+    ``lp`` states a curve as its segment lines, so it needs two rows holding the
+    linked expression inside the curve's *own* range — and under ``points:``
+    that range is per curve, where ``index(over, 0)`` and ``index(over, -1)``
+    are the axis'. A ``where:`` takes no operators to find it with, so the two
+    edges are marked here instead, from the mask the caller supplied: the first
+    and last position it marks, per curve.
+
+    True-only and sparse, since a missing row reads as false in a ``where``.
+    Called from :func:`tidy_sources`, which both lanes enter, and only for the
+    blocks that need it — an emitted parameter with nothing to fill it would be
+    a parameter the caller is asked for and cannot know about.
+
+    Returns:
+        *sources* with ``<block>_starts`` and ``<block>_ends`` added per
+        ``method: lp`` block that carries a mask.
+    """
+    for name, pw in schema.piecewise.items():
+        if not pw.points or pw.method != 'lp':
+            continue
+        dims = list(schema.parameters[pw.points].dims)
+        table = _coordinates(data.get(pw.points), dims, keep_value=True)
+        if table is None:
+            continue
+        order = _label_frame(pw.over, sources, table).with_row_index('_ord')
+        marked = table.filter(pl.col('value').cast(pl.Boolean)).join(order, on=pw.over, how='inner')
+        frame_dims = [d for d in dims if d != pw.over]
+        for suffix, edge in (('starts', pl.col('_ord').min()), ('ends', pl.col('_ord').max())):
+            at = edge.over(frame_dims) if frame_dims else edge
+            sources[f'{name}_{suffix}'] = marked.filter(pl.col('_ord') == at).select([*dims, 'value'])
+    return sources
 
 
 def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> None:

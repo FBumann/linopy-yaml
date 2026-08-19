@@ -110,7 +110,7 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
         schema = expand_piecewise(original)
         lower_program(original)
 
-        tidy = tidy_sources(schema, sources)
+        tidy = tidy_sources(original, sources)
         validate_curve_extent(original, tidy)
         master_coords, dim_coords = dimension_coords(schema, tidy)
         dataset = load_parameters(schema, tidy, master_coords)
