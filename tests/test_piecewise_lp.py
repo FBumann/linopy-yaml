@@ -34,7 +34,7 @@ import lpspec as lps
 from lpspec.errors import PiecewiseExpansionError
 from tests.conftest import schema_of
 from tests.differential import RTOL, differential
-from tests.oracle import pd
+from tests.oracle import lpspec_linopy, pd
 
 MODEL = """
 description: dispatch whose cost is read off a convex curve, stated as its segment lines
@@ -373,14 +373,15 @@ def test_each_curve_of_a_frame_is_checked_on_its_own():
     assert str(concave) in str(refusal.value), 'the refusal quotes the curve that bends the wrong way'
 
 
-@pytest.mark.xfail(reason='#1123 — the guard reads what is laid out in process, and a path is not', strict=True)
 def test_a_curve_bound_to_a_path_is_checked_like_one_in_memory(tmp_path):
-    """The same numbers, and the check turns on how they were handed over.
+    """The verdict is a property of the numbers, not of how they were handed over.
 
-    A concave curve under `>=` is the silent case the guard exists for, and
-    written to parquet it reaches the solver: on this data the answer comes
-    back optimal at 155 where the curve says 110. `validate_curve_extent`
-    scans a path for the same reason and pays two columns of I/O for it.
+    The guard laid out what it could in process and skipped a path, so this
+    concave curve was refused as a frame and reached the solver as parquet,
+    coming back optimal at 155 where the curve says 110 — and the eager lane,
+    which loads a path before the guard runs, refused it all along (#1123).
+    Both lanes now scan it, for the two columns `validate_curve_extent` already
+    pays that I/O for.
     """
     concave = [0.0, 30.0, 50.0, 60.0]
     sources = _relational(ys=concave)
@@ -388,8 +389,9 @@ def test_a_curve_bound_to_a_path_is_checked_like_one_in_memory(tmp_path):
         sources[name].write_parquet(tmp_path / f'{name}.parquet')
         sources[name] = tmp_path / f'{name}.parquet'
 
-    with pytest.raises(PiecewiseExpansionError, match='exact only for a convex curve'):
-        lps.build(pyyaml.safe_load(MODEL), sources)
+    for lane in (lps.build, lpspec_linopy.build):
+        with pytest.raises(PiecewiseExpansionError, match='exact only for a convex curve'):
+            lane(pyyaml.safe_load(MODEL), sources)
 
 
 @pytest.mark.xfail(reason='#1124 — the tolerance is scaled by y where the quantity it bounds is a slope', strict=True)
