@@ -234,6 +234,28 @@ IN_GROUPS = {
     'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)'},
 }
 
+#: The same, with nothing masked at all: `level` carries no `where`, so the
+#: operand reaches the shift with no presence frame of its own. Which of the
+#: two group-less readings the lane takes used to depend on that (#1061).
+IN_GROUPS_UNMASKED = {
+    'dimensions': {'t': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
+    'lookups': {'season_of': {'over': 't', 'into': 'season'}},
+    'variables': {
+        'level': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+        'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {
+        'link': {'foreach': ['t'], 'expression': 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)'}
+    },
+    'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)'},
+}
+
+#: A fourth snapshot the lookup sends nowhere, for both models above.
+GROUPLESS_SOURCES = {
+    't': pd.DataFrame({'t': [0, 1, 2, 3], 'season_of': ['s1', 's1', 's2', None]}),
+    'season': pd.Index(['s1', 's2'], name='season'),
+}
+
 
 def test_a_per_entity_offset_fills_its_own_edge_and_not_the_mask_under_it():
     """The gather's edge, asked the same way as the scalar shift's.
@@ -272,6 +294,41 @@ def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
     with differential(IN_GROUPS, sources, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, "both seasons' opening rows, and the one reading a live slot"
         assert run.oracle == pytest.approx(10.0), 'the snapshot whose predecessor is masked is capped by nothing'
+
+
+def test_a_coordinate_the_lookup_sends_nowhere_is_absent_rather_than_vacated():
+    """A snapshot in no season at all: it reaches nothing for a reason the
+    shift had nothing to do with, so `edge=0` does not speak for it.
+
+    The two readings of "reached nothing" are what separates this from the
+    test above: off a group's start the shift vacated the slot and the edge
+    fills it, but a coordinate the lookup sends nowhere never had a
+    predecessor to lose. It is the null a partial lookup gets everywhere else
+    (#969, `sum(by=)`, `at()`), and filling it asserts `take <= 0` where the
+    model said nothing.
+
+    Before #1061 the eager lane filled it and the relational one did not, so
+    the lanes reported 4 rows and 3 for the same file.
+    """
+    with differential(IN_GROUPS_UNMASKED, GROUPLESS_SOURCES, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, (
+            "each season's opening row and the one reading a live slot — not the group-less snapshot"
+        )
+        assert run.oracle == pytest.approx(10.0), 'take at the group-less snapshot is capped by nothing'
+
+
+def test_a_group_less_coordinate_stays_absent_under_a_mask_that_removes_nothing():
+    """The same question with a `where` on the operand that masks no row.
+
+    Worth its own case because it takes the other path: with a presence frame
+    the edge is rebuilt from the vacated set, without one it comes from the
+    grouped labels — and a mask removing nothing must not decide whether a
+    row exists.
+    """
+    sources = {**GROUPLESS_SOURCES, 'usable': pd.Series([1.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t'))}
+    with differential(IN_GROUPS, sources, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, 'a mask that removes nothing changes no row'
+        assert run.oracle == pytest.approx(10.0), 'take at the group-less snapshot is capped by nothing'
 
 
 #: A nonzero edge over a variable-free operand, reached with a per-entity
