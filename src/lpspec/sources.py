@@ -377,7 +377,9 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> N
                 if found < expected:
                     grid = _grid(extents, dims, present)
                     raise DataError(
-                        curve_with_a_hole_message(block, link.values, _a_hole(grid, present, dims), expected, found)
+                        curve_with_a_hole_message(
+                            block, link.values, _a_hole(grid, present, dims), expected, found, pw.points
+                        )
                     )
                 continue
             required = _required_under_mask(mask, extents, dims, present)
@@ -390,6 +392,7 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> N
                         _a_hole(required, present, dims),
                         counts[0].item(),
                         counts[1].item(),
+                        pw.points,
                     )
                 )
 

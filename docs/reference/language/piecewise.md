@@ -64,7 +64,9 @@ cost_curve:
 ```
 
 The masked breakpoint declares no weight and no segment binary, and its values
-are not asked for. **The mask is a prefix**: a curve runs from the first
+are not asked for. The mask is ordinary data — a model that keeps a
+length per curve crosses it with the breakpoints and compares, wherever the rest
+of its tables are prepared. **The mask is a prefix**: a curve runs from the first
 breakpoint to its own last one, and a gap — or a curve marked nowhere — is
 refused when data binds, because the chord row joins a breakpoint to the one
 before it and the domain row is written where the mask stops.

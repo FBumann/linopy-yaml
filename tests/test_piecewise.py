@@ -922,6 +922,26 @@ def test_values_missing_where_the_mask_says_present_are_still_refused(short_curv
         tidy_sources(schema_of(raw_of(SHORT_CURVE)), data)
 
 
+def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_inputs):
+    """A ragged curve meets this message first, so it is where `points:` is discovered.
+
+    With a mask already declared the same advice would be wrong — the reader
+    said how far the curve runs and the values disagree — so the way out is
+    named against what the block has.
+    """
+    unmasked = raw_of(SHORT_CURVE)
+    del unmasked['piecewise']['cost_curve']['points'], unmasked['parameters']['bp_present']
+    ragged = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
+
+    with pytest.raises(DataError, match='points: a mask over the curve') as offered:
+        tidy_sources(schema_of(unmasked), ragged)
+    assert '#1101' in str(offered.value), 'the arity escape is the other way out, and a different one'
+
+    thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
+    with pytest.raises(DataError, match=r"'bp_present' claims this breakpoint"):
+        tidy_sources(schema_of(raw_of(SHORT_CURVE)), {**short_curve_inputs, 'bp_x': curve_frame(thin)})
+
+
 def test_values_the_mask_leaves_out_are_left_alone(short_curve_inputs):
     """A table wider than the block uses is ordinary, not an error."""
     spare = {**A_AND_SHORT_B['x'], ('B', 2): 999.0}
