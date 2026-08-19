@@ -71,6 +71,34 @@ jobs:
             printf 'Running everything. Live files:\n%s\n' "$live"
           fi
 
+      # TeX costs 36s to install and nothing before the render needs it, so it
+      # installs across the steps below rather than in front of them: 5.4s of
+      # `apt-get update`, 1s of download, and 24s of `tex-common` triggers
+      # building the formats — a cost no package cache avoids, only overlap.
+      # Its output goes to a file, not the step's stdout, because a child
+      # holding that pipe open keeps the step running. Collected below, where
+      # a failed install surfaces with its log.
+      #
+      # The package list is deliberately minimal, and each entry earns its place:
+      #   texlive-latex-base        geometry.sty, amsmath.sty (and pulls in
+      #                             texlive-base, which carries amssymb.sty)
+      #   texlive-fonts-recommended the msam/msbm fonts amssymb *draws* with —
+      #                             \mathbb and \ominus are unset without them
+      # If the preamble ever grows a \usepackage, this list grows with it, and
+      # that is the point: it keeps the preamble installable from a small TeX.
+      - name: Start installing a minimal TeX
+        if: steps.scope.outputs.inert != 'true'
+        run: |
+          cat > "$RUNNER_TEMP/install-tex.sh" <<SH
+          apt-get update -qq &&
+            apt-get install -y --no-install-recommends \
+              texlive-latex-base texlive-fonts-recommended
+          echo \$? > "$RUNNER_TEMP/tex-status.part"
+          mv "$RUNNER_TEMP/tex-status.part" "$RUNNER_TEMP/tex-status"
+          SH
+          nohup sudo -n bash "$RUNNER_TEMP/install-tex.sh" \
+            > "$RUNNER_TEMP/tex-install.log" 2>&1 &
+
       # Current dependencies, dev group: lint, format, types, suite.
       - run: uv sync --group dev
       - run: uv run --no-sync ruff check .
@@ -99,6 +127,26 @@ jobs:
       - run: uv sync --group docs
       - run: uv run --no-sync mkdocs build --strict
 
+      # The install started before the suite; this is where it is waited on,
+      # so a failure reports apt's exit status and log rather than a missing
+      # `pdflatex` further down.
+      - name: Collect the TeX install
+        if: steps.scope.outputs.inert != 'true'
+        run: |
+          for _ in $(seq 300); do
+            if [ -f "$RUNNER_TEMP/tex-status" ]; then
+              status=$(cat "$RUNNER_TEMP/tex-status")
+              [ "$status" = 0 ] && exit 0
+              echo "the TeX install exited $status; its log:"
+              cat "$RUNNER_TEMP/tex-install.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo 'the TeX install had not finished 300s after the suite; its log:'
+          cat "$RUNNER_TEMP/tex-install.log"
+          exit 1
+
       # Typst is compiled by the suite above — it ships as a pip wheel, so
       # `pytest` already proves that half. LaTeX needs a toolchain, so its
       # compile lives here. The suite's structural checks (brace balance,
@@ -116,33 +164,33 @@ jobs:
       # they are where a spelling nothing else reaches — \boxplus, a forward
       # translation — first meets a real TeX.
       #
-      # The package list is deliberately minimal, and each entry earns its place:
-      #   texlive-latex-base        geometry.sty, amsmath.sty (and pulls in
-      #                             texlive-base, which carries amssymb.sty)
-      #   texlive-fonts-recommended the msam/msbm fonts amssymb *draws* with —
-      #                             \mathbb and \ominus are unset without them
-      # If the preamble ever grows a \usepackage, this list grows with it, and
-      # that is the point: it keeps the preamble installable from a small TeX.
-      - name: Install a minimal TeX
-        if: steps.scope.outputs.inert != 'true'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            texlive-latex-base texlive-fonts-recommended
+      # One interpreter for all 55 models rather than one each: the process
+      # starts were 24.2s of this step's 32.4s, against 8.2s for every
+      # `pdflatex` put together.
       - name: Every model renders to LaTeX that compiles
         # (the Typst half of this claim is `test_typst_output_compiles`)
         if: steps.scope.outputs.inert != 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/tex"
-          for model in examples/*.yaml examples/ports/*.yaml examples/operators/*.yaml tests/golden/model.yaml; do
-            name=$(basename "$model" .yaml)
-            symbols="examples/symbols/$name.yaml"
-            args=(latex "$model" --standalone -o "$RUNNER_TEMP/tex/$name.tex")
-            [ -f "$symbols" ] && args+=(--symbols "$symbols")
-            uv run --no-sync python -m lpspec "${args[@]}"
-            pdflatex -halt-on-error -interaction=nonstopmode \
-              -output-directory "$RUNNER_TEMP/tex" "$RUNNER_TEMP/tex/$name.tex"
-          done
+          uv run --no-sync python - "$RUNNER_TEMP/tex" \
+            examples/*.yaml examples/ports/*.yaml examples/operators/*.yaml tests/golden/model.yaml <<'PY'
+          import sys
+          from pathlib import Path
+
+          from lpspec.__main__ import main
+
+          out, models = Path(sys.argv[1]), sys.argv[2:]
+          for model in models:
+              name = Path(model).stem
+              argv = ['latex', model, '--standalone', '-o', str(out / f'{name}.tex')]
+              symbols = Path('examples/symbols', f'{name}.yaml')
+              if symbols.is_file():
+                  argv += ['--symbols', str(symbols)]
+              main(argv)
+          PY
+          printf '%s\0' "$RUNNER_TEMP"/tex/*.tex |
+            xargs -0 -P "$(nproc)" -n1 pdflatex -halt-on-error \
+              -interaction=nonstopmode -output-directory "$RUNNER_TEMP/tex"
 
       # Re-install the same checkout into the shipped shape, at the declared
       # floors. Two claims in one install:
