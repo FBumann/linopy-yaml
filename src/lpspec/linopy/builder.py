@@ -472,13 +472,15 @@ def _lookup_array(by: LookupNode, ctx: EvaluationContext) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _operator_sum(array: Any, *, over: str) -> Any:
-    """Sum *array* over dimension *over*.
+def _operator_sum(array: Any, *, over: str | None = None) -> Any:
+    """Sum *array* over dimension *over*, or over all of them where none is named.
 
     A DataArray and a linopy expression both carry ``dims`` and both take the
     dim positionally, so there is one branch: if the array does not have the
     named dimension, it is returned unchanged.
     """
+    if over is None:
+        return array.sum()
     if over in getattr(array, 'dims', ()):
         return array.sum(over)
     return array

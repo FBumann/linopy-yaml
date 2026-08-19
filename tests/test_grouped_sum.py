@@ -109,7 +109,7 @@ def test_sum_lowers_to_one_node_per_injection_term():
         ),
         pytest.param(
             'sum(p, over=generator, by=gen_bus)',
-            r'sum\(\) takes exactly one of over= or by=',
+            r'sum\(\) takes at most one of over= or by=',
             id='both-halves-of-the-old-spelling',
         ),
     ],

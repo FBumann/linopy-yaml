@@ -40,6 +40,7 @@ BEGIN, END = '<!-- operator-math:begin -->', '<!-- operator-math:end -->'
 #: table's first cell verbatim, which is the whole coupling: it cannot be
 #: edited on one side alone without a test noticing.
 OPERATORS = {
+    'sum(array)': 'sum_all',
     'sum(array, over=dim)': 'sum',
     'sum(array, by=lookup)': 'sum_by',
     'at(array, by=lookup)': 'at',
