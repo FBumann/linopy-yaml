@@ -199,6 +199,29 @@ def holes_in_values_message(name: str, holes: int, shown: str) -> str:
     )
 
 
+def curve_with_a_hole_message(block: str, name: str, shown: str, expected: int, found: int) -> str:
+    """A piecewise curve supplied at some of its coordinates — one wording, both lanes.
+
+    A missing row is the one shape whose two readings are both wrong here. The
+    absence rules read it as a zero coefficient, which puts a breakpoint at the
+    origin that the file never declared; read as a shorter curve it would need
+    the weights, the convexity row and the adjacency chain to shrink with it,
+    and a ``piecewise:`` block emits none of them masked. So the table is
+    refused instead, and the message names the formulation to write where the
+    arity really is data.
+    """
+    return (
+        f"piecewise '{block}': parameter '{name}' has no value at {shown} — {found} of the "
+        f'{expected} coordinates its dims carry. Every breakpoint gets a weight, so a missing '
+        f'row is not a shorter curve: read as a zero coefficient it is a breakpoint at the '
+        f'origin, and the answer mixes onto it.\n'
+        f'  Supply them   a value at every coordinate, the curve repeating its last point '
+        f'where it has fewer\n'
+        f'  Or write it   where the arity is data, the λ formulation states it '
+        f'directly (issue #1101)'
+    )
+
+
 def null_bounds_message(name: str, rows: int) -> str:
     """A bound with no value — one wording, both lanes.
 

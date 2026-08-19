@@ -26,6 +26,7 @@ import polars as pl
 from lpspec.errors import (
     DataError,
     PiecewiseExpansionError,
+    curve_with_a_hole_message,
     declared_index_also_supplied_message,
     declared_map_needs_labels_message,
     dense_array_message,
@@ -103,6 +104,7 @@ def tidy_sources(schema: Model, data: dict[str, object]) -> dict[str, object]:
         table = as_frame(obj, pdef.dims)
         sources[pname] = table if table is not None else _spread(pname, obj, pdef.dims, sources)
 
+    validate_curve_extent(schema, sources)
     validate_piecewise_data(schema, sources)
 
     return sources
@@ -276,6 +278,98 @@ def _column_names(source: Any, dim: str) -> frozenset[str]:
         return frozenset(pl.scan_parquet(source).collect_schema().names())
     table = as_frame(source, (dim,))
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
+
+
+def validate_curve_extent(schema: Model, sources: Mapping[str, object]) -> None:
+    """Refuse a ``piecewise:`` curve that is not supplied everywhere it is built.
+
+    A block emits one weight per breakpoint over the whole coordinate product —
+    the λ it declares carries no mask — so a values parameter short of a row
+    does not build a shorter curve. Both lanes call this, since both take the
+    caller's mapping and both would otherwise read that row as a zero
+    coefficient and put a breakpoint at the origin.
+
+    Sequences and single numbers are skipped: each is dense by construction,
+    spread over labels the dimension supplies. A parquet path is scanned, since
+    the check is worth two columns of I/O against an answer that carries no
+    sign of being wrong.
+
+    Args:
+        schema: The model as written — ``piecewise:`` blocks name the
+            parameters, and the expansion has none.
+        sources: Parameter and dimension names to what the caller bound.
+
+    Raises:
+        DataError: A link's values parameter with a hole in the product of the
+            dims it declares.
+    """
+    for block, pw in schema.piecewise.items():
+        for link in pw.links:
+            dims = list(schema.parameters[link.values].dims)
+            present = _coordinates(sources.get(link.values), dims)
+            if present is None:
+                continue
+            extents = {d: _label_frame(schema, d, sources, present) for d in dims}
+            expected = 1
+            for labels in extents.values():
+                expected *= labels.select(pl.len()).collect().item()
+            found = present.select(pl.len()).collect().item()
+            if found < expected:
+                raise DataError(
+                    curve_with_a_hole_message(block, link.values, _a_hole(extents, present, dims), expected, found)
+                )
+
+
+def _coordinates(source: object, dims: Sequence[str]) -> pl.LazyFrame | None:
+    """The coordinates *source* carries, or ``None`` where it carries all of them.
+
+    ``None`` covers both "dense by construction" and "not readable here" — a
+    source binding refuses is refused there, with the message that knows what
+    the declaration wanted.
+    """
+    if isinstance(source, (str, Path)):
+        table = pl.scan_parquet(source)
+    elif isinstance(source, Mapping) and len(dims) == 1:
+        return pl.LazyFrame({dims[0]: list(source.keys())})
+    else:
+        table = as_frame(source, tuple(dims))
+    if table is None or not set(dims) <= set(table.collect_schema().names()):
+        return None
+    return table.select(dims)
+
+
+def _label_frame(schema: Model, dim: str, sources: Mapping[str, object], present: pl.LazyFrame) -> pl.LazyFrame:
+    """*dim*'s labels as one column, from wherever the model's index comes from.
+
+    Falls back to the labels the curve itself carries, which is what a
+    dimension with no index of its own is bound against: there the curve cannot
+    be short of a breakpoint nothing else declares.
+    """
+    source = sources.get(dim)
+    if source is None and (declared := schema.declared_index(dim)) is not None:
+        source = declared[dim]
+    if source is None:
+        return present.select(dim).unique()
+    table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else as_frame(source, (dim,))
+    if table is None:
+        table = labels_frame(dim, source, schema.dimensions[dim].dtype)
+    return table.select(dim).unique()
+
+
+def _a_hole(extents: Mapping[str, pl.LazyFrame], present: pl.LazyFrame, dims: Sequence[str]) -> str:
+    """One coordinate the curve does not carry, written as the reader would look for it.
+
+    Built only on the way to raising, since the product it crosses is the whole
+    grid the curve was meant to cover. There is always such a coordinate: the
+    caller has counted fewer rows than that grid holds, and a repeated row can
+    only make the count larger.
+    """
+    dtypes = present.collect_schema()
+    grid = extents[dims[0]].select(pl.col(dims[0]).cast(dtypes[dims[0]]))
+    for dim in dims[1:]:
+        grid = grid.join(extents[dim].select(pl.col(dim).cast(dtypes[dim])), how='cross')
+    row = grid.join(present, on=list(dims), how='anti').head(1).collect().row(0, named=True)
+    return '(' + ', '.join(f'{d}={row[d]!r}' for d in dims) + ')'
 
 
 def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
