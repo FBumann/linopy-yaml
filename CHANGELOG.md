@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.216](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.215...v0.0.1-alpha.216) (2026-08-19)
+
+
+### Features
+
+* **file-out:** a model leaves as MPS, not only as LP ([#1097](https://github.com/fluxopt/lpspec/issues/1097)) ([76dc58b](https://github.com/fluxopt/lpspec/commit/76dc58ba0bd822787fb8bd1f3a7d4bfc2595fac4))
+* **language:** a convex cost curve stops paying a variable per breakpoint ([#926](https://github.com/fluxopt/lpspec/issues/926)) ([50d1984](https://github.com/fluxopt/lpspec/commit/50d198412ad5f76ef43375d70a41162ef1cd831b))
+
 ## [0.0.1-alpha.215](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.214...v0.0.1-alpha.215) (2026-08-19)
 
 
