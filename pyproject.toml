@@ -207,6 +207,11 @@ dev = [
     # sink's tests stay under it. Its own tests skip where it is absent, so a
     # contributor who does not want it can drop it without failing the suite.
     "lpspec[gurobi]",
+    # and the third, for the same reasons — its wheel's Community licence needs
+    # no file at all. `pyrefly` is the half that does not skip: a sink whose
+    # package is absent is an unresolved import and a red gate, not a skipped
+    # test, so an extra a sink imports belongs here the day the sink lands.
+    "lpspec[xpress]",
     # how pandas reads parquet, which the benchmark harness's linopy arm does
     # as part of the cost it is there to measure. Not needed by the engine —
     # the bare-install job runs the suite without it.
