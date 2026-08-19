@@ -49,7 +49,7 @@ if 'semantics' not in getattr(linopy.options, '_defaults', {}):
         f'linopy {linopy.__version__} has no options["semantics"], so it cannot speak the v1 '
         f'arithmetic convention this package is written against. The oracle would silently '
         f'measure against the legacy convention instead. Install the pin in pyproject.toml '
-        f'([tool.uv.sources]: PyPSA/linopy@feat/arithmetic-convention) — `uv sync`.'
+        f'(the `linopy` extra: PyPSA/linopy@master) — `uv sync`.'
     )
 from lpspec import linopy as lpspec_linopy  # noqa: E402  — must follow the guard above
 from lpspec.linopy import builder, loader  # noqa: E402
