@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.208](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.207...v0.0.1-alpha.208) (2026-08-19)
+
+
+### Bug Fixes
+
+* **language:** a coordinate in no group is absent, not an edge the fill speaks for ([#1070](https://github.com/fluxopt/lpspec/issues/1070)) ([60e3574](https://github.com/fluxopt/lpspec/commit/60e3574aeaddebccb011da769c45c6799a1e5ebb))
+
 ## [0.0.1-alpha.207](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.206...v0.0.1-alpha.207) (2026-08-19)
 
 
