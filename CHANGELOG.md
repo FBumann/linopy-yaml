@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.214](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.213...v0.0.1-alpha.214) (2026-08-19)
+
+
+### Documentation
+
+* **errors:** the error table names every class a caller can catch ([#1095](https://github.com/fluxopt/lpspec/issues/1095)) ([497aa56](https://github.com/fluxopt/lpspec/commit/497aa56a2ab96b4183f0e895211e24b6b6ba9b05))
+
 ## [0.0.1-alpha.213](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.212...v0.0.1-alpha.213) (2026-08-19)
 
 
