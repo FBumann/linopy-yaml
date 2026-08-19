@@ -183,7 +183,7 @@ this model worth reading beside `piecewise`:
 
 | | what it does with this model |
 |---|---|
-| `gurobi` | `addSOS` — branches on the set, no binaries in the model at all |
+| `gurobi`, `xpress` | `addSOS` — branches on the set, no binaries in the model at all |
 | `lp_file` | an `sos` section, read by any solver whose parser has one |
 | `highs` | **no SOS concept** — the set arrives reformulated, as a binary per segment and a linking row per member |
 

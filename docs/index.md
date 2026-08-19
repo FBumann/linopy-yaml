@@ -282,6 +282,7 @@ pip install lpspec  # the relational engine (polars, highspy)
 pip install "lpspec[linopy]"  # adds linopy + xarray + pandas: the lane, the
                               # oracle, and to_pandas / to_dataarray
 pip install "lpspec[gurobi]"  # adds the gurobi sink: solver_name='gurobi'
+pip install "lpspec[xpress]"  # adds the xpress sink: solver_name='xpress'
 ```
 
 !!! warning "Alpha, pre-1.0"

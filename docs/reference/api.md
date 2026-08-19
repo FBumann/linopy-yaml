@@ -83,7 +83,7 @@ out and need pandas / xarray, which ship with the `[linopy]` extra.
 | reading anyway | `NoSolutionError`; `objective` is `nan` |
 | **`expression` takes a declared name** | the value of a [named expression](language/expressions.md#named-expressions) at the solution, aggregated to its own dims. Never an expression string; an unknown name is a `KeyError` listing what is declared. It is compiled at the read, so a build with fifty declared expressions that reads none pays for none |
 | `dual` **raises rather than zero-filling** | no values at all is `NoSolutionError`; values but no duals — any integer or binary variable makes them undefined — is `LpspecError`, because only this quantity is missing |
-| **a solver can make a model mixed-integer** | an [`sos:`](language/piecewise.md#sos) set reaches a solver with no SOS concept as binaries, so an otherwise continuous model solved on `highs` has no duals and says so. On `gurobi`, which branches on the set itself, it keeps them |
+| **a solver can make a model mixed-integer** | an [`sos:`](language/piecewise.md#sos) set reaches a solver with no SOS concept as binaries, so an otherwise continuous model solved on `highs` has no duals and says so. On `gurobi` and `xpress`, which branch on the set itself, it keeps them |
 | duals exist only where a solver ran | a model written to LP and solved elsewhere never passes back through here. Reduced costs and slacks are not exposed yet |
 | `to_dataset` costs what it says | each variable arrives dense over its own dims — name a subset, or use `to_parquet` |
 
@@ -226,18 +226,19 @@ frame the model keeps rather than a read of what it releases.
 
 ## Choosing a solver
 
-**Which solver is a caller's choice, not the file's.** `solver_name` is `highs`
-(ships with the package) or `gurobi` (needs the `[gurobi]` extra), and nothing
-in the YAML names one — the same file means the same model whichever takes it.
-A name outside the two is an error listing them, never a quiet fallback.
+**Which solver is a caller's choice, not the file's.** `solver_name` is
+`highs` (ships with the package), `gurobi` (the `[gurobi]` extra) or `xpress`
+(the `[xpress]` extra), and nothing in the YAML names one — the same file means
+the same model whichever takes it. A name outside the three is an error listing
+them, never a quiet fallback.
 
-Options travel in the chosen solver's own vocabulary — `{'time_limit': 60}` for
-HiGHS against `{'TimeLimit': 60}` for Gurobi — because forwarding verbatim is
-the contract:
+Options travel in the chosen solver's own vocabulary, because forwarding
+verbatim is the contract — a time limit is three different words:
 
 ```python
 lps.solve('model.yaml', sources, solver_options={'time_limit': 60})
 lps.solve('model.yaml', sources, solver_name='gurobi', solver_options={'TimeLimit': 60})
+lps.solve('model.yaml', sources, solver_name='xpress', solver_options={'timelimit': 60})
 ```
 
 **Gurobi's remote and licensing options travel the same way**, so Compute

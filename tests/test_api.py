@@ -275,7 +275,7 @@ def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispa
     sources = dispatch_frame_inputs
     with pytest.raises(lps.LpspecError, match='unknown solver'):
         lps.solve(dispatch_yaml, sources, solver_name='cplex')
-    assert set(SOLVERS) == {'highs', 'gurobi'}
+    assert set(SOLVERS) == {'highs', 'gurobi', 'xpress'}
 
 
 def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(

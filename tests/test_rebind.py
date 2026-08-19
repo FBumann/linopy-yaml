@@ -466,7 +466,7 @@ def test_the_digest_reads_the_counts_that_frame_its_vectors(count):
 #: The option name each sink gives a time limit — `solver_options` is forwarded
 #: verbatim, so the vocabulary is the solver's own and there is one word per
 #: member rather than one shared word.
-LIMITS = {'highs': 'time_limit', 'gurobi': 'TimeLimit'}
+LIMITS = {'highs': 'time_limit', 'gurobi': 'TimeLimit', 'xpress': 'timelimit'}
 
 
 def test_a_solve_asking_for_other_options_loads_the_model_again(bound, solver_name):

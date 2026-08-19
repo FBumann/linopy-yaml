@@ -20,6 +20,7 @@ from lpspec.relational.sinks import sos
 from lpspec.relational.sinks.solvers.base import Solver
 from lpspec.relational.sinks.solvers.gurobi import Gurobi
 from lpspec.relational.sinks.solvers.highs import Highs
+from lpspec.relational.sinks.solvers.xpress import Xpress
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -44,6 +45,7 @@ __all__ = ['SOLVERS', 'Solver', 'ingestible', 'loaded', 'solver']
 SOLVERS: Mapping[str, type[Solver]] = {
     'highs': Highs,
     'gurobi': Gurobi,
+    'xpress': Xpress,
 }
 
 
@@ -66,7 +68,7 @@ def solver(name: str) -> type[Solver]:
     except KeyError:
         raise LpspecError(
             f'unknown solver {name!r} — this build solves with {", ".join(sorted(SOLVERS))}. '
-            'HiGHS ships with the package and is the default; gurobi needs the [gurobi] extra.'
+            'HiGHS ships with the package and is the default; gurobi and xpress need their own extras.'
         ) from None
     if not found.is_available():
         raise ModuleNotFoundError(

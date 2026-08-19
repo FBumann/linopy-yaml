@@ -98,6 +98,20 @@ gurobi = [
     "gurobipy>=11",
     "scipy>=1.11",
 ]
+# The `xpress` sink (relational/sinks/solvers/xpress.py). Opt-in, and the
+# second sink with a licence question, answered the same way: the wheel
+# carries a Community licence that is active on import — no file, no signup —
+# and refuses a model whose rows plus columns exceed 5000, which is what the
+# tests here stay under.
+#
+# The floor is where the API this sink calls settled: 9.5 is the release that
+# renamed the read-back to `getDuals`/`getSlacks` and deprecated the old
+# spellings, and the `SolStatus` enum the condition map is keyed by is 9.x.
+# Nothing here uses the modelling layer — the sink hands over the same CSR
+# arrays HiGHS takes — so no numpy floor of its own.
+xpress = [
+    "xpress>=9.5",
+]
 
 [project.urls]
 repository = "https://github.com/fluxopt/lpspec"
