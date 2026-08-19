@@ -332,14 +332,14 @@ def _column_names(source: Any, dim: str) -> frozenset[str]:
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
 
 
-def validate_curve_extent(schema: Model, sources: Mapping[str, object]) -> None:
+def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> None:
     """Refuse a ``piecewise:`` curve that is not supplied everywhere it is built.
 
     A block emits one weight per breakpoint over the whole coordinate product —
     the λ it declares carries no mask — so a values parameter short of a row
-    does not build a shorter curve. Both lanes call this, since both take the
-    caller's mapping and both would otherwise read that row as a zero
-    coefficient and put a breakpoint at the origin.
+    does not build a shorter curve. Both lanes call this, and both reach it with
+    what :func:`tidy_sources` returned, or would otherwise read that row as a
+    zero coefficient and put a breakpoint at the origin.
 
     Sequences and single numbers are skipped: each is dense by construction,
     spread over labels the dimension supplies. A parquet path is scanned, since
@@ -349,7 +349,8 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, object]) -> None:
     Args:
         schema: The model as written — ``piecewise:`` blocks name the
             parameters, and the expansion has none.
-        sources: Parameter and dimension names to what the caller bound.
+        sources: What :func:`tidy_sources` returned — parameter and dimension
+            names to a frame or a path.
 
     Raises:
         DataError: A link's values parameter with a hole in the product of the
@@ -361,7 +362,7 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, object]) -> None:
             present = _coordinates(sources.get(link.values), dims)
             if present is None:
                 continue
-            extents = {d: _label_frame(schema, d, sources, present) for d in dims}
+            extents = {d: _label_frame(d, sources, present) for d in dims}
             expected = 1
             for labels in extents.values():
                 expected *= labels.select(pl.len()).collect().item()
@@ -390,21 +391,21 @@ def _coordinates(source: object, dims: Sequence[str]) -> pl.LazyFrame | None:
     return table.select(dims)
 
 
-def _label_frame(schema: Model, dim: str, sources: Mapping[str, object], present: pl.LazyFrame) -> pl.LazyFrame:
+def _label_frame(dim: str, sources: Mapping[str, TidySource], present: pl.LazyFrame) -> pl.LazyFrame:
     """*dim*'s labels as one column, from wherever the model's index comes from.
+
+    *sources* is what :func:`tidy_sources` returned, so a dimension with an
+    index — declared by the file or passed by the caller — is already a frame
+    here, and which of the two it was stopped mattering at that door.
 
     Falls back to the labels the curve itself carries, which is what a
     dimension with no index of its own is bound against: there the curve cannot
     be short of a breakpoint nothing else declares.
     """
     source = sources.get(dim)
-    if source is None and (declared := schema.declared_index(dim)) is not None:
-        source = declared[dim]
     if source is None:
         return present.select(dim).unique()
-    table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else as_frame(source, (dim,))
-    if table is None:
-        table = labels_frame(dim, source, schema.dimensions[dim].dtype)
+    table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
     return table.select(dim).unique()
 
 
