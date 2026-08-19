@@ -78,12 +78,29 @@ def is_dense_array(obj: object) -> bool:
     return xr is not None and isinstance(obj, xr.DataArray)
 
 
+def is_multi_indexed(obj: object) -> bool:
+    """Whether *obj* is a pandas Series carrying more than one index level.
+
+    A pandas index is the one shape with no counterpart in the frames both
+    lanes build — polars has no index at all — so a MultiIndex is read by
+    promoting its levels to columns, and its *depth* is then a claim about the
+    parameter's arity that nothing downstream re-checks. Asked here, the caller
+    raises :func:`~lpspec.errors.multi_indexed_series_message` and names the
+    tidy frame that says the same thing in columns.
+    """
+    import sys
+
+    pd = sys.modules.get('pandas')
+    return pd is not None and isinstance(obj, pd.Series) and obj.index.nlevels > 1
+
+
 def _series_to_frame(series: Any, dims: Sequence[str]) -> Any:
     """A pandas Series with its index promoted to columns.
 
-    Levels the caller named bind by name: renaming them to *dims* transposes
-    the data when two dims share a label space, which nothing downstream can
-    catch.
+    One level, so one dim: :func:`is_multi_indexed` has already refused the
+    rest. Where the caller named the level it binds by that name — renaming it
+    to *dims* would transpose the data when two dims share a label space, which
+    nothing downstream can catch.
     """
     if any(n is None for n in series.index.names):
         series = series.rename_axis(dims)

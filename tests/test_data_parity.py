@@ -632,6 +632,35 @@ def test_a_stray_lookup_value_reads_the_same_over_an_int_labelled_target(tmp_pat
     assert str(relational.value) == str(eager.value), 'one defect, one sentence'
 
 
+def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
+    """The one pandas shape with no counterpart in the frames underneath.
+
+    An index carries the dims a parameter is over *and* how many of them there
+    are, and the second is a claim the declaration already makes — so the two
+    can disagree with nothing able to say which was meant. A depth check would
+    catch the disagreement; refusing the shape removes it, and a tidy frame
+    says the same thing in the vocabulary the other five accepted shapes use.
+
+    Refused at `tidy_sources`, which is the one door both lanes enter by, so
+    neither can drift a second wording for it.
+    """
+    path = tmp_path / 'lookup.yaml'
+    path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
+    deep = pd.MultiIndex.from_tuples([('w', 0), ('s', 0)], names=['g', 'k'])
+    sources = {
+        'p_max': pd.Series([5.0, 5.0], index=deep),
+        'g': _tidy(g=['w', 's'], gen_bus=['n', 'e']),
+    }
+
+    with pytest.raises(DataError, match='MultiIndex is not a source') as relational:
+        lps.build(path, sources).close()
+    with pytest.raises(DataError, match='MultiIndex is not a source') as eager:
+        lpspec_linopy.build(path, sources)
+
+    assert str(relational.value) == str(eager.value), 'one defect, one sentence'
+    assert "['g', 'value']" in str(eager.value), 'and it names the tidy frame the caller should pass'
+
+
 def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_path):
     """Ignoring it is a silent fallback, which is the one thing we do not do.
 

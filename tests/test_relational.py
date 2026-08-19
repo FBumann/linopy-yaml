@@ -1761,6 +1761,12 @@ BROADCAST_MASK_MODEL = {
 }
 
 
+def _grid(dims, labels, values):
+    """The full product of *labels* as a tidy frame, one row per coordinate."""
+    frame = pd.MultiIndex.from_product(labels, names=dims).to_frame(index=False)
+    return frame.assign(value=values)
+
+
 def test_a_mask_survives_a_broadcast_into_a_reduction():
     """`Presence.keyed_by=None` means "keyed by the fragment's dims", and a
     product may *widen* dims — so carrying it through the widening re-read
@@ -1774,19 +1780,10 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
     """
     data = {
         # a tech produces exactly one carrier, which is what makes `produces` sparse
-        'produces': pd.Series(
-            [1.0, 0.0, 0.0, 1.0],
-            index=pd.MultiIndex.from_product([['t1', 't2'], ['elec', 'heat']], names=['tech', 'carrier']),
-        ),
-        'demand': pd.Series(
-            [10.0, 20.0, 10.0, 20.0],
-            index=pd.MultiIndex.from_product([['n1', 'n2'], ['elec', 'heat']], names=['node', 'carrier']),
-        ),
+        'produces': _grid(['tech', 'carrier'], [['t1', 't2'], ['elec', 'heat']], [1.0, 0.0, 0.0, 1.0]),
+        'demand': _grid(['node', 'carrier'], [['n1', 'n2'], ['elec', 'heat']], [10.0, 20.0, 10.0, 20.0]),
         'cost': pd.Series({'t1': 1.0, 't2': 2.0}),
-        'installed': pd.Series(
-            [100.0, 100.0, 100.0, 100.0],
-            index=pd.MultiIndex.from_product([['n1', 'n2'], ['t1', 't2']], names=['node', 'tech']),
-        ),
+        'installed': _grid(['node', 'tech'], [['n1', 'n2'], ['t1', 't2']], [100.0] * 4),
     }
 
     with differential(BROADCAST_MASK_MODEL, data) as run:

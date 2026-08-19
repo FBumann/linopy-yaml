@@ -101,17 +101,25 @@ sources = {'snapshot': load.index, 'p_max': p_max, 'cost': cost, 'load': load}
 <details markdown="1">
 <summary>From PyPSA's shapes — one rename, one stack</summary>
 
-An entity column is an indexed Series already, so a static attribute passes
-with a rename of its index; only the wide time series needs its `stack()`
-back to tidy — here mapped from load names onto buses on the way, the shape
-[transport](transport.md) binds:
+An entity column is an indexed Series already, so a static attribute over one
+dimension passes with a rename of its index. The wide time series needs its
+`stack()` back to tidy and a `reset_index()` after it — a parameter over two
+dimensions arrives as a frame carrying both as columns, an index being a pandas
+idea the frames underneath have no counterpart for. Here it is mapped from load
+names onto buses on the way, the shape [transport](transport.md) binds:
 
 ```python
-load = n.loads_t.p_set.rename(columns=n.loads.bus).rename_axis(index='snapshot', columns='bus').stack()
+load = (
+    n.loads_t.p_set.rename(columns=n.loads.bus)
+    .rename_axis(index='snapshot', columns='bus')
+    .stack()
+    .rename('value')
+    .reset_index()
+)
 
 sources = {
-    'snapshot': load.index.get_level_values('snapshot').unique(),
-    'bus': load.index.get_level_values('bus').unique(),
+    'snapshot': load['snapshot'].unique(),
+    'bus': load['bus'].unique(),
     'p_max': n.generators['p_nom'].rename_axis('generator'),
     'cost': n.generators['marginal_cost'].rename_axis('generator'),
     'load': load,

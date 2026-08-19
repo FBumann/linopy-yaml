@@ -344,9 +344,8 @@ def dense_array_message(name: str) -> str:
     return (
         f"parameter '{name}': an xarray.DataArray is not a source. lpspec reads tables — "
         f'rows under named columns — and hands arrays back rather than taking them. Pass '
-        f'array.to_series(), whose index binds by name on both lanes, or '
-        f'array.to_series().reset_index() for a tidy frame. Result.to_dataarray() is the '
-        f'way back out.'
+        f'array.to_series().reset_index() for a tidy frame, whose columns bind by name on '
+        f'both lanes. Result.to_dataarray() is the way back out.'
     )
 
 
@@ -416,6 +415,23 @@ def lookup_values_are_not_labels_message(dim: str, lookup: str, target: str, val
         f"'{target}' label — otherwise sum(by={lookup}) drops "
         f'those terms in the join that places them, and the model builds and '
         f'solves without them.'
+    )
+
+
+def multi_indexed_series_message(name: str, dims: Sequence[str]) -> str:
+    """A pandas Series carrying its dims in a MultiIndex — one wording, both lanes.
+
+    The index depth is a second statement of how many dimensions the parameter
+    has, and it is the caller's rather than the file's, so the two can disagree
+    with nothing able to tell which was meant. Columns cannot: a tidy frame
+    says it once, in the vocabulary the engine already reads.
+    """
+    tidy = [*dims, 'value']
+    return (
+        f"parameter '{name}': a pandas Series with a MultiIndex is not a source. An index is "
+        f'a pandas idea with no counterpart in the frames both lanes build, and its depth is a '
+        f"second claim about what '{name}' is over. Pass a tidy frame carrying {tidy} — "
+        f'series.reset_index() is the whole change.'
     )
 
 

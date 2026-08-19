@@ -156,32 +156,27 @@ CAPS = {('n1', 'n1'): 1.0, ('n2', 'n1'): 5.0, ('n1', 'n2'): 500.0, ('n2', 'n2'):
 def _tidy_cap(names):
     """`cap` keyed by (from_bus, to_bus), read back off the normalised frame.
 
-    ``tidy_sources`` normalises to a frame, so the columns come back by name —
-    which is the point: a transposition shows up as swapped values.
+    The columns come back by name — which is the point: a transposition shows
+    up as swapped values rather than hiding in the order they were written.
     """
     import pandas as pd
 
-    index = pd.MultiIndex.from_tuples(list(CAPS), names=names)
-    frame = tidy_sources(Model(**NETWORK), {'cap': pd.Series(list(CAPS.values()), index=index)})['cap'].collect()
+    wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=[*names, 'value'])
+    frame = tidy_sources(Model(**NETWORK), {'cap': wide})['cap'].collect()
     table = frame.to_dict(as_series=False)
     return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
 
 
-def test_a_named_index_binds_by_name_not_position():
-    """Two dims over the same label space make a transposed index type-check
-    and cover every coordinate, so nothing downstream can catch it. Was: the
-    declared dims overwrote the user's level names and the matrix came out
-    transposed, with no error.
+def test_a_named_column_binds_by_name_not_position():
+    """Two dims over the same label space make a transposed source type-check
+    and cover every coordinate, so nothing downstream can catch it. Binding by
+    name is what makes the transposition visible instead.
     """
     assert _tidy_cap(['from_bus', 'to_bus']) == CAPS
     assert _tidy_cap(['to_bus', 'from_bus']) == {(f, t): v for (t, f), v in CAPS.items()}
 
 
-def test_an_unnamed_index_still_binds_positionally():
-    assert _tidy_cap([None, None]) == CAPS
-
-
-def test_an_index_name_outside_the_declared_dims_is_an_error():
+def test_a_column_name_outside_the_declared_dims_is_an_error():
     """Refused by binding, which asks it of a parquet path as well as a frame.
 
     ``tidy_sources`` only ever sees the in-memory half, so asking there too
@@ -189,9 +184,9 @@ def test_an_index_name_outside_the_declared_dims_is_an_error():
     """
     import pandas as pd
 
-    index = pd.MultiIndex.from_tuples(list(CAPS), names=['banana', 'to_bus'])
+    wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=['banana', 'to_bus', 'value'])
     with pytest.raises(DataError, match='is missing columns'):
-        lps.build(Model(**NETWORK), {'cap': pd.Series(list(CAPS.values()), index=index)})
+        lps.build(Model(**NETWORK), {'cap': wide})
 
 
 def test_a_divisor_under_a_pullback_is_still_named():

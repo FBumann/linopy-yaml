@@ -196,11 +196,8 @@ class TestLoadParameters:
                 {'x': {'values': [1], 'dtype': 'int'}, 'y': {'values': [2], 'dtype': 'int'}},
                 {'a': {'dims': ['x']}},
                 {'a': pd.DataFrame({'x': [1], 'y': [2], 'value': [1.0]}).set_index(['x', 'y'])['value']},
-                'index has 2 level',
-                id='an-index-deeper-than-the-declared-dims',
-                marks=pytest.mark.xfail(
-                    reason='#1088 — the shared door refuses the shape itself, which is the better answer'
-                ),
+                'a pandas Series with a MultiIndex is not a source',
+                id='a-multi-indexed-series',
             ),
             pytest.param(
                 {'x': {'values': [1], 'dtype': 'int'}},

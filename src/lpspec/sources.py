@@ -32,9 +32,10 @@ from lpspec.errors import (
     dense_array_message,
     index_without_its_label_column_message,
     map_keys_are_not_labels_message,
+    multi_indexed_series_message,
     unknown_source_keys_message,
 )
-from lpspec.frames import as_frame, is_dense_array, labels_frame
+from lpspec.frames import as_frame, is_dense_array, is_multi_indexed, labels_frame
 
 if TYPE_CHECKING:
     from lpspec.language.model import Model
@@ -92,6 +93,8 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
             continue
         if is_dense_array(obj):
             raise DataError(dense_array_message(pname))
+        if is_multi_indexed(obj):
+            raise DataError(multi_indexed_series_message(pname, pdef.dims))
         table = as_frame(obj, pdef.dims)
         sources[pname] = table if table is not None else _spread(pname, obj, pdef.dims, sources)
 
