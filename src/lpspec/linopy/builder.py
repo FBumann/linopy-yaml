@@ -18,7 +18,7 @@ import numpy as np
 import xarray as xr
 
 from lpspec._notes import note
-from lpspec.errors import DataError, LanguageError, null_bounds_message
+from lpspec.errors import DataError, LaneError, LanguageError, null_bounds_message
 from lpspec.language import degree
 from lpspec.language.expression_parser import (
     ArithmeticNode,
@@ -309,6 +309,7 @@ def _build_objective(ctx: EvaluationContext) -> None:
         check_divisors_cover('the objective', ast, ctx.schema, ctx.dataset, None, ctx.model)
 
         expr = _eval_ast(ast, ctx)
+        _refuse_an_objective_constant(expr)
 
         sense = 'min' if odef.sense == 'minimize' else 'max'
         ctx.model.add_objective(expr, overwrite=True, sense=sense)
@@ -587,6 +588,32 @@ def _bound_lookup(
             f"values. Pass sources={{'{over}': <table with '{over}' and '{name}' columns>}}."
         )
         raise DataError(msg) from None
+
+
+#: The one construct this lane accepts and cannot build, as the sentence a user
+#: reads. Module-level so the test that pins the wording has something to name.
+OBJECTIVE_CONSTANT_IS_A_LANE_GAP = (
+    "the objective carries a constant term, and this lane cannot build one: linopy's objective "
+    'takes no constant — there is no `objective_constant` slot anywhere in the package, which is '
+    'why PyPSA carries its own out of band. The relational lane builds it and returns the right '
+    'number, so the model is sayable and only this lane is short: run it with `lpspec.solve` / '
+    '`lpspec.build`. Dropping the constant here is refused deliberately — it would answer a '
+    'different model, and this lane is the differential oracle, so every test on such a file '
+    "would be calibrated to the shortened objective's number (#894)."
+)
+
+
+def _refuse_an_objective_constant(expr: Any) -> None:
+    """Refuse an objective this lane cannot build, before linopy is asked.
+
+    linopy's own refusal names neither the file nor the other lane, and arrives
+    from a setter two frames down. A check rather than a `try`, because the
+    upstream message is not a contract and a nonzero constant is the whole of
+    what it means.
+    """
+    const = getattr(expr, 'const', None)
+    if const is not None and bool(np.any(np.asarray(const) != 0)):
+        raise LaneError(OBJECTIVE_CONSTANT_IS_A_LANE_GAP)
 
 
 def _unsupported(call: str, array: Any) -> TypeError:

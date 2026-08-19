@@ -123,7 +123,11 @@ Eligibility is decided by **attempting the lowering** — `lower_program` return
 a `Program` or raises `lps.LanguageError` — so it cannot drift from what the
 engine supports. Errors split model from run: everything under `LanguageError`
 is decidable without data, `DataError` is what a source failed to supply, and
-both are `LpspecError` (`errors.py`). Expansion precedes validation in **both** lanes,
+both are `LpspecError` (`errors.py`). `LaneError` is the third thing that can
+be wrong and the one hard rule 3 does not forbid — **accepting is not
+building**, so a model both lanes accept may still meet a wall inside one of
+them, and the lane says so in its own words rather than passing an upstream
+exception through. Expansion precedes validation in **both** lanes,
 because a formulation emits declarations and those are language too — a stray
 dim in generated math is the same error as a stray dim in a written one.
 
@@ -220,7 +224,7 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `lpspec.linopy.expression` on the other lane | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
-| **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` | — |
+| **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` · `LaneError` | — |
 
 **Flat, and a namespace marks a lane rather than a topic.** `lpspec.linopy` is
 the only one, and it earns it by being a different lane — its own dependencies,

@@ -395,6 +395,7 @@ PUBLIC_API = {
     'catch it': {
         'LpspecError',
         'LanguageError',
+        'LaneError',
         'DataError',
         'DimensionError',
         'SchemaError',
