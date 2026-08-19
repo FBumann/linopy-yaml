@@ -651,19 +651,14 @@ def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex
 OUT_OF_ORDER_BP = pd.Index([2, 0, 1], name='bp')
 
 
-@pytest.mark.xfail(
-    reason='#1122 — the guard walks the frame in its row order, where the model walks the dimension in its own',
-    raises=PiecewiseExpansionError,
-    strict=True,
-)
 def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
     """A row order is not a breakpoint order, and only the second is the model's.
 
     Rows reach a lane in whatever order the join or the group-by that made
     them left behind; what orders the breakpoints is the `bp` index, which is
-    ascending here. So this table is the fixture's curve, and refusing it
-    refuses a model that builds and solves correctly on the eager lane, where
-    the loader lays the values out on the index before the guard reads them.
+    ascending here. The guard read the rows as they arrived and refused this
+    table as backwards (#1122), where the engine joins it by label and the
+    eager lane builds and solves it.
     """
     shuffled = {
         **nonconvex_inputs,
@@ -696,16 +691,15 @@ def test_the_eager_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp
         lpspec_linopy.build(path, {**nonconvex_inputs, 'bp': pd.Index([2, 1, 0], name='bp')})
 
 
-@pytest.mark.xfail(reason='#1122 — the guard never reads the index, so it cannot see the order it sets', strict=True)
 def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
-    """The other half of the same blindness, and this one builds a wrong model.
+    """The other half of the same blindness, and this one built a wrong model.
 
     A dimension's index is its order — `shift` walks it and `index(bp, 0)`
     names its first label — so an index written `[2, 1, 0]` puts the fixture's
     breakpoints at x = 100, 40, 0. `adjacency` then pairs segments that are
     not neighbours, and `lp` writes its chords against a negative run. The
-    eager lane refuses exactly this, having laid the values out on the index
-    first.
+    guard never read the index, so it had nothing to say about the order that
+    index sets (#1122).
     """
     backwards = {**nonconvex_inputs, 'bp': pd.Index([2, 1, 0], name='bp')}
 

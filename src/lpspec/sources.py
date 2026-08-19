@@ -604,6 +604,13 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     block whose parameters are absent is skipped. Called by both lanes, which
     is why it sits beside ``tidy_sources``.
 
+    **The breakpoints are walked in the ``over`` dimension's own index order**,
+    which is the order the model is built in — what ``shift`` walks and what
+    ``index(bp, 0)`` names. A values table is a function of its coordinates and
+    carries no order of its own, so it is laid out on that index first
+    (:func:`_breakpoint_order`); reading it in the row order it happened to
+    arrive in judged an order the model never builds, in both directions.
+
     Only the curvature check needs xarray, for the broadcast over dims, so the
     import waits until a block that needs it is found.
 
@@ -634,6 +641,8 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
         except KeyError:
             continue
         xa, ya = xr.broadcast(xa, ya)
+        if (order := _breakpoint_order(pw.over, values)) is not None:
+            xa, ya = xa.reindex({pw.over: order}), ya.reindex({pw.over: order})
         other = [d for d in xa.dims if d != pw.over]
         stacked_x = xa.transpose(*other, pw.over).values.reshape(-1, xa.sizes[pw.over])
         stacked_y = ya.transpose(*other, pw.over).values.reshape(-1, ya.sizes[pw.over])
@@ -659,6 +668,26 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
                     f'the curve with no sign of it in the answer. Use method: adjacency or '
                     f'method: sos2 for the exact form.'
                 )
+
+
+def _breakpoint_order(over: str, values: Mapping[str, Any] | Any) -> list[Any] | None:
+    """*over*'s labels in the order the model builds them, or ``None``.
+
+    ``None`` where the caller holds no index this can read — the linopy lane's
+    ``xr.Dataset``, whose arrays its loader has already laid out on that index,
+    so there is nothing left to reorder.
+
+    Deduplicated by *first appearance* rather than sorted, because that is the
+    ordinal the engine assigns (``relational/engines/polars/binding.py``) and a
+    guard reading a second order would answer for a model nobody builds.
+    """
+    source = values.get(over)
+    if isinstance(source, (str, Path)):
+        source = pl.scan_parquet(source)
+    if not isinstance(source, (pl.LazyFrame, pl.DataFrame)):
+        return None
+    labels = source.lazy().select(over).unique(maintain_order=True).collect()
+    return labels[over].to_list()
 
 
 def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) -> Any:
