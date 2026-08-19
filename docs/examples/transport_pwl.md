@@ -204,7 +204,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: total freight, charged on the scaled consignment rather than on the shipment
-      expression: scaled * distance * freight / 1000
+      expression: sum(scaled * distance * freight / 1000)
     ```
 
     ```python

@@ -162,7 +162,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         what the fleet costs to build, plus what it is expected to cost to run —
         operating cost weighted by how likely the future it is incurred in is, and
         capital cost paid once whichever future arrives
-      expression: p * opex * probability + p_nom * capex
+      expression: sum(p * opex * probability) + sum(p_nom * capex)
     ```
 
     ```python

@@ -35,4 +35,4 @@ constraints:
 objective:
   sense: minimize
   description: total shortfall, which is zero exactly when the capacity can be dispatched
-  expression: short
+  expression: sum(short)

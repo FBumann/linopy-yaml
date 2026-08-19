@@ -116,7 +116,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       description: >-
         total freight, priced as rate times distance the way the source does — the
         cost of a route is arithmetic here, not a precomputed table
-      expression: shipment * distance * freight / 1000
+      expression: sum(shipment * distance * freight / 1000)
     ```
 
     ```python

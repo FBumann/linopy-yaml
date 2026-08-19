@@ -283,7 +283,7 @@ class TestVersion:
             'parameters': {'c': {'dims': ['t']}},
             'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
             'constraints': {'r': {'foreach': ['t'], 'expression': 'x <= 1'}},
-            'objective': {'sense': 'maximize', 'expression': 'x * c'},
+            'objective': {'sense': 'maximize', 'expression': 'sum(x * c)'},
         }
 
     def test_absent_means_zero(self):

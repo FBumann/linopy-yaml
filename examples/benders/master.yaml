@@ -34,4 +34,4 @@ constraints:
 objective:
   sense: minimize
   description: what the capacity costs to build, plus the estimate of running it
-  expression: cap * invest + theta
+  expression: sum(cap * invest) + theta

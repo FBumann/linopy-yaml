@@ -103,7 +103,7 @@ constraints:
 objective:
   sense: minimize
   description: total cost of generation over the horizon
-  expression: weighted_sum(p, cost, over=generator)
+  expression: sum(weighted_sum(p, cost, over=generator))
 ```
 
 ## What it exercises

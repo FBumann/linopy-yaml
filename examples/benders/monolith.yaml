@@ -31,4 +31,4 @@ constraints:
 objective:
   sense: minimize
   description: what the capacity costs to build, plus what running it costs
-  expression: cap * invest + p * cost
+  expression: sum(cap * invest) + sum(p * cost)

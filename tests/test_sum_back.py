@@ -50,7 +50,7 @@ def up_time_model(edge: str | None) -> dict:
             'starts_when_told': {'foreach': ['g', 't'], 'expression': 'started >= must_start'},
             'stays_up_its_own_time': {'foreach': ['g', 't'], 'expression': f'{window} <= on'},
         },
-        'objective': {'sense': 'minimize', 'expression': 'on * cost'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(on * cost)'},
     }
 
 

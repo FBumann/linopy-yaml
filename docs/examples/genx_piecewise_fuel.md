@@ -75,7 +75,7 @@ $t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of t
 
 #### Objective
 
-$$\min \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \left( \mathit{output}_{p,h} \cdot \mathit{run\_cost}_{p} \cdot \mathit{weight}_{h} + \mathit{burned}_{p,h} \cdot \mathit{fuel\_price}_{p,h} \cdot \mathit{weight}_{h} + \mathit{burned}^{\mathrm{starting}}_{p,h} \cdot \mathit{fuel\_price}_{p,h} \cdot \mathit{weight}_{h} + \mathit{starting}_{p,h} \cdot \mathit{start\_cost}_{p} \cdot \mathit{weight}_{h} \right) + \sum_{h \in \mathcal{H},\enspace t \in \mathcal{T}} \mathit{shed}_{t,h} \cdot \mathit{shed}^{\mathrm{cost}}_{t} \cdot \mathit{weight}_{h} + \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \left( \mathit{burned}_{p,h} \cdot \mathit{captured}_{p} \cdot \mathit{weight}_{h} + \mathit{burned}^{\mathrm{starting}}_{p,h} \cdot \mathit{captured}^{\mathrm{start}}_{p} \cdot \mathit{weight}_{h} \right)$$
+$$\min \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \mathit{output}_{p,h} \cdot \mathit{run\_cost}_{p} \cdot \mathit{weight}_{h} + \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \mathit{burned}_{p,h} \cdot \mathit{fuel\_price}_{p,h} \cdot \mathit{weight}_{h} + \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \mathit{burned}^{\mathrm{starting}}_{p,h} \cdot \mathit{fuel\_price}_{p,h} \cdot \mathit{weight}_{h} + \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \mathit{starting}_{p,h} \cdot \mathit{start\_cost}_{p} \cdot \mathit{weight}_{h} + \sum_{h \in \mathcal{H},\enspace t \in \mathcal{T}} \mathit{shed}_{t,h} \cdot \mathit{shed}^{\mathrm{cost}}_{t} \cdot \mathit{weight}_{h} + \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \mathit{burned}_{p,h} \cdot \mathit{captured}_{p} \cdot \mathit{weight}_{h} + \sum_{p \in \mathcal{P},\enspace h \in \mathcal{H}} \mathit{burned}^{\mathrm{starting}}_{p,h} \cdot \mathit{captured}^{\mathrm{start}}_{p} \cdot \mathit{weight}_{h}$$
 
 #### Subject to
 
@@ -456,13 +456,13 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         the day's cost, scaled to the year — running, fuel, starts, shed demand and
         the capture the carbon-capture plants pay for
       expression: >-
-        output * run_cost * weight
-        + burned * fuel_price * weight
-        + burned_starting * fuel_price * weight
-        + starting * start_cost * weight
-        + shed * shed_cost * weight
-        + burned * captured * weight
-        + burned_starting * captured_start * weight
+        sum(output * run_cost * weight)
+        + sum(burned * fuel_price * weight)
+        + sum(burned_starting * fuel_price * weight)
+        + sum(starting * start_cost * weight)
+        + sum(shed * shed_cost * weight)
+        + sum(burned * captured * weight)
+        + sum(burned_starting * captured_start * weight)
     ```
 
 ## What the port had to decide

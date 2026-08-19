@@ -126,7 +126,7 @@ constraints:
 objective:
   sense: minimize
   description: what the open warehouses cost, plus what serving from them costs
-  expression: is_open * fixed_cost + serve * serve_cost
+  expression: sum(is_open * fixed_cost) + sum(serve * serve_cost)
 ```
 
 **`serve` is not declared binary, and that is the interesting part.** Only

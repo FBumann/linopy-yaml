@@ -333,7 +333,7 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
                 expression: "x - relmax * size <= 0"
             objective:
               sense: maximize
-              expression: "sum(x, over=f)"
+              expression: "sum(x)"
         """).lstrip()
     )
     probe = textwrap.dedent(f"""
@@ -385,7 +385,7 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
             expression: x <= 100
         objective:
           sense: maximize
-          expression: sum(x, over=f)
+          expression: sum(x)
         """)
     data = {
         'ub': pd.Series([10.0], index=pd.Index(['a'], name='f')),
@@ -514,7 +514,7 @@ def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as
         'dimensions': {'g': {'values': ['wind', 'gas']}},
         'parameters': {'cap': {'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'objective': {'sense': 'maximize', 'expression': 'x'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     path = tmp_path / 'm.yaml'
     path.write_text(pyyaml.safe_dump(raw))
@@ -530,7 +530,7 @@ _BARE_SHIFT = {
     'parameters': {'eff': {'dims': ['t']}},
     'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
     'constraints': {'c': {'foreach': ['t'], 'expression': 'x <= shift(eff, over=t, offset=1)'}},
-    'objective': {'sense': 'maximize', 'expression': 'x'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
 
@@ -566,7 +566,7 @@ def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
         'dimensions': {'g': {}},
         'parameters': {'cap': {'dims': ['g']}, 'cost': {'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'objective': {'sense': 'maximize', 'expression': 'x * cost'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
     }
     sources = {
         'cap': pd.Series({'wind': 40.0, 'gas': 100.0}).rename_axis('g'),

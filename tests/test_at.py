@@ -110,7 +110,7 @@ COMPONENT_GATE = {
         'gate': {'foreach': ['flow', 't'], 'expression': 'rate <= at(on, by=component_of) * 10'},
         'need': {'foreach': ['t'], 'expression': 'sum(rate, over=flow) >= 12'},
     },
-    'objective': {'sense': 'minimize', 'expression': 'rate * cost + on * oncost'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(rate * cost) + sum(on * oncost)'},
 }
 
 
@@ -177,7 +177,7 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
             'draw': {'foreach': [], 'expression': 'sum(at(level, by=component_of) * share, over=flow) >= 9'},
             'link': {'foreach': ['flow'], 'expression': 'take <= at(level, by=component_of)'},
         },
-        'objective': {'sense': 'minimize', 'expression': 'level * 1.0 + take * cost'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(level * 1.0) + sum(take * cost)'},
     }
     flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
     data = {
@@ -258,7 +258,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
             'within_capacity': {'foreach': ['unit', 't'], 'expression': 'p <= on * cap'},
             'meet_load': {'foreach': ['t'], 'expression': 'sum(p, over=unit) >= load'},
         },
-        'objective': {'sense': 'minimize', 'expression': 'p * run_cost + on * idle_cost'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p * run_cost) + sum(on * idle_cost)'},
     }
     rows = [(u, t, tf) for u, k in up_time.items() for t in hours for tf in hours if 0 <= t - tf < k]
     sources = {

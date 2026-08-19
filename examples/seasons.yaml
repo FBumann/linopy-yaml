@@ -50,4 +50,4 @@ constraints:
 objective:
   sense: maximize
   description: revenue from what the store releases
-  expression: release * price
+  expression: sum(release * price)

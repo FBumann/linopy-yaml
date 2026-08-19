@@ -156,7 +156,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: total cost of generation; moving power over a line is free here
-      expression: p * cost
+      expression: sum(p * cost)
     ```
 
     ```python

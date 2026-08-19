@@ -140,7 +140,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: total cost of the deliveries
-      expression: moved * cost
+      expression: sum(moved * cost)
     ```
 
 **The centre is in the connection's name and in nothing else, deliberately.**

@@ -69,4 +69,4 @@ constraints:
 objective:
   sense: minimize
   description: the length of the tour
-  expression: travel * distance
+  expression: sum(travel * distance)

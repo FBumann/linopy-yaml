@@ -29,4 +29,4 @@ constraints:
 objective:
   sense: minimize
   description: cost of dispatching at the proposed capacity
-  expression: p * cost
+  expression: sum(p * cost)

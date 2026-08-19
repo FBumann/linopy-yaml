@@ -52,7 +52,7 @@ DISPATCH = {
     },
     'variables': {'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'balance': {'foreach': ['snapshot'], 'expression': 'sum(p, over=generator) == load'}},
-    'objective': {'sense': 'minimize', 'expression': 'p * cost'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
 
@@ -103,7 +103,7 @@ KNAPSACK = {
     'parameters': {'worth': {'dims': ['item']}, 'weight': {'dims': ['item']}, 'capacity': {'dims': []}},
     'variables': {'take': {'foreach': ['item'], 'domain': 'binary'}},
     'constraints': {'fits': {'foreach': [], 'expression': 'sum(weight * take, over=item) <= capacity'}},
-    'objective': {'sense': 'maximize', 'expression': 'take * worth'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(take * worth)'},
 }
 
 

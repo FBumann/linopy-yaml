@@ -176,7 +176,7 @@ constraints:
 objective:
   sense: minimize
   description: the length of the tour
-  expression: travel * distance
+  expression: sum(travel * distance)
 ```
 
 **One shape here is worth the whole page.** MTZ needs `u` — the tour position —

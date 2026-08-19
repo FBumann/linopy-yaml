@@ -79,4 +79,4 @@ constraints:
 objective:
   sense: minimize
   description: total cost of generation; moving power over a line is free here
-  expression: p * cost
+  expression: sum(p * cost)

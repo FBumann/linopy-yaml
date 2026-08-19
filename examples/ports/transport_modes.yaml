@@ -61,4 +61,4 @@ constraints:
 objective:
   sense: minimize
   description: total cost of the deliveries
-  expression: moved * cost
+  expression: sum(moved * cost)

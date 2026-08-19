@@ -103,4 +103,4 @@ constraints:
 objective:
   sense: minimize
   description: what the fleet costs to run, plus what its starts and stops cost
-  expression: p * marginal_cost + start_up * start_up_cost + shut_down * shut_down_cost
+  expression: sum(p * marginal_cost) + sum(start_up * start_up_cost) + sum(shut_down * shut_down_cost)

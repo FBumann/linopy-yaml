@@ -231,8 +231,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         run and what it costs to run in the tail — capital cost sits outside the
         blend, so the risk preference prices operation rather than investment
       expression: >-
-        p_nom * capex
-        + (1 - omega) * probability * operating_cost
+        sum(p_nom * capex)
+        + sum((1 - omega) * probability * operating_cost)
         + omega * tail_average
     ```
 

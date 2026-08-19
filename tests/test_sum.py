@@ -46,7 +46,7 @@ def _model(budget: str, *, where: str | None = None) -> dict:
         },
         'variables': {'p': variable},
         'constraints': {'budget': {'foreach': [], 'expression': f'{budget} <= cap'}},
-        'objective': {'sense': 'maximize', 'expression': 'p'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(p)'},
     }
 
 

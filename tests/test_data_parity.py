@@ -51,7 +51,7 @@ MODEL = {
     'parameters': {'cost': {'dims': ['f']}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'foreach': ['f'], 'expression': 'x <= cap'}},
-    'objective': {'sense': 'maximize', 'expression': 'x * cost'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
 }
 
 ACCEPTED = 'accepted'
@@ -246,7 +246,7 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
         'parameters': {'rate': {'dims': []}},
         'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': ['f'], 'expression': 'x <= 1'}},
-        'objective': {'sense': 'maximize', 'expression': 'x * rate'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x * rate)'},
     }
     path = tmp_path / 'scalar.yaml'
     path.write_text(pyyaml.safe_dump(model))
@@ -265,7 +265,7 @@ POSITION_MODEL = {
     'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
     'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0}}},
     'constraints': {'c': {'foreach': ['g', 't'], 'expression': 'shift(x, over=t, offset=lead, edge=0) >= demand'}},
-    'objective': {'sense': 'minimize', 'expression': 'x'},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
 }
 
 _DEMAND = _tidy(g=['a', 'a', 'a'], t=[0, 1, 2], value=[1.0, 2.0, 3.0])
@@ -308,7 +308,7 @@ def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
         'parameters': {'cost': {'dims': ['g'], 'dtype': 'float'}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
-        'objective': {'sense': 'minimize', 'expression': 'x * cost'},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x * cost)'},
     }
     path = tmp_path / 'widening.yaml'
     path.write_text(pyyaml.safe_dump(model))
@@ -327,7 +327,7 @@ FLAG_MODEL = {
     'parameters': {'active': {'dims': ['g'], 'dtype': 'bool'}},
     'variables': {'x': {'foreach': ['g'], 'where': 'active', 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
-    'objective': {'sense': 'maximize', 'expression': 'x'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
 
@@ -373,7 +373,7 @@ def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: 
         'parameters': {'fuel': {'dims': ['g'], 'dtype': 'str'}},
         'variables': {'x': {'foreach': ['g'], 'where': 'fuel', 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'foreach': [], 'expression': 'sum(x, over=g) <= 9'}},
-        'objective': {'sense': 'maximize', 'expression': 'x'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     path = tmp_path / 'fuel.yaml'
     path.write_text(pyyaml.safe_dump(model))
@@ -391,7 +391,7 @@ LOOKUP_MODEL = {
     'parameters': {'p_max': {'dims': ['g']}},
     'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 10'}},
-    'objective': {'sense': 'maximize', 'expression': 'x'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
 _P_MAX = {'p_max': _tidy(g=['w', 's'], value=[5.0, 5.0])}
@@ -481,7 +481,7 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
         'parameters': {'cap': {'dims': ['g']}},
         'variables': {'x': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'constraints': {'k': {'foreach': ['b'], 'expression': 'sum(x, by=gen_bus) <= 100'}},
-        'objective': {'sense': 'maximize', 'expression': 'x'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     path = tmp_path / 'entity.yaml'
     path.write_text(pyyaml.safe_dump(model))

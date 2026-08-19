@@ -87,7 +87,7 @@ def test_a_dict_built_model_gets_a_file():
         'parameters': {'cost': {'dims': ['t']}},
         'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'cap': {'foreach': ['t'], 'expression': 'x <= 4'}},
-        'objective': {'sense': 'maximize', 'expression': 'x * cost'},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
     }
     text = lps.load_model(built).to_yaml()
 
@@ -133,7 +133,7 @@ def test_absence_is_dropped_and_values_are_kept():
         {
             'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
             'variables': {'x': {'foreach': ['t']}},
-            'objective': {'sense': 'minimize', 'expression': 'x'},
+            'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
         }
     ).to_yaml()
 
@@ -156,7 +156,7 @@ def test_json_carries_a_model_too():
         {
             'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
             'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0}}, 'y': {'foreach': ['t']}},
-            'objective': {'sense': 'minimize', 'expression': 'x + y'},
+            'objective': {'sense': 'minimize', 'expression': 'sum(x) + sum(y)'},
         }
     )
     assert json.loads(model.model_dump_json()) == model.to_dict()

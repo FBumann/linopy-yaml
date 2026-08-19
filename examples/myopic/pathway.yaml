@@ -55,4 +55,4 @@ constraints:
 objective:
   sense: minimize
   description: annualised cost of what is built, plus what running it costs across the year
-  expression: sum(invest * build, over=generator) + sum(weight * cost * p, over=generator)
+  expression: sum(invest * build) + sum(weight * cost * p)

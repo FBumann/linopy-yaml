@@ -51,5 +51,5 @@ constraints:
 
 objective:
   sense: minimize
-  expression: p * cost
+  expression: sum(p * cost)
 

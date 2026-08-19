@@ -288,6 +288,13 @@ def _build_objective(ctx: EvaluationContext) -> None:
 
     An objective has no ``where``, so its divisor check runs with no row mask
     — the numerator's own presence is the only thing that can excuse a gap.
+
+    The expression is scalar by the time it gets here, ``check_schema`` having
+    refused one carrying dims. That is what lets it be evaluated like any
+    other: an eager ``+`` broadcasts its operands, so a lane that added the
+    terms of ``x[i] * a[i] + y[j] * b[j]`` and summed afterwards would count
+    each once per coordinate of the other (#197) — and now nothing has to,
+    because the file said where each sum ends.
     """
     odef = ctx.schema.objective
     if odef is None:
@@ -301,65 +308,10 @@ def _build_objective(ctx: EvaluationContext) -> None:
 
         check_divisors_cover('the objective', ast, ctx.schema, ctx.dataset, None, ctx.model)
 
-        expr = _objective_expression(ast, ctx)
+        expr = _eval_ast(ast, ctx)
 
         sense = 'min' if odef.sense == 'minimize' else 'max'
         ctx.model.add_objective(expr, overwrite=True, sense=sense)
-
-
-def _objective_expression(node: ArithmeticNode, ctx: EvaluationContext) -> Any:
-    """*node* as a scalar: each additive term summed over the dims it carries.
-
-    An objective has no ``foreach``, so every dim it names is summed (the declaration rules)
-    — but *which* dims, per term rather than per objective. In
-    ``x[i] * a[i] + y[j] * b[j]`` the first term has ``|i|`` summands and the
-    second ``|j|``. Adding the operands first, as linopy's ``+`` does,
-    broadcasts both to ``(i, j)`` and counts each term once per coordinate of
-    the other, so an objective spanning a sparse and a dense variable comes out
-    multiplied rather than summed.
-
-    The relational lane never had the problem, an expression there being term
-    fragments that each keep their own dims. Distributing the sum over addition
-    reproduces that, which is what hard rule 3 requires (#197).
-    """
-    total: Any = None
-    for term in _additive_terms(node, ctx):
-        scalar = term.sum() if hasattr(term, 'sum') else term
-        total = scalar if total is None else total + scalar
-    return total
-
-
-def _additive_terms(node: ArithmeticNode, ctx: EvaluationContext) -> list[Any]:
-    """*node* as a list of terms to be summed, multiplication distributed.
-
-    Only the operators that distribute are walked; everything else is one
-    opaque term, an operator call having already reduced whatever it reduces.
-    Distribution is what keeps ``(x[i] * a[i] + y[j] * b[j]) * c[k]`` two terms
-    rather than one broadcast to ``(i, j, k)``.
-
-    Degree 1 makes it safe: ``degree.check_binary`` has already refused the one
-    product that would not survive, and a divisor carries no variables, so it
-    is a single value applied to each term.
-    """
-    if isinstance(node, UnaryOperatorNode) and node.op in {'+', '-'}:
-        terms = _additive_terms(node.operand, ctx)
-        return [-t for t in terms] if node.op == '-' else terms
-
-    if isinstance(node, BinaryOperatorNode):
-        degree.check_binary(node)
-        if node.op == '+':
-            return _additive_terms(node.left, ctx) + _additive_terms(node.right, ctx)
-        if node.op == '-':
-            return _additive_terms(node.left, ctx) + [-t for t in _additive_terms(node.right, ctx)]
-        if node.op == '*':
-            return [
-                left * right for left in _additive_terms(node.left, ctx) for right in _additive_terms(node.right, ctx)
-            ]
-        if node.op == '/':
-            divisor = _eval_ast(node.right, ctx)
-            return [term / divisor for term in _additive_terms(node.left, ctx)]
-
-    return [_eval_ast(node, ctx)]
 
 
 # ---------------------------------------------------------------------------

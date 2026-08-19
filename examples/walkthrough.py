@@ -61,7 +61,7 @@ _REFUSED = [
     ),
     (
         'variable x variable — above the degree-1 ceiling',
-        {'objective': {'sense': 'minimize', 'expression': 'sum(p * p, over=generator)'}},
+        {'objective': {'sense': 'minimize', 'expression': 'sum(p * p)'}},
     ),
 ]
 

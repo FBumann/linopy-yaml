@@ -51,7 +51,7 @@ constraints:
     expression: sum(p, over=generator) >= load
 objective:
   sense: minimize
-  expression: cap * invest + p * cost
+  expression: sum(cap * invest) + sum(p * cost)
 ```
 
 ## The split is one substitution
@@ -82,7 +82,7 @@ constraints:
     expression: sum(p, over=generator) >= load
 objective:
   sense: minimize
-  expression: p * cost
+  expression: sum(p * cost)
 ```
 
 Note what is *not* here: no `invest`, no `cap` bounds, no investment term. The
@@ -121,7 +121,7 @@ constraints:
     expression: sum(fcut_slope * cap, over=generator) <= fcut_const
 objective:
   sense: minimize
-  expression: cap * invest + theta
+  expression: sum(cap * invest) + theta
 ```
 
 **`cut` and `fcut` take their members from data**
@@ -185,13 +185,13 @@ variables:
 constraints:
   capacity:
     foreach: [snapshot, generator]
-    expression: p <= cap_hat * avail
+    expression: sum(p)<= cap_hat * avail
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) + short >= load
 objective:
   sense: minimize
-  expression: short
+  expression: sum(short)
 ```
 
 Its optimum is zero exactly when the subproblem is feasible, and its capacity

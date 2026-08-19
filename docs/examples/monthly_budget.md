@@ -54,7 +54,7 @@ A cap on what each technology may generate per calendar month — an aggregate o
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{t,g} \cdot c_{g}$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot c_{g}$$
 
 #### Subject to
 
@@ -135,7 +135,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: total cost of generation over the horizon
-      expression: sum(p * cost, over=generator)
+      expression: sum(p * cost)
     ```
 
     ```python

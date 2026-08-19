@@ -56,7 +56,7 @@ $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leav
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \left( p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \mathit{start\_up}_{t,g} \cdot \mathit{start\_up\_cost}_{g} + \mathit{shut\_down}_{t,g} \cdot \mathit{shut\_down\_cost}_{g} \right)$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{start\_up}_{t,g} \cdot \mathit{start\_up\_cost}_{g} + \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{shut\_down}_{t,g} \cdot \mathit{shut\_down\_cost}_{g}$$
 
 #### Subject to
 
@@ -226,7 +226,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: what the fleet costs to run, plus what its starts and stops cost
-      expression: p * marginal_cost + start_up * start_up_cost + shut_down * shut_down_cost
+      expression: sum(p * marginal_cost) + sum(start_up * start_up_cost) + sum(shut_down * shut_down_cost)
     ```
 
     ```python

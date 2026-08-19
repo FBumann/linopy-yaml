@@ -151,7 +151,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
     objective:
       sense: minimize
       description: total operating cost, taken off the curves rather than from a marginal rate
-      expression: op_cost
+      expression: sum(op_cost)
     ```
 
     ```python

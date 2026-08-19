@@ -262,9 +262,9 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       sense: minimize
       description: discounted cost of building, holding and running the system over the pathway
       expression: >-
-        build * build_cost
-        + built_capacity * holding_cost
-        + activity * running_cost
+        sum(build * build_cost)
+        + sum(built_capacity * holding_cost)
+        + sum(activity * running_cost)
         + residual_holding
     ```
 

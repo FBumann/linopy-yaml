@@ -36,4 +36,4 @@ constraints:
 objective:
   sense: minimize
   description: total cost of generation over the horizon
-  expression: p * cost
+  expression: sum(p * cost)
