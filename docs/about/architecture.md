@@ -308,14 +308,18 @@ choice load-bearing in the language's rulebook.
    backend cannot hold its own opinion about what a name refers to. The waist is
    closed from the front too: nothing under `language/` imports `lowering`,
    `sources`, `api` or any consuming subpackage (`LANGUAGE_MAY_IMPORT`), so what
-   a model *means* cannot depend on what is done with it. `load_model` sits
+   a model *means* cannot depend on what is done with it. `LANGUAGE_MAY_IMPORT`
+   is now the **empty set**: the language raises its own errors, so the
+   directory imports nothing from the package at all and could be lifted into a
+   package of its own without an edit. `load_model` sits
    inside that fence — parsing and validating is the language's own job, and a
    consumer that binds no data must reach it without reaching a runner; `api.py`
    re-exports it so callers keep saying `lps.load_model`. The traffic the other
    way is shaped too: a consumer reads the AST through `lpspec.language` itself
    and never through a module under it, so what the waist promises is
-   **forty-nine names in one `__all__`** — thirty-one node types and eighteen
-   oracles, front doors and message builders — rather than the union of
+   **fifty-six names in one `__all__`** — thirty-one node types, seven for the
+   errors it raises, and eighteen oracles, front doors and message builders —
+   rather than the union of
    whatever eleven submodules happen to expose. That list is pinned in both
    directions, so an export nobody imports fails as loudly as an import nobody
    exported, and a private name in it fails on sight.
@@ -327,10 +331,14 @@ choice load-bearing in the language's rulebook.
    `status.py`, `chunking.py` — is what any implementation answers to. An
    engine package is named for its engine; nothing *inside* one is.
    Enforced *more* strictly than stated — it imports nothing from the
-   package at all, bar declared dependency-free leaves (`errors.py` and
-   `frames.py`, in `ENGINE_MAY_IMPORT`), because a near-zero import surface is
-   what keeps the subpackage extractable. Widening that list is a decision, not
-   an accident.
+   package at all, bar two declared leaves (`errors.py` and `frames.py`, in
+   `ENGINE_MAY_IMPORT`), because a near-zero import surface is what keeps the
+   subpackage extractable. Widening that list is a decision, not an accident.
+   **`errors.py` is a leaf by name and not by cost**: it re-exports the
+   language's half of the hierarchy, so importing it loads the language. That
+   is the price of the root class living upstream of everything that extends
+   it, and it is the engine still raising `LanguageError` that makes the
+   re-export load-bearing rather than a convenience.
 3. **One language, two lanes — not fast-vs-slow versions of each other.** Both
    build the models a file declares: the streaming engine binds and solves
    relationally, the linopy lane constructs a `linopy.Model` the caller owns.
@@ -493,6 +501,7 @@ it.
 | `language/boundedness.py` | the models no data can bound: a free variable the objective improves toward infinity, named by `check` |
 | `language/operators.py` | the closed set of built-in operators: their *names* and *call shapes* — no registry |
 | `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_model`, the language's front door |
+| `language/errors.py` | the model half of the exception hierarchy, and the root the run half extends |
 | `language/piecewise.py` | `piecewise:` → λ-formulation declarations |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_model` |
 | `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/typeset/README.md)) |
@@ -500,7 +509,7 @@ it.
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `method: convex` curvature guard, which is the one check that needs values |
 | `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver, the linopy lane and the engine |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
-| `errors.py` | the exception hierarchy; the one module either fenced side may import |
+| `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.` |
 | `_notes.py` | attach context to an exception on the way out; no package imports, no opinions |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `relational/plan.py` | frozen logical-plan dataclasses — what an engine consumes |
@@ -540,9 +549,10 @@ the AST surface is one list rather than the union of eleven modules' internals.
 That is also what would survive the language being lifted into a package of its
 own: the fence is already the import a consumer would keep writing.
 
-`language/` and `relational/` are the two halves of the waist and their fences
-point the same way — outward, at `errors.py`, the one leaf both may import.
-`typeset/`'s points there too, which is what makes "a new consumer is free" a
+`language/` and `relational/` are the two halves of the waist, and their fences
+no longer point the same way. `relational/`'s points outward at `errors.py`;
+`language/`'s points nowhere, because it raises its own errors and `errors.py`
+imports *it*. `typeset/`'s points at `errors.py` too, which is what makes "a new consumer is free" a
 measurable claim rather than a hope: it is enforced twice, once on the names a
 renderer imports and once on the transitive closure behind them, because a
 consumer's real cost is what it drags in, not what it spells.

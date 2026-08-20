@@ -248,6 +248,12 @@ def test_engine_is_isolated():
     fed to the engine, and keeping the import surface at zero is what leaves
     the subpackage extractable. Widening it is a decision — add the module to
     ENGINE_MAY_IMPORT with a reason, the way ``errors.py`` is there.
+
+    What the engine *names* is checked here; what those names cost is not.
+    ``errors.py`` re-exports the language's half of the hierarchy, so importing
+    it now loads the language package too. That is deliberate and stated in
+    hard rule 2: a root class cannot live downstream of what extends it. The
+    day the engine stops raising ``LanguageError`` it could be a leaf again.
     """
     offenders = _reaches_past(
         'relational',
@@ -293,11 +299,13 @@ def test_no_contract_module_names_an_engine():
     )
 
 
-#: What ``language/`` may reach: itself, and the same dependency-free leaves the
-#: engine may reach. Both fences point at ``errors.py`` for the same reason —
-#: one exception hierarchy, owned by neither side. Widening this is a decision,
-#: exactly as widening ``ENGINE_MAY_IMPORT`` is.
-LANGUAGE_MAY_IMPORT = ENGINE_MAY_IMPORT
+#: What ``language/`` may reach: **nothing**. It used to reach ``errors.py`` for
+#: the exception hierarchy; the model half of that hierarchy now lives inside
+#: the language and the run half imports it, so the arrow points the other way
+#: and this set is empty. That is not tidiness — an empty set is the liftable
+#: claim, checked: the directory can be moved to a package of its own without
+#: an edit. Adding a name here takes that away.
+LANGUAGE_MAY_IMPORT: set[str] = set()
 
 
 def test_language_never_reaches_a_consumer():

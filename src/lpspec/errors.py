@@ -1,30 +1,35 @@
-"""The exception hierarchy, so that one ``except`` clause covers the package.
+"""The run half of the exception hierarchy, and the whole of it re-exported.
 
-The split that matters is **the model versus the run**:
-:class:`LanguageError` is the file saying something the language does not
-accept — decidable at load time, and what ``lps.check()`` raises;
-:class:`DataError` is a fine file with the wrong thing bound to it. Everything
-subclasses :class:`LpspecError`, which subclasses ``ValueError``.
+The split that matters is **the model versus the run**. The model half —
+:class:`LanguageError` and what derives from it, decidable at load time with no
+data bound — belongs to ``language/`` and is re-exported here, so one
+``except`` clause still covers the package and a caller keeps saying
+``lps.LanguageError``. What is defined here is the run: :class:`DataError` is a
+fine file with the wrong thing bound to it, :class:`LaneError` a file one lane
+cannot build, :class:`NoSolutionError` a solve with nothing to read back.
 
-``model.py``'s field validators raise plain ``ValueError``, since pydantic
-collects those into its own ``ValidationError`` and a custom class does not
-survive the trip; :func:`schema_error` turns one back at the API boundary.
-
-Deliberately dependency-free: the relational engine imports this module and
-nothing else from the package (docs/about/architecture.md, hard rule 2).
+**Not a leaf any more.** This module imports the language, because the root of
+the hierarchy has to live upstream of every class that extends it. The engine
+still names only this module and ``frames.py``; what it now costs to import is
+the language package behind them (docs/about/architecture.md, hard rule 2).
 """
 
 from __future__ import annotations
 
-import difflib
 from typing import TYPE_CHECKING, Any
+
+from lpspec.language import (
+    DimensionError,
+    LanguageError,
+    LpspecError,
+    PiecewiseExpansionError,
+    SchemaError,
+    did_you_mean,
+    schema_error,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
-
-
-class LpspecError(ValueError):
-    """Base class for every error this package raises on purpose."""
 
 
 class LpspecWarning(UserWarning):
@@ -33,33 +38,6 @@ class LpspecWarning(UserWarning):
     A warning rather than an error because the reading may be deliberate — a
     model part-written declares what its expressions have not reached yet.
     """
-
-
-# ---------------------------------------------------------------------------
-# The model is the problem — decidable without data
-# ---------------------------------------------------------------------------
-
-
-class LanguageError(LpspecError):
-    """The model is not sayable in the language, or does not obey its rules."""
-
-
-class SchemaError(LanguageError):
-    """**The declarations themselves are wrong**, before any expression is read.
-
-    An unknown key, a bad ``dtype``, a duplicate YAML key, a
-    version this reader does not know — as against a bare
-    :class:`LanguageError`, which is sound declarations saying something the
-    language rejects (an undeclared name, a dim rule, degree 2).
-    """
-
-
-class DimensionError(LanguageError):
-    """A dim-set rule was violated. Raised at load time, before any data."""
-
-
-class PiecewiseExpansionError(LanguageError):
-    """A piecewise block references something that doesn't exist or collides."""
 
 
 # ---------------------------------------------------------------------------
@@ -93,25 +71,16 @@ class NoSolutionError(LpspecError):
 __all__ = [
     'DataError',
     'DimensionError',
+    'LaneError',
     'LanguageError',
     'LpspecError',
+    'LpspecWarning',
     'NoSolutionError',
     'PiecewiseExpansionError',
     'SchemaError',
+    'did_you_mean',
+    'schema_error',
 ]
-
-
-def did_you_mean(name: str, known: Iterable[str], *, label: str = 'Declared') -> str:
-    """The repair clause for an unrecognised name: the near miss, or the set.
-
-    Only the clause is shared — an unknown declaration, an unknown YAML key and
-    an unknown symbol-table entry each frame it with a sentence of their own.
-    """
-    candidates = sorted(known)
-    near = difflib.get_close_matches(name, candidates, n=1, cutoff=0.6)
-    if near:
-        return f"Did you mean '{near[0]}'?"
-    return f'{label}: {", ".join(candidates) or "nothing"}.'
 
 
 def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
@@ -553,26 +522,3 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
         )
 
     return f"unknown {kind} '{name}'. {did_you_mean(name, candidates)}"
-
-
-def schema_error(exc: Any) -> LanguageError:
-    """A pydantic ``ValidationError`` as one of ours, keeping the class.
-
-    Pydantic wraps whatever a validator raises, so our own class cannot reach
-    the caller from inside the model — but the original survives under
-    ``ctx['error']``, so a :class:`DimensionError` comes back one. Anything
-    else, including several errors at once, is a :class:`SchemaError`.
-    """
-    errors = exc.errors()
-    lines = []
-    for error in errors:
-        message = str(error.get('msg', '')).removeprefix('Value error, ')
-        where = '.'.join(str(part) for part in error.get('loc', ()))
-        lines.append(f'{where}: {message}' if where else message)
-    text = '\n'.join(lines) or str(exc)
-
-    if len(errors) == 1:
-        original = errors[0].get('ctx', {}).get('error')
-        if isinstance(original, LanguageError):
-            return type(original)(text)
-    return SchemaError(text)
