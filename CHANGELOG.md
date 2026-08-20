@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.0.1-alpha.221](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.220...v0.0.1-alpha.221) (2026-08-20)
+
+
+### Features
+
+* **language:** a curve shorter than its breakpoint dimension says so ([#1115](https://github.com/fluxopt/lpspec/issues/1115)) ([45dc672](https://github.com/fluxopt/lpspec/commit/45dc672976aff62964ddfb1cf742e00f8addc7bc))
+* **language:** a curve's length is a fact of the curve ([#1117](https://github.com/fluxopt/lpspec/issues/1117)) ([3996273](https://github.com/fluxopt/lpspec/commit/3996273f6861fb23c15dd117328167cb34202933))
+
+
+### Bug Fixes
+
+* **data:** a breakpoint dimension with no index keeps its own message ([#1125](https://github.com/fluxopt/lpspec/issues/1125)) ([0ffef63](https://github.com/fluxopt/lpspec/commit/0ffef63df4e38ab84b35394073fe2ff85f7c9338))
+* **data:** a piecewise curve is judged as the model builds it ([#1126](https://github.com/fluxopt/lpspec/issues/1126)) ([c23102b](https://github.com/fluxopt/lpspec/commit/c23102b60342a37875e8096665740249923b82d7))
+* **language:** a curve varying along a dim no link carries is named on the link ([#1127](https://github.com/fluxopt/lpspec/issues/1127)) ([a51c151](https://github.com/fluxopt/lpspec/commit/a51c1518137eac091783fc7eab24533b31832d4d))
+
+
+### Documentation
+
+* **examples:** a gallery model whose curves are not all the same length ([#1119](https://github.com/fluxopt/lpspec/issues/1119)) ([1e9e7d1](https://github.com/fluxopt/lpspec/commit/1e9e7d1edec0e1591c01c1df9bafb8ab8e1df7cc))
+
 ## [0.0.1-alpha.220](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.219...v0.0.1-alpha.220) (2026-08-19)
 
 
