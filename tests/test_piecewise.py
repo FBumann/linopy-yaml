@@ -1278,57 +1278,34 @@ def test_both_lanes_build_a_link_below_the_frame(refined_inputs, tmp_path):
     assert float(built.objective.value) == pytest.approx(lps.solve(raw_of(REFINED), refined_inputs).objective)
 
 
-def test_a_links_where_splits_one_curve_into_pinned_and_bounded_rows(refined_inputs):
-    """One system, two senses — which is what a `where:` on a link is for.
+def test_a_link_below_the_frame_keeps_the_tuple_form():
+    """The map is the block's, so a link is two strings whichever frame it sits on."""
+    block = schema_of(raw_of(REFINED)).model_dump()['piecewise']['conversion']
 
-    The tuple form rations the sense: one non-`==` per block, and only with two
-    links. Two links under complementary masks give it per member instead, so a
-    system whose curves are pinned for some flows and bounded for others is one
-    block rather than two.
+    assert block['links'][0] == ['rate', 'bp_rate'], 'a link below the frame is still two strings'
+    assert block['by'] == 'converter_of', 'and the map is said once, by the block'
+
+
+def test_a_links_rows_follow_what_it_ties(refined_inputs):
+    """No mask on a link, because a masked expression already takes its rows.
+
+    A converter without one of the flows the curve ties builds no row for it,
+    and the build reports the omission rather than needing to be told.
     """
-    raw = override(
-        raw_of(REFINED),
-        **{
-            'parameters.pinned': {'dims': ['flow'], 'dtype': 'bool'},
-            'piecewise.conversion.links': [
-                {'expression': 'rate', 'values': 'bp_rate', 'where': 'pinned'},
-                {'expression': 'rate', 'values': 'bp_rate', 'sign': '>=', 'where': 'NOT pinned'},
-            ],
-        },
-    )
-    loose = {
+    fewer = refined_inputs['flow'].filter(pl.col('flow') != 'chp_power')
+    thin = {
         **refined_inputs,
-        'pinned': pl.DataFrame({'flow': list(REFINED_FLOWS), 'value': [True, False, True, True, True]}),
+        'flow': fewer,
+        'bp_rate': refined_inputs['bp_rate'].filter(pl.col('flow') != 'chp_power'),
+        'is_heat': refined_inputs['is_heat'].filter(pl.col('flow') != 'chp_power'),
+        'fuel_price': refined_inputs['fuel_price'].filter(pl.col('flow') != 'chp_power'),
     }
 
-    rows = expand_piecewise(schema_of(raw)).constraints
-    assert rows['conversion_link0'].where == 'pinned', 'the pinned rows are the first link'
-    assert rows['conversion_link1'].where == 'NOT pinned', 'and the bounded ones the second'
+    with lps.build(raw_of(REFINED), thin) as bound:
+        rows = {row['flow'] for row in bound.solve('highs').primal('rate').to_dicts()}
 
-    heat = {(r['flow'], r['time']): r['value'] for r in lps.solve(raw, loose).primal('rate').to_dicts()}
-    assert heat[('boiler_heat', 0)] >= 45.0 - 1e-9, 'the bounded flow meets the demand'
-    assert heat[('boiler_fuel', 0)] < 50.0, 'on less fuel than its curve would pin it to, which is what >= buys'
-
-
-def test_a_link_below_the_frame_keeps_the_tuple_form():
-    """The map is the block's, so the ordinary link spelling survives it.
-
-    Only a per-link `where:` needs the mapping form, since that is the one
-    thing about a link the block cannot say for all of them.
-    """
-    block = schema_of(raw_of(REFINED)).model_dump()['piecewise']['conversion']
-    assert block['links'][0] == ['rate', 'bp_rate'], 'a link below the frame is still two strings'
-    assert block['by'] == 'converter_of'
-
-    masked = override(
-        raw_of(REFINED),
-        **{
-            'parameters.pinned': {'dims': ['flow'], 'dtype': 'bool'},
-            'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'where': 'pinned'}],
-        },
-    )
-    dumped = schema_of(masked).model_dump()['piecewise']['conversion']['links'][0]
-    assert dumped == {'expression': 'rate', 'values': 'bp_rate', 'where': 'pinned'}
+    assert 'chp_power' not in rows, 'a flow that is not there ties nothing, and says so by absence'
+    assert {'chp_fuel', 'chp_heat'} <= rows, 'and the flows that remain still read one set of weights'
 
 
 @pytest.mark.parametrize(

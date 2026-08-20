@@ -438,7 +438,7 @@
       "anyOf": [
         {
           "additionalProperties": false,
-          "description": "One link of a piecewise block: an expression pinned to a values curve.\n\nWritten in YAML as ``[expression, values]`` or ``[expression, values,\nsign]`` and serialised back to exactly that form, so a round trip through\n:meth:`Model.to_yaml` reproduces the file.\n\n``where`` masks this link's rows, which is how one block holds curves\npinned for some members and bounded for others. A link carrying it is\nwritten as a mapping, and round-trips as one.",
+          "description": "One link of a piecewise block: an expression pinned to a values curve.\n\nWritten in YAML as ``[expression, values]`` or ``[expression, values,\nsign]`` and serialised back to exactly that form, so a round trip through\n:meth:`Model.to_yaml` reproduces the file.\n\nA link's rows exist where its expression does: a masked variable takes them\nwith it, which the build reports as an omission. So there is nothing here to\nsay about which rows are built.",
           "properties": {
             "expression": {
               "title": "Expression",
@@ -457,18 +457,6 @@
             "values": {
               "title": "Values",
               "type": "string"
-            },
-            "where": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "title": "Where"
             }
           },
           "required": [

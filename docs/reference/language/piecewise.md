@@ -147,9 +147,9 @@ Four things follow:
   and under `by:` those are the members the lookup carries — data, which no file
   can be checked against.
 
-A link may also carry `where:`, written as a mapping, which is how one block
-holds curves pinned by `==` for some members and bounded by `<=` for others:
-two links under complementary masks, sharing one set of weights.
+A link takes no mask of its own: its rows exist where its expression does, so a
+member missing the flow a curve ties builds no row for it and the build reports
+the omission.
 
 [The model](../../examples/piecewise_conversion.md) is a boiler tying two flows
 and a CHP tying three, on one axis, with neither number in the file.

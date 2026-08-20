@@ -358,9 +358,9 @@ class PiecewiseLink(_StrictBlock):
     sign]`` and serialised back to exactly that form, so a round trip through
     :meth:`Model.to_yaml` reproduces the file.
 
-    ``where`` masks this link's rows, which is how one block holds curves
-    pinned for some members and bounded for others. A link carrying it is
-    written as a mapping, and round-trips as one.
+    A link's rows exist where its expression does: a masked variable takes them
+    with it, which the build reports as an omission. So there is nothing here to
+    say about which rows are built.
     """
 
     _label: ClassVar[str] = 'a piecewise link'
@@ -368,7 +368,6 @@ class PiecewiseLink(_StrictBlock):
     expression: str
     values: str
     sign: LinkSign = '=='
-    where: str | None = None
 
     @model_validator(mode='before')
     @classmethod
@@ -387,12 +386,7 @@ class PiecewiseLink(_StrictBlock):
         return _also_written_as(core_schema, handler, list_form)
 
     @model_serializer
-    def _as_list(self) -> list[str] | dict[str, str]:
-        if self.where is not None:
-            written = {'expression': self.expression, 'values': self.values}
-            if self.sign != '==':
-                written['sign'] = self.sign
-            return written | {'where': self.where}
+    def _as_list(self) -> list[str]:
         return [self.expression, self.values] if self.sign == '==' else [self.expression, self.values, self.sign]
 
 

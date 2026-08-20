@@ -146,7 +146,6 @@ def expand_piecewise(schema: Model) -> Model:
             weights = f'at({lam}, by={pw.by})' if below else lam
             raw['constraints'][f'{name}_link{i}'] = {
                 'foreach': rows if below else list(frame),
-                **({'where': link.where} if link.where else {}),
                 'expression': (f'({link.expression}) {link.sign} sum({weights} * {link.values}, over={pw.over})'),
             }
         if pw.method == 'sos2':
