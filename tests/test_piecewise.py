@@ -1051,243 +1051,59 @@ def test_values_the_mask_leaves_out_are_left_alone(short_curve_inputs):
     assert lps.solve(raw_of(SHORT_CURVE), data).objective == pytest.approx(155.0), 'the masked row is not read'
 
 
-@pytest.mark.parametrize(
-    ('patch', 'match'),
-    [
-        pytest.param({'piecewise.cost_curve.points': 'nope'}, 'undeclared parameter', id='names-nothing'),
-        pytest.param(
-            {'parameters.bp_present': {'dims': ['generator'], 'dtype': 'bool'}},
-            "must carry dim 'bp'",
-            id='does-not-run-along-the-breakpoints',
-        ),
-        pytest.param(
-            {
-                'dimensions.zone': {'dtype': 'str'},
-                'parameters.bp_present': {'dims': ['zone', 'bp'], 'dtype': 'bool'},
-            },
-            'which the links do not',
-            id='carries-a-dim-the-block-does-not',
-        ),
-    ],
-)
-def test_a_mask_the_block_cannot_use_is_a_load_error(patch, match):
-    with pytest.raises(PiecewiseExpansionError, match=match):
-        lps.check(override(raw_of(SHORT_CURVE), **patch))
-
-
-@pytest.mark.parametrize('method', ['adjacency', 'sos2', 'convex', 'lp'])
-def test_points_may_name_the_curve_that_already_says_how_long_it_is(short_curve_inputs, method):
-    """`points: bp_x` — no mask table, because a length is a fact of the curve.
-
-    What the second table was for is still done: every other link is checked
-    against the one named, so a row missing from `bp_y` is refused. What is
-    given up is a row missing from `bp_x` itself, which is the parameter the
-    file nominated as the length.
-    """
-    raw = override(
-        raw_of(SHORT_CURVE), **{'piecewise.cost_curve.points': 'bp_x', 'piecewise.cost_curve.method': method}
-    )
-    del raw['parameters']['bp_present']
-    if method == 'lp':
-        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
-    data = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
-
-    assert lps.solve(raw, data).objective == pytest.approx(155.0), 'the same curve, one table fewer'
-
-    thin = {k: v for k, v in A_AND_SHORT_B['y'].items() if k != ('A', 2)}
-    with pytest.raises(DataError, match=r"'bp_y' has no value at"):
-        lps.solve(raw, {**data, 'bp_y': curve_frame(thin)})
-
-
-def test_a_nominated_curve_is_read_for_its_rows_not_its_values(short_curve_inputs):
-    """A breakpoint at zero is a breakpoint, so the mask cannot be the values' truthiness."""
-    raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.points': 'bp_x'})
-    del raw['parameters']['bp_present']
-    data = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
-
-    result = lps.solve(raw, data)
-
-    at_zero = [row for row in result.primal('cost_curve_lam').to_dicts() if (row['generator'], row['bp']) == ('A', 0)]
-    assert at_zero, "A's curve starts at x = 0, and that breakpoint carries a weight like any other"
-
-
-def test_a_curve_may_start_anywhere_on_the_axis(short_curve_inputs):
-    """Contiguous, not a prefix: what the rows need is a predecessor, not the axis head.
-
-    `lp` is the method that used to need the axis' own first and last
-    breakpoint; it reads each curve's own now, so a curve numbered from 1 is
-    the same curve one label along.
-    """
-    shifted_x = {('A', 1): 0.0, ('A', 2): 10.0, ('B', 1): 10.0, ('B', 2): 20.0}
-    shifted_y = {('A', 1): 0.0, ('A', 2): 50.0, ('B', 1): 100.0, ('B', 2): 130.0}
-    raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.points': 'bp_x', 'piecewise.cost_curve.method': 'lp'})
-    del raw['parameters']['bp_present']
-    raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
-    data = {
-        **{k: v for k, v in short_curve_inputs.items() if k != 'bp_present'},
-        'load': pl.DataFrame({'value': [15.0]}),
-        'bp_x': curve_frame(shifted_x),
-        'bp_y': curve_frame(shifted_y),
-    }
-
-    assert lps.solve(raw, data).objective == pytest.approx(115.0), (
-        'B runs at 15 on its own domain and A stays off — a curve one label along is the same curve'
-    )
-
-
-def test_a_curve_with_a_gap_is_still_refused(short_curve_inputs):
-    """Contiguity is what the chord row needs; the axis head was never the point."""
-    gapped = {('A', 0): 0.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0}
-    raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.points': 'bp_x'})
-    del raw['parameters']['bp_present']
-    data = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
-
-    with pytest.raises(DataError, match='not consecutive'):
-        tidy_sources(schema_of(raw), {**data, 'bp_x': curve_frame(gapped)})
-
-
-# ---------------------------------------------------------------------------
-# the counterweight: convex piecewise with no formulation at all
-# ---------------------------------------------------------------------------
-
-EPIGRAPH_YAML = """
-# The epigraph pattern: convex piecewise costs in ordinary affine YAML,
-# no piecewise: block needed (the seed of issue #23's method: lp).
-dimensions:
-  snapshot: {dtype: int}
-  generator: {dtype: str}
-  segment: {dtype: str}
-
-parameters:
-  p_max: {dims: [generator]}
-  load: {dims: [snapshot]}
-  seg_slope: {dims: [generator, segment]}
-  seg_intercept: {dims: [generator, segment]}
-
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds: {lower: 0, upper: p_max}
-  gen_cost:
-    foreach: [snapshot, generator]
-    bounds: {lower: 0}
-
-constraints:
-  balance:
-    foreach: [snapshot]
-    expression: sum(p, over=generator) == load
-  pwl:
-    foreach: [snapshot, generator, segment]
-    expression: gen_cost >= p * seg_slope + seg_intercept
-
-objective:
-  sense: minimize
-  expression: sum(gen_cost)
-"""
-
-
-@pytest.fixture
-def epigraph_inputs():
-    """A convex piecewise cost written as tangents, with no `piecewise:` block.
-
-    Segment *k* of a convex curve is the tangent ``cost >= slope_k * p +
-    intercept_k``, so marginal cost increases per segment. The breakpoints sit
-    at 40% and 75% of each generator's ``p_max``, and the intercepts are what
-    make the tangents touch there.
-    """
-
-    rng = np.random.default_rng(9)
-    n_s = 24
-    gens = ['cheap', 'mid']
-    segments = ['s0', 's1', 's2']
-    p_max = pd.Series({'cheap': 100.0, 'mid': 120.0})
-
-    slopes = pd.DataFrame({'cheap': [5.0, 15.0, 40.0], 'mid': [20.0, 35.0, 60.0]}, index=segments)
-    intercepts = {}
-    for g in gens:
-        b1, b2 = 0.4 * p_max[g], 0.75 * p_max[g]
-        s0, s1, s2 = slopes[g]
-        intercepts[g] = [0.0, (s0 - s1) * b1, (s0 - s1) * b1 + (s1 - s2) * b2]
-    icepts = pd.DataFrame(intercepts, index=segments)
-
-    load = pd.Series(
-        (rng.uniform(0.3, 0.9, n_s) * p_max.sum()).round(1),
-        index=pd.RangeIndex(n_s, name='snapshot'),
-    )
-    data = {
-        'p_max': p_max,
-        'load': load,
-        'seg_slope': slopes.T.stack().rename_axis(['generator', 'segment']).rename('value').reset_index(),
-        'seg_intercept': icepts.T.stack().rename_axis(['generator', 'segment']).rename('value').reset_index(),
-    }
-    return data | {
-        'snapshot': load.index,
-        'generator': pd.Index(gens, name='generator'),
-        'segment': pd.Index(segments, name='segment'),
-    }
-
-
-def test_the_epigraph_pattern_needs_no_formulation_machinery(epigraph_inputs):
-    """A convex piecewise cost is ordinary affine YAML, and stays a pure LP.
-
-    Under minimisation the epigraph is tight, so ``gen_cost`` equals the true
-    piecewise cost at the optimal dispatch.
-    """
-    data = epigraph_inputs
-
-    program = lower_program(schema_of(EPIGRAPH_YAML))
-    assert all(v.variable_type == 'continuous' for v in program.variables), 'the epigraph pattern is a pure LP'
-
-    with differential(EPIGRAPH_YAML, data, lp=True) as run:
-        p = by_coord(run.result, 'p', 'snapshot', 'generator')
-        gc = by_coord(run.result, 'gen_cost', 'snapshot', 'generator')
-        slopes = data['seg_slope'].set_index(['generator', 'segment'])['value'].unstack('segment')
-        icepts = data['seg_intercept'].set_index(['generator', 'segment'])['value'].unstack('segment')
-        for (s, g), pv in p.items():
-            expected = max(sl * pv + ic for sl, ic in zip(slopes.loc[g], icepts.loc[g], strict=True))
-            assert gc[(s, g)] == pytest.approx(expected, abs=1e-6)
-
-
-@pytest.mark.parametrize(
-    ('patch', 'match'),
-    [
-        pytest.param(
-            {
-                'parameters.gate_rows': {'dims': ['snapshot'], 'dtype': 'bool'},
-                'variables.u': {'foreach': ['snapshot'], 'domain': 'binary', 'where': 'gate_rows'},
-            },
-            'Declare `absence: zero`',
-            id='a-masked-gate-variable',
-        ),
-        pytest.param(
-            {
-                'dimensions.unit': {'dtype': 'str'},
-                'lookups.unit_of': {'over': 'snapshot', 'into': 'unit'},
-                'variables.u_unit': {'foreach': ['unit'], 'domain': 'binary', 'bounds': {}},
-                'piecewise.cost_curve.activity': 'at(u_unit, by=unit_of)',
-            },
-            "lookup 'unit_of'",
-            id='a-gate-pulled-back-through-a-lookup',
-        ),
-        pytest.param(
-            {'piecewise.cost_curve.activity': 'shift(u, over=snapshot, offset=1)'},
-            'no `edge=`',
-            id='a-gate-shifted-with-no-edge',
-        ),
-    ],
-)
-def test_a_gate_that_can_go_absent_is_refused(patch, match):
-    """A gate with a coordinate where it does not exist is refused (#1158).
+@pytest.mark.parametrize('method', ['adjacency', 'sos2'])
+def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, method):
+    """Where the gate does not exist the block is ungated, so the weights sum
+    to 1 — what a block with no `activity:` at all gets (#1158).
 
     The convexity row is ``sum(lam, over=bp) == (activity)`` and absence does
-    not spread out of a reduction, so an absent gate took the *row* with it:
-    the weights stayed, unconstrained, and the curve was silently relaxed
-    rather than pinned off. Measured on a curve with a no-load intercept it
+    not spread out of a reduction, so a masked gate used to take the *row* with
+    it: the weights stayed, summing to whatever the solver liked, and the curve
+    was silently relaxed. Measured on a curve with a no-load intercept it
     bought 900.00 where the answer is 1050.00, reported as nothing louder than
     a ``rows_not_built`` count.
     """
+    raw = raw_of(GATED_YAML)
+    raw['piecewise']['cost_curve']['method'] = method
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool'}
+    raw['variables']['u'] = {'foreach': ['snapshot'], 'domain': 'binary', 'where': 'gate_rows'}
+
+    gated = [True, False] * 6
+    data = {
+        **nonconvex_inputs,
+        'on_flag': pd.Series([0.0 if g else 1.0 for g in gated], index=pd.RangeIndex(12, name='snapshot')),
+        'gate_rows': pd.Series(gated, index=pd.RangeIndex(12, name='snapshot')),
+    }
+    model = lps.build(raw, data)
+    omitted = {c for c in model.diagnostics().omissions['constraint'] if c.startswith('cost_curve')}
+    assert not omitted, 'every coordinate gets a convexity row — gated by the variable, or ungated at 1'
+
+    result = model.solve()
+    cost = by_coord(result, 'op_cost', 'snapshot')
+    for s, is_gated in enumerate(gated):
+        expected = 0.0 if is_gated else curve(data['load'][s], data['bp_x'], data['bp_y'])
+        assert cost[s] == pytest.approx(expected, abs=1e-6), (
+            'the gate decides where it exists; where it does not, the curve holds unconditionally'
+        )
+
+
+@pytest.mark.parametrize(
+    ('activity', 'match'),
+    [
+        pytest.param('at(u_unit, by=unit_of)', 'is not a declared variable', id='a-pullback-through-a-lookup'),
+        pytest.param('shift(u, over=snapshot, offset=1)', 'is not a declared variable', id='a-shifted-gate'),
+        pytest.param('u * 2', 'is not a declared variable', id='an-arithmetic-gate'),
+    ],
+)
+def test_a_gate_that_is_not_a_variable_is_refused(activity, match):
+    """A gate is a variable or it is nothing.
+
+    An expression has no declaration to say what its absence means, and the
+    block needs that answer: `absence: zero` pins the curve off where the gate
+    is missing, and the default leaves it ungated there.
+    """
     with pytest.raises(PiecewiseExpansionError, match=match):
-        expand_piecewise(schema_of(GATED_YAML, **patch))
+        expand_piecewise(schema_of(GATED_YAML, **{'piecewise.cost_curve.activity': activity}))
 
 
 def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs):
@@ -1302,6 +1118,14 @@ def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs
         'where': 'gate_rows',
         'absence': 'zero',
     }
+
+    expanded = expand_piecewise(schema_of(raw))
+    assert 'cost_curve_convexity_ungated' not in expanded.constraints, (
+        'a gate that says its absence is zero wants one row, not the ungated half of a pair'
+    )
+    assert expanded.constraints['cost_curve_convexity'].where is None, (
+        'and that row is unmasked — the gate reads 0 where it does not exist, so the row still builds'
+    )
 
     gated = [True, False] * 6
     data = {

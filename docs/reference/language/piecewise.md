@@ -49,26 +49,32 @@ values parameter short of a row does not build a shorter curve: the
 coefficient, which is a breakpoint at the origin the file never declared. Such a
 table is refused when data binds.
 
-**A gate exists everywhere the curve does.** The convexity row reads
-`sum(lam, over=bp) == (activity)`, and [absence](absence.md#how-absence-travels)
-does not spread out of a reduction: where the gate is absent the *row* is not
-built, so the weights it was holding down are left free and the curve is
-relaxed rather than pinned off — a cheaper answer off the curve, with nothing
-but a `rows_not_built` count to say so. A gate under a `where:` therefore has to
-say what its absence *means*, and `absence: zero` is what says the curve is off
-there:
+**A gate is a variable, or there is none.** `activity:` names a binary
+variable, and the weights sum to it instead of to 1 — so `0` pins the curve
+off, columns and all. It has to be a *declaration* rather than an expression,
+because a masked gate has coordinates where it does not exist and only a
+declaration says what that means:
 
 <!-- doctest: wrap=variables -->
 ```yaml
 running:
   foreach: [snapshot, generator]
   domain: binary
-  where: committable
-  absence: zero  # no gate here means no curve here, not no row here
+  where: committable      # only some units have a commitment decision
 ```
 
-A gate read through a lookup, or through a `shift` with no `edge=`, has no such
-spelling — both are refused when the block loads, before any data binds.
+**Where the gate does not exist, the curve is ungated** — the block emits the
+convexity row twice under complementary masks, `== running` where the gate is
+and `== 1` where it is not, which is what a block with no `activity:` at all
+gets. Say the opposite with `absence: zero` on the gate, and the single row
+reads `== 0` there: no curve rather than an unconditional one. Both readings
+are the file's; neither is inferred.
+
+The row cannot simply be left to drop, and that is the reason for the pair: it
+is `sum(lam, over=bp) == (activity)`, and
+[absence](absence.md#how-absence-travels) does not spread out of a reduction,
+so an absent right-hand side would take the whole row with it and leave the
+weights with nothing making them a curve.
 
 **The breakpoint order is `over`'s index order**, the one every dimension has:
 the order its labels are first written in, which `shift` walks and

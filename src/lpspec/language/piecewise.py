@@ -60,20 +60,12 @@ from typing import TYPE_CHECKING, Any
 from lpspec.language.degree import check_expression
 from lpspec.language.dimensions import dims_of
 from lpspec.language.errors import LanguageError, PiecewiseExpansionError
-from lpspec.language.expression_parser import (
-    ArithmeticNode,
-    ComparisonNode,
-    FunctionCallNode,
-    LookupNode,
-    VariableNode,
-    children,
-    parse_expression,
-)
+from lpspec.language.expression_parser import ComparisonNode, parse_expression
 from lpspec.language.model import Model, PiecewiseBlock
 from lpspec.language.resolution import Namespace, resolve_expression
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Sequence
 
 
 def mask_of(block: str, pw: PiecewiseBlock) -> str | None:
@@ -89,6 +81,28 @@ def mask_of(block: str, pw: PiecewiseBlock) -> str | None:
     if pw.points is None:
         return None
     return f'{block}_points' if pw.points in {link.values for link in pw.links} else pw.points
+
+
+def _gate_rows(schema: Model, pw: PiecewiseBlock) -> tuple[tuple[str, str | None, str], ...]:
+    """What the weights sum to, as ``(name suffix, where, right-hand side)``.
+
+    One row where the gate exists at every coordinate the block builds a curve
+    for, and **two** where it does not. A gate is a variable, so a masked one
+    has coordinates where it does not exist — and there the block is ungated,
+    which is the ``1`` a block with no ``activity:`` gets. Written as a single
+    row it would instead be *no row*: absence does not spread out of a
+    reduction, so the right-hand side would take the row with it and leave the
+    weights without the convexity that makes them a curve at all (#1158).
+
+    ``absence: zero`` is the other reading and stays one row — the gate is 0
+    where it does not exist, so the curve is pinned off there.
+    """
+    if pw.activity is None:
+        return (('', None, '1'),)
+    gate = schema.variables[pw.activity]
+    if gate.where is None or gate.absence == 'zero':
+        return (('', None, f'({pw.activity})'),)
+    return (('', pw.activity, f'({pw.activity})'), ('_ungated', f'NOT {pw.activity}', '1'))
 
 
 def expand_piecewise(schema: Model) -> Model:
@@ -143,11 +157,13 @@ def expand_piecewise(schema: Model) -> Model:
             'bounds': {'lower': 0.0, 'upper': 1.0},
             'description': 'convex-combination weight on a breakpoint',
         }
-        rhs = f'({pw.activity})' if pw.activity else '1'
-        raw['constraints'][f'{name}_convexity'] = {
-            'foreach': list(frame),
-            'expression': f'sum({lam}, over={pw.over}) == {rhs}',
-        }
+        gated = _gate_rows(schema, pw)
+        for suffix, where, rhs in gated:
+            raw['constraints'][f'{name}_convexity{suffix}'] = {
+                'foreach': list(frame),
+                **({'where': where} if where else {}),
+                'expression': f'sum({lam}, over={pw.over}) == {rhs}',
+            }
         for i, link in enumerate(pw.links):
             raw['constraints'][f'{name}_link{i}'] = {
                 'foreach': list(frame),
@@ -162,10 +178,12 @@ def expand_piecewise(schema: Model) -> Model:
                 'domain': 'binary',
                 'bounds': {},
             }
-            raw['constraints'][f'{name}_pick'] = {
-                'foreach': list(frame),
-                'expression': f'sum({seg}, over={pw.over}) == {rhs}',
-            }
+            for suffix, where, rhs in gated:
+                raw['constraints'][f'{name}_pick{suffix}'] = {
+                    'foreach': list(frame),
+                    **({'where': where} if where else {}),
+                    'expression': f'sum({seg}, over={pw.over}) == {rhs}',
+                }
             raw['constraints'][f'{name}_adjacency'] = {
                 'foreach': [*frame, pw.over],
                 'expression': f'{lam} <= {seg} + shift({seg}, over={pw.over}, offset=1, edge=0)',
@@ -279,9 +297,14 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 frame.append(d)
 
     if pw.activity is not None:
-        if pw.activity in schema.variables and schema.variables[pw.activity].domain != 'binary':
+        if pw.activity not in schema.variables:
+            raise PiecewiseExpansionError(
+                f"{ctx}: activity '{pw.activity}' is not a declared variable. A gate is a variable or it is "
+                f'nothing — with no `activity:` at all the weights sum to 1, so what a gate adds is a column '
+                f'the solver decides, and only a declaration says what its absence means.'
+            )
+        if schema.variables[pw.activity].domain != 'binary':
             raise PiecewiseExpansionError(f"{ctx}: activity variable '{pw.activity}' must be binary")
-        _refuse_a_gate_that_can_go_absent(schema, ctx, pw.activity)
         for d in _declared_order(schema, _expr_dims(schema, pw.activity, f'{ctx} activity')):
             if d == pw.over:
                 raise PiecewiseExpansionError(f"{ctx}: activity must not carry the breakpoint dim '{pw.over}'")
@@ -319,7 +342,9 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
 
     emitted_constraints = (
         f'{name}_convexity',
+        f'{name}_convexity_ungated',
         f'{name}_pick',
+        f'{name}_pick_ungated',
         f'{name}_adjacency',
         f'{name}_chord',
         f'{name}_domain_lo',
@@ -352,24 +377,6 @@ def _declared_order(schema: Model, dims: frozenset[str]) -> list[str]:
     return declared + sorted(dims.difference(declared))
 
 
-def _resolved(schema: Model, text: str, ctx: str) -> ArithmeticNode:
-    """*text* as typed nodes, resolved against *schema*.
-
-    Both questions this module asks of an expression — its dims, and whether it
-    can go absent — are asked of the resolved tree, since a bare name says
-    nothing about which of them it is.
-    """
-    ast = parse_expression(text)
-    if isinstance(ast, ComparisonNode):
-        raise PiecewiseExpansionError(f'{ctx}: link expressions must not contain a comparison, got {text!r}')
-    errors: list[str] = []
-    resolved = resolve_expression(ast, Namespace.of(schema), ctx, errors)
-    if resolved is None:
-        raise PiecewiseExpansionError('\n'.join(errors))
-    assert not isinstance(resolved, ComparisonNode)
-    return resolved
-
-
 def _expr_dims(schema: Model, text: str, ctx: str) -> frozenset[str]:
     """Dims of an affine link expression.
 
@@ -380,7 +387,14 @@ def _expr_dims(schema: Model, text: str, ctx: str) -> frozenset[str]:
     the expression is a different question, asked later by whichever lane
     builds a plan.
     """
-    resolved = _resolved(schema, text, ctx)
+    ast = parse_expression(text)
+    if isinstance(ast, ComparisonNode):
+        raise PiecewiseExpansionError(f'{ctx}: link expressions must not contain a comparison, got {text!r}')
+    errors: list[str] = []
+    resolved = resolve_expression(ast, Namespace.of(schema), ctx, errors)
+    if resolved is None:
+        raise PiecewiseExpansionError('\n'.join(errors))
+    assert not isinstance(resolved, ComparisonNode)
     try:
         check_expression(resolved, ctx)
         return dims_of(resolved, schema, ctx)
@@ -388,50 +402,3 @@ def _expr_dims(schema: Model, text: str, ctx: str) -> frozenset[str]:
         raise PiecewiseExpansionError(
             f'{ctx}: link expression {text!r} is not a valid affine expression: {exc}'
         ) from exc
-
-
-def _refuse_a_gate_that_can_go_absent(schema: Model, ctx: str, text: str) -> None:
-    """Refuse an ``activity:`` that has a coordinate where it does not exist.
-
-    The gate is the right-hand side of ``sum(lam, over=<bp>) == (activity)``,
-    and absence does not spread out of a reduction: where the gate is absent
-    the *row* is not built, so the weights it was holding down are left free
-    rather than pinned to zero. That is a cheaper answer off the curve with
-    nothing but a ``rows_not_built`` count to say so, which is why this is a
-    refusal and not a warning (#1158).
-
-    A masked variable has a spelling for what its absence means and can be
-    gated on once it uses it; a lookup's nulls and a shift's vacated edge have
-    none, so they are refused outright.
-    """
-    for node in _every_node(_resolved(schema, text, ctx)):
-        if isinstance(node, VariableNode):
-            gate = schema.variables[node.name]
-            if gate.where is not None and gate.absence != 'zero':
-                raise PiecewiseExpansionError(
-                    f"{ctx}: activity variable '{node.name}' is masked by a `where:` and does not say what "
-                    f'its absence means, so where the gate does not exist the block would drop its '
-                    f'convexity row and leave the weights unconstrained instead of pinning the curve off. '
-                    f"Declare `absence: zero` on '{node.name}' — that is what says the curve is off there."
-                )
-        elif isinstance(node, LookupNode):
-            raise PiecewiseExpansionError(
-                f"{ctx}: activity reads through lookup '{node.shown}', whose null values leave the gate "
-                f'with no value — the block would drop its convexity row there and leave the weights '
-                f'unconstrained instead of pinning the curve off. A gate says what its absence means with '
-                f'`absence: zero`, which a lookup has no spelling for.'
-            )
-        elif isinstance(node, FunctionCallNode) and node.name == 'shift' and 'edge' not in node.kwargs:
-            raise PiecewiseExpansionError(
-                f'{ctx}: activity shifts with no `edge=`, so the gate does not exist at the vacated '
-                f'coordinate — the block would drop its convexity row there and leave the weights '
-                f'unconstrained instead of pinning the curve off. Say what the vacated position '
-                f'contributes: `edge=0` pins the curve off there.'
-            )
-
-
-def _every_node(node: ArithmeticNode) -> Iterator[ArithmeticNode]:
-    """*node* and everything under it, kwarg values included."""
-    yield node
-    for child in children(node):
-        yield from _every_node(child)
