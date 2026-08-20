@@ -669,6 +669,25 @@ def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
     tidy_sources(schema_of(CONVEX_MODEL), shuffled)
 
 
+def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_inputs):
+    """With no index there is no order, so the guard has no question to answer.
+
+    It answered anyway: reading the rows as they arrived, a curve written out
+    of order drew "requires strictly increasing breakpoints" — a claim about
+    an order nothing had established — in front of the message that names the
+    missing index. The λ methods, which have no curvature guard, always
+    reached the right one.
+    """
+    orphaned = {k: v for k, v in nonconvex_inputs.items() if k != 'bp'}
+    orphaned['bp_x'] = pd.Series([100.0, 0.0, 40.0], index=OUT_OF_ORDER_BP)
+    orphaned['bp_y'] = pd.Series([55.0, 0.0, 30.0], index=OUT_OF_ORDER_BP)
+
+    tidy_sources(schema_of(CONVEX_MODEL), orphaned)  # the guard has nothing to say
+
+    with pytest.raises(DataError, match='has no index'):
+        lps.build(CONVEX_MODEL, orphaned)
+
+
 def test_the_eager_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp_path):
     """Which of the two lanes is right, pinned — the loader lays the values out first.
 
