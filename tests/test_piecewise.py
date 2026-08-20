@@ -22,7 +22,7 @@ import pytest
 import yaml as pyyaml
 
 import lpspec as lps
-from lpspec.errors import DataError, DimensionError
+from lpspec.errors import DataError
 from lpspec.language.piecewise import PiecewiseExpansionError, expand_piecewise
 from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources, validate_piecewise_data
@@ -573,26 +573,29 @@ def test_a_link_outside_the_language_is_named_where_the_user_wrote_it(link_expre
 
 
 def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
-    """Emitted declarations are language too, so both lanes must judge them.
+    """A stray dim is named on the link that carries it, on both lanes.
 
-    A link's dims come from its values parameter, so a values parameter
-    carrying a dim the links do not is a stray dim in generated math — one row
-    per zone where the file reads as one per snapshot. The native lane used to
-    validate the file as written, which made ``lps.check()`` pass on a model
-    ``lpspec_linopy.build`` refused: the same YAML, two answers (hard rule 3).
+    A values parameter carrying a dim the links do not is a stray dim in
+    generated math — one row per zone where the file reads as one per
+    snapshot. The native lane used to validate the file as written, which made
+    ``lps.check()`` pass on a model ``lpspec_linopy.build`` refused: the same
+    YAML, two answers (hard rule 3). Both refused it once the emitted
+    declarations were judged too — but as a dimension error against
+    ``cost_curve_link1``, a constraint the author never wrote and a different
+    name under ``method: lp``. The block now says it of the link itself.
     """
     raw = override(
         raw_of(NONCONVEX_YAML),
         **{'dimensions.zone': {'dtype': 'str'}, 'parameters.bp_y': {'dims': ['zone', 'bp']}},
     )
-    stray = r"cost_curve_link1.*\['zone'\]"
+    stray = r"link 1 values parameter 'bp_y' carries \['zone'\], which no link expression does"
 
-    with pytest.raises(DimensionError, match=stray):
+    with pytest.raises(PiecewiseExpansionError, match=stray):
         lps.check(raw)
 
     path = tmp_path / 'stray_dim.yaml'
     path.write_text(pyyaml.safe_dump(raw))
-    with pytest.raises(DimensionError, match=stray):
+    with pytest.raises(PiecewiseExpansionError, match=stray):
         lpspec_linopy.build(path, {})
 
 
