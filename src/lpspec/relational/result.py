@@ -118,6 +118,30 @@ def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) ->
     return dataset
 
 
+def _number(value: float, *, sign: bool = False) -> str:
+    """*value* as the shortest string that reads back as itself.
+
+    A row is read to find the number the data produced, so a rendering that
+    rounds is a rendering that agrees with the file in exactly the case worth
+    reading — ``%g``'s six digits print two coefficients differing in the
+    seventh identically. ``repr`` is the shortest round-tripping form, and
+    dropping a trailing ``.0`` keeps the whole coefficient reading as linopy's
+    ``+50`` rather than ``+50.0``.
+    """
+    text = repr(float(value))
+    text = text.removesuffix('.0')
+    return f'+{text}' if sign and not text.startswith('-') else text
+
+
+def _bracket(labels: str) -> str:
+    """``[1, wind]``, or nothing at all for a declaration over no dims.
+
+    A scalar is ``z``, not ``z[]`` — linopy's spelling, and an empty bracket
+    states a coordinate that does not exist.
+    """
+    return f'[{labels}]' if labels else ''
+
+
 @dataclass(frozen=True)
 class ConstraintRow:
     """One built constraint row, spelled back out — what :meth:`~lpspec.api.BoundModel.row` returns.
@@ -125,9 +149,12 @@ class ConstraintRow:
     The row a model actually built at one coordinate: every term with its
     coefficient, and the comparison and right-hand side it was built against.
     Read off the built model, so it needs no solve — and it is the *built*
-    row, after ``where`` masking and after any term whose variable was absent
-    dropped out, which is exactly what makes it worth reading when a model
-    says something other than what its author wrote.
+    row, after ``where`` masking, after any term whose variable was absent
+    dropped out, and after a coefficient the data made exactly zero stopped
+    being a term at all (:func:`~lpspec.relational.engines.polars.engine._without_zeros`
+    — what a zero states, absence already states). Those three are why a row
+    can be shorter than the file suggests, and why reading one is worth it
+    when a model says something other than what its author wrote.
 
     Printing it gives the row as one line of math, which is what reading a row
     usually means; :attr:`terms` is the same content as a frame, for the row
@@ -169,8 +196,16 @@ class ConstraintRow:
         declaration and the spread of the coefficients are what a wide row is
         actually asked about, and they fit the same line.
         """
-        where = ', '.join(f'{dim}={label}' for dim, label in self.coordinate.items())
-        return f'{self.name}[{where}]: {self._body()} {self.sense} {self.rhs:g}'
+        return f'{self.name}{_bracket(self._where())}: {self._body()} {self.sense} {_number(self.rhs)}'
+
+    #: The line, not the field-by-field dataclass dump. A row is read at a
+    #: prompt and in a notebook cell more often than it is printed, and there
+    #: the default would put a multi-line frame inside one row's identity.
+    __repr__ = __str__
+
+    def _where(self) -> str:
+        """``snapshot=1, g=gas`` — the coordinate, in the declaration's dim order."""
+        return ', '.join(f'{dim}={label}' for dim, label in self.coordinate.items())
 
     def _body(self) -> str:
         """The terms, spelled out or summarised — the part that depends on width."""
@@ -178,7 +213,7 @@ class ConstraintRow:
             return '(no terms)'
         if self.terms.height <= self.display_terms:
             return ' '.join(
-                f'{coefficient:+g} {variable}[{coordinate}]'
+                f'{_number(coefficient, sign=True)} {variable}{_bracket(coordinate)}'
                 for variable, coordinate, coefficient in self.terms.iter_rows()
             )
         return f'{self.terms.height} terms — {self._per_declaration()}'
@@ -198,7 +233,9 @@ class ConstraintRow:
             pl.col('coefficient').abs().max().alias('high'),
         )
         return ', '.join(
-            f'{variable}: {terms} (|coef| {low:g})' if low == high else f'{variable}: {terms} (|coef| {low:g}…{high:g})'
+            f'{variable}: {terms} (|coef| {_number(low)})'
+            if low == high
+            else f'{variable}: {terms} (|coef| {_number(low)}…{_number(high)})'
             for variable, terms, low, high in grouped.iter_rows()
         )
 

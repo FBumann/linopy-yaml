@@ -155,15 +155,24 @@ reported per row. `display_terms` is where a line stops spelling terms out.
 It reads the **built** row, which is the whole of its value:
 
 - a coefficient is the number the *data* produced, where the file shows a
-  parameter name;
+  parameter name — every digit of it, since a rendering that rounded would
+  agree with the file in exactly the case worth reading;
 - a term whose variable was masked out by a `where` is simply **not there**, so
   a row shorter than the file suggests says so;
+- a term whose coefficient the data made **exactly zero** is not there either.
+  What a zero states, absence already states, so the build prunes it and the
+  row reads the matrix the solver was handed rather than a reconstruction of
+  it;
 - a row a `where` removed raises rather than answering, and the message names
   the three things that cause it.
 
 It needs no solve — a model too wrong to solve is exactly the one whose rows
 need reading — and the coordinate must name **every** dim of the declaration,
-since a partial one names a set of rows rather than one.
+since a partial one names a set of rows rather than one. The constraint is
+**positional**, so a dimension may be called `name` and still be named in the
+coordinate; a label the dimension cannot hold — a string against an integer
+dim, a stranger against a declared label set — is refused naming the dim, not
+the dtypes.
 
 There is no verb for a *column*: a variable's bounds are `to_yaml()`'s and its
 coefficients are the transpose of this, which nothing has asked for yet.

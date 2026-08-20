@@ -233,3 +233,127 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
                     f'{name} at {where} does not carry the coefficients the sink was handed for row {at}'
                 )
                 assert read.terms.height == given.height
+
+
+#: A coefficient and a right-hand side that ``%g``'s six significant digits
+#: cannot tell apart from their neighbours, and a scalar declaration — the
+#: cases where the *rendering* is what makes a row readable or not.
+PRECISE: dict[str, Any] = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0]}, 'g': {'values': ['a', 'b']}},
+    'parameters': {'cost': {'dims': ['g']}, 'load': {'dims': ['t']}},
+    'variables': {'p': {'foreach': ['t', 'g'], 'bounds': {'lower': 0}}},
+    'constraints': {'balance': {'foreach': ['t'], 'expression': 'sum(p * cost, over=g) >= load'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+}
+
+PRECISE_DATA = {
+    'cost': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0000001, 12345678.0]}),
+    'load': pl.DataFrame({'t': [0], 'value': [12345678.9]}),
+}
+
+
+def test_a_coefficient_prints_every_digit_the_data_gave_it() -> None:
+    """A rendering that rounds agrees with the file in exactly the case worth reading.
+
+    ``%g`` stops at six significant digits, which prints ``1.0000001`` as
+    ``1`` and two bounds differing in the seventh identically — so the one
+    line whose job is *this number is not what you wrote* would say it was.
+    """
+    with lps.build(PRECISE, PRECISE_DATA) as bound:
+        printed = str(bound.row('balance', t=0))
+
+    assert printed == 'balance[t=0]: +1.0000001 p[0, a] +12345678 p[0, b] >= 12345678.9', (
+        'every digit the data carried survives, and a whole coefficient still reads as linopy prints it'
+    )
+
+
+def test_a_row_echoed_at_a_prompt_is_the_line_not_the_frame() -> None:
+    """``repr`` is how a row is read in a REPL and in a notebook cell.
+
+    The generated dataclass one puts a multi-line frame inside a single row's
+    identity, which is the rendering this verb exists to replace.
+    """
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound:
+        row = bound.row('commit', t=1, g='gas')
+
+    assert repr(row) == str(row) == 'commit[t=1, g=gas]: +1 p[1, gas] -200 u[1, gas] <= 0'
+
+
+def test_a_row_has_one_spelling_whatever_order_its_coordinate_was_given_in() -> None:
+    """One row, one identity: the declaration orders the coordinate, not the caller's keywords."""
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound:
+        by_declaration = bound.row('commit', t=1, g='gas')
+        reversed_kwargs = bound.row('commit', g='gas', t=1)
+
+    assert str(by_declaration) == str(reversed_kwargs)
+    assert list(reversed_kwargs.coordinate) == ['t', 'g'], "the declaration's dim order, not the call's"
+
+
+def test_a_declaration_over_no_dims_carries_no_bracket() -> None:
+    """``z``, not ``z[]`` — linopy's spelling, and an empty bracket states a
+    coordinate that does not exist."""
+    model = {
+        'dimensions': {'g': {'values': ['wind', 'gas']}},
+        'variables': {
+            'p': {'foreach': ['g'], 'bounds': {'lower': 0}},
+            'z': {'foreach': [], 'bounds': {'lower': 0}},
+        },
+        'constraints': {'total': {'foreach': [], 'expression': 'sum(p, over=g) + z <= 10'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p) + z'},
+    }
+    with lps.build(model, {}) as bound:
+        assert str(bound.row('total')) == 'total: +1 p[wind] +1 p[gas] +1 z <= 10'
+
+
+def test_a_dimension_called_name_is_still_a_coordinate() -> None:
+    """``name`` is a legal dimension, and the parameter naming the constraint
+    may not take it away — so the constraint is positional."""
+    model = {
+        'dimensions': {'name': {'values': ['wind', 'gas']}},
+        'parameters': {'p_max': {'dims': ['name']}},
+        'variables': {'p': {'foreach': ['name'], 'bounds': {'lower': 0}}},
+        'constraints': {'cap': {'foreach': ['name'], 'expression': 'p <= p_max'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+    }
+    data = {'p_max': pl.DataFrame({'name': ['wind', 'gas'], 'value': [40.0, 200.0]})}
+    with lps.build(model, data) as bound:
+        assert str(bound.row('cap', name='wind')) == 'cap[name=wind]: +1 p[wind] <= 40'
+
+
+def test_a_coefficient_the_data_made_zero_leaves_no_term() -> None:
+    """The third way a built row is shorter than its file, beside a masked
+    variable and a masked row.
+
+    What a zero coefficient states, absence already states, so the build
+    prunes it (``_without_zeros``) and the row reads the matrix the sink was
+    handed — which is the whole of its value, and is why the term is gone
+    rather than printed as ``+0``.
+    """
+    zeroed = {**PRECISE_DATA, 'cost': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 2.0]})}
+    with lps.build(PRECISE, zeroed) as bound:
+        row = bound.row('balance', t=0)
+
+    assert _terms(row) == [('p', '0, b', 2.0)], 'a zero coefficient is not a term, so `a` is not in the row'
+
+
+@pytest.mark.parametrize(
+    ('coordinate', 'names'),
+    [
+        pytest.param({'t': '0', 'g': 'wind'}, 'Int64', id='a string against an integer dim'),
+        pytest.param({'t': 0, 'g': 1}, 'Enum', id='an integer against a label dim'),
+        pytest.param({'t': 0, 'g': 'nope'}, 'Enum', id='a stranger against an Enum'),
+    ],
+)
+def test_a_label_the_dimension_cannot_hold_is_refused_in_our_own_tree(coordinate: dict[str, Any], names: str) -> None:
+    """Labels arrive from JSON and CSV as the wrong type, and an ``Enum`` refuses strangers.
+
+    All three are one failure — this is not a label the dimension has — and
+    none of them may reach the caller in polars' vocabulary, which names a
+    dtype comparison and not the dimension that was misspelled.
+    """
+    with lps.build(COMMITMENT, COMMITMENT_DATA) as bound, pytest.raises(LpspecError, match='not one of its labels'):
+        try:
+            bound.row('commit', **coordinate)
+        except LpspecError as refused:
+            assert names in str(refused), 'the message names the type the dimension does hold'
+            raise

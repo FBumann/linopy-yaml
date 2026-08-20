@@ -143,8 +143,9 @@ what replaces it is two notebook pages: [Change a model](../interactive.ipynb)
 for the loops — `rebind` for new numbers, a longer table for more rows, a
 patched `dict` for new math — and [Fix, relax, remove](../lifecycle.ipynb) for
 the verbs, which are the same loops aimed at `fix`, `relax` and
-`remove_constraints`. What neither replaces is the *debugging*: an IIS, and
-printing a built row. Both pages say so.
+`remove_constraints`. What neither replaces is the *debugging*: an IIS. Both
+pages say so — a built row is read with
+[`row`](../reference/api.md#reading-one-row), in linopy's own form.
 
 Where linopy is genuinely ahead, and why none of it is a ceiling question, is the
 honest snapshot in [the roadmap](roadmap.md#honest-snapshot).

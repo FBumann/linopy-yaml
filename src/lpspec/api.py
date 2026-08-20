@@ -198,7 +198,7 @@ class BoundModel:
         """
         self._engine.write(path)
 
-    def row(self, name: str, **coordinate: Any) -> ConstraintRow:
+    def row(self, name: str, /, **coordinate: Any) -> ConstraintRow:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.
 
         The verb for *this row is wrong and I do not know why*. ``to_latex``
@@ -214,7 +214,8 @@ class BoundModel:
         rather than what the file appears to say.
 
         Args:
-            name: A declared constraint.
+            name: A declared constraint. Positional, so that a dimension may
+                be called ``name`` and still be named in *coordinate*.
             coordinate: One label per dim of that declaration, all of them —
                 a partial coordinate names a set of rows rather than one.
 
