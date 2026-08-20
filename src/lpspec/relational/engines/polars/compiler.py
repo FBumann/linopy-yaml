@@ -25,7 +25,13 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from lpspec.errors import DataError, LanguageError, LpspecError
+from lpspec.errors import (
+    DataError,
+    LaneError,
+    LanguageError,
+    LpspecError,
+    constant_summed_beside_a_term_message,
+)
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
@@ -716,10 +722,7 @@ class PolarsCompiler:
         """
         missing = [d for d in over if d not in p.dims]
         if missing and not p.is_term:
-            raise LanguageError(
-                f'in {context}: Sum over {list(over)} of a constant part lacking dims '
-                f'{missing} is ambiguous under masks — multiply explicitly instead'
-            )
+            raise LaneError(constant_summed_beside_a_term_message(context, list(over), missing))
         keep = tuple(d for d in p.dims if d not in over)
         scale = math.prod(self.data.cardinality[d] for d in missing)
         frame = p.frame.select(*keep, *p.carried)

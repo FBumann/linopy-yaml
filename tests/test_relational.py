@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from lpspec.errors import DataError, LanguageError, LpspecError
+from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
 from lpspec.language.model import Model
 from lpspec.lowering import lower_program
 from lpspec.relational import chunking
@@ -2162,3 +2162,55 @@ def test_a_zero_objective_coefficient_is_not_handed_to_the_solver():
         tables = bound._engine._tables()
         assert tables.obj.height == 1, 'the zero-cost column reached the objective frame'
         assert list(tables.obj['coeff']) == [5.0]
+
+
+#: A constant summed beside a term that carries the summed dim. `check` accepts
+#: it, `lower_program` passes it, and the linopy lane builds and solves it — so
+#: the file is sayable and only this lane is short. #1137.
+CONSTANT_BESIDE_A_TERM = {
+    'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b', 'c']}},
+    'parameters': {'k': {'dims': ['g']}, 'd': {'dims': []}, 'load': {'dims': []}},
+    'variables': {'x': {'foreach': ['g'], 'where': "g != 'c'", 'bounds': {'lower': 0}}},
+    'constraints': {'bal': {'foreach': [], 'expression': 'sum(x * k + d, over=g) >= load'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x, over=g)'},
+}
+CONSTANT_BESIDE_A_TERM_SOURCES = {'k': [1.0, 1.0, 1.0], 'd': 1.0, 'load': 10.0}
+
+
+def test_a_constant_summed_beside_a_term_is_a_lane_gap_not_a_language_error():
+    """#1137: the refusal is this lane's, so it may not wear the language's class.
+
+    `LanguageError` here says the file is unsayable, which is false twice over:
+    `check` passes with no data, and the eager lane builds the model and returns
+    8.0. What is true is that this lane cannot represent a constant fragment
+    under a mask it has no rows to read — which is what `LaneError` is for.
+    """
+    lps.check(CONSTANT_BESIDE_A_TERM), 'the language accepts it, so no LanguageError may be raised for it'
+
+    with pytest.raises(LaneError) as refusal:
+        lps.solve(CONSTANT_BESIDE_A_TERM, CONSTANT_BESIDE_A_TERM_SOURCES)
+    text = str(refusal.value)
+    assert "constraint 'bal'" in text, 'a refusal names where in the file it happened'
+    assert 'Declare the parameter over' in text, 'and the rewrite that reaches the same number'
+    assert 'lpspec.linopy.build' in text, 'and the lane that builds the file as written'
+    assert not isinstance(refusal.value, LanguageError), (
+        'a lane gap is not a language error — the file is sayable and the other lane builds it'
+    )
+
+
+def test_the_rewrite_the_lane_gap_names_reaches_the_answer():
+    """The message is only worth its words if what it tells you to do works.
+
+    Declaring the constant over the summed dim gives the fragment the rows this
+    lane needs, and the number it then reaches is the one the eager lane reaches
+    from the unrewritten file — so the rewrite preserves the model rather than
+    changing it.
+    """
+    rewritten = {
+        **CONSTANT_BESIDE_A_TERM,
+        'parameters': {**CONSTANT_BESIDE_A_TERM['parameters'], 'd': {'dims': ['g']}},
+    }
+    sources = {**CONSTANT_BESIDE_A_TERM_SOURCES, 'd': [1.0, 1.0, 1.0]}
+    assert lps.solve(rewritten, sources).objective == pytest.approx(8.0), (
+        'the rewrite answers what the eager lane answers for the file as written'
+    )

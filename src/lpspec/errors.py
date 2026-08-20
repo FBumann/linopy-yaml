@@ -118,6 +118,25 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
     )
 
 
+def constant_summed_beside_a_term_message(context: str, over: list[str], missing: list[str]) -> str:
+    """The relational lane's one gap: a constant part summed over a dim it lacks.
+
+    Its own wording rather than a bare refusal because three things are true at
+    once and only the first is obvious — the lane cannot build it, the file is
+    sayable (``check`` passes, and the eager lane returns a number), and there
+    is a rewrite that reaches that same number.
+    """
+    return (
+        f'in {context}: sum(over={over}) of a constant part lacking dims {missing}, '
+        f'and this lane cannot build one. A constant part compiles to its own frame, '
+        f'so a fragment with no rows for {missing} carries no count to sum — and under '
+        f'a mask the count is the *present* slots, which only the rows know. '
+        f'Declare the parameter over {missing} and supply it there: the model is the '
+        f'same and the number is unchanged. The eager lane builds the file as written, '
+        f'so only this lane is short — run it with `lpspec.linopy.build` (#1137).'
+    )
+
+
 def sparse_divisor_message(name: str, missing: int) -> str:
     """Why a divisor may not be sparse — one wording, both lanes.
 

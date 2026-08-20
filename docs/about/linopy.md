@@ -128,8 +128,11 @@ oracle an oracle, and it is now structural: both run the same `lower_program`
 gate, so a construct one refuses the other refuses in the same sentence, never
 with a redirection to the other lane.
 
-**Accepting is not building, and one construct parts them: an objective
-carrying a constant.** `linopy.Objective`'s expression setter rejects any
+**Accepting is not building, and two constructs part them — one in each
+direction.** Neither is a language limit: both files pass `check`, and each is
+built by the lane the other cannot.
+
+**The first is this lane's: an objective carrying a constant.** `linopy.Objective`'s expression setter rejects any
 expression whose `const` is nonzero — *"Constant values in objective function
 not supported."* — and there is no slot to put one in, which is why PyPSA
 carries `n.objective_constant` out of band. So a model like
@@ -147,6 +150,21 @@ build the model. `tests/test_corpus_parity.py` carries the strict xfail, typed
 to that error rather than to any `ValueError`, so the day linopy grows a slot it
 XPASSes and the check comes out with it
 ([#894](https://github.com/fluxopt/lpspec/issues/894)).
+
+**The second is the relational lane's, and it is the mirror: a constant summed
+over a dimension it does not carry**, beside a term that does — say
+`sum(x * k + d, over=g)` where `d` is a scalar. That lane compiles a constant
+part as its own frame, so a fragment with no rows for `g` carries no count to
+sum, and under a mask the count is the *present* slots, which only the rows
+know. This lane has no such split — the operand is one masked expression, so
+the constant is dropped wherever the term is — and so it builds the file as
+written. The relational lane says so in its own words and names the rewrite
+that reaches the same number: declare the parameter over `g` and supply it
+there ([#1137](https://github.com/fluxopt/lpspec/issues/1137)).
+
+Both are worth reading twice, because the shape is easy to mistake for a
+language limit and is not one: a `LaneError` names the wall *and* the route
+around it, which is the difference between the two classes.
 
 It takes the same *data* too, which it did not always
 ([#60](https://github.com/fluxopt/lpspec/issues/60)). A parameter is a parquet
