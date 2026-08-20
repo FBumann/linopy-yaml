@@ -205,9 +205,8 @@ def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
     Below the front door: `PolarsEngine.build` takes a *program* and the frames
-    a bound model reads, which is where a map is still a column of the index it
-    runs over. `tidy_sources` is what turns a caller's `gen_bus` relation into
-    that column, and this test is under it.
+    a bound model reads, which is the same shape `tidy_sources` hands over — an
+    index of labels, and each map as its own two-column relation.
     """
     return {
         'p_max': gens[['generator', 'p_max']].rename(columns={'p_max': 'value'}),
@@ -216,8 +215,11 @@ def transport_sources(gens, lines, load) -> dict:
         'load': load,
         'snapshot': load[['snapshot']],
         'bus': load[['bus']],
-        'generator': gens[['generator', 'bus']].rename(columns={'bus': 'gen_bus'}),
-        'line': lines[['line', 'from_bus', 'to_bus']].rename(columns={'from_bus': 'from', 'to_bus': 'to'}),
+        'generator': gens[['generator']],
+        'line': lines[['line']],
+        'gen_bus': gens[['generator', 'bus']].rename(columns={'bus': 'gen_bus'}),
+        'from': lines[['line', 'from_bus']].rename(columns={'from_bus': 'from'}),
+        'to': lines[['line', 'to_bus']].rename(columns={'to_bus': 'to'}),
     }
 
 
