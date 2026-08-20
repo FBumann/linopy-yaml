@@ -230,7 +230,9 @@ class Gurobi(Solver):
         option* can provoke: ``QCPDual`` puts the solve on the convex path, so
         a nonconvex quadratic constraint that solves without it fails with it.
         Left alone that reaches the caller as a ``GurobiError`` naming a
-        parameter they set for an unrelated reason.
+        parameter they set for an unrelated reason. The solver's own sentence
+        rides along because it names the row shape, and dropping it would leave
+        a caller with less than they had.
         """
         gurobipy = _gurobipy()
         try:
@@ -238,7 +240,12 @@ class Gurobi(Solver):
         except gurobipy.GurobiError as exc:
             if 'not PSD' not in str(exc):
                 raise
-            raise LpspecError(_nonconvex_row_message(str(exc))) from None
+            raise LpspecError(
+                f'this model has a quadratic constraint that is not convex, and the solve was asked for '
+                f'quadratic duals (QCPDual), which only a convex model has. Gurobi reported: {exc}\n'
+                f'Drop QCPDual from solver_options to solve it — the answer comes back without prices '
+                f'for the quadratic rows, which is the default for exactly this reason.'
+            ) from None
         status = _status_of(self._m)
         if not status.is_readable:
             return SolveAnswer.unreadable(status)
@@ -273,22 +280,6 @@ class Gurobi(Solver):
             self._m = self._x = self._env = None
             self._blocks = []
             self._qrows = []
-
-
-def _nonconvex_row_message(reported: str) -> str:
-    """A quadratic constraint the solver would take, refused for an option we asked it for.
-
-    Reached when ``QCPDual`` is on and a row turns out not to be convex —
-    which is a *data* property, so nothing could have said so earlier. The
-    solver's own sentence rides along because it names the row shape, and
-    dropping it would leave a caller with less than they had.
-    """
-    return (
-        f'this model has a quadratic constraint that is not convex, and the solve was asked for '
-        f'quadratic duals (QCPDual), which only a convex model has. Gurobi reported: {reported}\n'
-        f'Drop QCPDual from solver_options to solve it — the answer comes back without prices for '
-        f'the quadratic rows, which is the default for exactly this reason.'
-    )
 
 
 def _built(
