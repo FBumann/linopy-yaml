@@ -6,10 +6,11 @@ Renaming one breaks tests; changing one changes what the docs claim, and a test
 will say so.
 
 **A new model says which side it is on.** The language is being extracted to
-[math-spec](https://github.com/energy-models/math-spec), and a model goes with
-it if what it is evidence *of* is a construct — what the language can say, and
-what it means. It stays if it is evidence about lpspec: that a plan builds,
-that a solver agrees, that a published optimum is reproduced. Name it in
+[math-spec](https://github.com/energy-models/math-spec), and almost everything
+here stays: a model with a gallery page is read by a person and solved by an
+engine, and both of those are lpspec's. What moves is the **conformance
+corpus** — `operators/`, one construct per file, no page, written to be
+accepted or refused rather than answered. Name a new model in
 [`extraction.paths`](../extraction.paths) or in `EXAMPLES_THAT_STAY`
 (`tests/test_architecture.py`); a model in neither fails the suite rather than
 defaulting to a side.

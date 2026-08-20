@@ -31,24 +31,18 @@ docs/reference/notation.md
 docs/reference/typeset.md
 docs/about/ceiling.md
 
-# --- the corpus that exists to show a construct -----------------------------
-# The operator probes and the symbol tables are unambiguous. The teaching
-# models are here because each was written to demonstrate something the
-# language can say; the gallery pages that embed them stay, and read them
-# through the dependency.
+# --- the conformance corpus --------------------------------------------------
+# One construct per file, no gallery page, not in `MODEL_PATHS`: these exist to
+# be accepted or refused, which is what a spec's corpus is for. The symbol
+# tables go with the renderer that reads them.
+#
+# The teaching models do *not* move, though each demonstrates a construct.
+# `docs/examples/dispatch.md` solves `examples/dispatch.yaml` and links to it in
+# this repository; the model's day job is being read by a person and solved by
+# an engine, and both are lpspec's. A corpus proving a file is *sayable* and one
+# proving it is *solvable* are different corpora that happen to overlap.
 examples/operators/
 examples/symbols/
-examples/dispatch.yaml
-examples/monthly_budget.yaml
-examples/multi_period.yaml
-examples/piecewise.yaml
-examples/piecewise_lp.yaml
-examples/piecewise_ragged.yaml
-examples/reserves.yaml
-examples/seasons.yaml
-examples/sos.yaml
-examples/storage.yaml
-examples/transport.yaml
 
 # --- known not yet selectable ------------------------------------------------
 # `tests/test_typeset.py` belongs with `typeset/` but imports

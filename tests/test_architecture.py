@@ -483,17 +483,30 @@ def test_the_languages_own_generators_reach_no_consumer():
 
 MANIFEST = REPO / 'extraction.paths'
 
-#: The corpus that stays, and why. `walkthrough.yaml` reads as a teaching model
-#: and is not one: `run.py` solves it and `walkthrough.out` is the golden its
-#: output is compared against, so the model and its answer are one artefact.
-#: The rest are evidence about lpspec — an external optimum reproduced, or a
-#: driver taking slices of a model.
+#: The corpus that stays, and why. The ports and the drivers are evidence about
+#: lpspec — an external optimum reproduced, a driver taking slices. So are the
+#: teaching models, though each demonstrates a construct: every one has a
+#: gallery page that *solves* it and links to it in this repository, so what
+#: they are evidence of is that lpspec expresses and answers a real problem.
+#: `walkthrough.yaml` is the clearest case — `run.py` solves it and
+#: `walkthrough.out` is the golden, so the model and its answer are one thing.
 EXAMPLES_THAT_STAY = (
-    'examples/walkthrough.yaml',
     'examples/ports/',
     'examples/benders/',
     'examples/myopic/',
     'examples/rolling/',
+    'examples/dispatch.yaml',
+    'examples/monthly_budget.yaml',
+    'examples/multi_period.yaml',
+    'examples/piecewise.yaml',
+    'examples/piecewise_lp.yaml',
+    'examples/piecewise_ragged.yaml',
+    'examples/reserves.yaml',
+    'examples/seasons.yaml',
+    'examples/sos.yaml',
+    'examples/storage.yaml',
+    'examples/transport.yaml',
+    'examples/walkthrough.yaml',
 )
 
 
