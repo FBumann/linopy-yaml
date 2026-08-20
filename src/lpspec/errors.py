@@ -199,26 +199,57 @@ def holes_in_values_message(name: str, holes: int, shown: str) -> str:
     )
 
 
-def curve_with_a_hole_message(block: str, name: str, shown: str, expected: int, found: int) -> str:
+def curve_with_a_hole_message(block: str, name: str, shown: str, expected: int, found: int, points: str | None) -> str:
     """A piecewise curve supplied at some of its coordinates — one wording, both lanes.
 
     A missing row is the one shape whose two readings are both wrong here. The
     absence rules read it as a zero coefficient, which puts a breakpoint at the
     origin that the file never declared; read as a shorter curve it would need
-    the weights, the convexity row and the adjacency chain to shrink with it,
-    and a ``piecewise:`` block emits none of them masked. So the table is
-    refused instead, and the message names the formulation to write where the
-    arity really is data.
+    the weights to shrink with it, which is what ``points:`` says and a bare
+    table cannot.
+
+    Which is why the way out depends on whether the block already has a mask.
+    Without one the reader wants to hear that a curve may declare its length;
+    with one they have said it, and the disagreement is the news — the mask
+    claims a breakpoint the values do not carry.
     """
+    remedy = (
+        f"  Shorten it    '{points}' claims this breakpoint, so either it is one row too long "
+        f'or the value is missing\n'
+        f'  Or supply it  a value everywhere the mask says the curve runs'
+        if points
+        else (
+            "  Say how far   points: a mask over the curve, true up to each one's last "
+            'breakpoint\n'
+            '  Or supply it  a value at every coordinate of the axis\n'
+            '  Or write it   where the *arity* is data, the λ formulation states it '
+            'directly (issue #1101)'
+        )
+    )
     return (
         f"piecewise '{block}': parameter '{name}' has no value at {shown} — {found} of the "
-        f'{expected} coordinates its dims carry. Every breakpoint gets a weight, so a missing '
-        f'row is not a shorter curve: read as a zero coefficient it is a breakpoint at the '
-        f'origin, and the answer mixes onto it.\n'
-        f'  Supply them   a value at every coordinate, the curve repeating its last point '
-        f'where it has fewer\n'
-        f'  Or write it   where the arity is data, the λ formulation states it '
-        f'directly (issue #1101)'
+        f'{expected} coordinates it needs. Every breakpoint the block builds gets a weight, so '
+        f'a missing row is not a shorter curve: read as a zero coefficient it is a breakpoint '
+        f'at the origin, and the answer mixes onto it.\n{remedy}'
+    )
+
+
+def curve_mask_is_not_a_prefix_message(block: str, points: str, over: str, shown: str) -> str:
+    """A ``points:`` mask with a gap in it — one wording, both lanes.
+
+    The mask says how far a curve runs, not which breakpoints it picks, and the
+    emitted rows read it that way twice: a chord joins a breakpoint to the one
+    before it, and the upper domain row is written where the mask stops. A gap
+    would leave a chord joining across it and a domain row inside the curve,
+    both of which build and neither of which says what the file does.
+    """
+    at = f' at {shown}' if shown else ''
+    return (
+        f"piecewise '{block}': the points mask '{points}' is not a prefix of '{over}'{at} — it "
+        f'marks a breakpoint after one it leaves out, or marks none at all. A curve runs from '
+        f'the first breakpoint to its own last one.\n'
+        f"  Mark a prefix   true up to each curve's last breakpoint, false after it\n"
+        f'  A curve of none is not a curve: leave the block to the members that have one'
     )
 
 
