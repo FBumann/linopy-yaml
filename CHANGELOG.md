@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.1-alpha.223](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.222...v0.0.1-alpha.223) (2026-08-20)
+
+
+### Bug Fixes
+
+* **engine:** four operators refuse a constant beside a term as a lane gap ([#1140](https://github.com/fluxopt/lpspec/issues/1140)) ([b59aa4c](https://github.com/fluxopt/lpspec/commit/b59aa4c6828ef35393493a254ca6ee44a994f757))
+* **engine:** sum_back drops a constant at a slot its term is absent from ([#1143](https://github.com/fluxopt/lpspec/issues/1143)) ([2845133](https://github.com/fluxopt/lpspec/commit/28451338c9440dbdbf580740d558c5ca5e2dac06))
+
+
+### Refactoring
+
+* **errors:** the language raises its own errors ([#1135](https://github.com/fluxopt/lpspec/issues/1135)) ([38c00af](https://github.com/fluxopt/lpspec/commit/38c00af3c84a09c07bf62568dd1d9984d211c663))
+* **language:** the AST is read through one declared surface ([#1132](https://github.com/fluxopt/lpspec/issues/1132)) ([fd8bfb1](https://github.com/fluxopt/lpspec/commit/fd8bfb1b0d318b0331eb96eae131ab8e85def026))
+
 ## [0.0.1-alpha.222](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.221...v0.0.1-alpha.222) (2026-08-20)
 
 
