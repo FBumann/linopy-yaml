@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.237](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.236...v0.0.1-alpha.237) (2026-08-20)
+
+
+### Refactoring
+
+* **errors:** a refusal with one raiser is worded where it is raised ([#1189](https://github.com/fluxopt/lpspec/issues/1189)) ([477ae47](https://github.com/fluxopt/lpspec/commit/477ae4747de313fcbadb5f2485c038b1bac0f27c))
+
 ## [0.0.1-alpha.236](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.235...v0.0.1-alpha.236) (2026-08-20)
 
 
