@@ -26,7 +26,7 @@ import polars as pl
 from lpspec.errors import (
     DataError,
     PiecewiseExpansionError,
-    curve_mask_is_not_a_prefix_message,
+    curve_mask_is_not_contiguous_message,
     curve_with_a_hole_message,
     declared_index_also_supplied_message,
     declared_map_needs_labels_message,
@@ -37,6 +37,7 @@ from lpspec.errors import (
     unknown_source_keys_message,
 )
 from lpspec.frames import as_frame, is_dense_array, is_multi_indexed, labels_frame
+from lpspec.language.piecewise import mask_of
 
 if TYPE_CHECKING:
     from lpspec.language.model import Model
@@ -87,7 +88,7 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
         for dname, source in dimension_sources(schema, data).items()
     }
 
-    sources = derive_curve_edges(schema, sources, data)
+    sources = derive_curve_edges(schema, derive_curve_masks(schema, sources, data), data)
 
     for pname, pdef in schema.parameters.items():
         if pname in sources:
@@ -342,6 +343,35 @@ def _column_names(source: Any, dim: str) -> frozenset[str]:
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
 
 
+def derive_curve_masks(
+    schema: Model, sources: dict[str, TidySource], data: Mapping[str, object]
+) -> dict[str, TidySource]:
+    """Fill in the mask a block asked for by naming one of its own values.
+
+    ``points: bp_x`` says the curve runs as far as ``bp_x`` does. A length is a
+    fact of the curve, so this keeps it there rather than asking for a second
+    table that repeats it — and the other links are still checked against the
+    one named, which is what a second table would have caught.
+
+    The frame is true-only and sparse, since a missing row reads as false in a
+    ``where``: that is exactly "no breakpoint here". Called from
+    :func:`tidy_sources`, before the loop that asks for a parameter no caller
+    can have.
+
+    Returns:
+        *sources* with one frame added per block whose ``points:`` names a
+        values parameter, under the name the expansion emits.
+    """
+    for name, pw in schema.piecewise.items():
+        mask, nominated = mask_of(name, pw), pw.points
+        if mask is None or nominated is None or mask == nominated:
+            continue
+        rows = _coordinates(data.get(nominated), list(schema.parameters[nominated].dims))
+        if rows is not None:
+            sources[mask] = rows.with_columns(value=pl.lit(True))
+    return sources
+
+
 def derive_curve_edges(
     schema: Model, sources: dict[str, TidySource], data: Mapping[str, object]
 ) -> dict[str, TidySource]:
@@ -364,10 +394,11 @@ def derive_curve_edges(
         ``method: lp`` block that carries a mask.
     """
     for name, pw in schema.piecewise.items():
-        if not pw.points or pw.method != 'lp':
+        mask = mask_of(name, pw)
+        if mask is None or pw.points is None or pw.method != 'lp':
             continue
         dims = list(schema.parameters[pw.points].dims)
-        table = _coordinates(data.get(pw.points), dims, keep_value=True)
+        table = _coordinates(sources.get(mask, data.get(mask)), dims, keep_value=True)
         if table is None:
             continue
         order = _label_frame(pw.over, sources, table).with_row_index('_ord')
@@ -451,22 +482,28 @@ def _prefix_mask(schema: Model, block: str, pw: Any, sources: Mapping[str, TidyS
     Returns ``None`` where the mask is bound to something this cannot read,
     which binding refuses on its own terms.
     """
+    mask = mask_of(block, pw)
+    if pw.points is None or mask is None:
+        return None
     dims = list(schema.parameters[pw.points].dims)
-    table = _coordinates(sources.get(pw.points), dims, keep_value=True)
+    table = _coordinates(sources.get(mask), dims, keep_value=True)
     if table is None:
         return None
     order = _label_frame(pw.over, sources, table).with_row_index('_ord')
     frame_dims = [d for d in dims if d != pw.over]
     marked = table.filter(pl.col('value').cast(pl.Boolean)).join(order, on=pw.over, how='inner').select([*dims, '_ord'])
-    run_length = (pl.len().alias('marked'), pl.col('_ord').max().alias('last'))
+    run_length = (
+        pl.len().alias('marked'),
+        (pl.col('_ord').max() - pl.col('_ord').min() + 1).alias('span'),
+    )
     summary = marked.group_by(frame_dims).agg(*run_length) if frame_dims else marked.select(*run_length)
-    broken = summary.filter(pl.col('last') + 1 != pl.col('marked')).head(1).collect()
+    broken = summary.filter(pl.col('span') != pl.col('marked')).head(1).collect()
     if not broken.height and frame_dims:
         extents = {d: _label_frame(d, sources, table) for d in frame_dims}
         broken = _grid(extents, frame_dims, table).join(marked, on=frame_dims, how='anti').head(1).collect()
     if broken.height:
         shown = ', '.join(f'{d}={broken.row(0, named=True)[d]!r}' for d in frame_dims)
-        raise DataError(curve_mask_is_not_a_prefix_message(block, pw.points, pw.over, shown))
+        raise DataError(curve_mask_is_not_contiguous_message(block, mask, pw.over, shown))
     return marked.select(dims)
 
 
