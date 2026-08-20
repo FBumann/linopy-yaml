@@ -12,10 +12,10 @@ N expressions jointly pinned to a breakpoint-indexed piecewise-linear curve.
 ```yaml
 chp:
   over: bp  # breakpoint dimension
-  links:
-    - [power, power_bp]  # [expression, values-parameter]
-    - [fuel, fuel_bp]
-    - [heat, heat_bp]
+  links:  # each under a name the emitted row takes
+    power: {expression: power, values: power_bp}
+    fuel: {expression: fuel, values: fuel_bp}
+    heat: {expression: heat, values: heat_bp}
   method: adjacency  # how the weights are restricted — below
   active: null  # optional gating expression: formulation pinned to 0
 
@@ -23,8 +23,8 @@ chp:
 fuel_cap:
   over: bp
   links:
-    - [power, power_bp]
-    - [fuel, fuel_bp, "<="]
+    power: {expression: power, values: power_bp}
+    fuel: {expression: fuel, values: fuel_bp, sign: "<="}
 ```
 
 | Part of a link | |
@@ -67,8 +67,8 @@ cost_curve:
   over: bp
   points: bp_x  # this curve runs as far as its own breakpoints do
   links:
-    - [p, bp_x]
-    - [op_cost, bp_y]
+    dispatch: {expression: p, values: bp_x}
+    cost: {expression: op_cost, values: bp_y}
 ```
 
 A length is a fact of the curve, so this keeps it there — and the other links
@@ -100,10 +100,11 @@ conversion:
   points: bp_present
   method: adjacency
   links:
-    - [fuel, bp_fuel]         # per converter — on the weights' frame
-    - expression: rate        # per flow — one row each
+    fuel_in: {expression: fuel, values: bp_fuel}   # per converter — on the weights' frame
+    on_the_curve:                                  # per flow — one row each
+      expression: rate
       values: bp_rate
-      by: converter_of        # and this is how they reach the weights
+      by: converter_of                             # and this is how they reach the weights
 ```
 
 The shape it is about: the block makes one set of weights per coordinate of
@@ -196,8 +197,8 @@ cost_curve:
   over: bp
   method: lp
   links:
-    - [p, bp_x]
-    - [op_cost, bp_y, ">="]   # cost bounded below by the curve
+    dispatch: {expression: p, values: bp_x}
+    cost: {expression: op_cost, values: bp_y, sign: ">="}  # bounded below by the curve
 ```
 
 The trade is **columns for rows**: one row per segment plus the two domain

@@ -83,11 +83,11 @@ $$\sum_{p \in \mathcal{P}} \mathit{shipment}_{p,m} \ge \mathit{demand}_{m} \qqua
 
 $$\sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_lam}_{p,m,b} = 1 \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M}$$
 
-**`economies_of_scale_link0`**
+**`economies_of_scale_shipped`**
 
 $$\mathit{shipment}_{p,m} = \sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_lam}_{p,m,b} \cdot \mathit{bp}^{\mathrm{x}}_{b} \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M}$$
 
-**`economies_of_scale_link1`**
+**`economies_of_scale_cost`**
 
 $$\mathit{scaled}_{p,m} = \sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_lam}_{p,m,b} \cdot \mathit{bp}^{\mathrm{y}}_{b} \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M}$$
 
@@ -190,8 +190,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           port a MILP.
         over: bp
         links:
-          - [shipment, bp_x]
-          - [scaled, bp_y]
+          shipped: {expression: shipment, values: bp_x}
+          cost: {expression: scaled, values: bp_y}
 
     constraints:
       within_capacity:

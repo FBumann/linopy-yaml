@@ -167,7 +167,13 @@ def test_invalid_sense():
         pytest.param(
             {
                 'dimensions': {'x': {'values': [1], 'dtype': 'int'}},
-                'piecewise': {'thing': {'over': 'x', 'links': [['v', 'p'], ['w', 'q']], 'convx': True}},
+                'piecewise': {
+                    'thing': {
+                        'over': 'x',
+                        'links': {'a': {'expression': 'v', 'values': 'p'}, 'b': {'expression': 'w', 'values': 'q'}},
+                        'convx': True,
+                    }
+                },
             },
             "unknown key 'convx'",
             id='piecewise',
@@ -315,7 +321,14 @@ DESCRIBED = {
         'weighted': {'args': ['a', 'w'], 'template': 'sum(a * w, over=snapshot)', 'description': 'a weighted sum'},
     },
     'piecewise': {
-        'cost_curve': {'over': 'bp', 'links': [['p', 'bp_x'], ['op_cost', 'bp_y']], 'description': 'the cost curve'},
+        'cost_curve': {
+            'over': 'bp',
+            'links': {
+                'dispatch': {'expression': 'p', 'values': 'bp_x'},
+                'cost': {'expression': 'op_cost', 'values': 'bp_y'},
+            },
+            'description': 'the cost curve',
+        },
     },
     'sos': {
         'pick': {'variable': 'p', 'over': 'snapshot', 'type': 1, 'description': 'at most one hour dispatches'},
@@ -373,7 +386,7 @@ def test_an_undescribed_declaration_carries_none():
                 'piecewise': {
                     'cost_curve': {
                         'over': 'bp',
-                        'links': [{'expression': 'p', 'values': 'bp_x', 'description': 'the x axis'}],
+                        'links': {'dispatch': {'expression': 'p', 'values': 'bp_x', 'description': 'the x axis'}},
                     }
                 },
             },
@@ -465,18 +478,15 @@ def test_the_checked_in_json_schema_has_not_drifted():
 
 
 def test_the_json_schema_admits_what_the_loader_admits():
-    """The two shorthands live in before-validators, which pydantic's generated
-    schema cannot see — each needs its own schema hook in model.py, and losing a
-    hook loses the shorthand from every editor silently."""
+    """A shorthand lives in a before-validator, which pydantic's generated schema
+    cannot see — each needs its own hook in model.py, and losing a hook loses the
+    shorthand from every editor silently. A piecewise link has none: it is written
+    one way, under a name, so the schema is the model verbatim."""
     doc = json.loads(schema.PATH.read_text())
+
     link = doc['$defs']['PiecewiseLink']
-    assert any(form.get('type') == 'array' for form in link.get('anyOf', [])), (
-        'the schema lost the `[expression, values, sign?]` link shorthand the loader accepts'
-    )
-    expression = doc['$defs']['ExpressionBlock']
-    assert {'type': 'string'} in expression.get('anyOf', []), (
-        'the schema lost the bare-string form a named expression is written in'
-    )
+    assert 'anyOf' not in link, 'a link is written one way — a second form here means a hook went missing'
+    assert set(link['properties']) >= {'expression', 'values', 'sign', 'by'}, 'the schema lost a key a link may carry'
 
 
 def test_no_definition_refers_only_to_itself():

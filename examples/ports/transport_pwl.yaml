@@ -63,8 +63,8 @@ piecewise:
       port a MILP.
     over: bp
     links:
-      - [shipment, bp_x]
-      - [scaled, bp_y]
+      shipped: {expression: shipment, values: bp_x}
+      cost: {expression: scaled, values: bp_y}
 
 constraints:
   within_capacity:

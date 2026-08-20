@@ -437,7 +437,7 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> N
     """
     for block, pw in schema.piecewise.items():
         mask = _prefix_mask(schema, block, pw, sources) if pw.points else None
-        for link in pw.links:
+        for link in pw.links.values():
             dims = list(schema.parameters[link.values].dims)
             present = _coordinates(sources.get(link.values), dims)
             if present is None:

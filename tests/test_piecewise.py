@@ -52,8 +52,8 @@ piecewise:
   cost_curve:
     over: bp
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      dispatch: {expression: p, values: bp_x}
+      cost: {expression: op_cost, values: bp_y}
 
 constraints:
   balance:
@@ -101,8 +101,8 @@ piecewise:
   cost_curve:
     over: bp
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      dispatch: {expression: p, values: bp_x}
+      cost: {expression: op_cost, values: bp_y}
 
 constraints:
   balance:
@@ -196,9 +196,9 @@ piecewise:
   chp:
     over: bp
     links:
-      - [power, power_bp]
-      - [fuel, fuel_bp]
-      - [heat, heat_bp]
+      power: {expression: power, values: power_bp}
+      fuel: {expression: fuel, values: fuel_bp}
+      heat: {expression: heat, values: heat_bp}
 
 constraints:
   balance:
@@ -261,8 +261,8 @@ piecewise:
   cost_curve:
     over: bp
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      dispatch: {expression: p, values: bp_x}
+      cost: {expression: op_cost, values: bp_y}
     active: u
 
 constraints:
@@ -357,8 +357,8 @@ def test_expansion_emits_the_lambda_declarations():
         'cost_curve_convexity',
         'cost_curve_pick',
         'cost_curve_adjacency',
-        'cost_curve_link0',
-        'cost_curve_link1',
+        'cost_curve_dispatch',
+        'cost_curve_cost',
         'balance',
     }
 
@@ -375,7 +375,7 @@ def test_the_sos2_method_states_the_restriction_instead_of_building_it():
 
     assert 'cost_curve_lam' in expanded.variables
     assert 'cost_curve_seg' not in expanded.variables, 'the segment binaries survived a method that has none'
-    assert set(expanded.constraints) == {'cost_curve_convexity', 'cost_curve_link0', 'cost_curve_link1', 'balance'}
+    assert set(expanded.constraints) == {'cost_curve_convexity', 'cost_curve_dispatch', 'cost_curve_cost', 'balance'}
     emitted = expanded.sos['cost_curve']
     assert (emitted.variable, emitted.over, emitted.type, emitted.big_m) == ('cost_curve_lam', 'bp', 2, None)
 
@@ -504,9 +504,9 @@ def test_the_emitted_foreach_follows_declaration_order():
 
 def test_an_inline_expression_is_a_legal_link():
     raw = raw_of(NONCONVEX_YAML)
-    raw['piecewise']['cost_curve']['links'][0] = ['p * 2', 'bp_x']
+    raw['piecewise']['cost_curve']['links']['dispatch'] = {'expression': 'p * 2', 'values': 'bp_x'}
     expanded = expand_piecewise(schema_of(raw))
-    assert expanded.constraints['cost_curve_link0'].expression.startswith('(p * 2) ==')
+    assert expanded.constraints['cost_curve_dispatch'].expression.startswith('(p * 2) ==')
 
 
 @pytest.mark.parametrize(
@@ -514,7 +514,12 @@ def test_an_inline_expression_is_a_legal_link():
     [
         pytest.param(
             NONCONVEX_YAML,
-            {'piecewise.cost_curve.links': [['p', 'bp_x', '<='], ['op_cost', 'bp_y', '>=']]},
+            {
+                'piecewise.cost_curve.links': {
+                    'dispatch': {'expression': 'p', 'values': 'bp_x', 'sign': '<='},
+                    'cost': {'expression': 'op_cost', 'values': 'bp_y', 'sign': '>='},
+                }
+            },
             'at most one link',
             id='at-most-one-link',
         ),
@@ -535,7 +540,12 @@ def test_an_inline_expression_is_a_legal_link():
         ),
         pytest.param(
             NONCONVEX_YAML,
-            {'piecewise.cost_curve.links': [['p', 'bp_x'], ['op_cost', 'nope']]},
+            {
+                'piecewise.cost_curve.links': {
+                    'dispatch': {'expression': 'p', 'values': 'bp_x'},
+                    'cost': {'expression': 'op_cost', 'values': 'nope'},
+                }
+            },
             "undeclared parameter 'nope'",
             id='undeclared-parameter',
         ),
@@ -559,17 +569,17 @@ def test_a_link_outside_the_language_is_named_where_the_user_wrote_it(link_expre
     """The formulation checks its links itself, and that is the whole point.
 
     Lowering would catch these anyway — but only after expansion, so the error
-    would name ``cost_curve_link0``, a declaration the user never wrote. The
+    would name ``cost_curve_dispatch``, a declaration the user never wrote. The
     guard in ``_expr_dims`` exists to keep the message pointing at the
     ``piecewise:`` block and the link index instead.
     """
     raw = raw_of(NONCONVEX_YAML)
     block = next(iter(raw['piecewise']))
-    raw['piecewise'][block]['links'][0][0] = link_expression
+    raw['piecewise'][block]['links']['dispatch']['expression'] = link_expression
 
     with pytest.raises(PiecewiseExpansionError, match=message) as exc:
         expand_piecewise(schema_of(raw))
-    assert f"piecewise '{block}' link 0" in str(exc.value)
+    assert f"piecewise '{block}' link 'dispatch'" in str(exc.value)
 
 
 def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
@@ -581,14 +591,14 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
     ``lps.check()`` pass on a model ``lpspec_linopy.build`` refused: the same
     YAML, two answers (hard rule 3). Both refused it once the emitted
     declarations were judged too — but as a dimension error against
-    ``cost_curve_link1``, a constraint the author never wrote and a different
+    ``cost_curve_cost``, a constraint the author never wrote and a different
     name under ``method: lp``. The block now says it of the link itself.
     """
     raw = override(
         raw_of(NONCONVEX_YAML),
         **{'dimensions.zone': {'dtype': 'str'}, 'parameters.bp_y': {'dims': ['zone', 'bp']}},
     )
-    stray = r"link 1 values parameter 'bp_y' carries \['zone'\], which its expression does not"
+    stray = r"link 'cost' values parameter 'bp_y' carries \['zone'\], which its expression does not"
 
     with pytest.raises(PiecewiseExpansionError, match=stray):
         lps.check(raw)
@@ -866,8 +876,8 @@ piecewise:
     over: bp
     points: bp_present
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      dispatch: {expression: p, values: bp_x}
+      cost: {expression: op_cost, values: bp_y}
 
 constraints:
   balance:
@@ -924,7 +934,7 @@ def test_both_lanes_agree_on_a_masked_curve(short_curve_inputs, method, tmp_path
     """
     raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
     if method == 'lp':
-        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+        raw['piecewise']['cost_curve']['links']['cost']['sign'] = '>='
     path = tmp_path / 'masked.yaml'
     path.write_text(pyyaml.safe_dump(raw))
 
@@ -945,7 +955,7 @@ def test_a_masked_curve_reaches_the_optimum_its_own_points_put_it_at(short_curve
     """
     raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
     if method == 'lp':
-        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+        raw['piecewise']['cost_curve']['links']['cost']['sign'] = '>='
 
     result = lps.solve(raw, short_curve_inputs)
 
@@ -1089,7 +1099,7 @@ def test_points_may_name_the_curve_that_already_says_how_long_it_is(short_curve_
     )
     del raw['parameters']['bp_present']
     if method == 'lp':
-        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+        raw['piecewise']['cost_curve']['links']['cost']['sign'] = '>='
     data = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
 
     assert lps.solve(raw, data).objective == pytest.approx(155.0), 'the same curve, one table fewer'
@@ -1122,7 +1132,7 @@ def test_a_curve_may_start_anywhere_on_the_axis(short_curve_inputs):
     shifted_y = {('A', 1): 0.0, ('A', 2): 50.0, ('B', 1): 100.0, ('B', 2): 130.0}
     raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.points': 'bp_x', 'piecewise.cost_curve.method': 'lp'})
     del raw['parameters']['bp_present']
-    raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+    raw['piecewise']['cost_curve']['links']['cost']['sign'] = '>='
     data = {
         **{k: v for k, v in short_curve_inputs.items() if k != 'bp_present'},
         'load': pl.DataFrame({'value': [15.0]}),
@@ -1178,9 +1188,7 @@ piecewise:
     points: bp_present
     method: adjacency
     links:
-      - expression: rate
-        values: bp_rate
-        by: converter_of
+      on_the_curve: {expression: rate, values: bp_rate, by: converter_of}
 
 constraints:
   heat_balance:
@@ -1256,7 +1264,7 @@ def test_the_weights_stay_the_block_s_own(refined_inputs):
     assert expanded.variables['conversion_lam'].foreach == ['time', 'converter', 'bp'], (
         'the frame the links imply once the map is applied, in declared order'
     )
-    row = expanded.constraints['conversion_link0']
+    row = expanded.constraints['conversion_on_the_curve']
     assert row.foreach == ['time', 'flow'], 'the row sits on the frame the link carries, in declared order'
     assert 'at(conversion_lam, by=converter_of)' in row.expression, 'and reaches the weights through the lookup'
 
@@ -1295,19 +1303,23 @@ def test_a_mapped_link_may_be_bounded_by_its_curve(refined_inputs):
     bounded = override(
         raw_of(REFINED),
         **{
-            'piecewise.conversion.links': [
-                {'expression': 'rate', 'values': 'bp_rate', 'sign': '>=', 'by': 'converter_of'}
-            ]
+            'piecewise.conversion.links': {
+                'on_the_curve': {'expression': 'rate', 'values': 'bp_rate', 'sign': '>=', 'by': 'converter_of'}
+            }
         },
     )
 
-    row = expand_piecewise(schema_of(bounded)).constraints['conversion_link0']
+    row = expand_piecewise(schema_of(bounded)).constraints['conversion_on_the_curve']
     assert row.expression.startswith('(rate) >='), 'the sign reaches the row the map builds'
 
     three = override(
         raw_of(REFINED),
         **{
-            'piecewise.conversion.links': [['rate', 'bp_rate'], ['rate', 'bp_rate'], ['rate', 'bp_rate', '>=']],
+            'piecewise.conversion.links': {
+                'a': {'expression': 'rate', 'values': 'bp_rate'},
+                'b': {'expression': 'rate', 'values': 'bp_rate'},
+                'c': {'expression': 'rate', 'values': 'bp_rate', 'sign': '>='},
+            },
         },
     )
     with pytest.raises(SchemaError, match='exactly two links to say which side'):
@@ -1318,7 +1330,7 @@ def test_a_mapped_link_says_so_on_the_link():
     """`by:` sits beside `sign:` — both say how this tie meets the weights."""
     block = schema_of(raw_of(REFINED)).model_dump()['piecewise']['conversion']
 
-    assert block['links'][0] == {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of'}, (
+    assert block['links']['on_the_curve'] == {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of'}, (
         'a mapped link says so where it is written, and round-trips as it was'
     )
 
@@ -1349,7 +1361,7 @@ def test_a_links_rows_follow_what_it_ties(refined_inputs):
     ('patch', 'match'),
     [
         pytest.param(
-            {'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'by': 'nope'}]},
+            {'piecewise.conversion.links': {'on_the_curve': {'expression': 'rate', 'values': 'bp_rate', 'by': 'nope'}}},
             'undeclared lookup',
             id='by-names-no-lookup',
         ),
@@ -1357,10 +1369,10 @@ def test_a_links_rows_follow_what_it_ties(refined_inputs):
             {
                 'parameters.bp_load': {'dims': ['converter', 'bp']},
                 'variables.load': {'foreach': ['converter', 'time'], 'bounds': {'lower': 0}},
-                'piecewise.conversion.links': [
-                    {'expression': 'load', 'values': 'bp_load', 'by': 'converter_of'},
-                    ['load', 'bp_load'],
-                ],
+                'piecewise.conversion.links': {
+                    'mapped': {'expression': 'load', 'values': 'bp_load', 'by': 'converter_of'},
+                    'plain': {'expression': 'load', 'values': 'bp_load'},
+                },
             },
             'takes its rows nowhere',
             id='a-map-nothing-travels',
@@ -1385,7 +1397,10 @@ def test_one_link_is_enough_under_a_map():
     """
     lps.check(raw_of(REFINED))  # a single link, and it holds five flows
 
-    plain = override(raw_of(REFINED), **{'piecewise.conversion.links': [['rate', 'bp_rate']]})
+    plain = override(
+        raw_of(REFINED),
+        **{'piecewise.conversion.links': {'on_the_curve': {'expression': 'rate', 'values': 'bp_rate'}}},
+    )
     with pytest.raises(SchemaError, match='at least two links'):
         lps.check(plain)
 

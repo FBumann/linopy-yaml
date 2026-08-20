@@ -68,9 +68,7 @@ piecewise:
     points: bp_present
     method: adjacency
     links:
-      - expression: rate
-        values: bp_rate
-        by: converter_of
+      on_the_curve: {expression: rate, values: bp_rate, by: converter_of}
 
 constraints:
   heat_balance:

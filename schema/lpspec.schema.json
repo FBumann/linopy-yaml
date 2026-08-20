@@ -373,11 +373,11 @@
           "title": "Description"
         },
         "links": {
-          "items": {
+          "additionalProperties": {
             "$ref": "#/$defs/PiecewiseLink"
           },
           "title": "Links",
-          "type": "array"
+          "type": "object"
         },
         "method": {
           "default": "adjacency",
@@ -415,58 +415,46 @@
       "type": "object"
     },
     "PiecewiseLink": {
-      "anyOf": [
-        {
-          "additionalProperties": false,
-          "description": "One link of a piecewise block: an expression pinned to a values curve.\n\nWritten in YAML as ``[expression, values]`` or ``[expression, values,\nsign]`` and serialised back to exactly that form, so a round trip through\n:meth:`Model.to_yaml` reproduces the file.\n\n``by`` puts this link *below* the weights: its expression carries a finer\ndim \u2014 one row per flow where the weights are per converter \u2014 and the lookup\nnamed carries each row to the set it reads. It sits here beside ``sign``\nbecause both say how this tie meets the weights, and a link carrying it is\nwritten as a mapping.\n\nA link's rows exist where its expression does: a masked variable takes them\nwith it, which the build reports as an omission.",
-          "properties": {
-            "by": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "title": "By"
-            },
-            "expression": {
-              "title": "Expression",
+      "additionalProperties": false,
+      "description": "One link of a piecewise block: an expression pinned to a values curve.\n\nWritten under a name of its own, and the emitted row takes it: a link\ncalled ``dispatch`` in block ``cost_curve`` becomes the constraint\n``cost_curve_dispatch``. That name is what a reader of a dual, of the\ntypeset math, or of an error meets, so the model chooses it rather than\ninheriting a position in a list.\n\n``sign`` and ``by`` both say how this tie meets the weights: whether it is\npinned to them or bounded by them, and \u2014 where its expression carries a\nfiner dim, one row per flow to their one per converter \u2014 which lookup\ncarries each row to the set it reads.\n\nA link's rows exist where its expression does: a masked variable takes them\nwith it, which the build reports as an omission.",
+      "properties": {
+        "by": {
+          "anyOf": [
+            {
               "type": "string"
             },
-            "sign": {
-              "default": "==",
-              "enum": [
-                "==",
-                "<=",
-                ">="
-              ],
-              "title": "Sign",
-              "type": "string"
-            },
-            "values": {
-              "title": "Values",
-              "type": "string"
+            {
+              "type": "null"
             }
-          },
-          "required": [
-            "expression",
-            "values"
           ],
-          "title": "PiecewiseLink",
-          "type": "object"
+          "default": null,
+          "title": "By"
         },
-        {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 3,
-          "minItems": 2,
-          "type": "array"
+        "expression": {
+          "title": "Expression",
+          "type": "string"
+        },
+        "sign": {
+          "default": "==",
+          "enum": [
+            "==",
+            "<=",
+            ">="
+          ],
+          "title": "Sign",
+          "type": "string"
+        },
+        "values": {
+          "title": "Values",
+          "type": "string"
         }
-      ]
+      },
+      "required": [
+        "expression",
+        "values"
+      ],
+      "title": "PiecewiseLink",
+      "type": "object"
     },
     "SosBlock": {
       "additionalProperties": false,

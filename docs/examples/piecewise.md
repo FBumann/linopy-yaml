@@ -60,11 +60,11 @@ $$\sum_{g \in \mathcal{G}} p_{t,g} = \mathit{load}_{t} \qquad \forall\thinspace 
 
 $$\sum_{k \in \mathcal{K}} \lambda_{t,g,k} = 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
-**`cost_curve_link0`**
+**`cost_curve_dispatch`**
 
 $$p_{t,g} = \sum_{k \in \mathcal{K}} \lambda_{t,g,k} \cdot x_{g,k} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
-**`cost_curve_link1`**
+**`cost_curve_cost`**
 
 $$\mathrm{cost}_{t,g} = \sum_{k \in \mathcal{K}} \lambda_{t,g,k} \cdot y_{g,k} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
@@ -139,8 +139,8 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           binaries to keep them on one segment
         over: bp
         links:
-          - [p, bp_x]
-          - [op_cost, bp_y]
+          dispatch: {expression: p, values: bp_x}
+          cost: {expression: op_cost, values: bp_y}
         method: convex
 
     constraints:

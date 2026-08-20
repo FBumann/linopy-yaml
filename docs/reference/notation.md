@@ -546,8 +546,8 @@ A curve is sugar: what prints is the formulation it expands to, which is the mat
 economies_of_scale:
   over: bp
   links:
-    - [shipment, bp_x]
-    - [scaled, bp_y]
+    shipped: {expression: shipment, values: bp_x}
+    cost: {expression: scaled, values: bp_y}
 ```
 
 $$\sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_lam}_{p,m,b} = 1 \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M}$$
@@ -572,8 +572,8 @@ $$\mathit{economies\_of\_scale\_seg}_{p,m,b} \in \{0, 1\} \qquad \forall\thinspa
 cost_curve:
   over: bp
   links:
-    - [p, bp_x]
-    - [op_cost, bp_y]
+    dispatch: {expression: p, values: bp_x}
+    cost: {expression: op_cost, values: bp_y}
   method: sos2
 ```
 
@@ -595,8 +595,8 @@ $$\left( \mathit{cost\_curve\_lam}_{t,g,b} \right)_{b \in \mathcal{B}} \in \math
 cost_curve:
   over: bp
   links:
-    - [p, bp_x]
-    - [op_cost, bp_y]
+    dispatch: {expression: p, values: bp_x}
+    cost: {expression: op_cost, values: bp_y}
   method: convex
 ```
 
@@ -616,8 +616,8 @@ $$0 \le \mathit{cost\_curve\_lam}_{t,g,b} \le 1 \qquad \forall\thinspace t \in \
 cost_curve:
   over: bp
   links:
-    - [p, bp_x]
-    - [op_cost, bp_y, ">="]
+    dispatch: {expression: p, values: bp_x}
+    cost: {expression: op_cost, values: bp_y, sign: ">="}
   method: lp
 ```
 

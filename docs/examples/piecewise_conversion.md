@@ -81,7 +81,7 @@ $$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{is\_power}_{f} = \m
 
 $$\sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{t,c,b} = 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace c \in \mathcal{C}$$
 
-**`conversion_link0`**
+**`conversion_on_the_curve`**
 
 $$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{t,\mathrm{converter\_of}(f),b} \cdot \mathit{bp}^{\mathrm{rate}}_{f,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace f \in \mathcal{F}$$
 
@@ -185,9 +185,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         points: bp_present
         method: adjacency
         links:
-          - expression: rate
-            values: bp_rate
-            by: converter_of
+          on_the_curve: {expression: rate, values: bp_rate, by: converter_of}
 
     constraints:
       heat_balance:

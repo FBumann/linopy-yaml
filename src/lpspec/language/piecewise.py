@@ -13,8 +13,8 @@ needs only the breakpoint coordinate parameters themselves, no derived data
       curve:
         over: bp
         links:
-          - [power, power_bp]
-          - [fuel * eff, fuel_bp, "<="]
+          power: {expression: power, values: power_bp}
+          fuel: {expression: fuel * eff, values: fuel_bp, sign: "<="}
 
 with F = the union of the links' dims, it emits:
 
@@ -25,8 +25,8 @@ with F = the union of the links' dims, it emits:
       curve_convexity(F):     sum(curve_lam, over=bp) == 1
       curve_pick(F):          sum(curve_seg, over=bp) == 1        (method: adjacency)
       curve_adjacency(F, bp): curve_lam <= curve_seg + shift(curve_seg, over=bp, offset=1, edge=0)
-      curve_link0(F):         (power) == sum(curve_lam * power_bp, over=bp)
-      curve_link1(F):         (fuel * eff) <= sum(curve_lam * fuel_bp, over=bp)
+      curve_power(F):         (power) == sum(curve_lam * power_bp, over=bp)
+      curve_fuel(F):          (fuel * eff) <= sum(curve_lam * fuel_bp, over=bp)
 
 **Only the restriction on λ varies**, which is why it is one ``method:`` key
 and not three formulations (:data:`~lpspec.language.model.PIECEWISE_METHODS`).
@@ -45,8 +45,8 @@ file's and the *encoding* stays the sink's (``relational/sinks/sos.py``).
 
 A link expression is judged against the *language* before expansion — resolved,
 degree-checked, dims from :mod:`~lpspec.language.dimensions` — which keeps
-``p * p`` named against the link the user wrote rather than ``curve_link0``, a
-declaration they never saw.
+``p * p`` named against the link the user wrote — and now under the name they
+gave it, which the emitted row carries too.
 
 Two verdicts are deliberately elsewhere: what a plan node can represent is the
 consuming lane's business, and curvature is a property of the breakpoint
@@ -80,7 +80,7 @@ def mask_of(block: str, pw: PiecewiseBlock) -> str | None:
     """
     if pw.points is None:
         return None
-    return f'{block}_points' if pw.points in {link.values for link in pw.links} else pw.points
+    return f'{block}_points' if pw.points in {link.values for link in pw.links.values()} else pw.points
 
 
 def expand_piecewise(schema: Model) -> Model:
@@ -140,10 +140,10 @@ def expand_piecewise(schema: Model) -> Model:
             'foreach': list(frame),
             'expression': f'sum({lam}, over={pw.over}) == {rhs}',
         }
-        for i, link in enumerate(pw.links):
-            rows = _declared_order(schema, _expr_dims(schema, link.expression, f'{ctx_of(name)} link {i}'))
+        for tie, link in pw.links.items():
+            rows = _declared_order(schema, _expr_dims(schema, link.expression, f"{ctx_of(name)} link '{tie}'"))
             weights = f'at({lam}, by={link.by})' if link.mapped else lam
-            raw['constraints'][f'{name}_link{i}'] = {
+            raw['constraints'][f'{name}_{tie}'] = {
                 'foreach': rows if link.mapped else list(frame),
                 'expression': (f'({link.expression}) {link.sign} sum({weights} * {link.values}, over={pw.over})'),
             }
@@ -250,7 +250,7 @@ def _weights_frame(schema: Model, link: Any, ctx: str) -> frozenset[str]:
     return (dims - {lookup.over}) | ({into} if into is not None else frozenset())
 
 
-def _check_the_map_travels(schema: Model, ctx: str, i: int, link: Any) -> None:
+def _check_the_map_travels(schema: Model, ctx: str, tie: str, link: Any) -> None:
     """A link's ``by:`` carries its rows somewhere, or it is not a map.
 
     Two ways it does not: naming no lookup, and mapping out of a dim the rows
@@ -261,11 +261,11 @@ def _check_the_map_travels(schema: Model, ctx: str, i: int, link: Any) -> None:
         return
     lookup = schema.lookups.get(link.by)
     if lookup is None:
-        raise PiecewiseExpansionError(f"{ctx}: link {i} by references undeclared lookup '{link.by}'")
-    dims = _expr_dims(schema, link.expression, f'{ctx} link {i}')
+        raise PiecewiseExpansionError(f"{ctx}: link '{tie}' by references undeclared lookup '{link.by}'")
+    dims = _expr_dims(schema, link.expression, f"{ctx} link '{tie}'")
     if lookup.over not in dims:
         raise PiecewiseExpansionError(
-            f"{ctx}: link {i} maps by '{link.by}', which is over '{lookup.over}' — a dim its "
+            f"{ctx}: link '{tie}' maps by '{link.by}', which is over '{lookup.over}' — a dim its "
             f'expression does not carry (it has {sorted(dims)}), so the map takes its rows nowhere'
         )
 
@@ -287,29 +287,29 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
     any link's expression may be the one that carries the dim, and the last of
     them widens the frame as readily as the first. Left to the emitted
     declarations the same file is still refused, but by a dimension error
-    naming ``<block>_chord`` or ``<block>_link0`` — a constraint the author
-    never wrote, and a different one per method.
+    naming ``<block>_chord`` or the emitted row of a link — a constraint the
+    author did not write in those words, and a different one per method.
     """
     ctx = f"piecewise '{name}'"
     if pw.over not in schema.dimensions:
         raise PiecewiseExpansionError(f"{ctx}: over references undeclared dimension '{pw.over}'")
-    for i, link in enumerate(pw.links):
-        _check_the_map_travels(schema, ctx, i, link)
+    for tie, link in pw.links.items():
+        _check_the_map_travels(schema, ctx, tie, link)
 
     frame: list[str] = []
-    for i, link in enumerate(pw.links):
+    for tie, link in pw.links.items():
         values = link.values
         if values not in schema.parameters:
-            raise PiecewiseExpansionError(f"{ctx}: link {i} values references undeclared parameter '{values}'")
+            raise PiecewiseExpansionError(f"{ctx}: link '{tie}' values references undeclared parameter '{values}'")
         if pw.over not in schema.parameters[values].dims:
             raise PiecewiseExpansionError(
-                f"{ctx}: link {i} values parameter '{values}' must carry dim "
+                f"{ctx}: link '{tie}' values parameter '{values}' must carry dim "
                 f"'{pw.over}' (has {schema.parameters[values].dims})"
             )
-        for d in _declared_order(schema, _weights_frame(schema, link, f'{ctx} link {i}')):
+        for d in _declared_order(schema, _weights_frame(schema, link, f"{ctx} link '{tie}'")):
             if d == pw.over:
                 raise PiecewiseExpansionError(
-                    f"{ctx}: link {i} expression already carries the breakpoint dim '{pw.over}'"
+                    f"{ctx}: link '{tie}' expression already carries the breakpoint dim '{pw.over}'"
                 )
             if d not in frame:
                 frame.append(d)
@@ -323,8 +323,8 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
             if d not in frame:
                 frame.append(d)
 
-    for i, link in enumerate(pw.links):
-        rows = sorted(_expr_dims(schema, link.expression, f'{ctx} link {i}')) if link.mapped else frame
+    for tie, link in pw.links.items():
+        rows = sorted(_expr_dims(schema, link.expression, f"{ctx} link '{tie}'")) if link.mapped else frame
         if stray := [d for d in schema.parameters[link.values].dims if d != pw.over and d not in rows]:
             varies = (
                 'this link builds a row per coordinate of'
@@ -332,7 +332,7 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 else 'the block builds one curve per coordinate of'
             )
             raise PiecewiseExpansionError(
-                f"{ctx}: link {i} values parameter '{link.values}' carries {stray}, which its "
+                f"{ctx}: link '{tie}' values parameter '{link.values}' carries {stray}, which its "
                 f'expression does not — {varies} {rows}, so a curve varying along {stray} has '
                 f"nothing to vary against. Declare a link expression over it, or drop it from '{link.values}'."
             )
@@ -364,7 +364,7 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
         f'{name}_chord',
         f'{name}_domain_lo',
         f'{name}_domain_hi',
-        *(f'{name}_link{i}' for i in range(len(pw.links))),
+        *(f'{name}_{tie}' for tie in pw.links),
     )
     for kind, emitted, declared in (
         ('variable', (f'{name}_lam', f'{name}_seg'), schema.variables),

@@ -67,8 +67,8 @@ piecewise:
     description: cost bounded below by the curve, which is exact where the curve is convex
     over: bp
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, '>=']
+      p: {expression: p, values: bp_x}
+      op_cost: {expression: op_cost, values: bp_y, sign: ">="}
     method: lp
 
 constraints:
@@ -111,8 +111,8 @@ piecewise:
     description: each unit's cost bounded below by its own segment lines
     over: bp
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, '>=']
+      p: {expression: p, values: bp_x}
+      op_cost: {expression: op_cost, values: bp_y, sign: ">="}
     method: lp
 
 constraints:
@@ -201,7 +201,10 @@ def test_lp_and_convex_reach_one_optimum():
     """
     hull = pyyaml.safe_load(MODEL)
     hull['piecewise']['cost_curve']['method'] = 'convex'
-    hull['piecewise']['cost_curve']['links'] = [['p', 'bp_x'], ['op_cost', 'bp_y']]
+    hull['piecewise']['cost_curve']['links'] = {
+        'dispatch': {'expression': 'p', 'values': 'bp_x'},
+        'cost': {'expression': 'op_cost', 'values': 'bp_y'},
+    }
 
     with lps.solve(pyyaml.safe_load(MODEL), _relational()) as lines, lps.solve(hull, _relational()) as weights:
         assert lines.objective == pytest.approx(weights.objective, rel=RTOL)
@@ -228,7 +231,10 @@ def test_the_bounded_link_may_be_written_first():
     out against `bp_x` either way round.
     """
     swapped = pyyaml.safe_load(MODEL)
-    swapped['piecewise']['cost_curve']['links'] = [['op_cost', 'bp_y', '>='], ['p', 'bp_x']]
+    swapped['piecewise']['cost_curve']['links'] = {
+        'cost': {'expression': 'op_cost', 'values': 'bp_y', 'sign': '>='},
+        'dispatch': {'expression': 'p', 'values': 'bp_x'},
+    }
 
     with lps.solve(swapped, _relational()) as result:
         assert result.objective == pytest.approx(sum(_on_the_curve(x) for x in LOAD), rel=RTOL), (
@@ -261,7 +267,10 @@ def test_a_one_breakpoint_curve_is_that_point_under_the_weight_methods(method):
     """
     point = pyyaml.safe_load(MODEL)
     point['piecewise']['cost_curve']['method'] = method
-    point['piecewise']['cost_curve']['links'] = [['p', 'bp_x'], ['op_cost', 'bp_y']]
+    point['piecewise']['cost_curve']['links'] = {
+        'dispatch': {'expression': 'p', 'values': 'bp_x'},
+        'cost': {'expression': 'op_cost', 'values': 'bp_y'},
+    }
 
     with lps.solve(point, _relational(load=[10.0, 10.0, 10.0], xs=[10.0], ys=[25.0])) as result:
         assert result.objective == pytest.approx(3 * 25.0, rel=RTOL), (
@@ -354,8 +363,17 @@ def test_the_saving_is_columns_paid_for_in_rows():
     """
     sizes = {}
     for method, links in (
-        ('convex', [['p', 'bp_x'], ['op_cost', 'bp_y']]),
-        ('lp', [['p', 'bp_x'], ['op_cost', 'bp_y', '>=']]),
+        (
+            'convex',
+            {'dispatch': {'expression': 'p', 'values': 'bp_x'}, 'cost': {'expression': 'op_cost', 'values': 'bp_y'}},
+        ),
+        (
+            'lp',
+            {
+                'dispatch': {'expression': 'p', 'values': 'bp_x'},
+                'cost': {'expression': 'op_cost', 'values': 'bp_y', 'sign': '>='},
+            },
+        ),
     ):
         model = pyyaml.safe_load(MODEL)
         model['piecewise']['cost_curve']['method'] = method
@@ -392,7 +410,10 @@ def test_the_curvature_the_sign_states_is_required(sign, sense, ys, wanted):
     curve, since it is not mixed; only `lp` cares which way it bends.
     """
     model = pyyaml.safe_load(MODEL)
-    model['piecewise']['cost_curve']['links'] = [['p', 'bp_x'], ['op_cost', 'bp_y', sign]]
+    model['piecewise']['cost_curve']['links'] = {
+        'dispatch': {'expression': 'p', 'values': 'bp_x'},
+        'cost': {'expression': 'op_cost', 'values': 'bp_y', 'sign': sign},
+    }
     model['objective']['sense'] = sense
     with pytest.raises(PiecewiseExpansionError, match=f'exact only for a {wanted} curve'):
         lps.solve(model, _relational(ys=ys))
@@ -472,12 +493,23 @@ def test_a_concave_curve_is_refused_whatever_the_breakpoints_are_measured_in():
     ('patch', 'match'),
     [
         pytest.param(
-            {'links': [['p', 'bp_x'], ['op_cost', 'bp_y']]},
+            {
+                'links': {
+                    'dispatch': {'expression': 'p', 'values': 'bp_x'},
+                    'cost': {'expression': 'op_cost', 'values': 'bp_y'},
+                }
+            },
             'needs exactly one link bounded by the curve',
             id='both-links-pinned',
         ),
         pytest.param(
-            {'links': [['p', 'bp_x'], ['op_cost', 'bp_y'], ['p', 'bp_x']]},
+            {
+                'links': {
+                    'dispatch': {'expression': 'p', 'values': 'bp_x'},
+                    'cost': {'expression': 'op_cost', 'values': 'bp_y'},
+                    'again': {'expression': 'p', 'values': 'bp_x'},
+                }
+            },
             'needs exactly one link bounded by the curve',
             id='three-links-none-bounded',
         ),

@@ -74,11 +74,11 @@ $$\sum_{g \in \mathcal{G}} p_{t,g} = \mathit{load}_{t} \qquad \forall\thinspace 
 
 $$\sum_{b \in \mathcal{B}} \mathit{cost\_curve\_lam}_{t,g,b} = 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
-**`cost_curve_link0`**
+**`cost_curve_dispatch`**
 
 $$p_{t,g} = \sum_{b \in \mathcal{B}} \mathit{cost\_curve\_lam}_{t,g,b} \cdot \mathit{bp}^{\mathrm{x}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
-**`cost_curve_link1`**
+**`cost_curve_cost`**
 
 $$\mathit{op\_cost}_{t,g} = \sum_{b \in \mathcal{B}} \mathit{cost\_curve\_lam}_{t,g,b} \cdot \mathit{bp}^{\mathrm{y}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
@@ -154,8 +154,8 @@ piecewise:
       declared as a set instead
     over: bp
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      dispatch: {expression: p, values: bp_x}
+      cost: {expression: op_cost, values: bp_y}
     method: sos2
 
 constraints:

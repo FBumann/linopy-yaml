@@ -48,8 +48,8 @@ piecewise:
       declared as a set instead
     over: bp
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      dispatch: {expression: p, values: bp_x}
+      cost: {expression: op_cost, values: bp_y}
     method: sos2
 
 constraints:

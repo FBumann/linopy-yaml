@@ -154,8 +154,8 @@ piecewise:
       optimal either way
     over: bp
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, ">="]
+      dispatch: {expression: p, values: bp_x}
+      cost: {expression: op_cost, values: bp_y, sign: ">="}
     method: lp
 
 constraints:

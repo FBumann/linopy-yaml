@@ -354,15 +354,16 @@ class ExpressionBlock(_StrictBlock):
 class PiecewiseLink(_StrictBlock):
     """One link of a piecewise block: an expression pinned to a values curve.
 
-    Written in YAML as ``[expression, values]`` or ``[expression, values,
-    sign]`` and serialised back to exactly that form, so a round trip through
-    :meth:`Model.to_yaml` reproduces the file.
+    Written under a name of its own, and the emitted row takes it: a link
+    called ``dispatch`` in block ``cost_curve`` becomes the constraint
+    ``cost_curve_dispatch``. That name is what a reader of a dual, of the
+    typeset math, or of an error meets, so the model chooses it rather than
+    inheriting a position in a list.
 
-    ``by`` puts this link *below* the weights: its expression carries a finer
-    dim — one row per flow where the weights are per converter — and the lookup
-    named carries each row to the set it reads. It sits here beside ``sign``
-    because both say how this tie meets the weights, and a link carrying it is
-    written as a mapping.
+    ``sign`` and ``by`` both say how this tie meets the weights: whether it is
+    pinned to them or bounded by them, and — where its expression carries a
+    finer dim, one row per flow to their one per converter — which lookup
+    carries each row to the set it reads.
 
     A link's rows exist where its expression does: a masked variable takes them
     with it, which the build reports as an omission.
@@ -380,30 +381,13 @@ class PiecewiseLink(_StrictBlock):
         """Whether this link's rows sit below the weights and reach them through a lookup."""
         return self.by is not None
 
-    @model_validator(mode='before')
-    @classmethod
-    def _from_list(cls, data: Any) -> Any:
-        if isinstance(data, list):
-            if not 2 <= len(data) <= 3:
-                msg = f'each link must be [expression, values] or [expression, values, sign], got {data!r}'
-                raise ValueError(msg)
-            return dict(zip(('expression', 'values', 'sign'), data, strict=False))
-        return data
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler) -> JsonSchemaValue:
-        """The published schema admits the ``[expression, values, sign?]`` form every link is written as."""
-        list_form = {'type': 'array', 'items': {'type': 'string'}, 'minItems': 2, 'maxItems': 3}
-        return _also_written_as(core_schema, handler, list_form)
-
     @model_serializer
-    def _as_list(self) -> list[str] | dict[str, str]:
-        if self.by is None:
-            return [self.expression, self.values] if self.sign == '==' else [self.expression, self.values, self.sign]
+    def _as_written(self) -> dict[str, str]:
+        """What the file said and nothing else — a default carries nothing to round-trip."""
         written = {'expression': self.expression, 'values': self.values}
         if self.sign != '==':
             written['sign'] = self.sign
-        return written | {'by': self.by}
+        return written if self.by is None else written | {'by': self.by}
 
 
 #: How a ``piecewise:`` block restricts its interpolation weights, and what
@@ -451,7 +435,7 @@ class PiecewiseBlock(_StrictBlock):
     _label: ClassVar[str] = 'a piecewise declaration'
 
     over: str
-    links: list[PiecewiseLink]
+    links: dict[str, PiecewiseLink]
     method: PiecewiseMethod = 'adjacency'
     active: str | None = None
     points: str | None = None
@@ -475,7 +459,7 @@ class PiecewiseBlock(_StrictBlock):
         can be the wrong way round in ``links:`` — so this is what reads the
         pair anywhere the ``y`` side is the one being stated.
         """
-        x, y = self.links
+        x, y = self.links.values()
         return (y, x) if x.sign != '==' else (x, y)
 
     @property
@@ -505,7 +489,7 @@ class PiecewiseBlock(_StrictBlock):
     @property
     def mapped(self) -> bool:
         """Whether any link sits below the weights."""
-        return any(link.mapped for link in self.links)
+        return any(link.mapped for link in self.links.values())
 
     @model_validator(mode='after')
     def _check_the_links_are_enough(self) -> PiecewiseBlock:
@@ -523,7 +507,7 @@ class PiecewiseBlock(_StrictBlock):
                 'per member and the members are data.'
             )
             raise ValueError(msg)
-        if not self.mapped and any(link.sign != '==' for link in self.links) and len(self.links) != 2:
+        if not self.mapped and any(link.sign != '==' for link in self.links.values()) and len(self.links) != 2:
             msg = (
                 "a non-'==' sign bounds one side of a curve by the other, so it needs exactly two "
                 'links to say which side. A link carrying by: is a row per member, each bounded '
@@ -540,7 +524,7 @@ class PiecewiseBlock(_StrictBlock):
                 'is only well-defined for a single y=f(x) curve).'
             )
             raise ValueError(msg)
-        if self.method == 'lp' and sum(link.sign != '==' for link in self.links) != 1:
+        if self.method == 'lp' and sum(link.sign != '==' for link in self.links.values()) != 1:
             msg = (
                 "method: lp needs exactly one link bounded by the curve — a '<=' or '>=' third "
                 'element on it. With every link pinned the segment lines have nothing to bound.'
@@ -553,11 +537,11 @@ class PiecewiseBlock(_StrictBlock):
 
     @field_validator('links')
     @classmethod
-    def _check_links(cls, v: list[PiecewiseLink]) -> list[PiecewiseLink]:
+    def _check_links(cls, v: dict[str, PiecewiseLink]) -> dict[str, PiecewiseLink]:
         if not v:
             msg = 'piecewise needs a link.'
             raise ValueError(msg)
-        non_eq = [link.sign for link in v if link.sign != '==']
+        non_eq = [link.sign for link in v.values() if link.sign != '==']
         if len(non_eq) > 1:
             msg = "at most one link may carry a non-'==' sign."
             raise ValueError(msg)
