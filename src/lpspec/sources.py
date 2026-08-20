@@ -26,14 +26,18 @@ import polars as pl
 from lpspec.errors import (
     DataError,
     PiecewiseExpansionError,
+    coordinates_shown,
     curve_mask_is_not_contiguous_message,
     curve_with_a_hole_message,
-    declared_index_also_supplied_message,
     declared_map_needs_labels_message,
     dense_array_message,
     index_without_its_label_column_message,
+    lookup_relation_columns_message,
+    lookup_relation_holes_message,
+    lookup_relation_not_single_valued_message,
     map_keys_are_not_labels_message,
     multi_indexed_series_message,
+    one_fact_two_authors_message,
     unknown_source_keys_message,
 )
 from lpspec.frames import as_frame, is_dense_array, is_multi_indexed, labels_frame
@@ -63,9 +67,11 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
     curvature guard see every in-memory shape alike (:mod:`frames`
     is where the shapes are recognised).
 
-    **Dimensions are resolved first**, because the plain-Python parameter
-    shapes :func:`_spread` accepts — a sequence, one number for every
-    coordinate — are meaningless without the labels they are spread over. A
+    **Dimensions are resolved first** — ownership included, so a map with two
+    authors is refused before either author's table is read — because the
+    plain-Python parameter shapes :func:`_spread` accepts (a sequence, one
+    number for every coordinate) are meaningless without the labels they are
+    spread over. A
     ``piecewise:`` block's derived flags come next, before the parameter loop
     asks for data no caller can have (:func:`derive_curve_edges`).
 
@@ -74,18 +80,26 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
     of the question on this side would answer only for the in-memory half — a
     second wording for one defect, and the narrower one.
 
+    A **lookup** key carries a relation rather than a source of its own
+    (:func:`supplied_maps`): it is merged onto the index of the dimension it
+    runs over, so what comes back is keyed by parameters and dimensions only.
+
     Raises:
         DataError: A key naming nothing the model declares, a declared parameter
             with no data, or one bound to something neither a tidy table nor
             :func:`_spread` can read.
     """
-    known = {**schema.parameters, **schema.dimensions}
+    known = {**schema.parameters, **schema.dimensions, **schema.lookups}
     if unknown := set(data) - set(known):
         raise DataError(unknown_source_keys_message(unknown, known))
 
+    indices = dimension_sources(schema, data)
+    supplied = supplied_maps(schema, data)
     sources: dict[str, TidySource] = {
-        dname: polars_index(source, dname, schema.dimensions[dname].dtype, schema.declared_maps(dname))
-        for dname, source in dimension_sources(schema, data).items()
+        dname: polars_index(
+            source, dname, schema.dimensions[dname].dtype, schema.declared_maps(dname), supplied.get(dname, {})
+        )
+        for dname, source in indices.items()
     }
 
     sources = derive_curve_edges(schema, derive_curve_masks(schema, sources, data), data)
@@ -126,10 +140,10 @@ def dimension_sources(schema: Model, data: Mapping[str, object]) -> dict[str, ob
     dimensions *need* one is the caller's question — the engine asks it of the
     dims its program spans, the eager lane of every dim the file declares.
 
-    A declared map does not travel with the source. It is
-    :meth:`~lpspec.language.model.Model.declared_maps`, which both readers ask
-    for themselves, so a map the file declares is read against the labels the
-    same way whether those came from the file or from the caller.
+    A map does not travel with the source, whether the file declares it
+    (:meth:`~lpspec.language.model.Model.declared_maps`) or the caller supplies
+    it under the lookup's own key (:func:`supplied_maps`). Both are read
+    against the labels the same way, and the labels are whatever this returns.
 
     Raises:
         DataError: A dimension whose index two authors claim, or whose maps the
@@ -143,13 +157,92 @@ def dimension_sources(schema: Model, data: Mapping[str, object]) -> dict[str, ob
             sources[dname] = data[dname]
         elif ddef.values is not None:
             sources[dname] = ddef.values
-        elif maps_only := schema.declared_maps(dname):
-            raise DataError(declared_map_needs_labels_message(dname, maps_only))
+        elif authors := map_authors(schema, data, dname):
+            raise DataError(declared_map_needs_labels_message(dname, authors))
 
     return sources
 
 
-def polars_index(source: object, dim: str, dtype: str, maps: Mapping[str, Mapping[Any, Any]]) -> pl.LazyFrame:
+def map_authors(schema: Model, data: Mapping[str, object], dimension: str) -> list[str]:
+    """Where each map over *dimension* comes from, spelled as the reader wrote it.
+
+    Only used to refuse a dimension whose maps have an author and whose labels
+    have none, which is why it names the *author* rather than the lookup: the
+    two spellings want different fixes and neither is "pass the column".
+    """
+    return [f'lookups.{n}.values' for n in sorted(schema.declared_maps(dimension))] + [
+        f'sources[{n!r}]' for n in sorted(schema.lookups) if n in data and schema.lookups[n].over == dimension
+    ]
+
+
+def supplied_maps(schema: Model, data: Mapping[str, object]) -> dict[str, dict[str, pl.LazyFrame]]:
+    """Every lookup the caller passed under its own key, as a checked relation.
+
+    A lookup arrives the way a parameter does — its own key, its own table,
+    rows only where it has something to say. The two columns are the dimension
+    it runs ``over`` and the space its values are labels of
+    (:meth:`~lpspec.language.model.Model.label_space`), and what comes back is
+    that table under the lookup's own name, which is the spelling every lane
+    reads a map by.
+
+    A partial map is the rows it has. That is the whole of why this exists:
+    as a column on an index a map needs a cell per label and spells "unmapped"
+    as a null, which is the one place the absence rules read a hole as data.
+
+    Returns:
+        ``{dimension: {lookup name: (dimension, lookup) frame}}``, empty where
+        the caller supplied no relation.
+
+    Raises:
+        DataError: A relation short of either column, carrying a null in one,
+            or mapping a label twice.
+    """
+    supplied: dict[str, dict[str, pl.LazyFrame]] = {}
+    for name in sorted(schema.lookups):
+        if name not in data:
+            continue
+        over, space = schema.lookups[name].over, schema.label_space(name)
+        supplied.setdefault(over, {})[name] = _read_relation(data[name], name, over, space)
+    return supplied
+
+
+def _read_relation(source: object, lookup: str, over: str, space: str) -> pl.LazyFrame:
+    """One supplied relation, read and held to the rules a map has.
+
+    Collected here rather than left lazy: both checks below read every row, and
+    a scan re-read per pass is what #273 came from.
+    """
+    table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else as_frame(source, (over, space))
+    if table is None:
+        raise DataError(
+            f"lookup '{lookup}': cannot adapt {type(source).__name__} to a table — pass any "
+            f"table polars can read with columns ['{over}', '{space}'] (polars, pyarrow, "
+            f'pandas), or a parquet path.'
+        )
+    available = table.collect_schema().names()
+    if any(c not in available for c in (over, space)):
+        raise DataError(lookup_relation_columns_message(lookup, over, space, available))
+    rows = table.select(over, pl.col(space).alias(lookup)).collect()
+
+    holes = rows.filter(pl.col(over).is_null() | pl.col(lookup).is_null())
+    if holes.height:
+        shown = coordinates_shown([over], holes.select(over).head(5).rows())
+        raise DataError(lookup_relation_holes_message(lookup, space, holes.height, shown))
+
+    twice = rows.group_by(over).len().filter(pl.col('len') > 1).sort(over)
+    if twice.height:
+        raise DataError(lookup_relation_not_single_valued_message(lookup, over, [str(x) for x in twice[over]]))
+
+    return rows.lazy()
+
+
+def polars_index(
+    source: object,
+    dim: str,
+    dtype: str,
+    maps: Mapping[str, Mapping[Any, Any]],
+    supplied: Mapping[str, pl.LazyFrame],
+) -> pl.LazyFrame:
     """One dimension's index, read once — the only read of one in the package.
 
     :func:`dimension_sources` says which object supplies an index; this turns
@@ -170,7 +263,7 @@ def polars_index(source: object, dim: str, dtype: str, maps: Mapping[str, Mappin
     available = table.collect_schema().names()
     if dim not in available:
         raise DataError(index_without_its_label_column_message(dim, available))
-    return _read_declared_maps_against(table, dim, maps) if maps else table
+    return _read_maps_against(table, dim, maps, supplied) if maps or supplied else table
 
 
 def _spread(name: str, obj: object, dims: list[str], sources: Mapping[str, object]) -> pl.LazyFrame:
@@ -266,10 +359,11 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
 
     Two facts, each with one home. **The labels** — which members exist, and in
     what order — come from ``dimensions.<d>.values`` or from the caller's ``d``
-    source. **Each lookup's map** comes from ``lookups.<x>.values`` or from a
-    column named after it in that same source. Resolving either by precedence
-    would let the file describe a model the caller does not build, so both are
-    refused here, before either lane reads a table.
+    source. **Each lookup's map** comes from exactly one of three: its own
+    ``lookups.<x>.values``, its own source key, or a column named after it on
+    the index it runs over. Resolving any pair by precedence would let one
+    author describe a model another does not build, so every pair is refused
+    here, before either lane reads a table.
 
     A declared map is deliberately *not* a claim on the labels: it is a partial
     relation over the dimension, free to omit members and written in whatever
@@ -282,17 +376,30 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
         DataError: Naming the dimension, the declaration, and the key or column
             that collided with it.
     """
+    for name in sorted(schema.lookups):
+        if name in data and schema.lookups[name].values is not None:
+            raise DataError(_map_said_twice(name, f'lookups.{name}.values', f'sources[{name!r}]'))
+
     for dim, ddef in schema.dimensions.items():
         if dim not in data:
             continue
         where = f"sources['{dim}']"
         if ddef.values is not None:
-            raise DataError(declared_index_also_supplied_message(dim, f'dimensions.{dim}.values', where))
+            raise DataError(
+                one_fact_two_authors_message(f"dimension '{dim}'s labels", f'dimensions.{dim}.values', where)
+            )
         carried = _column_names(data[dim], dim)
-        for name in sorted(schema.declared_maps(dim)):
-            if name in carried:
-                column = f"the '{name}' column of {where}"
-                raise DataError(declared_index_also_supplied_message(dim, f'lookups.{name}.values', column))
+        for name in sorted(n for n, lk in schema.lookups.items() if lk.over == dim and n in carried):
+            column = f"the '{name}' column of {where}"
+            if name in schema.declared_maps(dim):
+                raise DataError(_map_said_twice(name, f'lookups.{name}.values', column))
+            if name in data:
+                raise DataError(_map_said_twice(name, f'sources[{name!r}]', column))
+
+
+def _map_said_twice(lookup: str, first: str, second: str) -> str:
+    """One wording for each pair of authors a lookup's map can have."""
+    return one_fact_two_authors_message(f"the map for lookup '{lookup}'", first, second)
 
 
 def check_declared_map_keys(dim: str, maps: Mapping[str, Mapping[Any, Any]], labels: Sequence[Any]) -> None:
@@ -314,15 +421,23 @@ def check_declared_map_keys(dim: str, maps: Mapping[str, Mapping[Any, Any]], lab
             raise DataError(map_keys_are_not_labels_message(dim, name, strays, [str(x) for x in labels]))
 
 
-def _read_declared_maps_against(table: pl.LazyFrame, dim: str, maps: Mapping[str, Mapping[Any, Any]]) -> pl.LazyFrame:
-    """*table*'s labels, with each declared map read against them as a column.
+def _read_maps_against(
+    table: pl.LazyFrame,
+    dim: str,
+    maps: Mapping[str, Mapping[Any, Any]],
+    supplied: Mapping[str, pl.LazyFrame],
+) -> pl.LazyFrame:
+    """*table*'s labels, with every map over *dim* read against them as a column.
 
     The labels are the caller's and stay exactly as they arrive — order
     included. A label a map omits gets a null, which is what a partial relation
-    means; a key naming no label is refused first by
-    :func:`check_declared_map_keys`, so the left join can only ever add nulls.
-    :func:`check_index_ownership` has already refused a table carrying a column
-    a map also declares, so neither author can overwrite the other here.
+    means; a key naming no label is refused first, so a left join can only ever
+    add nulls. :func:`check_index_ownership` has already refused a second
+    author for any one map, so nothing here can overwrite anything.
+
+    The padding is this function's whole subject and stops at its edge: a map
+    is supplied as the rows it has, and becomes a column of the index because
+    that is the shape both lanes read a lookup in.
     """
     labels = table.select(dim).collect()[dim].to_list()
     check_declared_map_keys(dim, maps, labels)
@@ -332,6 +447,12 @@ def _read_declared_maps_against(table: pl.LazyFrame, dim: str, maps: Mapping[str
             on=dim,
             how='left',
         )
+    known, key = set(labels), table.collect_schema()[dim]
+    for name, relation in supplied.items():
+        rows = relation.collect()
+        if strays := sorted(str(x) for x in rows[dim] if x not in known):
+            raise DataError(map_keys_are_not_labels_message(dim, name, strays, [str(x) for x in labels], 'maps'))
+        table = table.join(rows.with_columns(pl.col(dim).cast(key)).lazy(), on=dim, how='left')
     return table
 
 
