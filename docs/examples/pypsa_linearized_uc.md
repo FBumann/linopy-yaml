@@ -100,7 +100,7 @@ $$0 \le \mathit{shut\_down}_{t,g} \le 1 \qquad \forall\thinspace t \in \mathcal{
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

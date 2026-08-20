@@ -72,7 +72,7 @@ $$0 \le p_{t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\thinspace t \in \mathcal
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

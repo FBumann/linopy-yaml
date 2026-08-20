@@ -80,7 +80,7 @@ $$0 \le p^{\mathrm{nom}}_{g} \le p^{\mathrm{nom,max}}_{g} \qquad \forall\thinspa
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

@@ -23,7 +23,7 @@ reference table in [examples/index.md](examples/index.md) (`tools/constructs.py`
 the *"the same model, as math"* block on each model page
 (`tools/gallery_math.py`), the operator math in
 [the operators page](reference/language/operators.md#as-math)
-(`tools/spec_math.py`), and the tables in
+(`tools/language/spec_math.py`), and the tables in
 [benchmarks.md](about/benchmarks.md) (`bench.report`, `bench.plot`). The
 catalogue is read off `mkdocs.yml`'s nav,
 so a model is added to the gallery list by adding it to the sidebar — one list,

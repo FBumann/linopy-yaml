@@ -176,7 +176,7 @@ $$0 \le \mathit{units}_{p} \le \mathit{units}^{\mathrm{available}}_{p} \qquad \f
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

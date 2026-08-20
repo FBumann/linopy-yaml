@@ -101,7 +101,7 @@ $$0 \le e^{\mathrm{nom}}_{s} \le e^{\mathrm{nom,max}}_{s} \qquad \forall\thinspa
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

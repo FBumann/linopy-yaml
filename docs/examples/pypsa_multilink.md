@@ -86,7 +86,7 @@ $$0 \le p_{l} \le p^{\mathrm{nom}}_{l} \qquad \forall\thinspace l \in \mathcal{L
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

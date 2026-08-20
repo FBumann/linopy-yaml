@@ -101,7 +101,7 @@ $$\mathit{build}_{t,v} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

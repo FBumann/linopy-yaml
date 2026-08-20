@@ -214,7 +214,7 @@ new primitive is taxed. What is planned, and why, is
 
 ### The Python surface
 
-**Nineteen names, and the count is the feature.** The model is the YAML file; Python
+**Twenty names, and the count is the feature.** The model is the YAML file; Python
 is how you *run* it — so the whole surface is the diagram above written out,
 with nothing that constructs math and nothing that reaches the plan. Names are
 `lpspec.` unless shown otherwise, and what each one *does* is

@@ -89,7 +89,7 @@ $$p_{s,t,g} \ge 0 \qquad \forall\thinspace s \in \mathcal{S},\enspace t \in \mat
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

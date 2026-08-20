@@ -40,7 +40,7 @@ tracks the model rather than a number someone guessed. What is missing is the
 The honest version is partition-wise execution, which the locality closure
 already guarantees is safe.
 
-**Answers, not just solutions.** A solved model should tell you why it is
+**A solve that explains itself.** A solved model should tell you why it is
 infeasible, what a row costs, and what changed since the last solve — without
 opening a file no editor can hold. Most of that is a query over frames that
 already exist.
@@ -53,10 +53,11 @@ by the number of component *types* while cardinality lives entirely in data.
 
 ## What it will not become
 
-**Two durable losses, and they are the price of the closed AST.** Structure that
-needs the solver's *answer* to decide the next row, inside one plan; and
-imperative modeling at all. What that price buys is load-time validation, two
-lanes on one language, and a build that streams. Everything else is scheduling.
+**Two durable losses, and they are the price of the closed AST.** One is
+structure that needs the solver's *answer* to decide the next row, inside one
+plan. The other is imperative modeling of any kind. What that price buys is
+load-time validation, two lanes on one language, and a build that streams.
+Everything else is scheduling.
 
 The specific refusals — data prep, arbitrary array ops, domain helpers,
 normalisation, in-plan conditionals, a Python modeling API — are in
@@ -86,8 +87,8 @@ string and *uncalled* macro template.
 (labelled DataArrays vs tidy tables — `to_dataarray` bridges), debugging (an
 IIS via Gurobi), lifecycle (mutate, re-solve, warm start,
 `relax`/`fix`), solver breadth (ten backends and four handoffs vs three
-direct sinks plus files), and the variable types and capabilities behind the capability
-model.
+direct sinks plus files), and the variable types and constraint kinds the
+capability model still gates.
 
 **The ranking this implies:** indexed access blocks whole model classes today;
 the operational verbs block using the engine at 3am; solver breadth blocks

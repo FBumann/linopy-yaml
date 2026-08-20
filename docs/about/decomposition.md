@@ -185,7 +185,7 @@ variables:
 constraints:
   capacity:
     foreach: [snapshot, generator]
-    expression: sum(p)<= cap_hat * avail
+    expression: p <= cap_hat * avail
   balance:
     foreach: [snapshot]
     expression: sum(p, over=generator) + short >= load
@@ -267,14 +267,14 @@ and prints the difference — `0.0e+00` above, asserted in
 
 This is the two-lane differential test aimed at an algorithm instead of an
 engine, and it is a property of writing models declaratively: the undecomposed
-form is always available, because it is just another file over the same data.
+form is always available, because it is another file over the same data.
 
 ## What is deliberately absent
 
 The loop above is not the hard part. What is missing is everything that makes a
 decomposition survive a real model: cut management as the master grows,
 stabilisation, multi-cut, tolerances that hold when duals are degenerate, and an
-answer for when convergence simply does not happen.
+answer for when convergence does not happen.
 
 That is the surface [#596](https://github.com/fluxopt/lpspec/issues/596) asks
 whether to own. Nothing here settles it. What this page settles is that the
