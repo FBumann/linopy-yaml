@@ -114,37 +114,38 @@ question.
 ```
 one set of weights ─────►  λ[boiler, t]            λ[chp, t]
 
-[fuel, bp_fuel]            fuel[boiler, t]         fuel[chp, t]
+fuel_in:                   fuel[boiler, t]         fuel[chp, t]
   one row per set
 
-[rate, bp_rate]            rate[boiler_fuel, t]    rate[chp_fuel, t]
+on_the_curve:              rate[boiler_fuel, t]    rate[chp_fuel, t]
   more rows than sets,     rate[boiler_heat, t]    rate[chp_heat, t]
   grouped by converter_of                          rate[chp_power, t]
 ```
 
 **The per-row answer is the lookup's own contents** — a table with one entry per
 flow, `boiler_heat → boiler` — so `by:` carries no per-row information. It names
-which table, which is one sentence about the block rather than a fact about any
-row.
+which table.
 
 **`by:` sits beside `sign:`, on the link**, because both say how that tie meets
-the weights: one says which set it reads, the other how it relates to them. A
-link carrying it is written as a mapping; every other link keeps the two-string
-form. That is how a curve ties **as many expressions as the data
-gives it** — a converter with a fourth flow is a row in the lookup rather than
-an edit to the model — and the block still writes the tie, so the weights stay
-its own. Nothing in the file names λ.
+the weights: one which set it reads, the other how it relates to them. That is
+how a curve ties **as many expressions as the data gives it** — a converter with
+a fourth flow is a row in the lookup rather than an edit to the model — and the
+block still writes the tie, so the weights stay its own. Nothing in the file
+names λ.
 
-Four things follow:
+The contract is one sentence: **every link lands on the frame, or on a
+refinement of it named by `by:`.** Three things follow:
 
-- **`by:` and `foreach:` travel together.** A link below the frame no longer
-  says where that frame is, so the block declares it; where no link is below it,
-  the links are the frame and declaring it again would be a second answer.
+- **The frame is what the links imply**, each with its own map applied: a link
+  over `[flow, time]` mapping `converter_of` puts the weights on
+  `[converter, time]`, and nothing declares that twice. A link carrying *fewer*
+  dims than the others is refused rather than broadcast — tied at every
+  coordinate of what it lacks, one capacity would pin every snapshot to a single
+  operating point, and the model would solve.
 - **A values parameter follows its link**: `bp_rate` is over `[flow, bp]` because
   that is where its rows sit, and `bp_fuel` over `[converter, bp]`.
-- **The map must land on the frame** — a lookup out of a dim some link carries,
-  into one the weights live on. A link carrying neither is refused, rather than
-  quietly widening the frame.
+- **A map that takes its rows nowhere is refused** — a lookup out of a dim the
+  link's expression does not carry.
 - **One link is enough when it carries a map**, and it may be bounded. The
   two-link minimum is about quantities, and a mapped link's quantities are the
   members its lookup carries; the same goes for a `<=` or `>=`, which needs two
