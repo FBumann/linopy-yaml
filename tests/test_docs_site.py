@@ -317,7 +317,11 @@ def _tabled_errors() -> set[str]:
 
 
 def _public_errors() -> set[str]:
-    """Every exception `lpspec.errors` defines, which is what a caller can catch.
+    """Every exception `lpspec.errors` exposes, which is what a caller can catch.
+
+    Read off `__all__` rather than off where the class is defined: the model
+    half of the hierarchy lives in `language/errors.py` and is re-exported
+    here, and a caller catching `lps.LanguageError` neither knows nor cares.
 
     `LpspecWarning` is not one: it is raised by nothing and carries advice, and
     the paragraph under the table is where it is documented.
@@ -326,11 +330,10 @@ def _public_errors() -> set[str]:
 
     return {
         name
-        for name, obj in vars(errors).items()
-        if isinstance(obj, type)
+        for name in errors.__all__
+        if isinstance(obj := getattr(errors, name), type)
         and issubclass(obj, Exception)
         and not issubclass(obj, Warning)
-        and obj.__module__ == errors.__name__
     }
 
 
