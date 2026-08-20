@@ -32,7 +32,7 @@ from lpspec.errors import (
     PiecewiseExpansionError,
     SchemaError,
 )
-from lpspec.language.model import Model
+from lpspec.language import Model
 from lpspec.strategy import EachCoordinate, EachWindow, solve_over
 from lpspec.typeset import SymbolTable, to_latex, to_markdown, to_typst
 

@@ -25,7 +25,7 @@ from lpspec.errors import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from lpspec.language.model import Model
+    from lpspec.language import Model
     from lpspec.sources import TidySource
 
 

@@ -946,7 +946,7 @@ def _rendered_trees() -> Iterator[object]:
 UNRESOLVED = {
     'UnresolvedNameNode',
     'UnresolvedComparisonNode',
-    '_UnresolvedPositionNode',
+    'UnresolvedPositionNode',
     'NameNode',
     'NameListNode',
     'KeywordNode',
@@ -1001,7 +1001,7 @@ def _calls(node: object) -> Iterator[FunctionCallNode]:
 UNREACHABLE = {
     'if isinstance(node, (NameNode, NameListNode, KeywordNode, DimensionNode, LookupNode, EdgeNode)):',
     "msg = f'{type(node).__name__} reached the typesetter; resolve the expression first.'",
-    'if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, _UnresolvedPositionNode)):',
+    'if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode)):',
     "msg = f'{type(node).__name__} reached the typesetter; resolve the where string first.'",
     'if not isinstance(node, ComparisonNode):',
     "msg = f'{context}: expected a comparison, got {type(node).__name__}'",

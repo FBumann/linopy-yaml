@@ -32,42 +32,43 @@ import xarray as xr
 
 from lpspec._notes import note
 from lpspec.errors import DataError, LaneError, LanguageError, null_bounds_message
-from lpspec.language import degree
-from lpspec.language.expression_parser import (
+from lpspec.language import (
+    EDGE_WRAP,
+    AndNode,
     ArithmeticNode,
     BinaryOperatorNode,
+    BooleanLiteralNode,
     ComparisonNode,
+    DimensionComparisonNode,
     DimensionNode,
+    DimensionPositionNode,
     EdgeNode,
     FunctionCallNode,
     KeywordNode,
-    LookupNode,
-    NameListNode,
-    NameNode,
-    NumberNode,
-    ParameterNode,
-    UnaryOperatorNode,
-    VariableNode,
-)
-from lpspec.language.operators import EDGE_WRAP, unknown_operator_message
-from lpspec.language.resolution import Namespace, expression_of, where_of
-from lpspec.language.where_parser import (
-    AndNode,
-    BooleanLiteralNode,
-    DimensionComparisonNode,
-    DimensionPositionNode,
     LookupComparisonNode,
     LookupDefinedNode,
+    LookupNode,
     LookupPairComparisonNode,
+    NameListNode,
+    NameNode,
+    Namespace,
     NotNode,
+    NumberNode,
     OrNode,
     ParameterComparisonNode,
     ParameterDefinedNode,
+    ParameterNode,
+    UnaryOperatorNode,
     UnresolvedComparisonNode,
     UnresolvedNameNode,
+    UnresolvedPositionNode,
     VariableDefinedNode,
+    VariableNode,
     WhereNode,
-    _UnresolvedPositionNode,
+    check_binary,
+    expression_of,
+    unknown_operator_message,
+    where_of,
 )
 from lpspec.linopy import absence
 from lpspec.linopy.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
@@ -78,7 +79,7 @@ if TYPE_CHECKING:
     import linopy
     import pandas as pd
 
-    from lpspec.language.model import Model
+    from lpspec.language import Model
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
 
@@ -341,7 +342,7 @@ def _eval_ast(
     overloads, and a call is :func:`_call`. The node kinds that reach here only
     through a bug say so rather than evaluating to something.
 
-    Binary nodes go through ``degree.check_binary`` first: ``**``, a quadratic
+    Binary nodes go through ``check_binary`` first: ``**``, a quadratic
     product and a variable divisor are all refused by ``language/degree.py``,
     the same verdict the relational lane asks for and in the same sentence.
     """
@@ -381,7 +382,7 @@ def _eval_ast(
         return operand
 
     if isinstance(node, BinaryOperatorNode):
-        degree.check_binary(node)
+        check_binary(node)
         left = _eval_ast(node.left, ctx)
         right = _eval_ast(node.right, ctx)
         return _ARITHMETIC_OPS[node.op](left, right)
@@ -902,10 +903,10 @@ def _eval_node(
     if isinstance(node, BooleanLiteralNode):
         return xr.DataArray(node.value)
 
-    if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, _UnresolvedPositionNode)):
+    if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode)):
         msg = (
             f'{type(node).__name__} reached the evaluator unresolved. '
-            f'Where strings must go through resolution.resolve_where() first.'
+            f'Where strings must go through lpspec.language.where_of() first.'
         )
         raise AssertionError(msg)
 

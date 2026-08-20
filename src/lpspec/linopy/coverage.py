@@ -18,19 +18,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import DataError, sparse_divisor_message, uncovered_constant_message
-from lpspec.language.expression_parser import (
-    BinaryOperatorNode,
-    NameNode,
-    ParameterNode,
-    VariableNode,
-    children,
-)
+from lpspec.language import BinaryOperatorNode, NameNode, ParameterNode, VariableNode, children
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from lpspec.language.expression_parser import ComparisonNode, ExpressionNode
-    from lpspec.language.model import Model
+    from lpspec.language import ComparisonNode, ExpressionNode, Model
 
 
 def gaps_under(array: Any, mask: Any) -> int:

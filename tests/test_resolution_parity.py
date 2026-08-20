@@ -112,12 +112,12 @@ def test_every_resolved_predicate_is_parity_tested():
     from lpspec.language.where_parser import (
         UnresolvedComparisonNode,
         UnresolvedNameNode,
+        UnresolvedPositionNode,
         WhereNode,
-        _UnresolvedPositionNode,
     )
 
     # rewritten by resolution, never evaluated
-    unresolved = {UnresolvedNameNode, UnresolvedComparisonNode, _UnresolvedPositionNode}
+    unresolved = {UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode}
     expected = set(get_args(WhereNode)) - unresolved
 
     ns = Namespace(('p',), ('p_max', 'cost', 'load'), ('snapshot', 'generator'))
