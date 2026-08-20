@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
-from lpspec.errors import LanguageError
+from lpspec.errors import LaneError, LanguageError
 from lpspec.relational import plan
 from lpspec.relational.engines.polars.binding import BoundSources
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
@@ -289,7 +289,7 @@ def test_wrapping_is_modulo_and_acyclic_is_not():
 
 
 def test_a_shape_operator_along_a_dim_the_expression_lacks_is_refused():
-    with pytest.raises(LanguageError, match='translation'):
+    with pytest.raises(LaneError, match='shift'):
         compiler().expression(plan.Translate(plan.Parameter('cost'), 'snapshot', offset=1), 'test')
 
 

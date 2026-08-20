@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from lpspec.errors import DataError, LanguageError, LpspecError
+from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
 from lpspec.language.model import Model
 from lpspec.lowering import lower_program
 from lpspec.relational import chunking
@@ -2162,3 +2162,123 @@ def test_a_zero_objective_coefficient_is_not_handed_to_the_solver():
         tables = bound._engine._tables()
         assert tables.obj.height == 1, 'the zero-cost column reached the objective frame'
         assert list(tables.obj['coeff']) == [5.0]
+
+
+#: A constant part beside a term, under each operator that acts along a dim the
+#: constant does not carry. `check` accepts every one, `lower_program` passes it,
+#: and the eager lane builds and solves it — so the file is sayable and only this
+#: lane is short. #1137, found on `sum(over=)` and true of four of them.
+CONSTANT_BESIDE_A_TERM = {
+    'dimensions': {'t': {'dtype': 'int'}},
+    'parameters': {'k': {'dims': ['t']}, 'd': {'dims': []}, 'load': {'dims': []}},
+    'variables': {'x': {'foreach': ['t'], 'where': 't != 2', 'bounds': {'lower': 0}}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
+}
+
+
+def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = False) -> dict:
+    """Data for the model above, carrying only what that model declares.
+
+    The variable is absent at ``t = 2``, so a masked reduction counts two slots
+    and not three — which is the whole reason cardinality cannot stand in for
+    the count.
+    """
+    index = {'t': [0, 1, 2]}
+    sources: dict = {'k': [1.0, 1.0, 1.0], 'load': 10.0}
+    sources['d'] = [1.0, 1.0, 1.0] if over_the_dim else 1.0
+    if 'r_of' in expression:
+        index['r_of'] = ['n', 'n', 's']
+        sources['r'] = ['n', 's']
+    sources['t'] = pl.DataFrame(index)
+    return sources
+
+
+#: Every operator that acts along a dim, with the objective the eager lane
+#: reaches from the file *as written* — which is the number the rewrite owes.
+CONSTANT_BESIDE_A_TERM_CASES = [
+    ('sum(x * k + d, over=t) >= load', 8.0, 'sum-over'),
+    ('sum(sum(x * k + d, by=r_of), over=r) >= load', 8.0, 'sum-by'),
+    ('sum(shift(x * k + d, over=t, offset=1, edge=0), over=t) >= load', 8.0, 'shift'),
+    ('sum(sum_back(x * k + d, over=t, within=2), over=t) >= load', 3.0, 'sum-back'),
+]
+
+#: The refusal is the lane's for all four; only `sum_back`'s *rewrite* answers
+#: the wrong number, so the xfail belongs to that test and not to the class.
+REWRITE_IS_BROKEN_ON = {
+    'sum-back': pytest.mark.xfail(
+        reason='#1142 — sum_back keeps a constant at a slot the variable is absent from, '
+        'so the rewrite reaches 2.5 where the eager lane reaches 3.0',
+        strict=True,
+    )
+}
+
+REFUSAL_CASES = [pytest.param(expression, id=name) for expression, _, name in CONSTANT_BESIDE_A_TERM_CASES]
+REWRITE_CASES = [
+    pytest.param(
+        expression, answer, id=name, marks=[REWRITE_IS_BROKEN_ON[name]] if name in REWRITE_IS_BROKEN_ON else []
+    )
+    for expression, answer, name in CONSTANT_BESIDE_A_TERM_CASES
+]
+
+
+def _constant_beside_a_term(expression: str, *, over_the_dim: bool = False) -> dict:
+    """The model, optionally with the rewrite the refusal names applied.
+
+    `r` and its lookup are added only for the case that groups into them: a
+    dimension nothing uses as an axis is advice `check` issues, and the suite
+    turns warnings into errors, so carrying them for every case would fail the
+    other three for a reason that has nothing to do with the gap.
+    """
+    model = {**CONSTANT_BESIDE_A_TERM}
+    parameters = dict(model['parameters'])
+    if over_the_dim:
+        parameters['d'] = {'dims': ['t']}
+    if 'r_of' in expression:
+        model['dimensions'] = {**model['dimensions'], 'r': {'dtype': 'str'}}
+        model['lookups'] = {'r_of': {'over': 't', 'into': 'r'}}
+    return {
+        **model,
+        'parameters': parameters,
+        'constraints': {'bal': {'foreach': [], 'expression': expression}},
+    }
+
+
+@pytest.mark.parametrize('expression', REFUSAL_CASES)
+def test_a_constant_beside_a_term_is_a_lane_gap_not_a_language_error(expression):
+    """#1137: the refusal is this lane's, so it may not wear the language's class.
+
+    `LanguageError` here says the file is unsayable, which is false twice over:
+    `check` passes with no data, and the eager lane builds the model and reaches
+    *answer*. What is true is that this lane cannot represent a constant
+    fragment with no rows for the dim the operator acts along — which is what
+    `LaneError` is for. All four operators reach the same wall, so a fix for one
+    that left the others is a fix for a symptom.
+    """
+    model = _constant_beside_a_term(expression)
+    lps.check(model)
+
+    with pytest.raises(LaneError) as refusal:
+        lps.solve(model, _constant_beside_a_term_sources(expression))
+    text = str(refusal.value)
+    assert "constraint 'bal'" in text, 'a refusal names where in the file it happened'
+    assert 'Declare the parameter over' in text, 'and the rewrite that reaches the same number'
+    assert 'lpspec.linopy.build' in text, 'and the lane that builds the file as written'
+    assert not isinstance(refusal.value, LanguageError), (
+        'a lane gap is not a language error — the file is sayable and the other lane builds it'
+    )
+
+
+@pytest.mark.parametrize(('expression', 'answer'), REWRITE_CASES)
+def test_the_rewrite_the_lane_gap_names_reaches_the_answer(expression, answer):
+    """The message is only worth its words if what it tells you to do works.
+
+    Declaring the constant over the dim gives the fragment the rows this lane
+    needs, and the number it then reaches is the one the eager lane reaches from
+    the unrewritten file — so the rewrite preserves the model rather than
+    quietly answering a different one.
+    """
+    rewritten = _constant_beside_a_term(expression, over_the_dim=True)
+    sources = _constant_beside_a_term_sources(expression, over_the_dim=True)
+    assert lps.solve(rewritten, sources).objective == pytest.approx(answer), (
+        'the rewrite answers what the eager lane answers for the file as written'
+    )
