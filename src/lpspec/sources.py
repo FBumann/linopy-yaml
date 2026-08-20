@@ -443,7 +443,8 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> N
             if present is None:
                 continue
             extents = {d: _label_frame(d, sources, present) for d in dims}
-            if mask is None:
+            members = _members(schema, link, sources)
+            if mask is None and members is None:
                 expected = 1
                 for labels in extents.values():
                     expected *= labels.select(pl.len()).collect().item()
@@ -456,7 +457,8 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> N
                         )
                     )
                 continue
-            required = _required_under_mask(_through_lookup(schema, link, mask, sources), extents, dims, present)
+            reach = _through_lookup(schema, link, mask, sources) if mask is not None else members
+            required = _required_under_mask(reach, extents, dims, present)
             counts = pl.collect_all([required.select(pl.len()), present.select(pl.len())])
             if required.join(present, on=dims, how='anti').head(1).collect().height:
                 raise DataError(
@@ -505,6 +507,29 @@ def _prefix_mask(schema: Model, block: str, pw: Any, sources: Mapping[str, TidyS
         shown = ', '.join(f'{d}={broken.row(0, named=True)[d]!r}' for d in frame_dims)
         raise DataError(curve_mask_is_not_contiguous_message(block, mask, pw.over, shown))
     return marked.select(dims)
+
+
+def _members(schema: Model, link: Any, sources: Mapping[str, TidySource]) -> pl.LazyFrame | None:
+    """The coordinates a mapped link actually builds rows for, or ``None``.
+
+    A link reaches the weights through its lookup, and a **null** there says the
+    member belongs to no group — a flow on no curve, whose row the absence rules
+    drop. So a curve owes it no breakpoints, and asking for them would refuse a
+    model for data it never reads.
+
+    ``None`` where the link is not mapped, or the lookup's index is not readable
+    here — binding refuses that on its own terms.
+    """
+    if not link.mapped:
+        return None
+    lookup = schema.lookups[link.by]
+    index = sources.get(lookup.over)
+    if index is None:
+        return None
+    table = pl.scan_parquet(index) if isinstance(index, (str, Path)) else index
+    if link.by not in table.collect_schema().names():
+        return None
+    return table.filter(pl.col(link.by).is_not_null()).select(lookup.over)
 
 
 def _through_lookup(schema: Model, link: Any, mask: pl.LazyFrame, sources: Mapping[str, TidySource]) -> pl.LazyFrame:

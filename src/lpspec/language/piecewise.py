@@ -92,6 +92,12 @@ def expand_piecewise(schema: Model) -> Model:
     leaving the first lambda unconstrained by segment selection — a wrong MILP
     with no error, which is why #289 kept the escape hatch.
 
+    A mapped link's rows are masked by its own lookup, because a **null** there
+    says the member belongs to no group: a flow on no curve. Left unmasked the
+    row would still build — the pullback is absent, but it sits inside
+    ``sum(…, over=bp)``, and absence does not spread out of a reduction, so the
+    row would read ``rate == 0`` and pin a quantity the curve never described.
+
     ``points:`` masks the *declarations* — the weights and the segment binaries
     — and no constraint. Every emitted row either reduces over the breakpoint
     axis, where absence does not spread, or carries a masked weight, which
@@ -145,6 +151,7 @@ def expand_piecewise(schema: Model) -> Model:
             weights = f'at({lam}, by={link.by})' if link.mapped else lam
             raw['constraints'][f'{name}_{tie}'] = {
                 'foreach': rows if link.mapped else list(frame),
+                **({'where': link.by} if link.mapped else {}),
                 'expression': (f'({link.expression}) {link.sign} sum({weights} * {link.values}, over={pw.over})'),
             }
         if pw.method == 'sos2':

@@ -150,6 +150,9 @@ refinement of it named by `by:`.** Three things follow:
   that is where its rows sit, and `bp_fuel` over `[converter, bp]`.
 - **A map that takes its rows nowhere is refused** — a lookup out of a dim the
   link's expression does not carry.
+- **A member the lookup leaves null is on no curve**, so the link builds it no
+  row and asks it for no breakpoints. A flow that belongs to no converter is
+  tied by nothing, which is what a partial lookup already means everywhere else.
 - **One link is enough when it carries a map**, and it may be bounded. The
   two-link minimum is about quantities, and a mapped link's quantities are the
   members its lookup carries; the same goes for a `<=` or `>=`, which needs two

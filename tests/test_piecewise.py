@@ -1317,6 +1317,30 @@ def test_a_link_below_the_frame_must_say_how_it_reaches_the_weights():
         lps.check(raw)
 
 
+def test_a_member_on_no_curve_is_tied_by_nothing(refined_inputs):
+    """A null lookup says the member belongs to no group, and its row goes with it.
+
+    Two ways this went wrong before, and both are silent: the hole guard asked
+    for breakpoints the curve never described, and — supplied them — the row
+    still built. The pullback is absent there, but it sits inside
+    `sum(…, over=bp)`, and absence does not spread out of a reduction, so the
+    row read `rate == 0` and pinned a flow the curve says nothing about.
+    """
+    spare = dict(REFINED_FLOWS) | {'spare': None}
+    data = {
+        **refined_inputs,
+        'flow': pl.DataFrame({'flow': list(spare), 'converter_of': list(spare.values())}),
+        'is_heat': pl.DataFrame({'flow': list(spare), 'value': [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]}),
+        'fuel_price': pl.DataFrame({'flow': list(spare), 'value': [30.0, 0.0, 30.0, 0.0, 0.0, 1.0]}),
+    }
+
+    result = lps.solve(raw_of(REFINED), data)  # no breakpoints supplied for 'spare' at all
+
+    rate = {(row['flow'], row['time']): row['value'] for row in result.primal('rate').to_dicts()}
+    assert rate[('spare', 0)] == pytest.approx(45.0), 'a flow on no curve is free, and here it is the cheapest heat'
+    assert rate[('boiler_fuel', 0)] == pytest.approx(0.0), 'so the curved converter stays off'
+
+
 def test_a_mapped_link_may_be_bounded_by_its_curve(refined_inputs):
     """A sign needs two links to say which side is bounded — unless the map says it.
 
