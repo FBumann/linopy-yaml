@@ -600,9 +600,11 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     maps parameter names to whatever its lane holds — :func:`tidy_sources`'
     frames and paths, or the linopy lane's ``xr.Dataset`` — and a path is
     scanned for its two columns rather than skipped, since a verdict that
-    turned on how the numbers were handed over is no verdict at all. Only a
-    block whose parameters are absent is skipped. Called by both lanes, which
-    is why it sits beside ``tidy_sources``.
+    turned on how the numbers were handed over is no verdict at all. A block
+    is skipped where its parameters are absent, and where nothing supplies its
+    breakpoint dimension's index: with no index there is no order, so there is
+    no question here to answer, and binding's own message names what is
+    missing rather than this one calling a curve backwards.
 
     **The breakpoints are walked in the ``over`` dimension's own index order**,
     which is the order the model is built in — what ``shift`` walks and what
@@ -661,6 +663,8 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
             raise ModuleNotFoundError(msg) from exc
         ctx = f"piecewise '{name}'"
         x_link, y_link = pw.curve
+        if pw.over not in values:
+            continue
         try:
             arrays = [_as_dataarray(schema, x_link.values, values), _as_dataarray(schema, y_link.values, values)]
             if pw.points is not None:

@@ -524,8 +524,11 @@ class PolarsCompiler:
         Position means the coordinate here too. The label frame is row-major
         over the product in each dimension's own index order (*not*
         lexicographic dim order, which is why sorting by the dim columns does
-        not match), so sorting the parameter by those ordinals reproduces it
-        exactly and the value column is attached rather than joined.
+        not match), so each parameter row's slot is computed from its own
+        labels' ordinals and its value scattered there. **The table's row order
+        is nothing**: which slot a row lands in is decided by the coordinate it
+        carries, and ``_scattered`` refuses a product any slot of which nothing
+        wrote.
 
         **Wrong bounds are a wrong model with no error**, so this is refused
         unless all three hold, each a fact already computed:
