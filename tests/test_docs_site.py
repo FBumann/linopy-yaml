@@ -218,7 +218,7 @@ def test_the_operator_math_is_current():
     operator, and what it would rot into is a reference page describing an
     operator the language stopped having.
     """
-    from tools import spec_math
+    from tools.language import spec_math
 
     assert spec_math.main(['--check']) == 0, 'stale operator math'
 
@@ -232,7 +232,7 @@ def test_every_operator_in_the_table_has_a_probe():
     is asserted too — the prose table is the order a reader meets them, and two
     tables that disagree about it are read as two different sets.
     """
-    from tools import spec_math
+    from tools.language import spec_math
 
     assert spec_math.table_operators() == list(spec_math.OPERATORS), (
         f'{spec_math.PAGE.name} and tools/spec_math.OPERATORS name different operators, '
@@ -243,7 +243,7 @@ def test_every_operator_in_the_table_has_a_probe():
 
 def test_no_probe_without_a_row():
     """The reverse: a model in `examples/operators/` that the page never shows."""
-    from tools import spec_math
+    from tools.language import spec_math
 
     orphans = sorted(p.stem for p in spec_math.PROBES.glob('*.yaml') if p.stem not in set(spec_math.OPERATORS.values()))
     assert not orphans, f'operator probes nothing renders: {orphans}'
@@ -255,7 +255,7 @@ def test_no_probe_without_a_row():
 
 def test_the_notation_page_is_current():
     """The generated page equals what the fixture renders."""
-    from tools import notation
+    from tools.language import notation
 
     assert notation.main(['--check']) == 0, 'stale notation page'
 
@@ -266,11 +266,11 @@ def test_the_notation_page_shows_every_declaration_in_the_fixture():
     The chain is: `tests/test_typeset.py` holds the fixture to the language, so
     a construct the language has is a declaration in that file; this asserts
     every such declaration reaches the page. The fixture is read here rather
-    than through `tools.notation`, which would only prove the tool agrees with
+    than through `tools.language.notation`, which would only prove the tool agrees with
     itself — a block shape its scanner does not recognise is exactly the way
     the page would quietly become *most* constructs.
     """
-    from tools import notation
+    from tools.language import notation
 
     declared, section = set(), None
     for line in notation.MODEL.read_text().splitlines():
@@ -281,7 +281,7 @@ def test_the_notation_page_shows_every_declaration_in_the_fixture():
     shown = {match[1] for match in re.finditer(r'^#### `(.+?)`', notation.PAGE.read_text(), re.MULTILINE)}
     assert not declared - shown, (
         f'declarations in {notation.MODEL.name} that the notation page never shows: {sorted(declared - shown)}. '
-        f'Run `uv run python -m tools.notation`.'
+        f'Run `uv run python -m tools.language.notation`.'
     )
 
 
@@ -293,7 +293,7 @@ def test_the_notation_page_shows_every_way_a_curve_expands():
     the section's `method:` captions can be read as the whole list.
     """
     from lpspec.language.model import PIECEWISE_METHODS
-    from tools import notation
+    from tools.language import notation
 
     shown = set(re.findall(r'\*\*`method: (\w+)`\*\*', notation.PAGE.read_text()))
     assert shown == set(PIECEWISE_METHODS), (

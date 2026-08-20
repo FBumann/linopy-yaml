@@ -33,7 +33,8 @@ from lpspec.typeset.format import OPERATOR_NAMES
 from lpspec.typeset.symbols import _derive_name_symbol
 from tests import golden
 from tests.conftest import MODEL_PATHS, override
-from tools import gallery_math, spec_math
+from tools import gallery_math
+from tools.language import spec_math
 
 if TYPE_CHECKING:
     from lpspec.typeset.format import Format
