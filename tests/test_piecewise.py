@@ -1246,3 +1246,77 @@ def test_the_epigraph_pattern_needs_no_formulation_machinery(epigraph_inputs):
         for (s, g), pv in p.items():
             expected = max(sl * pv + ic for sl, ic in zip(slopes.loc[g], icepts.loc[g], strict=True))
             assert gc[(s, g)] == pytest.approx(expected, abs=1e-6)
+
+
+@pytest.mark.parametrize(
+    ('patch', 'match'),
+    [
+        pytest.param(
+            {
+                'parameters.gate_rows': {'dims': ['snapshot'], 'dtype': 'bool'},
+                'variables.u': {'foreach': ['snapshot'], 'domain': 'binary', 'where': 'gate_rows'},
+            },
+            'Declare `absence: zero`',
+            id='a-masked-gate-variable',
+        ),
+        pytest.param(
+            {
+                'dimensions.unit': {'dtype': 'str'},
+                'lookups.unit_of': {'over': 'snapshot', 'into': 'unit'},
+                'variables.u_unit': {'foreach': ['unit'], 'domain': 'binary', 'bounds': {}},
+                'piecewise.cost_curve.activity': 'at(u_unit, by=unit_of)',
+            },
+            "lookup 'unit_of'",
+            id='a-gate-pulled-back-through-a-lookup',
+        ),
+        pytest.param(
+            {'piecewise.cost_curve.activity': 'shift(u, over=snapshot, offset=1)'},
+            'no `edge=`',
+            id='a-gate-shifted-with-no-edge',
+        ),
+    ],
+)
+def test_a_gate_that_can_go_absent_is_refused(patch, match):
+    """A gate with a coordinate where it does not exist is refused (#1158).
+
+    The convexity row is ``sum(lam, over=bp) == (activity)`` and absence does
+    not spread out of a reduction, so an absent gate took the *row* with it:
+    the weights stayed, unconstrained, and the curve was silently relaxed
+    rather than pinned off. Measured on a curve with a no-load intercept it
+    bought 900.00 where the answer is 1050.00, reported as nothing louder than
+    a ``rows_not_built`` count.
+    """
+    with pytest.raises(PiecewiseExpansionError, match=match):
+        expand_piecewise(schema_of(GATED_YAML, **patch))
+
+
+def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs):
+    """`absence: zero` is the spelling the refusal above asks for, and it holds
+    the formulation together: the row is built everywhere, reading
+    ``sum(lam) == 0`` where the gate does not exist."""
+    raw = raw_of(GATED_YAML)
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool'}
+    raw['variables']['u'] = {
+        'foreach': ['snapshot'],
+        'domain': 'binary',
+        'where': 'gate_rows',
+        'absence': 'zero',
+    }
+
+    gated = [True, False] * 6
+    data = {
+        **nonconvex_inputs,
+        'on_flag': pd.Series([float(g) for g in gated], index=pd.RangeIndex(12, name='snapshot')),
+        'gate_rows': pd.Series(gated, index=pd.RangeIndex(12, name='snapshot')),
+    }
+    model = lps.build(raw, data)
+    omitted = set(model.diagnostics().omissions['constraint'])
+    assert not [c for c in omitted if c.startswith('cost_curve')], (
+        'a gate that says what its absence means leaves every row the block emits standing'
+    )
+
+    result = model.solve()
+    cost = by_coord(result, 'op_cost', 'snapshot')
+    for s, on in enumerate(gated):
+        expected = curve(data['load'][s], data['bp_x'], data['bp_y']) if on else 0.0
+        assert cost[s] == pytest.approx(expected, abs=1e-6), 'the curve is off where the gate does not exist'

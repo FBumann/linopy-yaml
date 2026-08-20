@@ -49,6 +49,27 @@ values parameter short of a row does not build a shorter curve: the
 coefficient, which is a breakpoint at the origin the file never declared. Such a
 table is refused when data binds.
 
+**A gate exists everywhere the curve does.** The convexity row reads
+`sum(lam, over=bp) == (activity)`, and [absence](absence.md#how-absence-travels)
+does not spread out of a reduction: where the gate is absent the *row* is not
+built, so the weights it was holding down are left free and the curve is
+relaxed rather than pinned off — a cheaper answer off the curve, with nothing
+but a `rows_not_built` count to say so. A gate under a `where:` therefore has to
+say what its absence *means*, and `absence: zero` is what says the curve is off
+there:
+
+<!-- doctest: wrap=variables -->
+```yaml
+running:
+  foreach: [snapshot, generator]
+  domain: binary
+  where: committable
+  absence: zero  # no gate here means no curve here, not no row here
+```
+
+A gate read through a lookup, or through a `shift` with no `edge=`, has no such
+spelling — both are refused when the block loads, before any data binds.
+
 **The breakpoint order is `over`'s index order**, the one every dimension has:
 the order its labels are first written in, which `shift` walks and
 `index(bp, 0)` names. So the `bp` index is the curve's x-axis, and a values

@@ -60,12 +60,20 @@ from typing import TYPE_CHECKING, Any
 from lpspec.language.degree import check_expression
 from lpspec.language.dimensions import dims_of
 from lpspec.language.errors import LanguageError, PiecewiseExpansionError
-from lpspec.language.expression_parser import ComparisonNode, parse_expression
+from lpspec.language.expression_parser import (
+    ArithmeticNode,
+    ComparisonNode,
+    FunctionCallNode,
+    LookupNode,
+    VariableNode,
+    children,
+    parse_expression,
+)
 from lpspec.language.model import Model, PiecewiseBlock
 from lpspec.language.resolution import Namespace, resolve_expression
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
 
 def mask_of(block: str, pw: PiecewiseBlock) -> str | None:
@@ -273,6 +281,7 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
     if pw.activity is not None:
         if pw.activity in schema.variables and schema.variables[pw.activity].domain != 'binary':
             raise PiecewiseExpansionError(f"{ctx}: activity variable '{pw.activity}' must be binary")
+        _refuse_a_gate_that_can_go_absent(schema, ctx, pw.activity)
         for d in _declared_order(schema, _expr_dims(schema, pw.activity, f'{ctx} activity')):
             if d == pw.over:
                 raise PiecewiseExpansionError(f"{ctx}: activity must not carry the breakpoint dim '{pw.over}'")
@@ -343,6 +352,24 @@ def _declared_order(schema: Model, dims: frozenset[str]) -> list[str]:
     return declared + sorted(dims.difference(declared))
 
 
+def _resolved(schema: Model, text: str, ctx: str) -> ArithmeticNode:
+    """*text* as typed nodes, resolved against *schema*.
+
+    Both questions this module asks of an expression — its dims, and whether it
+    can go absent — are asked of the resolved tree, since a bare name says
+    nothing about which of them it is.
+    """
+    ast = parse_expression(text)
+    if isinstance(ast, ComparisonNode):
+        raise PiecewiseExpansionError(f'{ctx}: link expressions must not contain a comparison, got {text!r}')
+    errors: list[str] = []
+    resolved = resolve_expression(ast, Namespace.of(schema), ctx, errors)
+    if resolved is None:
+        raise PiecewiseExpansionError('\n'.join(errors))
+    assert not isinstance(resolved, ComparisonNode)
+    return resolved
+
+
 def _expr_dims(schema: Model, text: str, ctx: str) -> frozenset[str]:
     """Dims of an affine link expression.
 
@@ -353,14 +380,7 @@ def _expr_dims(schema: Model, text: str, ctx: str) -> frozenset[str]:
     the expression is a different question, asked later by whichever lane
     builds a plan.
     """
-    ast = parse_expression(text)
-    if isinstance(ast, ComparisonNode):
-        raise PiecewiseExpansionError(f'{ctx}: link expressions must not contain a comparison, got {text!r}')
-    errors: list[str] = []
-    resolved = resolve_expression(ast, Namespace.of(schema), ctx, errors)
-    if resolved is None:
-        raise PiecewiseExpansionError('\n'.join(errors))
-    assert not isinstance(resolved, ComparisonNode)
+    resolved = _resolved(schema, text, ctx)
     try:
         check_expression(resolved, ctx)
         return dims_of(resolved, schema, ctx)
@@ -368,3 +388,50 @@ def _expr_dims(schema: Model, text: str, ctx: str) -> frozenset[str]:
         raise PiecewiseExpansionError(
             f'{ctx}: link expression {text!r} is not a valid affine expression: {exc}'
         ) from exc
+
+
+def _refuse_a_gate_that_can_go_absent(schema: Model, ctx: str, text: str) -> None:
+    """Refuse an ``activity:`` that has a coordinate where it does not exist.
+
+    The gate is the right-hand side of ``sum(lam, over=<bp>) == (activity)``,
+    and absence does not spread out of a reduction: where the gate is absent
+    the *row* is not built, so the weights it was holding down are left free
+    rather than pinned to zero. That is a cheaper answer off the curve with
+    nothing but a ``rows_not_built`` count to say so, which is why this is a
+    refusal and not a warning (#1158).
+
+    A masked variable has a spelling for what its absence means and can be
+    gated on once it uses it; a lookup's nulls and a shift's vacated edge have
+    none, so they are refused outright.
+    """
+    for node in _every_node(_resolved(schema, text, ctx)):
+        if isinstance(node, VariableNode):
+            gate = schema.variables[node.name]
+            if gate.where is not None and gate.absence != 'zero':
+                raise PiecewiseExpansionError(
+                    f"{ctx}: activity variable '{node.name}' is masked by a `where:` and does not say what "
+                    f'its absence means, so where the gate does not exist the block would drop its '
+                    f'convexity row and leave the weights unconstrained instead of pinning the curve off. '
+                    f"Declare `absence: zero` on '{node.name}' — that is what says the curve is off there."
+                )
+        elif isinstance(node, LookupNode):
+            raise PiecewiseExpansionError(
+                f"{ctx}: activity reads through lookup '{node.shown}', whose null values leave the gate "
+                f'with no value — the block would drop its convexity row there and leave the weights '
+                f'unconstrained instead of pinning the curve off. A gate says what its absence means with '
+                f'`absence: zero`, which a lookup has no spelling for.'
+            )
+        elif isinstance(node, FunctionCallNode) and node.name == 'shift' and 'edge' not in node.kwargs:
+            raise PiecewiseExpansionError(
+                f'{ctx}: activity shifts with no `edge=`, so the gate does not exist at the vacated '
+                f'coordinate — the block would drop its convexity row there and leave the weights '
+                f'unconstrained instead of pinning the curve off. Say what the vacated position '
+                f'contributes: `edge=0` pins the curve off there.'
+            )
+
+
+def _every_node(node: ArithmeticNode) -> Iterator[ArithmeticNode]:
+    """*node* and everything under it, kwarg values included."""
+    yield node
+    for child in children(node):
+        yield from _every_node(child)
