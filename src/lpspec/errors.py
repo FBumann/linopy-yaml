@@ -95,7 +95,7 @@ def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> st
     unknown = sorted(keys)
     lead = f'source key {unknown[0]!r} names' if len(unknown) == 1 else f'source keys {unknown} name'
     return (
-        f'{lead} neither a parameter nor a dimension this model declares. '
+        f'{lead} neither a parameter, a dimension nor a lookup this model declares. '
         f'{did_you_mean(unknown[0], known, label="Declared")} Pass only what the '
         f'model takes — a table carrying more than that is filtered here, not bound.'
     )
@@ -457,32 +457,40 @@ def multi_indexed_series_message(name: str, dims: Sequence[str]) -> str:
     )
 
 
-def declared_index_also_supplied_message(dim: str, declares: str, where: str) -> str:
-    """A dimension's index declared in the file and supplied by the caller — both lanes.
+def one_fact_two_authors_message(fact: str, first: str, second: str) -> str:
+    """A dimension's labels, or one lookup's map, claimed by two authors — both lanes.
 
-    Refused rather than resolved by precedence: a declaration says the file owns
-    the fact, and any rule picking a winner lets the file describe a model the
-    caller does not build.
+    Refused rather than resolved by precedence: any rule picking a winner lets
+    one author describe a model the other does not build, and the file a
+    reviewer reads stops being the model that solved.
+
+    *fact* names what was said twice, because the two are answerable
+    separately — a caller's label set under a file's declared map is the
+    working shape, not a collision.
     """
     return (
-        f"dimension '{dim}' has its index in the file ({declares}) and is also supplied "
-        f'under {where}. Exactly one of the two may say what its labels are: drop {where} '
-        f'to keep the declaration, or remove {declares} to let the data decide.'
+        f'{fact} is said twice — by {first} and by {second}. Exactly one may say it: '
+        f'drop {second} to keep {first}, or remove {first} to let the other decide.'
     )
 
 
-def map_keys_are_not_labels_message(dim: str, lookup: str, strays: Sequence[str], labels: Sequence[str]) -> str:
-    """A declared map keyed by something the caller's index does not carry — both lanes.
+def map_keys_are_not_labels_message(
+    dim: str, lookup: str, strays: Sequence[str], labels: Sequence[str], said: str = 'declares values for'
+) -> str:
+    """A map keyed by something the caller's index does not carry — both lanes.
 
     The same law ``Model._declared_lookup_errors`` decides at load where the
     dimension declares its own labels, arriving later because these labels do
     not exist until the caller supplies them. Refused rather than dropped: a key
     matching no label is a typo, and the join that reads the map would silently
     place its terms nowhere.
+
+    *said* is how the map got here — declared in the file, or supplied as its
+    own relation — because the fix differs and the law does not.
     """
     shown = ', '.join(strays[:5]) + (' …' if len(strays) > 5 else '')
     return (
-        f"lookup '{lookup}' declares values for {shown}, which are not labels of '{dim}'. "
+        f"lookup '{lookup}' {said} {shown}, which are not labels of '{dim}'. "
         f"'{dim}' takes its labels from the data here, and they are "
         f'{list(labels[:8])}{" …" if len(labels) > 8 else ""}. A map maps the labels that '
         f'exist — a key matching none of them would place its terms nowhere, so it is a typo '
@@ -490,20 +498,72 @@ def map_keys_are_not_labels_message(dim: str, lookup: str, strays: Sequence[str]
     )
 
 
-def declared_map_needs_labels_message(dim: str, maps: Iterable[str]) -> str:
-    """A dimension whose maps the file declares and whose labels nothing does — both lanes.
+def declared_map_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
+    """A dimension whose maps have an author and whose labels have none — both lanes.
 
     Its own wording rather than the missing-index one, because the fix is not
-    "pass a table carrying these lookup columns": those columns are the file's,
-    and passing them is refused. Only the labels are wanted.
+    "pass a table carrying these lookup columns": those columns belong to
+    whoever already supplies the map, and passing them again is refused. Only
+    the labels are wanted.
+
+    *authors* names each map where it comes from, a declaration or a source
+    key, so a model mixing the two reads back which is which.
     """
-    declared = ', '.join(f'lookups.{n}.values' for n in sorted(maps))
+    declared = ', '.join(sorted(authors))
     return (
-        f"dimension '{dim}' has its maps in the file ({declared}) but nothing says which of its "
+        f"dimension '{dim}' has its maps ({declared}) but nothing says which of its "
         f'labels exist. A map is a relation over a dimension, not the dimension itself — it may '
         f'omit members, and its key order is arbitrary. Declare dimensions.{dim}.values, or pass '
-        f"the labels under key '{dim}': the declared maps are read against them, and a label no "
+        f"the labels under key '{dim}': the maps are read against them, and a label no "
         f'map mentions gets a null.'
+    )
+
+
+def lookup_relation_columns_message(lookup: str, over: str, space: str, available: Sequence[str]) -> str:
+    """A supplied lookup relation short of one of its two columns — both lanes.
+
+    Both names are the declaration's, so the message spells the pair rather
+    than asking the reader to derive it: the key column is the dimension the
+    lookup runs ``over``, and the value column is named after the space the
+    values are labels of — the target dimension, or the lookup itself where it
+    owns its label space.
+    """
+    return (
+        f"lookup '{lookup}' is supplied as a relation and must carry columns "
+        f"['{over}', '{space}'] (has {list(available)}). '{over}' is the dimension it runs over "
+        f"and '{space}' is what its values are labels of."
+    )
+
+
+def lookup_relation_holes_message(lookup: str, column: str, holes: int, shown: str) -> str:
+    """A supplied lookup relation with a null in it — both lanes.
+
+    The same law a parameter's values are held to
+    (:func:`holes_in_values_message`), landing where a lookup is the one
+    relation that used to want the opposite: a partial map is rows for the
+    labels it maps and no row for the rest, so a null says the label is mapped
+    and unmapped at once.
+    """
+    at = f': {shown}' if shown else ''
+    return (
+        f"lookup '{lookup}' carries {holes} row(s) with a null in '{column}'{at}. A map is "
+        f'partial by leaving a label out, not by mapping it to nothing — drop the row and the '
+        f'label is unmapped, which is what every operator reading the lookup already means by it.'
+    )
+
+
+def lookup_relation_not_single_valued_message(lookup: str, over: str, offenders: Sequence[str]) -> str:
+    """A supplied lookup relation giving one label two values — both lanes.
+
+    Refused rather than resolved, for the reason
+    :func:`lookup_not_single_valued_message` gives on the index column: a
+    second row would multiply the label's terms through the join that reads it,
+    so the model that builds is larger than the one the file says.
+    """
+    shown = ', '.join(offenders[:5]) + (' …' if len(offenders) > 5 else '')
+    return (
+        f"lookup '{lookup}' maps {len(offenders)} '{over}' label(s) more than once: {shown}. "
+        f'A lookup is single-valued, so each label it maps takes exactly one row.'
     )
 
 

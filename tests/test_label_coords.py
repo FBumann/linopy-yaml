@@ -554,7 +554,7 @@ def test_a_map_alone_does_not_say_which_labels_exist():
     ``generator`` declaring no ``values:`` and nothing supplying them, the map
     over it leaves the dimension without an index, and both lanes say so.
     """
-    with pytest.raises(DataError, match='has its maps in the file'):
+    with pytest.raises(DataError, match=re.escape('has its maps (lookups.gen_bus.values)')):
         lps.solve(MAP_ONLY, DECLARED_SOURCES)
 
 
@@ -685,3 +685,217 @@ def test_a_label_space_lookup_may_declare_its_values_too():
     with lps.solve(model, {'load': _load()}) as result:
         built = sorted(row['snapshot'] for row in result.primal('x').to_dicts())
     assert built == [0, 1], 'only period 1 is built, and the map that says so is in the file'
+
+
+# ---------------------------------------------------------------------------
+# A map supplied under the lookup's own key
+# ---------------------------------------------------------------------------
+
+
+#: The same relation as `DECLARED`, with the caller holding it instead of the
+#: file: `gen_bus` takes its own source key and the two columns say what it is
+#: — the dimension it runs over, and the space its values are labels of. `g3`
+#: is mapped nowhere by being in no row.
+SUPPLIED = {
+    **DECLARED,
+    'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}},
+    'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus'}},
+}
+
+_RELATION = pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']})
+_SUPPLIED_SOURCES = {**DECLARED_SOURCES, 'generator': ['g1', 'g2', 'g3'], 'gen_bus': _RELATION}
+
+
+def test_a_supplied_relation_reaches_the_declared_map_without_touching_the_index():
+    """The point: a caller adds a map to a dimension whose index is not theirs.
+
+    Same model, same numbers as `test_a_declared_map_needs_no_index_source` —
+    `g3` cheapest and contributing nothing — reached with the relation in the
+    caller's hand rather than in the file. The index goes in as a bare label
+    list, so nothing here rewrites a table someone else generated.
+    """
+    with lps.solve(SUPPLIED, _SUPPLIED_SOURCES) as result:
+        built = {row['generator']: row['value'] for row in result.primal('p').to_dicts()}
+        assert result.objective == pytest.approx(13.0)
+    assert built['g3'] == pytest.approx(0.0), 'a generator in no row of the map is a generator on no bus'
+
+
+def test_a_supplied_relation_agrees_with_the_oracle():
+    """Both lanes read the relation through the one front door, so both see it."""
+    from tests.differential import differential
+    from tests.oracle import pd
+
+    data = {
+        'cost': pd.Series([1.0, 2.0, 0.5], index=['g1', 'g2', 'g3']),
+        'load': pd.Series([5.0, 4.0], index=['north', 'south']),
+        'generator': ['g1', 'g2', 'g3'],
+        'gen_bus': _RELATION,
+    }
+    with differential(SUPPLIED, data) as run:
+        assert run.result.objective == pytest.approx(13.0)
+
+
+def test_a_partial_map_is_supplied_as_the_rows_it_has():
+    """Absence is the absent row here as everywhere else, which is the whole change.
+
+    As a column on the index the same map needs a cell for every label and
+    spells "unmapped" as a null — the one place the absence rules read a hole
+    as data. Supplied as a relation it says nothing about `g3` at all, and a
+    null in it is refused the way a null in a parameter's values is.
+    """
+    holed = pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['north', 'south', None]})
+    with pytest.raises(DataError, match=r"lookup 'gen_bus' carries 1 row\(s\) with a null in 'bus'"):
+        lps.solve(SUPPLIED, {**_SUPPLIED_SOURCES, 'gen_bus': holed})
+
+
+def test_a_label_space_lookup_is_supplied_under_its_own_name():
+    """The kind with no target names its column after itself.
+
+    One rule for both kinds — *the space the values are labels of* — which for
+    a lookup owning its label space is the lookup. There is no dimension to
+    borrow a name from, which is why naming the column after the target cannot
+    be the rule.
+    """
+    model = {**_model(), 'dimensions': {'snapshot': {'dtype': 'int'}}}
+    model['constraints']['c']['where'] = 'period == 1'
+    sources = {
+        'snapshot': [0, 1, 2],
+        'load': _load(),
+        'period': pl.DataFrame({'snapshot': [0, 1], 'period': [1, 1]}),
+    }
+    with lps.solve(model, sources) as result:
+        built = sorted(row['snapshot'] for row in result.primal('x').to_dicts())
+    assert built == [0, 1, 2], 'the variable is unmasked; only the constraint reads the label space'
+    assert result.objective == pytest.approx(3.0), 'snapshot 2 is in no row of the map, so nothing constrains it'
+
+
+@pytest.mark.parametrize(
+    ('relation', 'match'),
+    [
+        pytest.param(
+            pl.DataFrame({'generator': ['g1'], 'gen_bus': ['north']}),
+            r"must carry columns \['generator', 'bus'\]",
+            id='named-after-itself-not-its-target',
+        ),
+        pytest.param(
+            pl.DataFrame({'bus': ['north']}),
+            r"must carry columns \['generator', 'bus'\]",
+            id='no-key-column',
+        ),
+        pytest.param(
+            pl.DataFrame({'generator': ['g1', 'g1'], 'bus': ['north', 'south']}),
+            r"maps 1 'generator' label\(s\) more than once: g1",
+            id='mapped-twice',
+        ),
+        pytest.param(
+            pl.DataFrame({'generator': ['g9'], 'bus': ['north']}),
+            r"lookup 'gen_bus' maps g9, which are not labels of 'generator'",
+            id='key-is-not-a-label',
+        ),
+    ],
+)
+def test_a_supplied_relation_is_held_to_what_a_map_is(relation, match):
+    """Single-valued, keyed by labels that exist, and spelled as the pair it is.
+
+    The stray key is the one refusal the column form got for free: a map that
+    rides the index cannot name a label the index lacks. Dropping it instead
+    would place that generator's terms nowhere while the model built and solved.
+    """
+    with pytest.raises(DataError, match=match):
+        lps.solve(SUPPLIED, {**_SUPPLIED_SOURCES, 'gen_bus': relation})
+
+
+@pytest.mark.parametrize(
+    ('model', 'sources', 'first', 'second'),
+    [
+        pytest.param(
+            DECLARED,
+            {'generator': ['g1', 'g2', 'g3'], 'gen_bus': _RELATION},
+            'lookups.gen_bus.values',
+            "sources['gen_bus']",
+            id='file-and-key',
+        ),
+        pytest.param(
+            SUPPLIED,
+            {'generator': _LABELS_AND_MAP, 'gen_bus': _RELATION},
+            "sources['gen_bus']",
+            "the 'gen_bus' column of sources['generator']",
+            id='key-and-column',
+        ),
+    ],
+)
+def test_a_map_has_one_author(model, sources, first, second):
+    """Three homes for one map, and any two of them is a refusal.
+
+    A precedence rule instead lets one author describe a model another does not
+    build. The third pair — the file against the index column — is
+    `test_a_declared_index_refuses_a_supplied_one`.
+    """
+    with pytest.raises(DataError, match=re.escape(f'is said twice — by {first} and by {second}')):
+        lps.solve(model, {**DECLARED_SOURCES, **sources})
+
+
+def test_a_supplied_map_does_not_say_which_labels_exist():
+    """A relation over a dimension is not the dimension, whoever holds it.
+
+    Reading the label set out of the map would let an omitted row delete a
+    member, and `g3` — mapped nowhere and still a generator — is exactly the
+    row that would vanish.
+    """
+    with pytest.raises(DataError, match=re.escape("has its maps (sources['gen_bus'])")):
+        lps.solve(SUPPLIED, {**DECLARED_SOURCES, 'gen_bus': _RELATION})
+
+
+@pytest.mark.parametrize('lane', ['relational', 'eager'])
+def test_a_supplied_relation_is_refused_the_same_way_on_both_lanes(lane):
+    """One defect, one sentence: the checks live in the door both lanes enter."""
+    from tests.oracle import lpspec_linopy
+
+    build = lps.solve if lane == 'relational' else lpspec_linopy.build
+    with pytest.raises(DataError, match=r"maps 1 'generator' label\(s\) more than once"):
+        build(
+            SUPPLIED,
+            {**_SUPPLIED_SOURCES, 'gen_bus': pl.DataFrame({'generator': ['g1', 'g1'], 'bus': ['north', 'south']})},
+        )
+
+
+#: Two maps out of one dimension into the same target — the PyPSA shape, where
+#: a line has a sending and a receiving bus. What it is here for: every check
+#: over a dimension's maps has to run per map, and one lookup cannot tell a
+#: loop that runs once from a loop that runs per name.
+TWO_MAPS = {
+    'dimensions': {'line': {}, 'bus': {'values': ['north', 'south']}},
+    'lookups': {
+        'line_from': {'over': 'line', 'into': 'bus'},
+        'line_to': {'over': 'line', 'into': 'bus'},
+    },
+    'parameters': {'flow_max': {'dims': ['line']}, 'load': {'dims': ['bus']}},
+    'variables': {'f': {'foreach': ['line'], 'bounds': {'lower': 0, 'upper': 'flow_max'}}},
+    'constraints': {'served': {'foreach': ['bus'], 'expression': 'sum(f, by=line_to) >= load'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(f, over=line)'},
+}
+
+_TWO_MAP_SOURCES = {
+    'line': ['l1', 'l2'],
+    'flow_max': pl.DataFrame({'line': ['l1', 'l2'], 'value': [10.0, 10.0]}),
+    'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [1.0, 2.0]}),
+    'line_from': pl.DataFrame({'line': ['l1', 'l2'], 'bus': ['south', 'north']}),
+    'line_to': pl.DataFrame({'line': ['l1', 'l2'], 'bus': ['north', 'south']}),
+}
+
+
+def test_two_maps_into_one_target_each_take_their_own_key():
+    """Two relations of identical schema, told apart by the key they arrive under.
+
+    The alternative — one table per ``(over, into)`` pair — has nowhere to put
+    the second, which is why the key is the lookup and not the pair.
+    """
+    with lps.solve(TWO_MAPS, _TWO_MAP_SOURCES) as result:
+        assert result.objective == pytest.approx(3.0), 'each line serves the bus line_to sends it to'
+
+
+def test_the_second_map_is_checked_as_hard_as_the_first():
+    """Per-map, not per-dimension: `line_from` is supplied and carried at once."""
+    index = pl.DataFrame({'line': ['l1', 'l2'], 'line_from': ['south', 'north']})
+    with pytest.raises(DataError, match=re.escape("the map for lookup 'line_from' is said twice")):
+        lps.solve(TWO_MAPS, {**_TWO_MAP_SOURCES, 'line': index})
