@@ -117,6 +117,7 @@ nav:
       - about/index.md
       - Architecture: about/architecture.md
       - The ceiling: about/ceiling.md
+      - What counts as language: about/what-counts-as-language.md
       - Decomposition: about/decomposition.md
       - Benchmarks: about/benchmarks.md
       # A source file, not a generated page: mkdocs copies it through and the

@@ -30,6 +30,7 @@ docs/reference/language/
 docs/reference/notation.md
 docs/reference/typeset.md
 docs/about/ceiling.md
+docs/about/what-counts-as-language.md
 
 # --- the operator reference's source ----------------------------------------
 # Not a corpus that happens to move: `tools/language/spec_math.py` generates the

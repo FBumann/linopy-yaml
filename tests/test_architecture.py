@@ -576,6 +576,7 @@ CROSSES_THE_CUT = {
     'tests/test_architecture.py': 'the fences themselves: this file is split at the cut, not moved',
     'tools/constructs.py': 'a comment citing `docs/reference/language/` for its column order',
     'pyproject.toml': "ruff's per-file-ignore for `src/lpspec/language/where_parser.py`",
+    'mkdocs.yml': 'fourteen nav entries for pages that move; the nav is rebuilt on both sides at the cut',
 }
 
 #: Where a crossing would be a break rather than a link, and the suffixes worth
@@ -600,7 +601,11 @@ def _crossings() -> dict[str, list[str]]:
         ]
     for path in candidates:
         text = path.read_text(errors='ignore')
-        named = sorted(line for line in moving if line in text)
+        # mkdocs writes its nav relative to `docs/`, so a moving page is named
+        # there without the prefix — the same crossing, spelled shorter.
+        named = sorted(
+            line for line in moving if line in text or (line.startswith('docs/') and line[len('docs/') :] in text)
+        )
         if named:
             found[str(path.relative_to(REPO))] = named
     return found

@@ -559,27 +559,23 @@ consumer's real cost is what it drags in, not what it spells.
 
 ### What counts as language
 
-A fence says what may not happen; it does not say what belongs. The test is:
+The rule is [its own page](what-counts-as-language.md), because it decides what
+may live here rather than how this package is arranged:
 
 > **A rule is language iff two consumers answering it separately would be a
 > bug.**
 
-Not "is it about syntax", not "does it run early" — *would a second opinion be
-wrong?* Every "one implementation each" rule in this file is that test applied:
-names resolve once (`resolution.py`), the operator set is closed (`operators.py`)
-and a test proves both lanes implement exactly it, an operator's dim rule lives
-only in `dimensions.py` with lowering **asking** for the verdict rather than
-deciding again, and degree lives only in `degree.py` — nothing about `x * y` is
-relational, and the ceiling doc says outright that **degree is not a property of
-the plan**. `piecewise.py` is in `language/` by the same test: a formulation
-emits declarations, and declarations are language.
+Every "one implementation each" rule in this file is that test applied: names
+resolve once (`resolution.py`), the operator set is closed (`operators.py`) and a
+test proves both lanes implement exactly it, an operator's dim rule lives only in
+`dimensions.py` with lowering **asking** for the verdict rather than deciding
+again, and degree lives only in `degree.py`. `piecewise.py` is in `language/` by
+the same test: a formulation emits declarations, and declarations are language.
 
-The test cuts the other way too, which is what keeps it from swallowing
-everything. `lowering.py` legitimately refuses **plan shapes** — `shift(offset=)`
-must be an integer literal, `sum(by=)` a declared lookup — because
-those are about what a plan node can represent, and a second opinion about them
-is not a bug, it is the other lane's own business. What a consumer may not do is
-state a rule about the *language* that another consumer then has to restate.
+The test cuts the other way here too. `lowering.py` legitimately refuses **plan
+shapes** — `shift(offset=)` must be an integer literal, `sum(by=)` a declared
+lookup — because those are about what a plan node can represent, and a second
+opinion about them is the other lane's own business rather than a bug.
 
 The corollary is what the top level is *for*. A module stays flat when it is
 legitimately **both** halves: `lowering.py` reads the AST and writes the plan,
