@@ -28,9 +28,10 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from lpspec.errors import DataError, LpspecWarning
+from lpspec.errors import DataError, LpspecError, LpspecWarning
 from lpspec.language import expand_piecewise, load_model, unbounded_notes
 from lpspec.lowering import advice, expression_thunks, lower_program
+from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
 from lpspec.sources import tidy_sources
@@ -47,28 +48,52 @@ if TYPE_CHECKING:
 __all__ = ['build', 'check', 'load_model', 'solve', 'write']
 
 
-def check(model: str | Path | dict[str, Any] | Model) -> Model:
+def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -> Model:
     """Parse, expand, validate and lower a model; bind no data.
+
+    With *sink*, also: **will that sink take it?** The two are separate axes
+    (docs/about/ceiling.md) — whether a model is sayable is solver-independent,
+    where it can land is not — so bare ``check`` stays silent about
+    portability. Most models never leave the common subset, and a default that
+    warned about a sink nobody named would be noise on every one of them.
+
+    A capability question is answered off a declared table with no data bound,
+    so it costs no build and needs no solver installed: a repository of models
+    can be checked in CI against every sink they will eventually be solved on.
+    The solver-independent advice is issued either way — a sink that refuses is
+    the answer to the second question, and naming one must not cost the first.
 
     Args:
         model: A YAML path, a mapping, or a loaded :class:`Model`.
+        sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an output
+            suffix (``.lp``, ``.mps``). ``None`` asks only whether the model is
+            sayable.
 
     Returns:
         The validated schema.
 
     Raises:
         LanguageError: A construct outside the streaming language.
+        LpspecError: A *sink* that cannot take this model, or a name belonging
+            to no sink.
         ValueError: A schema or expression that does not parse.
 
     Warns:
         LpspecWarning: Advice short of an error — a declared dimension nothing
             uses as an axis, a variable the objective drives to infinity with
-            nothing to stop it. Issued here and nowhere else.
+            nothing to stop it, a construct the named sink takes only
+            reformulated. Issued here and nowhere else.
     """
     schema = load_model(model)
     program = lower_program(schema)
-    for note in (*unbounded_notes(expand_piecewise(schema)), *advice(program)):
+    notes = [*unbounded_notes(expand_piecewise(schema)), *advice(program)]
+    refused = sinks.refusal(program, sink) if sink is not None else None
+    if sink is not None and refused is None:
+        notes += sinks.relaxations(program, sink)
+    for note in notes:
         warnings.warn(note, LpspecWarning, stacklevel=2)
+    if refused is not None:
+        raise LpspecError(refused)
     return schema
 
 

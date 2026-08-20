@@ -29,6 +29,8 @@ from typing import TYPE_CHECKING, Literal, get_args
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
 
+    from lpspec.relational import plan
+
 #: What a model may need a sink to have. ``indicator`` and ``semi-continuous``
 #: are absent deliberately: they have rows in the benchmarks table and no
 #: spelling in the language (#220, #383), so an entry would be a fact nothing
@@ -101,3 +103,23 @@ class Capabilities:
             if combination <= set(required):
                 return combination
         return None
+
+
+def required(program: plan.Program, /) -> frozenset[Capability]:
+    """What *program* needs a sink to have, decided with no data bound.
+
+    Exactly what the model declares, so a refusal built on it names constructs
+    the reader can find in their own file. What a *rewrite* then costs is the
+    performing sink's own fact and is declared there: HiGHS excludes a set
+    beside a Hessian because what it is handed for one is binaries, and a
+    requirement derived here instead would refuse the model for integrality it
+    never stated.
+
+    Only what rule 2 can decide appears here, so convexity never does.
+    """
+    needed: set[Capability] = set()
+    if any(v.variable_type != 'continuous' for v in program.variables):
+        needed.add('integrality')
+    if program.sos:
+        needed.add('sos')
+    return frozenset(needed)

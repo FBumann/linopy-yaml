@@ -316,6 +316,78 @@ def no_duals_message(discrete: Sequence[str], termination_condition: str, sets: 
     )
 
 
+#: How a capability reads in a sentence. The identifiers are the descriptor's
+#: vocabulary and are not what a modeller calls these things, and a refusal is
+#: read by whoever hit it rather than by whoever wrote the table.
+_SPELLED = {
+    'integrality': 'binary or integer variables',
+    'sos': 'special-ordered sets (`sos:`)',
+    'quadratic_objective': 'a quadratic objective',
+    'nonconvex_quadratic_objective': 'a nonconvex quadratic objective',
+    'quadratic_constraint': 'a quadratic constraint',
+}
+
+
+def _spelled(capabilities: Sequence[str]) -> str:
+    return ', '.join(_SPELLED.get(c, c) for c in capabilities)
+
+
+def _instead(takers: Sequence[str]) -> str:
+    """The third clause of the refusal contract: who *does* take it.
+
+    Without it an optional check moves the surprise from solve time to check
+    time for whoever thought to ask, and leaves whoever did not exactly where
+    they were. Naming another *sink* is not the lane redirection hard rule 3
+    forbids — both lanes still accept the same language, and this is about
+    where a model can land.
+    """
+    if not takers:
+        return 'No sink this build has takes it.'
+    return f'Sinks that do take it: {", ".join(sorted(takers))}.'
+
+
+def sink_refuses_message(sink: str, missing: Sequence[str], takers: Sequence[str]) -> str:
+    """A sink asked for a capability it does not have at all."""
+    return (
+        f'the {sink!r} sink cannot take {_spelled(missing)}: it has no such concept, so there is '
+        f'nothing to hand the model to. {_instead(takers)}'
+    )
+
+
+def sink_refuses_combination_message(sink: str, combination: Sequence[str], takers: Sequence[str]) -> str:
+    """A sink that has both halves of a pair and refuses them together.
+
+    Worth its own sentence rather than a shorter one about the pair: a caller
+    reading "it cannot take a quadratic objective" of a sink whose own
+    documentation says it can would reasonably conclude the message is wrong.
+    """
+    return (
+        f'the {sink!r} sink takes {_spelled(combination)} separately and refuses them together, '
+        f'which is a limit of that solver rather than of the model. {_instead(takers)}'
+    )
+
+
+def sink_reformulates_message(sink: str, capability: str, *, integrality_added: bool) -> str:
+    """A sink meeting a capability by rewriting the model into one it takes.
+
+    Not a refusal — it solves — but the answer comes back to a question
+    slightly different from the one asked. *integrality_added* is the one
+    consequence derivable here rather than assumed per capability: a model that
+    declared no integrality of its own and reaches the solver mixed-integer
+    comes back without duals.
+    """
+    cost = (
+        ' The model declared no integrality of its own and reaches the solver mixed-integer, '
+        'so it will come back without duals.'
+        if integrality_added
+        else ''
+    )
+    return (
+        f'the {sink!r} sink has no native support for {_SPELLED.get(capability, capability)} and '
+        f'will take it reformulated, so what reaches the solver is not what the file declares.{cost}'
+    )
+
+
 def duplicate_coordinate_message(name: str, shown: str, dims: list[str]) -> str:
     """More than one value for one coordinate — one wording, both lanes.
 
