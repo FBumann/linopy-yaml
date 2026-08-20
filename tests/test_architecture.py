@@ -652,8 +652,11 @@ CROSSES_THE_CUT = {
 #: by path, and moving that directory turned the step red on a tree whose whole
 #: suite was green locally. Configuration that names a file breaks the same way
 #: a test does.
-CUT_SCAN = (('tests', ('tests/language/', 'tests/typeset/')), ('tools', ('tools/language/',)))
-CUT_SCAN = CUT_SCAN + (('.github', ()),)
+CUT_SCAN = (
+    ('tests', ('tests/language/', 'tests/typeset/')),
+    ('tools', ('tools/language/',)),
+    ('.github', ()),
+)
 CUT_SCAN_FILES = ('pyproject.toml', 'mkdocs.yml')
 
 
