@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.231](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.230...v0.0.1-alpha.231) (2026-08-20)
+
+
+### Documentation
+
+* **examples:** a curve whose arity is data is four declarations ([#1131](https://github.com/fluxopt/lpspec/issues/1131)) ([9cae48d](https://github.com/fluxopt/lpspec/commit/9cae48d2953c443507dca0606bab64312d798871))
+
 ## [0.0.1-alpha.230](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.229...v0.0.1-alpha.230) (2026-08-20)
 
 
