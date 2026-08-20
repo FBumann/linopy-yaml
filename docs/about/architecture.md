@@ -522,7 +522,7 @@ it.
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `method: convex` curvature guard, which is the one check that needs values |
 | `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver, the linopy lane and the engine |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
-| `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.` |
+| `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.`; a wording lives here only where two modules raise it |
 | `_notes.py` | attach context to an exception on the way out; no package imports, no opinions |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `relational/plan.py` | frozen logical-plan dataclasses — what an engine consumes |

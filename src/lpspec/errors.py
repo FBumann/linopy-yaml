@@ -12,6 +12,10 @@ cannot build, :class:`NoSolutionError` a solve with nothing to read back.
 the hierarchy has to live upstream of every class that extends it. The engine
 still names only this module and ``frames.py``; what it now costs to import is
 the language package behind them (docs/about/architecture.md, hard rule 2).
+
+**A message lives here only where two modules raise it** — the cross-lane
+wordings, which have to be one sentence and not two. One raiser keeps its
+message beside itself.
 """
 
 from __future__ import annotations
@@ -83,24 +87,6 @@ __all__ = [
 ]
 
 
-def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
-    """A source key naming nothing the file declares — one wording, both doors.
-
-    Refused rather than ignored, and ``rebind`` is where the reason was settled
-    first: a name it does not recognise is a typo, and ignoring one there is a
-    silent re-solve of the numbers you meant to replace. Binding owes the same
-    answer — a dump carrying more than a model uses is filtered at the call,
-    where the caller can see what was dropped.
-    """
-    unknown = sorted(keys)
-    lead = f'source key {unknown[0]!r} names' if len(unknown) == 1 else f'source keys {unknown} name'
-    return (
-        f'{lead} neither a parameter, a dimension nor a lookup this model declares. '
-        f'{did_you_mean(unknown[0], known, label="Declared")} Pass only what the '
-        f'model takes — a table carrying more than that is filtered here, not bound.'
-    )
-
-
 def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
     """Why a constant side may not be sparse — one wording, both lanes.
 
@@ -115,28 +101,6 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
         f'  Supply the missing rows, if the value is what was meant.\n'
         f'  Mask them out with a where, if the row should not exist there.\n'
         f'  Drop the declaration, if the model has no such quantity at all.'
-    )
-
-
-def constant_beside_a_term_message(context: str, operator: str, dims: list[str]) -> str:
-    """The relational lane's one gap: an operator over a dim a constant part lacks.
-
-    Its own wording rather than a bare refusal because three things are true at
-    once and only the first is obvious — the lane cannot build it, the file is
-    sayable (``check`` passes, and the eager lane returns a number), and there
-    is a rewrite that reaches that same number.
-
-    *operator* is the surface spelling, not the plan node: the reader wrote
-    ``sum(by=…)``, and ``GroupSum`` is a word their file does not contain.
-    """
-    return (
-        f'in {context}: {operator} acts along {dims}, which a constant part of the expression '
-        f'does not carry, and this lane cannot build that. A constant part compiles to its own '
-        f'frame, so a fragment with no rows for {dims} has no slots for the operator to act on — '
-        f'and under a mask, which slots those are is known only to the rows. Declare the parameter '
-        f'over {dims} and supply it there: the model is the same and the number is unchanged. '
-        f'The eager lane builds the file as written, so only this lane is short — run it with '
-        f'`lpspec.linopy.build` (#1137).'
     )
 
 
@@ -190,60 +154,6 @@ def holes_in_values_message(name: str, holes: int, shown: str) -> str:
     )
 
 
-def curve_with_a_hole_message(block: str, name: str, shown: str, expected: int, found: int, points: str | None) -> str:
-    """A piecewise curve supplied at some of its coordinates — one wording, both lanes.
-
-    A missing row is the one shape whose two readings are both wrong here. The
-    absence rules read it as a zero coefficient, which puts a breakpoint at the
-    origin that the file never declared; read as a shorter curve it would need
-    the weights to shrink with it, which is what ``points:`` says and a bare
-    table cannot.
-
-    Which is why the way out depends on whether the block already has a mask.
-    Without one the reader wants to hear that a curve may declare its length;
-    with one they have said it, and the disagreement is the news — the mask
-    claims a breakpoint the values do not carry.
-    """
-    remedy = (
-        f"  Shorten it    '{points}' claims this breakpoint, so either it is one row too long "
-        f'or the value is missing\n'
-        f'  Or supply it  a value everywhere the mask says the curve runs'
-        if points
-        else (
-            "  Say how far   points: a mask over the curve, true up to each one's last "
-            'breakpoint\n'
-            '  Or supply it  a value at every coordinate of the axis\n'
-            '  Or write it   where the *arity* is data, the λ formulation states it '
-            'directly (issue #1101)'
-        )
-    )
-    return (
-        f"piecewise '{block}': parameter '{name}' has no value at {shown} — {found} of the "
-        f'{expected} coordinates it needs. Every breakpoint the block builds gets a weight, so '
-        f'a missing row is not a shorter curve: read as a zero coefficient it is a breakpoint '
-        f'at the origin, and the answer mixes onto it.\n{remedy}'
-    )
-
-
-def curve_mask_is_not_contiguous_message(block: str, points: str, over: str, shown: str) -> str:
-    """A curve whose breakpoints are not consecutive — one wording, both lanes.
-
-    Where a curve *starts* does not matter: every row that reads the mask asks
-    for a predecessor or for an end, and all of those are the curve's own. A
-    gap matters twice over — a chord would join across it, and a domain row
-    would sit inside the curve rather than at its edge. Both build, and neither
-    says what the file does.
-    """
-    at = f' at {shown}' if shown else ''
-    return (
-        f"piecewise '{block}': the breakpoints '{points}' marks along '{over}'{at} are not "
-        f'consecutive — there is a gap in them, or nothing is marked at all. A curve may sit '
-        f'anywhere along the axis, on breakpoints that follow one another.\n'
-        f'  Close the gap   a curve is its points and the ones between them\n'
-        f'  A curve of none is not a curve: leave the block to the members that have one'
-    )
-
-
 def null_bounds_message(name: str, rows: int) -> str:
     """A bound with no value — one wording, both lanes.
 
@@ -283,58 +193,6 @@ def wrong_value_dtype_message(name: str, declared: str, arrived: str) -> str:
     )
 
 
-def no_duals_message(
-    discrete: Sequence[str],
-    termination_condition: str,
-    sets: Sequence[str] = (),
-    quadratic_rows: Sequence[str] = (),
-) -> str:
-    """Why a solve that *did* leave values still has no duals.
-
-    Integrality is decidable from the model, and naming the variable is
-    actionable where "the solver reported none" is not.
-
-    *sets* are the special-ordered sets a sink without the concept turned into
-    binaries. They come first because a model that declared none of its own
-    integrality would otherwise be told it is mixed-integer with nothing named
-    — and because the fix is a different one: another sink, not a different
-    model.
-
-    *quadratic_rows* are the quadratic constraints, whose prices are off by
-    default: asking for them puts the solve on the convex path, and a nonconvex
-    row that solves without them fails with them. The one case here where
-    nothing is wrong with the model.
-    """
-    if quadratic_rows and not discrete:
-        names = ', '.join(f"'{n}'" for n in quadratic_rows)
-        return (
-            f"a quadratic constraint prices only under gurobi's QCPDual, which is off by default: "
-            f'{names} {"is" if len(quadratic_rows) == 1 else "are"} quadratic. Asking for those '
-            f'prices makes the solver take the convex path, so a nonconvex row that solves without '
-            f'them fails with them — which is why this is yours to ask for rather than ours to '
-            f"assume. Re-solve with solver_options={{'QCPDual': 1}} if the model is convex."
-        )
-    if sets:
-        names = ', '.join(f"'{n}'" for n in sets)
-        return (
-            f'duals are undefined for a mixed-integer model, and this sink has no SOS concept, so '
-            f'{names} reached it as binaries. Solve with a sink that takes a set natively (gurobi) '
-            f'to keep the LP, or drop the set to price the relaxation.'
-        )
-    if discrete:
-        names = ', '.join(f"'{n}'" for n in discrete)
-        return (
-            f'duals are undefined for a mixed-integer model: {names} '
-            f'{"is" if len(discrete) == 1 else "are"} not continuous. '
-            f'Drop the integrality to price the LP relaxation instead.'
-        )
-    return (
-        f'the solver returned no dual solution, though the solve terminated '
-        f'{termination_condition!r}. Duals come from a simplex basis, which a '
-        f'run stopped short of one does not have.'
-    )
-
-
 #: How a capability reads in a sentence. The identifiers are the descriptor's
 #: vocabulary and are not what a modeller calls these things, and a refusal is
 #: read by whoever hit it rather than by whoever wrote the table.
@@ -347,113 +205,24 @@ _SPELLED = {
 }
 
 
-def _spelled(capabilities: Sequence[str]) -> str:
+def spelled(capabilities: Sequence[str]) -> str:
+    """Capabilities as a refusal names them, wherever one is worded."""
     return ', '.join(_SPELLED.get(c, c) for c in capabilities)
-
-
-def _instead(takers: Sequence[str]) -> str:
-    """The third clause of the refusal contract: who *does* take it.
-
-    Naming another *sink* is not the lane redirection hard rule 3 forbids —
-    both lanes still accept the same language, and this is about where a model
-    can land.
-    """
-    if not takers:
-        return 'No sink this build has takes it.'
-    return f'Sinks that do take it: {", ".join(sorted(takers))}.'
-
-
-def sink_refuses_message(sink: str, missing: Sequence[str], takers: Sequence[str]) -> str:
-    """A sink asked for a capability it does not have at all."""
-    return (
-        f'the {sink!r} sink cannot take {_spelled(missing)}: it has no such concept, so there is '
-        f'nothing to hand the model to. {_instead(takers)}'
-    )
-
-
-def sink_refuses_combination_message(sink: str, combination: Sequence[str], takers: Sequence[str]) -> str:
-    """A sink that has both halves of a pair and refuses them together.
-
-    Its own sentence, because a caller reading "it cannot take a quadratic
-    objective" of a sink whose documentation says it can would conclude the
-    message is wrong.
-    """
-    return (
-        f'the {sink!r} sink takes {_spelled(combination)} separately and refuses them together, '
-        f'which is a limit of that solver rather than of the model. {_instead(takers)}'
-    )
-
-
-def sink_reformulates_message(sink: str, capability: str, *, integrality_added: bool) -> str:
-    """A sink meeting a capability by rewriting the model into one it takes.
-
-    *integrality_added* is the one consequence derivable here rather than
-    assumed per capability: a model that declared no integrality and reaches
-    the solver mixed-integer comes back without duals.
-    """
-    cost = (
-        ' The model declared no integrality of its own and reaches the solver mixed-integer, '
-        'so it will come back without duals.'
-        if integrality_added
-        else ''
-    )
-    return (
-        f'the {sink!r} sink has no native support for {_SPELLED.get(capability, capability)} and '
-        f'will take it reformulated, so what reaches the solver is not what the file declares.{cost}'
-    )
 
 
 def lane_cannot_build_message(lane: str, missing: Sequence[str]) -> str:
     """A construct the language accepts and one *lane* cannot construct.
 
     Hard rule 3's amendment, worded. It names the other lane rather than a
-    rewrite, there being nothing wrong with the model — :func:`sink_refuses_message`
-    one level up.
+    rewrite, there being nothing wrong with the model — the sink refusal
+    (:func:`lpspec.relational.sinks._sink_refuses_message`) one level up.
     """
     return (
-        f'the {lane} lane cannot build {_spelled(missing)}, and no reformulation of it is exact. '
+        f'the {lane} lane cannot build {spelled(missing)}, and no reformulation of it is exact. '
         f'The language accepts it and the streaming lane builds it, so this is a limit of the '
         f'lane rather than of the model.\n'
         f'Build it with lps.build()/lps.solve() instead, and ask check(model, sink=...) which '
         f'solver will take it — gurobi does, and an .lp file carries it to anything that does.'
-    )
-
-
-def nonconvex_row_message(reported: str) -> str:
-    """A quadratic constraint the solver would take, refused for an option we asked it for.
-
-    Reached when ``QCPDual`` is on and a row turns out not to be convex —
-    which is a *data* property, so nothing could have said so earlier. The
-    solver's own sentence rides along because it names the row shape, and
-    dropping it would leave a caller with less than they had.
-    """
-    return (
-        f'this model has a quadratic constraint that is not convex, and the solve was asked for '
-        f'quadratic duals (QCPDual), which only a convex model has. Gurobi reported: {reported}\n'
-        f'Drop QCPDual from solver_options to solve it — the answer comes back without prices for '
-        f'the quadratic rows, which is the default for exactly this reason.'
-    )
-
-
-def nonconvex_objective_message() -> str:
-    """A quadratic objective HiGHS refuses for its curvature.
-
-    The one capability verdict no data-free check can reach, so it arrives at
-    the solve — and names the way out, as :func:`no_duals_message` does. The
-    way out is spelled as the loader takes it (``method: convex``), a message
-    sending its reader to a key ``piecewise:`` rejects being worse than none.
-    """
-    return (
-        'the highs sink refused to run this quadratic objective, and a Hessian that is not '
-        'positive semidefinite is why it refuses one: it solves convex QPs only. Convexity is a '
-        'property of the coefficients rather than of the model, so nothing could refuse it '
-        "before the data was bound — the sink's other quadratic refusal, a Hessian standing "
-        'beside integrality, is declared and caught before the build.\n'
-        'Solve with gurobi, which reaches a nonconvex quadratic objective by spatial '
-        'branch-and-bound at its default parameters, or write the model to an .lp file for a '
-        'solver that takes one. A convex reformulation — the curve as a piecewise: block with '
-        'method: convex — keeps the LP, and with it the duals and the warm start a quadratic '
-        'objective gives up.'
     )
 
 
@@ -472,46 +241,6 @@ def duplicate_coordinate_message(name: str, shown: str, dims: list[str]) -> str:
     )
 
 
-def unknown_labels_message(name: str, dim: str, strangers: list[object], known: list[object]) -> str:
-    """A source label the dimension does not have — one wording, both lanes.
-
-    Distinct from sparsity: a *missing* row reads as zero (the data-binding rules), but a row
-    that is present and unaddressable is a typo, the line the declaration rules
-    already draw for coordinates (#350).
-
-    Only asked where the dimension's labels come from somewhere else — one
-    derived *from* the parameters cannot have a stranger in it, the union of
-    what arrived being its definition.
-    """
-    shown = ', '.join(repr(s) for s in strangers[:5])
-    more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
-    return (
-        f"parameter '{name}' has label(s) in dimension '{dim}' that are not coordinates "
-        f'of it: {shown}{more}.\n'
-        f'  {dim} has: {sorted(str(k) for k in known)[:10]}\n'
-        f'A missing row is a zero coefficient, but a label that is not a coordinate is a '
-        f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
-        f'as absent. Fix the label, or declare it as a coordinate.'
-    )
-
-
-def dense_array_message(name: str) -> str:
-    """A dense array where a table belongs — one wording, both lanes.
-
-    An ``xarray.DataArray`` is recognisable and has ``__len__``, so left alone
-    it would be read positionally on one lane and directly on the other. Both
-    refuse it: this package reads tables — rows under named columns, an index
-    being a column wearing a hat — and hands arrays back rather than taking
-    them.
-    """
-    return (
-        f"parameter '{name}': an xarray.DataArray is not a source. lpspec reads tables — "
-        f'rows under named columns — and hands arrays back rather than taking them. Pass '
-        f'array.to_series().reset_index() for a tidy frame, whose columns bind by name on '
-        f'both lanes. Result.to_dataarray() is the way back out.'
-    )
-
-
 def index_without_its_label_column_message(dim: str, available: Sequence[str]) -> str:
     """An index table carrying everything but the labels — one wording, both lanes.
 
@@ -522,196 +251,6 @@ def index_without_its_label_column_message(dim: str, available: Sequence[str]) -
     return (
         f"index for dimension '{dim}' is a table without a '{dim}' column (has "
         f'{list(available)}). The label column is named after the dimension.'
-    )
-
-
-def lookup_target_without_labels_message(dim: str, lookup: str, target: str) -> str:
-    """A lookup whose target has no label set to check against — one wording, both lanes.
-
-    Its own wording rather than the missing-index one, because what is missing
-    is not obvious from where the model breaks: the dimension the *values* are
-    labels of may be one no constraint spans, so nothing else in the model
-    would ask for its index at all.
-    """
-    return (
-        f"dimension '{dim}' lookup '{lookup}' targets '{target}', which nothing in this model "
-        f"spans and which has no index of its own, so the lookup's values have no label set to "
-        f"be checked against. Pass an index for '{target}' (under key '{target}' in sources, or "
-        f'as values on its declaration), or remove the lookup.'
-    )
-
-
-def lookup_values_are_not_labels_message(dim: str, lookup: str, target: str, values: Sequence[Any]) -> str:
-    """A lookup value naming no label of the dimension it targets — one wording, both lanes.
-
-    A *null* is not one: the label belongs to no group, which is the
-    row-absence idiom the rest of the language uses. Only a value that is
-    present and unknown is a typo, and that one drops terms in the join that
-    places them rather than raising anywhere.
-    """
-    shown = ', '.join(repr(v) for v in values)
-    return (
-        f"dimension '{dim}' lookup '{lookup}' has value(s) that are not "
-        f"'{target}' labels: {shown}. Every value must be a declared "
-        f"'{target}' label — otherwise sum(by={lookup}) drops "
-        f'those terms in the join that places them, and the model builds and '
-        f'solves without them.'
-    )
-
-
-def multi_indexed_series_message(name: str, dims: Sequence[str]) -> str:
-    """A pandas Series carrying its dims in a MultiIndex — one wording, both lanes.
-
-    The index depth is a second statement of how many dimensions the parameter
-    has, and it is the caller's rather than the file's, so the two can disagree
-    with nothing able to tell which was meant. Columns cannot: a tidy frame
-    says it once, in the vocabulary the engine already reads.
-    """
-    tidy = [*dims, 'value']
-    return (
-        f"parameter '{name}': a pandas Series with a MultiIndex is not a source. An index is "
-        f'a pandas idea with no counterpart in the frames both lanes build, and its depth is a '
-        f"second claim about what '{name}' is over. Pass a tidy frame carrying {tidy} — "
-        f'series.reset_index() is the whole change.'
-    )
-
-
-def one_fact_two_authors_message(fact: str, first: str, second: str) -> str:
-    """A dimension's labels, or one lookup's map, claimed by two authors — both lanes.
-
-    Refused rather than resolved by precedence: any rule picking a winner lets
-    one author describe a model the other does not build, and the file a
-    reviewer reads stops being the model that solved.
-
-    *fact* names what was said twice, because the two are answerable
-    separately — a caller's label set under a file's declared map is the
-    working shape, not a collision.
-    """
-    return (
-        f'{fact} is said twice — by {first} and by {second}. Exactly one may say it: '
-        f'drop {second} to keep {first}, or remove {first} to let the other decide.'
-    )
-
-
-def map_keys_are_not_labels_message(
-    dim: str, lookup: str, strays: Sequence[str], labels: Sequence[str], said: str = 'declares values for'
-) -> str:
-    """A map keyed by something the caller's index does not carry — both lanes.
-
-    The same law ``Model._declared_lookup_errors`` decides at load where the
-    dimension declares its own labels, arriving later because these labels do
-    not exist until the caller supplies them. Refused rather than dropped: a key
-    matching no label is a typo, and the join that reads the map would silently
-    place its terms nowhere.
-
-    *said* is how the map got here — declared in the file, or supplied as its
-    own relation — because the fix differs and the law does not.
-    """
-    shown = ', '.join(strays[:5]) + (' …' if len(strays) > 5 else '')
-    return (
-        f"lookup '{lookup}' {said} {shown}, which are not labels of '{dim}'. "
-        f"'{dim}' takes its labels from the data here, and they are "
-        f'{list(labels[:8])}{" …" if len(labels) > 8 else ""}. A map maps the labels that '
-        f'exist — a key matching none of them would place its terms nowhere, so it is a typo '
-        f'on one side or a label missing from the other.'
-    )
-
-
-def declared_map_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
-    """A dimension whose maps have an author and whose labels have none — both lanes.
-
-    Its own wording rather than the missing-index one, because the fix is not
-    "pass a table carrying these lookup columns": those columns belong to
-    whoever already supplies the map, and passing them again is refused. Only
-    the labels are wanted.
-
-    *authors* names each map where it comes from, a declaration or a source
-    key, so a model mixing the two reads back which is which.
-    """
-    declared = ', '.join(sorted(authors))
-    return (
-        f"dimension '{dim}' has its maps ({declared}) but nothing says which of its "
-        f'labels exist. A map is a relation over a dimension, not the dimension itself — it may '
-        f'omit members, and its key order is arbitrary. Declare dimensions.{dim}.values, or pass '
-        f"the labels under key '{dim}': the maps are read against them, and a label no "
-        f'map mentions gets a null.'
-    )
-
-
-def unsupplied_lookup_message(lookup: str, over: str, space: str) -> str:
-    """A lookup nothing gives a map for — one wording, both lanes.
-
-    The counterpart of a declared parameter with no data, and the refusal that
-    replaced three: with one data transport the map is present and
-    single-valued by construction, so the only thing left to be wrong about is
-    whether anyone said it at all.
-    """
-    return (
-        f"no data provided for lookup '{lookup}'. Pass it under key '{lookup}' as a table with "
-        f"columns ['{over}', '{space}'] — one row per '{over}' label it maps, and no row for a "
-        f'label it does not — or declare lookups.{lookup}.values in the file.'
-    )
-
-
-def lookup_column_on_an_index_message(dim: str, lookup: str) -> str:
-    """An index carrying a column named after a lookup over it — one wording, both lanes.
-
-    Refused rather than filtered away, unlike every other column a source
-    carries and the model does not take: this one is a map somebody meant to
-    supply, and dropping it silently would build the model they did not write.
-    """
-    return (
-        f"index for dimension '{dim}' carries a '{lookup}' column, and '{lookup}' is a lookup "
-        f"over '{dim}'. A map is supplied under its own key, not as a column of the index it "
-        f'runs over: pass it as sources[{lookup!r}], a table of the rows it maps.'
-    )
-
-
-def lookup_relation_columns_message(lookup: str, over: str, space: str, available: Sequence[str]) -> str:
-    """A supplied lookup relation short of one of its two columns — both lanes.
-
-    Both names are the declaration's, so the message spells the pair rather
-    than asking the reader to derive it: the key column is the dimension the
-    lookup runs ``over``, and the value column is named after the space the
-    values are labels of — the target dimension, or the lookup itself where it
-    owns its label space.
-    """
-    return (
-        f"lookup '{lookup}' is supplied as a relation and must carry columns "
-        f"['{over}', '{space}'] (has {list(available)}). '{over}' is the dimension it runs over "
-        f"and '{space}' is what its values are labels of."
-    )
-
-
-def lookup_relation_holes_message(lookup: str, column: str, holes: int, shown: str) -> str:
-    """A supplied lookup relation with a null in it — both lanes.
-
-    The same law a parameter's values are held to
-    (:func:`holes_in_values_message`), landing where a lookup is the one
-    relation that used to want the opposite: a partial map is rows for the
-    labels it maps and no row for the rest, so a null says the label is mapped
-    and unmapped at once.
-    """
-    at = f': {shown}' if shown else ''
-    return (
-        f"lookup '{lookup}' carries {holes} row(s) with a null in '{column}'{at}. A map is "
-        f'partial by leaving a label out, not by mapping it to nothing — drop the row and the '
-        f'label is unmapped, which is what every operator reading the lookup already means by it.'
-    )
-
-
-def lookup_relation_not_single_valued_message(lookup: str, over: str, offenders: Sequence[str]) -> str:
-    """A supplied lookup relation giving one label two values — both lanes.
-
-    Refused rather than resolved, for the reason
-    :func:`lookup_not_single_valued_message` gives on the index column: a
-    second row would multiply the label's terms through the join that reads it,
-    so the model that builds is larger than the one the file says.
-    """
-    shown = ', '.join(offenders[:5]) + (' …' if len(offenders) > 5 else '')
-    return (
-        f"lookup '{lookup}' maps {len(offenders)} '{over}' label(s) more than once: {shown}. "
-        f'A lookup is single-valued, so each label it maps takes exactly one row.'
     )
 
 

@@ -19,9 +19,7 @@ from typing import TYPE_CHECKING
 
 from lpspec.errors import (
     LpspecError,
-    sink_reformulates_message,
-    sink_refuses_combination_message,
-    sink_refuses_message,
+    spelled,
     unknown_name_message,
 )
 from lpspec.relational.sinks import capabilities as caps
@@ -31,6 +29,8 @@ from lpspec.relational.sinks.tables import ModelTables
 from lpspec.relational.sinks.writers import WRITERS, writer
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from lpspec.relational import plan
 
 __all__ = [
@@ -93,10 +93,43 @@ def refusal(program: plan.Program, name: str) -> str | None:
     table = sink_capabilities(name)
     needed = caps.required(program)
     if missing := table.missing(needed):
-        return sink_refuses_message(name, missing, _takers(program, name))
+        return _sink_refuses_message(name, missing, _takers(program, name))
     if combination := table.excluded(needed):
-        return sink_refuses_combination_message(name, sorted(combination), _takers(program, name))
+        return _sink_refuses_combination_message(name, sorted(combination), _takers(program, name))
     return None
+
+
+def _instead(takers: Sequence[str]) -> str:
+    """The third clause of the refusal contract: who *does* take it.
+
+    Naming another *sink* is not the lane redirection hard rule 3 forbids —
+    both lanes still accept the same language, and this is about where a model
+    can land.
+    """
+    if not takers:
+        return 'No sink this build has takes it.'
+    return f'Sinks that do take it: {", ".join(sorted(takers))}.'
+
+
+def _sink_refuses_combination_message(sink: str, combination: Sequence[str], takers: Sequence[str]) -> str:
+    """A sink that has both halves of a pair and refuses them together.
+
+    Its own sentence, because a caller reading "it cannot take a quadratic
+    objective" of a sink whose documentation says it can would conclude the
+    message is wrong.
+    """
+    return (
+        f'the {sink!r} sink takes {spelled(combination)} separately and refuses them together, '
+        f'which is a limit of that solver rather than of the model. {_instead(takers)}'
+    )
+
+
+def _sink_refuses_message(sink: str, missing: Sequence[str], takers: Sequence[str]) -> str:
+    """A sink asked for a capability it does not have at all."""
+    return (
+        f'the {sink!r} sink cannot take {spelled(missing)}: it has no such concept, so there is '
+        f'nothing to hand the model to. {_instead(takers)}'
+    )
 
 
 def relaxations(program: plan.Program, name: str) -> list[str]:
@@ -113,7 +146,7 @@ def relaxations(program: plan.Program, name: str) -> list[str]:
     needed = caps.required(program)
     declared = any(v.variable_type != 'continuous' for v in program.variables)
     return [
-        sink_reformulates_message(
+        _sink_reformulates_message(
             name,
             c,
             integrality_added=c in caps.REWRITTEN_AS_INTEGRALITY and not declared,
@@ -121,6 +154,37 @@ def relaxations(program: plan.Program, name: str) -> list[str]:
         for c in caps.CAPABILITIES
         if c in needed and table.support(c) == 'reformulated'
     ]
+
+
+def _instead(takers: Sequence[str]) -> str:
+    """The third clause of the refusal contract: who *does* take it.
+
+    Naming another *sink* is not the lane redirection hard rule 3 forbids —
+    both lanes still accept the same language, and this is about where a model
+    can land.
+    """
+    if not takers:
+        return 'No sink this build has takes it.'
+    return f'Sinks that do take it: {", ".join(sorted(takers))}.'
+
+
+def _sink_reformulates_message(sink: str, capability: str, *, integrality_added: bool) -> str:
+    """A sink meeting a capability by rewriting the model into one it takes.
+
+    *integrality_added* is the one consequence derivable here rather than
+    assumed per capability: a model that declared no integrality and reaches
+    the solver mixed-integer comes back without duals.
+    """
+    cost = (
+        ' The model declared no integrality of its own and reaches the solver mixed-integer, '
+        'so it will come back without duals.'
+        if integrality_added
+        else ''
+    )
+    return (
+        f'the {sink!r} sink has no native support for {spelled([capability])} and '
+        f'will take it reformulated, so what reaches the solver is not what the file declares.{cost}'
+    )
 
 
 def ingestible(name: str, model: ModelTables, program: plan.Program | None = None) -> ModelTables:
