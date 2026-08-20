@@ -507,15 +507,19 @@ def _check_named_offset(
     wrap: bool,
     fill: float | None,
 ) -> None:
-    """The three rules that make a per-entity offset mean one thing.
+    """The four rules that make a per-entity offset mean one thing.
 
     An offset that depends on the dimension it translates would move each
     position by a different amount *along that axis*, which is a permutation
     rather than a translation and has no reading as a lag. An offset that is
-    not integral cannot land on a coordinate. And a named offset must say what
-    the vacated positions contribute: the absent edge propagates through a
-    presence frame keyed by the dimension alone, which a per-entity edge is
-    not — refused here rather than answered wrongly (#850).
+    not integral cannot land on a coordinate. An offset varying over a
+    dimension neither the operand nor a partition puts within reach has no
+    coordinate to be read at, and would broadcast the shifted expression onto
+    a dimension the operator's dim rule says it does not have (#1161). And a
+    named offset must say what the vacated positions contribute: the absent
+    edge propagates through a presence frame keyed by the dimension alone,
+    which a per-entity edge is not — refused here rather than answered wrongly
+    (#850).
     """
     # An undeclared name never reaches here: resolution refuses it first, and
     # names the parameters that do exist, which is the better message.
@@ -534,6 +538,9 @@ def _check_named_offset(
             f'not a lag — drop the dimension from the parameter, or state the map you mean '
             f'as a lookup.'
         )
+    stray = sorted(set(declared.dims) - _within_reach(node, schema, context))
+    if stray:
+        raise LanguageError(f'{context}: {_stray_offset_message(name, stray, _partition_of(node))}')
     if not wrap and fill is None:
         raise LanguageError(
             f'{context}: shift(offset={name}) leaves the vacated positions absent, which a '
@@ -541,6 +548,44 @@ def _check_named_offset(
             f"Add edge='wrap' for a cyclic translation, or edge=<number> for what the "
             f'vacated positions contribute.'
         )
+
+
+def _within_reach(node: FunctionCallNode, schema: Model, context: str) -> set[str]:
+    """The dims a named offset may vary over.
+
+    Two ways for a coordinate of the offset to be one the shift can read it
+    at: the shifted expression carries the dim, or the partition groups the
+    walked axis *into* it, and then every coordinate of a group shares the
+    group's own lag.
+    """
+    reach = set(dims_of(node.args[0], schema, context))
+    by_node = node.kwargs.get('by')
+    if by_node is not None:
+        assert isinstance(by_node, LookupNode)
+        reach |= set(by_node.into)
+    return reach
+
+
+def _stray_offset_message(name: str, stray: list[str], partition: str | None) -> str:
+    """Why an offset over a dim nothing puts within reach is refused.
+
+    Without this the eager lane broadcasts the shifted expression onto that
+    dim — a bigger model than the file reads as, and one the operator's own
+    dim rule says it does not have — while the relational lane asks for a
+    column no frame carries (#1161).
+    """
+    grouped = (
+        f'or over what by={partition} groups into, which is one lag per group'
+        if partition is not None
+        else 'or, under by=<lookup>, over the dimension that lookup groups into — one lag per group'
+    )
+    return (
+        f'shift(offset={name}) is offset by a parameter over {stray}, which the shifted '
+        f'expression does not carry.\n'
+        f'An offset is read at the coordinate it moves, so it varies over the dims that '
+        f'expression has, {grouped}.\n'
+        f"Read '{name}' onto those dims with at(), or drop {stray} from it."
+    )
 
 
 def _shift_over_data_message(context: str) -> str:
