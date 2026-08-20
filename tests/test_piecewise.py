@@ -1175,11 +1175,12 @@ variables:
 piecewise:
   conversion:
     over: bp
-    by: converter_of
     points: bp_present
     method: adjacency
     links:
-      - [rate, bp_rate]
+      - expression: rate
+        values: bp_rate
+        by: converter_of
 
 constraints:
   heat_balance:
@@ -1291,7 +1292,14 @@ def test_a_mapped_link_may_be_bounded_by_its_curve(refined_inputs):
     value, so one is enough. Without the map the old rule stands: bounding one
     side of a curve by the other needs both sides named.
     """
-    bounded = override(raw_of(REFINED), **{'piecewise.conversion.links': [['rate', 'bp_rate', '>=']]})
+    bounded = override(
+        raw_of(REFINED),
+        **{
+            'piecewise.conversion.links': [
+                {'expression': 'rate', 'values': 'bp_rate', 'sign': '>=', 'by': 'converter_of'}
+            ]
+        },
+    )
 
     row = expand_piecewise(schema_of(bounded)).constraints['conversion_link0']
     assert row.expression.startswith('(rate) >='), 'the sign reaches the row the map builds'
@@ -1299,7 +1307,6 @@ def test_a_mapped_link_may_be_bounded_by_its_curve(refined_inputs):
     three = override(
         raw_of(REFINED),
         **{
-            'piecewise.conversion.by': None,
             'piecewise.conversion.links': [['rate', 'bp_rate'], ['rate', 'bp_rate'], ['rate', 'bp_rate', '>=']],
         },
     )
@@ -1307,12 +1314,13 @@ def test_a_mapped_link_may_be_bounded_by_its_curve(refined_inputs):
         lps.check(three)
 
 
-def test_a_link_below_the_frame_keeps_the_tuple_form():
-    """The map is the block's, so a link is two strings whichever frame it sits on."""
+def test_a_mapped_link_says_so_on_the_link():
+    """`by:` sits beside `sign:` — both say how this tie meets the weights."""
     block = schema_of(raw_of(REFINED)).model_dump()['piecewise']['conversion']
 
-    assert block['links'][0] == ['rate', 'bp_rate'], 'a link below the frame is still two strings'
-    assert block['by'] == 'converter_of', 'and the map is said once, by the block'
+    assert block['links'][0] == {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of'}, (
+        'a mapped link says so where it is written, and round-trips as it was'
+    )
 
 
 def test_a_links_rows_follow_what_it_ties(refined_inputs):
@@ -1340,14 +1348,21 @@ def test_a_links_rows_follow_what_it_ties(refined_inputs):
 @pytest.mark.parametrize(
     ('patch', 'match'),
     [
-        pytest.param({'piecewise.conversion.by': 'nope'}, 'undeclared lookup', id='by-names-no-lookup'),
+        pytest.param(
+            {'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'by': 'nope'}]},
+            'undeclared lookup',
+            id='by-names-no-lookup',
+        ),
         pytest.param(
             {
                 'parameters.bp_load': {'dims': ['converter', 'bp']},
                 'variables.load': {'foreach': ['converter', 'time'], 'bounds': {'lower': 0}},
-                'piecewise.conversion.links': [['load', 'bp_load'], ['load', 'bp_load']],
+                'piecewise.conversion.links': [
+                    {'expression': 'load', 'values': 'bp_load', 'by': 'converter_of'},
+                    ['load', 'bp_load'],
+                ],
             },
-            'which no link carries',
+            'takes its rows nowhere',
             id='a-map-nothing-travels',
         ),
     ],
@@ -1370,7 +1385,7 @@ def test_one_link_is_enough_under_a_map():
     """
     lps.check(raw_of(REFINED))  # a single link, and it holds five flows
 
-    plain = override(raw_of(REFINED), **{'piecewise.conversion.by': None})
+    plain = override(raw_of(REFINED), **{'piecewise.conversion.links': [['rate', 'bp_rate']]})
     with pytest.raises(SchemaError, match='at least two links'):
         lps.check(plain)
 

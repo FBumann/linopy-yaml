@@ -97,12 +97,13 @@ and `by:` is the lookup that carries each row up to the weights it reads:
 ```yaml
 conversion:
   over: bp
-  by: converter_of  # how a link below the weights reaches them
   points: bp_present
   method: adjacency
   links:
-    - [fuel, bp_fuel]         # carries `converter` — on the frame
-    - [rate, bp_rate]         # carries `flow` — one row per flow
+    - [fuel, bp_fuel]         # per converter — on the weights' frame
+    - expression: rate        # per flow — one row each
+      values: bp_rate
+      by: converter_of        # and this is how they reach the weights
 ```
 
 The shape it is about: the block makes one set of weights per coordinate of
@@ -125,9 +126,10 @@ flow, `boiler_heat → boiler` — so `by:` carries no per-row information. It n
 which table, which is one sentence about the block rather than a fact about any
 row.
 
-**A link uses the map when it carries the dim the lookup maps out of**, so the
-block says it once, no link says anything, and the weights' own frame is what
-the links imply once it is applied. That is how a curve ties **as many expressions as the data
+**`by:` sits beside `sign:`, on the link**, because both say how that tie meets
+the weights: one says which set it reads, the other how it relates to them. A
+link carrying it is written as a mapping; every other link keeps the two-string
+form. That is how a curve ties **as many expressions as the data
 gives it** — a converter with a fourth flow is a row in the lookup rather than
 an edit to the model — and the block still writes the tie, so the weights stay
 its own. Nothing in the file names λ.
@@ -142,10 +144,10 @@ Four things follow:
 - **The map must land on the frame** — a lookup out of a dim some link carries,
   into one the weights live on. A link carrying neither is refused, rather than
   quietly widening the frame.
-- **One link is enough under a map**, and it may be bounded. The two-link
-  minimum is about quantities, and under `by:` those are the members the lookup
-  carries; the same goes for a `<=` or `>=`, which needs two links to say which
-  side is bounded only when the links are the quantities.
+- **One link is enough when it carries a map**, and it may be bounded. The
+  two-link minimum is about quantities, and a mapped link's quantities are the
+  members its lookup carries; the same goes for a `<=` or `>=`, which needs two
+  links to say which side is bounded only when the links are the quantities.
 
   A sign under a map reaches **every member alike**, so it fits a family whose
   members are all pushed the same way. `>=` is exact for a quantity something

@@ -358,9 +358,14 @@ class PiecewiseLink(_StrictBlock):
     sign]`` and serialised back to exactly that form, so a round trip through
     :meth:`Model.to_yaml` reproduces the file.
 
+    ``by`` puts this link *below* the weights: its expression carries a finer
+    dim — one row per flow where the weights are per converter — and the lookup
+    named carries each row to the set it reads. It sits here beside ``sign``
+    because both say how this tie meets the weights, and a link carrying it is
+    written as a mapping.
+
     A link's rows exist where its expression does: a masked variable takes them
-    with it, which the build reports as an omission. So there is nothing here to
-    say about which rows are built.
+    with it, which the build reports as an omission.
     """
 
     _label: ClassVar[str] = 'a piecewise link'
@@ -368,6 +373,12 @@ class PiecewiseLink(_StrictBlock):
     expression: str
     values: str
     sign: LinkSign = '=='
+    by: str | None = None
+
+    @property
+    def mapped(self) -> bool:
+        """Whether this link's rows sit below the weights and reach them through a lookup."""
+        return self.by is not None
 
     @model_validator(mode='before')
     @classmethod
@@ -386,8 +397,13 @@ class PiecewiseLink(_StrictBlock):
         return _also_written_as(core_schema, handler, list_form)
 
     @model_serializer
-    def _as_list(self) -> list[str]:
-        return [self.expression, self.values] if self.sign == '==' else [self.expression, self.values, self.sign]
+    def _as_list(self) -> list[str] | dict[str, str]:
+        if self.by is None:
+            return [self.expression, self.values] if self.sign == '==' else [self.expression, self.values, self.sign]
+        written = {'expression': self.expression, 'values': self.values}
+        if self.sign != '==':
+            written['sign'] = self.sign
+        return written | {'by': self.by}
 
 
 #: How a ``piecewise:`` block restricts its interpolation weights, and what
@@ -419,9 +435,9 @@ class PiecewiseBlock(_StrictBlock):
     the curve instead of pinning it (at most one non-``"=="``, and only with
     exactly two links).
 
-    The weights live on the frame the links imply: what they carry, with the dim
-    ``by`` maps out of swapped for the one it maps into. So a link over flows
-    and a block mapping ``converter_of`` put the weights on converters, one row
+    The weights live on the frame the links imply: what each carries, with the
+    dim its own ``by`` maps out of swapped for the one it maps into. So a link
+    over flows mapping ``converter_of`` puts the weights on converters, one row
     per flow reads them, and how many flows a converter has is data.
 
     ``over`` names the breakpoint dimension; ``method`` is which of
@@ -436,7 +452,6 @@ class PiecewiseBlock(_StrictBlock):
 
     over: str
     links: list[PiecewiseLink]
-    by: str | None = None
     method: PiecewiseMethod = 'adjacency'
     active: str | None = None
     points: str | None = None
@@ -487,6 +502,11 @@ class PiecewiseBlock(_StrictBlock):
             raise ValueError(msg)
         return v
 
+    @property
+    def mapped(self) -> bool:
+        """Whether any link sits below the weights."""
+        return any(link.mapped for link in self.links)
+
     @model_validator(mode='after')
     def _check_the_links_are_enough(self) -> PiecewiseBlock:
         """A curve relates two quantities or more, and ``by:`` makes that a data question.
@@ -496,17 +516,17 @@ class PiecewiseBlock(_StrictBlock):
         member — how many is what the lookup carries, which no file can be
         checked against.
         """
-        if self.by is None and len(self.links) < 2:
+        if not self.mapped and len(self.links) < 2:
             msg = (
                 'piecewise needs at least two links ([expression, values, sign?]) — a curve '
                 'relates two quantities or more. One is enough under by:, where a link is a row '
                 'per member and the members are data.'
             )
             raise ValueError(msg)
-        if self.by is None and any(link.sign != '==' for link in self.links) and len(self.links) != 2:
+        if not self.mapped and any(link.sign != '==' for link in self.links) and len(self.links) != 2:
             msg = (
                 "a non-'==' sign bounds one side of a curve by the other, so it needs exactly two "
-                'links to say which side. Under by: a link is a row per member and each is bounded '
+                'links to say which side. A link carrying by: is a row per member, each bounded '
                 'by its own curve, so one is enough there.'
             )
             raise ValueError(msg)

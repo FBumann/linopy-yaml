@@ -65,7 +65,7 @@ from lpspec.language.model import Model, PiecewiseBlock
 from lpspec.language.resolution import Namespace, resolve_expression
 
 if TYPE_CHECKING:
-    from collections.abc import Container, Sequence
+    from collections.abc import Sequence
 
 
 def mask_of(block: str, pw: PiecewiseBlock) -> str | None:
@@ -142,10 +142,9 @@ def expand_piecewise(schema: Model) -> Model:
         }
         for i, link in enumerate(pw.links):
             rows = _declared_order(schema, _expr_dims(schema, link.expression, f'{ctx_of(name)} link {i}'))
-            below = _reaches_through(schema, pw, rows)
-            weights = f'at({lam}, by={pw.by})' if below else lam
+            weights = f'at({lam}, by={link.by})' if link.mapped else lam
             raw['constraints'][f'{name}_link{i}'] = {
-                'foreach': rows if below else list(frame),
+                'foreach': rows if link.mapped else list(frame),
                 'expression': (f'({link.expression}) {link.sign} sum({weights} * {link.values}, over={pw.over})'),
             }
         if pw.method == 'sos2':
@@ -236,48 +235,38 @@ def _expand_lp(
         }
 
 
-def _weights_frame(schema: Model, pw: PiecewiseBlock, link: Any, ctx: str) -> frozenset[str]:
-    """Where one link puts the weights: its own dims, with the map applied.
+def _weights_frame(schema: Model, link: Any, ctx: str) -> frozenset[str]:
+    """Where one link puts the weights: its own dims, with its own map applied.
 
-    A link carrying the dim ``by:`` maps out of sits *below* the weights — one
-    row per flow where they are per converter — so what it says about them is
-    the dim the lookup maps into. Every other link says its own dims, which is
-    what a block without a map does for all of them.
+    A link carrying ``by:`` sits *below* the weights — one row per flow where
+    they are per converter — so what it says about them is the dim its lookup
+    maps into. Every other link says its own dims.
     """
     dims = _expr_dims(schema, link.expression, ctx)
-    if pw.by is None or not _reaches_through(schema, pw, dims):
+    if not link.mapped:
         return dims
-    lookup = schema.lookups[pw.by]
+    lookup = schema.lookups[link.by]
     into = lookup.into
     return (dims - {lookup.over}) | ({into} if into is not None else frozenset())
 
 
-def _reaches_through(schema: Model, pw: PiecewiseBlock, rows: Container[str]) -> bool:
-    """Whether a link's rows sit below the weights and read them through ``by:``.
+def _check_the_map_travels(schema: Model, ctx: str, i: int, link: Any) -> None:
+    """A link's ``by:`` carries its rows somewhere, or it is not a map.
 
-    What decides it is the link's own dims: one carrying the dim the lookup
-    maps out of is a row per member of it, and everything else sits on the
-    frame. So the block declares the map once and no link declares anything.
+    Two ways it does not: naming no lookup, and mapping out of a dim the rows
+    do not sit on — a map nothing travels. Either would otherwise be reported
+    against a constraint the reader never wrote.
     """
-    return pw.by is not None and schema.lookups[pw.by].over in rows
-
-
-def _check_the_map_lands(schema: Model, ctx: str, pw: PiecewiseBlock, frame: list[str]) -> None:
-    """``by:`` carries rows to the weights, or the block is not a tie.
-
-    Where it lands is no longer a question — the frame is what the links imply
-    *after* the map, so it lands by construction. What is left is a map nothing
-    travels: named where every link already sits on the weights' frame, it does
-    nothing, and a key that does nothing reads as one that does something.
-    """
-    if pw.by is None:
+    if not link.mapped:
         return
-    lookup = schema.lookups[pw.by]
-    carried = [_expr_dims(schema, link.expression, f'{ctx} link {i}') for i, link in enumerate(pw.links)]
-    if not any(lookup.over in dims for dims in carried):
+    lookup = schema.lookups.get(link.by)
+    if lookup is None:
+        raise PiecewiseExpansionError(f"{ctx}: link {i} by references undeclared lookup '{link.by}'")
+    dims = _expr_dims(schema, link.expression, f'{ctx} link {i}')
+    if lookup.over not in dims:
         raise PiecewiseExpansionError(
-            f"{ctx}: by '{pw.by}' is over '{lookup.over}', which no link carries — the map is for "
-            f'links that sit below the weights, and every one of these is on their frame'
+            f"{ctx}: link {i} maps by '{link.by}', which is over '{lookup.over}' — a dim its "
+            f'expression does not carry (it has {sorted(dims)}), so the map takes its rows nowhere'
         )
 
 
@@ -304,8 +293,8 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
     ctx = f"piecewise '{name}'"
     if pw.over not in schema.dimensions:
         raise PiecewiseExpansionError(f"{ctx}: over references undeclared dimension '{pw.over}'")
-    if pw.by is not None and pw.by not in schema.lookups:
-        raise PiecewiseExpansionError(f"{ctx}: by references undeclared lookup '{pw.by}'")
+    for i, link in enumerate(pw.links):
+        _check_the_map_travels(schema, ctx, i, link)
 
     frame: list[str] = []
     for i, link in enumerate(pw.links):
@@ -317,7 +306,7 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 f"{ctx}: link {i} values parameter '{values}' must carry dim "
                 f"'{pw.over}' (has {schema.parameters[values].dims})"
             )
-        for d in _declared_order(schema, _weights_frame(schema, pw, link, f'{ctx} link {i}')):
+        for d in _declared_order(schema, _weights_frame(schema, link, f'{ctx} link {i}')):
             if d == pw.over:
                 raise PiecewiseExpansionError(
                     f"{ctx}: link {i} expression already carries the breakpoint dim '{pw.over}'"
@@ -334,11 +323,8 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
             if d not in frame:
                 frame.append(d)
 
-    _check_the_map_lands(schema, ctx, pw, frame)
-
     for i, link in enumerate(pw.links):
-        carried = _expr_dims(schema, link.expression, f'{ctx} link {i}')
-        rows = sorted(carried) if _reaches_through(schema, pw, carried) else frame
+        rows = sorted(_expr_dims(schema, link.expression, f'{ctx} link {i}')) if link.mapped else frame
         if stray := [d for d in schema.parameters[link.values].dims if d != pw.over and d not in rows]:
             varies = (
                 'this link builds a row per coordinate of'

@@ -182,11 +182,12 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           the link carries `flow` and the block maps `by: converter_of`, so it
           builds a row per flow and the number of flows is data
         over: bp
-        by: converter_of
         points: bp_present
         method: adjacency
         links:
-          - [rate, bp_rate]
+          - expression: rate
+            values: bp_rate
+            by: converter_of
 
     constraints:
       heat_balance:

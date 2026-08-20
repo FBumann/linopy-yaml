@@ -456,7 +456,7 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> N
                         )
                     )
                 continue
-            required = _required_under_mask(_through_lookup(schema, pw, link, mask, sources), extents, dims, present)
+            required = _required_under_mask(_through_lookup(schema, link, mask, sources), extents, dims, present)
             counts = pl.collect_all([required.select(pl.len()), present.select(pl.len())])
             if required.join(present, on=dims, how='anti').head(1).collect().height:
                 raise DataError(
@@ -507,9 +507,7 @@ def _prefix_mask(schema: Model, block: str, pw: Any, sources: Mapping[str, TidyS
     return marked.select(dims)
 
 
-def _through_lookup(
-    schema: Model, pw: Any, link: Any, mask: pl.LazyFrame, sources: Mapping[str, TidySource]
-) -> pl.LazyFrame:
+def _through_lookup(schema: Model, link: Any, mask: pl.LazyFrame, sources: Mapping[str, TidySource]) -> pl.LazyFrame:
     """A mask on the weights' frame, carried to the frame a refined link's rows sit on.
 
     ``points:`` marks the breakpoints a *curve* runs over, and a refined link's
@@ -521,16 +519,16 @@ def _through_lookup(
     Returns *mask* unchanged for a plain link, and where the lookup's index is
     not readable here — binding refuses that on its own terms.
     """
-    if pw.by is None or schema.lookups[pw.by].over not in schema.parameters[link.values].dims:
+    if not link.mapped or schema.lookups[link.by].over not in schema.parameters[link.values].dims:
         return mask
-    lookup = schema.lookups[pw.by]
+    lookup = schema.lookups[link.by]
     index, into = sources.get(lookup.over), lookup.into
     if index is None or into is None:
         return mask
     table = pl.scan_parquet(index) if isinstance(index, (str, Path)) else index
-    if pw.by not in table.collect_schema().names():
+    if link.by not in table.collect_schema().names():
         return mask
-    members = table.select(lookup.over, pl.col(pw.by).alias(into))
+    members = table.select(lookup.over, pl.col(link.by).alias(into))
     return mask.join(members, on=into, how='inner').drop(into)
 
 
