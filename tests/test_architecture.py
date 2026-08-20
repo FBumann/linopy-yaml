@@ -559,6 +559,7 @@ EXAMPLES_THAT_STAY = (
     'examples/monthly_budget.yaml',
     'examples/multi_period.yaml',
     'examples/piecewise.yaml',
+    'examples/piecewise_conversion.yaml',
     'examples/piecewise_lp.yaml',
     'examples/piecewise_ragged.yaml',
     'examples/reserves.yaml',

@@ -21,6 +21,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from lpspec.language import expand_piecewise, load_model
 from lpspec.relational.sinks.writers import mps_file
 from tests.conftest import (
     DISPATCH_MODEL,
@@ -122,6 +123,8 @@ def test_every_referenced_model_reaches_its_optimum_through_the_file(name: str, 
     concept, so a port declaring one has no reader here.
     """
     bindable_on_this_install(name)
+    if expand_piecewise(load_model(port_model(name))).sos:
+        pytest.skip(f'{name} declares a set, and HiGHS reads no SOS section from a file')
     path = tmp_path / f'{name}.mps'
     lps.write(port_model(name), port_sources(name), path)
     assert solve_written_file(path) == pytest.approx(PORT_REFERENCES[name]['objective'], rel=1e-6)
