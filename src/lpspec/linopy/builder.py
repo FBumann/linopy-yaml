@@ -65,6 +65,7 @@ from lpspec.language import (
     VariableDefinedNode,
     VariableNode,
     WhereNode,
+    carries_variable,
     check_binary,
     expression_of,
     unknown_operator_message,
@@ -258,9 +259,42 @@ def _build_constraints(ctx: EvaluationContext) -> None:
 
             lhs = _eval_ast(ast.left, ctx)
             rhs = _eval_ast(ast.right, ctx)
+            if _no_row_can_carry_a_term(ast, lhs, rhs):
+                continue
             sign = _SIGN_MAP[ast.op]
 
             ctx.model.add_constraints(lhs, sign, rhs, name=cname, mask=_as_linopy_mask(mask))
+
+
+def _no_row_can_carry_a_term(ast: ComparisonNode, lhs: Any, rhs: Any) -> bool:
+    """Whether the data left a constraint that names variables with none in it.
+
+    A dimension the data gives no members reduces away to a number, so every
+    row of ``sum(w, over=k) == 1`` asserts something about constants alone —
+    which the absence rules say is not a row, and the relational lane builds
+    none. Here linopy refused the expression outright, before any mask could
+    speak, so a program covering a feature the data does not use could not be
+    built at all (#1108).
+
+    Not the same as a row whose terms are absent: that is per coordinate, and
+    linopy drops those rows on the invariant both lanes share. And not the same
+    as an expression that names no variable in the first place — the file wrote
+    that one, so it still reaches linopy's refusal rather than disappearing.
+    """
+    if not (carries_variable(ast.left) or carries_variable(ast.right)):
+        return False
+    return _term_free(lhs) and _term_free(rhs)
+
+
+def _term_free(side: Any) -> bool:
+    """Whether *side* has nowhere for a variable term to sit.
+
+    A bare ``Variable`` is a term; a ``LinearExpression`` over an empty axis has
+    a term dimension of length zero; anything else is data.
+    """
+    if hasattr(side, 'to_linexpr'):
+        return False
+    return getattr(side, 'nterm', 0) == 0
 
 
 # ---------------------------------------------------------------------------

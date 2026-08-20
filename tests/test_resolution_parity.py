@@ -172,6 +172,57 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_model_inputs
     assert eager_status == relational_status
 
 
+#: A dimension the data leaves with **no members**, and a variable reduced over
+#: it. The empty sum is a number, so the row it lands in asserts something about
+#: constants alone — the same shape a masked variable leaves behind, reached by
+#: the one provenance that removes the term axis itself.
+EMPTY_AXIS_MODEL = {
+    'dimensions': {'g': {'dtype': 'str'}, 'k': {'dtype': 'int'}},
+    'parameters': {'exists': {'dims': ['g', 'k'], 'dtype': 'bool'}},
+    'variables': {
+        'w': {'foreach': ['g', 'k'], 'where': 'exists', 'bounds': {'lower': 0, 'upper': 1}},
+        'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'convex': {'foreach': ['g'], 'expression': 'sum(w, over=k) == 1'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
+}
+
+
+@pytest.mark.parametrize('sense', ['==', '<=', '>='], ids=['equality', 'upper-bound', 'lower-bound'])
+def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sense: str):
+    """The same rule as above, reached where the *dimension* is empty (#1108).
+
+    A reduction over a set with no members is `0`, so `sum(w, over=k) == 1`
+    is a row about constants alone and neither lane builds it. Was: the
+    relational lane solved, and the eager lane raised linopy's `Both sides of
+    the constraint are constant` before any mask could speak — so a component
+    library, whose whole shape is one program covering features a given system
+    does not use, could not use the oracle lane at all.
+
+    The two senses are one property: the shape decides, not the comparison.
+    """
+    model = override(EMPTY_AXIS_MODEL, **{'constraints.convex.expression': f'sum(w, over=k) {sense} 1'})
+    data = {
+        'g': pd.Index(['a', 'b'], name='g'),
+        'k': pd.Index([], name='k', dtype='int64'),
+        'exists': pd.DataFrame(
+            {
+                'g': pd.Series([], dtype='object'),
+                'k': pd.Series([], dtype='int64'),
+                'value': pd.Series([], dtype='bool'),
+            }
+        ),
+    }
+
+    with differential(model, data) as run:
+        assert 'convex' not in run.model.constraints, 'a row asserting something about constants only was built'
+        assert run.engine.diagnostics().rows == 0, 'the relational lane built one anyway'
+        assert run.engine.diagnostics().omissions.to_dicts() == [{'constraint': 'convex', 'rows_not_built': 2}], (
+            'a declared row dropped for want of a term is only defensible because the build says it happened'
+        )
+        assert run.oracle == 20.0, 'both `p` reach their bound — an unbuilt row pins nothing'
+
+
 BOOL_MASK_MODEL = {
     'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
     'parameters': {'active': {'dims': ['t'], 'dtype': 'bool'}, 'cap': {'dims': ['t']}},
