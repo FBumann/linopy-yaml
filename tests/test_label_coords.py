@@ -899,3 +899,38 @@ def test_the_second_map_is_checked_as_hard_as_the_first():
     index = pl.DataFrame({'line': ['l1', 'l2'], 'line_from': ['south', 'north']})
     with pytest.raises(DataError, match=re.escape("the map for lookup 'line_from' is said twice")):
         lps.solve(TWO_MAPS, {**_TWO_MAP_SOURCES, 'line': index})
+
+
+#: A parameter written positionally over a dimension that carries a supplied
+#: map. `cost` is a bare list, so which label each number belongs to is the
+#: index's row order — the order a map joined onto it must not disturb. `cap`
+#: pins the solution to `t = 0` alone, so the objective *is* that label's cost.
+POSITIONAL = {
+    'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
+    'lookups': {'g_of': {'over': 't', 'into': 'g'}},
+    'parameters': {'cost': {'dims': ['t']}, 'cap': {'dims': ['t']}},
+    'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'c': {'foreach': ['t'], 'expression': 'x >= cap'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x * cost, over=t)'},
+}
+
+
+def test_a_supplied_map_does_not_reorder_the_index_it_joins_onto():
+    """A label's position is its ordinal, and joining a map on may not move it.
+
+    A positional shape is placed against the labels read back off the index
+    *after* the map has been joined onto it, so a join free to reorder hands
+    every one of these numbers to the wrong label — and `shift`, which reads
+    ordinals, moves every coordinate with it. Both lanes then agree on a model
+    neither caller wrote, which is why the check is a number here rather than a
+    comparison between the two.
+    """
+    sources = {
+        't': pl.DataFrame({'t': [0, 1, 2]}),
+        'g': ['n', 's'],
+        'g_of': pl.DataFrame({'t': [0, 1, 2], 'g': ['n', 'n', 's']}),
+        'cost': [1.0, 10.0, 100.0],
+        'cap': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 0.0, 0.0]}),
+    }
+    with lps.solve(POSITIONAL, sources) as result:
+        assert result.objective == pytest.approx(1.0), "the first number is the first label's, whatever the join did"
