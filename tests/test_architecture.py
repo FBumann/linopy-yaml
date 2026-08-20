@@ -461,6 +461,53 @@ def test_the_languages_own_tests_reach_no_consumer():
 LANGUAGE_TOOLS_MAY_IMPORT = ('lpspec.language', 'lpspec.errors', 'lpspec.typeset')
 
 
+#: What a test under ``tests/typeset/`` may reach. The renderer, the language it
+#: reads, the CLI that fronts it, and the fixtures either owns — an allowlist for
+#: the same reason as the language's (#1150): enumerating what is forbidden kept
+#: missing things.
+#:
+#: ``lpspec.__main__`` is on it because the CLI moves with the renderer, and the
+#: test names it as a module rather than as ``from lpspec import __main__`` so
+#: that what it reaches is legible here.
+TYPESET_TESTS_MAY_IMPORT = (
+    'lpspec.language',
+    'lpspec.typeset',
+    'lpspec.errors',
+    'lpspec.__main__',
+    'tests.language',
+    'tests.typeset',
+)
+
+
+def test_the_renderers_own_tests_reach_no_further_than_the_renderer():
+    """`typeset/` travels with the language, so its tests have to travel too.
+
+    They did not: `test_typeset.py` swept `MODEL_PATHS` and read the gallery's
+    pages through `tools.gallery_math`, and `test_cli.py` drove the CLI over
+    `examples/dispatch.yaml` — the gallery, the generator and the model all stay.
+    What moved here is the renderer's own claims over fixtures that move with
+    it; the same claims over this repository's corpus are
+    `tests/test_typeset_gallery.py`.
+    """
+    offenders = {}
+    for path in (REPO / 'tests' / 'typeset').rglob('*.py'):
+        if '__pycache__' in path.parts:
+            continue
+        bad = sorted(
+            {
+                name
+                for name in _imported(ast.parse(path.read_text()))
+                if name.split('.')[0] in {'lpspec', 'tests', 'tools'} and not name.startswith(TYPESET_TESTS_MAY_IMPORT)
+            }
+        )
+        if bad:
+            offenders[str(path.relative_to(REPO))] = bad
+    assert not offenders, (
+        f'a renderer test reaches past the renderer: {offenders} — assert it over a fixture '
+        f'that travels, or move the test to `tests/test_typeset_gallery.py`'
+    )
+
+
 def test_the_languages_own_generators_reach_no_consumer():
     """A generator that needs a plan is documenting lpspec, not the language.
 
@@ -587,6 +634,8 @@ CROSSES_THE_CUT = {
     'tests/test_api.py': 'a docstring citing `docs/about/ceiling.md`, and one naming `tests/language/`',
     'tests/test_architecture.py': 'the fences themselves: this file is split at the cut, not moved',
     'tools/constructs.py': 'a comment citing `docs/reference/language/` for its column order',
+    'tests/test_typeset_gallery.py': 'its docstring names `tests/typeset/`, the renderer tests it was '
+    'split out of; what it asserts is about the gallery, which stays',
     'tests/test_expansion_parity.py': 'a comment naming the language test whose model it copies '
     'rather than imports, precisely so the import does not cross',
     'pyproject.toml': "ruff's per-file-ignore for `src/lpspec/language/where_parser.py`",
@@ -594,8 +643,9 @@ CROSSES_THE_CUT = {
 }
 
 #: Where a crossing would be a break rather than a link, and the suffixes worth
-#: reading. `tests/language/` and `tools/language/` are excluded: they move.
-CUT_SCAN = (('tests', 'tests/language/'), ('tools', 'tools/language/'))
+#: reading. The directories that move are excluded — a moving file naming
+#: another moving file is not a crossing, it is two halves of the same package.
+CUT_SCAN = (('tests', ('tests/language/', 'tests/typeset/')), ('tools', ('tools/language/',)))
 CUT_SCAN_FILES = ('pyproject.toml', 'mkdocs.yml')
 
 
@@ -610,7 +660,7 @@ def _crossings() -> dict[str, list[str]]:
             for path in (REPO / root).rglob('*')
             if path.is_file()
             and '__pycache__' not in path.parts
-            and skip not in str(path.relative_to(REPO))
+            and not any(s in str(path.relative_to(REPO)) for s in skip)
             and path.suffix in {'.py', '.md', '.yml', '.yaml', '.toml'}
         ]
     for path in candidates:

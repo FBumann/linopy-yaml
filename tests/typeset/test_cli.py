@@ -20,10 +20,13 @@ from pathlib import Path
 
 import pytest
 
-from lpspec import __main__ as front
+import lpspec.__main__ as front
 from lpspec.typeset import FORMATS
+from tests.typeset import golden
 
-MODEL = 'examples/dispatch.yaml'
+#: The golden model, not `examples/dispatch.yaml`: the CLI travels with the
+#: renderer and this fixture travels with both, where the gallery stays.
+MODEL = str(golden.MODEL)
 
 
 def _verbs() -> set[str]:
