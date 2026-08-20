@@ -1278,6 +1278,30 @@ def test_both_lanes_build_a_link_below_the_frame(refined_inputs, tmp_path):
     assert float(built.objective.value) == pytest.approx(lps.solve(raw_of(REFINED), refined_inputs).objective)
 
 
+def test_a_mapped_link_may_be_bounded_by_its_curve(refined_inputs):
+    """A sign needs two links to say which side is bounded — unless the map says it.
+
+    Under `by:` a link is a row per member and each is bounded by its own curve
+    value, so one is enough. Without the map the old rule stands: bounding one
+    side of a curve by the other needs both sides named.
+    """
+    bounded = override(raw_of(REFINED), **{'piecewise.conversion.links': [['rate', 'bp_rate', '>=']]})
+
+    row = expand_piecewise(schema_of(bounded)).constraints['conversion_link0']
+    assert row.expression.startswith('(rate) >='), 'the sign reaches the row the map builds'
+
+    three = override(
+        raw_of(REFINED),
+        **{
+            'piecewise.conversion.by': None,
+            'piecewise.conversion.foreach': [],
+            'piecewise.conversion.links': [['rate', 'bp_rate'], ['rate', 'bp_rate'], ['rate', 'bp_rate', '>=']],
+        },
+    )
+    with pytest.raises(SchemaError, match='exactly two links to say which side'):
+        lps.check(three)
+
+
 def test_a_link_below_the_frame_keeps_the_tuple_form():
     """The map is the block's, so a link is two strings whichever frame it sits on."""
     block = schema_of(raw_of(REFINED)).model_dump()['piecewise']['conversion']

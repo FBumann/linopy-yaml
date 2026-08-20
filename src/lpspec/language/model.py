@@ -523,6 +523,13 @@ class PiecewiseBlock(_StrictBlock):
                 'per member and the members are data.'
             )
             raise ValueError(msg)
+        if self.by is None and any(link.sign != '==' for link in self.links) and len(self.links) != 2:
+            msg = (
+                "a non-'==' sign bounds one side of a curve by the other, so it needs exactly two "
+                'links to say which side. Under by: a link is a row per member and each is bounded '
+                'by its own curve, so one is enough there.'
+            )
+            raise ValueError(msg)
         return self
 
     @model_validator(mode='after')
@@ -553,9 +560,6 @@ class PiecewiseBlock(_StrictBlock):
         non_eq = [link.sign for link in v if link.sign != '==']
         if len(non_eq) > 1:
             msg = "at most one link may carry a non-'==' sign."
-            raise ValueError(msg)
-        if non_eq and len(v) != 2:
-            msg = "a non-'==' sign is only supported with exactly two links."
             raise ValueError(msg)
         return v
 

@@ -143,9 +143,10 @@ Four things follow:
 - **The map must land on the frame** — a lookup out of a dim some link carries,
   into one the weights live on. A link carrying neither is refused, rather than
   quietly widening the frame.
-- **One link is enough under a map.** The two-link minimum is about quantities,
-  and under `by:` those are the members the lookup carries — data, which no file
-  can be checked against.
+- **One link is enough under a map**, and it may be bounded. The two-link
+  minimum is about quantities, and under `by:` those are the members the lookup
+  carries; the same goes for a `<=` or `>=`, which needs two links to say which
+  side is bounded only when the links are the quantities.
 
 A link takes no mask of its own: its rows exist where its expression does, so a
 member missing the flow a curve ties builds no row for it and the build reports
