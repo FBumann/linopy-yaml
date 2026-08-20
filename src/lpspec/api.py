@@ -29,9 +29,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from lpspec.errors import DataError, LpspecWarning
-from lpspec.language.boundedness import unbounded_notes
-from lpspec.language.piecewise import expand_piecewise
-from lpspec.language.validation import load_model
+from lpspec.language import expand_piecewise, load_model, unbounded_notes
 from lpspec.lowering import advice, expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.sinks import solver, writer
@@ -40,7 +38,7 @@ from lpspec.sources import tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language.model import Model
+    from lpspec.language import Model
     from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a

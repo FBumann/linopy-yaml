@@ -37,10 +37,10 @@ from lpspec.errors import (
     unknown_source_keys_message,
 )
 from lpspec.frames import as_frame, is_dense_array, is_multi_indexed, labels_frame
-from lpspec.language.piecewise import mask_of
+from lpspec.language import mask_of
 
 if TYPE_CHECKING:
-    from lpspec.language.model import Model
+    from lpspec.language import Model
 
 
 #: What a source is once :func:`tidy_sources` has read it: a tidy

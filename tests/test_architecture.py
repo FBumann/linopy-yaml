@@ -318,6 +318,101 @@ def test_language_never_reaches_a_consumer():
     )
 
 
+def _consumer_paths() -> Iterator[Path]:
+    """Every module that reads the AST rather than producing it.
+
+    Membership is read off the path, like every other fence here: a consumer is
+    anything under ``src/lpspec`` that is not ``language/`` itself, so a new one
+    is inside the fence the moment it lands.
+    """
+    for path in PKG.rglob('*.py'):
+        if '__pycache__' in path.parts or 'language' in path.relative_to(PKG).parts:
+            continue
+        yield path
+
+
+def _from_the_language(tree: ast.AST) -> Iterator[tuple[str, str]]:
+    """Every ``from lpspec.language… import …`` in *tree*, as (module, name) pairs."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith('lpspec.language'):
+            for alias in node.names:
+                yield node.module, alias.name
+
+
+def _declared_surface() -> list[str]:
+    """``language.__all__``, read out of the source rather than imported.
+
+    Static like the rest of this module: the fences must be checkable on a bare
+    install, and importing the package to ask would drag in the engine.
+    """
+    tree = ast.parse((PKG / 'language' / '__init__.py').read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == '__all__' for target in node.targets
+        ):
+            return [element.value for element in node.value.elts]
+    raise AssertionError('language/__init__.py declares no __all__ — the seam has to be a list somebody can read')
+
+
+def test_no_consumer_reaches_past_the_language_facade():
+    """The waist from the consumer's side — what makes it a contract rather than a habit.
+
+    Hard rule 1 stops the language reaching a consumer. This is the shape of the
+    traffic the other way: a consumer reads the AST through ``lpspec.language``
+    and nothing else, so what the waist promises is one reviewable list. A
+    submodule path is not that — nobody agreed to it, it can hold a private
+    name, and a name reached that way is invisible to the count below.
+    """
+    offenders = {}
+    for path in _consumer_paths():
+        deep = sorted(
+            {module for module, _ in _from_the_language(ast.parse(path.read_text())) if module != 'lpspec.language'}
+        )
+        if deep:
+            offenders[str(path.relative_to(PKG))] = deep
+    assert not offenders, (
+        f'a consumer imports a language submodule: {offenders} — read the AST through '
+        f'`lpspec.language`, and add the name to its __all__ if it is not there yet'
+    )
+
+
+def test_the_language_facade_is_exactly_what_consumers_read():
+    """The surface is a decision, so it is counted — in both directions.
+
+    A name exported and imported by nobody is surface the waist is carrying for
+    free, and YAGNI applies to a seam harder than anywhere else: it is what a
+    package boundary would have to keep stable. A name imported and not exported
+    means ``__all__`` has stopped describing the seam and the count has stopped
+    meaning anything.
+
+    Deliberately measured against ``src/`` alone. ``tests/`` reaches into the
+    language's own internals on purpose — they are its unit tests, not its
+    consumers — so counting them would make the seam look wider than it is.
+    """
+    used = {name for path in _consumer_paths() for _, name in _from_the_language(ast.parse(path.read_text()))}
+    declared = set(_declared_surface())
+    assert declared == used, (
+        f'the language surface and its consumers disagree: exported but unused '
+        f'{sorted(declared - used)}, used but not exported {sorted(used - declared)} — '
+        f'__all__ is the seam, so it says exactly what the AST is read through'
+    )
+
+
+def test_the_language_facade_exports_no_private_name():
+    """A leading underscore in the seam is the surface admitting it is unfinished.
+
+    ``_UnresolvedPositionNode`` was in it, reached by all three consumers, and
+    nothing failed: the fence above counts a name, and the exactness check
+    above accepts whatever both sides spell the same. Only this reads the
+    spelling. A private name a consumer needs is a name that was never private.
+    """
+    private = sorted(name for name in _declared_surface() if name.startswith('_'))
+    assert not private, (
+        f'the language exports private names: {private} — a name the seam carries is public, '
+        f'so rename it rather than exporting the underscore'
+    )
+
+
 #: What ``typeset/`` may reach. The language and nothing else: a renderer reads
 #: the AST and writes text, so it must not be able to acquire an opinion an
 #: engine holds. ``lpspec.errors`` for the exception hierarchy, as everywhere.

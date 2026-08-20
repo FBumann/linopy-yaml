@@ -311,7 +311,14 @@ choice load-bearing in the language's rulebook.
    a model *means* cannot depend on what is done with it. `load_model` sits
    inside that fence — parsing and validating is the language's own job, and a
    consumer that binds no data must reach it without reaching a runner; `api.py`
-   re-exports it so callers keep saying `lps.load_model`.
+   re-exports it so callers keep saying `lps.load_model`. The traffic the other
+   way is shaped too: a consumer reads the AST through `lpspec.language` itself
+   and never through a module under it, so what the waist promises is
+   **forty-nine names in one `__all__`** — thirty-one node types and eighteen
+   oracles, front doors and message builders — rather than the union of
+   whatever eleven submodules happen to expose. That list is pinned in both
+   directions, so an export nobody imports fails as loudly as an import nobody
+   exported, and a private name in it fails on sight.
 2. **The engine knows nothing about linopy, xarray or YAML.** `relational/` goes
    plan → engine → a solver sink → solver, with linopy's semantics as a spec to match
    rather than code to share; it never sees the schema, the AST, or the eager
@@ -475,6 +482,7 @@ it.
 
 | Module | Role |
 |---|---|
+| `language/__init__.py` | **the seam**: the whole of what a consumer may read off the AST, and the only language module one may import |
 | `language/_yaml.py` | the only place a file is read: YAML 1.2 booleans, duplicate keys refused |
 | `language/model.py` | pydantic schema incl. `expressions:` / `macros:` / `piecewise:` |
 | `language/expression_parser.py`, `language/where_parser.py` | text → core AST; grammar only, dependency-free |
@@ -523,6 +531,14 @@ linopy or xarray; everything under `typeset/` reads the
 AST and writes text, and reaches neither the plan nor any data.
 `tests/test_architecture.py` reads membership off the path in all four cases,
 so no fence can be stepped over by naming a file differently.
+
+`language/`'s fence has a second half the other three do not need, because it is
+the only directory anything is allowed to import *from*: a consumer reads
+`lpspec.language` and nothing under it. A submodule path would be a contract
+nobody agreed to — it can carry a private name, and it cannot be counted — so
+the AST surface is one list rather than the union of eleven modules' internals.
+That is also what would survive the language being lifted into a package of its
+own: the fence is already the import a consumer would keep writing.
 
 `language/` and `relational/` are the two halves of the waist and their fences
 point the same way — outward, at `errors.py`, the one leaf both may import.

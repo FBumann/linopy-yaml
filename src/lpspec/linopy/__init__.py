@@ -65,10 +65,7 @@ except ModuleNotFoundError as exc:
 
 from lpspec._notes import note
 from lpspec.errors import unknown_name_message
-from lpspec.language.expression_parser import ComparisonNode
-from lpspec.language.piecewise import expand_piecewise
-from lpspec.language.resolution import Namespace, expression_of
-from lpspec.language.validation import load_model
+from lpspec.language import ComparisonNode, Namespace, expand_piecewise, expression_of, load_model
 from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
 from lpspec.linopy.loader import dimension_coords, load_parameters
 from lpspec.lowering import lower_expression, lower_program
@@ -77,7 +74,7 @@ from lpspec.sources import tidy_sources, validate_curve_extent, validate_piecewi
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language.model import Model
+    from lpspec.language import Model
 
 linopy.options['semantics'] = 'v1'
 

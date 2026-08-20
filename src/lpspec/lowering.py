@@ -28,51 +28,53 @@ from functools import partial
 from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 from lpspec.errors import LanguageError
-from lpspec.language import degree
-from lpspec.language.dimensions import dims_of
-from lpspec.language.expression_parser import (
+from lpspec.language import (
+    AndNode,
     ArithmeticNode,
     BinaryOperatorNode,
+    BooleanLiteralNode,
     ComparisonNode,
+    DimensionComparisonNode,
     DimensionNode,
+    DimensionPositionNode,
     EdgeNode,
     FunctionCallNode,
     KeywordNode,
-    LookupNode,
-    NameListNode,
-    NameNode,
-    NumberNode,
-    ParameterNode,
-    UnaryOperatorNode,
-    VariableNode,
-)
-from lpspec.language.operators import call_shape_error, edge_error
-from lpspec.language.piecewise import expand_piecewise
-from lpspec.language.resolution import Namespace, expression_of, where_of
-from lpspec.language.where_parser import (
-    AndNode,
-    BooleanLiteralNode,
-    DimensionComparisonNode,
-    DimensionPositionNode,
     LookupComparisonNode,
     LookupDefinedNode,
+    LookupNode,
     LookupPairComparisonNode,
+    NameListNode,
+    NameNode,
+    Namespace,
     NotNode,
+    NumberNode,
     OrNode,
     ParameterComparisonNode,
     ParameterDefinedNode,
+    ParameterNode,
+    UnaryOperatorNode,
     UnresolvedComparisonNode,
     UnresolvedNameNode,
+    UnresolvedPositionNode,
     VariableDefinedNode,
+    VariableNode,
     WhereNode,
-    _UnresolvedPositionNode,
+    call_shape_error,
+    carries_variable,
+    check_binary,
+    dims_of,
+    edge_error,
+    expand_piecewise,
+    expression_of,
+    where_of,
 )
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from lpspec.language.model import Model
+    from lpspec.language import Model
 
 _SENSES = {'==', '<=', '>='}
 
@@ -208,7 +210,8 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
     Three language rules are *asked* here and answered elsewhere: the call
     shape (``operators.call_shape_error``, re-asked so an AST that skipped
     resolution gets the language's wording rather than an ``IndexError``), the
-    dim rules (``dimensions.dims_of``) and degree (``language/degree.py``).
+    dim rules (``dims_of``) and degree (``check_binary``), both asked for
+    their verdict rather than decided again here.
 
     What stays is about the plan: which node a call becomes, and the shapes a
     node cannot represent — a ``GroupSum`` groups by a declared lookup, a
@@ -251,7 +254,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
     if isinstance(node, BinaryOperatorNode):
         left = _lower_expr(node.left, schema, context)
         right = _lower_expr(node.right, schema, context)
-        degree.check_binary(node, context)
+        check_binary(node, context)
         match node.op:
             case '+':
                 return plan.Add(left, right)
@@ -338,7 +341,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
                 raise LanguageError(f'{context}: {_shift_by_message()}')
             _check_dim_rules(node, schema, context)
             operand = _lower_expr(node.args[0], schema, context)
-            has_var = degree.carries_variable(node.args[0])
+            has_var = carries_variable(node.args[0])
             edge = node.kwargs.get('edge')
             wrap = isinstance(edge, EdgeNode)
             fill = None if wrap else _translate_fill(edge, context, has_var=has_var)
@@ -616,10 +619,10 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
     if isinstance(node, LookupDefinedNode):
         return plan.LookupDefined(node.name, node.over)
 
-    if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, _UnresolvedPositionNode)):
+    if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode)):
         msg = (
             f'{type(node).__name__} reached lowering unresolved. Where strings '
-            f'must go through resolution.where_of() first.'
+            f'must go through lpspec.language.where_of() first.'
         )
         raise AssertionError(msg)
 
