@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.0-alpha.226](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.226...v0.1.0-alpha.226) (2026-08-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **language:** a piecewise gate is named for the number it is ([#1136](https://github.com/fluxopt/lpspec/issues/1136))
+
+### Refactoring
+
+* **language:** a piecewise gate is named for the number it is ([#1136](https://github.com/fluxopt/lpspec/issues/1136)) ([ef119f2](https://github.com/fluxopt/lpspec/commit/ef119f2aa3bf92f6ae988a9251369dadd3124ab6))
+
 ## [0.0.1-alpha.226](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.225...v0.0.1-alpha.226) (2026-08-20)
 
 
