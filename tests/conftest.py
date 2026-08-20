@@ -369,3 +369,34 @@ def transport_data():
         }
     )
     return gens, lines, load
+
+
+def recomputed_row_values(engine, result) -> Any:
+    """Every row's left-hand side at the solution, recomputed from the model.
+
+    ``Ax`` for a linear row and ``xᵀQx + Ax`` for a quadratic one, out of the
+    built frames and the primal — and nothing else the solver produced, which
+    is what makes agreement with ``result.activity`` a check of the whole chain
+    rather than a tautology. For a quadratic row it stands in for the oracle
+    the linopy lane cannot provide.
+
+    Scattered rather than ``reduceat``-ed: a purely quadratic row owns no
+    linear entries, and ``reduceat`` repeats the previous row on an empty span.
+    """
+    import numpy as np
+
+    tables = engine._tables()
+    x = np.zeros(tables.column_count)
+    for name, block in engine._variable_blocks.items():
+        x[block.start : block.start + block.height] = result.primal(name)['value'].to_numpy()
+
+    values = np.zeros(tables.row_count)
+    spans = np.diff(tables.row_starts)
+    rows = np.repeat(np.arange(tables.row_count), spans)
+    np.add.at(values, rows, tables.matrix['coeff'].to_numpy() * x[tables.matrix['col'].to_numpy()])
+
+    quadratic = tables.qmatrix
+    if quadratic.height:
+        pairs = quadratic['coeff'].to_numpy() * x[quadratic['col_l'].to_numpy()] * x[quadratic['col_r'].to_numpy()]
+        np.add.at(values, quadratic['row'].to_numpy(), pairs)
+    return values

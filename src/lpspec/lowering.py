@@ -129,9 +129,9 @@ def lower_program(schema: Model) -> plan.Program:
             plan.ConstraintDeclaration(
                 cname,
                 tuple(cdef.foreach),
-                lhs=_lower_expr(ast.left, schema, f"constraint '{cname}'"),
+                lhs=_lower_expr(ast.left, schema, f"constraint '{cname}'", ceiling=2),
                 sense=ast.op,
-                rhs=_lower_expr(ast.right, schema, f"constraint '{cname}'"),
+                rhs=_lower_expr(ast.right, schema, f"constraint '{cname}'", ceiling=2),
                 where=where,
             )
         )

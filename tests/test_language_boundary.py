@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+import lpspec as lps
 from lpspec.errors import LanguageError
 from lpspec.language.dimensions import check_schema
 from lpspec.lowering import lower_program
@@ -49,6 +50,10 @@ def test_every_shipped_example_is_inside_the_language(path):
         pytest.param({'variables.p.where': 'snapshot > 2'}, id='where-on-a-dimension-roadmap-5b'),
         pytest.param(_objective('sum(p * cost)'), id='affine-product'),
         pytest.param(_objective('sum(p * p)'), id='degree-two-in-the-objective'),
+        pytest.param(
+            {'constraints.power_balance.expression': 'sum(p * p, over=generator) == load'},
+            id='degree-two-in-a-constraint',
+        ),
     ],
 )
 def test_inside_the_language(patch):
@@ -65,9 +70,9 @@ def test_inside_the_language(patch):
             id='power-operator',
         ),
         pytest.param(
-            {'constraints.power_balance.expression': 'sum(p * p, over=generator) == load'},
+            {'expressions': {'squared': {'expression': 'sum(p * p, over=generator)'}}},
             'degree 2',
-            id='degree-two-in-a-constraint',
+            id='degree-two-in-a-named-expression',
         ),
         pytest.param(
             _objective('sum(p) * sum(p)'),
@@ -90,13 +95,14 @@ def test_inside_the_language(patch):
 def test_outside_the_language_is_a_load_error(patch, match):
     """Each of these is refused at load, with no data bound.
 
-    ``degree-two`` is the first clause of the ceiling and the reason this runs
-    here rather than in the engine: the affine guard used to need data bound,
-    so ``lps.check()`` accepted the model and it only blew up at build time —
-    useless as a CI verb for exactly the rule it should enforce first.
+    Asked of ``lps.check`` rather than of ``lower_program``, because the verb
+    is the claim: the affine guard once needed data bound, so ``check``
+    accepted the model and it blew up at build time — useless as a CI verb for
+    exactly the rules it should enforce first. Named expressions are the same
+    argument one construct along; only ``check`` lowers them.
     """
     with pytest.raises(LanguageError, match=match):
-        lower_program(schema_of(DISPATCH, **patch))
+        lps.check(schema_of(DISPATCH, **patch))
 
 
 def test_an_unknown_operator_names_its_context_and_teaches_the_rewrite():

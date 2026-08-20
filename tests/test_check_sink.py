@@ -34,6 +34,13 @@ PLAIN = {
 #: that a shipped sink satisfies by rewriting rather than by taking.
 WITH_A_SET = PLAIN | {'sos': {'pick': {'variable': 'p', 'over': 'g', 'type': 1}}}
 
+#: The same model at degree 2, in each of the two positions the language takes
+#: it: the first constructs a shipped sink refuses outright.
+WITH_A_QUADRATIC_OBJECTIVE = PLAIN | {'objective': {'sense': 'minimize', 'expression': 'sum(p * p, over=g)'}}
+WITH_A_QUADRATIC_ROW = PLAIN | {
+    'constraints': {**PLAIN['constraints'], 'ball': {'foreach': ['g'], 'expression': 'p * p <= 9'}}
+}
+
 
 def _warnings(model, **kwargs) -> list[str]:
     with warnings.catch_warnings(record=True) as caught:
@@ -88,15 +95,33 @@ def test_the_question_needs_no_solver_installed(monkeypatch):
         sinks.solver('gurobi')
 
 
-def test_no_shipped_sink_refuses_anything_the_language_can_say():
+def _refusing(model) -> set[str]:
+    """Every shipped sink that would turn *model* away."""
+    return {name for name in (*SOLVERS, *WRITERS) if sinks.refusal(_program(model), name) is not None}
+
+
+def test_which_shipped_sinks_refuse_what_the_language_can_now_say():
     """The state of the world, pinned so it is visible when it changes.
 
-    Every construct today is `native` or `reformulated` everywhere, which is
-    why `check(sink=)` can only warn. The first `absent` cell the language can
-    reach turns this red, which is where that should show up.
+    A **set** still reaches every sink, natively or as binaries, so a model
+    carrying one is warned about at worst. **Degree 2** does not: it is the
+    first thing the language can say that some destinations have no spelling
+    for at all, which is what turned `check(sink=)` from a warning into a
+    refusal.
+
+    Named individually rather than counted, because which sink is on the list
+    is the fact: a cell moving in either direction — xpress growing a Hessian,
+    a writer gaining a section — should be read here rather than inferred from
+    a number.
     """
-    refused = {name: sinks.refusal(_program(WITH_A_SET), name) for name in (*SOLVERS, *WRITERS)}
-    assert set(refused.values()) == {None}, f'a shipped sink now refuses a model the language can state: {refused}'
+    assert _refusing(WITH_A_SET) == set(), 'a set reaches every sink, the ones that cannot branch on it rewriting it'
+    assert _refusing(WITH_A_QUADRATIC_OBJECTIVE) == {'xpress', '.mps'}, (
+        'the two with no path for a Hessian: xpress ships one and this package hands it none, '
+        'and MPS spells it in a section this writer does not write'
+    )
+    assert _refusing(WITH_A_QUADRATIC_ROW) == {'highs', 'xpress', '.mps'}, (
+        'and a quadratic row, which HiGHS has no entry point for at all'
+    )
 
 
 def test_a_sink_that_takes_nothing_is_refused_by_name_and_offered_the_others(monkeypatch):

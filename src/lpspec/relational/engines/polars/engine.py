@@ -55,6 +55,7 @@ _OBJ = ('col', 'coeff')
 _QUAD = ('col_l', 'col_r', 'coeff')
 _ROWS = ('row', 'sense', 'rhs')
 _MATRIX = ('row', 'col', 'coeff')
+_QMATRIX = ('row', 'col_l', 'col_r', 'coeff')
 _SOS = ('set', 'type', 'col', 'weight', 'big_m')
 
 #: The dtype of each of those columns. ``vtype`` is an ``Enum`` over the
@@ -181,6 +182,11 @@ class PolarsEngine:
         #: spellings (:class:`~lpspec.relational.sinks.tables.ModelTables`).
         #: Empty for every model with an affine objective, which is most.
         self._quad: pl.DataFrame | None = None
+        #: The quadratic part of every quadratic constraint row, one row per
+        #: ``(row, unordered pair)``. Its rows are the **tail** of the label
+        #: space (:func:`_linear_first`), so a sink can take them as a slice
+        #: rather than hunting for them among the linear ones.
+        self._qmatrix: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
         self._matrix: pl.DataFrame | None = None
         self._sos: pl.DataFrame | None = None
@@ -260,18 +266,19 @@ class PolarsEngine:
         with _clocked(self._timings, 'build'):
             cols = [self._build_variable(v) for v in program.variables]
             sets = [self._build_sos(s, program.variable(s.variable)) for s in program.sos]
-            built = [self._build_constraint(c) for c in program.constraints]
+            built = [self._build_constraint(c) for c in _linear_first(program.constraints)]
             objective = self._build_objective(program.objective)
 
             self._sos = _stack(sets, _SOS)
             self._cols = _stack(cols, _COLS)
-            self._rows = labels.in_position_order(_stack([r for r, _ in built], _ROWS), 'row')
-            ordered = _in_row_order(_stack([m for _, m in built if m is not None], _MATRIX))
+            self._rows = labels.in_position_order(_stack([r for r, _, _ in built], _ROWS), 'row')
+            ordered = _in_row_order(_stack([m for _, m, _ in built if m is not None], _MATRIX))
             self._matrix_starts = _row_starts(ordered, self._n_rows)
             self._matrix = ordered.select('col', 'coeff').rechunk()
             self._n_entries = self._matrix.height
             self._obj = _stack([objective] if objective is not None else [], _OBJ)
             self._quad = _stack([] if self._quad is None else [self._quad], _QUAD)
+            self._qmatrix = _in_row_order(_stack([q for _, _, q in built if q is not None], _QMATRIX))
 
     @property
     def _q(self) -> PolarsCompiler:
@@ -470,8 +477,10 @@ class PolarsEngine:
             self._n_sets = built.item(-1, 'set') + 1
         return built
 
-    def _build_constraint(self, c: plan.ConstraintDeclaration) -> tuple[pl.DataFrame, pl.DataFrame | None]:
-        """One constraint as its ``rows`` and its share of the matrix.
+    def _build_constraint(
+        self, c: plan.ConstraintDeclaration
+    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
+        """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
 
         Terms normalise to the left, constants to the right. Each constant
         fragment is aggregated to its own coordinates and left-joined, so a
@@ -491,13 +500,17 @@ class PolarsEngine:
 
         The labelled frame is kept for the dual read-back, and its block
         narrows when rows go termless: the run of labels a declaration owns is
-        what survived, not what it declared (#561).
+        what survived, not what it declared (#561). A purely quadratic row has
+        no linear entries at all, so an empty share is not a missing one — what
+        decides whether a row is built is whether *either* matrix has a term.
         """
-        lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs")
-        rhs = self._q.expression(c.rhs, f"constraint '{c.name}' rhs")
+        quadratic = _declares_quadratic(c)
+        lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs", quadratic=quadratic)
+        rhs = self._q.expression(c.rhs, f"constraint '{c.name}' rhs", quadratic=quadratic)
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
+        quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
         consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
-        for p, _ in [*terms, *consts]:
+        for p, _ in [*terms, *quads, *consts]:
             extra = set(p.dims) - set(c.dims)
             if extra:
                 raise LanguageError(
@@ -505,7 +518,7 @@ class PolarsEngine:
                     f'foreach {list(c.dims)} — missing a Sum/GroupSum?'
                 )
 
-        restrictions = _absence_restrictions([p for p, _ in terms])
+        restrictions = _absence_restrictions([p for p, _ in (*terms, *quads)])
         start = self._n_rows
         declared = labels.declared_height(self._q, c.dims, c.where) if restrictions else None
         labelled = labels.frame(self._q, c.dims, c.where, 'row', start, restrictions)
@@ -546,12 +559,12 @@ class PolarsEngine:
                 raise DataError(uncovered_constant_message(names, gaps, f"constraint '{c.name}'"))
             rows = rows.drop(gap_column)
 
-        if not terms:
+        if not terms and not quads:
             self._omitted[c.name] = rows.height
             self._constraint_blocks[c.name] = _Block(start, 0)
             self._n_rows = start
             self._constraints[c.name] = self._constraints[c.name].clear()
-            return rows.clear(), None
+            return rows.clear(), None, None
 
         pieces = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(terms) == 1 else None
@@ -568,12 +581,53 @@ class PolarsEngine:
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
-        matrix, term_rows = self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
+        matrix, term_rows = (
+            self._matrix_share(pieces, f"constraint '{c.name}'", c.lhs, c.rhs)
+            if pieces
+            else (_stack([], _MATRIX), pl.Series('row', [], dtype=_DTYPES['row']))
+        )
+        qmatrix = self._quadratic_share(frame, quads, c)
+        if qmatrix is not None:
+            term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
         rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, term_rows, start)
         spread = _magnitude_range(matrix.get_column('coeff'))
         if spread is not None:
             self._coefficients[c.name] = spread
-        return rows, matrix
+        if qmatrix is not None:
+            qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
+        return rows, matrix, qmatrix
+
+    def _quadratic_share(
+        self, frame: pl.LazyFrame, quads: list[tuple[TermFragment, float]], c: plan.ConstraintDeclaration
+    ) -> pl.DataFrame | None:
+        """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``.
+
+        The matrix share's twin, deliberately the *simple* version: it sorts
+        and aggregates unconditionally where :meth:`_matrix_share` probes
+        first, a model having few quadratic rows and each a handful of entries.
+        Pairs are ordered by column index for :meth:`_objective_quadratic`'s
+        reason.
+        """
+        if not quads:
+            return None
+        pieces = [
+            (frame.join(p.frame, on=list(p.dims), how='inner') if p.dims else frame.join(p.frame, how='cross')).select(
+                'row',
+                pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
+                pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
+                (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
+            )
+            for p, sign in quads
+        ]
+        stacked = pl.concat(pieces).collect(engine='streaming')
+        self._refuse_undefined_divisors(stacked, f"constraint '{c.name}'", c.lhs, c.rhs)
+        return _without_zeros(
+            stacked.lazy()
+            .group_by('row', 'col_l', 'col_r')
+            .agg(pl.col('coeff').sum())
+            .sort('row', 'col_l', 'col_r')
+            .collect(engine='streaming')
+        )
 
     def _drop_termless_rows(
         self, name: str, rows: pl.DataFrame, matrix: pl.DataFrame, kept: pl.Series, start: int
@@ -710,6 +764,7 @@ class PolarsEngine:
             self._cols is None
             or self._obj is None
             or self._quad is None
+            or self._qmatrix is None
             or self._rows is None
             or self._matrix is None
             or self._sos is None
@@ -723,6 +778,7 @@ class PolarsEngine:
             cols=self._cols,
             obj=self._obj,
             quad=self._quad,
+            qmatrix=self._qmatrix,
             rows=self._rows,
             matrix=self._matrix,
             sos=self._sos,
@@ -879,12 +935,25 @@ class PolarsEngine:
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
 
+        A construct the format has no section for is refused here, the way the
+        solve path refuses one a solver cannot ingest
+        (:func:`~lpspec.relational.sinks.ingestible`) and with the sentence
+        ``check(model, sink=...)`` would have given. Writing it anyway would
+        hand back a file that parses, solves, and is a different model: the
+        MPS writer spells no quadratic term, so those rows would arrive empty
+        (#942).
+
         Raises:
             ValueError: A suffix nothing writes.
+            LpspecError: A construct this format cannot spell.
         """
         path = Path(path)
-        chosen = sinks.writer(path.suffix.lower())
+        suffix = path.suffix.lower()
+        chosen = sinks.writer(suffix)
         tables = self._tables()
+        assert self._program is not None
+        if (refused := sinks.refusal(self._program, suffix)) is not None:
+            raise LpspecError(refused)
         with _clocked(self._timings, 'write'):
             chosen.write(tables, path)
 
@@ -979,6 +1048,7 @@ class PolarsEngine:
                 self._discrete(),
                 answer.status.termination_condition,
                 sets=self._reformulated_sets(tables is not built),
+                quadratic_rows=self._quadratic_constraints(),
             ),
         )
 
@@ -1138,6 +1208,16 @@ class PolarsEngine:
         assert self._program is not None
         return sorted(v.name for v in self._program.variables if v.variable_type != 'continuous')
 
+    def _quadratic_constraints(self) -> list[str]:
+        """The constraints this model declared as quadratic.
+
+        The other reason an otherwise continuous model comes back without
+        duals, and like the sets one it is a fact about the *model* rather than
+        about the solve — so it is read off the program and not off the answer.
+        """
+        assert self._program is not None
+        return sorted(c.name for c in self._program.constraints if _declares_quadratic(c))
+
     def _reformulated_sets(self, reformulated: bool) -> list[str]:
         """The sets that reached the solver as binaries, if any did.
 
@@ -1162,7 +1242,7 @@ class PolarsEngine:
             self._solver.close()
             self._solver = None
         self._cols = self._obj = self._rows = self._matrix = self._sos = self._matrix_starts = None
-        self._quad = None
+        self._quad = self._qmatrix = None
         self._variables.clear()
         self._constraints.clear()
         self._variable_blocks.clear()
@@ -1284,6 +1364,24 @@ def _short_parameters(program: plan.Program, bound: BoundSources) -> dict[str, t
         if rows < reach:
             short[p.name] = (reach, rows)
     return short
+
+
+def _linear_first(constraints: tuple[plan.ConstraintDeclaration, ...]) -> list[plan.ConstraintDeclaration]:
+    """*constraints* with the quadratic declarations last, order otherwise kept.
+
+    **Quadratic is a property of a declaration, not of a row** — a constraint
+    has one expression — so building those last puts their rows in a contiguous
+    *tail* of the label space. Everything downstream stays a slice because of
+    it: a solver holding linear rows in one object and quadratic rows in
+    another concatenates two runs rather than scattering by label. A stable
+    sort, so file order survives inside each half.
+    """
+    return sorted(constraints, key=_declares_quadratic)
+
+
+def _declares_quadratic(c: plan.ConstraintDeclaration) -> bool:
+    """Whether *c*'s expression multiplies two variable-carrying operands."""
+    return plan.is_quadratic(c.lhs) or plan.is_quadratic(c.rhs)
 
 
 def _in_row_order(matrix: pl.DataFrame) -> pl.DataFrame:

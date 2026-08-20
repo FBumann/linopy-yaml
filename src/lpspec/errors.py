@@ -283,7 +283,12 @@ def wrong_value_dtype_message(name: str, declared: str, arrived: str) -> str:
     )
 
 
-def no_duals_message(discrete: Sequence[str], termination_condition: str, sets: Sequence[str] = ()) -> str:
+def no_duals_message(
+    discrete: Sequence[str],
+    termination_condition: str,
+    sets: Sequence[str] = (),
+    quadratic_rows: Sequence[str] = (),
+) -> str:
     """Why a solve that *did* leave values still has no duals.
 
     Integrality is decidable from the model, and naming the variable is
@@ -294,7 +299,21 @@ def no_duals_message(discrete: Sequence[str], termination_condition: str, sets: 
     integrality would otherwise be told it is mixed-integer with nothing named
     — and because the fix is a different one: another sink, not a different
     model.
+
+    *quadratic_rows* are the quadratic constraints, whose prices are off by
+    default: asking for them puts the solve on the convex path, and a nonconvex
+    row that solves without them fails with them. The one case here where
+    nothing is wrong with the model.
     """
+    if quadratic_rows and not discrete:
+        names = ', '.join(f"'{n}'" for n in quadratic_rows)
+        return (
+            f"a quadratic constraint prices only under gurobi's QCPDual, which is off by default: "
+            f'{names} {"is" if len(quadratic_rows) == 1 else "are"} quadratic. Asking for those '
+            f'prices makes the solver take the convex path, so a nonconvex row that solves without '
+            f'them fails with them — which is why this is yours to ask for rather than ours to '
+            f"assume. Re-solve with solver_options={{'QCPDual': 1}} if the model is convex."
+        )
     if sets:
         names = ', '.join(f"'{n}'" for n in sets)
         return (
@@ -381,6 +400,38 @@ def sink_reformulates_message(sink: str, capability: str, *, integrality_added: 
     return (
         f'the {sink!r} sink has no native support for {_SPELLED.get(capability, capability)} and '
         f'will take it reformulated, so what reaches the solver is not what the file declares.{cost}'
+    )
+
+
+def lane_cannot_build_message(lane: str, missing: Sequence[str]) -> str:
+    """A construct the language accepts and one *lane* cannot construct.
+
+    Hard rule 3's amendment, worded. It names the other lane rather than a
+    rewrite, there being nothing wrong with the model — :func:`sink_refuses_message`
+    one level up.
+    """
+    return (
+        f'the {lane} lane cannot build {_spelled(missing)}, and no reformulation of it is exact. '
+        f'The language accepts it and the streaming lane builds it, so this is a limit of the '
+        f'lane rather than of the model.\n'
+        f'Build it with lps.build()/lps.solve() instead, and ask check(model, sink=...) which '
+        f'solver will take it — gurobi does, and an .lp file carries it to anything that does.'
+    )
+
+
+def nonconvex_row_message(reported: str) -> str:
+    """A quadratic constraint the solver would take, refused for an option we asked it for.
+
+    Reached when ``QCPDual`` is on and a row turns out not to be convex —
+    which is a *data* property, so nothing could have said so earlier. The
+    solver's own sentence rides along because it names the row shape, and
+    dropping it would leave a caller with less than they had.
+    """
+    return (
+        f'this model has a quadratic constraint that is not convex, and the solve was asked for '
+        f'quadratic duals (QCPDual), which only a convex model has. Gurobi reported: {reported}\n'
+        f'Drop QCPDual from solver_options to solve it — the answer comes back without prices for '
+        f'the quadratic rows, which is the default for exactly this reason.'
     )
 
 

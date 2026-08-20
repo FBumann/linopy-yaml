@@ -31,7 +31,7 @@ import numpy as np
 import xarray as xr
 
 from lpspec._notes import note
-from lpspec.errors import DataError, LaneError, LanguageError, null_bounds_message
+from lpspec.errors import DataError, LaneError, LanguageError, lane_cannot_build_message, null_bounds_message
 from lpspec.language import (
     EDGE_WRAP,
     AndNode,
@@ -67,6 +67,7 @@ from lpspec.language import (
     WhereNode,
     check_binary,
     expression_of,
+    is_quadratic,
     unknown_operator_message,
     where_of,
 )
@@ -242,6 +243,20 @@ def _build_sos(ctx: EvaluationContext) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _refuse_quadratic(node: ComparisonNode) -> None:
+    """A quadratic constraint is sayable and this lane cannot build one.
+
+    Hard rule 3's amendment in the one place it bites: both lanes accept the
+    same language, and ``linopy.Model.add_constraints`` refuses a
+    ``QuadraticExpression`` outright. Refused *here*, in the language's own
+    words and before linopy is asked, so the caller gets a sentence naming the
+    lane that does build it rather than somebody else's
+    ``NotImplementedError`` (:data:`lpspec.api.LANES`).
+    """
+    if any(is_quadratic(side) for side in (node.left, node.right)):
+        raise LanguageError(lane_cannot_build_message('linopy', ['quadratic_constraint']))
+
+
 def _build_constraints(ctx: EvaluationContext) -> None:
     for cname, cdef in ctx.schema.constraints.items():
         with note(f"while building constraint '{cname}'"):
@@ -253,6 +268,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
                 msg = f'expression must contain exactly one comparison operator (<=, >=, ==).\nGot: {cdef.expression!r}'
                 raise LanguageError(msg)
 
+            _refuse_quadratic(ast)
             check_divisors_cover(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask, ctx.model)
             check_constant_side_covers(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask)
 

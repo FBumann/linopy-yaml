@@ -15,7 +15,7 @@ takes the tables and renders them to a file. Everything else follows.
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `base.py` |
 
 `sos.py` belongs to neither, which is what it is for: see *the one uneven
-stream* below. `capabilities.py` belongs to both — *what a sink can ingest*.
+stream* below.
 
 ## Staying loaded
 
@@ -191,13 +191,16 @@ no name on the Python surface.
 `capabilities.py` is the second axis of [the
 ceiling](../../../../docs/about/ceiling.md#capability-is-not-the-ceiling) —
 what a sink takes, as against what the language may say — and its docstring is
-where the three-valued entries, the exclusions and the data-time ones are
-argued. One `Capabilities` descriptor per sink, declared in the sink's own
-module: a `ClassVar` on a `Solver`, a field on a `Writer`, since a writer is a
-function and has nowhere else to put a fact.
+where the entries are argued. One descriptor per sink, declared in the sink's
+own module: a `ClassVar` on a `Solver`, a field on a `Writer`. The *lanes*
+declare against the same vocabulary, in `api.LANES`, since a lane's capability
+is the runner's business and not a sink's.
 
-`ingestible` reads it today. Still missing is
-[the `check(model, sink=...)` half](https://github.com/fluxopt/lpspec/issues/89).
+Three callers read it, and between them a construct a sink has no spelling for
+cannot reach that sink by any door: `check(model, sink=...)` before any data is
+bound, `ingestible` at the solve, and the engine's `write` — which asks without
+being asked, a file written without the section being a different model that
+parses and solves.
 
 ## Stable output
 

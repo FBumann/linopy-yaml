@@ -21,6 +21,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from lpspec.errors import LpspecError
 from lpspec.language import expand_piecewise, load_model
 from lpspec.relational.sinks.writers import mps_file
 from tests.conftest import (
@@ -33,12 +34,25 @@ from tests.conftest import (
     solve_written_file,
 )
 from tests.test_milp import COMMITMENT_YAML
+from tests.test_quadratic_objective import MODEL as QUADRATIC_OBJECTIVE_MODEL
+from tests.test_quadratic_objective import SOURCES as QUADRATIC_DATA
 from tests.test_sos import DATA as SOS_DATA
 from tests.test_sos import best
 from tests.test_sos import model as sos_model
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+#: The quadratic-objective fixture with its objective moved into a row — the
+#: other position degree 2 reaches, and the one whose rows would arrive empty.
+QUADRATIC_ROW_MODEL = {
+    **QUADRATIC_OBJECTIVE_MODEL,
+    'constraints': {
+        **QUADRATIC_OBJECTIVE_MODEL['constraints'],
+        'coupled': {'foreach': ['g'], 'expression': 'p * p <= 9'},
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(p, over=g)'},
+}
 
 DISPATCH_DATA = {
     'p_max': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [40.0, 200.0]}),
@@ -244,3 +258,31 @@ def test_a_format_nothing_writes_names_both_of_the_ones_that_do(tmp_path: Path) 
     """The registry's error is where a caller learns MPS shipped."""
     with pytest.raises(ValueError, match=r'\.lp, \.mps'):
         lps.write(DISPATCH_MODEL, DISPATCH_DATA, tmp_path / 'model.nl')
+
+
+#: The two constructs this writer has no section for, each in the position it
+#: is declared over. ``.lp`` writes both, which is what makes the refusal the
+#: *format's* rather than a ban on degree 2.
+QUADRATIC = {
+    'a-quadratic-objective': QUADRATIC_OBJECTIVE_MODEL,
+    'a-quadratic-constraint': QUADRATIC_ROW_MODEL,
+}
+
+
+@pytest.mark.parametrize('model', list(QUADRATIC.values()), ids=list(QUADRATIC))
+def test_a_construct_this_format_cannot_spell_is_refused_rather_than_written(model: Any, tmp_path: Path) -> None:
+    """MPS spells a quadratic term in an extension section this writer does not
+    write, so writing the model without it would hand back a file that parses,
+    solves, and is a different model.
+
+    Measured on the model below before the refusal existed: the quadratic rows
+    arrived as empty ones, and Gurobi read the file back at 30.0 against the
+    9.0 the model itself reaches. The declaration was already there — nothing
+    on the write path asked it, where the solve path asks
+    ``ingestible`` and ``check(sink=)`` asks directly.
+    """
+    with pytest.raises(LpspecError, match=r"the '\.mps' sink cannot take a quadratic"):
+        lps.write(model, QUADRATIC_DATA, tmp_path / 'model.mps')
+
+    lps.write(model, QUADRATIC_DATA, tmp_path / 'model.lp')
+    assert '[' in (tmp_path / 'model.lp').read_text(), 'the same model is a section the LP writer does emit'

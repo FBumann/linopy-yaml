@@ -98,9 +98,9 @@ model: examples/walkthrough.yaml
       Available: ['at', 'shift', 'sum', 'sum_back']
       Define 'cumsum' as a macro under 'macros:' if it composes built-ins; if the math is not sayable in the language, use a declared escape.
 
-    variable x variable in a constraint — degree 2 is the objective's alone:
+    variable x variable x variable — the ceiling is degree 2, not "nonlinear is fine":
     caught by check() as LanguageError
-      constraint 'shaped': both factors of a product contain variables, which is degree 2. The language takes that in the **objective** and nowhere else: no sink that ships takes a quadratic constraint, and the linopy lane cannot build one at all.
-      Multiply the variable by a parameter instead, model the curve with a piecewise: block, or state the product as an objective term — see docs/about/ceiling.md.
+      the objective: this product is degree 3. The language takes degree 2, in the **objective** and nowhere else: a sink takes a quadratic form and none takes a cubic one.
+      Multiply by a parameter instead, or give the inner product a name — a variable constrained to equal it is degree 1 wherever it is used.
 
 docs/about/architecture.md has the rules these stages enforce.

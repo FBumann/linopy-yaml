@@ -56,7 +56,9 @@ about a sink nobody named would be noise on every one of them. You get back:
 
 - **A refusal** (`LpspecError`) if the sink has no such concept, or refuses the
   combination — naming the construct, the sink, *and* the sinks that do take
-  it. Nothing in the language can trigger one today.
+  it. Degree 2 is what reaches one: no sink but Gurobi and the LP writer takes
+  a quadratic row, and HiGHS refuses a quadratic objective *beside* integrality
+  while taking either alone.
 - **A warning** if the sink takes it only by rewriting. `sos:` on HiGHS is the
   one that exists: it arrives as binaries, so a model that declared no
   integrality comes back mixed-integer and without duals — better read before
@@ -64,6 +66,12 @@ about a sink nobody named would be noise on every one of them. You get back:
 
 Answered off a declared table with **no data and no installed solver**, so
 `check(m, sink='gurobi')` answers on a machine that has never had gurobipy.
+
+Asking is optional; being refused is not. `solve` and `write` read the same
+table when they get there, so `lps.write(m, sources, 'model.mps')` on a model
+carrying a quadratic term is refused by name rather than handed back as a file
+whose quadratic rows are missing — which would parse, solve, and answer for a
+different model. What `sink=` buys is the same sentence before the build.
 
 ## Sources
 
