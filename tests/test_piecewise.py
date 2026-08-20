@@ -22,7 +22,7 @@ import pytest
 import yaml as pyyaml
 
 import lpspec as lps
-from lpspec.errors import DataError
+from lpspec.errors import DataError, SchemaError
 from lpspec.language.piecewise import PiecewiseExpansionError, expand_piecewise
 from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources, validate_piecewise_data
@@ -588,7 +588,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
         raw_of(NONCONVEX_YAML),
         **{'dimensions.zone': {'dtype': 'str'}, 'parameters.bp_y': {'dims': ['zone', 'bp']}},
     )
-    stray = r"link 1 values parameter 'bp_y' carries \['zone'\], which no link expression does"
+    stray = r"link 1 values parameter 'bp_y' carries \['zone'\], which its expression does not"
 
     with pytest.raises(PiecewiseExpansionError, match=stray):
         lps.check(raw)
@@ -1144,6 +1144,223 @@ def test_a_curve_with_a_gap_is_still_refused(short_curve_inputs):
 
     with pytest.raises(DataError, match='not consecutive'):
         tidy_sources(schema_of(raw), {**data, 'bp_x': curve_frame(gapped)})
+
+
+# ---------------------------------------------------------------------------
+# a refined link: one declaration, a row per member
+# ---------------------------------------------------------------------------
+
+REFINED = """
+dimensions:
+  time: {dtype: int}
+  converter: {dtype: str}
+  flow: {dtype: str}
+  bp: {dtype: int}
+
+lookups:
+  converter_of: {over: flow, into: converter}
+
+parameters:
+  bp_rate: {dims: [flow, bp]}
+  bp_present: {dims: [converter, bp], dtype: bool}
+  is_heat: {dims: [flow]}
+  fuel_price: {dims: [flow]}
+  heat_demand: {dims: [time]}
+
+variables:
+  rate:
+    foreach: [flow, time]
+    bounds: {lower: 0}
+
+piecewise:
+  conversion:
+    over: bp
+    foreach: [converter, time]
+    points: bp_present
+    method: adjacency
+    links:
+      - {expression: rate, values: bp_rate, by: converter_of}
+
+constraints:
+  heat_balance:
+    foreach: [time]
+    expression: sum(rate * is_heat, over=flow) == heat_demand
+
+objective:
+  sense: minimize
+  expression: sum(sum(rate * fuel_price, over=flow), over=time)
+"""
+
+#: A boiler tying two flows and a CHP tying three — one link, and the count is data.
+REFINED_FLOWS = {
+    'boiler_fuel': 'boiler',
+    'boiler_heat': 'boiler',
+    'chp_fuel': 'chp',
+    'chp_heat': 'chp',
+    'chp_power': 'chp',
+}
+REFINED_CURVES = {
+    'boiler_fuel': [0.0, 50.0, 100.0],
+    'boiler_heat': [0.0, 45.0, 85.0],
+    'chp_fuel': [0.0, 40.0, 70.0, 100.0],
+    'chp_heat': [0.0, 20.0, 32.0, 40.0],
+    'chp_power': [0.0, 15.0, 30.0, 42.0],
+}
+
+
+@pytest.fixture
+def refined_inputs():
+    rows = [(f, k, v) for f, values in REFINED_CURVES.items() for k, v in enumerate(values)]
+    present = [(c, k, k < (3 if c == 'boiler' else 4)) for c in ('boiler', 'chp') for k in range(4)]
+    return {
+        'time': [0],
+        'converter': ['boiler', 'chp'],
+        'flow': pl.DataFrame({'flow': list(REFINED_FLOWS), 'converter_of': list(REFINED_FLOWS.values())}),
+        'bp': [0, 1, 2, 3],
+        'bp_rate': pl.DataFrame(
+            {'flow': [r[0] for r in rows], 'bp': [r[1] for r in rows], 'value': [r[2] for r in rows]}
+        ),
+        'bp_present': pl.DataFrame(
+            {'converter': [p[0] for p in present], 'bp': [p[1] for p in present], 'value': [p[2] for p in present]}
+        ),
+        'is_heat': pl.DataFrame({'flow': list(REFINED_FLOWS), 'value': [0.0, 1.0, 0.0, 1.0, 0.0]}),
+        'fuel_price': pl.DataFrame({'flow': list(REFINED_FLOWS), 'value': [30.0, 0.0, 30.0, 0.0, 0.0]}),
+        'heat_demand': pl.DataFrame({'time': [0], 'value': [45.0]}),
+    }
+
+
+def test_one_refined_link_ties_however_many_flows_a_converter_has(refined_inputs):
+    """The arity is a row count, and the file says nothing about it.
+
+    Two flows on the boiler and three on the CHP, one declaration for both —
+    and a converter with a fourth is a row in the lookup rather than an edit.
+    """
+    result = lps.solve(raw_of(REFINED), refined_inputs)
+
+    rate = {(row['flow'], row['time']): row['value'] for row in result.primal('rate').to_dicts()}
+    assert rate[('boiler_heat', 0)] == pytest.approx(45.0), 'the boiler meets the demand at its second breakpoint'
+    assert rate[('boiler_fuel', 0)] == pytest.approx(50.0), 'and burns what that breakpoint says'
+    assert rate[('chp_fuel', 0)] == pytest.approx(0.0), 'the CHP stays off, all three of its flows at once'
+
+
+def test_the_weights_stay_the_block_s_own(refined_inputs):
+    """λ is emitted, not declared — a refined link is still a tie the block writes."""
+    expanded = expand_piecewise(schema_of(raw_of(REFINED)))
+
+    assert expanded.variables['conversion_lam'].foreach == ['converter', 'time', 'bp']
+    row = expanded.constraints['conversion_link0']
+    assert row.foreach == ['time', 'flow'], 'the row sits on the frame the link carries, in declared order'
+    assert 'at(conversion_lam, by=converter_of)' in row.expression, 'and reaches the weights through the lookup'
+
+
+def test_the_hole_guard_follows_the_lookup(refined_inputs):
+    """What the hand-written tie cannot have: the curve's values checked against the mask.
+
+    `bp_rate` is per flow and the mask is per converter, so the check is only
+    possible because the link names the map between them. Without it this same
+    instance builds and solves — 7096.25 against 5990.0 — with nothing said.
+    """
+    thin = refined_inputs['bp_rate'].filter(~((pl.col('flow') == 'chp_heat') & (pl.col('bp') == 2)))
+
+    with pytest.raises(DataError, match=r"'bp_rate' has no value at \(flow='chp_heat', bp=2\)"):
+        lps.solve(raw_of(REFINED), {**refined_inputs, 'bp_rate': thin})
+
+
+def test_both_lanes_build_a_refined_link(refined_inputs, tmp_path):
+    """`at()` and a lookup are ordinary language by the time either lane sees them."""
+    path = tmp_path / 'refined.yaml'
+    path.write_text(REFINED)
+
+    built = lpspec_linopy.build(path, refined_inputs)
+    built.solve('highs', output_flag=False)
+
+    assert float(built.objective.value) == pytest.approx(lps.solve(raw_of(REFINED), refined_inputs).objective)
+
+
+def test_a_links_where_splits_one_curve_into_pinned_and_bounded_rows(refined_inputs):
+    """One system, two senses — which is what a `where:` on a link is for.
+
+    The tuple form rations the sense: one non-`==` per block, and only with two
+    links. Two links under complementary masks give it per member instead, so a
+    system whose curves are pinned for some flows and bounded for others is one
+    block rather than two.
+    """
+    raw = override(
+        raw_of(REFINED),
+        **{
+            'parameters.pinned': {'dims': ['flow'], 'dtype': 'bool'},
+            'piecewise.conversion.links': [
+                {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of', 'where': 'pinned'},
+                {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of', 'sign': '>=', 'where': 'NOT pinned'},
+            ],
+        },
+    )
+    loose = {
+        **refined_inputs,
+        'pinned': pl.DataFrame({'flow': list(REFINED_FLOWS), 'value': [True, False, True, True, True]}),
+    }
+
+    rows = expand_piecewise(schema_of(raw)).constraints
+    assert rows['conversion_link0'].where == 'pinned', 'the pinned rows are the first link'
+    assert rows['conversion_link1'].where == 'NOT pinned', 'and the bounded ones the second'
+
+    heat = {(r['flow'], r['time']): r['value'] for r in lps.solve(raw, loose).primal('rate').to_dicts()}
+    assert heat[('boiler_heat', 0)] >= 45.0 - 1e-9, 'the bounded flow meets the demand'
+    assert heat[('boiler_fuel', 0)] < 50.0, 'on less fuel than its curve would pin it to, which is what >= buys'
+
+
+def test_a_refined_link_round_trips_as_a_mapping():
+    """The tuple form cannot hold `by:`, so such a link is written and dumped as a mapping."""
+    dumped = schema_of(raw_of(REFINED)).model_dump()['piecewise']['conversion']['links'][0]
+
+    assert dumped == {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of'}
+
+
+@pytest.mark.parametrize(
+    ('patch', 'match'),
+    [
+        pytest.param({'piecewise.conversion.foreach': []}, 'must declare foreach', id='refined-without-a-frame'),
+        pytest.param(
+            {'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'by': 'nope'}]},
+            'undeclared lookup',
+            id='by-names-no-lookup',
+        ),
+        pytest.param(
+            {
+                'lookups.time_of': {'over': 'converter', 'into': 'time'},
+                'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'by': 'time_of'}],
+            },
+            'a dim its expression does not carry',
+            id='by-maps-out-of-the-wrong-dim',
+        ),
+        pytest.param(
+            {
+                'dimensions.site': {'dtype': 'str'},
+                'lookups.site_of': {'over': 'flow', 'into': 'site'},
+                'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'by': 'site_of'}],
+            },
+            'which is not part of foreach',
+            id='by-lands-off-the-frame',
+        ),
+    ],
+)
+def test_a_refined_link_that_reaches_no_weights_is_a_load_error(patch, match):
+    """Three ways a `by:` fails to carry rows to weights, each named on the link."""
+    with pytest.raises((SchemaError, PiecewiseExpansionError), match=match):
+        lps.check(override(raw_of(REFINED), **patch))
+
+
+def test_one_link_is_enough_when_it_is_refined():
+    """The two-link minimum is about quantities, and a refined link is many of them.
+
+    How many a curve ties is then the members mapping to it — data, and not a
+    thing a file can be checked against.
+    """
+    lps.check(raw_of(REFINED))  # a single link, and it holds five flows
+
+    plain = override(raw_of(REFINED), **{'piecewise.conversion.links': [['rate', 'bp_rate']]})
+    with pytest.raises(SchemaError, match='at least two links'):
+        lps.check(plain)
 
 
 # ---------------------------------------------------------------------------

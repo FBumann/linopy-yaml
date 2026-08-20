@@ -456,7 +456,7 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> N
                         )
                     )
                 continue
-            required = _required_under_mask(mask, extents, dims, present)
+            required = _required_under_mask(_through_lookup(schema, link, mask, sources), extents, dims, present)
             counts = pl.collect_all([required.select(pl.len()), present.select(pl.len())])
             if required.join(present, on=dims, how='anti').head(1).collect().height:
                 raise DataError(
@@ -505,6 +505,31 @@ def _prefix_mask(schema: Model, block: str, pw: Any, sources: Mapping[str, TidyS
         shown = ', '.join(f'{d}={broken.row(0, named=True)[d]!r}' for d in frame_dims)
         raise DataError(curve_mask_is_not_contiguous_message(block, mask, pw.over, shown))
     return marked.select(dims)
+
+
+def _through_lookup(schema: Model, link: Any, mask: pl.LazyFrame, sources: Mapping[str, TidySource]) -> pl.LazyFrame:
+    """A mask on the weights' frame, carried to the frame a refined link's rows sit on.
+
+    ``points:`` marks the breakpoints a *curve* runs over, and a refined link's
+    values are per member of something finer — one row per flow where the mask
+    is per converter. The lookup the link names is what pairs them, and it is a
+    column of its own dimension's index, so the translation is the join the
+    emitted ``at()`` performs.
+
+    Returns *mask* unchanged for a plain link, and where the lookup's index is
+    not readable here — binding refuses that on its own terms.
+    """
+    if not link.refined:
+        return mask
+    lookup = schema.lookups[link.by]
+    index, into = sources.get(lookup.over), lookup.into
+    if index is None or into is None:
+        return mask
+    table = pl.scan_parquet(index) if isinstance(index, (str, Path)) else index
+    if link.by not in table.collect_schema().names():
+        return mask
+    members = table.select(lookup.over, pl.col(link.by).alias(into))
+    return mask.join(members, on=into, how='inner').drop(into)
 
 
 def _required_under_mask(

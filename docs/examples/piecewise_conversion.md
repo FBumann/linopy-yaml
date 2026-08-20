@@ -58,21 +58,16 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 | Symbol | Meaning |
 |---|---|
 | $\mathit{rate}$ | `rate` over $\mathcal{F} \times \mathcal{T}$ --- what each flow runs at |
-| $\mathit{weight}$ | `weight` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ --- how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
+| $\mathit{conversion\_lam}$ | `conversion_lam` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
+| $\mathit{conversion\_seg}$ | `conversion_seg` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ |
+
+$t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
 
 #### Objective
 
 $$\min \sum_{t \in \mathcal{T}} \sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{fuel\_price}_{f}$$
 
 #### Subject to
-
-**`one_operating_point`**
-
-$$\sum_{b \in \mathcal{B}} \mathit{weight}_{c,t,b} = 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T}$$
-
-**`on_the_curve`**
-
-$$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{weight}_{\mathrm{converter\_of}(f),t,b} \cdot \mathit{bp}^{\mathrm{rate}}_{f,b} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T}$$
 
 **`heat_balance`**
 
@@ -82,19 +77,35 @@ $$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{is\_heat}_{f} = \ma
 
 $$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{is\_power}_{f} = \mathit{power\_demand}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
+**`conversion_convexity`**
+
+$$\sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{c,t,b} = 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T}$$
+
+**`conversion_link0`**
+
+$$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{\mathrm{converter\_of}(f),t,b} \cdot \mathit{bp}^{\mathrm{rate}}_{f,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace f \in \mathcal{F}$$
+
+**`conversion_pick`**
+
+$$\sum_{b \in \mathcal{B}} \mathit{conversion\_seg}_{c,t,b} = 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T}$$
+
+**`conversion_adjacency`**
+
+$$\mathit{conversion\_lam}_{c,t,b} \le \mathit{conversion\_seg}_{c,t,b} + \mathit{conversion\_seg}_{c,t,b \boxminus_{0} 1} \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+
 #### Variable domains
 
 **`rate`**
 
 $$0 \le \mathit{rate}_{f,t} \le \mathit{rate}^{\mathrm{max}}_{f} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T}$$
 
-**`weight`**
+**`conversion_lam`**
 
-$$0 \le \mathit{weight}_{c,t,b} \le 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bp}^{\mathrm{present}}_{c,b}$$
+$$0 \le \mathit{conversion\_lam}_{c,t,b} \le 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bp}^{\mathrm{present}}_{c,b}$$
 
-**`weight sos`**
+**`conversion_seg`**
 
-$$\left( \mathit{weight}_{c,t,b} \right)_{b \in \mathcal{B}} \in \mathrm{SOS}2 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T}$$
+$$\mathit{conversion\_seg}_{c,t,b} \in \{0, 1\} \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bp}^{\mathrm{present}}_{c,b}$$
 
 </details>
 <!-- math:end -->
@@ -163,36 +174,23 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         bounds:
           lower: 0
           upper: rate_max
-      weight:
-        description: >-
-          how much of each breakpoint the converter's operating point is made of —
-          one convex combination per converter and period, over the breakpoints its
-          own curve runs to
-        foreach: [converter, time, bp]
-        where: bp_present
-        bounds:
-          lower: 0
-          upper: 1
 
-    sos:
-      on_one_segment:
+    piecewise:
+      conversion:
         description: >-
-          at most two weights, and those two neighbours — which is what puts the
-          operating point on a segment of the curve rather than anywhere in its hull
-        variable: weight
+          one curve per converter and period, tying every flow that converter has —
+          the link is refined by `converter_of`, so it builds a row per flow and the
+          number of flows is data
         over: bp
-        type: 2
-        big_m: 1
+        foreach: [converter, time]
+        points: bp_present
+        method: adjacency
+        links:
+          - expression: rate
+            values: bp_rate
+            by: converter_of
 
     constraints:
-      one_operating_point:
-        description: each converter sits somewhere on its curve, in every period
-        foreach: [converter, time]
-        expression: sum(weight, over=bp) == 1
-      on_the_curve:
-        description: every flow reads its own value off its converter's weights
-        foreach: [flow, time]
-        expression: rate == sum(at(weight, by=converter_of) * bp_rate, over=bp)
       heat_balance:
         description: heat delivered meets the demand
         foreach: [time]

@@ -103,7 +103,7 @@ drift from what the engine builds.
 | [monthly_budget](monthly_budget.md) | **✔** 9500 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [multi_period](multi_period.md) | **✔** 10020 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
 | [piecewise](piecewise.md) | **✔** 3850 | **✓** | · | · | · | · | · | **✓** | **✓** | · | · |
-| [piecewise_conversion](piecewise_conversion.md) | **✔** 5990 | **✓** | · | **✓** | · | · | **✓** | **✓** | · | **✓** | · |
+| [piecewise_conversion](piecewise_conversion.md) | **✔** 5990 | **✓** | · | **✓** | **✓** | · | **✓** | **✓** | **✓** | · | **✓** |
 | [piecewise_lp](piecewise_lp.md) | **✔** 3850 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
 | [piecewise_ragged](piecewise_ragged.md) | **✔** 426 | **✓** | · | · | · | · | **✓** | **✓** | **✓** | · | · |
 | [reserves](reserves.md) | **✔** 915 | **✓** | **✓** | **✓** | · | · | · | **✓** | · | · | · |

@@ -357,6 +357,13 @@ class PiecewiseLink(_StrictBlock):
     Written in YAML as ``[expression, values]`` or ``[expression, values,
     sign]`` and serialised back to exactly that form, so a round trip through
     :meth:`Model.to_yaml` reproduces the file.
+
+    ``by`` makes it a **refined** link: the expression sits on a finer frame
+    than the weights — one row per flow where the weights are per converter —
+    and the lookup named is what carries each row to the weights it reads. The
+    tie is then one declaration whatever the number of rows, which is what lets
+    a curve tie a number of expressions that is data. Such a link is written as
+    a mapping, and round-trips as one.
     """
 
     _label: ClassVar[str] = 'a piecewise link'
@@ -364,6 +371,13 @@ class PiecewiseLink(_StrictBlock):
     expression: str
     values: str
     sign: LinkSign = '=='
+    by: str | None = None
+    where: str | None = None
+
+    @property
+    def refined(self) -> bool:
+        """Whether this link's rows sit below the weights' frame."""
+        return self.by is not None
 
     @model_validator(mode='before')
     @classmethod
@@ -382,7 +396,12 @@ class PiecewiseLink(_StrictBlock):
         return _also_written_as(core_schema, handler, list_form)
 
     @model_serializer
-    def _as_list(self) -> list[str]:
+    def _as_list(self) -> list[str] | dict[str, str]:
+        if self.by is not None or self.where is not None:
+            written = {'expression': self.expression, 'values': self.values}
+            if self.sign != '==':
+                written['sign'] = self.sign
+            return written | {k: v for k, v in (('by', self.by), ('where', self.where)) if v is not None}
         return [self.expression, self.values] if self.sign == '==' else [self.expression, self.values, self.sign]
 
 
@@ -415,6 +434,11 @@ class PiecewiseBlock(_StrictBlock):
     the curve instead of pinning it (at most one non-``"=="``, and only with
     exactly two links).
 
+    ``foreach`` is the frame the weights live on. It is inferred from the links
+    where every one of them sits on it, and must be declared once any link is
+    *refined* — a refined link's dims are its own, so they no longer say where
+    the weights are.
+
     ``over`` names the breakpoint dimension; ``method`` is which of
     :data:`PIECEWISE_METHODS` restricts the weights; ``active`` names a gating
     expression that pins the formulation to 0 when it is 0; ``points`` names a
@@ -427,6 +451,7 @@ class PiecewiseBlock(_StrictBlock):
 
     over: str
     links: list[PiecewiseLink]
+    foreach: list[str] = []
     method: PiecewiseMethod = 'adjacency'
     active: str | None = None
     points: str | None = None
@@ -477,6 +502,36 @@ class PiecewiseBlock(_StrictBlock):
             raise ValueError(msg)
         return v
 
+    @property
+    def refined(self) -> bool:
+        """Whether any link's rows sit below the weights' frame."""
+        return any(link.refined for link in self.links)
+
+    @model_validator(mode='after')
+    def _check_the_frame_is_known(self) -> PiecewiseBlock:
+        """A refined link declares its own dims, so it cannot imply the weights'.
+
+        Where every link sits on the weights' frame, that frame is the union of
+        what they carry and declaring it again would be a second answer. Where
+        one does not, nothing is left to infer from and ``foreach:`` is the only
+        thing that says where λ lives.
+        """
+        if self.refined and not self.foreach:
+            msg = (
+                'a piecewise block with a refined link (one carrying by:) must declare foreach: — '
+                'the frame its weights live on. A refined link sits below that frame, so the links '
+                'no longer say where the weights are.'
+            )
+            raise ValueError(msg)
+        if self.foreach and not self.refined:
+            msg = (
+                'foreach: is for a block whose links do not say where its weights live, which is '
+                'a block with a refined link (one carrying by:). Where every link sits on the '
+                "weights' frame, that frame is theirs and declaring it is a second answer."
+            )
+            raise ValueError(msg)
+        return self
+
     @model_validator(mode='after')
     def _check_method_shape(self) -> PiecewiseBlock:
         if self.convex and len(self.links) != 2:
@@ -499,8 +554,15 @@ class PiecewiseBlock(_StrictBlock):
     @field_validator('links')
     @classmethod
     def _check_links(cls, v: list[PiecewiseLink]) -> list[PiecewiseLink]:
-        if len(v) < 2:
-            msg = 'piecewise needs at least two links ([expression, values, sign?]).'
+        if len(v) < 2 and not any(link.refined for link in v):
+            msg = (
+                'piecewise needs at least two links ([expression, values, sign?]) — a curve '
+                'relates two quantities or more. One is enough where it is refined (by:), since '
+                'such a link is a row per member and the members are data.'
+            )
+            raise ValueError(msg)
+        if not v:
+            msg = 'piecewise needs a link.'
             raise ValueError(msg)
         non_eq = [link.sign for link in v if link.sign != '==']
         if len(non_eq) > 1:

@@ -57,36 +57,23 @@ variables:
     bounds:
       lower: 0
       upper: rate_max
-  weight:
-    description: >-
-      how much of each breakpoint the converter's operating point is made of —
-      one convex combination per converter and period, over the breakpoints its
-      own curve runs to
-    foreach: [converter, time, bp]
-    where: bp_present
-    bounds:
-      lower: 0
-      upper: 1
 
-sos:
-  on_one_segment:
+piecewise:
+  conversion:
     description: >-
-      at most two weights, and those two neighbours — which is what puts the
-      operating point on a segment of the curve rather than anywhere in its hull
-    variable: weight
+      one curve per converter and period, tying every flow that converter has —
+      the link is refined by `converter_of`, so it builds a row per flow and the
+      number of flows is data
     over: bp
-    type: 2
-    big_m: 1
+    foreach: [converter, time]
+    points: bp_present
+    method: adjacency
+    links:
+      - expression: rate
+        values: bp_rate
+        by: converter_of
 
 constraints:
-  one_operating_point:
-    description: each converter sits somewhere on its curve, in every period
-    foreach: [converter, time]
-    expression: sum(weight, over=bp) == 1
-  on_the_curve:
-    description: every flow reads its own value off its converter's weights
-    foreach: [flow, time]
-    expression: rate == sum(at(weight, by=converter_of) * bp_rate, over=bp)
   heat_balance:
     description: heat delivered meets the demand
     foreach: [time]
