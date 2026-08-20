@@ -414,10 +414,10 @@ class DimensionDeclaration:
     checked for containment once the dim tables exist — which keeps a mistyped
     label from silently dropping its terms in the join that places them.
 
-    ``label_spaces`` are the inline kind: index columns the dimension owns
-    outright, with no target and so nothing to check. They ride the dim table
-    for selection and rendering, and resolution refuses to group into one, so
-    no expression node reaches them.
+    ``label_spaces`` are the inline kind: maps the dimension owns outright,
+    with no target and so nothing to check. They are read for selection and
+    rendering, and resolution refuses to group into one, so no expression node
+    reaches them.
     """
 
     name: str
@@ -425,8 +425,13 @@ class DimensionDeclaration:
     label_spaces: tuple[str, ...] = ()
 
     @property
-    def carried(self) -> list[str]:
-        """Every lookup column the dimension's index source must supply."""
+    def maps(self) -> list[str]:
+        """Every map over the dimension, targeted and label-space alike.
+
+        What binding needs a relation for: both kinds are read by a ``where``
+        and both arrive the same way, and only the targeted ones have a label
+        set to be checked against.
+        """
         return sorted([*(lk.name for lk in self.lookups), *self.label_spaces])
 
 

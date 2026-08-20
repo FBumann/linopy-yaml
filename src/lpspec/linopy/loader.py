@@ -61,7 +61,8 @@ def dimension_coords(
         frames[dim] = _through_numpy(collected(table))
 
     master = {dim: pd.Index(pd.unique(frames[dim][dim]), name=dim) for dim in schema.dimensions}
-    return master, _lookup_arrays(schema, frames, master)
+    relations = {name: _through_numpy(collected(tidy[name])) for name in schema.lookups}
+    return master, _lookup_arrays(schema, relations, master)
 
 
 def collected(source: TidySource) -> pl.DataFrame:
@@ -89,36 +90,34 @@ def _through_numpy(table: pl.DataFrame) -> pd.DataFrame:
 
 def _lookup_arrays(
     schema: Model,
-    frames: Mapping[str, pd.DataFrame],
+    relations: Mapping[str, pd.DataFrame],
     master: Mapping[str, pd.Index],
 ) -> dict[str, dict[str, xr.DataArray]]:
     """Each declared lookup as an array over the dimension it is over.
 
-    The map arrives joined onto the index, single-valued per label, by the
-    reader both lanes enter (:func:`~lpspec.sources.tidy_sources`); what is
-    left to check here is containment, and only for a *targeted* lookup. A
-    label-space lookup owns its values, so there is no dimension for them to be
-    contained in and nothing to ask.
+    A map arrives as its own ``(over, lookup)`` relation, single-valued and
+    holding rows only where it is defined
+    (:func:`~lpspec.sources.tidy_sources`). **The padding happens here**, and
+    only here: an array is dense by construction, and linopy's ``groupby``
+    wants one aligned to the dimension's coordinates — so a label the relation
+    leaves out becomes a null in it, and every reader on this lane already
+    treats that null as "in no group".
 
-    Containment matters here for a reason of this lane's own: a value that is
-    not a label of the target would be dropped by xarray's inner-join
-    alignment, losing the term it carries with no error anywhere.
+    What is left to check is containment, and only for a *targeted* lookup: a
+    label-space lookup owns its values, so there is no dimension for them to be
+    contained in and nothing to ask. It matters here for a reason of this
+    lane's own — a value that is not a label of the target would be dropped by
+    xarray's inner-join alignment, losing the term it carries with no error
+    anywhere.
     """
     out: dict[str, dict[str, xr.DataArray]] = {}
-    for dim, frame in frames.items():
-        declared = {**schema.targeted_of(dim), **schema.labels_of(dim)}
-        if not declared:
-            continue
-        names = sorted(declared)
+    for name, relation in sorted(relations.items()):
+        dim, target = schema.lookups[name].over, schema.lookups[name].into
         labels = master[dim]
-        first = frame.drop_duplicates(subset=[dim]).set_index(dim)
-        targeted = schema.targeted_of(dim)
-        out[dim] = {}
-        for name in names:
-            series = first[name].reindex(labels)
-            if name in targeted:
-                _refuse_values_outside(dim, name, targeted[name], series, master)
-            out[dim][name] = xr.DataArray(series.to_numpy(), dims=[dim], coords={dim: labels}, name=name)
+        series = relation.set_index(dim)[name].reindex(labels)
+        if target is not None:
+            _refuse_values_outside(dim, name, target, series, master)
+        out.setdefault(dim, {})[name] = xr.DataArray(series.to_numpy(), dims=[dim], coords={dim: labels}, name=name)
     return out
 
 

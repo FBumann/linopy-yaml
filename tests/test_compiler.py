@@ -74,9 +74,10 @@ CARDINALITY = {'snapshot': 24, 'generator': 3, 'bus': 2}
 
 DIMENSIONS = {
     'snapshot': pl.LazyFrame(schema={'val': pl.Int64, 'ord': pl.Int64}),
-    'generator': pl.LazyFrame(schema={'val': pl.String, 'ord': pl.Int64, 'bus': pl.String}),
+    'generator': pl.LazyFrame(schema={'val': pl.String, 'ord': pl.Int64}),
     'bus': pl.LazyFrame(schema={'val': pl.String, 'ord': pl.Int64}),
 }
+LOOKUPS = {'bus': pl.LazyFrame(schema={'generator': pl.String, 'bus': pl.String})}
 PARAMETERS = {
     'cost': pl.LazyFrame(schema={'generator': pl.String, 'value': pl.Float64}),
     'load': pl.LazyFrame(schema={'snapshot': pl.Int64, 'value': pl.Float64}),
@@ -94,6 +95,7 @@ def bound() -> BoundSources:
     return BoundSources(
         parameters=PARAMETERS,
         dimensions=DIMENSIONS,
+        lookups=LOOKUPS,
         cardinality=CARDINALITY,
         # heights, which only `diagnostics` reads — empty here for the reason
         # the frames are: compiling reads no rows and cannot count them either.
@@ -425,6 +427,7 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     sources = BoundSources(
         parameters={'load': pl.LazyFrame({'snapshot': [0, 1, 2], 'value': [10.0, 20.0, 30.0]})},
         dimensions={'snapshot': snapshots},
+        lookups={},
         cardinality={'snapshot': 3},
         parameter_rows={'load': 3},
     )

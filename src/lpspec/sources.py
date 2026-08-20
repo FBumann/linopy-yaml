@@ -82,9 +82,10 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
     of the question on this side would answer only for the in-memory half — a
     second wording for one defect, and the narrower one.
 
-    A **lookup** key carries a relation rather than a source of its own
-    (:func:`supplied_maps`): it is merged onto the index of the dimension it
-    runs over, so what comes back is keyed by parameters and dimensions only.
+    A **lookup** comes back under its own name too, as the ``(over, lookup)``
+    relation :func:`lookup_relations` checked — the rows it maps and no others.
+    Each lane holds a map the way it needs one, and neither reads it off an
+    index: this door hands over the relation itself.
 
     Raises:
         DataError: A key naming nothing the model declares, a declared parameter
@@ -96,13 +97,10 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
         raise DataError(unknown_source_keys_message(unknown, known))
 
     indices = dimension_sources(schema, data)
-    supplied = supplied_maps(schema, data)
     sources: dict[str, TidySource] = {
-        dname: polars_index(
-            source, dname, schema.dimensions[dname].dtype, schema.declared_maps(dname), supplied.get(dname, {})
-        )
-        for dname, source in indices.items()
+        dname: polars_index(source, dname, schema.dimensions[dname].dtype) for dname, source in indices.items()
     }
+    sources |= lookup_relations(schema, data, sources)
 
     sources = derive_curve_edges(schema, derive_curve_masks(schema, sources, data), data)
 
@@ -144,8 +142,8 @@ def dimension_sources(schema: Model, data: Mapping[str, object]) -> dict[str, ob
 
     A map does not travel with the source, whether the file declares it
     (:meth:`~lpspec.language.model.Model.declared_maps`) or the caller supplies
-    it under the lookup's own key (:func:`supplied_maps`). Both are read
-    against the labels the same way, and the labels are whatever this returns.
+    it under the lookup's own key. Both become the same relation in
+    :func:`lookup_relations`, read against the labels this returns.
 
     Raises:
         DataError: A dimension whose index two authors claim, or whose maps the
@@ -177,35 +175,66 @@ def map_authors(schema: Model, data: Mapping[str, object], dimension: str) -> li
     ]
 
 
-def supplied_maps(schema: Model, data: Mapping[str, object]) -> dict[str, dict[str, pl.LazyFrame]]:
-    """Every lookup the caller passed under its own key, as a checked relation.
+def lookup_relations(
+    schema: Model, data: Mapping[str, object], indices: Mapping[str, TidySource]
+) -> dict[str, pl.LazyFrame]:
+    """Every lookup's map as the ``(over, lookup)`` relation both lanes read.
 
-    A lookup arrives the way a parameter does — its own key, its own table,
-    rows only where it has something to say. The two columns are the dimension
-    it runs ``over`` and the space its values are labels of
-    (:meth:`~lpspec.language.model.Model.label_space`), and what comes back is
-    that table under the lookup's own name, which is the spelling every lane
-    reads a map by.
+    One shape whichever author supplied it: the file's ``values:`` becomes the
+    same two columns the caller's own key carries, so nothing downstream asks
+    where a map came from. Rows only where the map is defined — a label it
+    leaves out simply has none, which is the absence rule everything else here
+    obeys.
 
-    A partial map is the rows it has. That is the whole of why this exists:
-    as a column on an index a map needs a cell per label and spells "unmapped"
-    as a null, which is the one place the absence rules read a hole as data.
+    The value column is renamed to the lookup, which is the name every lane
+    reads a map by; what the caller writes it as is the space its values are
+    labels of (:meth:`~lpspec.language.model.Model.label_space`).
 
     Returns:
-        ``{dimension: {lookup name: (dimension, lookup) frame}}``, empty where
-        the caller supplied no relation.
+        ``{lookup name: (over, lookup) frame}`` for every lookup the model
+        declares, since one with no map at all is refused before this runs.
 
     Raises:
         DataError: A relation short of either column, carrying a null in one,
-            or mapping a label twice.
+            mapping a label twice, or keyed by a label its dimension lacks.
     """
-    supplied: dict[str, dict[str, pl.LazyFrame]] = {}
-    for name in sorted(schema.lookups):
-        if name not in data:
-            continue
-        over, space = schema.lookups[name].over, schema.label_space(name)
-        supplied.setdefault(over, {})[name] = _read_relation(data[name], name, over, space)
-    return supplied
+    relations: dict[str, pl.LazyFrame] = {}
+    for name, lookup in sorted(schema.lookups.items()):
+        over = lookup.over
+        if lookup.values is not None:
+            keys = list(lookup.values)
+            rows = pl.LazyFrame({over: keys, name: [lookup.values[k] for k in keys]}).drop_nulls(name)
+            said = 'declares values for'
+        else:
+            rows = _read_relation(data[name], name, over, schema.label_space(name))
+            said = 'maps'
+        relations[name] = _keyed_by_labels(rows, name, over, indices[over], said)
+    return relations
+
+
+def _keyed_by_labels(rows: pl.LazyFrame, lookup: str, over: str, index: TidySource, said: str) -> pl.LazyFrame:
+    """One relation, refused unless every label it maps is a label *over* has.
+
+    The asymmetry is the point. A label no map mentions is the **partial case**
+    and simply has no row; a key naming no label is a **typo**, and dropping it
+    would place its terms nowhere while the model built and solved.
+
+    *said* is how the map got here, because the fix differs and the law does
+    not: a key in the file is edited there, a row in a table is dropped.
+
+    The key column is cast to the index's own dtype once every key has been
+    checked against it, which is what lets a map arrive from a source whose
+    encoding differs — a pandas ``Categorical``, a dictionary parquet — and
+    still meet the index in the join that reads it.
+    """
+    labels = (pl.scan_parquet(index) if isinstance(index, (str, Path)) else index).select(over).collect()
+    known = set(labels[over].to_list())
+    keys = rows.select(over).collect()[over].to_list()
+    if strays := sorted(str(x) for x in keys if x not in known):
+        raise DataError(
+            map_keys_are_not_labels_message(over, lookup, strays, [str(x) for x in labels[over].to_list()], said)
+        )
+    return rows.with_columns(pl.col(over).cast(labels.schema[over]))
 
 
 def _read_relation(source: object, lookup: str, over: str, space: str) -> pl.LazyFrame:
@@ -238,13 +267,7 @@ def _read_relation(source: object, lookup: str, over: str, space: str) -> pl.Laz
     return rows.lazy()
 
 
-def polars_index(
-    source: object,
-    dim: str,
-    dtype: str,
-    maps: Mapping[str, Mapping[Any, Any]],
-    supplied: Mapping[str, pl.LazyFrame],
-) -> pl.LazyFrame:
+def polars_index(source: object, dim: str, dtype: str) -> pl.LazyFrame:
     """One dimension's index, read once — the only read of one in the package.
 
     :func:`dimension_sources` says which object supplies an index; this turns
@@ -257,15 +280,15 @@ def polars_index(
     the read — so the engine still hands the file to the query it builds.
 
     Raises:
-        DataError: A table with no column named after the dimension, labels no
-            frame can be made of, or a map keyed by something they do not hold.
+        DataError: A table with no column named after the dimension, or labels
+            no frame can be made of.
     """
     table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else as_frame(source, (dim,))
     table = table if table is not None else labels_frame(dim, source, dtype)
     available = table.collect_schema().names()
     if dim not in available:
         raise DataError(index_without_its_label_column_message(dim, available))
-    return _read_maps_against(table, dim, maps, supplied) if maps or supplied else table
+    return table
 
 
 def _spread(name: str, obj: object, dims: list[str], sources: Mapping[str, object]) -> pl.LazyFrame:
@@ -404,69 +427,6 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
         for name, lookup in sorted(schema.lookups.items()):
             if lookup.over == dim and name in carried:
                 raise DataError(lookup_column_on_an_index_message(dim, name))
-
-
-def check_declared_map_keys(dim: str, maps: Mapping[str, Mapping[Any, Any]], labels: Sequence[Any]) -> None:
-    """Every declared map is keyed by labels *dim* actually has — one wording, both lanes.
-
-    The asymmetry is the point. A label no map mentions is the **partial case**
-    and gets a null; a key naming no label is a **typo**, and dropping it would
-    place its terms nowhere while the model built and solved. Where the file
-    declares the labels too, ``Model._declared_lookup_errors`` decides this at
-    load; here the labels are the caller's, so the same law lands at bind.
-
-    Raises:
-        DataError: Naming the lookup and the keys that match no label.
-    """
-    known = set(labels)
-    for name, values in maps.items():
-        strays = sorted(str(k) for k in values if k not in known)
-        if strays:
-            raise DataError(map_keys_are_not_labels_message(dim, name, strays, [str(x) for x in labels]))
-
-
-def _read_maps_against(
-    table: pl.LazyFrame,
-    dim: str,
-    maps: Mapping[str, Mapping[Any, Any]],
-    supplied: Mapping[str, pl.LazyFrame],
-) -> pl.LazyFrame:
-    """*table*'s labels, with every map over *dim* read against them as a column.
-
-    The labels are the caller's and stay exactly as they arrive — order
-    included. A label a map omits gets a null, which is what a partial relation
-    means; a key naming no label is refused first, so a left join can only ever
-    add nulls. :func:`check_index_ownership` has already refused a second
-    author for any one map, so nothing here can overwrite anything.
-
-    The padding is this function's whole subject and stops at its edge: a map
-    is supplied as the rows it has, and becomes a column of the index because
-    that is the shape both lanes read a lookup in.
-    """
-    labels = table.select(dim).collect()[dim].to_list()
-    check_declared_map_keys(dim, maps, labels)
-    for name, values in maps.items():
-        table = _joined(table, pl.LazyFrame({dim: list(values), name: list(values.values())}), dim)
-    known, key = set(labels), table.collect_schema()[dim]
-    for name, relation in supplied.items():
-        rows = relation.collect()
-        if strays := sorted(str(x) for x in rows[dim] if x not in known):
-            raise DataError(map_keys_are_not_labels_message(dim, name, strays, [str(x) for x in labels], 'maps'))
-        table = _joined(table, rows.with_columns(pl.col(dim).cast(key)).lazy(), dim)
-    return table
-
-
-def _joined(index: pl.LazyFrame, map_: pl.LazyFrame, dim: str) -> pl.LazyFrame:
-    """One map onto the index, in the index's own row order.
-
-    ``maintain_order='left'`` is the load-bearing argument, and the two readers
-    of a label's *position* are what make it so: :func:`_spread` places a
-    positional parameter against the labels read back off this frame, and the
-    engine takes ordinals from it for ``shift``. A join left free to reorder
-    answers differently in different query contexts, so both would land on
-    labels the caller never paired them with — on both lanes, agreeing.
-    """
-    return index.join(map_, on=dim, how='left', maintain_order='left')
 
 
 def _column_names(source: Any, dim: str) -> frozenset[str]:

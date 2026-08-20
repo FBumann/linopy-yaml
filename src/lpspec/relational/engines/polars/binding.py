@@ -44,7 +44,11 @@ class BoundSources:
     """The data a program is built against, after binding.
 
     ``parameters`` are tidy ``(dims…, value)``; ``dimensions`` are
-    ``(val, ord, lookups…)``.
+    ``(val, ord)``; ``lookups`` are ``(over, lookup)``, one row per label the
+    map is defined at and none for the rest. A map is its own frame rather than
+    a column of the index it runs over, so "this label maps nowhere" is a row
+    that is not there and every operator reading one inherits that from its
+    join (#1182).
 
     ``cardinality`` is a dimension frame's height, cached here because deriving
     it later means collecting the frame again — ``sum`` over an absent dim
@@ -57,6 +61,7 @@ class BoundSources:
 
     parameters: Mapping[str, pl.LazyFrame]
     dimensions: Mapping[str, pl.LazyFrame]
+    lookups: Mapping[str, pl.LazyFrame]
     cardinality: Mapping[str, int]
     parameter_rows: Mapping[str, int]
 
@@ -91,10 +96,12 @@ def bind(program: plan.Program, sources: Mapping[str, Any]) -> BoundSources:
     for p in program.parameters:
         binder.parameter(p)
     binder.remaining_dimensions()
+    binder.lookup_relations()
     binder.encode_dimensions()
     return BoundSources(
         parameters=binder.parameters,
         dimensions=binder.dimensions,
+        lookups=binder.lookups,
         cardinality=binder.cardinality,
         parameter_rows=binder.parameter_rows,
     )
@@ -108,6 +115,7 @@ class _Binder:
         self.sources = sources
         self.parameters: dict[str, pl.LazyFrame] = {}
         self.dimensions: dict[str, pl.LazyFrame] = {}
+        self.lookups: dict[str, pl.LazyFrame] = {}
         self.cardinality: dict[str, int] = {}
         self.parameter_rows: dict[str, int] = {}
 
@@ -176,25 +184,31 @@ class _Binder:
         """
         for d in sorted(self._declared_dims() | self._lookup_targets()):
             if d in self.sources:
-                self._register(d, self._explicit_frame(d, self.sources[d], self.program.dimension(d).carried))
+                self._register(d, self._explicit_frame(d, self.sources[d]))
 
     def remaining_dimensions(self) -> None:
-        """Refuse a dimension with no index, then check every lookup's values.
+        """Refuse a dimension with no index.
 
         Every dimension needs one: :meth:`sourced_dimensions` registered those
-        that have it, so anything left here has none. Containment runs once
-        every frame exists — it stops a mistyped lookup value from vanishing in
-        the join that places its terms, leaving a model that builds and solves
-        without them.
+        that have it, so anything left here has none.
         """
-        dims = self._declared_dims()
-        for d in sorted(dims):
-            if d in self.dimensions:
-                continue
-            raise DataError(no_index_source_message(d))
+        for d in sorted(self._declared_dims()):
+            if d not in self.dimensions:
+                raise DataError(no_index_source_message(d))
 
-        for d in sorted(dims):
-            for lk in sorted(self.program.dimension(d).lookups):
+    def lookup_relations(self) -> None:
+        """Every map as its own ``(over, lookup)`` frame, its values checked.
+
+        Registered after the dimensions because containment needs the target's
+        labels: a value that is not one of them would vanish in the join that
+        places its terms, leaving a model that builds and solves without them.
+        """
+        for d in sorted(self._declared_dims()):
+            declaration = self.program.dimension(d)
+            for name in declaration.maps:
+                self.lookups[name] = self._relation_frame(d, name)
+            for lk in sorted(declaration.lookups):
+                relation = self.lookups[lk.name]
                 if lk.target not in self.dimensions:
                     raise DataError(
                         f"dimension '{d}' lookup '{lk.name}' targets '{lk.target}', which "
@@ -203,19 +217,23 @@ class _Binder:
                         f"Pass an index for '{lk.target}' (under key '{lk.target}' in sources, "
                         f'or as values on its declaration), or remove the lookup.'
                     )
-                data_validation.check_lookup_containment(d, lk.name, lk.target, self.dimensions)
+                data_validation.check_lookup_containment(d, lk.name, lk.target, relation, self.dimensions[lk.target])
 
-    def _explicit_frame(self, d: str, source: Any, names: list[str]) -> pl.LazyFrame:
-        """A dimension's ``(val, ord, lookups…)`` from a caller's index.
+    def _relation_frame(self, d: str, lookup: str) -> pl.LazyFrame:
+        """One map's ``(over, lookup)`` source, collected once."""
+        frame = self._read(
+            self.sources[lookup],
+            f"map for lookup '{lookup}' must be a table polars can read with "
+            f"columns ['{d}', '{lookup}'], or a parquet path",
+        )
+        return frame.select(d, lookup).collect().lazy()
+
+    def _explicit_frame(self, d: str, source: Any) -> pl.LazyFrame:
+        """A dimension's ``(val, ord)`` from a caller's index.
 
         Ordinals follow the source's own order — a label's position is the row
         it first appears at — so a translation moves by position exactly as the
         eager lane does, even for string labels.
-
-        The maps arrive already joined on and single-valued per label
-        (:func:`~lpspec.sources.tidy_sources`), so *names* is selected and not
-        checked: with one transport there is nothing for the index to be short
-        of or to disagree with itself about.
 
         Collected once, the frame being a scan: every pass over a lazy view
         re-reads the source (#273), and the grouping below reads that one
@@ -229,13 +247,13 @@ class _Binder:
         available = frame.collect_schema().names()
         if d not in available:
             raise DataError(index_without_its_label_column_message(d, available))
-        labelled = frame.select(d, *names).with_row_index(_ROW_POSITION).collect().lazy()
+        labelled = frame.select(d).with_row_index(_ROW_POSITION).collect().lazy()
         return (
             labelled.group_by(d)
-            .agg(pl.col(_ROW_POSITION).min(), *(pl.col(c).first() for c in names))
+            .agg(pl.col(_ROW_POSITION).min())
             .sort(_ROW_POSITION)
             .with_row_index('ord')
-            .select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64), *names)
+            .select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64))
         )
 
     def _register(self, d: str, table: pl.LazyFrame) -> None:
@@ -246,7 +264,9 @@ class _Binder:
     def encode_dimensions(self) -> None:
         """Every string dimension becomes an ``Enum`` over its labels, in ordinal order.
 
-        One dictionary per dimension applied to every frame carrying it, so
+        One dictionary per dimension applied to every frame carrying it — a
+        map's two columns included, each against the dimension it holds labels
+        of — so
         downstream joins meet ``Enum`` against ``Enum`` with equal categories by
         construction. A dim column then costs a code instead of a string for the
         model's lifetime, which shrinks the retained label frames and the emit
@@ -261,12 +281,16 @@ class _Binder:
         if not enums:
             return
         for d, frame in materialised.items():
-            casts = [pl.col('val').cast(enums[d])] if d in enums else []
-            casts += [
-                pl.col(lk.name).cast(enums[lk.target]) for lk in self.program.dimension(d).lookups if lk.target in enums
-            ]
-            if casts:
-                self.dimensions[d] = frame.with_columns(casts).lazy()
+            if d in enums:
+                self.dimensions[d] = frame.with_columns(pl.col('val').cast(enums[d])).lazy()
+        targets = {lk.name: lk.target for d in self.program.dimensions for lk in d.lookups}
+        for d in sorted(self._declared_dims()):
+            for name in self.program.dimension(d).maps:
+                target = targets.get(name)
+                casts = [pl.col(d).cast(enums[d])] if d in enums else []
+                casts += [pl.col(name).cast(enums[target])] if target in enums else []
+                if casts:
+                    self.lookups[name] = self.lookups[name].collect().with_columns(casts).lazy()
         for p in self.program.parameters:
             casts = [pl.col(d).cast(enums[d]) for d in p.dims if d in enums]
             if casts:

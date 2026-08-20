@@ -160,22 +160,15 @@ def check_value_dtype(p: plan.ParameterDeclaration, frame: pl.LazyFrame) -> None
     raise DataError(wrong_value_dtype_message(p.name, p.dtype, arrived))
 
 
-def check_lookup_containment(d: str, lookup: str, target: str, dimensions: Dimensions) -> None:
-    """Every lookup value must be a label of the dimension it targets.
+def check_lookup_containment(d: str, lookup: str, target: str, relation: pl.LazyFrame, labels: pl.LazyFrame) -> None:
+    """Every value a lookup maps to must be a label of the dimension it targets.
 
-    A *null* is not a violation — the label belongs to no group, the same
-    row-absence idiom the rest of the engine uses. Only a value that is present
-    and unknown is a typo, and that one drops terms silently.
+    A label the relation has no row for is not a violation — it belongs to no
+    group, which is the row-absence idiom the rest of the engine uses. Only a
+    value that is *there* and unknown is a typo, and that one drops terms
+    silently.
     """
-    known = dimensions[target].select(pl.col('val').alias(lookup))
-    bad = (
-        dimensions[d]
-        .select(lookup)
-        .filter(pl.col(lookup).is_not_null())
-        .join(known, on=lookup, how='anti')
-        .unique(maintain_order=True)
-        .head(5)
-        .collect()
-    )
+    known = labels.select(pl.col('val').alias(lookup))
+    bad = relation.select(lookup).join(known, on=lookup, how='anti').unique(maintain_order=True).head(5).collect()
     if bad.height:
         raise DataError(lookup_values_are_not_labels_message(d, lookup, target, bad[lookup].to_list()))

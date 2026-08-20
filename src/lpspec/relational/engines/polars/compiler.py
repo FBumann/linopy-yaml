@@ -433,13 +433,13 @@ class PolarsCompiler:
                     f"where-comparison on dimension '{p.dimension}' is outside the foreach dims "
                     f'{list(dims)} — reducing a mask over an unlisted dim is not supported'
                 )
-            table = self.data.dimensions[p.dimension]
+            table = self._partitioned(p.dimension, str(p.by))
             _refuse_short_groups(p, table)
             group = pl.col(str(p.by))
             within = pl.col('ord').rank('ordinal').over(group).cast(pl.Int64) - 1
             size = pl.len().over(group).cast(pl.Int64)
             target = pl.lit(p.position) if p.position >= 0 else size + p.position
-            offset = pl.when(group.is_null()).then(None).otherwise(within - target)
+            offset = within - target
             return carrier.once(
                 f'__where ord {p.dimension} by {p.by}__',
                 lambda f, alias: f.join(
@@ -459,7 +459,7 @@ class PolarsCompiler:
             return carrier.once(
                 f'__where lookup {lookup}__',
                 lambda f, alias: f.join(
-                    self.data.dimensions[over].select(pl.col('val').alias(over), pl.col(lookup).alias(alias)),
+                    self.data.lookups[lookup].select(pl.col(over), pl.col(lookup).alias(alias)),
                     on=over,
                     how='left',
                 ),
@@ -833,6 +833,36 @@ class PolarsCompiler:
             return grouped
         return replace(grouped, frame=pl.concat([grouped.frame, self._empty_groups(grouped, g)]))
 
+    def _mapping(self, over: str, coordinate: tuple[str, ...], into: tuple[str, ...]) -> pl.LazyFrame:
+        """The ``(over, into…)`` table a group or a pullback joins against.
+
+        One relation per coordinate, met on ``over`` by **inner** joins: a
+        label some coordinate does not map has no row in that relation and so
+        none here, which is what "reaches no slot" means for the whole tuple.
+        Reading several at once therefore costs joins and no null bookkeeping —
+        the tuple exists exactly where every coordinate does.
+
+        The pairing is materialised before any frame is looked up, so a node
+        built by hand with tuples of different lengths is refused by ``zip``
+        rather than by a missing name (``plan`` is a public IR).
+        """
+        pairs = list(zip(coordinate, into, strict=True))
+        mapping, *rest = (self.data.lookups[c].select(pl.col(over), pl.col(c).alias(i)) for c, i in pairs)
+        for other in rest:
+            mapping = mapping.join(other, on=over, how='inner')
+        return mapping
+
+    def _partitioned(self, dim: str, lookup: str) -> pl.LazyFrame:
+        """*dim*'s ``(val, ord, lookup)``, only for labels the map places in a group.
+
+        The inner join is where "this coordinate is in no group" now comes
+        from: it has no row in the relation, so it has none here, and every
+        rank, span and neighbour computed below sees only labels that are in
+        one. What used to be a null group is an absent row.
+        """
+        rows = self.data.lookups[lookup].select(pl.col(dim).alias('val'), pl.col(lookup))
+        return self.data.dimensions[dim].join(rows, on='val', how='inner')
+
     def _empty_groups(self, p: TermFragment, g: plan.GroupSum) -> pl.LazyFrame:
         """The ``into`` combinations no member maps to, as constant rows worth zero.
 
@@ -854,9 +884,7 @@ class PolarsCompiler:
         for target in g.into[1:]:
             labels = self.data.dimensions[target].select(pl.col('val').alias(target))
             universe = universe.join(labels, how='cross')
-        reached = self.data.dimensions[g.over].select(
-            *(pl.col(c).alias(i) for c, i in zip(g.coordinate, g.into, strict=True))
-        )
+        reached = self._mapping(g.over, g.coordinate, g.into).select(*g.into)
         empty = universe.join(reached, on=list(g.into), how='anti')
         spanned = [d for d in p.dims if d not in g.into]
         if spanned:
@@ -890,15 +918,15 @@ class PolarsCompiler:
 
         Two absences reach the fine coordinate and :meth:`_remap_fragment`'s
         inner join swallows both — the operand's own, where the variable under
-        it was masked away, and the **lookup's**, where the label maps to null
-        and there is no slot to read (the absence rules list it among the four
-        constructs that create one). Unreported, the term merely vanishes and
+        it was masked away, and the **lookup's**, where the map has no row for
+        the label and there is no slot to read (the absence rules list it among
+        the four constructs that create one). Unreported, the term merely vanishes and
         its row survives to assert something the model never said: `x <= 0`
         where the model said nothing (#968).
 
         Reading through several coordinates at once, a label reaches its slot
-        only where *every* one of them maps: one null anywhere in the tuple
-        leaves nothing to read, the same as one null in a single lookup.
+        only where *every* one of them maps, which is what :meth:`_mapping`'s
+        inner joins already say.
 
         A total lookup over an operand with nothing to report yields nothing
         rather than a restriction admitting everything, so a model with no
@@ -910,14 +938,10 @@ class PolarsCompiler:
         widens the fragment's dims while this frame keeps the one column that
         matters — the hazard :class:`Presence` names.
         """
-        mapping = self.data.dimensions[a.over].select(
-            pl.col('val').alias(a.over),
-            *(pl.col(c).alias(i) for c, i in zip(a.coordinate, a.into, strict=True)),
-        )
-        reachable = mapping.filter(pl.all_horizontal([pl.col(i).is_not_null() for i in a.into]))
+        reachable = self._mapping(a.over, a.coordinate, a.into)
         if not p.presences:
-            partial = mapping.select(pl.any_horizontal([pl.col(i).is_null() for i in a.into]).any()).collect().item()
-            return (Presence(reachable.select(a.over), (a.over,)),) if partial else ()
+            total = self.data.cardinality[a.over] == reachable.select(pl.len()).collect().item()
+            return () if total else (Presence(reachable.select(a.over), (a.over,)),)
 
         def pulled(presence: Presence) -> Presence:
             keys = presence.keys(p.dims)
@@ -937,9 +961,9 @@ class PolarsCompiler:
     ) -> TermFragment:
         """Trade dims *consumed* for *produced* through *node*'s coordinates.
 
-        The mapping table is the declared coordinates read as columns —
-        ``val`` as ``over``, each coordinate as the dim it targets — and the
-        rewrite is a single inner equi-join on *consumed*. A group consumes
+        The mapping table is :meth:`_mapping` — the declared coordinates' own
+        relations, keyed by ``over`` and named for the dims they target — and
+        the rewrite is a single inner equi-join on *consumed*. A group consumes
         ``over`` (:meth:`_group_fragment`); an ``At`` reads the same table
         backwards (:meth:`_at_fragment`). Written once so the adjoints cannot
         drift: a change to how the mapping joins is a change to both.
@@ -950,10 +974,7 @@ class PolarsCompiler:
         """
         dropped = set(consumed)
         keep = tuple(x for x in p.dims if x not in dropped)
-        mapping = self.data.dimensions[node.over].select(
-            pl.col('val').alias(node.over),
-            *(pl.col(c).alias(i) for c, i in zip(node.coordinate, node.into, strict=True)),
-        )
+        mapping = self._mapping(node.over, node.coordinate, node.into)
         frame = p.frame.join(mapping, on=list(consumed), how='inner').select(*keep, *produced, *p.carried)
         return TermFragment((*keep, *produced), frame, p.kind)
 
@@ -1044,17 +1065,14 @@ class PolarsCompiler:
         if s.partition is not None:
             # Inside a group the neighbour is decided by position within *that*
             # group, so both joins read a rank rather than the axis-wide `ord`
-            # and a wrap closes on the group's own size. A coordinate the lookup
-            # sends nowhere ranks null and joins to nothing, which is the null
-            # group everywhere else.
+            # and a wrap closes on the group's own size. A coordinate the map
+            # places nowhere is not in this table at all and joins to nothing,
+            # which is what it reaches everywhere else.
+            table = self._partitioned(s.dimension, s.partition)
             grouped = pl.col(s.partition)
             table = table.with_columns(
-                pl.when(grouped.is_null())
-                .then(None)
-                .otherwise(pl.col('ord').rank('ordinal').over(grouped) - 1)
-                .cast(pl.Int64)
-                .alias(_POS),
-                pl.when(grouped.is_null()).then(None).otherwise(pl.len().over(grouped)).cast(pl.Int64).alias(_SPAN),
+                (pl.col('ord').rank('ordinal').over(grouped) - 1).cast(pl.Int64).alias(_POS),
+                pl.len().over(grouped).cast(pl.Int64).alias(_SPAN),
             )
         position = _POS if s.partition is not None else 'ord'
         group_cols = [pl.col(s.partition)] if s.partition is not None else []
@@ -1211,8 +1229,8 @@ class PolarsCompiler:
         groups into, and no frame carries a column of it: what travels with a
         coordinate is the lookup's own value, so the offset is read under the
         lookup's name and one equi-join lands each group's own lag (#1161).
-        A coordinate the lookup sends nowhere has a null there and joins to
-        nothing, which is the null group everywhere else.
+        A coordinate the map places nowhere is in no partitioned table and
+        joins to nothing, which is what it reaches everywhere else.
         """
         assert isinstance(s.offset, str)
         grouped = self._grouped_into(s)
@@ -1245,7 +1263,7 @@ class PolarsCompiler:
         table = self.data.dimensions[s.dimension]
         if s.partition is not None:
             grouped = pl.col(s.partition)
-            table = table.filter(grouped.is_not_null()).with_columns(
+            table = self._partitioned(s.dimension, s.partition).with_columns(
                 (pl.col('ord').rank('ordinal').over(grouped) - 1).cast(pl.Int64).alias(_POS),
                 pl.len().over(grouped).cast(pl.Int64).alias(_SPAN),
             )
@@ -1269,14 +1287,10 @@ class PolarsCompiler:
         """The labels the partition lookup actually places in a group.
 
         The rest belong to none, so a translation reaches nothing for them and
-        their rows are not built — the null reading ``sum(by=)`` gives, and the
-        one an edge policy cannot speak about.
+        their rows are not built — the reading ``sum(by=)`` gives a label the
+        map has no row for, and the one an edge policy cannot speak about.
         """
-        return (
-            self.data.dimensions[s.dimension]
-            .filter(pl.col(str(s.partition)).is_not_null())
-            .select(pl.col('val').alias(s.dimension))
-        )
+        return self._partitioned(s.dimension, str(s.partition)).select(pl.col('val').alias(s.dimension))
 
     def _vacated(
         self, presence: Presence, dims: tuple[str, ...], s: plan.Translate, card: int, others: list[str]
@@ -1385,10 +1399,13 @@ def _refuse_short_groups(p: plan.DimensionPosition, table: pl.LazyFrame) -> None
     the same one construct-wide: a boundary clause that silently seeds no row
     leaves that group's recurrence unanchored. Grouping only multiplies the
     chance — one short period is enough — so it is checked per group, which
-    costs one pass over the dim table the mask is about to join anyway.
+    costs one pass over the table the mask is about to join anyway.
+
+    *table* is :meth:`_Compiler._partitioned`'s, so a coordinate in no group is
+    not in it and no group of ``None`` can be counted short.
     """
     needed = p.position + 1 if p.position >= 0 else -p.position
-    sizes = table.select(pl.col(str(p.by))).drop_nulls().group_by(str(p.by)).len().collect()
+    sizes = table.select(pl.col(str(p.by))).group_by(str(p.by)).len().collect()
     short = sorted(str(g) for g, n in sizes.iter_rows() if n < needed)
     if short:
         msg = (
