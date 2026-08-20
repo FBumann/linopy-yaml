@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.226](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.225...v0.0.1-alpha.226) (2026-08-20)
+
+
+### Documentation
+
+* **language:** the rule that decides what belongs has its own page ([#1153](https://github.com/fluxopt/lpspec/issues/1153)) ([f5c5336](https://github.com/fluxopt/lpspec/commit/f5c533643b80dff6d90892a83a8b231603bd92b7))
+
 ## [0.0.1-alpha.225](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.224...v0.0.1-alpha.225) (2026-08-20)
 
 
