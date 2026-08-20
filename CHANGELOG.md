@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.225](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.224...v0.0.1-alpha.225) (2026-08-20)
+
+
+### Refactoring
+
+* **extraction:** the corpus that moves is the operator reference's source ([#1149](https://github.com/fluxopt/lpspec/issues/1149)) ([a71eb62](https://github.com/fluxopt/lpspec/commit/a71eb626cfaa6568f38e31a14cfb5a43ad23a61a))
+
 ## [0.0.1-alpha.224](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.223...v0.0.1-alpha.224) (2026-08-20)
 
 
