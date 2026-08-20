@@ -28,91 +28,16 @@ from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources, validate_piecewise_data
 from tests.conftest import by_coord, override, raw_of, schema_of
 from tests.differential import differential
+from tests.language.piecewise_models import CHP_YAML, GATED_YAML, NONCONVEX_YAML, SOS2_MODEL, TWO_DIM_YAML
 from tests.oracle import lpspec_linopy, pd
-
-NONCONVEX_YAML = """
-dimensions:
-  snapshot: {dtype: int}
-  bp: {dtype: int}
-
-parameters:
-  load: {dims: [snapshot]}
-  bp_x: {dims: [bp]}
-  bp_y: {dims: [bp]}
-
-variables:
-  p:
-    foreach: [snapshot]
-    bounds: {lower: 0, upper: 100}
-  op_cost:
-    foreach: [snapshot]
-    bounds: {lower: 0}
-
-piecewise:
-  cost_curve:
-    over: bp
-    links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
-
-constraints:
-  balance:
-    foreach: [snapshot]
-    expression: p == load
-
-objective:
-  sense: minimize
-  expression: sum(op_cost, over=snapshot)
-"""
 
 #: The same model with the hull instead of the curve — `method: convex` and
 #: nothing else changed.
 CONVEX_MODEL = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'convex'})
 
-#: And the same restriction as the default's, said as a set rather than built
-#: out of binaries. The two must reach the same optimum on every sink.
-SOS2_MODEL = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'sos2'})
 
 #: Breakpoints whose x goes backwards — the shape the curvature guard refuses.
 BACKWARDS_BP_X = pd.Series([0.0, 50.0, 40.0], index=pd.RangeIndex(3, name='bp'))
-
-
-#: two dims in the frame, so the emitted ``foreach`` has an order to get wrong.
-TWO_DIM_YAML = """
-dimensions:
-  snapshot: {dtype: int}
-  generator: {dtype: str}
-  bp: {dtype: int}
-
-parameters:
-  load: {dims: [snapshot]}
-  bp_x: {dims: [generator, bp]}
-  bp_y: {dims: [generator, bp]}
-
-variables:
-  p:
-    foreach: [snapshot, generator]
-    bounds: {lower: 0, upper: 100}
-  op_cost:
-    foreach: [snapshot, generator]
-    bounds: {lower: 0}
-
-piecewise:
-  cost_curve:
-    over: bp
-    links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
-
-constraints:
-  balance:
-    foreach: [snapshot]
-    expression: sum(p, over=generator) == load
-
-objective:
-  sense: minimize
-  expression: sum(sum(op_cost, over=generator), over=snapshot)
-"""
 
 
 def curve(p, bp_x, bp_y) -> float:
@@ -170,47 +95,6 @@ def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs):
         assert run.oracle < on_curve, 'the hull undercuts a concave curve'
 
 
-CHP_YAML = """
-dimensions:
-  snapshot: {dtype: int}
-  bp: {dtype: int}
-
-parameters:
-  load: {dims: [snapshot]}
-  power_bp: {dims: [bp]}
-  fuel_bp: {dims: [bp]}
-  heat_bp: {dims: [bp]}
-
-variables:
-  power:
-    foreach: [snapshot]
-    bounds: {lower: 0, upper: 100}
-  fuel:
-    foreach: [snapshot]
-    bounds: {lower: 0}
-  heat:
-    foreach: [snapshot]
-    bounds: {lower: 0}
-
-piecewise:
-  chp:
-    over: bp
-    links:
-      - [power, power_bp]
-      - [fuel, fuel_bp]
-      - [heat, heat_bp]
-
-constraints:
-  balance:
-    foreach: [snapshot]
-    expression: power == load
-
-objective:
-  sense: minimize
-  expression: sum(fuel, over=snapshot)
-"""
-
-
 def test_three_links_all_track_the_same_curve_position():
     n_s = 8
     rng = np.random.default_rng(21)
@@ -233,50 +117,6 @@ def test_three_links_all_track_the_same_curve_position():
         for s, load_v in load.items():
             assert fuel[s] == pytest.approx(curve(load_v, power_bp, fuel_bp), abs=1e-6)
             assert heat[s] == pytest.approx(curve(load_v, power_bp, heat_bp), abs=1e-6)
-
-
-GATED_YAML = """
-dimensions:
-  snapshot: {dtype: int}
-  bp: {dtype: int}
-
-parameters:
-  load: {dims: [snapshot]}
-  on_flag: {dims: [snapshot]}
-  bp_x: {dims: [bp]}
-  bp_y: {dims: [bp]}
-
-variables:
-  u:
-    foreach: [snapshot]
-    domain: binary
-  p:
-    foreach: [snapshot]
-    bounds: {lower: 0, upper: 100}
-  op_cost:
-    foreach: [snapshot]
-    bounds: {lower: 0}
-
-piecewise:
-  cost_curve:
-    over: bp
-    links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
-    activity: u
-
-constraints:
-  commit:
-    foreach: [snapshot]
-    expression: u == on_flag
-  balance:
-    foreach: [snapshot]
-    expression: p == load * on_flag
-
-objective:
-  sense: minimize
-  expression: sum(op_cost, over=snapshot)
-"""
 
 
 def test_activity_gates_the_curve_off(nonconvex_inputs):
@@ -347,22 +187,6 @@ def test_breakpoints_may_vary_along_another_dim():
 # ---------------------------------------------------------------------------
 
 
-def test_expansion_emits_the_lambda_declarations():
-    expanded = expand_piecewise(schema_of(NONCONVEX_YAML))
-
-    assert not expanded.piecewise
-    assert 'cost_curve_lam' in expanded.variables
-    assert expanded.variables['cost_curve_seg'].domain == 'binary'
-    assert set(expanded.constraints) >= {
-        'cost_curve_convexity',
-        'cost_curve_pick',
-        'cost_curve_adjacency',
-        'cost_curve_link0',
-        'cost_curve_link1',
-        'balance',
-    }
-
-
 def test_the_sos2_method_states_the_restriction_instead_of_building_it():
     """The same weights, the same convexity row, and no binaries at all.
 
@@ -428,33 +252,6 @@ def test_the_sos2_method_gates_off_like_the_binaries_do(nonconvex_inputs):
             assert cost[s] == pytest.approx(expected, abs=1e-6)
 
 
-def test_an_emitted_set_may_not_collide_with_a_declared_one():
-    """The emitted-name rule, for the one declaration kind that is new."""
-    raw = override(raw_of(SOS2_MODEL), **{'sos.cost_curve': {'variable': 'p', 'over': 'bp', 'type': 1}})
-    with pytest.raises(PiecewiseExpansionError, match="emitted sos 'cost_curve' collides"):
-        schema_of(raw)
-
-
-def test_a_method_this_project_does_not_have_is_refused():
-    """`incremental` is linopy's fourth formulation and not one of ours. The
-    refusal names the formulations that exist rather than picking one."""
-    raw = raw_of(NONCONVEX_YAML)
-    raw['piecewise']['cost_curve']['method'] = 'incremental'
-    with pytest.raises(lps.SchemaError, match='unknown piecewise method'):
-        schema_of(raw)
-
-
-def test_a_validated_model_expands_once():
-    """Validation already built the expansion, so asking again returns it.
-
-    One object from both calls is the observable form of "once is enough": a
-    second ``Model`` would be a second full validation of every emitted
-    declaration.
-    """
-    schema = schema_of(NONCONVEX_YAML)
-    assert expand_piecewise(schema) is expand_piecewise(schema)
-
-
 def test_the_adjacency_row_survives_at_the_first_breakpoint(nonconvex_inputs):
     """The reason ``shift`` kept an escape hatch when it started meaning absence.
 
@@ -475,101 +272,6 @@ def test_the_adjacency_row_survives_at_the_first_breakpoint(nonconvex_inputs):
     with differential(NONCONVEX_YAML, data) as run:
         first = run.model.constraints['cost_curve_adjacency'].labels.isel({'bp': 0}).values
         assert (first != -1).all(), 'the first breakpoint lost its adjacency row'
-
-
-def test_the_emitted_foreach_follows_declaration_order():
-    """The frame is a *set* of dims until something orders it, and iterating a
-    set spends randomised string hashing — so the emitted ``foreach``, and every
-    solver column index behind it, used to vary between processes building the
-    same file. Asserted both ways round: within one process a set iterates the
-    same way for the same names, so a run that reads the set rather than the
-    declaration would have to fail one of the two.
-    """
-    raw = raw_of(TWO_DIM_YAML)
-    assert list(raw['dimensions']) == ['snapshot', 'generator', 'bp']
-    assert expand_piecewise(schema_of(raw)).variables['cost_curve_lam'].foreach == [
-        'snapshot',
-        'generator',
-        'bp',
-    ]
-
-    flipped = raw_of(TWO_DIM_YAML)
-    flipped['dimensions'] = {d: flipped['dimensions'][d] for d in ('generator', 'snapshot', 'bp')}
-    assert expand_piecewise(schema_of(flipped)).variables['cost_curve_lam'].foreach == [
-        'generator',
-        'snapshot',
-        'bp',
-    ]
-
-
-def test_an_inline_expression_is_a_legal_link():
-    raw = raw_of(NONCONVEX_YAML)
-    raw['piecewise']['cost_curve']['links'][0] = ['p * 2', 'bp_x']
-    expanded = expand_piecewise(schema_of(raw))
-    assert expanded.constraints['cost_curve_link0'].expression.startswith('(p * 2) ==')
-
-
-@pytest.mark.parametrize(
-    ('model', 'patch', 'match'),
-    [
-        pytest.param(
-            NONCONVEX_YAML,
-            {'piecewise.cost_curve.links': [['p', 'bp_x', '<='], ['op_cost', 'bp_y', '>=']]},
-            'at most one link',
-            id='at-most-one-link',
-        ),
-        pytest.param(
-            CHP_YAML, {'piecewise.chp.method': 'convex'}, 'exactly two links', id='convex-needs-exactly-two-links'
-        ),
-        pytest.param(
-            GATED_YAML,
-            {'piecewise.cost_curve.method': 'convex'},
-            'activity is not supported',
-            id='convex-cannot-be-gated',
-        ),
-        pytest.param(
-            GATED_YAML,
-            {'variables.u': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}}},
-            'must be binary',
-            id='activity-must-be-binary',
-        ),
-        pytest.param(
-            NONCONVEX_YAML,
-            {'piecewise.cost_curve.links': [['p', 'bp_x'], ['op_cost', 'nope']]},
-            "undeclared parameter 'nope'",
-            id='undeclared-parameter',
-        ),
-    ],
-)
-def test_a_malformed_block_is_refused(model, patch, match):
-    """Schema-level arity rules and the expansion's own preconditions — both
-    have to fire before any data is bound."""
-    with pytest.raises(ValueError, match=match):
-        expand_piecewise(schema_of(model, **patch))
-
-
-@pytest.mark.parametrize(
-    ('link_expression', 'message'),
-    [
-        ('p ** 2', r"operator '\*\*'"),
-        ('p * p', 'both factors of a product contain variables'),
-    ],
-)
-def test_a_link_outside_the_language_is_named_where_the_user_wrote_it(link_expression, message):
-    """The formulation checks its links itself, and that is the whole point.
-
-    Lowering would catch these anyway — but only after expansion, so the error
-    would name ``cost_curve_link0``, a declaration the user never wrote. The
-    guard in ``_expr_dims`` exists to keep the message pointing at the
-    ``piecewise:`` block and the link index instead.
-    """
-    raw = raw_of(NONCONVEX_YAML)
-    block = next(iter(raw['piecewise']))
-    raw['piecewise'][block]['links'][0][0] = link_expression
-
-    with pytest.raises(PiecewiseExpansionError, match=message) as exc:
-        expand_piecewise(schema_of(raw))
-    assert f"piecewise '{block}' link 0" in str(exc.value)
 
 
 def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
@@ -1085,25 +787,6 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
         assert cost[s] == pytest.approx(expected, abs=1e-6), (
             'the gate decides where it exists; where it does not, the curve holds unconditionally'
         )
-
-
-@pytest.mark.parametrize(
-    ('activity', 'match'),
-    [
-        pytest.param('at(u_unit, by=unit_of)', 'is not a declared variable', id='a-pullback-through-a-lookup'),
-        pytest.param('shift(u, over=snapshot, offset=1)', 'is not a declared variable', id='a-shifted-gate'),
-        pytest.param('u * 2', 'is not a declared variable', id='an-arithmetic-gate'),
-    ],
-)
-def test_a_gate_that_is_not_a_variable_is_refused(activity, match):
-    """A gate is a variable or it is nothing.
-
-    An expression has no declaration to say what its absence means, and the
-    block needs that answer: `absence: zero` pins the curve off where the gate
-    is missing, and the default leaves it ungated there.
-    """
-    with pytest.raises(PiecewiseExpansionError, match=match):
-        expand_piecewise(schema_of(GATED_YAML, **{'piecewise.cost_curve.activity': activity}))
 
 
 def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs):

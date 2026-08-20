@@ -34,54 +34,8 @@ import lpspec as lps
 from lpspec.errors import PiecewiseExpansionError
 from tests.conftest import schema_of
 from tests.differential import RTOL, differential
+from tests.language.piecewise_models import LP_MODEL as MODEL
 from tests.oracle import lpspec_linopy, pd
-
-MODEL = """
-description: dispatch whose cost is read off a convex curve, stated as its segment lines
-
-dimensions:
-  snapshot: {dtype: int, description: dispatch periods}
-  bp: {dtype: int, description: breakpoints of the cost curve}
-
-parameters:
-  load: {dims: [snapshot], description: demand to be met}
-  bp_x: {dims: [bp], description: breakpoint output levels}
-  bp_y: {dims: [bp], description: cost at each breakpoint}
-
-variables:
-  p:
-    foreach: [snapshot]
-    bounds: {lower: 0, upper: 100}
-    description: dispatched power
-  op_cost:
-    foreach: [snapshot]
-    bounds: {lower: 0}
-    description: operating cost, read off the curve
-  running:
-    foreach: [snapshot]
-    domain: binary
-    description: unused here; a gate for the case lp cannot take one
-
-piecewise:
-  cost_curve:
-    description: cost bounded below by the curve, which is exact where the curve is convex
-    over: bp
-    links:
-      - [p, bp_x]
-      - [op_cost, bp_y, '>=']
-    method: lp
-
-constraints:
-  balance:
-    foreach: [snapshot]
-    expression: p == load
-    description: output meets demand
-
-objective:
-  sense: minimize
-  expression: sum(op_cost, over=snapshot)
-  description: total operating cost
-"""
 
 PER_UNIT_MODEL = """
 description: the same curve, one per unit — the shape a corpus of cost curves arrives in
@@ -466,36 +420,6 @@ def test_a_concave_curve_is_refused_whatever_the_breakpoints_are_measured_in():
 # ---------------------------------------------------------------------------
 # the shape lp needs, refused at load
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ('patch', 'match'),
-    [
-        pytest.param(
-            {'links': [['p', 'bp_x'], ['op_cost', 'bp_y']]},
-            'needs exactly one link bounded by the curve',
-            id='both-links-pinned',
-        ),
-        pytest.param(
-            {'links': [['p', 'bp_x'], ['op_cost', 'bp_y'], ['p', 'bp_x']]},
-            'needs exactly one link bounded by the curve',
-            id='three-links-none-bounded',
-        ),
-        pytest.param(
-            {'activity': 'running'},
-            'activity is not supported with method: lp',
-            id='an-activity-with-nothing-to-gate',
-        ),
-    ],
-)
-def test_a_block_lp_cannot_state_is_refused_at_load(patch, match):
-    """Refused rather than fallen back from: a method written down is a
-    formulation chosen, and quietly building a different one is the thing a
-    reviewer of the file could not see."""
-    model = pyyaml.safe_load(MODEL)
-    model['piecewise']['cost_curve'].update(patch)
-    with pytest.raises(lps.SchemaError, match=match):
-        schema_of(model)
 
 
 # ---------------------------------------------------------------------------
