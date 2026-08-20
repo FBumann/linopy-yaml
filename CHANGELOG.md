@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.229](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.228...v0.0.1-alpha.229) (2026-08-20)
+
+
+### Bug Fixes
+
+* **compat:** a reduction over an empty dimension builds no row on either lane ([#1170](https://github.com/fluxopt/lpspec/issues/1170)) ([7e348a1](https://github.com/fluxopt/lpspec/commit/7e348a15cd95865694e77883b219abcb16d8d7c3)), closes [#1108](https://github.com/fluxopt/lpspec/issues/1108)
+
 ## [0.0.1-alpha.228](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.227...v0.0.1-alpha.228) (2026-08-20)
 
 
