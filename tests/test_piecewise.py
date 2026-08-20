@@ -1293,6 +1293,23 @@ def test_both_lanes_build_a_link_below_the_frame(refined_inputs, tmp_path):
     assert float(built.objective.value) == pytest.approx(lps.solve(raw_of(REFINED), refined_inputs).objective)
 
 
+def test_a_link_below_the_frame_must_say_how_it_reaches_the_weights():
+    """The contract: every link lands on the frame, or on a refinement named by `by:`.
+
+    A link carrying fewer dims than the others used to be broadcast up to
+    them — a capacity tied to the curve at every snapshot, which pins every
+    snapshot to one operating point and solves without a word. A link carrying
+    *more* is the mapped case, and says so.
+    """
+    raw = raw_of(TWO_DIM_YAML)
+    raw['parameters']['bp_cap'] = {'dims': ['generator', 'bp']}
+    raw['variables']['cap'] = {'foreach': ['generator'], 'bounds': {'lower': 0}}
+    raw['piecewise']['cost_curve']['links']['sizing'] = {'expression': 'cap', 'values': 'bp_cap'}
+
+    with pytest.raises(PiecewiseExpansionError, match=r"link 'sizing' does not carry \['snapshot'\]"):
+        lps.check(raw)
+
+
 def test_a_mapped_link_may_be_bounded_by_its_curve(refined_inputs):
     """A sign needs two links to say which side is bounded — unless the map says it.
 

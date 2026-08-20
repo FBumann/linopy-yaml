@@ -65,7 +65,7 @@ from lpspec.language.model import Model, PiecewiseBlock
 from lpspec.language.resolution import Namespace, resolve_expression
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
 
 def mask_of(block: str, pw: PiecewiseBlock) -> str | None:
@@ -250,6 +250,31 @@ def _weights_frame(schema: Model, link: Any, ctx: str) -> frozenset[str]:
     return (dims - {lookup.over}) | ({into} if into is not None else frozenset())
 
 
+def _check_every_link_lands_on_the_frame(
+    ctx: str, pw: PiecewiseBlock, lands: Mapping[str, frozenset[str]], frame: Sequence[str]
+) -> None:
+    """A link ties its quantity to the weights, or to a refinement of them.
+
+    The frame is what the links imply between them, so a link carrying *fewer*
+    dims than the others would be tied at every coordinate of the rest — one
+    capacity pinned to a curve at every snapshot, which forces every snapshot
+    onto one operating point. That is a model nobody writes on purpose, and it
+    builds and solves, so it is refused where it is written rather than found
+    in an answer.
+
+    A link carrying *more* is the mapped case, and says so with ``by:``.
+    """
+    for tie, dims in lands.items():
+        if pw.links[tie].mapped or dims >= frozenset(frame):
+            continue
+        missing = [d for d in frame if d not in dims]
+        raise PiecewiseExpansionError(
+            f"{ctx}: link '{tie}' does not carry {missing}, which the block's other links do — it "
+            f'would be tied to the curve at every coordinate of {missing}, pinning them all to one '
+            f'operating point. Carry it, or name the lookup that reaches the weights with by:.'
+        )
+
+
 def _check_the_map_travels(schema: Model, ctx: str, tie: str, link: Any) -> None:
     """A link's ``by:`` carries its rows somewhere, or it is not a map.
 
@@ -297,6 +322,7 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
         _check_the_map_travels(schema, ctx, tie, link)
 
     frame: list[str] = []
+    lands: dict[str, frozenset[str]] = {}
     for tie, link in pw.links.items():
         values = link.values
         if values not in schema.parameters:
@@ -306,7 +332,8 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 f"{ctx}: link '{tie}' values parameter '{values}' must carry dim "
                 f"'{pw.over}' (has {schema.parameters[values].dims})"
             )
-        for d in _declared_order(schema, _weights_frame(schema, link, f"{ctx} link '{tie}'")):
+        lands[tie] = _weights_frame(schema, link, f"{ctx} link '{tie}'")
+        for d in _declared_order(schema, lands[tie]):
             if d == pw.over:
                 raise PiecewiseExpansionError(
                     f"{ctx}: link '{tie}' expression already carries the breakpoint dim '{pw.over}'"
@@ -322,6 +349,8 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 raise PiecewiseExpansionError(f"{ctx}: active expression must not carry the breakpoint dim '{pw.over}'")
             if d not in frame:
                 frame.append(d)
+
+    _check_every_link_lands_on_the_frame(ctx, pw, lands, frame)
 
     for tie, link in pw.links.items():
         rows = sorted(_expr_dims(schema, link.expression, f"{ctx} link '{tie}'")) if link.mapped else frame
