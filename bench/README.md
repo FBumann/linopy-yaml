@@ -170,10 +170,10 @@ Three of those are deliberate calls rather than defaults:
   stderr noise in a harness that parses stdout.
 
 Both arms start from the same parquet files and stop at the same seam, so
-each pays for its own data ingestion. That is the honest unit; note that the
-*phases* are not comparable one-for-one, because linopy defers coefficient
-materialisation to `to_polars()` inside `to_file` — its `build` allocates dense
-arrays and little else. Compare totals, and read the phases as attribution
+each pays for its own data ingestion. That is the honest unit. The *phases* are
+not comparable one-for-one, because linopy defers coefficient materialisation to
+`to_polars()` inside `to_file` — its `build` allocates dense arrays and little
+else. Compare totals, and read the phases as attribution
 within an arm.
 
 **Peak RSS is the whole cost, because nothing spills to disk.** An engine that

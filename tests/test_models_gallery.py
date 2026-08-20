@@ -159,9 +159,7 @@ def test_the_generated_blocks_are_current() -> None:
     plan, so a model that gains a construct and a table that does not mention
     it cannot both be committed. The reference table comes from
     ``references.json``, the same file ``test_ports.py`` asserts against — so
-    the *published* optimum and the *asserted* one cannot disagree. They used
-    to be able to: the table was hand-written, and hand-written twice, once
-    here and once in the old ``docs/ports.md``.
+    the *published* optimum and the *asserted* one cannot disagree.
     """
     page = constructs.PAGE.read_text()
     assert constructs.rendered(page) == page, 'the gallery page is stale — run `uv run python -m tools.constructs`'

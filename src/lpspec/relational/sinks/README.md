@@ -132,7 +132,7 @@ at all. So a sink **declares** how it satisfies one, in the descriptor
 'sos': 'reformulated'  # highs: binaries and linking rows instead
 ```
 
-— and `solvers.ingestible(name, tables)` acts on the answer, before the load,
+— and `sinks.ingestible(name, tables)` acts on the answer, before the load,
 handing a member that cannot take a set the `sos.py` rewrite of it. Two
 properties make that a family decision rather than a member's:
 

@@ -151,7 +151,12 @@ way, what it costs and what is refused are together under
 to work on it,
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-To see it rather than read it, `python examples/walkthrough.py` runs one small model through every stage — YAML → schema → core AST → logical plan → model frames → LP text → solution — printing the artifact each stage produces, plus two models the language refuses and why. Its output is committed as [examples/walkthrough.out](examples/walkthrough.out) if you would rather just read that.
+To see it rather than read it, `python examples/walkthrough.py` runs one small
+model through every stage — YAML → schema → core AST → logical plan → model
+frames → LP text → solution — printing the artifact each stage produces. It
+also runs two models the language refuses, and says why. Its output is
+committed as [examples/walkthrough.out](examples/walkthrough.out), if you would
+rather read it than run it.
 
 ```bash
 pip install lpspec  # the relational engine (polars, highspy)

@@ -219,7 +219,8 @@ def _constraint_lines(model: ModelTables, lo: int, hi: int, entries: pl.DataFram
 
     One row per *output line*, interleaved by sorting, so nothing gathers a
     row's terms into a string list first — a ``group_by('row')`` into a list
-    column and an explode measured a large multiple of this (#520). *entries* is the
+    column and an explode measured 3x this on ``sector/m`` emit (#520). *entries*
+    is the
     chunk's slice of the matrix from :meth:`ModelTables.matrix_block`, and the
     anti-join gives a termless row the line a solver still needs to parse.
 

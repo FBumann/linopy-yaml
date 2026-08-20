@@ -39,7 +39,7 @@ gallery catalogue quotes it rather than keeping a second one. It is allowed to
 be loose in a way the generated block beneath it is not: it is read at a
 glance, and three summaries had drifted far enough to be wrong before the block
 existed to check them against. So the
-looseness is bounded rather than assumed. `tests/test_typeset.py` requires each
+looseness is bounded rather than assumed. `tests/typeset/test_typeset.py` requires each
 of those six to **either** use only symbols the generator can reach — the
 hand-written notation is then an oracle *for* the typesetter, since the point
 of the format is that a gallery page could be generated — **or** name why it

@@ -1589,9 +1589,9 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
 
     That is correct and it is the documented reading of a sparse coefficient
     table, but it is the same silently-wrong shape the v1 convention removed
-    from the variable side, so the absence rules now names it and this pins the behaviour
+    from the variable side, so the absence rules now name it and this pins the behaviour
     the prose describes. The benign case is
-    ``test_a_parameter_covering_a_subset_of_its_dims_means_zero_on_both_lanes``:
+    ``test_a_sparse_coefficient_is_still_a_zero_coefficient``:
     there the zero lands on a coefficient *and* a right-hand side, so the row
     constrains nothing. Here the right-hand side is a literal 0 and the missing
     coefficient was the whole bound.

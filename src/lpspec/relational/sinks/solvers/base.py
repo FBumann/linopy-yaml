@@ -138,7 +138,7 @@ class Solver(ABC):
 
     #: What this member can ingest, and what it refuses in combination. A
     #: member states it; the family acts on it
-    #: (:func:`~lpspec.relational.sinks.solvers.ingestible`), so no ``_load``
+    #: (:func:`~lpspec.relational.sinks.ingestible`), so no ``_load``
     #: has to remember to ask.
     capabilities: ClassVar[Capabilities]
 
@@ -160,7 +160,7 @@ class Solver(ABC):
         (:func:`~lpspec.relational.sinks.solvers.solver`).
 
         A probe of the import system rather than an import: answering must not
-        cost the load it is asked in order to avoid, and must not raise.
+        cost the load it is asked to avoid, and must not raise.
         Uncached, being asked once per solve — against a solve.
         """
         return all(importlib.util.find_spec(package) is not None for package in cls.requires)

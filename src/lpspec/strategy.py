@@ -943,7 +943,7 @@ def _encode(
 
     A path the workers can reach stays a path. A path they cannot travels as
     **its own bytes, untouched** — decoding and re-encoding a parquet file
-    produces byte-identical output for a large multiple of the CPU (#459).
+    produces byte-identical output for 79x the CPU (#459).
     Anything held in memory is written to parquet, which beats pickling the
     frame on size and time.
 
