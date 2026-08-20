@@ -31,7 +31,6 @@ from lpspec.errors import (
     coordinates_shown,
     duplicate_coordinate_message,
     holes_in_values_message,
-    lookup_values_are_not_labels_message,
     unknown_labels_message,
     wrong_value_dtype_message,
 )
@@ -158,17 +157,3 @@ def check_value_dtype(p: plan.ParameterDeclaration, frame: pl.LazyFrame) -> None
         return
     arrived = next((name for name, types in _COLUMNS.items() if column in types), str(column))
     raise DataError(wrong_value_dtype_message(p.name, p.dtype, arrived))
-
-
-def check_lookup_containment(d: str, lookup: str, target: str, relation: pl.LazyFrame, labels: pl.LazyFrame) -> None:
-    """Every value a lookup maps to must be a label of the dimension it targets.
-
-    A label the relation has no row for is not a violation — it belongs to no
-    group, which is the row-absence idiom the rest of the engine uses. Only a
-    value that is *there* and unknown is a typo, and that one drops terms
-    silently.
-    """
-    known = labels.select(pl.col('val').alias(lookup))
-    bad = relation.select(lookup).join(known, on=lookup, how='anti').unique(maintain_order=True).head(5).collect()
-    if bad.height:
-        raise DataError(lookup_values_are_not_labels_message(d, lookup, target, bad[lookup].to_list()))

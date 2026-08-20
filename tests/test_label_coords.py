@@ -218,16 +218,30 @@ def test_a_lookup_may_target_a_dimension_nothing_spans_yet(month, extra):
         assert solution.objective == pytest.approx(10.0), 'each period caps its snapshots at 5, so the model builds'
 
 
-def test_an_unused_target_still_checks_containment():
+@pytest.mark.parametrize('lane', ['relational', 'eager'])
+def test_an_unused_target_still_checks_containment(lane):
+    """A map into a dimension no constraint groups by is checked all the same.
+
+    On both lanes, because the check now runs where the map is read rather than
+    where each engine holds one — the eager lane never spans `month` either,
+    and used to reach this only through its own copy.
+    """
+    from tests.oracle import lpspec_linopy
+
+    build = lps.build if lane == 'relational' else lpspec_linopy.build
     short = {'month': pl.DataFrame({'month': ['jan']})}
     with pytest.raises(DataError, match="not 'month' labels"):
-        lps.build(_unused_target_model({'dtype': 'str'}), _unused_target_sources() | short)
+        build(_unused_target_model({'dtype': 'str'}), _unused_target_sources() | short)
 
 
-def test_an_unused_target_without_an_index_is_refused_with_the_true_reason():
+@pytest.mark.parametrize('lane', ['relational', 'eager'])
+def test_an_unused_target_without_an_index_is_refused_with_the_true_reason(lane):
     """The old message blamed missing data the caller may well have supplied (#488)."""
+    from tests.oracle import lpspec_linopy
+
+    build = lps.build if lane == 'relational' else lpspec_linopy.build
     with pytest.raises(DataError, match='no index of its own') as caught:
-        lps.build(_unused_target_model({'dtype': 'str'}), _unused_target_sources())
+        build(_unused_target_model({'dtype': 'str'}), _unused_target_sources())
     assert "Pass an index for 'month'" in str(caught.value), 'the refusal has to say what would satisfy it'
 
 

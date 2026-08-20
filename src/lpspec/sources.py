@@ -36,6 +36,8 @@ from lpspec.errors import (
     lookup_relation_columns_message,
     lookup_relation_holes_message,
     lookup_relation_not_single_valued_message,
+    lookup_target_without_labels_message,
+    lookup_values_are_not_labels_message,
     map_keys_are_not_labels_message,
     multi_indexed_series_message,
     one_fact_two_authors_message,
@@ -190,13 +192,20 @@ def lookup_relations(
     reads a map by; what the caller writes it as is the space its values are
     labels of (:meth:`~lpspec.language.model.Model.label_space`).
 
+    **Both label columns are checked here**, against the indices this is handed:
+    the keys against ``over``'s, and — for a lookup with a target — the values
+    against that dimension's. Each lane used to ask the second question of its
+    own representation, one in polars and one in pandas, for a defect a caller
+    fixes the same way either way.
+
     Returns:
         ``{lookup name: (over, lookup) frame}`` for every lookup the model
         declares, since one with no map at all is refused before this runs.
 
     Raises:
         DataError: A relation short of either column, carrying a null in one,
-            mapping a label twice, or keyed by a label its dimension lacks.
+            mapping a label twice, keyed by a label its dimension lacks, or
+            holding a value that is not a label of the dimension it targets.
     """
     relations: dict[str, pl.LazyFrame] = {}
     for name, lookup in sorted(schema.lookups.items()):
@@ -208,12 +217,41 @@ def lookup_relations(
         else:
             rows = _read_relation(data[name], name, over, schema.label_space(name))
             said = 'maps'
-        relations[name] = _keyed_by_labels(rows, name, over, indices[over], said)
+        _check_keys_are_labels(rows, name, over, _labels_of(over, indices[over]), said)
+        if (target := lookup.into) is not None:
+            if target not in indices:
+                raise DataError(lookup_target_without_labels_message(over, name, target))
+            _check_values_are_labels(rows, over, name, target, _labels_of(target, indices[target]))
+        relations[name] = rows
     return relations
 
 
-def _keyed_by_labels(rows: pl.LazyFrame, lookup: str, over: str, index: TidySource, said: str) -> pl.LazyFrame:
-    """One relation, refused unless every label it maps is a label *over* has.
+def _check_values_are_labels(rows: pl.LazyFrame, over: str, lookup: str, target: str, labels: pl.Series) -> None:
+    """Refuse a map holding a value *target* does not have as a label.
+
+    The check that makes ``sum(by=)`` safe: a value naming no label of the
+    dimension it targets is dropped by the join that places its terms — an
+    inner join relationally, an alignment on the eager lane — so the model
+    builds and solves with those terms silently missing.
+
+    Offenders keep their own type — a python native off polars, never a numpy
+    scalar — because the message reprs them and an ``int`` label read back as
+    ``np.int64(99)`` is a second sentence for one defect.
+    """
+    known = set(labels.to_list())
+    seen: dict[Any, None] = {v: None for v in rows.select(lookup).collect()[lookup].to_list() if v not in known}
+    if seen:
+        raise DataError(lookup_values_are_not_labels_message(over, lookup, target, list(seen)[:5]))
+
+
+def _labels_of(dim: str, index: TidySource) -> pl.Series:
+    """One dimension's labels, for a check that is about to run against them."""
+    frame = pl.scan_parquet(index) if isinstance(index, (str, Path)) else index
+    return frame.select(dim).collect()[dim]
+
+
+def _check_keys_are_labels(rows: pl.LazyFrame, lookup: str, over: str, labels: pl.Series, said: str) -> None:
+    """Refuse a map keyed by anything *over* does not have as a label.
 
     The asymmetry is the point. A label no map mentions is the **partial case**
     and simply has no row; a key naming no label is a **typo**, and dropping it
@@ -221,20 +259,11 @@ def _keyed_by_labels(rows: pl.LazyFrame, lookup: str, over: str, index: TidySour
 
     *said* is how the map got here, because the fix differs and the law does
     not: a key in the file is edited there, a row in a table is dropped.
-
-    The key column is cast to the index's own dtype once every key has been
-    checked against it, which is what lets a map arrive from a source whose
-    encoding differs — a pandas ``Categorical``, a dictionary parquet — and
-    still meet the index in the join that reads it.
     """
-    labels = (pl.scan_parquet(index) if isinstance(index, (str, Path)) else index).select(over).collect()
-    known = set(labels[over].to_list())
+    known = set(labels.to_list())
     keys = rows.select(over).collect()[over].to_list()
     if strays := sorted(str(x) for x in keys if x not in known):
-        raise DataError(
-            map_keys_are_not_labels_message(over, lookup, strays, [str(x) for x in labels[over].to_list()], said)
-        )
-    return rows.with_columns(pl.col(over).cast(labels.schema[over]))
+        raise DataError(map_keys_are_not_labels_message(over, lookup, strays, [str(x) for x in labels.to_list()], said))
 
 
 def _read_relation(source: object, lookup: str, over: str, space: str) -> pl.LazyFrame:

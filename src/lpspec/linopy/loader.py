@@ -14,7 +14,6 @@ from lpspec.errors import (
     coordinates_shown,
     duplicate_coordinate_message,
     holes_in_values_message,
-    lookup_values_are_not_labels_message,
     no_index_source_message,
     wrong_value_dtype_message,
 )
@@ -103,34 +102,19 @@ def _lookup_arrays(
     leaves out becomes a null in it, and every reader on this lane already
     treats that null as "in no group".
 
-    What is left to check is containment, and only for a *targeted* lookup: a
-    label-space lookup owns its values, so there is no dimension for them to be
-    contained in and nothing to ask. It matters here for a reason of this
-    lane's own — a value that is not a label of the target would be dropped by
-    xarray's inner-join alignment, losing the term it carries with no error
-    anywhere.
+    Nothing is checked here. A value naming no label of the target would be
+    dropped by xarray's inner-join alignment, losing the term it carries with
+    no error anywhere — which is why it is refused at
+    :func:`~lpspec.sources.lookup_relations`, before either lane holds a map at
+    all.
     """
     out: dict[str, dict[str, xr.DataArray]] = {}
     for name, relation in sorted(relations.items()):
-        dim, target = schema.lookups[name].over, schema.lookups[name].into
+        dim = schema.lookups[name].over
         labels = master[dim]
         series = relation.set_index(dim)[name].reindex(labels)
-        if target is not None:
-            _refuse_values_outside(dim, name, target, series, master)
         out.setdefault(dim, {})[name] = xr.DataArray(series.to_numpy(), dims=[dim], coords={dim: labels}, name=name)
     return out
-
-
-def _refuse_values_outside(dim: str, name: str, target: str, values: pd.Series, master: Mapping[str, pd.Index]) -> None:
-    """Every value of a targeted lookup is a label of the dimension it targets.
-
-    A null is not a value here: it says the label belongs to no group, which is
-    row absence rather than a typo.
-    """
-    known = set(master[target])
-    strangers = pd.unique(values[~values.isna() & ~values.isin(known)])
-    if len(strangers):
-        raise DataError(lookup_values_are_not_labels_message(dim, name, target, strangers[:5].tolist()))
 
 
 def load_parameters(
