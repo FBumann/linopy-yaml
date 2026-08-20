@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.234](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.233...v0.0.1-alpha.234) (2026-08-20)
+
+
+### Bug Fixes
+
+* **data:** a map joined onto an index leaves its label order alone ([#1184](https://github.com/fluxopt/lpspec/issues/1184)) ([3116666](https://github.com/fluxopt/lpspec/commit/31166669fb94dc7e3c40e109b3bc6daecdd266e7))
+
 ## [0.0.1-alpha.233](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.232...v0.0.1-alpha.233) (2026-08-20)
 
 
