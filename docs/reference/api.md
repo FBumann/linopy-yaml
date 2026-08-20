@@ -25,6 +25,7 @@ result.dual('power_balance')
 | `lps.solve(model, sources, solver_name='highs', solver_options=None)` | build and solve in one call — returns a `Result` |
 | `lps.solve_over(model, sources, axis, ...)` | solve once per slice and fold the answers — [sweeps](sweeps.md) |
 | `lps.write(model, sources, out)` | build and stream to a file; the suffix picks the format |
+| `bound.row(name, **coordinate)` | what one built constraint row says — terms, comparison, right-hand side |
 | `lps.to_latex` / `to_typst` / `to_markdown` | the math as a document — [typeset](typeset.md) |
 
 Errors are one tree: `LpspecError` at the root, `LanguageError` (with
@@ -102,12 +103,79 @@ bound = lps.build('model.yaml', sources)
 bound.write('model.lp')
 result = bound.solve()
 bound.diagnostics()  # what the build and its solves did that the answer does not show
+bound.row('balance', snapshot=17)  # what one row actually says
 ```
 
 **Inspecting a model is `build`'s job, not `solve`'s.** `solve` hands back an
 answer and `write` a path; the questions *about the model* — how big is it,
-what did it not build, how did its re-solves go — belong to the handle that
-**is** the model.
+what did it not build, what does this row say, how did its re-solves go —
+belong to the handle that **is** the model.
+
+### Reading one row
+
+`to_latex` and its siblings render the model as math **before any data**, and
+`result.dual('balance')` gives a row's number **without its terms**. `row` is
+the third question, and the one a wrong model is debugged by: what does this
+constraint, at this coordinate, actually say?
+
+```python
+print(bound.row('balance', snapshot=1))
+# balance[snapshot=1]: +1 p[1, wind] +50 p[1, gas] +30 p[1, coal] >= 60
+```
+
+That line is **linopy's**, on purpose — their `Constraint.print()` renders a row
+the same way, and a reader arriving from there should not have to learn a
+second way to read a constraint. What is added is the row's own identity on the
+same line, where linopy prints it as a header.
+
+The same content is a frame, for the row too wide to read and for anything that
+filters or joins:
+
+```python
+row = bound.row('balance', snapshot=17)
+row.terms  # (variable, coordinate, coefficient), one row per term
+row.sense  # '=='
+row.rhs  # 80.0
+```
+
+A row too wide to spell out **summarises rather than truncating** — twelve
+terms of three hundred are twelve arbitrary ones:
+
+```python
+print(bound.row('balance', t=0))
+# balance[t=0]: 301 terms — p: 300 (|coef| 0.001…0.3), slack: 1 (|coef| 1000) >= 5
+```
+
+That is the two questions a wide row is actually asked, on one line: how much
+of it each declaration contributes, and whether its coefficients span an order
+of magnitude the solve will pay for. The thousand-fold spread above is the
+fault `diagnostics().coefficient_range` reports per *declaration* and nothing
+reported per row. `display_terms` is where a line stops spelling terms out.
+
+It reads the **built** row, which is the whole of its value:
+
+- a coefficient is the number the *data* produced, where the file shows a
+  parameter name — every digit of it, since a rendering that rounded would
+  agree with the file in exactly the case worth reading;
+- a term whose variable was masked out by a `where` is simply **not there**, so
+  a row shorter than the file suggests says so;
+- a term whose coefficient the data made **exactly zero** is not there either.
+  What a zero states, absence already states, so the build prunes it and the
+  row reads the matrix the solver was handed rather than a reconstruction of
+  it;
+- a row a `where` removed raises rather than answering, and the message names
+  the three things that cause it.
+
+It needs no solve — a model too wrong to solve is exactly the one whose rows
+need reading — and the coordinate must name **every** dim of the declaration,
+since a partial one names a set of rows rather than one. The constraint is
+**positional**, so a dimension may be called `name` and still be named in the
+coordinate; a label the dimension cannot hold — a string against an integer
+dim, a stranger against a declared label set — is refused naming the dim, not
+the dtypes.
+
+There is no verb for a *column*: a variable's bounds are `to_yaml()`'s and its
+coefficients are the transpose of this, which nothing has asked for yet.
 
 ### Re-solving with new numbers
 

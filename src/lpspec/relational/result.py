@@ -118,6 +118,128 @@ def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) ->
     return dataset
 
 
+def _number(value: float, *, sign: bool = False) -> str:
+    """*value* as the shortest string that reads back as itself.
+
+    A row is read to find the number the data produced, so a rendering that
+    rounds is a rendering that agrees with the file in exactly the case worth
+    reading — ``%g``'s six digits print two coefficients differing in the
+    seventh identically. ``repr`` is the shortest round-tripping form, and
+    dropping a trailing ``.0`` keeps the whole coefficient reading as linopy's
+    ``+50`` rather than ``+50.0``.
+    """
+    text = repr(float(value))
+    text = text.removesuffix('.0')
+    return f'+{text}' if sign and not text.startswith('-') else text
+
+
+def _bracket(labels: str) -> str:
+    """``[1, wind]``, or nothing at all for a declaration over no dims.
+
+    A scalar is ``z``, not ``z[]`` — linopy's spelling, and an empty bracket
+    states a coordinate that does not exist.
+    """
+    return f'[{labels}]' if labels else ''
+
+
+@dataclass(frozen=True)
+class ConstraintRow:
+    """One built constraint row, spelled back out — what :meth:`~lpspec.api.BoundModel.row` returns.
+
+    The row a model actually built at one coordinate: every term with its
+    coefficient, and the comparison and right-hand side it was built against.
+    Read off the built model, so it needs no solve — and it is the *built*
+    row, after ``where`` masking, after any term whose variable was absent
+    dropped out, and after a coefficient the data made exactly zero stopped
+    being a term at all (:func:`~lpspec.relational.engines.polars.engine._without_zeros`
+    — what a zero states, absence already states). Those three are why a row
+    can be shorter than the file suggests, and why reading one is worth it
+    when a model says something other than what its author wrote.
+
+    Printing it gives the row as one line of math, which is what reading a row
+    usually means; :attr:`terms` is the same content as a frame, for the row
+    too wide to read and for anything that filters or joins.
+
+    Attributes:
+        name: The constraint this row belongs to.
+        coordinate: Where in that declaration it sits.
+        terms: ``(variable, coordinate, coefficient)``, one row per term, in
+            the solver's own column order. ``coordinate`` is the term's labels
+            in its variable's dim order — what goes in the brackets — rendered
+            rather than spread across dim columns, since two terms of one row
+            may come from variables with different dims and so cannot share
+            them.
+        sense: ``<=``, ``>=`` or ``==``.
+        rhs: What the left-hand side is compared against.
+    """
+
+    name: str
+    coordinate: Mapping[str, object]
+    terms: pl.DataFrame
+    sense: str
+    rhs: float
+
+    #: How many terms a line spells out before it summarises instead. The
+    #: number *is* the decision: past it the terms no longer fit a line worth
+    #: reading, and an arbitrary dozen of three hundred answers nothing that
+    #: their count and their spread does not answer better.
+    display_terms = 12
+
+    def __str__(self) -> str:
+        """The row as one line: ``balance[snapshot=1]: +1 p[…] +50 p[…] >= 60``.
+
+        linopy's shape for the same job, since a reader arriving from there
+        should not have to learn a second way to read a constraint.
+
+        **A row too wide to spell out summarises rather than truncating.**
+        Twelve terms of three hundred are twelve arbitrary ones; the count per
+        declaration and the spread of the coefficients are what a wide row is
+        actually asked about, and they fit the same line.
+        """
+        return f'{self.name}{_bracket(self._where())}: {self._body()} {self.sense} {_number(self.rhs)}'
+
+    #: The line, not the field-by-field dataclass dump. A row is read at a
+    #: prompt and in a notebook cell more often than it is printed, and there
+    #: the default would put a multi-line frame inside one row's identity.
+    __repr__ = __str__
+
+    def _where(self) -> str:
+        """``snapshot=1, g=gas`` — the coordinate, in the declaration's dim order."""
+        return ', '.join(f'{dim}={label}' for dim, label in self.coordinate.items())
+
+    def _body(self) -> str:
+        """The terms, spelled out or summarised — the part that depends on width."""
+        if not self.terms.height:
+            return '(no terms)'
+        if self.terms.height <= self.display_terms:
+            return ' '.join(
+                f'{_number(coefficient, sign=True)} {variable}{_bracket(coordinate)}'
+                for variable, coordinate, coefficient in self.terms.iter_rows()
+            )
+        return f'{self.terms.height} terms — {self._per_declaration()}'
+
+    def _per_declaration(self) -> str:
+        """``p: 300 (|coef| 1…50)`` per variable, in the row's own term order.
+
+        The two questions a row too wide to read is asked: how much of it each
+        declaration contributes, and whether its coefficients span an order of
+        magnitude that will cost the solve.
+        """
+        import polars as pl
+
+        grouped = self.terms.group_by('variable', maintain_order=True).agg(
+            pl.len().alias('terms'),
+            pl.col('coefficient').abs().min().alias('low'),
+            pl.col('coefficient').abs().max().alias('high'),
+        )
+        return ', '.join(
+            f'{variable}: {terms} (|coef| {_number(low)})'
+            if low == high
+            else f'{variable}: {terms} (|coef| {_number(low)}…{_number(high)})'
+            for variable, terms, low, high in grouped.iter_rows()
+        )
+
+
 @dataclass(frozen=True)
 class Diagnostics:
     """What a build and its solves did that the answer does not show.

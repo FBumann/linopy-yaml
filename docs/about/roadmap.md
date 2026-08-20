@@ -83,8 +83,8 @@ mode and `active` gating; load-time validation of every expression, `where`
 string and *uncalled* macro template.
 
 **Behind linopy**, and none of it a ceiling question: the post-solve object
-(labelled DataArrays vs tidy tables — `to_dataarray` bridges), debugging (IIS
-via Gurobi, `print()` of a row), lifecycle (mutate, re-solve, warm start,
+(labelled DataArrays vs tidy tables — `to_dataarray` bridges), debugging (an
+IIS via Gurobi), lifecycle (mutate, re-solve, warm start,
 `relax`/`fix`), solver breadth (ten backends and four handoffs vs three
 direct sinks plus files), and the variable types and capabilities behind the capability
 model.
