@@ -481,6 +481,151 @@ def test_the_languages_own_generators_reach_no_consumer():
     )
 
 
+MANIFEST = REPO / 'extraction.paths'
+
+#: The corpus that stays, and why. The ports and the drivers are evidence about
+#: lpspec — an external optimum reproduced, a driver taking slices. So are the
+#: teaching models, though each demonstrates a construct: every one has a
+#: gallery page that *solves* it and links to it in this repository, so what
+#: they are evidence of is that lpspec expresses and answers a real problem.
+#: `walkthrough.yaml` is the clearest case — `run.py` solves it and
+#: `walkthrough.out` is the golden, so the model and its answer are one thing.
+EXAMPLES_THAT_STAY = (
+    'examples/symbols/',
+    'examples/ports/',
+    'examples/benders/',
+    'examples/myopic/',
+    'examples/rolling/',
+    'examples/dispatch.yaml',
+    'examples/monthly_budget.yaml',
+    'examples/multi_period.yaml',
+    'examples/piecewise.yaml',
+    'examples/piecewise_lp.yaml',
+    'examples/piecewise_ragged.yaml',
+    'examples/reserves.yaml',
+    'examples/seasons.yaml',
+    'examples/sos.yaml',
+    'examples/storage.yaml',
+    'examples/transport.yaml',
+    'examples/walkthrough.yaml',
+)
+
+
+def _manifest() -> list[str]:
+    """The paths ``extraction.paths`` selects, comments and blanks dropped."""
+    lines = [line.strip() for line in MANIFEST.read_text().splitlines()]
+    return [line for line in lines if line and not line.startswith('#')]
+
+
+def test_every_path_the_extraction_selects_exists():
+    """A manifest naming a path that has moved selects nothing and says nothing.
+
+    ``git filter-repo`` does not fail on a path that matches no file — it
+    quietly keeps less than intended — so a stale line here would be discovered
+    as an absence in the new repository, after the history was rewritten.
+    """
+    missing = [line for line in _manifest() if not (REPO / line).exists()]
+    assert not missing, (
+        f'extraction.paths names paths that do not exist: {missing} — filter-repo would '
+        f'select nothing for them and report no error'
+    )
+
+
+def test_every_model_is_on_one_side_of_the_extraction():
+    """A model added to ``examples/`` lands on a side deliberately, or fails here.
+
+    The rule is what a model is evidence *of*: a construct the language can say,
+    or a claim about lpspec — that a plan builds, a solver agrees, a published
+    optimum is reproduced. Nothing decides that automatically, which is why an
+    unclassified model is an error rather than a default.
+    """
+    moves = tuple(line for line in _manifest() if line.startswith('examples/'))
+    unclassified = sorted(
+        str(path.relative_to(REPO))
+        for path in (REPO / 'examples').rglob('*.yaml')
+        if not str(path.relative_to(REPO)).startswith(moves + EXAMPLES_THAT_STAY)
+    )
+    assert not unclassified, (
+        f'{unclassified} is in neither extraction.paths nor EXAMPLES_THAT_STAY — say which '
+        f'side it is on: a model showing a construct moves, one proving lpspec builds stays'
+    )
+
+
+#: Everything that stays and names something the extraction takes, with what the
+#: cut owes it. Four are checks that read a moving artefact at run time and so
+#: must travel with it or be split; the rest are prose and configuration that
+#: become references to the other repository.
+#:
+#: Scoped to code and configuration on purpose. `docs/` cross-links to moving
+#: pages in bulk and every one of those becomes an external link — a known
+#: rewrite, not a break, and listing them here would bury the ones that are.
+#:
+#: **Paths only, never imports.** An import of a moving module survives the cut
+#: as an import of the dependency, which is the bulk rewrite the facade exists
+#: to make one spelling; a *path* to a moving file resolves to nothing. That is
+#: why `tests/test_cli.py` is absent though it plainly travels with
+#: `__main__.py`: it names the CLI by importing it, so it is manifest business
+#: rather than a crossing.
+CROSSES_THE_CUT = {
+    'tests/test_doc_examples.py': 'runs the code blocks in `docs/reference/language/`; those pages move',
+    'tests/test_docs_site.py': 'checks the operator page against `examples/operators/`; both move',
+    'tests/test_schema.py': 'asserts `schema/lpspec.schema.json` matches the model — moves, minus the '
+    'lowering half `test_an_omitted_bound_means_unbounded_all_the_way_down` keeps here',
+    'tests/README.md': 'prose naming `tests/language/`',
+    'tests/test_api.py': 'a docstring citing `docs/about/ceiling.md`, and one naming `tests/language/`',
+    'tests/test_architecture.py': 'the fences themselves: this file is split at the cut, not moved',
+    'tools/constructs.py': 'a comment citing `docs/reference/language/` for its column order',
+    'pyproject.toml': "ruff's per-file-ignore for `src/lpspec/language/where_parser.py`",
+}
+
+#: Where a crossing would be a break rather than a link, and the suffixes worth
+#: reading. `tests/language/` and `tools/language/` are excluded: they move.
+CUT_SCAN = (('tests', 'tests/language/'), ('tools', 'tools/language/'))
+CUT_SCAN_FILES = ('pyproject.toml', 'mkdocs.yml')
+
+
+def _crossings() -> dict[str, list[str]]:
+    """Staying code and configuration that names a path the manifest takes."""
+    moving = _manifest()
+    found = {}
+    candidates = [REPO / name for name in CUT_SCAN_FILES]
+    for root, skip in CUT_SCAN:
+        candidates += [
+            path
+            for path in (REPO / root).rglob('*')
+            if path.is_file()
+            and '__pycache__' not in path.parts
+            and skip not in str(path.relative_to(REPO))
+            and path.suffix in {'.py', '.md', '.yml', '.yaml', '.toml'}
+        ]
+    for path in candidates:
+        text = path.read_text(errors='ignore')
+        named = sorted(line for line in moving if line in text)
+        if named:
+            found[str(path.relative_to(REPO))] = named
+    return found
+
+
+def test_everything_that_crosses_the_cut_is_declared():
+    """The manifest says what leaves; this says what stays behind pointing at it.
+
+    A misclassified path is the failure the exhaustiveness check cannot see — it
+    catches a model nobody classified, never one classified wrongly. Twice in
+    this PR's history the disproof was a *consumer* nobody had looked for: the
+    gallery pages that solve the teaching models, and the symbol tables paired
+    one-to-one with models that stay. So the consumers are enumerated, and the
+    set is exact in both directions: a new crossing fails as undeclared, and a
+    resolved one fails as stale rather than sitting here reading as work.
+    """
+    crossings = _crossings()
+    undeclared = sorted(set(crossings) - set(CROSSES_THE_CUT))
+    stale = sorted(set(CROSSES_THE_CUT) - set(crossings))
+    assert not undeclared and not stale, (
+        f'undeclared crossings {undeclared}, stale entries {stale} — a file that names a moving '
+        f'path either travels with it, is split, or is written down here with what the cut owes it'
+    )
+
+
 def test_the_language_facade_exports_no_private_name():
     """A leading underscore in the seam is the surface admitting it is unfinished.
 
