@@ -193,7 +193,7 @@ It reads the **built** row, which is the whole of its value:
 - a coefficient is the number the *data* produced, where the file shows a
   parameter name — every digit of it, since a rendering that rounded would
   agree with the file in exactly the case worth reading;
-- a term whose variable was masked out by a `where` is simply **not there**, so
+- a term whose variable was masked out by a `where` is **not there**, so
   a row shorter than the file suggests says so;
 - a term whose coefficient the data made **exactly zero** is not there either.
   What a zero states, absence already states, so the build prunes it and the

@@ -43,7 +43,7 @@ the data, and the built model is smaller than the coordinate product.
 
 The same idea runs through data binding, with one distinction worth learning
 early: a **variable** the mask removed is *absent*, and a term carrying it takes
-its whole row with it — while a **parameter** row that is simply missing is a
+its whole row with it — while a **parameter** row that is missing is a
 zero coefficient, and the row survives without it. Absence is a property of
 variables. → [dispatch](examples/dispatch.md), [absence](reference/language/absence.md)
 

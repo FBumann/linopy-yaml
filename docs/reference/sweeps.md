@@ -159,7 +159,7 @@ have** — there is nothing to tune. (`df.lazy()` is not an optimisation: an
 eager frame is embedded in the plan, so it pickles *larger* than the frame.
 Only `scan_parquet` is a reference.)
 
-## What a sweep does under the hood
+## How a sweep runs
 
 | | |
 |---|---|

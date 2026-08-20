@@ -94,7 +94,7 @@ $$0 \le \mathit{spill}_{t,s} \le \mathit{inflow}_{t,s} \qquad \forall\thinspace 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

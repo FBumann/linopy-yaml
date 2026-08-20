@@ -75,7 +75,7 @@ $$0 \le g_{t,l} \le \mathit{link}^{\mathrm{p,nom}}_{l} \qquad \forall\thinspace 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

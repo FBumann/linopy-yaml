@@ -101,7 +101,7 @@ $$0 \le p^{\mathrm{nom}}_{e,g} \le 100 \qquad \forall\thinspace e \in \mathcal{E
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 

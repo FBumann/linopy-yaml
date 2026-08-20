@@ -104,7 +104,7 @@ $$0 \le \mathit{loss}_{t,l} \le \mathit{loss}^{\mathrm{max}}_{l} \qquad \forall\
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+The tabs start from [the instance's tables](data.md) — one frame per parameter.
 
 === "lpspec"
 
