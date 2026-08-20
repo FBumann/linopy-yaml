@@ -170,6 +170,7 @@ def test_invalid_sense():
                 'piecewise': {
                     'thing': {
                         'over': 'x',
+                        'foreach': ['y'],
                         'links': {'a': {'expression': 'v', 'values': 'p'}, 'b': {'expression': 'w', 'values': 'q'}},
                         'convx': True,
                     }
@@ -323,6 +324,7 @@ DESCRIBED = {
     'piecewise': {
         'cost_curve': {
             'over': 'bp',
+            'foreach': ['snapshot'],
             'links': {
                 'dispatch': {'expression': 'p', 'values': 'bp_x'},
                 'cost': {'expression': 'op_cost', 'values': 'bp_y'},

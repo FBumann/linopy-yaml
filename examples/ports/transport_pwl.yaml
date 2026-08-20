@@ -62,6 +62,7 @@ piecewise:
       allows. The binaries are what make the answer right — and what make this
       port a MILP.
     over: bp
+    foreach: [plant, market]
     links:
       shipped: {expression: shipment, values: bp_x}
       cost: {expression: scaled, values: bp_y}

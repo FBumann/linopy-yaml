@@ -66,6 +66,7 @@ piecewise:
   cost_curve:
     description: cost bounded below by the curve, which is exact where the curve is convex
     over: bp
+    foreach: [snapshot]
     links:
       p: {expression: p, values: bp_x}
       op_cost: {expression: op_cost, values: bp_y, sign: ">="}
@@ -110,6 +111,7 @@ piecewise:
   cost_curve:
     description: each unit's cost bounded below by its own segment lines
     over: bp
+    foreach: [snapshot, unit]
     links:
       p: {expression: p, values: bp_x}
       op_cost: {expression: op_cost, values: bp_y, sign: ">="}

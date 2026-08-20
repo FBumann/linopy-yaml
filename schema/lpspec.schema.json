@@ -346,7 +346,7 @@
     },
     "PiecewiseBlock": {
       "additionalProperties": false,
-      "description": "N expressions jointly pinned to a breakpoint-indexed piecewise curve.\n\nMirrors ``linopy.Model.add_piecewise_formulation``. Each link is\n``[expression, values_parameter]`` or ``[expression, values_parameter,\nsign]``: *expression* is any affine expression string, *values_parameter*\nnames a parameter carrying the ``over`` dim, and *sign* bounds the link by\nthe curve instead of pinning it (at most one non-``\"==\"``, and only with\nexactly two links).\n\nThe weights live on the frame the links imply: what each carries, with the\ndim its own ``by`` maps out of swapped for the one it maps into. So a link\nover flows mapping ``converter_of`` puts the weights on converters, one row\nper flow reads them, and how many flows a converter has is data.\n\n``over`` names the breakpoint dimension; ``method`` is which of\n:data:`PIECEWISE_METHODS` restricts the weights; ``active`` names a gating\nexpression that pins the formulation to 0 when it is 0; ``points`` names a\nboolean parameter saying how far each curve runs, for a model whose curves\nare not all the same length. Expanded before building into plain variables\nand constraints \u2014 see ``lpspec.language.piecewise``.",
+      "description": "N expressions jointly pinned to a breakpoint-indexed piecewise curve.\n\nMirrors ``linopy.Model.add_piecewise_formulation``. Each link is\n``[expression, values_parameter]`` or ``[expression, values_parameter,\nsign]``: *expression* is any affine expression string, *values_parameter*\nnames a parameter carrying the ``over`` dim, and *sign* bounds the link by\nthe curve instead of pinning it (at most one non-``\"==\"``, and only with\nexactly two links).\n\n``foreach`` is where the weights live, declared as any other frame is and\nchecked the same way: **each link's dims equal it, or map into it with**\n``by:``. So a link over flows mapping ``converter_of`` belongs to a block\nover converters, one row per flow reads one set of weights, and how many\nflows a converter has is data rather than a line in the file.\n\n``over`` names the breakpoint dimension; ``method`` is which of\n:data:`PIECEWISE_METHODS` restricts the weights; ``active`` names a gating\nexpression that pins the formulation to 0 when it is 0; ``points`` names a\nboolean parameter saying how far each curve runs, for a model whose curves\nare not all the same length. Expanded before building into plain variables\nand constraints \u2014 see ``lpspec.language.piecewise``.",
       "properties": {
         "active": {
           "anyOf": [
@@ -371,6 +371,13 @@
           ],
           "default": null,
           "title": "Description"
+        },
+        "foreach": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Foreach",
+          "type": "array"
         },
         "links": {
           "additionalProperties": {
@@ -409,6 +416,7 @@
       },
       "required": [
         "over",
+        "foreach",
         "links"
       ],
       "title": "PiecewiseBlock",

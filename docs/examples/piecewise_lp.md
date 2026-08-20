@@ -153,6 +153,7 @@ piecewise:
       envelope a convex curve would cut a concave one, and the solve comes back
       optimal either way
     over: bp
+    foreach: [snapshot, generator]
     links:
       dispatch: {expression: p, values: bp_x}
       cost: {expression: op_cost, values: bp_y, sign: ">="}

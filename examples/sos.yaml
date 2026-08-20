@@ -47,6 +47,7 @@ piecewise:
       non-zero — the restriction the default method builds out of binaries,
       declared as a set instead
     over: bp
+    foreach: [snapshot, generator]
     links:
       dispatch: {expression: p, values: bp_x}
       cost: {expression: op_cost, values: bp_y}

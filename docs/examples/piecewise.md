@@ -138,6 +138,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           cost read off the generator's curve — convex, so the weights need no
           binaries to keep them on one segment
         over: bp
+        foreach: [snapshot, generator]
         links:
           dispatch: {expression: p, values: bp_x}
           cost: {expression: op_cost, values: bp_y}

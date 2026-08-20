@@ -419,10 +419,11 @@ class PiecewiseBlock(_StrictBlock):
     the curve instead of pinning it (at most one non-``"=="``, and only with
     exactly two links).
 
-    The weights live on the frame the links imply: what each carries, with the
-    dim its own ``by`` maps out of swapped for the one it maps into. So a link
-    over flows mapping ``converter_of`` puts the weights on converters, one row
-    per flow reads them, and how many flows a converter has is data.
+    ``foreach`` is where the weights live, declared as any other frame is and
+    checked the same way: **each link's dims equal it, or map into it with**
+    ``by:``. So a link over flows mapping ``converter_of`` belongs to a block
+    over converters, one row per flow reads one set of weights, and how many
+    flows a converter has is data rather than a line in the file.
 
     ``over`` names the breakpoint dimension; ``method`` is which of
     :data:`PIECEWISE_METHODS` restricts the weights; ``active`` names a gating
@@ -435,6 +436,7 @@ class PiecewiseBlock(_StrictBlock):
     _label: ClassVar[str] = 'a piecewise declaration'
 
     over: str
+    foreach: list[str]
     links: dict[str, PiecewiseLink]
     method: PiecewiseMethod = 'adjacency'
     active: str | None = None

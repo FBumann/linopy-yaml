@@ -12,6 +12,7 @@ N expressions jointly pinned to a breakpoint-indexed piecewise-linear curve.
 ```yaml
 chp:
   over: bp  # breakpoint dimension
+  foreach: [snapshot, generator]  # where the weights live
   links:  # each under a name the emitted row takes
     power: {expression: power, values: power_bp}
     fuel: {expression: fuel, values: fuel_bp}
@@ -22,6 +23,7 @@ chp:
 # a two-link block may bound one side instead of pinning it
 fuel_cap:
   over: bp
+  foreach: [snapshot, generator]
   links:
     power: {expression: power, values: power_bp}
     fuel: {expression: fuel, values: fuel_bp, sign: "<="}
@@ -65,6 +67,7 @@ curve is as long as its rows:
 ```yaml
 cost_curve:
   over: bp
+  foreach: [snapshot, generator]
   points: bp_x  # this curve runs as far as its own breakpoints do
   links:
     dispatch: {expression: p, values: bp_x}
@@ -97,6 +100,7 @@ and `by:` is the lookup that carries each row up to the weights it reads:
 ```yaml
 conversion:
   over: bp
+  foreach: [converter, time]
   points: bp_present
   method: adjacency
   links:
@@ -196,6 +200,7 @@ gate to pin down.
 ```yaml
 cost_curve:
   over: bp
+  foreach: [snapshot, generator]
   method: lp
   links:
     dispatch: {expression: p, values: bp_x}

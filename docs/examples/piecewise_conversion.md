@@ -58,8 +58,8 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 | Symbol | Meaning |
 |---|---|
 | $\mathit{rate}$ | `rate` over $\mathcal{F} \times \mathcal{T}$ --- what each flow runs at |
-| $\mathit{conversion\_lam}$ | `conversion_lam` over $\mathcal{T} \times \mathcal{C} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
-| $\mathit{conversion\_seg}$ | `conversion_seg` over $\mathcal{T} \times \mathcal{C} \times \mathcal{B}$ |
+| $\mathit{conversion\_lam}$ | `conversion_lam` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
+| $\mathit{conversion\_seg}$ | `conversion_seg` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ |
 
 $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
 
@@ -79,19 +79,19 @@ $$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{is\_power}_{f} = \m
 
 **`conversion_convexity`**
 
-$$\sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{t,c,b} = 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace c \in \mathcal{C}$$
+$$\sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{c,t,b} = 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T}$$
 
 **`conversion_on_the_curve`**
 
-$$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{t,\mathrm{converter\_of}(f),b} \cdot \mathit{bp}^{\mathrm{rate}}_{f,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace f \in \mathcal{F}$$
+$$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{\mathrm{converter\_of}(f),t,b} \cdot \mathit{bp}^{\mathrm{rate}}_{f,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace f \in \mathcal{F}$$
 
 **`conversion_pick`**
 
-$$\sum_{b \in \mathcal{B}} \mathit{conversion\_seg}_{t,c,b} = 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace c \in \mathcal{C}$$
+$$\sum_{b \in \mathcal{B}} \mathit{conversion\_seg}_{c,t,b} = 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T}$$
 
 **`conversion_adjacency`**
 
-$$\mathit{conversion\_lam}_{t,c,b} \le \mathit{conversion\_seg}_{t,c,b} + \mathit{conversion\_seg}_{t,c,b \boxminus_{0} 1} \qquad \forall\thinspace t \in \mathcal{T},\enspace c \in \mathcal{C},\enspace b \in \mathcal{B}$$
+$$\mathit{conversion\_lam}_{c,t,b} \le \mathit{conversion\_seg}_{c,t,b} + \mathit{conversion\_seg}_{c,t,b \boxminus_{0} 1} \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 #### Variable domains
 
@@ -101,11 +101,11 @@ $$0 \le \mathit{rate}_{f,t} \le \mathit{rate}^{\mathrm{max}}_{f} \qquad \forall\
 
 **`conversion_lam`**
 
-$$0 \le \mathit{conversion\_lam}_{t,c,b} \le 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace c \in \mathcal{C},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bp}^{\mathrm{present}}_{c,b}$$
+$$0 \le \mathit{conversion\_lam}_{c,t,b} \le 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bp}^{\mathrm{present}}_{c,b}$$
 
 **`conversion_seg`**
 
-$$\mathit{conversion\_seg}_{t,c,b} \in \{0, 1\} \qquad \forall\thinspace t \in \mathcal{T},\enspace c \in \mathcal{C},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bp}^{\mathrm{present}}_{c,b}$$
+$$\mathit{conversion\_seg}_{c,t,b} \in \{0, 1\} \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bp}^{\mathrm{present}}_{c,b}$$
 
 </details>
 <!-- math:end -->
@@ -182,6 +182,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           the link carries `flow` and the block maps `by: converter_of`, so it
           builds a row per flow and the number of flows is data
         over: bp
+        foreach: [converter, time]
         points: bp_present
         method: adjacency
         links:

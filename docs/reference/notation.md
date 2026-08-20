@@ -545,6 +545,7 @@ A curve is sugar: what prints is the formulation it expands to, which is the mat
 ```yaml
 economies_of_scale:
   over: bp
+  foreach: [plant, market]
   links:
     shipped: {expression: shipment, values: bp_x}
     cost: {expression: scaled, values: bp_y}
@@ -571,6 +572,7 @@ $$\mathit{economies\_of\_scale\_seg}_{p,m,b} \in \{0, 1\} \qquad \forall\thinspa
 ```yaml
 cost_curve:
   over: bp
+  foreach: [snapshot, generator]
   links:
     dispatch: {expression: p, values: bp_x}
     cost: {expression: op_cost, values: bp_y}
@@ -594,6 +596,7 @@ $$\left( \mathit{cost\_curve\_lam}_{t,g,b} \right)_{b \in \mathcal{B}} \in \math
 ```yaml
 cost_curve:
   over: bp
+  foreach: [snapshot, generator]
   links:
     dispatch: {expression: p, values: bp_x}
     cost: {expression: op_cost, values: bp_y}
@@ -615,6 +618,7 @@ $$0 \le \mathit{cost\_curve\_lam}_{t,g,b} \le 1 \qquad \forall\thinspace t \in \
 ```yaml
 cost_curve:
   over: bp
+  foreach: [snapshot, generator]
   links:
     dispatch: {expression: p, values: bp_x}
     cost: {expression: op_cost, values: bp_y, sign: ">="}

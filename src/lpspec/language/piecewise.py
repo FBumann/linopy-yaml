@@ -65,7 +65,7 @@ from lpspec.language.model import Model, PiecewiseBlock
 from lpspec.language.resolution import Namespace, resolve_expression
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
 
 def mask_of(block: str, pw: PiecewiseBlock) -> str | None:
@@ -250,29 +250,50 @@ def _weights_frame(schema: Model, link: Any, ctx: str) -> frozenset[str]:
     return (dims - {lookup.over}) | ({into} if into is not None else frozenset())
 
 
-def _check_every_link_lands_on_the_frame(
-    ctx: str, pw: PiecewiseBlock, lands: Mapping[str, frozenset[str]], frame: Sequence[str]
-) -> None:
-    """A link ties its quantity to the weights, or to a refinement of them.
+def _lands_on(
+    schema: Model, ctx: str, tie: str, link: Any, dims: frozenset[str], frame: Sequence[str]
+) -> frozenset[str]:
+    """Where a link's rows put the weights, checked against the frame declared.
 
-    The frame is what the links imply between them, so a link carrying *fewer*
-    dims than the others would be tied at every coordinate of the rest — one
-    capacity pinned to a curve at every snapshot, which forces every snapshot
-    onto one operating point. That is a model nobody writes on purpose, and it
-    builds and solves, so it is refused where it is written rather than found
-    in an answer.
-
-    A link carrying *more* is the mapped case, and says so with ``by:``.
+    The contract in one sentence: **a link's dims equal ``foreach``, or map into
+    it with ``by:``**. Three ways to break it, and each is a model that would
+    otherwise build: rows tied at every coordinate of a dim they do not carry,
+    which pins those coordinates to one operating point; a map out of a dim the
+    rows do not sit on, which carries them nowhere; and a map into a dim the
+    weights do not live on, which lands them beside the curve rather than on it.
     """
-    for tie, dims in lands.items():
-        if pw.links[tie].mapped or dims >= frozenset(frame):
-            continue
-        missing = [d for d in frame if d not in dims]
+    wanted = frozenset(frame)
+    if not link.mapped:
+        if dims == wanted:
+            return dims
         raise PiecewiseExpansionError(
-            f"{ctx}: link '{tie}' does not carry {missing}, which the block's other links do — it "
-            f'would be tied to the curve at every coordinate of {missing}, pinning them all to one '
-            f'operating point. Carry it, or name the lookup that reaches the weights with by:.'
+            f"{ctx}: link '{tie}' is over {sorted(dims)}, and foreach is {list(frame)} — a link's "
+            f'dims are the frame its rows sit on. Carry {sorted(wanted - dims) or "fewer dims"}, or '
+            f'name the lookup that reaches the weights with by:.'
         )
+
+    lookup = schema.lookups.get(link.by)
+    if lookup is None:
+        raise PiecewiseExpansionError(f"{ctx}: link '{tie}' by references undeclared lookup '{link.by}'")
+    if lookup.over not in dims:
+        raise PiecewiseExpansionError(
+            f"{ctx}: link '{tie}' maps by '{link.by}', which is over '{lookup.over}' — a dim its "
+            f'expression does not carry (it has {sorted(dims)}), so the map takes its rows nowhere'
+        )
+    into = lookup.into
+    if into is None or into not in wanted:
+        raise PiecewiseExpansionError(
+            f"{ctx}: link '{tie}' maps by '{link.by}' into '{into}', which foreach "
+            f'{list(frame)} does not carry — a map reaches the weights, and they live there'
+        )
+    landed = (dims - {lookup.over}) | {into}
+    if landed != wanted:
+        raise PiecewiseExpansionError(
+            f"{ctx}: link '{tie}' lands on {sorted(landed)} once '{link.by}' is applied, and foreach "
+            f'is {list(frame)} — every row of a link reads one set of weights, so what is left after '
+            f'the map is the frame they live on'
+        )
+    return landed
 
 
 def _check_the_map_travels(schema: Model, ctx: str, tie: str, link: Any) -> None:
@@ -322,6 +343,16 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
         _check_the_map_travels(schema, ctx, tie, link)
 
     frame: list[str] = []
+    for d in pw.foreach:
+        if d not in schema.dimensions:
+            raise PiecewiseExpansionError(f"{ctx}: foreach references undeclared dimension '{d}'")
+        if d == pw.over:
+            raise PiecewiseExpansionError(
+                f"{ctx}: foreach carries the breakpoint dim '{pw.over}' — the weights run along it, "
+                f'so the frame is what is left when it is taken away'
+            )
+        frame.append(d)
+
     lands: dict[str, frozenset[str]] = {}
     for tie, link in pw.links.items():
         values = link.values
@@ -332,14 +363,12 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 f"{ctx}: link '{tie}' values parameter '{values}' must carry dim "
                 f"'{pw.over}' (has {schema.parameters[values].dims})"
             )
-        lands[tie] = _weights_frame(schema, link, f"{ctx} link '{tie}'")
-        for d in _declared_order(schema, lands[tie]):
-            if d == pw.over:
-                raise PiecewiseExpansionError(
-                    f"{ctx}: link '{tie}' expression already carries the breakpoint dim '{pw.over}'"
-                )
-            if d not in frame:
-                frame.append(d)
+        dims = _expr_dims(schema, link.expression, f"{ctx} link '{tie}'")
+        if pw.over in dims:
+            raise PiecewiseExpansionError(
+                f"{ctx}: link '{tie}' expression already carries the breakpoint dim '{pw.over}'"
+            )
+        lands[tie] = _lands_on(schema, ctx, tie, link, dims, frame)
 
     if pw.active is not None:
         if pw.active in schema.variables and schema.variables[pw.active].domain != 'binary':
@@ -348,9 +377,10 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
             if d == pw.over:
                 raise PiecewiseExpansionError(f"{ctx}: active expression must not carry the breakpoint dim '{pw.over}'")
             if d not in frame:
-                frame.append(d)
-
-    _check_every_link_lands_on_the_frame(ctx, pw, lands, frame)
+                raise PiecewiseExpansionError(
+                    f"{ctx}: active carries '{d}', which foreach {frame} does not — the gate says what "
+                    f'the weights of one curve sum to, so it lives where they do'
+                )
 
     for tie, link in pw.links.items():
         rows = sorted(_expr_dims(schema, link.expression, f"{ctx} link '{tie}'")) if link.mapped else frame

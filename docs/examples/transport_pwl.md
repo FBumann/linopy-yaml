@@ -189,6 +189,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           allows. The binaries are what make the answer right — and what make this
           port a MILP.
         over: bp
+        foreach: [plant, market]
         links:
           shipped: {expression: shipment, values: bp_x}
           cost: {expression: scaled, values: bp_y}

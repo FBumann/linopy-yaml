@@ -146,6 +146,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
           breakpoints do, so the hydro unit pays for two weights and the gas turbine
           for four
         over: bp
+        foreach: [snapshot, generator]
         points: bp_x
         links:
           dispatch: {expression: p, values: bp_x}

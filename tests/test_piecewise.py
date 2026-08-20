@@ -51,6 +51,7 @@ variables:
 piecewise:
   cost_curve:
     over: bp
+    foreach: [snapshot]
     links:
       dispatch: {expression: p, values: bp_x}
       cost: {expression: op_cost, values: bp_y}
@@ -100,6 +101,7 @@ variables:
 piecewise:
   cost_curve:
     over: bp
+    foreach: [snapshot, generator]
     links:
       dispatch: {expression: p, values: bp_x}
       cost: {expression: op_cost, values: bp_y}
@@ -195,6 +197,7 @@ variables:
 piecewise:
   chp:
     over: bp
+    foreach: [snapshot]
     links:
       power: {expression: power, values: power_bp}
       fuel: {expression: fuel, values: fuel_bp}
@@ -260,6 +263,7 @@ variables:
 piecewise:
   cost_curve:
     over: bp
+    foreach: [snapshot]
     links:
       dispatch: {expression: p, values: bp_x}
       cost: {expression: op_cost, values: bp_y}
@@ -477,16 +481,17 @@ def test_the_adjacency_row_survives_at_the_first_breakpoint(nonconvex_inputs):
         assert (first != -1).all(), 'the first breakpoint lost its adjacency row'
 
 
-def test_the_emitted_foreach_follows_declaration_order():
-    """The frame is a *set* of dims until something orders it, and iterating a
-    set spends randomised string hashing — so the emitted ``foreach``, and every
-    solver column index behind it, used to vary between processes building the
-    same file. Asserted both ways round: within one process a set iterates the
-    same way for the same names, so a run that reads the set rather than the
-    declaration would have to fail one of the two.
+def test_the_emitted_foreach_is_the_frame_the_block_declared():
+    """λ lives where `foreach:` says, in the order it says it.
+
+    The frame used to be a *set* the expansion collected from the links, and
+    iterating a set spends randomised string hashing — so the emitted foreach,
+    and every solver column index behind it, varied between processes building
+    one file. Declaring the frame retires that: the order is the author's, and
+    the breakpoint dim goes last because the weights run along it.
     """
     raw = raw_of(TWO_DIM_YAML)
-    assert list(raw['dimensions']) == ['snapshot', 'generator', 'bp']
+    assert raw['piecewise']['cost_curve']['foreach'] == ['snapshot', 'generator']
     assert expand_piecewise(schema_of(raw)).variables['cost_curve_lam'].foreach == [
         'snapshot',
         'generator',
@@ -494,12 +499,12 @@ def test_the_emitted_foreach_follows_declaration_order():
     ]
 
     flipped = raw_of(TWO_DIM_YAML)
-    flipped['dimensions'] = {d: flipped['dimensions'][d] for d in ('generator', 'snapshot', 'bp')}
+    flipped['piecewise']['cost_curve']['foreach'] = ['generator', 'snapshot']
     assert expand_piecewise(schema_of(flipped)).variables['cost_curve_lam'].foreach == [
         'generator',
         'snapshot',
         'bp',
-    ]
+    ], 'the block says the order, so a reader of the file knows it without running anything'
 
 
 def test_an_inline_expression_is_a_legal_link():
@@ -874,6 +879,7 @@ variables:
 piecewise:
   cost_curve:
     over: bp
+    foreach: [generator]
     points: bp_present
     links:
       dispatch: {expression: p, values: bp_x}
@@ -1185,6 +1191,7 @@ variables:
 piecewise:
   conversion:
     over: bp
+    foreach: [time, converter]
     points: bp_present
     method: adjacency
     links:
@@ -1306,7 +1313,7 @@ def test_a_link_below_the_frame_must_say_how_it_reaches_the_weights():
     raw['variables']['cap'] = {'foreach': ['generator'], 'bounds': {'lower': 0}}
     raw['piecewise']['cost_curve']['links']['sizing'] = {'expression': 'cap', 'values': 'bp_cap'}
 
-    with pytest.raises(PiecewiseExpansionError, match=r"link 'sizing' does not carry \['snapshot'\]"):
+    with pytest.raises(PiecewiseExpansionError, match=r"link 'sizing' is over \['generator'\], and foreach is"):
         lps.check(raw)
 
 

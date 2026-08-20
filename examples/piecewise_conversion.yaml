@@ -65,6 +65,7 @@ piecewise:
       the link carries `flow` and the block maps `by: converter_of`, so it
       builds a row per flow and the number of flows is data
     over: bp
+    foreach: [converter, time]
     points: bp_present
     method: adjacency
     links:
