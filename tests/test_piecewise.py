@@ -1342,10 +1342,29 @@ def test_a_refined_link_round_trips_as_a_mapping():
             'which is not part of foreach',
             id='by-lands-off-the-frame',
         ),
+        pytest.param(
+            {
+                'dimensions.site': {'dtype': 'str'},
+                'parameters.bp_site': {'dims': ['site', 'bp']},
+                'variables.spend': {'foreach': ['site', 'time'], 'bounds': {'lower': 0}},
+                'piecewise.conversion.links': [
+                    {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of'},
+                    ['spend', 'bp_site'],
+                ],
+            },
+            "carries 'site', which foreach",
+            id='a-plain-link-below-the-declared-frame',
+        ),
     ],
 )
 def test_a_refined_link_that_reaches_no_weights_is_a_load_error(patch, match):
-    """Three ways a `by:` fails to carry rows to weights, each named on the link."""
+    """Four ways a link fails to reach the weights, each named against the block.
+
+    The last is not about `by:` at all: a *plain* link carrying a dim the
+    declared frame does not would widen that frame, and the widening surfaced
+    as a dimension error against `conversion_link0` — a constraint the reader
+    never wrote.
+    """
     with pytest.raises((SchemaError, PiecewiseExpansionError), match=match):
         lps.check(override(raw_of(REFINED), **patch))
 

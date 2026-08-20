@@ -309,8 +309,15 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 raise PiecewiseExpansionError(
                     f"{ctx}: link {i} expression already carries the breakpoint dim '{pw.over}'"
                 )
-            if not link.refined and d not in frame:
-                frame.append(d)
+            if link.refined or d in frame:
+                continue
+            if pw.foreach:
+                raise PiecewiseExpansionError(
+                    f"{ctx}: link {i} carries '{d}', which foreach {list(pw.foreach)} does not — a plain "
+                    f'link sits on the frame the weights live on, so a finer one needs by: to say how it '
+                    f'reaches them'
+                )
+            frame.append(d)
         if link.refined:
             _check_the_lookup_lands(schema, ctx, i, link, pw, frame)
 
