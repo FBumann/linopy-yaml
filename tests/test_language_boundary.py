@@ -66,8 +66,8 @@ def test_inside_the_language(patch):
     [
         pytest.param(
             {'constraints.power_balance.expression': 'sum(p ** 2, over=generator) == load'},
-            r"operator '\*\*'",
-            id='power-operator',
+            'over variables',
+            id='a-power-over-a-variable',
         ),
         pytest.param(
             {'expressions': {'squared': {'expression': 'sum(p * p, over=generator)'}}},

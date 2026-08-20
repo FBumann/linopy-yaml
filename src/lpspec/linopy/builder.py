@@ -90,6 +90,7 @@ _ARITHMETIC_OPS: dict[str, Callable[[Any, Any], Any]] = {
     '-': operator.sub,
     '*': operator.mul,
     '/': operator.truediv,
+    '**': operator.pow,
 }
 
 #: Where-comparison operators, evaluated element-wise on a DataArray.

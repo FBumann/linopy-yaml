@@ -237,7 +237,7 @@ def test_check_and_load_model_need_no_data(dispatch_yaml):
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
-        pytest.param('sum(p ** 2)', r"operator '\*\*'", id='an-operator-outside-the-language'),
+        pytest.param('sum(p ** 2)', 'over variables', id='a-power-over-a-variable'),
         pytest.param(
             'sum(p) * sum(p)',
             'sums of more than one term',

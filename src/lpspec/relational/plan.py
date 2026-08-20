@@ -115,6 +115,20 @@ class Multiply(Expression):
 
 
 @dataclass(frozen=True)
+class Power(Expression):
+    """``base ** exponent``, both variable-free.
+
+    Degree 0 in variables wherever it appears, so no consumer has to ask what
+    position it stands in: the language refuses a variable anywhere under it
+    (``language/degree.py``), which is what lets this fold to one number per
+    coordinate like any other parameter arithmetic.
+    """
+
+    base: Expression
+    exponent: Expression
+
+
+@dataclass(frozen=True)
 class Divide(Expression):
     """Quotient ``numerator / divisor``. The divisor must be variable-free."""
 

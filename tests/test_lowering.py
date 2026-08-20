@@ -23,6 +23,7 @@ from lpspec.relational.plan import (
     Parameter,
     ParameterComparison,
     ParameterDefined,
+    Power,
     Sum,
     Variable,
     divisor_parameters,
@@ -126,10 +127,14 @@ def test_sum_over_absent_dim_raises_at_lowering_too(dispatch_schema):
         _lower_expr(resolved('sum(load, over=generator)', dispatch_schema), dispatch_schema, 't')
 
 
-def test_the_power_operator_stays_outside_the_relational_subset(dispatch_schema):
+def test_a_power_lowers_only_where_no_variable_is_under_it(dispatch_schema):
     """roll/shift lower to plan.Translate and binary/integer to variable_type;
-    '**' has no affine reading at all, so it has nowhere to go."""
-    with pytest.raises(LanguageError, match=r"operator '\*\*'"):
+    `**` lowers to plan.Power, but only over operands that carry no variable —
+    with one under it there is no affine reading and nowhere to go."""
+    lowered = _lower_expr(resolved('cost ** cost', dispatch_schema), dispatch_schema, 't')
+    assert isinstance(lowered, Power), 'a variable-free power has a plan node of its own'
+
+    with pytest.raises(LanguageError, match='over variables'):
         _lower_expr(resolved('p ** 2', dispatch_schema), dispatch_schema, 't')
 
 
