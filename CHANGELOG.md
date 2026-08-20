@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.232](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.231...v0.0.1-alpha.232) (2026-08-20)
+
+
+### Features
+
+* **data:** a lookup is supplied without rewriting the index it rides on ([#1179](https://github.com/fluxopt/lpspec/issues/1179)) ([385c048](https://github.com/fluxopt/lpspec/commit/385c0486fa39b425e7f6898e234a89efa162cfd8))
+
 ## [0.0.1-alpha.231](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.230...v0.0.1-alpha.231) (2026-08-20)
 
 
