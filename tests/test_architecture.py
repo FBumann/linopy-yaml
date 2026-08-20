@@ -406,12 +406,16 @@ def test_the_language_facade_is_exactly_what_consumers_read():
     )
 
 
-#: What a test under ``tests/language/`` may reach. The language, the exception
-#: hierarchy half of it owns, and the shared fixtures — never a consumer. Unlike
-#: the fence in ``src/``, submodules are fine: these are the language's own unit
-#: tests, and testing `expression_parser` through the facade would be testing the
-#: facade.
-LANGUAGE_TESTS_MAY_IMPORT = ('lpspec.language', 'lpspec.errors')
+#: What a test under ``tests/language/`` may reach, and it is an **allowlist**:
+#: anything rooted at ``lpspec``, ``tests`` or ``tools`` that is not named here
+#: fails. Enumerating what is forbidden kept missing things — ``tests.conftest``
+#: first (#1150), then ``tests.oracle`` and ``tests.differential``, each found by
+#: hand rather than by the guard whose job it was.
+#:
+#: Unlike the fence in ``src/``, submodules are fine: these are the language's
+#: own unit tests, and testing `expression_parser` through the facade would be
+#: testing the facade.
+LANGUAGE_TESTS_MAY_IMPORT = ('lpspec.language', 'lpspec.errors', 'tests.language')
 
 
 def test_the_languages_own_tests_reach_no_consumer():
@@ -422,6 +426,14 @@ def test_the_languages_own_tests_reach_no_consumer():
     would not survive the language being lifted into a package of its own,
     which is what this directory exists to make true. `import lpspec` counts as
     reaching one: the top-level namespace is the runner.
+
+    So does `tests.conftest`, and that is the half this test used to miss
+    (#1150): it imports `tools.constructs`, which imports `api`, `lowering` and
+    `relational`, so a directory importing it is one that would not start. The
+    fixtures these tests need live in `tests/language/fixtures.py` instead, and
+    `conftest` re-exports them for everything on the other side of the cut. **A
+    test travels only if its fixtures travel** — the clause the criterion in
+    #1146 was missing.
     """
     offenders = {}
     for path in (REPO / 'tests' / 'language').rglob('*.py'):
@@ -431,7 +443,7 @@ def test_the_languages_own_tests_reach_no_consumer():
             {
                 name
                 for name in _imported(ast.parse(path.read_text()))
-                if name == 'lpspec' or (name.startswith('lpspec') and not name.startswith(LANGUAGE_TESTS_MAY_IMPORT))
+                if name.split('.')[0] in {'lpspec', 'tests', 'tools'} and not name.startswith(LANGUAGE_TESTS_MAY_IMPORT)
             }
         )
         if bad:
@@ -575,6 +587,8 @@ CROSSES_THE_CUT = {
     'tests/test_api.py': 'a docstring citing `docs/about/ceiling.md`, and one naming `tests/language/`',
     'tests/test_architecture.py': 'the fences themselves: this file is split at the cut, not moved',
     'tools/constructs.py': 'a comment citing `docs/reference/language/` for its column order',
+    'tests/test_expansion_parity.py': 'a comment naming the language test whose model it copies '
+    'rather than imports, precisely so the import does not cross',
     'pyproject.toml': "ruff's per-file-ignore for `src/lpspec/language/where_parser.py`",
     'mkdocs.yml': 'fourteen nav entries for pages that move; the nav is rebuilt on both sides at the cut',
 }

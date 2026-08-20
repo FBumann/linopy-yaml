@@ -20,26 +20,31 @@ engine is frame-native, and the module constants are the single source of both.
 from __future__ import annotations
 
 import contextlib
-import copy
 import difflib
 import importlib.util
 import io
 import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
 
-from lpspec.language._yaml import parse_yaml, read_yaml
 from lpspec.language.validation import load_model
-from tools import constructs
 
-if TYPE_CHECKING:
-    from lpspec.language.model import Model
+# The language's own tests own these (#1150); the noqa marks the two this file
+# re-exports without using, so the forty-odd tests on the other side of the cut
+# keep importing all four from one place.
+from tests.language.fixtures import (  # noqa: F401
+    DISPATCH_MODEL,
+    override,
+    raw_of,
+    schema_of,
+)
+from tools import constructs
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
@@ -107,22 +112,6 @@ def port(request: pytest.FixtureRequest) -> dict[str, Any]:
 #: is covered the day it lands rather than when someone remembers a glob.
 MODEL_PATHS = [p for _, p in constructs.models()]
 
-#: The dispatch model as a dict, for tests that need to mutate a declaration
-#: rather than read a file. Deliberately the same math as
-#: ``examples/dispatch.yaml`` so a reader who knows one knows the other; use
-#: :func:`override` to vary it.
-DISPATCH_MODEL: dict[str, Any] = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'values': ['wind', 'gas']}},
-    'parameters': {
-        'p_max': {'dims': ['generator']},
-        'cost': {'dims': ['generator']},
-        'load': {'dims': ['snapshot']},
-    },
-    'variables': {'p': {'foreach': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'balance': {'foreach': ['snapshot'], 'expression': 'sum(p, over=generator) == load'}},
-    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
-}
-
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
@@ -136,43 +125,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 # ---------------------------------------------------------------------------
 # building schemas to test against
 # ---------------------------------------------------------------------------
-
-
-def override(base: dict[str, Any], **patch: Any) -> dict[str, Any]:
-    """A deep copy of ``base`` with dotted paths replaced.
-
-    ``override(DISPATCH_MODEL, **{'variables.p.where': 'p_max > 0'})``. Missing
-    intermediate keys are created, so this both edits an existing declaration
-    and adds a new one — which is what makes a whole family of "the base model
-    but for one thing" tests a one-liner each.
-    """
-    raw = copy.deepcopy(base)
-    for dotted, value in patch.items():
-        node = raw
-        *parents, leaf = dotted.split('.')
-        for key in parents:
-            node = node.setdefault(key, {})
-        node[leaf] = value
-    return raw
-
-
-def schema_of(source: str | Path | dict[str, Any], **patch: Any) -> Model:
-    """A ``Model`` from a YAML path, YAML text, or a raw dict.
-
-    ``Path`` means a file, ``str`` means the YAML itself — the distinction is
-    the type, never a guess about the content. ``**patch`` applies
-    :func:`override` first, which is how a test says "this example, but with
-    ``**`` in the objective".
-    """
-    raw = raw_of(source)
-    return load_model(override(raw, **patch) if patch else raw)
-
-
-def raw_of(source: str | Path | dict[str, Any]) -> dict[str, Any]:
-    """The parsed mapping behind a path / YAML text / dict, unvalidated."""
-    if isinstance(source, dict):
-        return source
-    return read_yaml(source) if isinstance(source, Path) else parse_yaml(source)
 
 
 def solve_written_file(path: Path | str) -> float:
