@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.230](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.229...v0.0.1-alpha.230) (2026-08-20)
+
+
+### Bug Fixes
+
+* **language:** a constraint that decides nothing is refused where the file is read ([#1173](https://github.com/fluxopt/lpspec/issues/1173)) ([c94d330](https://github.com/fluxopt/lpspec/commit/c94d33083ee0032f0ccd5958f21de4ca665460ec)), closes [#1171](https://github.com/fluxopt/lpspec/issues/1171)
+* **typeset:** a fill and a group share the operator's one subscript ([#1169](https://github.com/fluxopt/lpspec/issues/1169)) ([8455a73](https://github.com/fluxopt/lpspec/commit/8455a734f5b8b3f4b3fe99e02365657217052a2b)), closes [#1165](https://github.com/fluxopt/lpspec/issues/1165)
+
 ## [0.0.1-alpha.229](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.228...v0.0.1-alpha.229) (2026-08-20)
 
 
