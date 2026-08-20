@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from lpspec.errors import LanguageError
+from lpspec.language.dimensions import check_schema
 from lpspec.lowering import lower_program
 from tests.conftest import EXAMPLES_DIR, MODEL_PATHS, schema_of
 
@@ -19,6 +20,18 @@ DISPATCH = EXAMPLES_DIR / 'dispatch.yaml'
 
 def _objective(expression: str) -> dict:
     return {'objective.expression': expression}
+
+
+@pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)
+def test_every_shipped_example_typechecks(path):
+    """Every dim rule, over the corpus this repository ships.
+
+    The rules live with the language and are swept there over the probes that
+    travel with them; this is the same sweep over the gallery and the ports,
+    which stay. Both are needed: a rule with no corpus proves nothing, and a
+    corpus with no rule applied to it is a directory of files.
+    """
+    check_schema(schema_of(path))
 
 
 @pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)
