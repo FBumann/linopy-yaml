@@ -826,10 +826,10 @@ class PolarsEngine:
             ValueError: A suffix nothing writes.
         """
         path = Path(path)
-        write = sinks.writer(path.suffix.lower())
+        chosen = sinks.writer(path.suffix.lower())
         tables = self._tables()
         with _clocked(self._timings, 'write'):
-            write(tables, path)
+            chosen.write(tables, path)
 
     def solve(
         self,

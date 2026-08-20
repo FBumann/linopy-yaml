@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from lpspec.errors import LpspecError
+from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
@@ -159,9 +160,23 @@ class Highs(Solver):
     requires = ('highspy',)
     unavailable_message = 'highspy ships with lpspec, so a build without it is broken rather than missing an extra'
 
-    #: HiGHS has no SOS concept at all — its own LP reader refuses the section
-    #: — so a set arrives here already written as binaries and linking rows.
-    sos = 'reformulated'
+    #: No SOS concept at all, so a set arrives already written as binaries and
+    #: linking rows. A *convex* Hessian goes in through ``passHessian``; the
+    #: exclusions beside it are why this is a descriptor rather than a set of
+    #: features, and the pair is probed in ``test_sink_capability_probes.py``.
+    #: A set is that same refusal one step removed: the rewrite that gets one
+    #: in here *is* binaries, so it cannot stand beside a Hessian either.
+    capabilities = Capabilities(
+        supports={
+            'integrality': 'native',
+            'sos': 'reformulated',
+            'quadratic_objective': 'native',
+        },
+        excludes=(
+            frozenset({'quadratic_objective', 'integrality'}),
+            frozenset({'quadratic_objective', 'sos'}),
+        ),
+    )
 
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._handle = build_highs(model, batch_rows, self._options)

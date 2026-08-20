@@ -22,6 +22,7 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
+from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
@@ -127,8 +128,19 @@ class Gurobi(Solver):
     unavailable_message = 'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "lpspec[gurobi]"'
 
     #: Gurobi branches on a set itself, which is the whole reason to declare
-    #: one: no binaries, no big-M, and no bound a member has to have.
-    sos = 'native'
+    #: one: no binaries, no big-M, and no bound a member has to have. It is
+    #: also the only sink with no quadratic exclusion at all — nonconvex
+    #: reaches spatial branch-and-bound at default parameters, and a Hessian
+    #: stands beside integrality (``tests/test_gurobi_capability_probes.py``).
+    capabilities = Capabilities(
+        supports={
+            'integrality': 'native',
+            'sos': 'native',
+            'quadratic_objective': 'native',
+            'nonconvex_quadratic_objective': 'native',
+            'quadratic_constraint': 'native',
+        }
+    )
 
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._m, self._x, self._blocks, self._env = _built(model, batch_rows, self._options)

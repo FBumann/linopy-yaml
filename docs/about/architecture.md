@@ -628,7 +628,9 @@ read back by joining labels to coordinates.
 **Add a sink:** a module in `relational/sinks/solvers/` named for the solver
 (`solve_<name>`, `build_<name>`, one line in `SOLVERS`, its dependency behind an
 extra and imported inside the function), or one in `writers/` keyed by suffix in
-`WRITERS`. Nothing above it changes — no method on the engine, no branch in
+`WRITERS`. Either way it declares what it can ingest — a `Capabilities`
+descriptor beside the code that knows, since a sink declaring nothing reads as
+taking nothing. Nothing above it changes — no method on the engine, no branch in
 `api.py`, no name on the Python surface. The
 [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md)
 is the full list, and `tests/test_architecture.py` checks the shape off the path.

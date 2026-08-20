@@ -91,11 +91,16 @@ def ingestible(name: str, model: ModelTables) -> ModelTables:
     *ingested* digest: a big-M is a matrix coefficient by then, so a bound
     that moved one is a model to load again rather than numbers to push.
 
+    Only ``reformulated`` is rewritten here. ``absent`` is a refusal rather
+    than a silent rewrite, and one the caller is told about before the solve
+    (#89) — a sink that cannot take a set and is handed one anyway would
+    otherwise be given a model nobody chose.
+
     Returns:
         *model* itself where nothing has to change, which is every model
         declaring no sets.
     """
-    if model.sos.height and solver(name).sos != 'native':
+    if model.sos.height and solver(name).capabilities.support('sos') == 'reformulated':
         return sos.reformulated(model)
     return model
 

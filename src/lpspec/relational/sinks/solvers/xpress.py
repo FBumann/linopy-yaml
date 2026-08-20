@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
 from lpspec.relational.status import SolveStatus
@@ -116,8 +117,12 @@ class Xpress(Solver):
     unavailable_message = 'The xpress sink requires the [xpress] extra: pip install "lpspec[xpress]"'
 
     #: Xpress branches on a set itself, which is the whole reason to declare
-    #: one: no binaries, no big-M, and no bound a member has to have.
-    sos = 'native'
+    #: one: no binaries, no big-M, and no bound a member has to have. The
+    #: Optimizer takes a Hessian; **this sink does not hand it one**, and a
+    #: descriptor says what the sink ingests rather than what the library
+    #: could, so the quadratic entries are absent until something here writes
+    #: them.
+    capabilities = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
 
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._p = _built(model, batch_rows, self._options)

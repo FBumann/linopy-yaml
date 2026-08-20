@@ -17,6 +17,8 @@ import highspy
 import numpy as np
 import pytest
 
+from lpspec.relational.sinks import SOLVERS
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -161,7 +163,8 @@ def test_the_highs_lp_reader_refuses_the_sos_section(tmp_path: Path):
     h.setOptionValue('output_flag', False)
     assert h.readModel(str(path)) == highspy.HighsStatus.kError, (
         f'{TABLE} says the HiGHS reader refuses an sos section. If it takes one now, HiGHS has the '
-        f'concept and `sos = reformulated` is a worse relaxation than it needs to be.'
+        f"concept and the `'sos': 'reformulated'` in its descriptor is a worse relaxation than it "
+        f'needs to be.'
     )
 
 
@@ -190,4 +193,25 @@ def test_a_second_hessian_replaces_the_first_and_keeps_the_model():
     assert h.getObjectiveValue() == pytest.approx(4.0 * CONVEX_OPTIMUM), (
         'replaced rather than accumulated — 4x the curvature at the same optimum. One that '
         'accumulated would make a rebind wrong rather than slow.'
+    )
+
+
+def test_the_highs_descriptor_says_what_these_probes_measured():
+    """The claim, tied to the evidence — the whole point of declaring one.
+
+    A descriptor is a promise about somebody else's library, and the failure it
+    exists to prevent is drift between the promise and the behaviour. Both live
+    in this module, so the tie is an assertion rather than a doc table read
+    twice and hoped over.
+    """
+    capabilities = SOLVERS['highs'].capabilities
+    assert capabilities.support('quadratic_objective') == 'native', 'a convex Hessian solved, above'
+    assert capabilities.support('nonconvex_quadratic_objective') == 'absent', 'a non-PSD Hessian was refused, above'
+    assert capabilities.support('quadratic_constraint') == 'absent', 'there is no entry point to call, above'
+    assert capabilities.support('sos') == 'reformulated', (
+        'HiGHS has no set concept, so a set reaches it as binaries and linking rows — its own LP '
+        'reader refusing the section is that same fact from the other side'
+    )
+    assert capabilities.excluded(['quadratic_objective', 'integrality']) is not None, (
+        'the pair returned kError above, and a flat set of features cannot say so'
     )
