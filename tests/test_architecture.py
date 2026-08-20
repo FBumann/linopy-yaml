@@ -638,6 +638,8 @@ CROSSES_THE_CUT = {
     'split out of; what it asserts is about the gallery, which stays',
     'tests/test_expansion_parity.py': 'a comment naming the language test whose model it copies '
     'rather than imports, precisely so the import does not cross',
+    '.github/workflows/ci.yml': 'the LaTeX-compiles step names the models it renders, `examples/operators/` and the golden model among them',
+    '.github/workflows/codspeed.yml': 'a comment naming the golden model as one of the models',
     'pyproject.toml': "ruff's per-file-ignore for `src/lpspec/language/where_parser.py`",
     'mkdocs.yml': 'fourteen nav entries for pages that move; the nav is rebuilt on both sides at the cut',
 }
@@ -645,7 +647,13 @@ CROSSES_THE_CUT = {
 #: Where a crossing would be a break rather than a link, and the suffixes worth
 #: reading. The directories that move are excluded — a moving file naming
 #: another moving file is not a crossing, it is two halves of the same package.
+#:
+#: ``.github/`` is here because it was missed: a CI step read the golden model
+#: by path, and moving that directory turned the step red on a tree whose whole
+#: suite was green locally. Configuration that names a file breaks the same way
+#: a test does.
 CUT_SCAN = (('tests', ('tests/language/', 'tests/typeset/')), ('tools', ('tools/language/',)))
+CUT_SCAN = CUT_SCAN + (('.github', ()),)
 CUT_SCAN_FILES = ('pyproject.toml', 'mkdocs.yml')
 
 
@@ -673,6 +681,39 @@ def _crossings() -> dict[str, list[str]]:
         if named:
             found[str(path.relative_to(REPO))] = named
     return found
+
+
+#: Directory prefixes a workflow can name that are files in this repository.
+#: Anything else in a `run:` block is a runner path, a container path or a shell
+#: variable, and none of those are ours to check.
+REPO_PREFIXES = ('examples/', 'tests/', 'src/', 'docs/', 'tools/', 'schema/', 'bench/')
+
+
+def test_every_repository_path_a_workflow_names_exists():
+    """A workflow step reads files by path, and a move makes it read nothing.
+
+    Filed as a guard because it happened: `tests/golden/` moved to
+    `tests/typeset/golden/`, the whole suite stayed green locally, and CI went
+    red on a step that renders every model by path. Nothing else looks here —
+    the fences read imports, and the crossings check answers "does this file
+    name something that moves", not "is every path it names still right".
+
+    Globs are resolved rather than skipped: `examples/*.yaml` matching nothing
+    is the same silent hole as a missing file.
+    """
+    missing = []
+    for workflow in sorted((REPO / '.github' / 'workflows').glob('*.y*ml')):
+        for token in workflow.read_text().split():
+            token = token.strip('\'"`,')
+            if not token.startswith(REPO_PREFIXES):
+                continue
+            hits = list(REPO.glob(token)) if any(c in token for c in '*?[') else [REPO / token]
+            if not any(path.exists() for path in hits):
+                missing.append(f'{workflow.name}: {token}')
+    assert not missing, (
+        f'a workflow names paths that do not exist: {missing} — a step reading them '
+        f'reads nothing, and no test outside CI would notice'
+    )
 
 
 def test_everything_that_crosses_the_cut_is_declared():

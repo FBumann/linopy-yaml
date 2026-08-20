@@ -186,7 +186,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/tex"
           uv run --no-sync python - "$RUNNER_TEMP/tex" \
-            examples/*.yaml examples/ports/*.yaml examples/operators/*.yaml tests/golden/model.yaml <<'PY'
+            examples/*.yaml examples/ports/*.yaml examples/operators/*.yaml tests/typeset/golden/model.yaml <<'PY'
           import sys
           from pathlib import Path
 
