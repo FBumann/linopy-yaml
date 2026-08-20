@@ -5,6 +5,15 @@
 Renaming one breaks tests; changing one changes what the docs claim, and a test
 will say so.
 
+**A new model says which side it is on.** The language is being extracted to
+[math-spec](https://github.com/energy-models/math-spec), and a model goes with
+it if what it is evidence *of* is a construct — what the language can say, and
+what it means. It stays if it is evidence about lpspec: that a plan builds,
+that a solver agrees, that a published optimum is reproduced. Name it in
+[`extraction.paths`](../extraction.paths) or in `EXAMPLES_THAT_STAY`
+(`tests/test_architecture.py`); a model in neither fails the suite rather than
+defaulting to a side.
+
 **Read them explained** in [docs/examples/](../docs/examples/index.md) — the maths,
 what each construct exercises, and for a port a side-by-side against the
 reference implementation. This directory is the source; that is the guided tour.

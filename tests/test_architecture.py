@@ -481,6 +481,62 @@ def test_the_languages_own_generators_reach_no_consumer():
     )
 
 
+MANIFEST = REPO / 'extraction.paths'
+
+#: The corpus that stays, and why. `walkthrough.yaml` reads as a teaching model
+#: and is not one: `run.py` solves it and `walkthrough.out` is the golden its
+#: output is compared against, so the model and its answer are one artefact.
+#: The rest are evidence about lpspec — an external optimum reproduced, or a
+#: driver taking slices of a model.
+EXAMPLES_THAT_STAY = (
+    'examples/walkthrough.yaml',
+    'examples/ports/',
+    'examples/benders/',
+    'examples/myopic/',
+    'examples/rolling/',
+)
+
+
+def _manifest() -> list[str]:
+    """The paths ``extraction.paths`` selects, comments and blanks dropped."""
+    lines = [line.strip() for line in MANIFEST.read_text().splitlines()]
+    return [line for line in lines if line and not line.startswith('#')]
+
+
+def test_every_path_the_extraction_selects_exists():
+    """A manifest naming a path that has moved selects nothing and says nothing.
+
+    ``git filter-repo`` does not fail on a path that matches no file — it
+    quietly keeps less than intended — so a stale line here would be discovered
+    as an absence in the new repository, after the history was rewritten.
+    """
+    missing = [line for line in _manifest() if not (REPO / line).exists()]
+    assert not missing, (
+        f'extraction.paths names paths that do not exist: {missing} — filter-repo would '
+        f'select nothing for them and report no error'
+    )
+
+
+def test_every_model_is_on_one_side_of_the_extraction():
+    """A model added to ``examples/`` lands on a side deliberately, or fails here.
+
+    The rule is what a model is evidence *of*: a construct the language can say,
+    or a claim about lpspec — that a plan builds, a solver agrees, a published
+    optimum is reproduced. Nothing decides that automatically, which is why an
+    unclassified model is an error rather than a default.
+    """
+    moves = tuple(line for line in _manifest() if line.startswith('examples/'))
+    unclassified = sorted(
+        str(path.relative_to(REPO))
+        for path in (REPO / 'examples').rglob('*.yaml')
+        if not str(path.relative_to(REPO)).startswith(moves + EXAMPLES_THAT_STAY)
+    )
+    assert not unclassified, (
+        f'{unclassified} is in neither extraction.paths nor EXAMPLES_THAT_STAY — say which '
+        f'side it is on: a model showing a construct moves, one proving lpspec builds stays'
+    )
+
+
 def test_the_language_facade_exports_no_private_name():
     """A leading underscore in the seam is the surface admitting it is unfinished.
 

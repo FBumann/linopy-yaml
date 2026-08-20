@@ -1,0 +1,56 @@
+# What leaves for energy-models/math-spec, as `git filter-repo` selects it:
+#
+#     git filter-repo --paths-from-file extraction.paths
+#
+# One rule decides every line. A path moves if what it is evidence *of* is the
+# language — a construct, its meaning, or how it prints. It stays if it is
+# evidence about lpspec: that a plan builds, that a solver agrees, that a
+# published optimum is reproduced.
+#
+# `tests/test_architecture.py` keeps this current: every path here must exist,
+# and every model under `examples/` must be named by exactly one of this file
+# and the stays-list beside it, so a new model lands on a side deliberately.
+
+# --- the language itself ---------------------------------------------------
+src/lpspec/language/
+schema/
+
+# --- the reference consumer -------------------------------------------------
+# `typeset/` reads the AST and reaches no engine, and the notation page and the
+# operator table are its output. A spec that documents itself needs both halves.
+src/lpspec/typeset/
+src/lpspec/__main__.py
+
+# --- the tests and generators that ask only the language --------------------
+tests/language/
+tools/language/
+
+# --- the reference ----------------------------------------------------------
+docs/reference/language/
+docs/reference/notation.md
+docs/reference/typeset.md
+docs/about/ceiling.md
+
+# --- the corpus that exists to show a construct -----------------------------
+# The operator probes and the symbol tables are unambiguous. The teaching
+# models are here because each was written to demonstrate something the
+# language can say; the gallery pages that embed them stay, and read them
+# through the dependency.
+examples/operators/
+examples/symbols/
+examples/dispatch.yaml
+examples/monthly_budget.yaml
+examples/multi_period.yaml
+examples/piecewise.yaml
+examples/piecewise_lp.yaml
+examples/piecewise_ragged.yaml
+examples/reserves.yaml
+examples/seasons.yaml
+examples/sos.yaml
+examples/storage.yaml
+examples/transport.yaml
+
+# --- known not yet selectable ------------------------------------------------
+# `tests/test_typeset.py` belongs with `typeset/` but imports
+# `tools.gallery_math`, which stays: it renders the gallery, an lpspec artefact.
+# Untangling that is a PR of its own and the line lands here when it does.
