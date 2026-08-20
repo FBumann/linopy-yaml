@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.0.1-alpha.233](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.232...v0.0.1-alpha.233) (2026-08-20)
+
+
+### Features
+
+* **api:** check answers whether a named sink will take the model ([#928](https://github.com/fluxopt/lpspec/issues/928)) ([4a9d80e](https://github.com/fluxopt/lpspec/commit/4a9d80e5f00cc171175983b31a2159f676503726))
+* **language:** a constraint may be quadratic where something can build one ([#942](https://github.com/fluxopt/lpspec/issues/942)) ([7ef15c7](https://github.com/fluxopt/lpspec/commit/7ef15c771ce3c351f92d807ce1caecb37ec0879f))
+* **language:** a discount factor is arithmetic, not a column to prepare ([#1177](https://github.com/fluxopt/lpspec/issues/1177)) ([6c5c806](https://github.com/fluxopt/lpspec/commit/6c5c8068484c1cef0c9acf8ae5dc80c4574eeb1d))
+* **language:** the objective takes a quadratic term ([#929](https://github.com/fluxopt/lpspec/issues/929)) ([e8c88cb](https://github.com/fluxopt/lpspec/commit/e8c88cbe6e5959a2d8b3b671007660c43319eae0))
+* **sinks:** a sink declares what it can ingest, and what it refuses in pairs ([#927](https://github.com/fluxopt/lpspec/issues/927)) ([3af0c43](https://github.com/fluxopt/lpspec/commit/3af0c43e687ab6117d7accccf2d42ee6ba67601a))
+* **solver:** gurobi takes the quadratic objectives highs refuses ([#930](https://github.com/fluxopt/lpspec/issues/930)) ([344804b](https://github.com/fluxopt/lpspec/commit/344804be780a838787836a7dc8ddc2aa3b197dd8))
+
+
+### Documentation
+
+* **sinks:** the capability table says what each sink actually refuses ([#925](https://github.com/fluxopt/lpspec/issues/925)) ([8e0b7c8](https://github.com/fluxopt/lpspec/commit/8e0b7c8804a2a35be27211b162227040595375a2))
+
 ## [0.0.1-alpha.232](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.231...v0.0.1-alpha.232) (2026-08-20)
 
 
