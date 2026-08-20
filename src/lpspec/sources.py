@@ -451,10 +451,9 @@ def _lookup_relation_holes_message(lookup: str, column: str, holes: int, shown: 
 def _lookup_relation_not_single_valued_message(lookup: str, over: str, offenders: Sequence[str]) -> str:
     """A supplied lookup relation giving one label two values — both lanes.
 
-    Refused rather than resolved, for the reason
-    :func:`lpspec.errors.lookup_not_single_valued_message` gives on the index column: a
-    second row would multiply the label's terms through the join that reads it,
-    so the model that builds is larger than the one the file says.
+    Refused rather than resolved: a second row would multiply the label's terms
+    through the join that reads it, so the model that builds is larger than the
+    one the file says.
     """
     shown = ', '.join(offenders[:5]) + (' …' if len(offenders) > 5 else '')
     return (

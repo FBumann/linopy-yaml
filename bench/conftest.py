@@ -1,15 +1,9 @@
 """The harness: selection, data, and the parity gate.
 
-This is what `bench/run.py` used to be. It was an argparse front end over three
-nested loops, a subprocess protocol and a JSON-line writer — every one of which
-pytest already has, and has tested. The mapping is close to line for line:
-
-    for case x size x sink x arm      ->  parametrize (below)
-    subprocess.run(_run_case.py)      ->  benchmem(isolate=True)
-    --cases/--sizes/--arms/--sinks    ->  the same flags, via pytest_addoption
-    --repeat N, collapse by minimum   ->  rounds; `min` is pytest-benchmark's own
-    --out results.jsonl               ->  --benchmark-json
-    the parity gate, before timing    ->  a session fixture
+Every moving part is pytest's own: the case x size x sink x arm product is a
+`parametrize`, isolation is `benchmem(isolate=True)`, repetition and its
+minimum are pytest-benchmark's rounds, the output is `--benchmark-json`, and
+the parity gate is a session fixture. Nothing here re-implements a runner.
 
 What is *not* free is the ragged shape: cases have different ladders, and the
 density rungs exist on one case only. So the (case, size) axis is built here

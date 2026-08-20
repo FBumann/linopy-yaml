@@ -687,9 +687,10 @@ class PolarsEngine:
         shapes and loses it on others differing only in data (`dispatch` keeps
         it, `nodal` and `profiled` do not, all three the same lone masked
         ``p * cost``), so no static gate can say when the tax will pay; and
-        paid for nothing it multiplies the objective phase several times over,
-        against a best case that is a wash (#581). ``obj`` carries no order
-        contract anyway.
+        paid for nothing it tripled ``profiled/l``'s objective phase, 40 → 147
+        ms, against a best case that is a wash — 69 + 6 ms ordered against 32 +
+        42 plain on ``dispatch/l`` (#581). ``obj`` carries no order contract
+        anyway.
         """
         if o is None:
             return None
@@ -975,7 +976,7 @@ class PolarsEngine:
 
         **What the solver is handed may be wider than what was built**, and
         that too is the family's decision
-        (:func:`~lpspec.relational.sinks.solvers.ingestible`): a sink with no
+        (:func:`~lpspec.relational.sinks.ingestible`): a sink with no
         SOS concept takes the sets as binaries and rows appended past the
         model's own. The read-back is unaffected — a declaration's share is a
         slice, and nothing was appended before one.
@@ -1519,9 +1520,9 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> Any:
     """Each row's first entry in the row-ordered *ordered* — CSR's own index.
 
     Run-length, scatter, cumulative sum — robust to the model's shape where the
-    alternatives are not: ``bincount`` pays per entry — several times rle's
-    cost on a large matrix (#550) — and ``searchsorted`` per row times log
-    entries.
+    alternatives are not: ``bincount`` pays per entry — 26 ms against rle's 7 ms
+    at 10M entries over 100k rows (#550) — and ``searchsorted`` per row times
+    log entries.
     Computed here so ``row`` can then be dropped, since every consumer either
     slices by these starts or asks
     :meth:`~lpspec.relational.sinks.tables.ModelTables.matrix_block` to spell

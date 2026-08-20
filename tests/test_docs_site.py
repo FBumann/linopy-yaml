@@ -92,7 +92,7 @@ def test_every_blob_url_names_a_file_that_exists():
     """The other half: a blob URL is checked by nothing at all.
 
     mkdocs treats it as external and never follows it; the repo has no reason
-    to notice it. So a page can go on pointing at `bench/results/latest.jsonl`
+    to notice it. So a page can go on pointing at `bench/results/latest.json`
     long after the file moves, and the first report is a reader hitting
     GitHub's 404.
     """
@@ -263,7 +263,7 @@ def test_the_notation_page_is_current():
 def test_the_notation_page_shows_every_declaration_in_the_fixture():
     """What makes the page's "every construct" true.
 
-    The chain is: `tests/test_typeset.py` holds the fixture to the language, so
+    The chain is: `tests/typeset/test_typeset.py` holds the fixture to the language, so
     a construct the language has is a declaration in that file; this asserts
     every such declaration reaches the page. The fixture is read here rather
     than through `tools.language.notation`, which would only prove the tool agrees with
