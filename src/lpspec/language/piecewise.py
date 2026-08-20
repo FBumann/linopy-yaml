@@ -236,6 +236,22 @@ def _expand_lp(
         }
 
 
+def _weights_frame(schema: Model, pw: PiecewiseBlock, link: Any, ctx: str) -> frozenset[str]:
+    """Where one link puts the weights: its own dims, with the map applied.
+
+    A link carrying the dim ``by:`` maps out of sits *below* the weights — one
+    row per flow where they are per converter — so what it says about them is
+    the dim the lookup maps into. Every other link says its own dims, which is
+    what a block without a map does for all of them.
+    """
+    dims = _expr_dims(schema, link.expression, ctx)
+    if pw.by is None or not _reaches_through(schema, pw, dims):
+        return dims
+    lookup = schema.lookups[pw.by]
+    into = lookup.into
+    return (dims - {lookup.over}) | ({into} if into is not None else frozenset())
+
+
 def _reaches_through(schema: Model, pw: PiecewiseBlock, rows: Container[str]) -> bool:
     """Whether a link's rows sit below the weights and read them through ``by:``.
 
@@ -249,19 +265,14 @@ def _reaches_through(schema: Model, pw: PiecewiseBlock, rows: Container[str]) ->
 def _check_the_map_lands(schema: Model, ctx: str, pw: PiecewiseBlock, frame: list[str]) -> None:
     """``by:`` carries rows to the weights, or the block is not a tie.
 
-    Two ways it fails to once the lookup is known to exist: landing somewhere
-    the weights do not live, and being named where no link is below the frame at
-    all — a map nothing travels. Either would otherwise be reported against a
-    constraint the reader never wrote.
+    Where it lands is no longer a question — the frame is what the links imply
+    *after* the map, so it lands by construction. What is left is a map nothing
+    travels: named where every link already sits on the weights' frame, it does
+    nothing, and a key that does nothing reads as one that does something.
     """
     if pw.by is None:
         return
     lookup = schema.lookups[pw.by]
-    if lookup.into not in frame:
-        raise PiecewiseExpansionError(
-            f"{ctx}: by '{pw.by}' maps into '{lookup.into}', which foreach {frame} does not carry — "
-            f'a link below the frame reaches the weights through the frame they live on'
-        )
     carried = [_expr_dims(schema, link.expression, f'{ctx} link {i}') for i, link in enumerate(pw.links)]
     if not any(lookup.over in dims for dims in carried):
         raise PiecewiseExpansionError(
@@ -297,16 +308,6 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
         raise PiecewiseExpansionError(f"{ctx}: by references undeclared lookup '{pw.by}'")
 
     frame: list[str] = []
-    for d in pw.foreach:
-        if d not in schema.dimensions:
-            raise PiecewiseExpansionError(f"{ctx}: foreach references undeclared dimension '{d}'")
-        if d == pw.over:
-            raise PiecewiseExpansionError(
-                f"{ctx}: foreach carries the breakpoint dim '{pw.over}' — the weights run along it, "
-                f'so the frame is what is left when it is taken away'
-            )
-        frame.append(d)
-
     for i, link in enumerate(pw.links):
         values = link.values
         if values not in schema.parameters:
@@ -316,20 +317,13 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 f"{ctx}: link {i} values parameter '{values}' must carry dim "
                 f"'{pw.over}' (has {schema.parameters[values].dims})"
             )
-        for d in _declared_order(schema, _expr_dims(schema, link.expression, f'{ctx} link {i}')):
+        for d in _declared_order(schema, _weights_frame(schema, pw, link, f'{ctx} link {i}')):
             if d == pw.over:
                 raise PiecewiseExpansionError(
                     f"{ctx}: link {i} expression already carries the breakpoint dim '{pw.over}'"
                 )
-            if d in frame or (pw.by is not None and d == schema.lookups[pw.by].over):
-                continue
-            if pw.foreach:
-                raise PiecewiseExpansionError(
-                    f"{ctx}: link {i} carries '{d}', which foreach {list(pw.foreach)} does not — a plain "
-                    f'link sits on the frame the weights live on, so a finer one needs by: to say how it '
-                    f'reaches them'
-                )
-            frame.append(d)
+            if d not in frame:
+                frame.append(d)
 
     if pw.active is not None:
         if pw.active in schema.variables and schema.variables[pw.active].domain != 'binary':

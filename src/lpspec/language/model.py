@@ -419,12 +419,10 @@ class PiecewiseBlock(_StrictBlock):
     the curve instead of pinning it (at most one non-``"=="``, and only with
     exactly two links).
 
-    ``foreach`` is the frame the weights live on. It is inferred from the links
-    where every one of them sits on it, and must be declared alongside ``by``,
-    the lookup a link *below* that frame reaches the weights through — one row
-    per flow where the weights are per converter. A link uses it exactly when
-    its expression carries the dim the lookup maps out of, so a block may hold
-    both kinds and the arity of the refined ones is data.
+    The weights live on the frame the links imply: what they carry, with the dim
+    ``by`` maps out of swapped for the one it maps into. So a link over flows
+    and a block mapping ``converter_of`` put the weights on converters, one row
+    per flow reads them, and how many flows a converter has is data.
 
     ``over`` names the breakpoint dimension; ``method`` is which of
     :data:`PIECEWISE_METHODS` restricts the weights; ``active`` names a gating
@@ -438,7 +436,6 @@ class PiecewiseBlock(_StrictBlock):
 
     over: str
     links: list[PiecewiseLink]
-    foreach: list[str] = []
     by: str | None = None
     method: PiecewiseMethod = 'adjacency'
     active: str | None = None
@@ -489,23 +486,6 @@ class PiecewiseBlock(_StrictBlock):
             msg = f'unknown piecewise method {v!r}. The formulations are:\n{options}'
             raise ValueError(msg)
         return v
-
-    @model_validator(mode='after')
-    def _check_the_frame_is_known(self) -> PiecewiseBlock:
-        """``by:`` and ``foreach:`` are one decision, so neither stands alone.
-
-        A link below the weights' frame no longer says where that frame is, so
-        the block declares it. Where no link is below it, the links are the
-        frame and declaring it again would be a second answer.
-        """
-        if bool(self.by) != bool(self.foreach):
-            msg = (
-                'by: and foreach: travel together — by: is how a link below the frame reaches '
-                'the weights, and foreach: is where that frame is. A block with neither takes '
-                'its frame from the links, which is the ordinary case.'
-            )
-            raise ValueError(msg)
-        return self
 
     @model_validator(mode='after')
     def _check_the_links_are_enough(self) -> PiecewiseBlock:

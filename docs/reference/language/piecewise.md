@@ -97,8 +97,7 @@ and `by:` is the lookup that carries each row up to the weights it reads:
 ```yaml
 conversion:
   over: bp
-  foreach: [converter, time]  # the frame the weights live on
-  by: converter_of            # how a link below it reaches them
+  by: converter_of  # how a link below the weights reaches them
   points: bp_present
   method: adjacency
   links:
@@ -127,8 +126,8 @@ which table, which is one sentence about the block rather than a fact about any
 row.
 
 **A link uses the map when it carries the dim the lookup maps out of**, so the
-block says it once and no link says anything: the ordinary two-string form
-holds both kinds. That is how a curve ties **as many expressions as the data
+block says it once, no link says anything, and the weights' own frame is what
+the links imply once it is applied. That is how a curve ties **as many expressions as the data
 gives it** — a converter with a fourth flow is a row in the lookup rather than
 an edit to the model — and the block still writes the tie, so the weights stay
 its own. Nothing in the file names λ.

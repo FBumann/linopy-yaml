@@ -1175,7 +1175,6 @@ variables:
 piecewise:
   conversion:
     over: bp
-    foreach: [converter, time]
     by: converter_of
     points: bp_present
     method: adjacency
@@ -1245,10 +1244,17 @@ def test_one_link_ties_however_many_flows_a_converter_has(refined_inputs):
 
 
 def test_the_weights_stay_the_block_s_own(refined_inputs):
-    """λ is emitted, not declared — a refined link is still a tie the block writes."""
+    """λ is emitted, not declared, and the map says where it lives.
+
+    The link carries `[flow, time]`; `converter_of` swaps the flow for its
+    converter, so the weights are per converter and period without the file
+    saying so twice.
+    """
     expanded = expand_piecewise(schema_of(raw_of(REFINED)))
 
-    assert expanded.variables['conversion_lam'].foreach == ['converter', 'time', 'bp']
+    assert expanded.variables['conversion_lam'].foreach == ['time', 'converter', 'bp'], (
+        'the frame the links imply once the map is applied, in declared order'
+    )
     row = expanded.constraints['conversion_link0']
     assert row.foreach == ['time', 'flow'], 'the row sits on the frame the link carries, in declared order'
     assert 'at(conversion_lam, by=converter_of)' in row.expression, 'and reaches the weights through the lookup'
@@ -1294,7 +1300,6 @@ def test_a_mapped_link_may_be_bounded_by_its_curve(refined_inputs):
         raw_of(REFINED),
         **{
             'piecewise.conversion.by': None,
-            'piecewise.conversion.foreach': [],
             'piecewise.conversion.links': [['rate', 'bp_rate'], ['rate', 'bp_rate'], ['rate', 'bp_rate', '>=']],
         },
     )
@@ -1335,18 +1340,7 @@ def test_a_links_rows_follow_what_it_ties(refined_inputs):
 @pytest.mark.parametrize(
     ('patch', 'match'),
     [
-        pytest.param({'piecewise.conversion.foreach': []}, 'travel together', id='a-map-with-no-frame'),
-        pytest.param({'piecewise.conversion.by': None}, 'travel together', id='a-frame-with-no-map'),
         pytest.param({'piecewise.conversion.by': 'nope'}, 'undeclared lookup', id='by-names-no-lookup'),
-        pytest.param(
-            {
-                'dimensions.site': {'dtype': 'str'},
-                'lookups.site_of': {'over': 'flow', 'into': 'site'},
-                'piecewise.conversion.by': 'site_of',
-            },
-            'which foreach',
-            id='by-lands-off-the-frame',
-        ),
         pytest.param(
             {
                 'parameters.bp_load': {'dims': ['converter', 'bp']},
@@ -1356,25 +1350,13 @@ def test_a_links_rows_follow_what_it_ties(refined_inputs):
             'which no link carries',
             id='a-map-nothing-travels',
         ),
-        pytest.param(
-            {
-                'dimensions.site': {'dtype': 'str'},
-                'parameters.bp_site': {'dims': ['site', 'bp']},
-                'variables.spend': {'foreach': ['site', 'time'], 'bounds': {'lower': 0}},
-                'piecewise.conversion.links': [['rate', 'bp_rate'], ['spend', 'bp_site']],
-            },
-            "carries 'site', which foreach",
-            id='a-plain-link-below-the-declared-frame',
-        ),
     ],
 )
-def test_a_map_that_reaches_no_weights_is_a_load_error(patch, match):
-    """Four ways a link fails to reach the weights, each named against the block.
+def test_a_map_that_carries_nothing_is_a_load_error(patch, match):
+    """Two ways a map fails to carry rows to weights, each named against the block.
 
-    The last is not about `by:` at all: a *plain* link carrying a dim the
-    declared frame does not would widen that frame, and the widening surfaced
-    as a dimension error against `conversion_link0` — a constraint the reader
-    never wrote.
+    Where it *lands* is no longer among them: the frame is what the links imply
+    after the map, so a map that resolves lands by construction.
     """
     with pytest.raises((SchemaError, PiecewiseExpansionError), match=match):
         lps.check(override(raw_of(REFINED), **patch))
@@ -1388,7 +1370,7 @@ def test_one_link_is_enough_under_a_map():
     """
     lps.check(raw_of(REFINED))  # a single link, and it holds five flows
 
-    plain = override(raw_of(REFINED), **{'piecewise.conversion.by': None, 'piecewise.conversion.foreach': []})
+    plain = override(raw_of(REFINED), **{'piecewise.conversion.by': None})
     with pytest.raises(SchemaError, match='at least two links'):
         lps.check(plain)
 
