@@ -693,6 +693,19 @@ class PolarsCompiler:
             consts = tuple(_join_mul(x, inv, 'const', divide=True) for x in a.consts)
             return CompiledExpression(terms, consts, quads)
 
+        def power(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
+            """``a ** b``, where neither side carries a variable.
+
+            The language refuses one that does (``language/degree.py``), so
+            this is the plan-boundary backstop the other operators keep: a node
+            arriving by any other route dies here rather than folding a
+            variable's coefficient into a base.
+            """
+            if a.terms or a.quads or b.terms or b.quads:
+                raise LanguageError(f'in {context}: a power over variables — `**` takes neither side variable')
+            assert len(a.consts) == 1 and len(b.consts) == 1, 'a base or exponent that adds is refused at load'
+            return CompiledExpression((), (_join_pow(a.consts[0], b.consts[0]),))
+
         def ev(e: plan.Expression) -> CompiledExpression:
             if isinstance(e, plan.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
@@ -710,6 +723,8 @@ class PolarsCompiler:
                 return product(ev(e.left), ev(e.right))
             if isinstance(e, plan.Divide):
                 return quotient(ev(e.numerator), ev(e.divisor))
+            if isinstance(e, plan.Power):
+                return power(ev(e.base), ev(e.exponent))
             if isinstance(e, plan.Sum):
                 inner = _propagate_absence(ev(e.operand))
                 return _map_fragments(inner, lambda p: self._sum_fragment(p, e.over, context))
@@ -1562,6 +1577,26 @@ def _join_mul(a: TermFragment, c: TermFragment, kind: Kind, divide: bool = False
     out = value_column(kind)
     frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
     return replace(a, dims=out_dims, frame=frame, kind=kind)
+
+
+def _join_pow(a: TermFragment, b: TermFragment) -> TermFragment:
+    """``a ** b``, both const fragments — one const fragment out.
+
+    :func:`_join_mul`'s shape with ``pow`` in place of ``*``, and the same
+    reason for renaming the right-hand value first: both sides carry ``cval``.
+    An **inner** join, unlike divide's left: an exponent with no value at a
+    coordinate is not a division by a hole, it is a factor the model never
+    stated, and a null base or exponent would poison the coefficient it
+    multiplies rather than reporting anything.
+    """
+    shared = [d for d in a.dims if d in b.dims]
+    out_dims = a.dims + tuple(d for d in b.dims if d not in a.dims)
+    right = b.frame.rename({'cval': _RHS})
+    joined = a.frame.join(right, on=shared, how='inner') if shared else a.frame.join(right, how='cross')
+    frame = joined.with_columns(pl.col('cval').pow(pl.col(_RHS)).alias('cval')).select(
+        *out_dims, *carried_columns('const')
+    )
+    return TermFragment(out_dims, frame, 'const')
 
 
 def _join_quad(a: TermFragment, b: TermFragment) -> TermFragment:

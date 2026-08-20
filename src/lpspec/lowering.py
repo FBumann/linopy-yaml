@@ -264,6 +264,8 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str, *, ceiling: i
                 return plan.Multiply(left, right)
             case '/':
                 return plan.Divide(left, right)
+            case '**':
+                return plan.Power(left, right)
             case _:  # pragma: no cover — check_binary refuses every other operator
                 raise AssertionError(f'{context}: operator {node.op!r} passed the degree check')
 

@@ -46,8 +46,8 @@ from tests.oracle import lpspec_linopy  # skips the module without the [linopy] 
         ),
         pytest.param(
             {'objective.expression': 'sum(p ** 2)'},
-            r"operator '\*\*'",
-            id='an-operator-outside-the-language',
+            'over variables',
+            id='a-power-over-a-variable',
         ),
         pytest.param(
             {'objective.expression': 'sum(p / (1 - cost))'},
