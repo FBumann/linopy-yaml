@@ -14,10 +14,7 @@ from lpspec.errors import (
     coordinates_shown,
     duplicate_coordinate_message,
     holes_in_values_message,
-    lookup_not_single_valued_message,
     lookup_values_are_not_labels_message,
-    lookups_need_an_index_message,
-    missing_lookup_columns_message,
     no_index_source_message,
     wrong_value_dtype_message,
 )
@@ -53,17 +50,13 @@ def dimension_coords(
         absent from the second.
 
     Raises:
-        DataError: A dimension with no index, an index short of a declared
-            lookup column, a lookup that is not single-valued per label, or a
-            lookup value that is not a label of the dimension it targets.
+        DataError: A dimension with no index, or a lookup value that is not a
+            label of the dimension it targets.
     """
     frames: dict[str, pd.DataFrame] = {}
     for dim in schema.dimensions:
         table = tidy.get(dim)
         if table is None:
-            carried = sorted({**schema.targeted_of(dim), **schema.labels_of(dim)})
-            if carried:
-                raise DataError(lookups_need_an_index_message(dim, carried, 'nothing'))
             raise DataError(no_index_source_message(dim))
         frames[dim] = _through_numpy(collected(table))
 
@@ -101,11 +94,11 @@ def _lookup_arrays(
 ) -> dict[str, dict[str, xr.DataArray]]:
     """Each declared lookup as an array over the dimension it is over.
 
-    A lookup is a column of its dimension's index, so both checks are of that
-    index: single-valued per label, and — for a *targeted* lookup — every value
-    a label of the dimension it targets. A label-space lookup owns its values,
-    so there is no dimension for them to be contained in and nothing the second
-    check could ask.
+    The map arrives joined onto the index, single-valued per label, by the
+    reader both lanes enter (:func:`~lpspec.sources.tidy_sources`); what is
+    left to check here is containment, and only for a *targeted* lookup. A
+    label-space lookup owns its values, so there is no dimension for them to be
+    contained in and nothing to ask.
 
     Containment matters here for a reason of this lane's own: a value that is
     not a label of the target would be dropped by xarray's inner-join
@@ -117,11 +110,6 @@ def _lookup_arrays(
         if not declared:
             continue
         names = sorted(declared)
-        missing = [name for name in names if name not in frame.columns]
-        if missing:
-            raise DataError(missing_lookup_columns_message(dim, missing, list(frame.columns)))
-        _refuse_many_valued_lookups(dim, names, frame)
-
         labels = master[dim]
         first = frame.drop_duplicates(subset=[dim]).set_index(dim)
         targeted = schema.targeted_of(dim)
@@ -132,21 +120,6 @@ def _lookup_arrays(
                 _refuse_values_outside(dim, name, targeted[name], series, master)
             out[dim][name] = xr.DataArray(series.to_numpy(), dims=[dim], coords={dim: labels}, name=name)
     return out
-
-
-def _refuse_many_valued_lookups(dim: str, names: list[str], frame: pd.DataFrame) -> None:
-    """One label, one lookup value — counting a null among the values.
-
-    ``dropna=False`` is what makes this the relational lane's question rather
-    than a weaker one: polars counts a null as a value, so a label mapped
-    nowhere in one row and somewhere in another disagrees with itself on both
-    lanes. Left out, the null won — ``drop_duplicates`` keeps the first row —
-    and the member silently left the group that was to hold it.
-    """
-    counts = frame.groupby(dim, sort=False)[names].nunique(dropna=False)
-    offenders = {name: int((counts[name] > 1).sum()) for name in names if (counts[name] > 1).any()}
-    if offenders:
-        raise DataError(lookup_not_single_valued_message(dim, offenders))
 
 
 def _refuse_values_outside(dim: str, name: str, target: str, values: pd.Series, master: Mapping[str, pd.Index]) -> None:

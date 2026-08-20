@@ -59,15 +59,25 @@
       2050
     ]
   },
-  "snapshot": {
-    "period_of": [
+  "period_of": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "period": [
       2030,
       2030,
       2030,
       2030,
       2050,
       2050
-    ],
+    ]
+  },
+  "snapshot": {
     "snapshot": [
       0,
       1,

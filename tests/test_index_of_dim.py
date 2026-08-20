@@ -26,7 +26,7 @@ import yaml as pyyaml
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError
-from tests.conftest import schema_of
+from tests.conftest import relation, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
@@ -291,7 +291,8 @@ def _grouped_sources():
     of its own and not the one under test here.
     """
     return {
-        'snapshot': pl.DataFrame({'snapshot': GROUPED_SNAPSHOTS, 'period_of': GROUPED_PERIODS}),
+        'snapshot': pl.DataFrame({'snapshot': GROUPED_SNAPSHOTS}),
+        'period_of': relation('snapshot', 'period', GROUPED_SNAPSHOTS, GROUPED_PERIODS),
         'period': pl.DataFrame({'period': [0, 1]}),
         'price': pl.DataFrame({'snapshot': GROUPED_SNAPSHOTS, 'value': [1.0] * len(GROUPED_SNAPSHOTS)}),
     }
@@ -426,7 +427,8 @@ def _seasons_sources():
     """
     snapshots = [1, 2, 3, 4, 5, 6, 7]
     return {
-        'snapshot': pl.DataFrame({'snapshot': snapshots, 'season_of': ['winter'] * 4 + ['summer'] * 3}),
+        'snapshot': pl.DataFrame({'snapshot': snapshots}),
+        'season_of': relation('snapshot', 'season', snapshots, ['winter'] * 4 + ['summer'] * 3),
         'season': pl.DataFrame({'season': ['winter', 'summer']}),
         'inflow': pl.DataFrame({'snapshot': snapshots, 'value': [0.0, 10.0, 0.0, 0.0, 0.0, 6.0, 0.0]}),
         'price': pl.DataFrame({'snapshot': snapshots, 'value': [1.0, 2.0, 5.0, 3.0, 4.0, 1.0, 2.0]}),
@@ -539,9 +541,8 @@ def test_coordinates_in_no_group_translate_from_nothing():
     """
     sources = _seasons_sources()
     snapshots = [1, 2, 3, 4, 5, 6, 7, 98, 99]
-    sources['snapshot'] = pl.DataFrame(
-        {'snapshot': snapshots, 'season_of': ['winter'] * 4 + ['summer'] * 3 + [None, None]}
-    )
+    sources['snapshot'] = pl.DataFrame({'snapshot': snapshots})
+    sources['season_of'] = relation('snapshot', 'season', snapshots, ['winter'] * 4 + ['summer'] * 3 + [None, None])
     for name in ('inflow', 'price'):
         sources[name] = pl.concat([sources[name], pl.DataFrame({'snapshot': [98, 99], 'value': [1.0, 1.0]})])
 

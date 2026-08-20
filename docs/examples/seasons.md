@@ -189,29 +189,30 @@ re-check when the horizon is renumbered, extended, or cut into different seasons
 
 ## The grouping is data
 
-`season_of` is a column of the snapshot index, so the same file expresses
-maintenance campaigns, representative days, market quarters or contract windows.
-Move two snapshots between seasons by editing that column and no clause changes:
+`season_of` is a table passed beside the snapshot index, so the same file
+expresses maintenance campaigns, representative days, market quarters or
+contract windows. Move two snapshots between seasons by editing that table and
+no clause changes:
 
 ```text
 shape: (7, 2)
-┌──────────┬───────────┐
-│ snapshot ┆ season_of │
-│ ---      ┆ ---       │
-│ i64      ┆ str       │
-╞══════════╪═══════════╡
-│ 1        ┆ winter    │
-│ 2        ┆ winter    │
-│ 3        ┆ winter    │
-│ 4        ┆ winter    │
-│ 5        ┆ summer    │
-│ 6        ┆ summer    │
-│ 7        ┆ summer    │
-└──────────┴───────────┘
+┌──────────┬────────┐
+│ snapshot ┆ season │
+│ ---      ┆ ---    │
+│ i64      ┆ str    │
+╞══════════╪════════╡
+│ 1        ┆ winter │
+│ 2        ┆ winter │
+│ 3        ┆ winter │
+│ 4        ┆ winter │
+│ 5        ┆ summer │
+│ 6        ┆ summer │
+│ 7        ┆ summer │
+└──────────┴────────┘
 ```
 
-A snapshot the column leaves null belongs to no season, so it reaches nothing and
-its row is not built — the same reading a null gets in
+A snapshot the table has no row for belongs to no season, so it reaches nothing
+and its row is not built — the same reading absence gets in
 [`sum(by=)`](../reference/language/operators.md).
 
 Compare [monthly budget](monthly_budget.md), where such a column groups a *sum*,

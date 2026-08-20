@@ -505,8 +505,11 @@ def _transport_data(shape: Shape, dest: Path) -> dict[str, str]:
             'cap': pd.DataFrame({'line': lines, 'value': rng.uniform(20.0, 80.0, n_line)}),
             'neg_cap': pd.DataFrame({'line': lines, 'value': -rng.uniform(20.0, 80.0, n_line)}),
             'load': pd.DataFrame({'snapshot': snaps, 'bus': buses * n_snap, 'value': load.ravel()}),
-            'generator': pd.DataFrame({'generator': gens, 'gen_bus': gen_bus}),
-            'line': pd.DataFrame({'line': lines, 'line_from': frm, 'line_to': to}),
+            'generator': pd.DataFrame({'generator': gens}),
+            'gen_bus': pd.DataFrame({'generator': gens, 'bus': gen_bus}),
+            'line': pd.DataFrame({'line': lines}),
+            'line_from': pd.DataFrame({'line': lines, 'bus': frm}),
+            'line_to': pd.DataFrame({'line': lines, 'bus': to}),
             'bus': pd.DataFrame({'bus': buses}),
             'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
         },
@@ -531,6 +534,9 @@ def _transport_eager(paths: dict[str, str]) -> dict[str, Any]:
         'generator': gens,
         'bus': pd.Index(pd.read_parquet(paths['bus'])['bus'], name='bus'),
         'line': lines,
+        'gen_bus': pd.read_parquet(paths['gen_bus']),
+        'line_from': pd.read_parquet(paths['line_from']),
+        'line_to': pd.read_parquet(paths['line_to']),
     }
     return data | index
 

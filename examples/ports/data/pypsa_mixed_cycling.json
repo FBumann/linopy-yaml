@@ -1,13 +1,127 @@
 {
-  "snapshot": {"snapshot": [0, 1, 2, 3]},
-  "bus": {"bus": ["grid"]},
-  "generator": {"generator": ["base", "peaker"], "gen_bus": ["grid", "grid"]},
-  "storage": {"storage": ["ring", "seasonal"], "storage_bus": ["grid", "grid"]},
-  "cyclic": {"storage": ["ring", "seasonal"], "value": [true, false]},
-  "p_nom": {"generator": ["base", "peaker"], "value": [45.0, 100.0]},
-  "marginal_cost": {"generator": ["base", "peaker"], "value": [20.0, 80.0]},
-  "storage_p_nom": {"storage": ["ring", "seasonal"], "value": [15.0, 15.0]},
-  "soc_max": {"storage": ["ring", "seasonal"], "value": [40.0, 40.0]},
-  "soc_initial": {"storage": ["ring", "seasonal"], "value": [20.0, 30.0]},
-  "load": {"snapshot": [0, 1, 2, 3], "bus": ["grid", "grid", "grid", "grid"], "value": [30.0, 90.0, 35.0, 70.0]}
+  "bus": {
+    "bus": [
+      "grid"
+    ]
+  },
+  "cyclic": {
+    "storage": [
+      "ring",
+      "seasonal"
+    ],
+    "value": [
+      true,
+      false
+    ]
+  },
+  "gen_bus": {
+    "generator": [
+      "base",
+      "peaker"
+    ],
+    "bus": [
+      "grid",
+      "grid"
+    ]
+  },
+  "generator": {
+    "generator": [
+      "base",
+      "peaker"
+    ]
+  },
+  "load": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "bus": [
+      "grid",
+      "grid",
+      "grid",
+      "grid"
+    ],
+    "value": [
+      30.0,
+      90.0,
+      35.0,
+      70.0
+    ]
+  },
+  "marginal_cost": {
+    "generator": [
+      "base",
+      "peaker"
+    ],
+    "value": [
+      20.0,
+      80.0
+    ]
+  },
+  "p_nom": {
+    "generator": [
+      "base",
+      "peaker"
+    ],
+    "value": [
+      45.0,
+      100.0
+    ]
+  },
+  "snapshot": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "soc_initial": {
+    "storage": [
+      "ring",
+      "seasonal"
+    ],
+    "value": [
+      20.0,
+      30.0
+    ]
+  },
+  "soc_max": {
+    "storage": [
+      "ring",
+      "seasonal"
+    ],
+    "value": [
+      40.0,
+      40.0
+    ]
+  },
+  "storage": {
+    "storage": [
+      "ring",
+      "seasonal"
+    ]
+  },
+  "storage_bus": {
+    "storage": [
+      "ring",
+      "seasonal"
+    ],
+    "bus": [
+      "grid",
+      "grid"
+    ]
+  },
+  "storage_p_nom": {
+    "storage": [
+      "ring",
+      "seasonal"
+    ],
+    "value": [
+      15.0,
+      15.0
+    ]
+  }
 }

@@ -1,14 +1,98 @@
 {
-  "bus": {"bus": ["gas", "elec", "heat"]},
-  "generator": {"generator": ["gas_well"], "gen_bus": ["gas"]},
-  "link": {"link": ["chp", "boiler", "ocgt"]},
-  "incidence": {
-    "link": ["chp", "chp", "chp", "boiler", "boiler", "ocgt", "ocgt"],
-    "bus": ["gas", "elec", "heat", "gas", "heat", "gas", "elec"],
-    "value": [-1.0, 0.4, 0.4, -1.0, 0.8, -1.0, 0.5]
+  "bus": {
+    "bus": [
+      "gas",
+      "elec",
+      "heat"
+    ]
   },
-  "gen_p_nom": {"generator": ["gas_well"], "value": [200.0]},
-  "marginal_cost": {"generator": ["gas_well"], "value": [10.0]},
-  "p_nom": {"link": ["chp", "boiler", "ocgt"], "value": [50.0, 100.0, 100.0]},
-  "load": {"bus": ["gas", "elec", "heat"], "value": [0.0, 40.0, 36.0]}
+  "gen_bus": {
+    "generator": [
+      "gas_well"
+    ],
+    "bus": [
+      "gas"
+    ]
+  },
+  "gen_p_nom": {
+    "generator": [
+      "gas_well"
+    ],
+    "value": [
+      200.0
+    ]
+  },
+  "generator": {
+    "generator": [
+      "gas_well"
+    ]
+  },
+  "incidence": {
+    "link": [
+      "chp",
+      "chp",
+      "chp",
+      "boiler",
+      "boiler",
+      "ocgt",
+      "ocgt"
+    ],
+    "bus": [
+      "gas",
+      "elec",
+      "heat",
+      "gas",
+      "heat",
+      "gas",
+      "elec"
+    ],
+    "value": [
+      -1.0,
+      0.4,
+      0.4,
+      -1.0,
+      0.8,
+      -1.0,
+      0.5
+    ]
+  },
+  "link": {
+    "link": [
+      "chp",
+      "boiler",
+      "ocgt"
+    ]
+  },
+  "load": {
+    "bus": [
+      "gas",
+      "elec",
+      "heat"
+    ],
+    "value": [
+      0.0,
+      40.0,
+      36.0
+    ]
+  },
+  "marginal_cost": {
+    "generator": [
+      "gas_well"
+    ],
+    "value": [
+      10.0
+    ]
+  },
+  "p_nom": {
+    "link": [
+      "chp",
+      "boiler",
+      "ocgt"
+    ],
+    "value": [
+      50.0,
+      100.0,
+      100.0
+    ]
+  }
 }

@@ -34,7 +34,7 @@ from lpspec.errors import DimensionError, LanguageError, SchemaError
 from lpspec.language.expression_parser import parse_expression
 from lpspec.lowering import _lower_expr, lower_program
 from lpspec.relational.plan import GroupSum, Variable
-from tests.conftest import override, raw_of, resolved, schema_of
+from tests.conftest import override, raw_of, relation, resolved, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import builder, pd, xr
 from tests.test_compiler import compiler
@@ -86,7 +86,7 @@ OF_TECH = ['wind', 'sun', 'wind', 'wind']
 
 
 def _inputs(technologies=('wind', 'sun')):
-    index = pd.DataFrame({'generator': GENERATORS, 'gen_bus': OF_BUS, 'gen_tech': OF_TECH})
+    index = pd.DataFrame({'generator': GENERATORS})
     limits = pd.DataFrame(
         {
             'bus': ['a', 'a', 'b', 'b'],
@@ -99,6 +99,8 @@ def _inputs(technologies=('wind', 'sun')):
         'limit': limits,
         'demand': 20.0,
         'generator': index,
+        'gen_bus': relation('generator', 'bus', GENERATORS, OF_BUS),
+        'gen_tech': relation('generator', 'technology', GENERATORS, OF_TECH),
         'bus': pd.Index(['a', 'b'], name='bus'),
         'technology': pd.Index(list(technologies), name='technology'),
     }

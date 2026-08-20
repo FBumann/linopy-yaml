@@ -122,9 +122,15 @@ sources = {
     'bus': load['bus'].unique(),
     'p_max': n.generators['p_nom'].rename_axis('generator'),
     'cost': n.generators['marginal_cost'].rename_axis('generator'),
+    'gen_bus': n.generators['bus'].rename_axis('generator').reset_index(),
     'load': load,
 }
 ```
+
+`gen_bus` is the last of those and the one that is not a parameter: a
+[lookup](../reference/language/dimensions.md#lookups) arrives under its own name
+as the relation it is, so PyPSA's `bus` column is passed across as it stands
+rather than merged into an index.
 
 </details>
 

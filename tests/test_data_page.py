@@ -95,10 +95,7 @@ def test_the_pypsa_shapes_block_produces_tidy_sources() -> None:
     exec(_block('n.generators'), scope)
     instance = json.loads((FOLDER.parent / 'transport.json').read_text())
     sources = scope['sources'] | {
-        'line': pl.DataFrame(instance['line']),
-        'cap': pl.DataFrame(instance['cap']),
-        'neg_cap': pl.DataFrame(instance['neg_cap']),
-        'generator': pl.DataFrame(instance['generator']),
+        key: pl.DataFrame(instance[key]) for key in ('line', 'cap', 'neg_cap', 'generator', 'line_from', 'line_to')
     }
     with lps.solve(str(ROOT / 'examples' / 'transport.yaml'), sources) as solution:
         assert solution.objective == pytest.approx(4400.0, rel=1e-9), (

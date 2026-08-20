@@ -19,7 +19,7 @@ from lpspec.relational.plan import (
     Translate,
     Variable,
 )
-from tests.conftest import DISPATCH_MODEL, EXAMPLES_DIR, by_coord, override, resolved, schema_of
+from tests.conftest import DISPATCH_MODEL, EXAMPLES_DIR, by_coord, override, relation, resolved, schema_of
 from tests.differential import differential
 from tests.oracle import pd
 
@@ -252,7 +252,8 @@ IN_GROUPS_UNMASKED = {
 
 #: A fourth snapshot the lookup sends nowhere, for both models above.
 GROUPLESS_SOURCES = {
-    't': pd.DataFrame({'t': [0, 1, 2, 3], 'season_of': ['s1', 's1', 's2', None]}),
+    't': pd.DataFrame({'t': [0, 1, 2, 3]}),
+    'season_of': relation('t', 'season', [0, 1, 2, 3], ['s1', 's1', 's2', None]),
     'season': pd.Index(['s1', 's2'], name='season'),
 }
 
@@ -287,7 +288,8 @@ def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
     the masked one drops.
     """
     sources = {
-        't': pd.DataFrame({'t': [0, 1, 2, 3], 'season_of': ['s1', 's1', 's2', 's2']}),
+        't': pd.DataFrame({'t': [0, 1, 2, 3]}),
+        'season_of': relation('t', 'season', [0, 1, 2, 3], ['s1', 's1', 's2', 's2']),
         'season': pd.Index(['s1', 's2'], name='season'),
         'usable': pd.Series([0.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t')),
     }
@@ -419,7 +421,8 @@ def test_a_per_group_offset_translates_each_group_by_its_own_lag():
     six coordinates somewhere else.
     """
     sources = {
-        't': pd.DataFrame({'t': [0, 1, 2, 3, 4, 5], 'period_of': [2030] * 3 + [2050] * 3}),
+        't': pd.DataFrame({'t': [0, 1, 2, 3, 4, 5]}),
+        'period_of': relation('t', 'period', [0, 1, 2, 3, 4, 5], [2030] * 3 + [2050] * 3),
         'period': pd.Index([2030, 2050], name='period'),
         'lead': pd.Series([1, 2], index=pd.Index([2030, 2050], name='period')),
         'v': pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0], index=pd.Index(range(6), name='t')),
@@ -447,7 +450,8 @@ def test_a_per_group_offset_over_a_variable_vacates_each_groups_opening_rows():
     so it reaches nothing, and ``edge=0`` does not speak for it (#1061).
     """
     sources = {
-        't': pd.DataFrame({'t': [0, 1, 2, 3, 4, 5, 6], 'season_of': ['s1'] * 3 + ['s2'] * 3 + [None]}),
+        't': pd.DataFrame({'t': [0, 1, 2, 3, 4, 5, 6]}),
+        'season_of': relation('t', 'season', range(7), ['s1'] * 3 + ['s2'] * 3 + [None]),
         'season': pd.Index(['s1', 's2'], name='season'),
         'lead': pd.Series([1, 2], index=pd.Index(['s1', 's2'], name='season')),
         'cap': pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0], index=pd.Index(range(7), name='t')),
@@ -470,7 +474,8 @@ def test_an_offset_may_differ_per_entity_and_per_group_at_once():
     units, periods = ['a', 'b'], [0, 1, 2, 3]
     sources = {
         'g': pd.Index(units, name='g'),
-        't': pd.DataFrame({'t': periods, 'season_of': ['s1', 's1', 's2', 's2']}),
+        't': pd.DataFrame({'t': periods}),
+        'season_of': relation('t', 'season', periods, ['s1', 's1', 's2', 's2']),
         'season': pd.Index(['s1', 's2'], name='season'),
         'lead': pd.DataFrame({'g': ['a', 'a', 'b', 'b'], 'season': ['s1', 's2'] * 2, 'value': [1, 1, 1, 2]}),
         'v': pd.DataFrame(

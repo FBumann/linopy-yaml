@@ -26,7 +26,7 @@ import io
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
@@ -45,6 +45,9 @@ from tests.language.fixtures import (  # noqa: F401
     schema_of,
 )
 from tools import constructs
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
@@ -73,6 +76,19 @@ def bindable_on_this_install(name: str) -> None:
         pytest.importorskip('xarray', reason=f"{name}'s curvature guard needs xarray until #27")
 
 
+def relation(over: str, into: str, labels: Sequence[Any], values: Sequence[Any]) -> pl.DataFrame:
+    """A lookup's map as the table it is supplied under its own key.
+
+    Takes the column form these fixtures used to carry — one value per label,
+    `None` where the label maps nowhere — and returns the relation: the rows it
+    maps, and no row for the rest. The tests that pin the transport itself
+    write their relations out literally; this is for the many where the map is
+    a prop rather than the subject.
+    """
+    rows = [(a, b) for a, b in zip(labels, values, strict=True) if b is not None]
+    return pl.DataFrame({over: [a for a, _ in rows], into: [b for _, b in rows]})
+
+
 def port_sources(name: str) -> dict[str, Any]:
     """One JSON per port, filtered to what its model declares.
 
@@ -86,7 +102,7 @@ def port_sources(name: str) -> dict[str, Any]:
     tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
     model = PORTS_DIR / f'{name}.yaml'
     schema = load_model(model if model.exists() else EXAMPLES_DIR / f'{name}.yaml')
-    known = {**schema.parameters, **schema.dimensions}
+    known = {**schema.parameters, **schema.dimensions, **schema.lookups}
     return {k: v for k, v in tables.items() if k in known}
 
 

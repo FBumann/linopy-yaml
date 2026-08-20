@@ -32,6 +32,7 @@ from lpspec.errors import (
     declared_map_needs_labels_message,
     dense_array_message,
     index_without_its_label_column_message,
+    lookup_column_on_an_index_message,
     lookup_relation_columns_message,
     lookup_relation_holes_message,
     lookup_relation_not_single_valued_message,
@@ -39,6 +40,7 @@ from lpspec.errors import (
     multi_indexed_series_message,
     one_fact_two_authors_message,
     unknown_source_keys_message,
+    unsupplied_lookup_message,
 )
 from lpspec.frames import as_frame, is_dense_array, is_multi_indexed, labels_frame
 from lpspec.language import mask_of
@@ -359,11 +361,10 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
 
     Two facts, each with one home. **The labels** — which members exist, and in
     what order — come from ``dimensions.<d>.values`` or from the caller's ``d``
-    source. **Each lookup's map** comes from exactly one of three: its own
-    ``lookups.<x>.values``, its own source key, or a column named after it on
-    the index it runs over. Resolving any pair by precedence would let one
-    author describe a model another does not build, so every pair is refused
-    here, before either lane reads a table.
+    source. **Each lookup's map** comes from ``lookups.<x>.values`` or from the
+    lookup's own source key: exactly one, and never neither. Resolving a pair
+    by precedence would let one author describe a model another does not build,
+    so the pair is refused here, before either lane reads a table.
 
     A declared map is deliberately *not* a claim on the labels: it is a partial
     relation over the dimension, free to omit members and written in whatever
@@ -372,13 +373,24 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
     caller's label set is therefore the one index with two authors — one per
     fact — and it is the shape this check exists to keep honest.
 
+    An index carrying a column named after a lookup over it is refused rather
+    than filtered: every other stray column is a dump's extra, and this one is
+    a map someone meant to supply.
+
     Raises:
-        DataError: Naming the dimension, the declaration, and the key or column
-            that collided with it.
+        DataError: Naming the dimension or the lookup, and both authors — or
+            neither, where a map has none.
     """
-    for name in sorted(schema.lookups):
-        if name in data and schema.lookups[name].values is not None:
-            raise DataError(_map_said_twice(name, f'lookups.{name}.values', f'sources[{name!r}]'))
+    for name, lookup in sorted(schema.lookups.items()):
+        supplied, declared = name in data, lookup.values is not None
+        if supplied and declared:
+            raise DataError(
+                one_fact_two_authors_message(
+                    f"the map for lookup '{name}'", f'lookups.{name}.values', f'sources[{name!r}]'
+                )
+            )
+        if not supplied and not declared:
+            raise DataError(unsupplied_lookup_message(name, lookup.over, schema.label_space(name)))
 
     for dim, ddef in schema.dimensions.items():
         if dim not in data:
@@ -389,17 +401,9 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
                 one_fact_two_authors_message(f"dimension '{dim}'s labels", f'dimensions.{dim}.values', where)
             )
         carried = _column_names(data[dim], dim)
-        for name in sorted(n for n, lk in schema.lookups.items() if lk.over == dim and n in carried):
-            column = f"the '{name}' column of {where}"
-            if name in schema.declared_maps(dim):
-                raise DataError(_map_said_twice(name, f'lookups.{name}.values', column))
-            if name in data:
-                raise DataError(_map_said_twice(name, f'sources[{name!r}]', column))
-
-
-def _map_said_twice(lookup: str, first: str, second: str) -> str:
-    """One wording for each pair of authors a lookup's map can have."""
-    return one_fact_two_authors_message(f"the map for lookup '{lookup}'", first, second)
+        for name, lookup in sorted(schema.lookups.items()):
+            if lookup.over == dim and name in carried:
+                raise DataError(lookup_column_on_an_index_message(dim, name))
 
 
 def check_declared_map_keys(dim: str, maps: Mapping[str, Mapping[Any, Any]], labels: Sequence[Any]) -> None:

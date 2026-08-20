@@ -27,7 +27,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from tests.conftest import EXAMPLES_DIR
+from tests.conftest import EXAMPLES_DIR, relation
 
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
 PAGE = Path('docs/examples/multi_period.md')
@@ -42,7 +42,8 @@ GENERATORS = ['wind', 'gas']
 
 def _sources(capex_2050_wind: float = 8.0):
     return {
-        'snapshot': pl.DataFrame({'snapshot': SNAPSHOTS, 'period_of': PERIOD_OF}),
+        'snapshot': pl.DataFrame({'snapshot': SNAPSHOTS}),
+        'period_of': pl.DataFrame({'snapshot': SNAPSHOTS, 'period': PERIOD_OF}),
         'period': pl.DataFrame({'period': [2030, 2050]}),
         'generator': pl.DataFrame({'generator': GENERATORS}),
         'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 20.0, 40.0, 60.0]}),
@@ -124,7 +125,8 @@ def test_one_binary_gates_every_flow_of_its_component():
     """
     flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
     sources = {
-        'flow': pl.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c2']}),
+        'flow': pl.DataFrame({'flow': flows}),
+        'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
         'component': pl.DataFrame({'component': components}),
         'cost': pl.DataFrame({'flow': flows, 'value': [1.0, 2.0, 1.5]}),
         'oncost': pl.DataFrame({'component': components, 'value': [5.0, 7.0]}),
@@ -185,7 +187,8 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'share': pd.Series([1.0, 2.0, 3.0], index=flows),
     }
     index = {
-        'flow': pd.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c2']}),
+        'flow': pd.DataFrame({'flow': flows}),
+        'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
         'component': pd.Index(components, name='component'),
     }
     with differential(model, data | index) as run:
@@ -278,7 +281,8 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
     sources |= {
         'unit': pl.DataFrame({'unit': list(up_time)}),
         't': pl.DataFrame({'t': hours}),
-        'tf': pl.DataFrame({'tf': hours, 'same_moment': hours}),
+        'tf': pl.DataFrame({'tf': hours}),
+        'same_moment': relation('tf', 't', hours, hours),
     }
     with lps.solve(model, sources) as solution:
         assert solution.objective == pytest.approx(13.0), (
@@ -329,7 +333,8 @@ def test_at_through_a_null_lookup_takes_the_row_with_it():
     built = lpspec_linopy.build(
         DANGLING,
         {
-            'flow': pd.DataFrame({'flow': flows, 'component_of': DANGLING_MAP}),
+            'flow': pd.DataFrame({'flow': flows}),
+            'component_of': relation('flow', 'component', flows, DANGLING_MAP),
             'component': pd.Index(components, name='component'),
         },
     )
@@ -358,7 +363,8 @@ def test_at_through_a_null_lookup_agrees_between_lanes():
     with differential(
         DANGLING,
         {
-            'flow': pd.DataFrame({'flow': flows, 'component_of': DANGLING_MAP}),
+            'flow': pd.DataFrame({'flow': flows}),
+            'component_of': relation('flow', 'component', flows, DANGLING_MAP),
             'component': pd.Index(components, name='component'),
         },
         lp=True,
@@ -403,7 +409,9 @@ def test_at_through_one_null_of_a_pair_takes_the_row_with_it():
     with differential(
         DANGLING_PAIR,
         {
-            'flow': pd.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c1'], 'kind_of': ['k1', 'k1', None]}),
+            'flow': pd.DataFrame({'flow': flows}),
+            'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c1']),
+            'kind_of': relation('flow', 'kind', flows, ['k1', 'k1', None]),
             'component': pd.Index(['c1', 'c2'], name='component'),
             'kind': pd.Index(['k1'], name='kind'),
         },
@@ -437,7 +445,8 @@ def test_at_over_a_masked_variable_takes_the_row_with_it():
     with differential(
         MASKED,
         {
-            'flow': pd.DataFrame({'flow': flows, 'component_of': ['c1', 'c1', 'c2']}),
+            'flow': pd.DataFrame({'flow': flows}),
+            'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
             'component': pd.Index(components, name='component'),
             'usable': pd.Series([1.0, 0.0], index=pd.Index(components, name='component')),
         },
@@ -500,7 +509,8 @@ def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
     with differential(
         DANGLING_SHIFTED,
         {
-            'flow': pd.DataFrame({'flow': flows, 'component_of': DANGLING_MAP}),
+            'flow': pd.DataFrame({'flow': flows}),
+            'component_of': relation('flow', 'component', flows, DANGLING_MAP),
             'component': pd.Index(components, name='component'),
             't': pd.Index([0, 1], name='t'),
             'u': pd.Index(['a', 'b'], name='u'),

@@ -23,24 +23,40 @@
       40.0
     ]
   },
-  "generator": {
-    "gen_bus": [
+  "gen_bus": {
+    "generator": [
+      "wind_n",
+      "gas_s"
+    ],
+    "bus": [
       "north",
       "south"
-    ],
+    ]
+  },
+  "generator": {
     "generator": [
       "wind_n",
       "gas_s"
     ]
   },
   "line": {
-    "line_from": [
-      "north"
-    ],
+    "line": [
+      "n_to_s"
+    ]
+  },
+  "line_from": {
     "line": [
       "n_to_s"
     ],
-    "line_to": [
+    "bus": [
+      "north"
+    ]
+  },
+  "line_to": {
+    "line": [
+      "n_to_s"
+    ],
+    "bus": [
       "south"
     ]
   },

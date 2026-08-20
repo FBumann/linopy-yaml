@@ -395,49 +395,57 @@ LOOKUP_MODEL = {
 }
 
 _P_MAX = {'p_max': _tidy(g=['w', 's'], value=[5.0, 5.0])}
+_INDEX = {'g': _tidy(g=['w', 's'])}
+_MAP = {'gen_bus': _tidy(g=['w', 's'], b=['n', 'e'])}
 
 
 @pytest.mark.parametrize(
     ('sources', 'match'),
     [
-        pytest.param(_P_MAX, 'carries lookups', id='no-index-at-all'),
+        pytest.param({**_P_MAX, **_MAP}, 'has its maps', id='a-map-and-no-labels'),
+        pytest.param({**_P_MAX, **_INDEX}, 'no data provided for lookup', id='an-index-and-no-map'),
         pytest.param(
-            {**_P_MAX, 'g': _tidy(g=['w', 's'])},
-            'missing declared lookup column',
-            id='an-index-without-the-lookup-column',
+            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], gen_bus=['n', 'e'])},
+            r"must carry columns \['g', 'b'\]",
+            id='a-map-named-after-itself-and-not-its-target',
         ),
         pytest.param(
-            {**_P_MAX, 'g': _tidy(gg=['w', 's'], gen_bus=['n', 'e'])},
+            {**_P_MAX, **_MAP, 'g': _tidy(gg=['w', 's'])},
             "without a 'g' column",
             id='an-index-without-the-label-column',
         ),
         pytest.param(
-            {**_P_MAX, 'g': _tidy(g=['w', 's'], gen_bus=['n', 'zz'])},
+            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'zz'])},
             'not .b. labels',
             id='a-lookup-value-that-is-no-label-of-its-target',
         ),
         pytest.param(
-            {**_P_MAX, 'g': _tidy(g=['w', 'w', 's'], gen_bus=['n', 'e', 'e'])},
-            'more than one value per label',
+            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 'w', 's'], b=['n', 'e', 'e'])},
+            'more than once',
             id='a-lookup-with-two-values-for-one-label',
         ),
         pytest.param(
-            {**_P_MAX, 'g': _tidy(g=['w', 'w', 's'], gen_bus=[None, 'n', 'e'])},
-            'more than one value per label',
-            id='a-lookup-null-in-one-row-and-set-in-another',
+            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=[None, 'e'])},
+            "null in 'b'",
+            id='a-lookup-mapping-a-label-to-nothing',
+        ),
+        pytest.param(
+            {**_P_MAX, **_MAP, 'g': _tidy(g=['w', 's'], gen_bus=['n', 'e'])},
+            "is a lookup over 'g'",
+            id='a-map-carried-on-the-index-it-runs-over',
         ),
     ],
 )
-def test_a_lookup_index_defect_reads_the_same_on_both_lanes(tmp_path, sources, match):
+def test_a_lookup_defect_reads_the_same_on_both_lanes(tmp_path, sources, match):
     """One wording, not two — the same rule `no_index_source_message` follows.
 
     The first two were written twice and drifted: the relational lane named the
     `sources` key and the eager one a separate argument, for one defect a caller
-    fixes the same way whichever lane they were on. The rest are the same
-    duplication one function further in, where the eager lane read the index
-    itself: a missing label column reached the caller as a raw polars
-    `ColumnNotFoundError` on one lane, and the two lookup refusals had a
-    sentence each, one of them missing the repair clause entirely.
+    fixes the same way whichever lane they were on. The rest were the same
+    duplication one function further in, where each lane read the index itself
+    — and with a map arriving under its own key they are one check in the door
+    both lanes enter, which is what makes the parity structural here rather
+    than tested into place.
     """
     path = tmp_path / 'lookup.yaml'
     path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
@@ -490,8 +498,8 @@ def test_a_lookup_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_pa
     }
     path = tmp_path / 'null_lookup.yaml'
     path.write_text(pyyaml.safe_dump(model))
-    clean = {**_P_MAX, 'g': _tidy(g=['w', 's'], gen_bus=['n', 'n'])}
-    holed = {**_P_MAX, 'g': _tidy(g=['w', 'w', 's'], gen_bus=[None, 'n', 'n'])}
+    clean = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'n'])}
+    holed = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 'w', 's'], b=[None, 'n', 'n'])}
 
     with lps.solve(path, clean) as run:
         assert run.objective == pytest.approx(3.0), 'both members are on the bus, and the bus caps them'
@@ -499,9 +507,9 @@ def test_a_lookup_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_pa
     built.solve(solver_name='highs', output_flag=False)
     assert float(built.objective.value) == pytest.approx(3.0), 'and the eager lane agrees where the index is clean'
 
-    with pytest.raises(DataError, match='more than one value per label'):
+    with pytest.raises(DataError, match="null in 'b'"):
         lps.build(path, holed).close()
-    with pytest.raises(DataError, match='more than one value per label'):
+    with pytest.raises(DataError, match="null in 'b'"):
         lpspec_linopy.build(path, holed)
 
 
@@ -514,7 +522,7 @@ def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
     """
     path = tmp_path / 'lookup.yaml'
     path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
-    sources = {**_P_MAX, 'g': _tidy(g=['w', 's'], gen_bus=['n', 'e'])}
+    sources = {**_P_MAX, **_INDEX, **_MAP}
 
     with lps.solve(path, sources) as relational:
         assert relational.is_ok
@@ -537,8 +545,8 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
     path = tmp_path / 'lookup.yaml'
     path.write_text(pyyaml.safe_dump(LOOKUP_MODEL))
     index = tmp_path / 'g.parquet'
-    _tidy(g=['w', 's'], gen_bus=['n', 'e']).write_parquet(index)
-    sources = {**_P_MAX, 'g': str(index)}
+    _tidy(g=['w', 's']).write_parquet(index)
+    sources = {**_P_MAX, **_MAP, 'g': str(index)}
 
     monkeypatch.setitem(sys.modules, 'pyarrow', None)
     with lps.solve(path, sources) as relational:
@@ -586,17 +594,18 @@ def test_a_lookup_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_pat
     days = [datetime.date(2030, 1, 1), datetime.date(2030, 1, 2)]
     path = tmp_path / 'temporal_lookup.yaml'
     path.write_text(pyyaml.safe_dump(TEMPORAL_LOOKUP_MODEL))
-    index = _tidy(g=['w', 's'], day_of=[days[0], days[0]])
+    day_of = _tidy(g=['w', 's'], d=[days[0], days[0]])
     if library == 'a parquet path':
-        index.write_parquet(tmp_path / 'g.parquet')
+        day_of.write_parquet(tmp_path / 'day_of.parquet')
     sources = {
         **_P_MAX,
         'cap': _tidy(d=days, value=[3.0, 7.0]),
         'd': days,
-        'g': {
-            'pandas': lambda: pd.DataFrame({'g': ['w', 's'], 'day_of': [days[0], days[0]]}),
-            'polars': lambda: index,
-            'a parquet path': lambda: str(tmp_path / 'g.parquet'),
+        'g': ['w', 's'],
+        'day_of': {
+            'pandas': lambda: pd.DataFrame({'g': ['w', 's'], 'd': [days[0], days[0]]}),
+            'polars': lambda: day_of,
+            'a parquet path': lambda: str(tmp_path / 'day_of.parquet'),
         }[library](),
     }
 
@@ -621,7 +630,7 @@ def test_a_stray_lookup_value_reads_the_same_over_an_int_labelled_target(tmp_pat
     }
     path = tmp_path / 'int_labels.yaml'
     path.write_text(pyyaml.safe_dump(model))
-    sources = {**_P_MAX, 'g': _tidy(g=['w', 's'], gen_bus=[1, 99])}
+    sources = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
 
     with pytest.raises(DataError, match=r'not .b. labels') as relational:
         lps.build(path, sources).close()
@@ -649,7 +658,8 @@ def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
     deep = pd.MultiIndex.from_tuples([('w', 0), ('s', 0)], names=['g', 'k'])
     sources = {
         'p_max': pd.Series([5.0, 5.0], index=deep),
-        'g': _tidy(g=['w', 's'], gen_bus=['n', 'e']),
+        **_INDEX,
+        **_MAP,
     }
 
     with pytest.raises(DataError, match='MultiIndex is not a source') as relational:
@@ -725,7 +735,12 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
     The columns a table must carry are exact and total — every dim, plus
     `value` — so a misspelled one is a missing one and is refused. Nothing can
     hide in the extras, and the extras are the point: a framework hands over
-    `generators` with its index, its lookups and its attributes in one table.
+    `generators` with its index and its attributes in one table.
+
+    One column is not an extra. A column named after a lookup over the
+    dimension is a map somebody meant to supply, and dropping it silently would
+    build the model they did not write — so it is the one stray that is
+    refused, naming the key it belongs under.
     """
     model = {
         'dimensions': {'g': {}, 'b': {'values': ['n', 'e']}},
@@ -737,11 +752,19 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
     }
     path = tmp_path / 'entity.yaml'
     path.write_text(pyyaml.safe_dump(model))
-    generators = _tidy(g=['w', 's'], gen_bus=['n', 'e'], cap=[10.0, 20.0], note=['a', 'b'])
-    sources = {'g': generators, 'cap': _tidy(g=['w', 's'], value=[10.0, 20.0])}
+    generators = _tidy(g=['w', 's'], cap=[10.0, 20.0], note=['a', 'b'])
+    sources = {
+        'g': generators,
+        'gen_bus': _tidy(g=['w', 's'], b=['n', 'e']),
+        'cap': _tidy(g=['w', 's'], value=[10.0, 20.0]),
+    }
 
     with lps.solve(path, sources) as result:
         assert result.objective == pytest.approx(30.0)
 
     with pytest.raises(DataError, match=r"missing columns \['g'\]"):
         lps.build(path, {**sources, 'cap': _tidy(gg=['w', 's'], value=[10.0, 20.0])}).close()
+
+    carried = _tidy(g=['w', 's'], cap=[10.0, 20.0], gen_bus=['n', 'e'])
+    with pytest.raises(DataError, match=r"index for dimension 'g' carries a 'gen_bus' column"):
+        lps.build(path, {**sources, 'g': carried}).close()

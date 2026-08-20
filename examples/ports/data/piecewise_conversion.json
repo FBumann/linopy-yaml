@@ -1,39 +1,42 @@
 {
-  "time": {
-    "time": [
-      0,
-      1,
-      2
-    ]
-  },
-  "converter": {
-    "converter": [
-      "boiler",
-      "chp"
-    ]
-  },
-  "flow": {
-    "flow": [
-      "boiler_fuel",
-      "boiler_heat",
-      "chp_fuel",
-      "chp_heat",
-      "chp_power"
-    ],
-    "converter_of": [
-      "boiler",
-      "boiler",
-      "chp",
-      "chp",
-      "chp"
-    ]
-  },
   "bp": {
     "bp": [
       0,
       1,
       2,
       3
+    ]
+  },
+  "bp_present": {
+    "converter": [
+      "boiler",
+      "boiler",
+      "boiler",
+      "boiler",
+      "chp",
+      "chp",
+      "chp",
+      "chp"
+    ],
+    "bp": [
+      0,
+      1,
+      2,
+      3,
+      0,
+      1,
+      2,
+      3
+    ],
+    "value": [
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true
     ]
   },
   "bp_rate": {
@@ -98,36 +101,63 @@
       42.0
     ]
   },
-  "bp_present": {
+  "converter": {
+    "converter": [
+      "boiler",
+      "chp"
+    ]
+  },
+  "converter_of": {
+    "flow": [
+      "boiler_fuel",
+      "boiler_heat",
+      "chp_fuel",
+      "chp_heat",
+      "chp_power"
+    ],
     "converter": [
       "boiler",
       "boiler",
-      "boiler",
-      "boiler",
-      "chp",
       "chp",
       "chp",
       "chp"
-    ],
-    "bp": [
-      0,
-      1,
-      2,
-      3,
-      0,
-      1,
-      2,
-      3
+    ]
+  },
+  "flow": {
+    "flow": [
+      "boiler_fuel",
+      "boiler_heat",
+      "chp_fuel",
+      "chp_heat",
+      "chp_power"
+    ]
+  },
+  "fuel_price": {
+    "flow": [
+      "boiler_fuel",
+      "boiler_heat",
+      "chp_fuel",
+      "chp_heat",
+      "chp_power"
     ],
     "value": [
-      true,
-      true,
-      true,
-      false,
-      true,
-      true,
-      true,
-      true
+      30.0,
+      0.0,
+      34.0,
+      0.0,
+      0.0
+    ]
+  },
+  "heat_demand": {
+    "time": [
+      0,
+      1,
+      2
+    ],
+    "value": [
+      45.0,
+      54.5,
+      20.0
     ]
   },
   "is_heat": {
@@ -162,34 +192,6 @@
       1.0
     ]
   },
-  "fuel_price": {
-    "flow": [
-      "boiler_fuel",
-      "boiler_heat",
-      "chp_fuel",
-      "chp_heat",
-      "chp_power"
-    ],
-    "value": [
-      30.0,
-      0.0,
-      34.0,
-      0.0,
-      0.0
-    ]
-  },
-  "heat_demand": {
-    "time": [
-      0,
-      1,
-      2
-    ],
-    "value": [
-      45.0,
-      54.5,
-      20.0
-    ]
-  },
   "power_demand": {
     "time": [
       0,
@@ -216,6 +218,13 @@
       100.0,
       40.0,
       42.0
+    ]
+  },
+  "time": {
+    "time": [
+      0,
+      1,
+      2
     ]
   }
 }

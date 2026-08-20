@@ -1,34 +1,255 @@
 {
-  "snapshot": {"snapshot": [0, 1, 2, 3]},
-  "bus": {"bus": ["north", "south", "east"]},
-  "carrier": {"carrier": ["wind", "gas", "oil"]},
-  "generator": {
-    "generator": ["wind_north", "wind_east", "gas_south", "oil_east"],
-    "gen_bus": ["north", "east", "south", "east"],
-    "gen_carrier": ["wind", "wind", "gas", "oil"]
+  "bus": {
+    "bus": [
+      "north",
+      "south",
+      "east"
+    ]
   },
-  "link": {"link": ["north_south", "east_south"], "link_from": ["north", "east"], "link_to": ["south", "south"]},
+  "bus_capacity_cap": {
+    "bus": [
+      "east"
+    ],
+    "carrier": [
+      "wind"
+    ],
+    "value": [
+      17.0
+    ]
+  },
+  "carrier": {
+    "carrier": [
+      "wind",
+      "gas",
+      "oil"
+    ]
+  },
+  "energy_cap": {
+    "carrier": [
+      "gas"
+    ],
+    "value": [
+      380.0
+    ]
+  },
+  "expansion_cost_cap": 10500.0,
+  "gen_bus": {
+    "generator": [
+      "wind_north",
+      "wind_east",
+      "gas_south",
+      "oil_east"
+    ],
+    "bus": [
+      "north",
+      "east",
+      "south",
+      "east"
+    ]
+  },
+  "gen_capital_cost": {
+    "generator": [
+      "wind_north",
+      "wind_east",
+      "gas_south",
+      "oil_east"
+    ],
+    "value": [
+      500.0,
+      450.0,
+      400.0,
+      300.0
+    ]
+  },
+  "gen_carrier": {
+    "generator": [
+      "wind_north",
+      "wind_east",
+      "gas_south",
+      "oil_east"
+    ],
+    "carrier": [
+      "wind",
+      "wind",
+      "gas",
+      "oil"
+    ]
+  },
+  "generator": {
+    "generator": [
+      "wind_north",
+      "wind_east",
+      "gas_south",
+      "oil_east"
+    ]
+  },
+  "link": {
+    "link": [
+      "north_south",
+      "east_south"
+    ]
+  },
+  "link_capital_cost": {
+    "link": [
+      "north_south",
+      "east_south"
+    ],
+    "value": [
+      200.0,
+      400.0
+    ]
+  },
+  "link_from": {
+    "link": [
+      "north_south",
+      "east_south"
+    ],
+    "bus": [
+      "north",
+      "east"
+    ]
+  },
+  "link_length": {
+    "link": [
+      "north_south",
+      "east_south"
+    ],
+    "value": [
+      100.0,
+      50.0
+    ]
+  },
+  "link_to": {
+    "link": [
+      "north_south",
+      "east_south"
+    ],
+    "bus": [
+      "south",
+      "south"
+    ]
+  },
   "load": {
-    "snapshot": [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3],
-    "bus": ["north", "north", "north", "north", "south", "south", "south", "south", "east", "east", "east", "east"],
-    "value": [10.0, 10.0, 10.0, 10.0, 120.0, 120.0, 120.0, 120.0, 20.0, 20.0, 20.0, 20.0]
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      0,
+      1,
+      2,
+      3,
+      0,
+      1,
+      2,
+      3
+    ],
+    "bus": [
+      "north",
+      "north",
+      "north",
+      "north",
+      "south",
+      "south",
+      "south",
+      "south",
+      "east",
+      "east",
+      "east",
+      "east"
+    ],
+    "value": [
+      10.0,
+      10.0,
+      10.0,
+      10.0,
+      120.0,
+      120.0,
+      120.0,
+      120.0,
+      20.0,
+      20.0,
+      20.0,
+      20.0
+    ]
+  },
+  "marginal_cost": {
+    "generator": [
+      "wind_north",
+      "wind_east",
+      "gas_south",
+      "oil_east"
+    ],
+    "value": [
+      0.0,
+      0.0,
+      60.0,
+      150.0
+    ]
   },
   "p_max_pu": {
-    "snapshot": [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3],
-    "generator": [
-      "wind_north", "wind_north", "wind_north", "wind_north",
-      "wind_east", "wind_east", "wind_east", "wind_east",
-      "gas_south", "gas_south", "gas_south", "gas_south",
-      "oil_east", "oil_east", "oil_east", "oil_east"
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      0,
+      1,
+      2,
+      3,
+      0,
+      1,
+      2,
+      3,
+      0,
+      1,
+      2,
+      3
     ],
-    "value": [0.9, 0.2, 0.8, 0.3, 0.3, 0.9, 0.4, 0.8, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    "generator": [
+      "wind_north",
+      "wind_north",
+      "wind_north",
+      "wind_north",
+      "wind_east",
+      "wind_east",
+      "wind_east",
+      "wind_east",
+      "gas_south",
+      "gas_south",
+      "gas_south",
+      "gas_south",
+      "oil_east",
+      "oil_east",
+      "oil_east",
+      "oil_east"
+    ],
+    "value": [
+      0.9,
+      0.2,
+      0.8,
+      0.3,
+      0.3,
+      0.9,
+      0.4,
+      0.8,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
   },
-  "marginal_cost": {"generator": ["wind_north", "wind_east", "gas_south", "oil_east"], "value": [0.0, 0.0, 60.0, 150.0]},
-  "gen_capital_cost": {"generator": ["wind_north", "wind_east", "gas_south", "oil_east"], "value": [500.0, 450.0, 400.0, 300.0]},
-  "link_capital_cost": {"link": ["north_south", "east_south"], "value": [200.0, 400.0]},
-  "link_length": {"link": ["north_south", "east_south"], "value": [100.0, 50.0]},
-  "energy_cap": {"carrier": ["gas"], "value": [380.0]},
-  "bus_capacity_cap": {"bus": ["east"], "carrier": ["wind"], "value": [17.0]},
-  "volume_cap": 3400.0,
-  "expansion_cost_cap": 10500.0
+  "snapshot": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "volume_cap": 3400.0
 }

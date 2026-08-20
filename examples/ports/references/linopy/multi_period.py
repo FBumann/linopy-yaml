@@ -44,7 +44,7 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     weight: pd.Series = tables['weight'].set_index('snapshot')['value']
     opex: pd.Series = tables['opex'].set_index('generator')['value']
     capex = xr.DataArray(tables['capex'].pivot(index='period', columns='generator', values='value'))
-    period = xr.DataArray(tables['snapshot'].set_index('snapshot')['period_of'].rename('period'))
+    period = xr.DataArray(tables['period_of'].set_index('snapshot')['period'])
 
     m = linopy.Model()
     p = m.add_variables(lower=0, coords=[load.index, opex.index], name='p')

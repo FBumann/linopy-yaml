@@ -49,9 +49,12 @@ def _inputs(gens, lines, load):
     }
     return data | {
         'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),
-        'generator': gens[['generator', 'bus']].rename(columns={'bus': 'gen_bus'}),
+        'generator': gens[['generator']],
         'bus': pd.Index(sorted(load['bus'].unique()), name='bus'),
-        'line': lines[['line', 'from_bus', 'to_bus']].rename(columns={'from_bus': 'line_from', 'to_bus': 'line_to'}),
+        'line': lines[['line']],
+        'gen_bus': gens[['generator', 'bus']],
+        'line_from': lines[['line', 'from_bus']].rename(columns={'from_bus': 'bus'}),
+        'line_to': lines[['line', 'to_bus']].rename(columns={'to_bus': 'bus'}),
     }
 
 
@@ -179,9 +182,9 @@ def test_a_coordinate_must_be_single_valued(transport_data):
     gens, lines, load = transport_data
     other = 's' if gens['bus'].iloc[0] != 's' else 'n'
     data = _inputs(gens, lines, load)
-    data['generator'] = pd.concat([data['generator'], data['generator'].head(1).assign(gen_bus=other)])
+    data['gen_bus'] = pd.concat([data['gen_bus'], data['gen_bus'].head(1).assign(bus=other)])
 
-    with pytest.raises(DataError, match='more than one value'):
+    with pytest.raises(DataError, match='more than once'):
         _relationally(data)
 
 
@@ -193,20 +196,25 @@ def test_a_parameter_carrying_a_coordinate_twice_is_refused(transport_data):
     divergence between two lanes that are supposed to accept the same thing.
     """
     gens, lines, load = transport_data
-    doubled = pd.concat([gens, gens.head(1)])
+    data = _inputs(gens, lines, load)
+    data['p_max'] = pd.concat([data['p_max'], data['p_max'].head(1)])
 
     with pytest.raises(DataError, match="parameter 'p_max' has more than one row"):
-        _relationally(_inputs(doubled, lines, load))
+        _relationally(data)
 
 
 def test_a_coordinate_bearing_dim_needs_an_index_source(transport_data):
     """A coordinate cannot be inferred from the parameters that use the dim —
-    inferring it is what would let a typo extend the label space."""
+    inferring it is what would let a typo extend the label space.
+
+    Nor from the map over it: `gen_bus` still says which generators sit where,
+    and a relation over a dimension never says which of its members exist.
+    """
     gens, lines, load = transport_data
     data = _inputs(gens, lines, load)
     del data['generator']
 
-    with pytest.raises(DataError, match='no index source'):
+    with pytest.raises(DataError, match=re.escape("has its maps (sources['gen_bus'])")):
         _relationally(data)
 
 
@@ -236,10 +244,12 @@ objective:
 def _partial_inputs():
     """`item` carries lookup `grp`: i0 and i1 in group g0, i2 in none."""
     items = ['i0', 'i1', 'i2']
-    index = pd.DataFrame({'item': items, 'grp': ['g0', 'g0', None]})
+    index = pd.DataFrame({'item': items})
+    grp = pd.DataFrame({'item': ['i0', 'i1'], 'g': ['g0', 'g0']})
     return (
         {  # relational sources
             'item': index,
+            'grp': grp,
             'g': pd.DataFrame({'g': ['g0']}),
             'cap': pd.DataFrame({'item': items, 'value': [5.0, 5.0, 5.0]}),
             'target': pd.DataFrame({'g': ['g0'], 'value': [3.0]}),
@@ -248,6 +258,7 @@ def _partial_inputs():
             'cap': pd.Series([5.0, 5.0, 5.0], index=pd.Index(items, name='item')),
             'target': pd.Series([3.0], index=pd.Index(['g0'], name='g')),
             'item': index,
+            'grp': grp,
             'g': pd.Index(['g0'], name='g'),
         },
     )
@@ -292,13 +303,15 @@ GROUPED_ONTO_BUS = {
 GROUPED_ONTO_BUS_SOURCES = {
     'a label no member reaches': {
         'bus': pl.DataFrame({'bus': ['north', 'south', 'east']}),
-        'generator': pl.DataFrame({'generator': ['g1', 'g2'], 'gen_bus': ['north', 'south']}),
+        'generator': ['g1', 'g2'],
+        'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']}),
         'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [10.0, 10.0]}),
         'load': pl.DataFrame({'bus': ['north', 'south', 'east'], 'value': [4.0, 6.0, 0.0]}),
     },
     'a declared order that is not sorted': {
         'bus': pl.DataFrame({'bus': ['south', 'north']}),
-        'generator': pl.DataFrame({'generator': ['g1', 'g2'], 'gen_bus': ['north', 'south']}),
+        'generator': ['g1', 'g2'],
+        'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']}),
         'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [10.0, 10.0]}),
         'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [4.0, 6.0]}),
     },
@@ -345,7 +358,8 @@ BROADCAST_GROUP_SUM = {
 BROADCAST_SOURCES = {
     'w': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'value': [1.0, 2.0, 5.0]}),
     'limit': pl.DataFrame({'snapshot': [0, 0, 1, 1], 'bus': ['b1', 'b2'] * 2, 'value': [9.0, 100.0, 9.0, 100.0]}),
-    'generator': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['b1', 'b1', 'b2']}),
+    'generator': ['g1', 'g2', 'g3'],
+    'gen_bus': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     'bus': pl.DataFrame({'bus': ['b1', 'b2']}),
 }
 
@@ -467,19 +481,21 @@ def monthly():
     """The snapshot index and sources: six snapshots over three calendar months,
     wind capped in the first.
 
-    The `month_of` column is data prep — one polars expression — which is the
+    The `month_of` relation is data prep — one polars expression — which is the
     page's whole point: the language never learns what a calendar is.
     """
     import datetime as dt
 
     hours = [dt.datetime(2030, 1, 1) + dt.timedelta(days=15 * i) for i in range(6)]
-    index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month_of'))
-    months = sorted(set(index['month_of']))
+    snapshots = pl.DataFrame({'snapshot': hours})
+    month_of = snapshots.with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
+    months = sorted(set(month_of['month']))
     gens = ['wind', 'gas']
     return (
-        index,
+        month_of,
         {
-            'snapshot': index,
+            'snapshot': snapshots,
+            'month_of': month_of,
             'month': pl.DataFrame({'month': months}),
             'generator': pl.DataFrame({'generator': gens}),
             'p_max': pl.DataFrame({'generator': gens, 'value': [10.0, 100.0]}),
@@ -504,16 +520,16 @@ def test_a_monthly_budget_binds_and_prices_itself(monthly):
     instead — 50 against 1. February and March are slack and price at zero,
     which is what distinguishes a binding budget from a decorative one.
     """
-    index, sources = monthly
+    month_of, sources = monthly
     with lps.solve(MONTHLY_YAML, sources) as result:
         assert result.is_ok
         wind = (
             result.primal('p')
             .filter(pl.col('generator') == 'wind')
-            .join(index, on='snapshot')
-            .group_by('month_of')
+            .join(month_of, on='snapshot')
+            .group_by('month')
             .agg(pl.col('value').sum())
-            .sort('month_of')
+            .sort('month')
         )
         assert wind['value'].to_list() == pytest.approx([5.0, 10.0, 20.0]), (
             '3 snapshots in Jan (capped at 5), 1 in Feb, 2 in Mar — unequal groups'
@@ -530,11 +546,11 @@ def test_the_monthly_grouping_is_a_column_and_nothing_else(monthly):
     and the constraint now spans three-month blocks. That is the claim the
     page makes about weeks, seasons and representative periods, checked once.
     """
-    index, sources = monthly
-    quarters = index.with_columns(pl.lit('2030-Q1').alias('month_of')).select('snapshot', 'month_of')
+    month_of, sources = monthly
+    quarters = month_of.with_columns(pl.lit('2030-Q1').alias('month'))
     regrouped = {
         **sources,
-        'snapshot': quarters,
+        'month_of': quarters,
         'month': pl.DataFrame({'month': ['2030-Q1']}),
         'monthly_cap': pl.DataFrame({'month': ['2030-Q1'] * 2, 'generator': ['wind', 'gas'], 'value': [5.0, 1e4]}),
     }
@@ -553,12 +569,12 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
     of its own — the model then solves a smaller problem and says nothing. The
     same check catches a generator assigned to a bus that does not exist.
     """
-    index, sources = monthly
-    typo = index.with_columns(
-        pl.when(pl.col('month_of') == '2030-03').then(pl.lit('2030-3')).otherwise(pl.col('month_of')).alias('month_of')
+    month_of, sources = monthly
+    typo = month_of.with_columns(
+        pl.when(pl.col('month') == '2030-03').then(pl.lit('2030-3')).otherwise(pl.col('month')).alias('month')
     )
     with pytest.raises(DataError, match=r"lookup 'month_of' has value\(s\) that are not 'month' labels"):
-        lps.solve(MONTHLY_YAML, {**sources, 'snapshot': typo})
+        lps.solve(MONTHLY_YAML, {**sources, 'month_of': typo})
 
 
 def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
@@ -570,9 +586,9 @@ def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
     Defaults are restored while formatting, so a contributor's `POLARS_FMT_*`
     environment cannot fail this.
     """
-    index, _sources = monthly
+    month_of, _sources = monthly
     fences = re.findall(r'^```text\n(.*?)^```', MONTHLY_PAGE.read_text(), re.MULTILINE | re.DOTALL)
     printed = [block for block in fences if block.startswith('shape: (')]
     assert len(printed) == 1, 'the page prints exactly one frame'
     with pl.Config(restore_defaults=True):
-        assert printed[0].rstrip('\n') == str(index)
+        assert printed[0].rstrip('\n') == str(month_of)

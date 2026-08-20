@@ -44,7 +44,7 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     cost: pd.Series = tables['cost'].set_index('generator')['value']
     load: pd.Series = tables['load'].set_index('snapshot')['value']
     cap = xr.DataArray(tables['monthly_cap'].pivot(index='month', columns='generator', values='value'))
-    month = xr.DataArray(tables['snapshot'].set_index('snapshot')['month_of'].rename('month'))
+    month = xr.DataArray(tables['month_of'].set_index('snapshot')['month'])
 
     m = linopy.Model()
     p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')

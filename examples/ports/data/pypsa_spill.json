@@ -1,21 +1,162 @@
 {
-  "snapshot": {"snapshot": [0, 1, 2, 3, 4, 5]},
-  "bus": {"bus": ["hub"]},
-  "generator": {"generator": ["gas"], "gen_bus": ["hub"]},
-  "storage": {"storage": ["res", "bat"], "storage_bus": ["hub", "hub"]},
-  "p_nom": {"generator": ["gas"], "value": [100.0]},
-  "marginal_cost": {"generator": ["gas"], "value": [80.0]},
-  "storage_p_nom": {"storage": ["res", "bat"], "value": [30.0, 20.0]},
-  "soc_max": {"storage": ["res", "bat"], "value": [60.0, 40.0]},
-  "soc_initial": {"storage": ["res", "bat"], "value": [40.0, 0.0]},
+  "bus": {
+    "bus": [
+      "hub"
+    ]
+  },
+  "gen_bus": {
+    "generator": [
+      "gas"
+    ],
+    "bus": [
+      "hub"
+    ]
+  },
+  "generator": {
+    "generator": [
+      "gas"
+    ]
+  },
   "inflow": {
-    "snapshot": [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5],
-    "storage": ["res", "res", "res", "res", "res", "res", "bat", "bat", "bat", "bat", "bat", "bat"],
-    "value": [50.0, 50.0, 10.0, 10.0, 10.0, 10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "storage": [
+      "res",
+      "res",
+      "res",
+      "res",
+      "res",
+      "res",
+      "bat",
+      "bat",
+      "bat",
+      "bat",
+      "bat",
+      "bat"
+    ],
+    "value": [
+      50.0,
+      50.0,
+      10.0,
+      10.0,
+      10.0,
+      10.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
   },
   "load": {
-    "snapshot": [0, 1, 2, 3, 4, 5],
-    "bus": ["hub", "hub", "hub", "hub", "hub", "hub"],
-    "value": [20.0, 20.0, 40.0, 40.0, 40.0, 40.0]
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "bus": [
+      "hub",
+      "hub",
+      "hub",
+      "hub",
+      "hub",
+      "hub"
+    ],
+    "value": [
+      20.0,
+      20.0,
+      40.0,
+      40.0,
+      40.0,
+      40.0
+    ]
+  },
+  "marginal_cost": {
+    "generator": [
+      "gas"
+    ],
+    "value": [
+      80.0
+    ]
+  },
+  "p_nom": {
+    "generator": [
+      "gas"
+    ],
+    "value": [
+      100.0
+    ]
+  },
+  "snapshot": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "soc_initial": {
+    "storage": [
+      "res",
+      "bat"
+    ],
+    "value": [
+      40.0,
+      0.0
+    ]
+  },
+  "soc_max": {
+    "storage": [
+      "res",
+      "bat"
+    ],
+    "value": [
+      60.0,
+      40.0
+    ]
+  },
+  "storage": {
+    "storage": [
+      "res",
+      "bat"
+    ]
+  },
+  "storage_bus": {
+    "storage": [
+      "res",
+      "bat"
+    ],
+    "bus": [
+      "hub",
+      "hub"
+    ]
+  },
+  "storage_p_nom": {
+    "storage": [
+      "res",
+      "bat"
+    ],
+    "value": [
+      30.0,
+      20.0
+    ]
   }
 }

@@ -51,12 +51,11 @@ def checked_sources(case: Case, size: str, paths: dict[str, str]) -> dict[str, s
 
     model = case.model_path(case.shape(size))
     schema = pyyaml.safe_load(model.read_text())
-    params = set(schema.get('parameters', {}))
-    dims = set(schema.get('dimensions', {}))
-    undeclared = sorted(set(paths) - params - dims)
+    declared = set().union(*(schema.get(block, {}) for block in ('parameters', 'dimensions', 'lookups')))
+    undeclared = sorted(set(paths) - declared)
     if undeclared:
         raise ValueError(
-            f'{case.name}: {undeclared} declared as neither parameter nor dimension in '
+            f'{case.name}: {undeclared} declared as neither parameter, dimension nor lookup in '
             f'{model} — the build would not see it. Stale files under bench/.cache/?'
         )
     return dict(paths)
