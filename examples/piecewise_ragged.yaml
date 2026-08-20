@@ -1,0 +1,66 @@
+description: >-
+  Least-cost dispatch where each generator's cost curve has as many breakpoints
+  as its data gives it — two for the hydro unit, four for the gas turbine —
+  rather than as many as the longest curve in the system.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  generator:
+    description: dispatchable units
+    dtype: str
+  bp:
+    description: breakpoints, as many as the longest curve needs
+    dtype: int
+
+parameters:
+  p_max:
+    description: maximum dispatch
+    dims: [generator]
+  load:
+    description: demand to be met
+    dims: [snapshot]
+  bp_x:
+    description: breakpoint dispatch levels, one curve per generator and no two the same length
+    dims: [generator, bp]
+  bp_y:
+    description: cost at each breakpoint
+    dims: [generator, bp]
+
+variables:
+  p:
+    description: dispatched power
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+      upper: p_max
+  op_cost:
+    description: operating cost, piecewise-linear in dispatch
+    foreach: [snapshot, generator]
+    bounds:
+      lower: 0
+
+piecewise:
+  cost_curve:
+    description: >-
+      each unit's own curve — `points: bp_x` says a curve runs as far as its own
+      breakpoints do, so the hydro unit pays for two weights and the gas turbine
+      for four
+    over: bp
+    points: bp_x
+    links:
+      - [p, bp_x]
+      - [op_cost, bp_y, ">="]
+    method: convex
+
+constraints:
+  balance:
+    description: every period's demand is met
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+
+objective:
+  sense: minimize
+  description: total operating cost, taken off each unit's own curve
+  expression: sum(sum(op_cost, over=generator), over=snapshot)

@@ -51,6 +51,7 @@ nav:
           - transport: examples/transport.md
           - piecewise: examples/piecewise.md
           - piecewise segment lines: examples/piecewise_lp.md
+          - piecewise curves of differing length: examples/piecewise_ragged.md
           - special-ordered sets: examples/sos.md
           - monthly budget: examples/monthly_budget.md
           - multi-period: examples/multi_period.md

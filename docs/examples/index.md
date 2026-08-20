@@ -22,6 +22,7 @@ Every page starts from data in the shape the call wants, and
 | [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
 | [piecewise](piecewise.md) | Per-generator convex cost curves, expanded into a λ-formulation. |
 | [piecewise segment lines](piecewise_lp.md) | A piecewise-linear cost curve stated as **the lines its segments lie on** — [piecewise](piecewise.md) with one line changed, and the only method that declares no auxiliary variable at all. |
+| [piecewise curves of differing length](piecewise_ragged.md) | Per-generator cost curves of **different lengths**, each as long as its own data. |
 | [special-ordered sets](sos.md) | A piecewise-linear cost curve stated as a **special-ordered set** — [piecewise](piecewise.md) with one line changed, handed to the solver as a set it branches on itself. |
 | [monthly budget](monthly_budget.md) | A cap on what each technology may generate per calendar month — an aggregate over a *coarser grouping of time*, written with the same operator that places a generator on a bus. |
 | [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
@@ -102,6 +103,7 @@ drift from what the engine builds.
 | [multi_period](multi_period.md) | **✔** 10020 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
 | [piecewise](piecewise.md) | **✔** 3850 | **✓** | · | · | · | · | · | **✓** | **✓** | · | · |
 | [piecewise_lp](piecewise_lp.md) | **✔** 3850 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
+| [piecewise_ragged](piecewise_ragged.md) | **✔** 426 | **✓** | · | · | · | · | **✓** | **✓** | **✓** | · | · |
 | [reserves](reserves.md) | **✔** 915 | **✓** | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [seasons](seasons.md) | · | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
 | [sos](sos.md) | · | **✓** | · | · | · | · | · | **✓** | **✓** | **✓** | · |
@@ -183,6 +185,7 @@ that class, and the evidence behind
 | [osemosys_utopia](osemosys_utopia.md) | 29446.86269 | 1e-09 | · | published by OSeMOSYS: asserted in OSeMOSYS_GNU_MathProg tests/test_gnu_mathprog.py as obj = 2.944686269e+04 for tests/utopia.txt, and reproduced here by running GLPK directly (glpsol 5.0, src/osemosys.txt) — an oracle outside Python entirely |
 | [piecewise](piecewise.md) | 3850.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
 | [piecewise_lp](piecewise_lp.md) | 3850.0 | 1e-09 | **✔** | the same instance as piecewise, whose optimum and duals linopy 0.9.0 fixes via examples/ports/references/linopy/piecewise.py — the two formulations agreeing is the claim |
+| [piecewise_ragged](piecewise_ragged.md) | 426.0 | 1e-09 | **✔** | linopy 0.9.0, via examples/ports/references/linopy/piecewise_ragged.py — agreement between two formulations of one convex curve (weights here, segment lines there), not a published figure |
 | [pypsa_ac_dc](pypsa_ac_dc.md) | 18441021.477729216 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ac_dc.py — n.objective + n.objective_constant, the system cost |
 | [pypsa_committable_extendable](pypsa_committable_extendable.md) | 21700.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_committable_extendable.py |
 | [pypsa_cvar](pypsa_cvar.md) | 35410.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cvar.py |

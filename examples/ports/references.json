@@ -1337,5 +1337,24 @@
         ]
       }
     }
+  },
+  "piecewise_ragged": {
+    "objective": 426.0,
+    "rtol": 1e-09,
+    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/piecewise_ragged.py — agreement between two formulations of one convex curve (weights here, segment lines there), not a published figure",
+    "duals": {
+      "balance": {
+        "snapshot": [
+          0,
+          1,
+          2
+        ],
+        "value": [
+          0.8,
+          1.6,
+          3.0
+        ]
+      }
+    }
   }
 }
