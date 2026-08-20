@@ -442,18 +442,27 @@ def _read_maps_against(
     labels = table.select(dim).collect()[dim].to_list()
     check_declared_map_keys(dim, maps, labels)
     for name, values in maps.items():
-        table = table.join(
-            pl.LazyFrame({dim: list(values), name: list(values.values())}),
-            on=dim,
-            how='left',
-        )
+        table = _joined(table, pl.LazyFrame({dim: list(values), name: list(values.values())}), dim)
     known, key = set(labels), table.collect_schema()[dim]
     for name, relation in supplied.items():
         rows = relation.collect()
         if strays := sorted(str(x) for x in rows[dim] if x not in known):
             raise DataError(map_keys_are_not_labels_message(dim, name, strays, [str(x) for x in labels], 'maps'))
-        table = table.join(rows.with_columns(pl.col(dim).cast(key)).lazy(), on=dim, how='left')
+        table = _joined(table, rows.with_columns(pl.col(dim).cast(key)).lazy(), dim)
     return table
+
+
+def _joined(index: pl.LazyFrame, map_: pl.LazyFrame, dim: str) -> pl.LazyFrame:
+    """One map onto the index, in the index's own row order.
+
+    ``maintain_order='left'`` is the load-bearing argument, and the two readers
+    of a label's *position* are what make it so: :func:`_spread` places a
+    positional parameter against the labels read back off this frame, and the
+    engine takes ordinals from it for ``shift``. A join left free to reorder
+    answers differently in different query contexts, so both would land on
+    labels the caller never paired them with — on both lanes, agreeing.
+    """
+    return index.join(map_, on=dim, how='left', maintain_order='left')
 
 
 def _column_names(source: Any, dim: str) -> frozenset[str]:
