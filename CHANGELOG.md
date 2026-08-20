@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.228](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.227...v0.0.1-alpha.228) (2026-08-20)
+
+
+### Bug Fixes
+
+* **language:** a per-group offset translates each group by its own lag ([#1166](https://github.com/fluxopt/lpspec/issues/1166)) ([2b80850](https://github.com/fluxopt/lpspec/commit/2b80850e0c9eff4cee2a798643fd976b253c5c69)), closes [#1161](https://github.com/fluxopt/lpspec/issues/1161)
+
 ## [0.0.1-alpha.227](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.226...v0.0.1-alpha.227) (2026-08-20)
 
 
