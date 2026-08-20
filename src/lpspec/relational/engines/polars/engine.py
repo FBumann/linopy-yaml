@@ -29,7 +29,6 @@ from lpspec.errors import (
     DataError,
     LanguageError,
     LpspecError,
-    no_duals_message,
     null_bounds_message,
     sparse_divisor_message,
     uncovered_constant_message,
@@ -1044,7 +1043,7 @@ class PolarsEngine:
             _expressions=self._expression_readers(answer.primal),
             _no_duals=None
             if answer.dual is not None
-            else no_duals_message(
+            else _no_duals_message(
                 self._discrete(),
                 answer.status.termination_condition,
                 sets=self._reformulated_sets(tables is not built),
@@ -1257,6 +1256,58 @@ class PolarsEngine:
     def __exit__(self, *exc: object) -> Literal[False]:
         self.close()
         return False
+
+
+def _no_duals_message(
+    discrete: Sequence[str],
+    termination_condition: str,
+    sets: Sequence[str] = (),
+    quadratic_rows: Sequence[str] = (),
+) -> str:
+    """Why a solve that *did* leave values still has no duals.
+
+    Integrality is decidable from the model, and naming the variable is
+    actionable where "the solver reported none" is not.
+
+    *sets* are the special-ordered sets a sink without the concept turned into
+    binaries. They come first because a model that declared none of its own
+    integrality would otherwise be told it is mixed-integer with nothing named
+    — and because the fix is a different one: another sink, not a different
+    model.
+
+    *quadratic_rows* are the quadratic constraints, whose prices are off by
+    default: asking for them puts the solve on the convex path, and a nonconvex
+    row that solves without them fails with them. The one case here where
+    nothing is wrong with the model.
+    """
+    if quadratic_rows and not discrete:
+        names = ', '.join(f"'{n}'" for n in quadratic_rows)
+        return (
+            f"a quadratic constraint prices only under gurobi's QCPDual, which is off by default: "
+            f'{names} {"is" if len(quadratic_rows) == 1 else "are"} quadratic. Asking for those '
+            f'prices makes the solver take the convex path, so a nonconvex row that solves without '
+            f'them fails with them — which is why this is yours to ask for rather than ours to '
+            f"assume. Re-solve with solver_options={{'QCPDual': 1}} if the model is convex."
+        )
+    if sets:
+        names = ', '.join(f"'{n}'" for n in sets)
+        return (
+            f'duals are undefined for a mixed-integer model, and this sink has no SOS concept, so '
+            f'{names} reached it as binaries. Solve with a sink that takes a set natively (gurobi) '
+            f'to keep the LP, or drop the set to price the relaxation.'
+        )
+    if discrete:
+        names = ', '.join(f"'{n}'" for n in discrete)
+        return (
+            f'duals are undefined for a mixed-integer model: {names} '
+            f'{"is" if len(discrete) == 1 else "are"} not continuous. '
+            f'Drop the integrality to price the LP relaxation instead.'
+        )
+    return (
+        f'the solver returned no dual solution, though the solve terminated '
+        f'{termination_condition!r}. Duals come from a simplex basis, which a '
+        f'run stopped short of one does not have.'
+    )
 
 
 @contextmanager

@@ -70,7 +70,7 @@ def is_dense_array(obj: object) -> bool:
     An ``xarray.DataArray`` has ``__len__``, so left unasked it would fall
     through to a positional read and bind a dense array as a sequence of values
     in index order. Asked, the caller raises
-    :func:`~lpspec.errors.dense_array_message` and names the rewrite.
+    :func:`~lpspec.sources._dense_array_message` and names the rewrite.
     """
     import sys
 
@@ -85,7 +85,7 @@ def is_multi_indexed(obj: object) -> bool:
     lanes build — polars has no index at all — so a MultiIndex is read by
     promoting its levels to columns, and its *depth* is then a claim about the
     parameter's arity that nothing downstream re-checks. Asked here, the caller
-    raises :func:`~lpspec.errors.multi_indexed_series_message` and names the
+    raises :func:`~lpspec.sources._multi_indexed_series_message` and names the
     tidy frame that says the same thing in columns.
     """
     import sys

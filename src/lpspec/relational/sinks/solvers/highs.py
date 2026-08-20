@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from lpspec.errors import LpspecError, nonconvex_objective_message
+from lpspec.errors import LpspecError
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
@@ -313,11 +313,26 @@ class Highs(Solver):
         the sentence the curvature earns rather than as an unreadable status.
         The pair a Hessian is otherwise refused for, integrality beside it, is
         declared on the descriptor and never reaches a load.
+
+        The way out is spelled as the loader takes it (``method: convex``): a
+        message sending its reader to a key ``piecewise:`` rejects would be
+        worse than none.
         """
         import highspy
 
         if self._handle.run() == highspy.HighsStatus.kError and model.quad.height:
-            raise LpspecError(nonconvex_objective_message())
+            raise LpspecError(
+                'the highs sink refused to run this quadratic objective, and a Hessian that is not '
+                'positive semidefinite is why it refuses one: it solves convex QPs only. Convexity is a '
+                'property of the coefficients rather than of the model, so nothing could refuse it '
+                "before the data was bound — the sink's other quadratic refusal, a Hessian standing "
+                'beside integrality, is declared and caught before the build.\n'
+                'Solve with gurobi, which reaches a nonconvex quadratic objective by spatial '
+                'branch-and-bound at its default parameters, or write the model to an .lp file for a '
+                'solver that takes one. A convex reformulation — the curve as a piecewise: block with '
+                'method: convex — keeps the LP, and with it the duals and the warm start a quadratic '
+                'objective gives up.'
+            )
         status = _status_of(self._handle, highspy)
         if not status.is_readable:
             return SolveAnswer.unreadable(status)

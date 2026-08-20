@@ -31,7 +31,6 @@ from lpspec.errors import (
     LaneError,
     LanguageError,
     LpspecError,
-    constant_beside_a_term_message,
 )
 from lpspec.relational import plan
 
@@ -166,9 +165,20 @@ def _refuse_a_fragment_without_the_dims(p: TermFragment, dims: list[str], contex
     every term the foreach dims at load, so reaching here means the plan is
     malformed, which is the lane's own business and stays `LanguageError`
     pending #1134.
+
+    *operator* is the surface spelling, not the plan node: the reader wrote
+    ``sum(by=…)``, and ``GroupSum`` is a word their file does not contain.
     """
     if p.kind == 'const':
-        raise LaneError(constant_beside_a_term_message(context, operator, dims))
+        raise LaneError(
+            f'in {context}: {operator} acts along {dims}, which a constant part of the expression '
+            f'does not carry, and this lane cannot build that. A constant part compiles to its own '
+            f'frame, so a fragment with no rows for {dims} has no slots for the operator to act on — '
+            f'and under a mask, which slots those are is known only to the rows. Declare the parameter '
+            f'over {dims} and supply it there: the model is the same and the number is unchanged. '
+            f'The eager lane builds the file as written, so only this lane is short — run it with '
+            f'`lpspec.linopy.build` (#1137).'
+        )
     raise LanguageError(f'in {context}: {operator} along {dims} but the expression has dims {list(p.dims)}')
 
 

@@ -31,7 +31,6 @@ from lpspec.errors import (
     coordinates_shown,
     duplicate_coordinate_message,
     holes_in_values_message,
-    unknown_labels_message,
     wrong_value_dtype_message,
 )
 
@@ -87,7 +86,7 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
     for d, labels in known.items():
         if not answers[f'#known {d}']:
             strangers = frame.filter(~pl.col(d).is_in(labels.implode())).select(pl.col(d).unique()).collect()
-            raise DataError(unknown_labels_message(p.name, d, strangers[d].to_list(), labels.to_list()))
+            raise DataError(_unknown_labels_message(p.name, d, strangers[d].to_list(), labels.to_list()))
 
     if not answers['#duplicated']:
         return
@@ -97,6 +96,29 @@ def check_one_row_per_coordinate(p: plan.ParameterDeclaration, frame: pl.LazyFra
         for row in duplicated.iter_rows(named=True)
     )
     raise DataError(duplicate_coordinate_message(p.name, shown, list(p.dims)))
+
+
+def _unknown_labels_message(name: str, dim: str, strangers: list[object], known: list[object]) -> str:
+    """A source label the dimension does not have — one wording, both lanes.
+
+    Distinct from sparsity: a *missing* row reads as zero (the data-binding rules), but a row
+    that is present and unaddressable is a typo, the line the declaration rules
+    already draw for coordinates (#350).
+
+    Only asked where the dimension's labels come from somewhere else — one
+    derived *from* the parameters cannot have a stranger in it, the union of
+    what arrived being its definition.
+    """
+    shown = ', '.join(repr(s) for s in strangers[:5])
+    more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
+    return (
+        f"parameter '{name}' has label(s) in dimension '{dim}' that are not coordinates "
+        f'of it: {shown}{more}.\n'
+        f'  {dim} has: {sorted(str(k) for k in known)[:10]}\n'
+        f'A missing row is a zero coefficient, but a label that is not a coordinate is a '
+        f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
+        f'as absent. Fix the label, or declare it as a coordinate.'
+    )
 
 
 def check_values_are_present(p: plan.ParameterDeclaration, frame: pl.LazyFrame) -> None:
