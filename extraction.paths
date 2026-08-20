@@ -51,6 +51,13 @@ examples/operators/
 # lpspec's own testing rather than the shape of the language.
 
 # --- known not yet selectable ------------------------------------------------
-# `tests/test_typeset.py` belongs with `typeset/` but imports
-# `tools.gallery_math`, which stays: it renders the gallery, an lpspec artefact.
-# Untangling that is a PR of its own and the line lands here when it does.
+# Two test files belong with what they test and cannot travel yet, both because
+# they read something that stays:
+#
+#   tests/test_typeset.py  imports `tools.gallery_math`, which renders the
+#                          gallery — an lpspec artefact
+#   tests/test_cli.py      drives `python -m lpspec latex` over
+#                          `examples/dispatch.yaml`, a model that stays
+#
+# Same shape as #1150: a test travels only if its fixtures travel. Each line
+# lands here when that is untangled.

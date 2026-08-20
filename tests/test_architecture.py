@@ -551,6 +551,81 @@ def test_every_model_is_on_one_side_of_the_extraction():
     )
 
 
+#: Everything that stays and names something the extraction takes, with what the
+#: cut owes it. Four are checks that read a moving artefact at run time and so
+#: must travel with it or be split; the rest are prose and configuration that
+#: become references to the other repository.
+#:
+#: Scoped to code and configuration on purpose. `docs/` cross-links to moving
+#: pages in bulk and every one of those becomes an external link — a known
+#: rewrite, not a break, and listing them here would bury the ones that are.
+#:
+#: **Paths only, never imports.** An import of a moving module survives the cut
+#: as an import of the dependency, which is the bulk rewrite the facade exists
+#: to make one spelling; a *path* to a moving file resolves to nothing. That is
+#: why `tests/test_cli.py` is absent though it plainly travels with
+#: `__main__.py`: it names the CLI by importing it, so it is manifest business
+#: rather than a crossing.
+CROSSES_THE_CUT = {
+    'tests/test_doc_examples.py': 'runs the code blocks in `docs/reference/language/`; those pages move',
+    'tests/test_docs_site.py': 'checks the operator page against `examples/operators/`; both move',
+    'tests/test_schema.py': 'asserts `schema/lpspec.schema.json` matches the model — moves, minus the '
+    'lowering half `test_an_omitted_bound_means_unbounded_all_the_way_down` keeps here',
+    'tests/README.md': 'prose naming `tests/language/`',
+    'tests/test_api.py': 'a docstring citing `docs/about/ceiling.md`, and one naming `tests/language/`',
+    'tests/test_architecture.py': 'the fences themselves: this file is split at the cut, not moved',
+    'tools/constructs.py': 'a comment citing `docs/reference/language/` for its column order',
+    'pyproject.toml': "ruff's per-file-ignore for `src/lpspec/language/where_parser.py`",
+}
+
+#: Where a crossing would be a break rather than a link, and the suffixes worth
+#: reading. `tests/language/` and `tools/language/` are excluded: they move.
+CUT_SCAN = (('tests', 'tests/language/'), ('tools', 'tools/language/'))
+CUT_SCAN_FILES = ('pyproject.toml', 'mkdocs.yml')
+
+
+def _crossings() -> dict[str, list[str]]:
+    """Staying code and configuration that names a path the manifest takes."""
+    moving = _manifest()
+    found = {}
+    candidates = [REPO / name for name in CUT_SCAN_FILES]
+    for root, skip in CUT_SCAN:
+        candidates += [
+            path
+            for path in (REPO / root).rglob('*')
+            if path.is_file()
+            and '__pycache__' not in path.parts
+            and skip not in str(path.relative_to(REPO))
+            and path.suffix in {'.py', '.md', '.yml', '.yaml', '.toml'}
+        ]
+    for path in candidates:
+        text = path.read_text(errors='ignore')
+        named = sorted(line for line in moving if line in text)
+        if named:
+            found[str(path.relative_to(REPO))] = named
+    return found
+
+
+def test_everything_that_crosses_the_cut_is_declared():
+    """The manifest says what leaves; this says what stays behind pointing at it.
+
+    A misclassified path is the failure the exhaustiveness check cannot see — it
+    catches a model nobody classified, never one classified wrongly. Twice in
+    this PR's history the disproof was a *consumer* nobody had looked for: the
+    gallery pages that solve the teaching models, and the symbol tables paired
+    one-to-one with models that stay. So the consumers are enumerated, and the
+    set is exact in both directions: a new crossing fails as undeclared, and a
+    resolved one fails as stale rather than sitting here reading as work.
+    """
+    crossings = _crossings()
+    undeclared = sorted(set(crossings) - set(CROSSES_THE_CUT))
+    stale = sorted(set(CROSSES_THE_CUT) - set(crossings))
+    assert not undeclared and not stale, (
+        f'undeclared crossings {undeclared}, stale entries {stale} — a file that names a moving '
+        f'path either travels with it, is split, or is written down here with what the cut owes it'
+    )
+
+
 def test_the_language_facade_exports_no_private_name():
     """A leading underscore in the seam is the surface admitting it is unfinished.
 
