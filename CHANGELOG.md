@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.222](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.221...v0.0.1-alpha.222) (2026-08-20)
+
+
+### Features
+
+* **api:** a single constraint row has a spelling ([#1114](https://github.com/fluxopt/lpspec/issues/1114)) ([54bd9e4](https://github.com/fluxopt/lpspec/commit/54bd9e4f402556f5ba99d296d7a8803b9d72cf78))
+
 ## [0.0.1-alpha.221](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.220...v0.0.1-alpha.221) (2026-08-20)
 
 
