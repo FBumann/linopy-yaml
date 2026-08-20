@@ -1,6 +1,6 @@
 """Regenerate the committed golden output.
 
-    uv run python -m tests.golden
+    uv run python -m tests.typeset.golden
 
 Then **read the diff**. That is the review: a golden file is only worth having
 if a change to it is looked at, and the reason the output is generated rather
@@ -11,7 +11,7 @@ review time, not at authoring time.
 from __future__ import annotations
 
 from lpspec.typeset import FORMATS, typeset
-from tests.golden import MODEL, path_for
+from tests.typeset.golden import MODEL, path_for
 
 
 def main() -> int:

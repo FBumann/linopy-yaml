@@ -271,7 +271,7 @@ extend-fixable = ["B", "SIM", "RUF", "C4", "UP"]
 "bench/**/*.py" = ["T20", "D"]  # a harness reports by printing; stdout is its interface
 "tools/**/*.py" = ["T20", "D"]  # same: a generator says what it wrote
 "tests/**/*.py" = ["D"]
-"tests/golden/__main__.py" = ["T20", "D"]  # likewise a generator, and only reachable as a command
+"tests/typeset/golden/__main__.py" = ["T20", "D"]  # likewise a generator, and only reachable as a command
 "src/lpspec/language/where_parser.py" = ["N806"]  # grammar tokens (NOT/AND/OR) are named after keywords
 
 [tool.ruff.format]

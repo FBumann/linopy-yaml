@@ -106,7 +106,7 @@ on:
     # **Config is listed by path, never by extension.** `**.md` is safe because
     # no markdown in this tree reaches a build; `**.yaml` would not be, because
     # `bench/models/*.yaml` *are* the benchmarked models and `examples/**` and
-    # `tests/golden/model.yaml` are models too. An extension glob cannot tell a
+    # `tests/typeset/golden/model.yaml` are models too. An extension glob cannot tell a
     # tool's configuration from a program's input, so the config entries below
     # are named one by one and a new one earns its line by being read.
     #
