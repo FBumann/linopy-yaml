@@ -507,6 +507,11 @@ so and as binaries plus linking rows where it says *no concept*.
 | quadratic objective **and** integrality | text section | **not written** | **refused** — `run()` returns `kError` | native (MIQP) | **no path here** |
 | quadratic constraint | text section, unreadable | **not written** | **no concept** — no entry point at all | `addQConstr` / `addMQConstr` | **no path here** |
 
+**A rewrite is not free, and the cost is what comes back.** An LP carrying a
+set returns from HiGHS without duals — the reformulation makes it a MIP — and
+from Gurobi with them. That asymmetry is the argument for declaring capability
+rather than papering over it ([the ceiling](ceiling.md#capability-is-not-the-ceiling)).
+
 **"No path here" is about this tree, not about Xpress.** The Optimizer takes a
 Hessian and quadratic rows; the sink in `solvers/xpress.py` never hands it one,
 and a descriptor says what the sink ingests rather than what the library could
