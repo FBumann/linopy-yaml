@@ -165,11 +165,15 @@ It is **one wall, reached by all four operators that act along a dimension**
 refusal rather than each wording its own: a fix for one that left the others
 would be a fix for a symptom. The relational lane names the rewrite that
 reaches the same number — declare the parameter over the dimension and supply
-it there ([#1137](https://github.com/fluxopt/lpspec/issues/1137)). One operator
-is short of that promise today: `sum_back` reads a constant at a slot the
-variable is absent from where the other three drop it, so its rewrite answers
-2.5 against the eager lane's 3.0, and a strict `xfail` holds the case until
-that reading is settled
+it there ([#1137](https://github.com/fluxopt/lpspec/issues/1137)).
+
+Finding that wall is what turned up a real disagreement behind it: `sum_back`
+read a constant at a slot the variable was absent from, where every other
+operator drops it, so the two lanes answered 2.5 and 3.0 on a file **neither**
+refused. A reduction consumes its operand before any row exists, so absence has
+to be pushed into the operand first — `sum` and `sum(by=)` did that and the
+window did not. Fixed by giving the window the same pass, with a differential
+test over every operator that moves along a dimension
 ([#1142](https://github.com/fluxopt/lpspec/issues/1142)).
 
 Both are worth reading twice, because the shape is easy to mistake for a

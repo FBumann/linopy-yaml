@@ -40,7 +40,7 @@ from lpspec.relational.sinks import SOLVERS
 from lpspec.relational.sinks.solvers.highs import Highs
 from tests.conftest import by_coord, override, solve_written_file
 from tests.differential import RTOL, differential
-from tests.oracle import linopy, pd, transport_eager_objective, xr
+from tests.oracle import linopy, lpspec_linopy, pd, transport_eager_objective, xr
 
 # ---------------------------------------------------------------------------
 # model 1: dispatch (the spec example)
@@ -2202,15 +2202,10 @@ CONSTANT_BESIDE_A_TERM_CASES = [
     ('sum(sum_back(x * k + d, over=t, within=2), over=t) >= load', 3.0, 'sum-back'),
 ]
 
-#: The refusal is the lane's for all four; only `sum_back`'s *rewrite* answers
-#: the wrong number, so the xfail belongs to that test and not to the class.
-REWRITE_IS_BROKEN_ON = {
-    'sum-back': pytest.mark.xfail(
-        reason='#1142 — sum_back keeps a constant at a slot the variable is absent from, '
-        'so the rewrite reaches 2.5 where the eager lane reaches 3.0',
-        strict=True,
-    )
-}
+#: Empty since #1142: `sum_back`'s rewrite answered 2.5 against the eager lane's
+#: 3.0 until the window propagated absence into its operand. Kept as the hook a
+#: future one-operator hole hangs on, rather than inlined into the list.
+REWRITE_IS_BROKEN_ON: dict[str, pytest.MarkDecorator] = {}
 
 REFUSAL_CASES = [pytest.param(expression, id=name) for expression, _, name in CONSTANT_BESIDE_A_TERM_CASES]
 REWRITE_CASES = [
@@ -2281,4 +2276,63 @@ def test_the_rewrite_the_lane_gap_names_reaches_the_answer(expression, answer):
     sources = _constant_beside_a_term_sources(expression, over_the_dim=True)
     assert lps.solve(rewritten, sources).objective == pytest.approx(answer), (
         'the rewrite answers what the eager lane answers for the file as written'
+    )
+
+
+#: A constant beside a **masked** term, under every operator that moves or
+#: reduces along a dimension. The variable is absent at ``t = 2`` and the
+#: constant is not, so each operator has to decide whether the constant survives
+#: that slot; the powers of ten make a disagreement name the slot it kept.
+#:
+#: #1142 was `sum_back` alone, and it was invisible for two reasons worth
+#: keeping: the corpus never masks an operand, and a constant of 1.0 at every
+#: label makes two wrong slots look like one right one.
+ABSENT_SLOT_CASES = [
+    pytest.param('sum(x * k + d, over=t) >= load', id='sum-over'),
+    pytest.param('sum(sum(x * k + d, by=r_of), over=r) >= load', id='sum-by'),
+    pytest.param('sum(shift(x * k + d, over=t, offset=1, edge=0), over=t) >= load', id='shift-forward'),
+    pytest.param('sum(shift(x * k + d, over=t, offset=-1, edge=0), over=t) >= load', id='shift-back'),
+    pytest.param("sum(shift(x * k + d, over=t, offset=1, edge='wrap'), over=t) >= load", id='shift-wrap'),
+    pytest.param('sum(at(sum(x * k + d, by=r_of), by=r_of), over=t) >= load', id='at'),
+    pytest.param('sum(sum_back(x * k + d, over=t, within=2), over=t) >= load', id='sum-back'),
+]
+
+ABSENT_SLOT_SOURCES = {
+    't': pl.DataFrame({'t': [0, 1, 2], 'r_of': ['n', 'n', 's']}),
+    'r': ['n', 's'],
+    'k': [1.0, 1.0, 1.0],
+    'd': [1.0, 10.0, 100.0],
+    'load': 1000.0,
+}
+
+
+def _absent_slot_model(expression: str) -> dict:
+    return {
+        'dimensions': {'t': {'dtype': 'int'}, 'r': {'dtype': 'str'}},
+        'lookups': {'r_of': {'over': 't', 'into': 'r'}},
+        'parameters': {'k': {'dims': ['t']}, 'd': {'dims': ['t']}, 'load': {'dims': []}},
+        'variables': {'x': {'foreach': ['t'], 'where': 't != 2', 'bounds': {'lower': 0}}},
+        'constraints': {'bal': {'foreach': [], 'expression': expression}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
+    }
+
+
+@pytest.mark.parametrize('expression', ABSENT_SLOT_CASES)
+def test_a_constant_at_an_absent_slot_reads_the_same_on_both_lanes(expression):
+    """#1142: every operator that moves along a dim drops the constant with the term.
+
+    Differential rather than a pinned number, because the question is not what
+    the answer is but whether the two lanes give the same one — and the eager
+    lane is the oracle for exactly this reading of v1 §13. `sum_back` answered
+    2.5 against 3.0 until `Window` joined the operators that propagate absence
+    into their operand before remapping.
+    """
+    model = _absent_slot_model(expression)
+    relational = lps.solve(model, ABSENT_SLOT_SOURCES).objective
+
+    eager = lpspec_linopy.build(model, ABSENT_SLOT_SOURCES)
+    eager.solve(solver_name='highs')
+
+    assert relational == pytest.approx(float(eager.objective.value), rel=RTOL), (
+        'the lanes disagree about whether a constant survives a slot its term is absent from'
     )

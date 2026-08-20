@@ -672,7 +672,8 @@ class PolarsCompiler:
             if isinstance(e, plan.Translate):
                 return _map_fragments(ev(e.operand), lambda p: self._translate_fragment(p, e, context))
             if isinstance(e, plan.Window):
-                return _map_fragments(ev(e.operand), lambda p: self._window_fragment(p, e, context))
+                inner = _propagate_absence(ev(e.operand))
+                return _map_fragments(inner, lambda p: self._window_fragment(p, e, context))
             raise LanguageError(f'unsupported expression node {type(e).__name__} in {context}')
 
         return ev(expr)
@@ -1383,6 +1384,16 @@ def _propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
 
     Applied only where the key columns are dims the fragment carries: a
     restriction naming a dim a fragment lacks cannot speak about it.
+
+    **Which operators need it is decided by their fan-in.** ``Sum`` and
+    ``GroupSum`` are many-to-one and ``Window`` is one-to-many, so an output row
+    mixes several input slots: the row-level intersection at assembly can say
+    the *row* survives, never which of the slots behind it did, and a constant
+    read from an absent slot is already inside the total by then. ``At`` and
+    ``Translate`` are one-to-one — one output, one input — so the row either
+    survives or does not, and the intersection is exactly right without a pass
+    here. ``Window`` was missing from this list and the lanes disagreed about a
+    constant at a masked slot (#1142); the fan-in is the rule, not the list.
 
     **A fragment is never restricted by its own presence.** Its rows and its
     presence are built from one frame and rewritten in step — a product joins
