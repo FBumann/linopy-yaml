@@ -458,6 +458,7 @@ def validate_curve_extent(schema: Model, sources: Mapping[str, TidySource]) -> N
                     )
                 continue
             reach = _through_lookup(schema, link, mask, sources) if mask is not None else members
+            assert reach is not None, 'one of the mask or the lookup got us here'
             required = _required_under_mask(reach, extents, dims, present)
             counts = pl.collect_all([required.select(pl.len()), present.select(pl.len())])
             if required.join(present, on=dims, how='anti').head(1).collect().height:

@@ -83,7 +83,7 @@ $$\sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{c,t,b} = 1 \qquad \forall\t
 
 **`conversion_on_the_curve`**
 
-$$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{\mathrm{converter\_of}(f),t,b} \cdot \mathit{bp}^{\mathrm{rate}}_{f,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace f \in \mathcal{F}$$
+$$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{conversion\_lam}_{\mathrm{converter\_of}(f),t,b} \cdot \mathit{bp}^{\mathrm{rate}}_{f,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace f \in \mathcal{F} \thinspace:\thinspace \mathrm{converter\_of}(f) \text{ is defined}$$
 
 **`conversion_pick`**
 
