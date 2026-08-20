@@ -999,10 +999,8 @@ class PolarsCompiler:
         )
         outgoing = table.select(pl.col('val').alias(s.dimension), pl.col(position).alias(_ORD_OUT), *group_cols)
 
-        offset_name = s.offset if isinstance(s.offset, str) else None
-        offset_dims: tuple[str, ...] = ()
-        if offset_name is not None:
-            offset_dims = tuple(self.program.parameter(offset_name).dims)
+        named_offset = isinstance(s.offset, str)
+        if named_offset:
             moved = pl.col(_ORD_IN) + pl.col(_OFFSET)
         else:
             assert not isinstance(s.offset, str)
@@ -1021,17 +1019,12 @@ class PolarsCompiler:
             """
             kept = [d for d in (source_dims if source_dims is not None else p.dims) if d != s.dimension]
             walked = source.join(incoming, on=s.dimension, how='inner').drop(s.dimension)
-            if offset_name is not None:
-                # A per-entity offset is one more equi-join, on dims the frame
+            if named_offset:
+                # A per-entity offset is one more equi-join, on keys the frame
                 # already carries — the same locality class as a literal one,
                 # since the reach is still a lookup on the dim table.
-                walked = walked.join(
-                    self.data.parameters[offset_name].select(
-                        *offset_dims, pl.col('value').cast(pl.Int64).alias(_OFFSET)
-                    ),
-                    on=list(offset_dims),
-                    how='inner',
-                )
+                offsets, keys = self._offsets(s)
+                walked = walked.join(offsets, on=keys, how='inner')
             landing = [_ORD_OUT, s.partition] if s.partition is not None else [_ORD_OUT]
             return (
                 walked.with_columns(moved.alias(_ORD_OUT))
@@ -1121,10 +1114,46 @@ class PolarsCompiler:
         far back a row reaches decides which rows have nothing to reach, so
         under a named offset the two entities of one coordinate need not agree
         about whether it is the edge.
+
+        The grouped dimension is not among them: a lag per group varies along
+        the translated dimension itself, which the edge is already keyed by.
         """
         if not isinstance(s.offset, str):
             return ()
-        return tuple(self.program.parameter(s.offset).dims)
+        grouped = self._grouped_into(s)
+        return tuple(d for d in self.program.parameter(s.offset).dims if d != grouped)
+
+    def _grouped_into(self, s: plan.Translate) -> str | None:
+        """The dimension the partition groups into, where the offset is over it.
+
+        ``None`` for every other shift — a numeric offset, an unpartitioned
+        one, or one over dims the operand carries itself.
+        """
+        if s.partition is None or not isinstance(s.offset, str):
+            return None
+        targeted = {lk.name: lk.target for lk in self.program.dimension(s.dimension).lookups}
+        target = targeted[s.partition]
+        return target if target in self.program.parameter(s.offset).dims else None
+
+    def _offsets(self, s: plan.Translate) -> tuple[pl.LazyFrame, list[str]]:
+        """A named offset's values and the keys a frame reads them by.
+
+        A **per-group** offset is declared over the dimension the partition
+        groups into, and no frame carries a column of it: what travels with a
+        coordinate is the lookup's own value, so the offset is read under the
+        lookup's name and one equi-join lands each group's own lag (#1161).
+        A coordinate the lookup sends nowhere has a null there and joins to
+        nothing, which is the null group everywhere else.
+        """
+        assert isinstance(s.offset, str)
+        grouped = self._grouped_into(s)
+        dims = self.program.parameter(s.offset).dims
+        keys = [str(s.partition) if d == grouped else d for d in dims]
+        frame = self.data.parameters[s.offset].select(
+            *(pl.col(d).alias(key) for d, key in zip(dims, keys, strict=True)),
+            pl.col('value').cast(pl.Int64).alias(_OFFSET),
+        )
+        return frame, keys
 
     def _edge(self, s: plan.Translate, card: int, *, vacated: bool) -> pl.LazyFrame:
         """The coordinates an acyclic shift vacates, or keeps.
@@ -1140,7 +1169,9 @@ class PolarsCompiler:
         outside its own group exactly where it would have reached outside the
         axis. A coordinate in no group is neither — it is absent, the reading
         :meth:`_grouped` gives it, so it is dropped here rather than counted as
-        an edge a policy could speak for (#1061).
+        an edge a policy could speak for (#1061). A per-group offset reaches it
+        by the lookup rather than by a cross join, one lag standing for the
+        whole group.
         """
         table = self.data.dimensions[s.dimension]
         if s.partition is not None:
@@ -1153,15 +1184,12 @@ class PolarsCompiler:
         else:
             position, span = pl.col('ord'), pl.lit(card, dtype=pl.Int64)
         dims = self.offset_dims(s)
-        if dims:
-            assert isinstance(s.offset, str)
-            table = table.join(
-                self.data.parameters[s.offset].select(*dims, pl.col('value').cast(pl.Int64).alias(_OFFSET)),
-                how='cross',
-            )
+        if isinstance(s.offset, str):
+            offsets, keys = self._offsets(s)
+            on = [key for key in keys if key == s.partition]
+            table = table.join(offsets, on=on, how='inner') if on else table.join(offsets, how='cross')
             offset = pl.col(_OFFSET)
         else:
-            assert not isinstance(s.offset, str)
             offset = pl.lit(s.offset, dtype=pl.Int64)
         source = position - offset
         reaches = (source % span + span) % span if s.wrap else source

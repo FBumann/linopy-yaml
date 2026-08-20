@@ -360,6 +360,171 @@ def test_a_per_entity_offset_writes_a_nonzero_edge_where_that_entity_vacates():
         assert run.oracle == pytest.approx(25.0), '10 + 10 + 5'
 
 
+#: The two gathers *together*: a lag that is per group rather than per entity,
+#: which is a parameter declared over the dimension the partition groups into.
+#: A period's own construction lead time, on a flat snapshot axis (#1161).
+PER_GROUP_OFFSET = {
+    'dimensions': {'t': {'dtype': 'int'}, 'period': {'dtype': 'int'}},
+    'lookups': {'period_of': {'over': 't', 'into': 'period'}},
+    'parameters': {'lead': {'dims': ['period'], 'dtype': 'int'}, 'v': {'dims': ['t']}},
+    'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': -100, 'upper': 100}}},
+    'constraints': {
+        'reads': {'foreach': ['t'], 'expression': 'p == shift(v, over=t, offset=lead, by=period_of, edge=0)'}
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+}
+
+#: The same lag over a *variable*, where the edge is a term that is not there
+#: rather than a number written into a frame — and one snapshot the lookup
+#: sends nowhere, which no lag reaches and no edge speaks for.
+PER_GROUP_OFFSET_TERMS = {
+    'dimensions': {'t': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
+    'lookups': {'season_of': {'over': 't', 'into': 'season'}},
+    'parameters': {'lead': {'dims': ['season'], 'dtype': 'int'}, 'cap': {'dims': ['t']}},
+    'variables': {
+        'level': {'foreach': ['t'], 'bounds': {'lower': 'cap', 'upper': 'cap'}},
+        'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}},
+    },
+    'constraints': {
+        'link': {'foreach': ['t'], 'expression': 'take <= shift(level, over=t, offset=lead, by=season_of, edge=0)'}
+    },
+    'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t)'},
+}
+
+#: Per entity *and* per group at once: one key the frame carries and one it
+#: reaches through the lookup, in the same join.
+PER_ENTITY_AND_PER_GROUP = {
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
+    'lookups': {'season_of': {'over': 't', 'into': 'season'}},
+    'parameters': {'lead': {'dims': ['g', 'season'], 'dtype': 'int'}, 'v': {'dims': ['g', 't']}},
+    'variables': {'p': {'foreach': ['g', 't'], 'bounds': {'lower': -100, 'upper': 100}}},
+    'constraints': {
+        'reads': {'foreach': ['g', 't'], 'expression': 'p == shift(v, over=t, offset=lead, by=season_of, edge=0)'}
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+}
+
+
+def _by_t(result, name: str) -> list[float]:
+    """One variable's primals in coordinate order, which is what a lag is about."""
+    return result.primal(name).sort('t')['value'].to_list()
+
+
+def test_a_per_group_offset_translates_each_group_by_its_own_lag():
+    """The lag is the group's, so two periods with different lead times each
+    reach back their own distance and vacate their own opening rows.
+
+    The first period leads by one and the second by two, which no single
+    number reproduces: shifting the whole axis by either lands three of the
+    six coordinates somewhere else.
+    """
+    sources = {
+        't': pd.DataFrame({'t': [0, 1, 2, 3, 4, 5], 'period_of': [2030] * 3 + [2050] * 3}),
+        'period': pd.Index([2030, 2050], name='period'),
+        'lead': pd.Series([1, 2], index=pd.Index([2030, 2050], name='period')),
+        'v': pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0], index=pd.Index(range(6), name='t')),
+    }
+    with differential(PER_GROUP_OFFSET, sources, lp=True) as run:
+        assert list(run.model.constraints['reads'].coords) == ['t'], (
+            'the row is the snapshot, and the period its lag was read at is not a coordinate of it'
+        )
+        assert run.model.constraints['reads'].size == run.engine.diagnostics().rows == 6, (
+            'one row per snapshot, and the same number of them on both lanes'
+        )
+        assert _by_t(run.result, 'p') == [0.0, 10.0, 20.0, 0.0, 0.0, 40.0], (
+            "each period reaches back its own lead inside its own group, and its opening rows take the edge's zero"
+        )
+        assert run.oracle == pytest.approx(70.0), '0 + 10 + 20 + 0 + 0 + 40'
+
+
+def test_a_per_group_offset_over_a_variable_vacates_each_groups_opening_rows():
+    """The same lag where the operand carries terms rather than values.
+
+    ``level`` is pinned to ``cap`` by its bounds, so what ``take`` may reach is
+    the lag read plainly: the second season leads by two, so both of its
+    opening rows are capped by the edge's zero rather than by a term. The
+    snapshot in no season is capped by nothing at all — it belongs to no group,
+    so it reaches nothing, and ``edge=0`` does not speak for it (#1061).
+    """
+    sources = {
+        't': pd.DataFrame({'t': [0, 1, 2, 3, 4, 5, 6], 'season_of': ['s1'] * 3 + ['s2'] * 3 + [None]}),
+        'season': pd.Index(['s1', 's2'], name='season'),
+        'lead': pd.Series([1, 2], index=pd.Index(['s1', 's2'], name='season')),
+        'cap': pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0], index=pd.Index(range(7), name='t')),
+    }
+    with differential(PER_GROUP_OFFSET_TERMS, sources, lp=True) as run:
+        assert run.engine.diagnostics().rows == 6, 'one row per snapshot in a season, and none for the one in no season'
+        assert _by_t(run.result, 'take') == [0.0, 10.0, 20.0, 0.0, 0.0, 40.0, 100.0], (
+            'each season reaches back its own lead, and the group-less snapshot is capped by nothing'
+        )
+        assert run.oracle == pytest.approx(170.0)
+
+
+def test_an_offset_may_differ_per_entity_and_per_group_at_once():
+    """Two keys, one join: the entity's own column and the group's, which the
+    frame carries only as the lookup's value.
+
+    The second unit leads by two in the second season and by one everywhere
+    else, so it alone vacates both of that season's rows.
+    """
+    units, periods = ['a', 'b'], [0, 1, 2, 3]
+    sources = {
+        'g': pd.Index(units, name='g'),
+        't': pd.DataFrame({'t': periods, 'season_of': ['s1', 's1', 's2', 's2']}),
+        'season': pd.Index(['s1', 's2'], name='season'),
+        'lead': pd.DataFrame({'g': ['a', 'a', 'b', 'b'], 'season': ['s1', 's2'] * 2, 'value': [1, 1, 1, 2]}),
+        'v': pd.DataFrame(
+            {
+                'g': [u for u in units for _ in periods],
+                't': periods * 2,
+                'value': [10.0, 20.0, 30.0, 40.0, 1.0, 2.0, 3.0, 4.0],
+            }
+        ),
+    }
+    with differential(PER_ENTITY_AND_PER_GROUP, sources, lp=True) as run:
+        read = run.result.primal('p').sort('g', 't')
+        assert read['value'].to_list() == [0.0, 10.0, 0.0, 30.0, 0.0, 1.0, 0.0, 0.0], (
+            "the lead is read at the pair, not at either key alone — 'b' vacates both rows of the season it leads by two"
+        )
+        assert run.oracle == pytest.approx(41.0), '(0 + 10 + 0 + 30) + (0 + 1 + 0 + 0)'
+
+
+OFFSET_OUT_OF_REACH = {
+    'nothing-puts-it-in-reach': ('lead', '', r"over \['season'\], which the shifted expression does not carry"),
+    'not-what-the-partition-groups-into': ('far', ', by=season_of', r"over \['g'\], which the shifted expression"),
+}
+
+
+@pytest.mark.parametrize(
+    ('offset', 'partition', 'match'), list(OFFSET_OUT_OF_REACH.values()), ids=list(OFFSET_OUT_OF_REACH)
+)
+def test_an_offset_over_a_dim_nothing_puts_in_reach_is_refused(offset: str, partition: str, match: str):
+    """An offset is read at the coordinate it moves, so it must vary over a dim
+    that coordinate has — the shifted expression's own, or the one a partition
+    groups into.
+
+    Neither refusal is pedantry: the eager lane broadcast the shifted
+    expression onto the stray dim and built a bigger model than the file reads
+    as, while the relational lane asked for a column no frame carries (#1161).
+    """
+    model = {
+        'dimensions': {
+            'g': {'dtype': 'str', 'values': ['a']},
+            't': {'dtype': 'int', 'values': [0, 1]},
+            'season': {'dtype': 'str', 'values': ['s']},
+        },
+        'lookups': {'season_of': {'over': 't', 'into': 'season'}},
+        'parameters': {'lead': {'dims': ['season'], 'dtype': 'int'}, 'far': {'dims': ['g'], 'dtype': 'int'}},
+        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {
+            'k': {'foreach': ['t'], 'expression': f"x >= shift(x, over=t, offset={offset}, edge='wrap'{partition})"}
+        },
+        'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
+    }
+    with pytest.raises(LanguageError, match=match):
+        lps.check(model)
+
+
 def test_shift_semantics_are_positional_not_lexicographic():
     """Coords whose sorted order differs from declared order (string labels:
     lexicographic t0,t1,t10,... vs positional t0..t47). Both backends must
