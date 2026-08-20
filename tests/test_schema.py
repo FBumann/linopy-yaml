@@ -15,7 +15,7 @@ import pytest
 from lpspec.errors import SchemaError
 from lpspec.language import model
 from lpspec.language.model import Model
-from tools import schema
+from tools.language import schema
 
 
 def test_empty_schema():
@@ -460,7 +460,7 @@ def test_an_unknown_key_in_a_named_expression_is_rejected():
 
 def test_the_checked_in_json_schema_has_not_drifted():
     assert schema.PATH.read_text() == schema.rendered(), (
-        'schema/lpspec.schema.json no longer matches the models — run `uv run python -m tools.schema`'
+        'schema/lpspec.schema.json no longer matches the models — run `uv run python -m tools.language.schema`'
     )
 
 

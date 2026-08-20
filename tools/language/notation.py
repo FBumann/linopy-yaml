@@ -1,7 +1,7 @@
 """The notation reference: every construct beside the math it prints.
 
-    uv run python -m tools.notation           # rewrite the page's block
-    uv run python -m tools.notation --check   # fail if it has drifted
+    uv run python -m tools.language.notation           # rewrite the page's block
+    uv run python -m tools.language.notation --check   # fail if it has drifted
 
 The page exists to be *read as a whole*. Whether a notation is good is a
 question about the set of it — whether two constructs that mean different
@@ -33,7 +33,7 @@ from pathlib import Path
 from lpspec.language.model import PIECEWISE_METHODS
 from lpspec.typeset import to_markdown
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 PAGE = ROOT / 'docs' / 'reference' / 'notation.md'
 MODEL = ROOT / 'tests' / 'golden' / 'model.yaml'
 
@@ -284,7 +284,9 @@ def main(argv: list[str] | None = None) -> int:
     updated = rendered_page(page)
     if opts.check:
         if updated != page:
-            print(f'{PAGE.relative_to(ROOT)} is stale — run `uv run python -m tools.notation`', file=sys.stderr)
+            print(
+                f'{PAGE.relative_to(ROOT)} is stale — run `uv run python -m tools.language.notation`', file=sys.stderr
+            )
             return 1
         print(f'{PAGE.relative_to(ROOT)} matches the model')
         return 0

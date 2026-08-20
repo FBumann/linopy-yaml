@@ -442,6 +442,45 @@ def test_the_languages_own_tests_reach_no_consumer():
     )
 
 
+#: What a generator under ``tools/language/`` may reach. ``typeset`` is on the
+#: list because it moves with the language rather than despite being a consumer
+#: of the AST: the notation page and the operator table *are* the renderer's
+#: output, so a spec package that documents itself needs both halves.
+LANGUAGE_TOOLS_MAY_IMPORT = ('lpspec.language', 'lpspec.errors', 'lpspec.typeset')
+
+
+def test_the_languages_own_generators_reach_no_consumer():
+    """A generator that needs a plan is documenting lpspec, not the language.
+
+    These rewrite the JSON Schema, the operator table and the notation page from
+    the declarations themselves, so each is readable with no data and no engine
+    — which is also what lets them move with the thing they document.
+    ``constructs.py`` and ``gallery_math.py`` are deliberately *not* here: they
+    catalogue the gallery and the optima that did not come from us.
+
+    ``import lpspec`` counts as reaching a consumer, as it does for the tests:
+    the top-level namespace is the runner, and a generator that spells its
+    import that way stops saying which layer it reads.
+    """
+    offenders = {}
+    for path in (REPO / 'tools' / 'language').rglob('*.py'):
+        if '__pycache__' in path.parts:
+            continue
+        bad = sorted(
+            {
+                name
+                for name in _imported(ast.parse(path.read_text()))
+                if name == 'lpspec' or (name.startswith('lpspec') and not name.startswith(LANGUAGE_TOOLS_MAY_IMPORT))
+            }
+        )
+        if bad:
+            offenders[path.name] = bad
+    assert not offenders, (
+        f'a language generator reaches a consumer: {offenders} — read the declarations, '
+        f'or leave the generator in tools/ with the ones that document the gallery'
+    )
+
+
 def test_the_language_facade_exports_no_private_name():
     """A leading underscore in the seam is the surface admitting it is unfinished.
 
