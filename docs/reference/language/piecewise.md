@@ -87,48 +87,49 @@ Where the *arity* is data, and one component ties three expressions where
 another ties two, the λ formulation is written out directly rather than through
 this block ([#1101](https://github.com/fluxopt/lpspec/issues/1101)).
 
-### A refined link, for a curve whose arity is data
+### A link below the weights, for a curve whose arity is data
 
-A link's rows sit on the weights' frame — one per generator, one per converter.
-A **refined** link sits below it: its expression carries a finer dimension, and
-`by:` names the lookup that carries each row up to the weights it reads.
+A link's rows sit on the frame the weights live on — one per generator, one per
+converter. A link whose expression carries a **finer** dimension sits below it,
+and `by:` is the lookup that carries each row up to the weights it reads:
 
 <!-- doctest: wrap=piecewise -->
 ```yaml
 conversion:
   over: bp
   foreach: [converter, time]  # the frame the weights live on
+  by: converter_of            # how a link below it reaches them
   points: bp_present
   method: adjacency
   links:
-    - expression: rate  # one row per flow, not per converter
-      values: bp_rate
-      by: converter_of
+    - [fuel, bp_fuel]         # carries `converter` — on the frame
+    - [rate, bp_rate]         # carries `flow` — one row per flow
 ```
 
-That is how a curve ties **as many expressions as the data gives it**: one
-declaration, and a converter with a fourth flow is a row in the lookup rather
-than an edit to the model. The block still writes the tie, so the weights stay
-its own — the emitted row is
-`rate == sum(at(conversion_lam, by=converter_of) * bp_rate, over=bp)`, and
-nothing in the file names λ.
+**A link uses the map when it carries the dim the lookup maps out of**, so the
+block says it once and no link says anything: the ordinary two-string form
+holds both kinds. That is how a curve ties **as many expressions as the data
+gives it** — a converter with a fourth flow is a row in the lookup rather than
+an edit to the model — and the block still writes the tie, so the weights stay
+its own. Nothing in the file names λ.
 
 Four things follow:
 
-- **`foreach:` is required, and only then.** A refined link's dims are its own,
-  so the links no longer say where the weights live; where every link sits on
-  the weights' frame, that frame is theirs and declaring it would be a second
-  answer.
-- **The values parameter follows the link**, not the block: `bp_rate` is over
-  `[flow, bp]` here, because that is the frame its rows sit on.
-- **`by:` must land on the frame** — a lookup out of a dim the expression
-  carries, into one the weights live on. A coarser expression is refused: tying
-  it would be an aggregation, and belongs in a constraint of its own.
-- **One link is enough when it is refined.** The two-link minimum is about
-  quantities, and a refined link is a row per member — how many is data.
+- **`by:` and `foreach:` travel together.** A link below the frame no longer
+  says where that frame is, so the block declares it; where no link is below it,
+  the links are the frame and declaring it again would be a second answer.
+- **A values parameter follows its link**: `bp_rate` is over `[flow, bp]` because
+  that is where its rows sit, and `bp_fuel` over `[converter, bp]`.
+- **The map must land on the frame** — a lookup out of a dim some link carries,
+  into one the weights live on. A link carrying neither is refused, rather than
+  quietly widening the frame.
+- **One link is enough under a map.** The two-link minimum is about quantities,
+  and under `by:` those are the members the lookup carries — data, which no file
+  can be checked against.
 
-A link may also carry `where:`, which is how one system holds curves pinned by
-`==` and others bounded by `<=`: two links under complementary masks.
+A link may also carry `where:`, written as a mapping, which is how one block
+holds curves pinned by `==` for some members and bounded by `<=` for others:
+two links under complementary masks, sharing one set of weights.
 
 [The model](../../examples/piecewise_conversion.md) is a boiler tying two flows
 and a CHP tying three, on one axis, with neither number in the file.

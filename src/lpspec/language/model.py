@@ -358,12 +358,9 @@ class PiecewiseLink(_StrictBlock):
     sign]`` and serialised back to exactly that form, so a round trip through
     :meth:`Model.to_yaml` reproduces the file.
 
-    ``by`` makes it a **refined** link: the expression sits on a finer frame
-    than the weights — one row per flow where the weights are per converter —
-    and the lookup named is what carries each row to the weights it reads. The
-    tie is then one declaration whatever the number of rows, which is what lets
-    a curve tie a number of expressions that is data. Such a link is written as
-    a mapping, and round-trips as one.
+    ``where`` masks this link's rows, which is how one block holds curves
+    pinned for some members and bounded for others. A link carrying it is
+    written as a mapping, and round-trips as one.
     """
 
     _label: ClassVar[str] = 'a piecewise link'
@@ -371,13 +368,7 @@ class PiecewiseLink(_StrictBlock):
     expression: str
     values: str
     sign: LinkSign = '=='
-    by: str | None = None
     where: str | None = None
-
-    @property
-    def refined(self) -> bool:
-        """Whether this link's rows sit below the weights' frame."""
-        return self.by is not None
 
     @model_validator(mode='before')
     @classmethod
@@ -397,11 +388,11 @@ class PiecewiseLink(_StrictBlock):
 
     @model_serializer
     def _as_list(self) -> list[str] | dict[str, str]:
-        if self.by is not None or self.where is not None:
+        if self.where is not None:
             written = {'expression': self.expression, 'values': self.values}
             if self.sign != '==':
                 written['sign'] = self.sign
-            return written | {k: v for k, v in (('by', self.by), ('where', self.where)) if v is not None}
+            return written | {'where': self.where}
         return [self.expression, self.values] if self.sign == '==' else [self.expression, self.values, self.sign]
 
 
@@ -435,9 +426,11 @@ class PiecewiseBlock(_StrictBlock):
     exactly two links).
 
     ``foreach`` is the frame the weights live on. It is inferred from the links
-    where every one of them sits on it, and must be declared once any link is
-    *refined* — a refined link's dims are its own, so they no longer say where
-    the weights are.
+    where every one of them sits on it, and must be declared alongside ``by``,
+    the lookup a link *below* that frame reaches the weights through — one row
+    per flow where the weights are per converter. A link uses it exactly when
+    its expression carries the dim the lookup maps out of, so a block may hold
+    both kinds and the arity of the refined ones is data.
 
     ``over`` names the breakpoint dimension; ``method`` is which of
     :data:`PIECEWISE_METHODS` restricts the weights; ``active`` names a gating
@@ -452,6 +445,7 @@ class PiecewiseBlock(_StrictBlock):
     over: str
     links: list[PiecewiseLink]
     foreach: list[str] = []
+    by: str | None = None
     method: PiecewiseMethod = 'adjacency'
     active: str | None = None
     points: str | None = None
@@ -502,32 +496,37 @@ class PiecewiseBlock(_StrictBlock):
             raise ValueError(msg)
         return v
 
-    @property
-    def refined(self) -> bool:
-        """Whether any link's rows sit below the weights' frame."""
-        return any(link.refined for link in self.links)
-
     @model_validator(mode='after')
     def _check_the_frame_is_known(self) -> PiecewiseBlock:
-        """A refined link declares its own dims, so it cannot imply the weights'.
+        """``by:`` and ``foreach:`` are one decision, so neither stands alone.
 
-        Where every link sits on the weights' frame, that frame is the union of
-        what they carry and declaring it again would be a second answer. Where
-        one does not, nothing is left to infer from and ``foreach:`` is the only
-        thing that says where λ lives.
+        A link below the weights' frame no longer says where that frame is, so
+        the block declares it. Where no link is below it, the links are the
+        frame and declaring it again would be a second answer.
         """
-        if self.refined and not self.foreach:
+        if bool(self.by) != bool(self.foreach):
             msg = (
-                'a piecewise block with a refined link (one carrying by:) must declare foreach: — '
-                'the frame its weights live on. A refined link sits below that frame, so the links '
-                'no longer say where the weights are.'
+                'by: and foreach: travel together — by: is how a link below the frame reaches '
+                'the weights, and foreach: is where that frame is. A block with neither takes '
+                'its frame from the links, which is the ordinary case.'
             )
             raise ValueError(msg)
-        if self.foreach and not self.refined:
+        return self
+
+    @model_validator(mode='after')
+    def _check_the_links_are_enough(self) -> PiecewiseBlock:
+        """A curve relates two quantities or more, and ``by:`` makes that a data question.
+
+        Without it, the links are the quantities and one of them is a curve
+        relating a variable to itself. With it, a single link is a row per
+        member — how many is what the lookup carries, which no file can be
+        checked against.
+        """
+        if self.by is None and len(self.links) < 2:
             msg = (
-                'foreach: is for a block whose links do not say where its weights live, which is '
-                'a block with a refined link (one carrying by:). Where every link sits on the '
-                "weights' frame, that frame is theirs and declaring it is a second answer."
+                'piecewise needs at least two links ([expression, values, sign?]) — a curve '
+                'relates two quantities or more. One is enough under by:, where a link is a row '
+                'per member and the members are data.'
             )
             raise ValueError(msg)
         return self
@@ -554,13 +553,6 @@ class PiecewiseBlock(_StrictBlock):
     @field_validator('links')
     @classmethod
     def _check_links(cls, v: list[PiecewiseLink]) -> list[PiecewiseLink]:
-        if len(v) < 2 and not any(link.refined for link in v):
-            msg = (
-                'piecewise needs at least two links ([expression, values, sign?]) — a curve '
-                'relates two quantities or more. One is enough where it is refined (by:), since '
-                'such a link is a row per member and the members are data.'
-            )
-            raise ValueError(msg)
         if not v:
             msg = 'piecewise needs a link.'
             raise ValueError(msg)

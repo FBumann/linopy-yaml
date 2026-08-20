@@ -1176,10 +1176,11 @@ piecewise:
   conversion:
     over: bp
     foreach: [converter, time]
+    by: converter_of
     points: bp_present
     method: adjacency
     links:
-      - {expression: rate, values: bp_rate, by: converter_of}
+      - [rate, bp_rate]
 
 constraints:
   heat_balance:
@@ -1229,7 +1230,7 @@ def refined_inputs():
     }
 
 
-def test_one_refined_link_ties_however_many_flows_a_converter_has(refined_inputs):
+def test_one_link_ties_however_many_flows_a_converter_has(refined_inputs):
     """The arity is a row count, and the file says nothing about it.
 
     Two flows on the boiler and three on the CHP, one declaration for both —
@@ -1266,7 +1267,7 @@ def test_the_hole_guard_follows_the_lookup(refined_inputs):
         lps.solve(raw_of(REFINED), {**refined_inputs, 'bp_rate': thin})
 
 
-def test_both_lanes_build_a_refined_link(refined_inputs, tmp_path):
+def test_both_lanes_build_a_link_below_the_frame(refined_inputs, tmp_path):
     """`at()` and a lookup are ordinary language by the time either lane sees them."""
     path = tmp_path / 'refined.yaml'
     path.write_text(REFINED)
@@ -1290,8 +1291,8 @@ def test_a_links_where_splits_one_curve_into_pinned_and_bounded_rows(refined_inp
         **{
             'parameters.pinned': {'dims': ['flow'], 'dtype': 'bool'},
             'piecewise.conversion.links': [
-                {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of', 'where': 'pinned'},
-                {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of', 'sign': '>=', 'where': 'NOT pinned'},
+                {'expression': 'rate', 'values': 'bp_rate', 'where': 'pinned'},
+                {'expression': 'rate', 'values': 'bp_rate', 'sign': '>=', 'where': 'NOT pinned'},
             ],
         },
     )
@@ -1309,55 +1310,64 @@ def test_a_links_where_splits_one_curve_into_pinned_and_bounded_rows(refined_inp
     assert heat[('boiler_fuel', 0)] < 50.0, 'on less fuel than its curve would pin it to, which is what >= buys'
 
 
-def test_a_refined_link_round_trips_as_a_mapping():
-    """The tuple form cannot hold `by:`, so such a link is written and dumped as a mapping."""
-    dumped = schema_of(raw_of(REFINED)).model_dump()['piecewise']['conversion']['links'][0]
+def test_a_link_below_the_frame_keeps_the_tuple_form():
+    """The map is the block's, so the ordinary link spelling survives it.
 
-    assert dumped == {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of'}
+    Only a per-link `where:` needs the mapping form, since that is the one
+    thing about a link the block cannot say for all of them.
+    """
+    block = schema_of(raw_of(REFINED)).model_dump()['piecewise']['conversion']
+    assert block['links'][0] == ['rate', 'bp_rate'], 'a link below the frame is still two strings'
+    assert block['by'] == 'converter_of'
+
+    masked = override(
+        raw_of(REFINED),
+        **{
+            'parameters.pinned': {'dims': ['flow'], 'dtype': 'bool'},
+            'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'where': 'pinned'}],
+        },
+    )
+    dumped = schema_of(masked).model_dump()['piecewise']['conversion']['links'][0]
+    assert dumped == {'expression': 'rate', 'values': 'bp_rate', 'where': 'pinned'}
 
 
 @pytest.mark.parametrize(
     ('patch', 'match'),
     [
-        pytest.param({'piecewise.conversion.foreach': []}, 'must declare foreach', id='refined-without-a-frame'),
-        pytest.param(
-            {'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'by': 'nope'}]},
-            'undeclared lookup',
-            id='by-names-no-lookup',
-        ),
-        pytest.param(
-            {
-                'lookups.time_of': {'over': 'converter', 'into': 'time'},
-                'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'by': 'time_of'}],
-            },
-            'a dim its expression does not carry',
-            id='by-maps-out-of-the-wrong-dim',
-        ),
+        pytest.param({'piecewise.conversion.foreach': []}, 'travel together', id='a-map-with-no-frame'),
+        pytest.param({'piecewise.conversion.by': None}, 'travel together', id='a-frame-with-no-map'),
+        pytest.param({'piecewise.conversion.by': 'nope'}, 'undeclared lookup', id='by-names-no-lookup'),
         pytest.param(
             {
                 'dimensions.site': {'dtype': 'str'},
                 'lookups.site_of': {'over': 'flow', 'into': 'site'},
-                'piecewise.conversion.links': [{'expression': 'rate', 'values': 'bp_rate', 'by': 'site_of'}],
+                'piecewise.conversion.by': 'site_of',
             },
-            'which is not part of foreach',
+            'which foreach',
             id='by-lands-off-the-frame',
+        ),
+        pytest.param(
+            {
+                'parameters.bp_load': {'dims': ['converter', 'bp']},
+                'variables.load': {'foreach': ['converter', 'time'], 'bounds': {'lower': 0}},
+                'piecewise.conversion.links': [['load', 'bp_load'], ['load', 'bp_load']],
+            },
+            'which no link carries',
+            id='a-map-nothing-travels',
         ),
         pytest.param(
             {
                 'dimensions.site': {'dtype': 'str'},
                 'parameters.bp_site': {'dims': ['site', 'bp']},
                 'variables.spend': {'foreach': ['site', 'time'], 'bounds': {'lower': 0}},
-                'piecewise.conversion.links': [
-                    {'expression': 'rate', 'values': 'bp_rate', 'by': 'converter_of'},
-                    ['spend', 'bp_site'],
-                ],
+                'piecewise.conversion.links': [['rate', 'bp_rate'], ['spend', 'bp_site']],
             },
             "carries 'site', which foreach",
             id='a-plain-link-below-the-declared-frame',
         ),
     ],
 )
-def test_a_refined_link_that_reaches_no_weights_is_a_load_error(patch, match):
+def test_a_map_that_reaches_no_weights_is_a_load_error(patch, match):
     """Four ways a link fails to reach the weights, each named against the block.
 
     The last is not about `by:` at all: a *plain* link carrying a dim the
@@ -1369,15 +1379,15 @@ def test_a_refined_link_that_reaches_no_weights_is_a_load_error(patch, match):
         lps.check(override(raw_of(REFINED), **patch))
 
 
-def test_one_link_is_enough_when_it_is_refined():
-    """The two-link minimum is about quantities, and a refined link is many of them.
+def test_one_link_is_enough_under_a_map():
+    """The two-link minimum is about quantities, and under `by:` those are data.
 
-    How many a curve ties is then the members mapping to it — data, and not a
-    thing a file can be checked against.
+    How many a curve ties is then the members the lookup carries to it, which
+    no file can be checked against.
     """
     lps.check(raw_of(REFINED))  # a single link, and it holds five flows
 
-    plain = override(raw_of(REFINED), **{'piecewise.conversion.links': [['rate', 'bp_rate']]})
+    plain = override(raw_of(REFINED), **{'piecewise.conversion.by': None, 'piecewise.conversion.foreach': []})
     with pytest.raises(SchemaError, match='at least two links'):
         lps.check(plain)
 

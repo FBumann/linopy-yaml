@@ -179,16 +179,15 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
       conversion:
         description: >-
           one curve per converter and period, tying every flow that converter has —
-          the link is refined by `converter_of`, so it builds a row per flow and the
-          number of flows is data
+          the link carries `flow` and the block maps `by: converter_of`, so it
+          builds a row per flow and the number of flows is data
         over: bp
         foreach: [converter, time]
+        by: converter_of
         points: bp_present
         method: adjacency
         links:
-          - expression: rate
-            values: bp_rate
-            by: converter_of
+          - [rate, bp_rate]
 
     constraints:
       heat_balance:

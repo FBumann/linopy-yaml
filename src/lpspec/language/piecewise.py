@@ -65,7 +65,7 @@ from lpspec.language.model import Model, PiecewiseBlock
 from lpspec.language.resolution import Namespace, resolve_expression
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Container, Sequence
 
 
 def mask_of(block: str, pw: PiecewiseBlock) -> str | None:
@@ -141,10 +141,11 @@ def expand_piecewise(schema: Model) -> Model:
             'expression': f'sum({lam}, over={pw.over}) == {rhs}',
         }
         for i, link in enumerate(pw.links):
-            weights = f'at({lam}, by={link.by})' if link.refined else lam
             rows = _declared_order(schema, _expr_dims(schema, link.expression, f'{ctx_of(name)} link {i}'))
+            below = _reaches_through(schema, pw, rows)
+            weights = f'at({lam}, by={pw.by})' if below else lam
             raw['constraints'][f'{name}_link{i}'] = {
-                'foreach': rows if link.refined else list(frame),
+                'foreach': rows if below else list(frame),
                 **({'where': link.where} if link.where else {}),
                 'expression': (f'({link.expression}) {link.sign} sum({weights} * {link.values}, over={pw.over})'),
             }
@@ -236,27 +237,37 @@ def _expand_lp(
         }
 
 
-def _check_the_lookup_lands(schema: Model, ctx: str, i: int, link: Any, pw: PiecewiseBlock, frame: list[str]) -> None:
-    """A refined link's ``by:`` carries its rows to the weights, or it is not a tie.
+def _reaches_through(schema: Model, pw: PiecewiseBlock, rows: Container[str]) -> bool:
+    """Whether a link's rows sit below the weights and read them through ``by:``.
 
-    Three ways it fails to: naming no lookup, mapping out of a dim the link's
-    rows do not sit on, and mapping into one the weights do not live on. Each
-    leaves rows facing weights nothing pairs them with, which the emitted
-    ``at()`` would report against a constraint the reader never wrote.
+    What decides it is the link's own dims: one carrying the dim the lookup
+    maps out of is a row per member of it, and everything else sits on the
+    frame. So the block declares the map once and no link declares anything.
     """
-    lookup = schema.lookups.get(link.by)
-    if lookup is None:
-        raise PiecewiseExpansionError(f"{ctx}: link {i} by references undeclared lookup '{link.by}'")
-    rows = _expr_dims(schema, link.expression, f'{ctx} link {i}')
-    if lookup.over not in rows:
-        raise PiecewiseExpansionError(
-            f"{ctx}: link {i} maps by '{link.by}', which is over '{lookup.over}' — a dim its "
-            f'expression does not carry (it has {sorted(rows)})'
-        )
+    return pw.by is not None and schema.lookups[pw.by].over in rows
+
+
+def _check_the_map_lands(schema: Model, ctx: str, pw: PiecewiseBlock, frame: list[str]) -> None:
+    """``by:`` carries rows to the weights, or the block is not a tie.
+
+    Two ways it fails to once the lookup is known to exist: landing somewhere
+    the weights do not live, and being named where no link is below the frame at
+    all — a map nothing travels. Either would otherwise be reported against a
+    constraint the reader never wrote.
+    """
+    if pw.by is None:
+        return
+    lookup = schema.lookups[pw.by]
     if lookup.into not in frame:
         raise PiecewiseExpansionError(
-            f"{ctx}: link {i} maps by '{link.by}' into '{lookup.into}', which is not part of "
-            f'foreach {frame} — a refined link reaches the weights through the frame they live on'
+            f"{ctx}: by '{pw.by}' maps into '{lookup.into}', which foreach {frame} does not carry — "
+            f'a link below the frame reaches the weights through the frame they live on'
+        )
+    carried = [_expr_dims(schema, link.expression, f'{ctx} link {i}') for i, link in enumerate(pw.links)]
+    if not any(lookup.over in dims for dims in carried):
+        raise PiecewiseExpansionError(
+            f"{ctx}: by '{pw.by}' is over '{lookup.over}', which no link carries — the map is for "
+            f'links that sit below the weights, and every one of these is on their frame'
         )
 
 
@@ -283,6 +294,8 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
     ctx = f"piecewise '{name}'"
     if pw.over not in schema.dimensions:
         raise PiecewiseExpansionError(f"{ctx}: over references undeclared dimension '{pw.over}'")
+    if pw.by is not None and pw.by not in schema.lookups:
+        raise PiecewiseExpansionError(f"{ctx}: by references undeclared lookup '{pw.by}'")
 
     frame: list[str] = []
     for d in pw.foreach:
@@ -309,7 +322,7 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                 raise PiecewiseExpansionError(
                     f"{ctx}: link {i} expression already carries the breakpoint dim '{pw.over}'"
                 )
-            if link.refined or d in frame:
+            if d in frame or (pw.by is not None and d == schema.lookups[pw.by].over):
                 continue
             if pw.foreach:
                 raise PiecewiseExpansionError(
@@ -318,8 +331,6 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
                     f'reaches them'
                 )
             frame.append(d)
-        if link.refined:
-            _check_the_lookup_lands(schema, ctx, i, link, pw, frame)
 
     if pw.active is not None:
         if pw.active in schema.variables and schema.variables[pw.active].domain != 'binary':
@@ -330,12 +341,15 @@ def _validate_block(schema: Model, name: str, pw: PiecewiseBlock) -> tuple[str, 
             if d not in frame:
                 frame.append(d)
 
+    _check_the_map_lands(schema, ctx, pw, frame)
+
     for i, link in enumerate(pw.links):
-        rows = sorted(_expr_dims(schema, link.expression, f'{ctx} link {i}')) if link.refined else frame
+        carried = _expr_dims(schema, link.expression, f'{ctx} link {i}')
+        rows = sorted(carried) if _reaches_through(schema, pw, carried) else frame
         if stray := [d for d in schema.parameters[link.values].dims if d != pw.over and d not in rows]:
             varies = (
                 'this link builds a row per coordinate of'
-                if link.refined
+                if rows is not frame
                 else 'the block builds one curve per coordinate of'
             )
             raise PiecewiseExpansionError(
