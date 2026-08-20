@@ -31,18 +31,24 @@ docs/reference/notation.md
 docs/reference/typeset.md
 docs/about/ceiling.md
 
-# --- the conformance corpus --------------------------------------------------
-# One construct per file, no gallery page, not in `MODEL_PATHS`: these exist to
-# be accepted or refused, which is what a spec's corpus is for. The symbol
-# tables go with the renderer that reads them.
-#
-# The teaching models do *not* move, though each demonstrates a construct.
-# `docs/examples/dispatch.md` solves `examples/dispatch.yaml` and links to it in
-# this repository; the model's day job is being read by a person and solved by
-# an engine, and both are lpspec's. A corpus proving a file is *sayable* and one
-# proving it is *solvable* are different corpora that happen to overlap.
+# --- the operator reference's source ----------------------------------------
+# Not a corpus that happens to move: `tools/language/spec_math.py` generates the
+# operator table *from* these thirteen files into
+# `docs/reference/language/operators.md`, and all three lines of that pipeline
+# are above. One construct per file, no gallery page, not in `MODEL_PATHS`.
 examples/operators/
-examples/symbols/
+
+# Everything else under `examples/` stays. The teaching models each have a
+# gallery page that *solves* them and links to them in this repository, so what
+# they demonstrate is that lpspec expresses and answers a real problem — a
+# corpus proving a file is *sayable* and one proving it is *solvable* are
+# different corpora that happen to overlap. `examples/symbols/` stays with
+# them: every table is the spelling for one model, and all eight of those
+# models stay, so a table that moved would name nothing.
+#
+# A conformance corpus beyond the operator probes gets written for math-spec
+# when math-spec needs one. Inheriting this one would import the shape of
+# lpspec's own testing rather than the shape of the language.
 
 # --- known not yet selectable ------------------------------------------------
 # `tests/test_typeset.py` belongs with `typeset/` but imports

@@ -491,6 +491,7 @@ MANIFEST = REPO / 'extraction.paths'
 #: `walkthrough.yaml` is the clearest case — `run.py` solves it and
 #: `walkthrough.out` is the golden, so the model and its answer are one thing.
 EXAMPLES_THAT_STAY = (
+    'examples/symbols/',
     'examples/ports/',
     'examples/benders/',
     'examples/myopic/',
