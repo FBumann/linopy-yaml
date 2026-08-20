@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.238](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.237...v0.0.1-alpha.238) (2026-08-20)
+
+
+### Documentation
+
+* a docstring names the number it measured and the symbol that exists ([#1195](https://github.com/fluxopt/lpspec/issues/1195)) ([343ea93](https://github.com/fluxopt/lpspec/commit/343ea93a2c18580274d0be44af0d3e3e7f12ff55))
+
 ## [0.0.1-alpha.237](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.236...v0.0.1-alpha.237) (2026-08-20)
 
 
