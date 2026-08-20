@@ -151,16 +151,26 @@ to that error rather than to any `ValueError`, so the day linopy grows a slot it
 XPASSes and the check comes out with it
 ([#894](https://github.com/fluxopt/lpspec/issues/894)).
 
-**The second is the relational lane's, and it is the mirror: a constant summed
-over a dimension it does not carry**, beside a term that does — say
-`sum(x * k + d, over=g)` where `d` is a scalar. That lane compiles a constant
-part as its own frame, so a fragment with no rows for `g` carries no count to
-sum, and under a mask the count is the *present* slots, which only the rows
-know. This lane has no such split — the operand is one masked expression, so
-the constant is dropped wherever the term is — and so it builds the file as
-written. The relational lane says so in its own words and names the rewrite
-that reaches the same number: declare the parameter over `g` and supply it
-there ([#1137](https://github.com/fluxopt/lpspec/issues/1137)).
+**The second is the relational lane's, and it is the mirror: an operator acting
+along a dimension a constant part does not carry**, beside a term that does —
+say `sum(x * k + d, over=t)` where `d` is a scalar. That lane compiles a
+constant part as its own frame, so a fragment with no rows for `t` has no slots
+for the operator to act on, and under a mask which slots those are is known
+only to the rows. This lane has no such split — the operand is one masked
+expression, so the constant is dropped wherever the term is — and so it builds
+the file as written.
+
+It is **one wall, reached by all four operators that act along a dimension**
+(`sum(over=)`, `sum(by=)`, `shift`, `sum_back`), which is why they share a
+refusal rather than each wording its own: a fix for one that left the others
+would be a fix for a symptom. The relational lane names the rewrite that
+reaches the same number — declare the parameter over the dimension and supply
+it there ([#1137](https://github.com/fluxopt/lpspec/issues/1137)). One operator
+is short of that promise today: `sum_back` reads a constant at a slot the
+variable is absent from where the other three drop it, so its rewrite answers
+2.5 against the eager lane's 3.0, and a strict `xfail` holds the case until
+that reading is settled
+([#1142](https://github.com/fluxopt/lpspec/issues/1142)).
 
 Both are worth reading twice, because the shape is easy to mistake for a
 language limit and is not one: a `LaneError` names the wall *and* the route

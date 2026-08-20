@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import polars as pl
 
@@ -30,7 +30,7 @@ from lpspec.errors import (
     LaneError,
     LanguageError,
     LpspecError,
-    constant_summed_beside_a_term_message,
+    constant_beside_a_term_message,
 )
 from lpspec.relational import plan
 
@@ -139,6 +139,23 @@ class TermFragment:
     def carried(self) -> list[str]:
         """The non-dim columns a projection has to keep."""
         return carried_columns(is_term=self.is_term)
+
+
+def _refuse_a_fragment_without_the_dims(p: TermFragment, dims: list[str], context: str, operator: str) -> NoReturn:
+    """Refuse a fragment an operator cannot act on, in the right class.
+
+    Two different failures share this shape and must not share a class. A
+    **constant part** lacking the dims is a file the language accepts and the
+    eager lane builds — `check` passes, so `LanguageError` would be a lie — and
+    it is reachable from ordinary YAML wherever a scalar is added beside a term
+    (#1137). A **term** lacking them is not reachable that way: `dims_of` gives
+    every term the foreach dims at load, so reaching here means the plan is
+    malformed, which is the lane's own business and stays `LanguageError`
+    pending #1134.
+    """
+    if not p.is_term:
+        raise LaneError(constant_beside_a_term_message(context, operator, dims))
+    raise LanguageError(f'in {context}: {operator} along {dims} but the expression has dims {list(p.dims)}')
 
 
 def value_column(*, is_term: bool) -> str:
@@ -722,7 +739,7 @@ class PolarsCompiler:
         """
         missing = [d for d in over if d not in p.dims]
         if missing and not p.is_term:
-            raise LaneError(constant_summed_beside_a_term_message(context, list(over), missing))
+            _refuse_a_fragment_without_the_dims(p, missing, context, f'sum(over={list(over)})')
         keep = tuple(d for d in p.dims if d not in over)
         scale = math.prod(self.data.cardinality[d] for d in missing)
         frame = p.frame.select(*keep, *p.carried)
@@ -745,7 +762,7 @@ class PolarsCompiler:
         surface is a list rather than a composition of calls.
         """
         if g.over not in p.dims:
-            raise LanguageError(f"in {context}: GroupSum over '{g.over}' but the expression has dims {list(p.dims)}")
+            _refuse_a_fragment_without_the_dims(p, [g.over], context, f'sum(by=) over {g.over!r}')
         grouped = self._remap_fragment(p, g, consumed=(g.over,), produced=g.into)
         if p.is_term:
             return grouped
@@ -888,9 +905,7 @@ class PolarsCompiler:
         itself. So an operand with no presence gains none.
         """
         if s.dimension not in p.dims:
-            raise LanguageError(
-                f"in {context}: a window along '{s.dimension}' but the expression has dims {list(p.dims)}"
-            )
+            _refuse_a_fragment_without_the_dims(p, [s.dimension], context, f'sum_back(over={s.dimension!r})')
         card = self.data.cardinality[s.dimension]
         table = self.data.dimensions[s.dimension]
         incoming = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_IN))
@@ -954,9 +969,7 @@ class PolarsCompiler:
         Lowering refuses every other numeric edge over a variable.
         """
         if s.dimension not in p.dims:
-            raise LanguageError(
-                f"in {context}: translation along '{s.dimension}' but the expression has dims {list(p.dims)}"
-            )
+            _refuse_a_fragment_without_the_dims(p, [s.dimension], context, f'shift(over={s.dimension!r})')
         card = self.data.cardinality[s.dimension]
         others = [d for d in p.dims if d != s.dimension]
         table = self.data.dimensions[s.dimension]
