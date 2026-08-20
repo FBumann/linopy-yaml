@@ -525,6 +525,22 @@ def index_without_its_label_column_message(dim: str, available: Sequence[str]) -
     )
 
 
+def lookup_target_without_labels_message(dim: str, lookup: str, target: str) -> str:
+    """A lookup whose target has no label set to check against — one wording, both lanes.
+
+    Its own wording rather than the missing-index one, because what is missing
+    is not obvious from where the model breaks: the dimension the *values* are
+    labels of may be one no constraint spans, so nothing else in the model
+    would ask for its index at all.
+    """
+    return (
+        f"dimension '{dim}' lookup '{lookup}' targets '{target}', which nothing in this model "
+        f"spans and which has no index of its own, so the lookup's values have no label set to "
+        f"be checked against. Pass an index for '{target}' (under key '{target}' in sources, or "
+        f'as values on its declaration), or remove the lookup.'
+    )
+
+
 def lookup_values_are_not_labels_message(dim: str, lookup: str, target: str, values: Sequence[Any]) -> str:
     """A lookup value naming no label of the dimension it targets — one wording, both lanes.
 

@@ -197,27 +197,16 @@ class _Binder:
                 raise DataError(no_index_source_message(d))
 
     def lookup_relations(self) -> None:
-        """Every map as its own ``(over, lookup)`` frame, its values checked.
+        """Every map as its own ``(over, lookup)`` frame.
 
-        Registered after the dimensions because containment needs the target's
-        labels: a value that is not one of them would vanish in the join that
-        places its terms, leaving a model that builds and solves without them.
+        Both label columns were checked against their dimensions' indices by
+        the reader both lanes enter (:func:`~lpspec.sources.lookup_relations`),
+        so what is left here is registering the frame under the name the
+        compiler reads a map by.
         """
         for d in sorted(self._declared_dims()):
-            declaration = self.program.dimension(d)
-            for name in declaration.maps:
+            for name in self.program.dimension(d).maps:
                 self.lookups[name] = self._relation_frame(d, name)
-            for lk in sorted(declaration.lookups):
-                relation = self.lookups[lk.name]
-                if lk.target not in self.dimensions:
-                    raise DataError(
-                        f"dimension '{d}' lookup '{lk.name}' targets '{lk.target}', which "
-                        f'nothing in this model spans and which has no index of its own, so '
-                        f"the lookup's values have no label set to be checked against. "
-                        f"Pass an index for '{lk.target}' (under key '{lk.target}' in sources, "
-                        f'or as values on its declaration), or remove the lookup.'
-                    )
-                data_validation.check_lookup_containment(d, lk.name, lk.target, relation, self.dimensions[lk.target])
 
     def _relation_frame(self, d: str, lookup: str) -> pl.LazyFrame:
         """One map's ``(over, lookup)`` source, collected once."""
