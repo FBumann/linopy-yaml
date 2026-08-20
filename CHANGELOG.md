@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-alpha.227](https://github.com/fluxopt/lpspec/compare/v0.1.0-alpha.226...v0.1.0-alpha.227) (2026-08-20)
+
+
+### Bug Fixes
+
+* **language:** a piecewise curve whose gate does not exist there is ungated, not relaxed ([#1159](https://github.com/fluxopt/lpspec/issues/1159)) ([1b927cc](https://github.com/fluxopt/lpspec/commit/1b927ccb38ede4cbfbadfd4f7522740fe495a46e))
+
 ## [0.1.0-alpha.226](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.226...v0.1.0-alpha.226) (2026-08-20)
 
 
