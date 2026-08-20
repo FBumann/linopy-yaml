@@ -16,7 +16,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from lpspec.errors import LpspecError
-from lpspec.relational.sinks import sos
 from lpspec.relational.sinks.solvers.base import Solver
 from lpspec.relational.sinks.solvers.gurobi import Gurobi
 from lpspec.relational.sinks.solvers.highs import Highs
@@ -31,7 +30,7 @@ if TYPE_CHECKING:
 #: ``WarmStart`` is deliberately absent. The carry it describes has no caller
 #: above the family yet (#382), so it stays where the machinery is —
 #: ``solvers.base`` — rather than reading as a surface something may use.
-__all__ = ['SOLVERS', 'Solver', 'ingestible', 'loaded', 'solver']
+__all__ = ['SOLVERS', 'Solver', 'loaded', 'solver']
 
 #: Every solver a caller may name, and **closed** — a dict literal, not a
 #: registry something installed can add to. Which solver runs is the caller's
@@ -75,34 +74,6 @@ def solver(name: str) -> type[Solver]:
             f'{name} is a solver this build knows, but its package is not installed here. {found.unavailable_message}'
         )
     return found
-
-
-def ingestible(name: str, model: ModelTables) -> ModelTables:
-    """*model* in the form the named solver can take it — sets included.
-
-    The one place a capability is acted on, and it is the *family*'s rather
-    than a member's: a solver that cannot ingest a special-ordered set is
-    handed :func:`~lpspec.relational.sinks.sos.reformulated` tables, so no
-    ``_load`` has to know the model ever carried one, and everything that
-    reads a solve back — the span check, the label slices — sees the one model
-    the solver actually holds.
-
-    Asked before the load rather than inside it because a rebind compares the
-    *ingested* digest: a big-M is a matrix coefficient by then, so a bound
-    that moved one is a model to load again rather than numbers to push.
-
-    Only ``reformulated`` is rewritten here. ``absent`` is a refusal rather
-    than a silent rewrite, and one the caller is told about before the solve
-    (#89) — a sink that cannot take a set and is handed one anyway would
-    otherwise be given a model nobody chose.
-
-    Returns:
-        *model* itself where nothing has to change, which is every model
-        declaring no sets.
-    """
-    if model.sos.height and solver(name).capabilities.support('sos') == 'reformulated':
-        return sos.reformulated(model)
-    return model
 
 
 def loaded(

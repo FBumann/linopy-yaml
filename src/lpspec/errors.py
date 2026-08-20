@@ -335,11 +335,9 @@ def _spelled(capabilities: Sequence[str]) -> str:
 def _instead(takers: Sequence[str]) -> str:
     """The third clause of the refusal contract: who *does* take it.
 
-    Without it an optional check moves the surprise from solve time to check
-    time for whoever thought to ask, and leaves whoever did not exactly where
-    they were. Naming another *sink* is not the lane redirection hard rule 3
-    forbids — both lanes still accept the same language, and this is about
-    where a model can land.
+    Naming another *sink* is not the lane redirection hard rule 3 forbids —
+    both lanes still accept the same language, and this is about where a model
+    can land.
     """
     if not takers:
         return 'No sink this build has takes it.'
@@ -357,9 +355,9 @@ def sink_refuses_message(sink: str, missing: Sequence[str], takers: Sequence[str
 def sink_refuses_combination_message(sink: str, combination: Sequence[str], takers: Sequence[str]) -> str:
     """A sink that has both halves of a pair and refuses them together.
 
-    Worth its own sentence rather than a shorter one about the pair: a caller
-    reading "it cannot take a quadratic objective" of a sink whose own
-    documentation says it can would reasonably conclude the message is wrong.
+    Its own sentence, because a caller reading "it cannot take a quadratic
+    objective" of a sink whose documentation says it can would conclude the
+    message is wrong.
     """
     return (
         f'the {sink!r} sink takes {_spelled(combination)} separately and refuses them together, '
@@ -370,11 +368,9 @@ def sink_refuses_combination_message(sink: str, combination: Sequence[str], take
 def sink_reformulates_message(sink: str, capability: str, *, integrality_added: bool) -> str:
     """A sink meeting a capability by rewriting the model into one it takes.
 
-    Not a refusal — it solves — but the answer comes back to a question
-    slightly different from the one asked. *integrality_added* is the one
-    consequence derivable here rather than assumed per capability: a model that
-    declared no integrality of its own and reaches the solver mixed-integer
-    comes back without duals.
+    *integrality_added* is the one consequence derivable here rather than
+    assumed per capability: a model that declared no integrality and reaches
+    the solver mixed-integer comes back without duals.
     """
     cost = (
         ' The model declared no integrality of its own and reaches the solver mixed-integer, '
@@ -385,6 +381,26 @@ def sink_reformulates_message(sink: str, capability: str, *, integrality_added: 
     return (
         f'the {sink!r} sink has no native support for {_SPELLED.get(capability, capability)} and '
         f'will take it reformulated, so what reaches the solver is not what the file declares.{cost}'
+    )
+
+
+def nonconvex_objective_message() -> str:
+    """A quadratic objective HiGHS refuses for its curvature.
+
+    The one capability verdict no data-free check can reach, so it arrives at
+    the solve — and names the way out, as :func:`no_duals_message` does. The
+    way out is spelled as the loader takes it (``method: convex``), a message
+    sending its reader to a key ``piecewise:`` rejects being worse than none.
+    """
+    return (
+        'the highs sink refused to run this quadratic objective, and a Hessian that is not '
+        'positive semidefinite is why it refuses one: it solves convex QPs only. Convexity is a '
+        'property of the coefficients rather than of the model, so nothing could refuse it '
+        "before the data was bound — the sink's other quadratic refusal, a Hessian standing "
+        'beside integrality, is declared and caught before the build.\n'
+        'Write the model to an .lp file for a solver that takes one, or state the curve as a '
+        'piecewise: block with method: convex instead — a convex reformulation keeps the LP, '
+        'and with it the duals and the warm start a quadratic objective gives up.'
     )
 
 

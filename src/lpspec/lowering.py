@@ -143,7 +143,7 @@ def lower_program(schema: Model) -> plan.Program:
             raise LanguageError('the objective: expression must not contain a comparison operator')
         objective = plan.ObjectiveDeclaration(
             'min' if odef.sense == 'minimize' else 'max',
-            _lower_expr(ast, schema, 'the objective'),
+            _lower_expr(ast, schema, 'the objective', ceiling=2),
         )
 
     dimensions = tuple(
@@ -204,7 +204,7 @@ def expression_thunks(schema: Model) -> dict[str, Callable[[], plan.Expression]]
 # ---------------------------------------------------------------------------
 
 
-def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expression:
+def _lower_expr(node: ArithmeticNode, schema: Model, context: str, *, ceiling: int = 1) -> plan.Expression:
     """Rewrite one resolved core-AST expression as a plan expression.
 
     Three language rules are *asked* here and answered elsewhere: the call
@@ -248,13 +248,13 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
         raise AssertionError(msg)
 
     if isinstance(node, UnaryOperatorNode):
-        inner = _lower_expr(node.operand, schema, context)
+        inner = _lower_expr(node.operand, schema, context, ceiling=ceiling)
         return plan.Negate(inner) if node.op == '-' else inner
 
     if isinstance(node, BinaryOperatorNode):
-        left = _lower_expr(node.left, schema, context)
-        right = _lower_expr(node.right, schema, context)
-        check_binary(node, context)
+        left = _lower_expr(node.left, schema, context, ceiling=ceiling)
+        right = _lower_expr(node.right, schema, context, ceiling=ceiling)
+        check_binary(node, context, ceiling=ceiling)
         match node.op:
             case '+':
                 return plan.Add(left, right)
@@ -275,7 +275,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
         if node.name == 'sum':
             by_node = node.kwargs.get('by')
             _check_dim_rules(node, schema, context)
-            operand = _lower_expr(node.args[0], schema, context)
+            operand = _lower_expr(node.args[0], schema, context, ceiling=ceiling)
             if by_node is None and 'over' not in node.kwargs:
                 return plan.Sum(operand, tuple(sorted(dims_of(node.args[0], schema, context))))
             if by_node is None:
@@ -298,7 +298,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
                 raise LanguageError(f'{context}: at(by=...) must name a lookup')
             _check_dim_rules(node, schema, context)
             return plan.At(
-                _lower_expr(node.args[0], schema, context),
+                _lower_expr(node.args[0], schema, context, ceiling=ceiling),
                 over=by_node.dimension,
                 coordinate=by_node.names,
                 into=by_node.into,
@@ -310,7 +310,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
                 raise LanguageError(f'{context}: sum_back(over=...) must name a dimension')
             within_node = node.kwargs['within']
             _check_dim_rules(node, schema, context)
-            operand = _lower_expr(node.args[0], schema, context)
+            operand = _lower_expr(node.args[0], schema, context, ceiling=ceiling)
             wrap = _window_edge(node.kwargs.get('edge'), context)
             width: int | str
             if isinstance(within_node, ParameterNode):
@@ -340,7 +340,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str) -> plan.Expre
             ):
                 raise LanguageError(f'{context}: {_shift_by_message()}')
             _check_dim_rules(node, schema, context)
-            operand = _lower_expr(node.args[0], schema, context)
+            operand = _lower_expr(node.args[0], schema, context, ceiling=ceiling)
             has_var = carries_variable(node.args[0])
             edge = node.kwargs.get('edge')
             wrap = isinstance(edge, EdgeNode)

@@ -148,7 +148,7 @@ def test_a_variable_compiles_to_one_term_fragment_over_its_dims():
     assert not compiled.consts
     fragment = compiled.terms[0]
     assert fragment.dims == ('snapshot', 'generator')
-    assert fragment.is_term
+    assert fragment.kind == 'term'
     assert columns(fragment.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
 
 
@@ -156,7 +156,7 @@ def test_a_parameter_is_a_constant_fragment_not_a_term():
     compiled = compiler().expression(plan.Parameter('cost'), 'test')
     assert not compiled.terms
     assert compiled.consts[0].dims == ('generator',)
-    assert not compiled.consts[0].is_term
+    assert compiled.consts[0].kind == 'const'
     assert columns(compiled.consts[0].frame) == ['generator', 'cval']
 
 

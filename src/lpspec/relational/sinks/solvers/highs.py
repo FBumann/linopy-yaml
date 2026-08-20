@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from lpspec.errors import LpspecError
+from lpspec.errors import LpspecError, nonconvex_objective_message
 from lpspec.relational.sinks.capabilities import Capabilities
 from lpspec.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
 from lpspec.relational.sinks.tables import SENSE_CODES, solver_vector
@@ -134,7 +134,52 @@ def build_highs(
 
     if model.objective_sense == 'max':
         h.changeObjectiveSense(highspy.ObjSense.kMaximize)
+    _pass_hessian(h, model)
     return h
+
+
+def _pass_hessian(h: Any, model: ModelTables) -> None:
+    r"""The objective's quadratic part, as the Hessian HiGHS reads.
+
+    ``passHessian`` takes :math:`Q` in :math:`\frac12 x^\top Q x`, lower
+    triangle only, in column-major (CSC) order — so the conversion from the
+    unordered-pair form the engine hands over is two rules, and they differ:
+
+    * a **diagonal** pair states :math:`q\,x_i^2`, and :math:`\frac12 Q_{ii}
+      x_i^2 = q\,x_i^2` needs :math:`Q_{ii} = 2q`;
+    * an **off-diagonal** pair states :math:`q\,x_i x_j` once, where the
+      symmetric matrix holds it twice — :math:`\frac12 (Q_{ij} + Q_{ji}) = q`
+      — so the stored value is :math:`q` itself.
+
+    The whole part goes over at once — there is no incremental Hessian API —
+    but onto the model already loaded, which is what lets :meth:`Highs.push`
+    replace it without a reload.
+    """
+    import highspy
+    import numpy as np
+
+    if not model.quad.height:
+        return
+    lower = model.quad['col_r'].to_numpy().astype(np.int32, copy=False)
+    upper = model.quad['col_l'].to_numpy().astype(np.int32, copy=False)
+    diagonal = lower == upper
+    values = np.where(diagonal, model.quad['coeff'].to_numpy() * 2.0, model.quad['coeff'].to_numpy())
+
+    order = np.lexsort((lower, upper))
+    starts = np.zeros(model.column_count + 1, dtype=np.int32)
+    np.add.at(starts, upper + 1, 1)
+    _loaded(
+        h,
+        h.passHessian(
+            model.column_count,
+            len(order),
+            int(highspy.HessianFormat.kTriangular),
+            np.cumsum(starts, out=starts),
+            lower[order],
+            values[order],
+        ),
+        'the quadratic objective',
+    )
 
 
 class Highs(Solver):
@@ -202,6 +247,7 @@ class Highs(Solver):
         rows = np.arange(model.row_count, dtype=np.int32)
         rlb, rub = _row_bounds(model.dense_rows(inf), inf)
         _loaded(self._handle, self._handle.changeRowsBounds(model.row_count, rows, rlb, rub), 'new right-hand sides')
+        _pass_hessian(self._handle, model)
 
     def warm_start(self) -> WarmStart | None:
         """The basis the last solve left, or its incumbent where none is valid.
@@ -250,9 +296,18 @@ class Highs(Solver):
             _took(self._handle.setSolution(solution), 'the carried incumbent')
 
     def _run(self, model: ModelTables) -> SolveAnswer:
+        """Solve, and read the one error HiGHS reports as a refusal to start.
+
+        A ``kError`` from ``run()`` leaves the model status unset — there is no
+        solve to read back — so a quadratic model that gets one is refused with
+        the sentence the curvature earns rather than as an unreadable status.
+        The pair a Hessian is otherwise refused for, integrality beside it, is
+        declared on the descriptor and never reaches a load.
+        """
         import highspy
 
-        self._handle.run()
+        if self._handle.run() == highspy.HighsStatus.kError and model.quad.height:
+            raise LpspecError(nonconvex_objective_message())
         status = _status_of(self._handle, highspy)
         if not status.is_readable:
             return SolveAnswer.unreadable(status)

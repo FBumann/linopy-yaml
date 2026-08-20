@@ -6,7 +6,7 @@ two let one solver's limits read as architectural law. One descriptor per sink,
 so a construct the language says and a sink cannot take is a refusal naming
 both rather than a ``kError`` from inside a library.
 
-Three shapes, each forced by docs/about/benchmarks.md#sink-capabilities rather
+Four shapes, each forced by docs/about/benchmarks.md#sink-capabilities rather
 than chosen:
 
 - **Three-valued.** ``reformulated`` is an answer, not a missing ``native``: a
@@ -18,6 +18,11 @@ than chosen:
   ``check`` cannot answer it (rule 2). ``nonconvex_quadratic_objective`` is
   declared anyway: the sink that discovers it at solve time reads the sinks
   that would have taken it off this table.
+- **A descriptor describes the sink as shipped, not the library it wraps.** A
+  solver that takes a Hessian through an entry point this package does not call
+  cannot ingest a quadratic objective *here*, and saying otherwise would drop
+  the quadratic part and answer a different model's optimum. An entry moves
+  when the hand-off lands, so the benchmarks table may be ahead of it.
 """
 
 from __future__ import annotations
@@ -26,10 +31,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, get_args
 
+from lpspec.relational import plan
+
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
-
-    from lpspec.relational import plan
 
 #: What a model may need a sink to have. ``indicator`` and ``semi-continuous``
 #: are absent deliberately: they have rows in the benchmarks table and no
@@ -120,6 +125,27 @@ def required(program: plan.Program, /) -> frozenset[Capability]:
     needed: set[Capability] = set()
     if any(v.variable_type != 'continuous' for v in program.variables):
         needed.add('integrality')
+    if program.objective is not None and _is_quadratic(program.objective.expression):
+        needed.add('quadratic_objective')
     if program.sos:
         needed.add('sos')
     return frozenset(needed)
+
+
+def _is_quadratic(expression: plan.Expression) -> bool:
+    """Whether *expression* contains a product of two variable-carrying operands.
+
+    The plan's own reading of degree, and the only place outside the compiler
+    that asks it: a capability is decided on the program, and the program is
+    the plan. Structural, so it costs a walk of the tree and reads no data.
+    """
+    if isinstance(expression, plan.Multiply) and all(_carries_variable(x) for x in (expression.left, expression.right)):
+        return True
+    return any(_is_quadratic(child) for child in plan.children(expression))
+
+
+def _carries_variable(expression: plan.Expression) -> bool:
+    """Whether a variable appears anywhere under *expression*."""
+    if isinstance(expression, plan.Variable):
+        return True
+    return any(_carries_variable(child) for child in plan.children(expression))

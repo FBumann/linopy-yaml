@@ -48,10 +48,11 @@ if TYPE_CHECKING:
     from polars._typing import MaintainOrderJoin
 
 
-#: The four frames a sink reads, as schemas. Stated here because the engine
+#: The frames a sink reads, as schemas. Stated here because the engine
 #: is what fills them and an empty model still has to have them.
 _COLS = ('lb', 'ub', 'vtype')
 _OBJ = ('col', 'coeff')
+_QUAD = ('col_l', 'col_r', 'coeff')
 _ROWS = ('row', 'sense', 'rhs')
 _MATRIX = ('row', 'col', 'coeff')
 _SOS = ('set', 'type', 'col', 'weight', 'big_m')
@@ -88,6 +89,7 @@ _DTYPES = {
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
     'sense': SENSE, 'vtype': pl.Enum(get_args(plan.VariableType)),
     'set': pl.Int32, 'type': pl.UInt8, 'weight': pl.Int32, 'big_m': pl.Float64,
+    'col_l': pl.Int32, 'col_r': pl.Int32,
 }  # fmt: skip
 
 
@@ -172,6 +174,13 @@ class PolarsEngine:
         self._constraint_blocks: dict[str, _Block] = {}
         self._cols: pl.DataFrame | None = None
         self._obj: pl.DataFrame | None = None
+        #: The objective's quadratic part, one row per *unordered pair* of
+        #: columns: ``coeff`` is the coefficient of ``x[col_l] · x[col_r]`` in
+        #: the objective as written, and never half of it. Each sink converts
+        #: into its own spelling of the same form, which is three different
+        #: spellings (:class:`~lpspec.relational.sinks.tables.ModelTables`).
+        #: Empty for every model with an affine objective, which is most.
+        self._quad: pl.DataFrame | None = None
         self._rows: pl.DataFrame | None = None
         self._matrix: pl.DataFrame | None = None
         self._sos: pl.DataFrame | None = None
@@ -262,6 +271,7 @@ class PolarsEngine:
             self._matrix = ordered.select('col', 'coeff').rechunk()
             self._n_entries = self._matrix.height
             self._obj = _stack([objective] if objective is not None else [], _OBJ)
+            self._quad = _stack([] if self._quad is None else [self._quad], _QUAD)
 
     @property
     def _q(self) -> PolarsCompiler:
@@ -630,7 +640,7 @@ class PolarsEngine:
         """
         if o is None:
             return None
-        comp = self._q.expression(o.expression, 'objective')
+        comp = self._q.expression(o.expression, 'objective', quadratic=True)
         for p in comp.consts:
             if p.dims:
                 raise LanguageError(
@@ -639,6 +649,7 @@ class PolarsEngine:
                 )
             self._obj_const += p.frame.select(pl.col('cval').sum()).collect().item() or 0.0
         self._obj_sense = o.sense
+        self._quad = self._objective_quadratic(comp.quads, o.expression)
         if not comp.terms:
             return None
         pieces = [
@@ -652,12 +663,57 @@ class PolarsEngine:
         self._objective_range = _magnitude_range(objective.get_column('coeff'))
         return objective
 
+    def _objective_quadratic(self, quads: tuple[TermFragment, ...], expression: plan.Expression) -> pl.DataFrame | None:
+        r"""The objective's quadratic part as ``(col_l, col_r, coeff)``, or ``None``.
+
+        **One row per unordered pair**, at the coefficient the file wrote:
+        ``coeff · x[col_l] · x[col_r]``, whole and not halved. Each sink spells
+        that differently — a Hessian is :math:`\frac12 x^\top Q x`, the LP
+        section is divided by two, Gurobi takes :math:`x^\top Q x` — so what
+        leaves here is the algebra and the conversion is theirs.
+
+        A pair is **ordered by column index** before anything is added up, or
+        ``x·y`` and ``y·x`` land in different rows and a sink loads half the
+        coefficient twice — right by accident on a symmetric Hessian, silently
+        wrong in the LP section. The aggregate then runs only when a pair
+        repeats, probed like the linear half.
+
+        **It leaves sorted, and that is a contract.** The join hands pairs back
+        in whatever order the data made, so two builds disagreed and
+        :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` read a
+        moved *coefficient* as a moved pattern. Unconditionally, unlike the
+        matrix: the frame is one row per pair and nothing says it arrives
+        sorted.
+        """
+        if not quads:
+            return None
+        pieces = [
+            p.frame.select(
+                pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
+                pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
+                pl.col('coeff'),
+            )
+            for p in quads
+        ]
+        stacked = pl.concat(pieces).collect(engine='streaming')
+        self._refuse_undefined_divisors(stacked, 'objective', expression)
+        if stacked.select(pl.struct('col_l', 'col_r').n_unique()).item() != stacked.height:
+            stacked = stacked.lazy().group_by('col_l', 'col_r').agg(pl.col('coeff').sum()).collect(engine='streaming')
+        return _without_zeros(stacked.sort('col_l', 'col_r'))
+
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the engine only supplies the frames
     # ------------------------------------------------------------------
 
     def _tables(self) -> sinks.ModelTables:
-        if self._cols is None or self._obj is None or self._rows is None or self._matrix is None or self._sos is None:
+        if (
+            self._cols is None
+            or self._obj is None
+            or self._quad is None
+            or self._rows is None
+            or self._matrix is None
+            or self._sos is None
+        ):
             raise LpspecError(
                 'there is no built model to hand over: it was closed, or a rebind raised and released '
                 'it rather than leaving half of one behind. Build it again — rebind() with data it can '
@@ -666,6 +722,7 @@ class PolarsEngine:
         return sinks.ModelTables(
             cols=self._cols,
             obj=self._obj,
+            quad=self._quad,
             rows=self._rows,
             matrix=self._matrix,
             sos=self._sos,
@@ -885,7 +942,7 @@ class PolarsEngine:
             raise LpspecError(unknown_keep_message(keep))
         built = self._tables()
         with _clocked(self._timings, 'handoff'):
-            tables = sinks.ingestible(solver_name, built)
+            tables = sinks.ingestible(solver_name, built, self._program)
             self._sink_columns = tables.column_count - built.column_count
             self._sink_rows = tables.row_count - built.row_count
             if keep == 'nothing' and self._solver is not None:
@@ -1105,6 +1162,7 @@ class PolarsEngine:
             self._solver.close()
             self._solver = None
         self._cols = self._obj = self._rows = self._matrix = self._sos = self._matrix_starts = None
+        self._quad = None
         self._variables.clear()
         self._constraints.clear()
         self._variable_blocks.clear()
@@ -1186,7 +1244,7 @@ def _expression_frame(name: str, expr: plan.Expression, compiler: PolarsCompiler
     total = pl.lit(0.0, dtype=pl.Float64)
     for i, p in enumerate(fragments):
         column = f'__piece {i}__'
-        if p.is_term:
+        if p.kind != 'const':
             valued = p.frame.join(values, on='var_label', how='left').select(
                 *p.dims, (pl.col('coeff') * pl.col(_SOLUTION)).alias(column)
             )
@@ -1352,7 +1410,7 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[Presence]:
 
     Only *variable* absence counts — a sparse parameter's missing rows mean a
     zero coefficient (the data-binding rules) — which is why the fragment carries
-    :attr:`TermFragment.presence` separately from its frame, and why this reads
+    :attr:`TermFragment.presences` separately from its frame, and why this reads
     that. A fragment with nothing to restrict is skipped, an unmasked variable
     existing at every coordinate of its foreach.
 
@@ -1362,4 +1420,4 @@ def _absence_restrictions(terms: Sequence[TermFragment]) -> list[Presence]:
     where the presence implied them — since labelling cannot know the
     fragment it came from.
     """
-    return [Presence(p.presence.frame, p.presence.keys(p.dims)) for p in terms if p.presence is not None]
+    return [Presence(x.frame, x.keys(p.dims)) for p in terms for x in p.presences]

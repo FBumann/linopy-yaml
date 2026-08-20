@@ -179,7 +179,7 @@ licence for churn.
 
 **Triage first: macro, primitive, or escape?** Most requests are compositions
 and cost nothing. A genuinely new shape earns a primitive only if it clears the
-expressive ceiling — degree 1 ∩ relational ∩ local. Unsayable math goes to a
+expressive ceiling — relational ∩ local, degree 2 in the objective and 1 elsewhere. Unsayable math goes to a
 declared `escape:` island rather than into the language.
 
 Read, in order:

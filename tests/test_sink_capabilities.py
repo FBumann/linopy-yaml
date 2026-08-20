@@ -73,12 +73,19 @@ def test_nothing_is_excluded_where_no_exclusion_is_declared():
         pytest.param('highs', 'nonconvex_quadratic_objective', 'absent', id='highs-refuses-a-nonconvex-one'),
         pytest.param('highs', 'quadratic_constraint', 'absent', id='highs-has-no-quadratic-row-at-all'),
         pytest.param('gurobi', 'sos', 'native', id='gurobi-branches-on-a-set'),
-        pytest.param('gurobi', 'nonconvex_quadratic_objective', 'native', id='gurobi-goes-spatial'),
-        pytest.param('gurobi', 'quadratic_constraint', 'native', id='gurobi-takes-a-quadratic-row'),
+        pytest.param('gurobi', 'quadratic_objective', 'absent', id='the-gurobi-sink-passes-no-hessian-yet'),
+        pytest.param('gurobi', 'quadratic_constraint', 'absent', id='nor-a-quadratic-row'),
     ],
 )
 def test_the_shipped_solver_table(sink, capability, expected):
-    """The rows of docs/about/benchmarks.md#sink-capabilities, as declared."""
+    """What each sink can ingest **as shipped**.
+
+    Not the same table as docs/about/benchmarks.md#sink-capabilities, and the
+    difference is the point: that page describes the *libraries*, and gurobipy
+    takes a Hessian. This sink does not pass it one yet, so its entry is
+    `absent` — a descriptor that claimed otherwise would drop the quadratic
+    part of an objective and answer a different model's optimum.
+    """
     assert SOLVERS[sink].capabilities.support(capability) == expected
 
 
@@ -106,9 +113,12 @@ def test_a_set_is_excluded_from_the_hessian_it_would_arrive_beside():
     )
 
 
-def test_the_lp_writer_carries_everything():
-    """A section is text, so the format has no exclusion either — and its
-    capabilities are the *writer's*, not the reader's."""
+def test_the_lp_writer_carries_what_it_writes():
+    """A section is text, so the format has no exclusion either — and what it
+    declares is the *writer's*, not the reader's and not the format's: LP text
+    has a quadratic-constraint section, nothing here emits one, and a model
+    carrying one would otherwise be written back without it."""
     capabilities = WRITERS['.lp'].capabilities
-    assert capabilities.missing(CAPABILITIES) == []
+    assert capabilities.missing(CAPABILITIES) == ['quadratic_constraint']
+    assert capabilities.support('quadratic_objective') == 'native', 'the section this branch taught it to write'
     assert capabilities.excludes == ()

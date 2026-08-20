@@ -300,6 +300,10 @@ def _build_objective(ctx: EvaluationContext) -> None:
     terms of ``x[i] * a[i] + y[j] * b[j]`` and summed afterwards would count
     each once per coordinate of the other (#197) — and now nothing has to,
     because the file said where each sum ends.
+
+    The one position where a product of two variables is legal, so the degree
+    ceiling is raised for this walk alone — linopy's ``*`` already answers with
+    a ``QuadraticExpression``, so nothing here branches on which came back.
     """
     odef = ctx.schema.objective
     if odef is None:
@@ -313,7 +317,7 @@ def _build_objective(ctx: EvaluationContext) -> None:
 
         check_divisors_cover('the objective', ast, ctx.schema, ctx.dataset, None, ctx.model)
 
-        expr = _eval_ast(ast, ctx)
+        expr = _eval_ast(ast, ctx, ceiling=2)
         _refuse_an_objective_constant(expr)
 
         sense = 'min' if odef.sense == 'minimize' else 'max'
@@ -354,6 +358,8 @@ def _refuse_an_objective_constant(expr: Any) -> None:
 def _eval_ast(
     node: ArithmeticNode,
     ctx: EvaluationContext,
+    *,
+    ceiling: int = 1,
 ) -> Any:
     """Evaluate an expression AST node against the model namespace.
 
@@ -396,24 +402,24 @@ def _eval_ast(
         raise AssertionError(msg)
 
     if isinstance(node, UnaryOperatorNode):
-        operand = _eval_ast(node.operand, ctx)
+        operand = _eval_ast(node.operand, ctx, ceiling=ceiling)
         if node.op == '-':
             return -operand
         return operand
 
     if isinstance(node, BinaryOperatorNode):
-        check_binary(node)
-        left = _eval_ast(node.left, ctx)
-        right = _eval_ast(node.right, ctx)
+        check_binary(node, ceiling=ceiling)
+        left = _eval_ast(node.left, ctx, ceiling=ceiling)
+        right = _eval_ast(node.right, ctx, ceiling=ceiling)
         return _ARITHMETIC_OPS[node.op](left, right)
 
     if isinstance(node, FunctionCallNode):
-        return _call(node, ctx)
+        return _call(node, ctx, ceiling=ceiling)
 
     assert_never(node)
 
 
-def _call(node: FunctionCallNode, ctx: EvaluationContext) -> Any:
+def _call(node: FunctionCallNode, ctx: EvaluationContext, *, ceiling: int = 1) -> Any:
     """One operator call, its operands and keywords evaluated.
 
     Two names in :data:`_OPERATORS` do not reach it by that table. ``by=`` names
@@ -432,7 +438,7 @@ def _call(node: FunctionCallNode, ctx: EvaluationContext) -> Any:
     """
     if node.name not in _OPERATORS:
         raise NameError(unknown_operator_message(node.name))
-    args = [_eval_ast(a, ctx) for a in node.args]
+    args = [_eval_ast(a, ctx, ceiling=ceiling) for a in node.args]
 
     if node.name == 'at':
         by = node.kwargs['by']
@@ -442,10 +448,10 @@ def _call(node: FunctionCallNode, ctx: EvaluationContext) -> Any:
         assert isinstance(by, LookupNode)
         return _operator_grouped_sum(args[0], _lookup_arrays(by, ctx), into=by.into, labels=ctx.master_coords)
 
-    return _OPERATORS[node.name](*args, **{k: _keyword(v, ctx) for k, v in node.kwargs.items()})
+    return _OPERATORS[node.name](*args, **{k: _keyword(v, ctx, ceiling=ceiling) for k, v in node.kwargs.items()})
 
 
-def _keyword(value: Any, ctx: EvaluationContext) -> Any:
+def _keyword(value: Any, ctx: EvaluationContext, *, ceiling: int = 1) -> Any:
     """One operator keyword, as the operator below takes it.
 
     A lookup arrives as its values over the dimension it is over, *named* for
@@ -461,7 +467,7 @@ def _keyword(value: Any, ctx: EvaluationContext) -> Any:
     if isinstance(value, LookupNode):
         # a partition names one lookup, refused plural at load
         return _lookup_arrays(value, ctx)[0].rename(value.into[0])
-    return _eval_ast(value, ctx)
+    return _eval_ast(value, ctx, ceiling=ceiling)
 
 
 def _lookup_arrays(by: LookupNode, ctx: EvaluationContext) -> tuple[Any, ...]:

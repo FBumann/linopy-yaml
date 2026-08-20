@@ -6,9 +6,11 @@ suffix). They are directories rather than a convention, so
 ``tests/test_architecture.py`` reads membership off the path.
 
 ``tables.py`` is what both read, and neither family imports the other.
-``capabilities.py`` is what both *declare*, and the three functions below are
-where a caller's model meets those declarations — the only place the two
-families are asked one question together.
+``capabilities.py`` is what both *declare*, and the functions below are where
+a caller's model meets those declarations — the only place the two families are
+asked one question together, which is why ``ingestible`` is here rather than in
+``solvers/``: what a sink cannot take is refused by naming the sinks that can,
+and those live in both families.
 """
 
 from __future__ import annotations
@@ -23,7 +25,8 @@ from lpspec.errors import (
     unknown_name_message,
 )
 from lpspec.relational.sinks import capabilities as caps
-from lpspec.relational.sinks.solvers import SOLVERS, Solver, ingestible, loaded, solver
+from lpspec.relational.sinks import sos
+from lpspec.relational.sinks.solvers import SOLVERS, Solver, loaded, solver
 from lpspec.relational.sinks.tables import ModelTables
 from lpspec.relational.sinks.writers import WRITERS, writer
 
@@ -118,3 +121,43 @@ def relaxations(program: plan.Program, name: str) -> list[str]:
         for c in caps.CAPABILITIES
         if c in needed and table.support(c) == 'reformulated'
     ]
+
+
+def ingestible(name: str, model: ModelTables, program: plan.Program | None = None) -> ModelTables:
+    """*model* in the form the named solver can take it — sets included.
+
+    The one place a capability is acted on, and it is the *family*'s rather
+    than a member's: a solver that cannot ingest a special-ordered set is
+    handed :func:`~lpspec.relational.sinks.sos.reformulated` tables, so no
+    ``_load`` has to know the model ever carried one, and everything that
+    reads a solve back — the span check, the label slices — sees the one model
+    the solver actually holds.
+
+    Asked before the load rather than inside it because a rebind compares the
+    *ingested* digest: a big-M is a matrix coefficient by then, so a bound
+    that moved one is a model to load again rather than numbers to push.
+
+    *program* is what the refusal is decided on, and it is optional only
+    because a caller composing tables by hand has no plan to hand over: given
+    one, a model this sink cannot take is refused **here**, before the load,
+    with the same sentence ``check(model, sink=...)`` would have given hours
+    earlier. Without it the refusal falls to the solver, which reports it as
+    an error code from inside a library.
+
+    Only ``reformulated`` is rewritten, so the rewrite and the refusal read the
+    same cell: a sink is never handed a rewrite of a construct it declared it
+    has no concept of.
+
+    Returns:
+        *model* itself where nothing has to change, which is every model
+        declaring no sets.
+
+    Raises:
+        LpspecError: A *program* carrying a construct this sink has no concept
+            of, or a combination it refuses.
+    """
+    if program is not None and (refused := refusal(program, name)) is not None:
+        raise LpspecError(refused)
+    if model.sos.height and solver(name).capabilities.support('sos') == 'reformulated':
+        return sos.reformulated(model)
+    return model
