@@ -12,7 +12,7 @@ import pytest
 
 from lpspec.language.dimensions import DimensionError, check_schema, dims_of
 from lpspec.language.resolution import Namespace, expression_of
-from tests.conftest import MODEL_PATHS, override, schema_of
+from tests.conftest import MODEL_PATHS, schema_of
 
 if TYPE_CHECKING:
     from lpspec.language.model import Model
@@ -185,16 +185,6 @@ def test_broadcast_is_legal_when_one_side_contains_the_other():
 def test_an_ill_dimensioned_declaration_is_rejected(patch, match):
     with pytest.raises(DimensionError, match=match):
         _schema(**patch)
-
-
-def test_checking_needs_no_data():
-    """The whole point: every rule above is decided from declarations alone,
-    so `lps.check()` catches them in CI with no sources bound."""
-    import lpspec as lps
-
-    raw = override(BASE, **{'constraints.stray': {'foreach': ['snapshot'], 'expression': 'p <= p_max'}})
-    with pytest.raises(DimensionError):
-        lps.check(raw)
 
 
 @pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)

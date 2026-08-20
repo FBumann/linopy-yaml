@@ -406,6 +406,42 @@ def test_the_language_facade_is_exactly_what_consumers_read():
     )
 
 
+#: What a test under ``tests/language/`` may reach. The language, the exception
+#: hierarchy half of it owns, and the shared fixtures — never a consumer. Unlike
+#: the fence in ``src/``, submodules are fine: these are the language's own unit
+#: tests, and testing `expression_parser` through the facade would be testing the
+#: facade.
+LANGUAGE_TESTS_MAY_IMPORT = ('lpspec.language', 'lpspec.errors')
+
+
+def test_the_languages_own_tests_reach_no_consumer():
+    """The prefix is the claim: everything here is decided at ``load_model``.
+
+    A test that needs `build`, `solve`, a plan or a lane is asserting something
+    about a *consumer* of the AST, however language-shaped its subject — and it
+    would not survive the language being lifted into a package of its own,
+    which is what this directory exists to make true. `import lpspec` counts as
+    reaching one: the top-level namespace is the runner.
+    """
+    offenders = {}
+    for path in (REPO / 'tests' / 'language').rglob('*.py'):
+        if '__pycache__' in path.parts:
+            continue
+        bad = sorted(
+            {
+                name
+                for name in _imported(ast.parse(path.read_text()))
+                if name == 'lpspec' or (name.startswith('lpspec') and not name.startswith(LANGUAGE_TESTS_MAY_IMPORT))
+            }
+        )
+        if bad:
+            offenders[path.name] = bad
+    assert not offenders, (
+        f'a language test reaches a consumer: {offenders} — assert it through `load_model`, '
+        f'or move the test to the file that owns the consumer it is really about'
+    )
+
+
 def test_the_language_facade_exports_no_private_name():
     """A leading underscore in the seam is the surface admitting it is unfinished.
 

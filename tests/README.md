@@ -50,6 +50,13 @@ reach.
   model whose data reaches the guard, with data small enough to read in a
   failure.
 - **A probe moves to `conftest.py` on its second importer.** Not before.
+- **A claim decided at `load_model` lives in `tests/language/`**, and nothing
+  there imports a consumer — including `lpspec` itself, whose top-level
+  namespace is the runner. The door the claim is *decided at* is the test, not
+  the subject it is about: "a stray dim is refused" is the language's, while
+  "`check` reaches that refusal with no sources bound" is `check`'s and belongs
+  beside it. The package docstring carries the rule and the two tests that
+  deliberately span both halves.
 - **Data is generated, seeded and feasible by construction**
   (`conftest.transport_data` is the model). Committed data needs one of two
   reasons: external provenance (the ports) or a golden whose diff is the

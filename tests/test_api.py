@@ -22,12 +22,16 @@ import polars as pl
 import pytest
 
 import lpspec as lps
+from lpspec.errors import DimensionError
 from lpspec.language.model import Model
 from tests.conftest import (
     DISPATCH_COST,
     DISPATCH_GENERATORS,
     DISPATCH_P_MAX,
+    EXAMPLES_DIR,
     _dispatch_load,
+    override,
+    raw_of,
     schema_of,
     solve_written_file,
 )
@@ -590,3 +594,20 @@ def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs
     for read in (lambda: sol.primal('p'), lambda: sol.dual('power_balance')):
         with pytest.raises(lps.LpspecError, match='this result was closed'):
             read()
+
+
+def test_check_catches_a_dim_error_with_no_sources_bound():
+    """`check` is a CI verb, and this is what makes it one.
+
+    Every dim rule is decided from declarations alone — `tests/language/
+    test_dimensions.py` is the whole set — so the claim worth making *here* is
+    not that the rule exists but that the runner reaches it without a byte of
+    data. Kept on this side of the split for that reason: it is an assertion
+    about `check`, not about dims.
+    """
+    raw = override(
+        raw_of(EXAMPLES_DIR / 'dispatch.yaml'),
+        **{'constraints.stray': {'foreach': ['snapshot'], 'expression': 'p <= p_max'}},
+    )
+    with pytest.raises(DimensionError):
+        lps.check(raw)
