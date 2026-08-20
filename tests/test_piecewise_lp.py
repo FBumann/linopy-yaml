@@ -482,9 +482,9 @@ def test_a_concave_curve_is_refused_whatever_the_breakpoints_are_measured_in():
             id='three-links-none-bounded',
         ),
         pytest.param(
-            {'active': 'running'},
-            'active gating is not supported with method: lp',
-            id='an-active-gate-with-nothing-to-gate',
+            {'activity': 'running'},
+            'activity is not supported with method: lp',
+            id='an-activity-with-nothing-to-gate',
         ),
     ],
 )

@@ -263,7 +263,7 @@ piecewise:
     links:
       - [p, bp_x]
       - [op_cost, bp_y]
-    active: u
+    activity: u
 
 constraints:
   commit:
@@ -279,8 +279,8 @@ objective:
 """
 
 
-def test_active_gates_the_curve_off(nonconvex_inputs):
-    """`active:` decides whether the curve applies at a coordinate at all.
+def test_activity_gates_the_curve_off(nonconvex_inputs):
+    """`activity:` decides whether the curve applies at a coordinate at all.
 
     Gated on, the cost sits on the curve at the pinned load; gated off, it is
     pinned to zero.
@@ -410,11 +410,11 @@ def test_the_sos2_method_solves_natively_where_the_sink_has_the_concept(nonconve
 
 
 def test_the_sos2_method_gates_off_like_the_binaries_do(nonconvex_inputs):
-    """``active`` is a property of the weights, so every method keeps it.
+    """``activity`` is a property of the weights, so every method keeps it.
 
     A gated-off block pins the convexity row to zero, which sets every weight
     to zero — a state the set admits, since at most two nonzero is satisfied
-    by none. ``method: convex`` is the one that refuses ``active``, and does
+    by none. ``method: convex`` is the one that refuses ``activity``, and does
     so because a hull with nothing pinning it is not a gate.
     """
     data = nonconvex_inputs
@@ -524,14 +524,14 @@ def test_an_inline_expression_is_a_legal_link():
         pytest.param(
             GATED_YAML,
             {'piecewise.cost_curve.method': 'convex'},
-            'active gating is not supported',
+            'activity is not supported',
             id='convex-cannot-be-gated',
         ),
         pytest.param(
             GATED_YAML,
             {'variables.u': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}}},
             'must be binary',
-            id='active-must-be-binary',
+            id='activity-must-be-binary',
         ),
         pytest.param(
             NONCONVEX_YAML,
