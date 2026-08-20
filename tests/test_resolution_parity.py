@@ -41,6 +41,24 @@ def test_both_lanes_refuse_the_same_where(tmp_path, dispatch_model_inputs, where
         lps.check(path)
 
 
+def test_both_lanes_refuse_a_comparison_that_carries_no_variable(tmp_path, dispatch_model_inputs):
+    """A constraint whose two sides are both constants decides nothing (#1171).
+
+    Was: the relational lane built the model quietly with no such row, while
+    the eager lane raised linopy's own `TypeError` at build — one language,
+    two answers, and neither of them said what was wrong with the file. It is
+    decidable with no data bound, so it is decided where the file is read.
+    """
+    data = dispatch_model_inputs
+    path = dispatch_model_path(tmp_path, **{'constraints.balance.expression': 'p_max <= 1'})
+
+    with pytest.raises(ValueError, match='decides nothing'):
+        lpspec_linopy.build(path, data)
+
+    with pytest.raises(ValueError, match='decides nothing'):
+        lps.check(path)
+
+
 #: Where-strings that must build *identically* on both lanes. Chosen to cover
 #: every resolved predicate type — see the exhaustiveness test below. The dim
 #: comparisons are deliberately always-true: a mask that removes every variable

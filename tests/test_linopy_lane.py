@@ -355,11 +355,21 @@ def _has_note(exc: BaseException, substring: str) -> bool:
     return any(substring in n for n in getattr(exc, '__notes__', []))
 
 
+#: A constant side the data does not cover, which only the *build* can see: the
+#: rows exist, the parameter has no row at one of them, and the fill would be
+#: the bound. The declaration it names is reached through `note()` rather than
+#: written into the message, which is the half of this the load errors cannot
+#: exercise.
+_UNCOVERED_BOUND = "parameters:\n  cap: {dims: [g]}\nconstraints:\n  c:\n    foreach: [g]\n    expression: 'p <= cap'\n"
+_NO_ROWS = {'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
+
+
 @pytest.mark.parametrize(
-    ('tail', 'error', 'match', 'context'),
+    ('tail', 'data', 'error', 'match', 'context'),
     [
         pytest.param(
             "    where: '<<<'\n",
+            {},
             ValueError,
             'Failed to parse where string',
             "Variable 'p'",
@@ -367,6 +377,7 @@ def _has_note(exc: BaseException, substring: str) -> bool:
         ),
         pytest.param(
             "constraints:\n  c:\n    foreach: [g]\n    expression: 'p + 1'\n",
+            {},
             ValueError,
             'exactly one comparison',
             "Constraint 'c'",
@@ -374,6 +385,7 @@ def _has_note(exc: BaseException, substring: str) -> bool:
         ),
         pytest.param(
             "objective:\n  expression: 'p == 1'\n",
+            {},
             ValueError,
             'must not contain a comparison',
             'The objective',
@@ -381,18 +393,27 @@ def _has_note(exc: BaseException, substring: str) -> bool:
         ),
         pytest.param(
             "constraints:\n  c:\n    foreach: []\n    expression: '1 <= 2'\n",
-            TypeError,
-            None,
+            {},
+            ValueError,
+            'decides nothing',
+            "Constraint 'c'",
+            id='a-comparison-with-no-variable-in-it',
+        ),
+        pytest.param(
+            _UNCOVERED_BOUND,
+            _NO_ROWS,
+            DataError,
+            'fewer coordinates than the rows built here',
             "while building constraint 'c'",
-            id='valid-syntax-and-dims-but-no-variable-so-only-the-build-sees-it',
+            id='a-constant-side-the-data-misses-so-only-the-build-sees-it',
         ),
     ],
 )
-def test_a_failure_names_the_declaration_and_the_file(yaml_file, tail, error, match, context):
+def test_a_failure_names_the_declaration_and_the_file(yaml_file, tail, data, error, match, context):
     bad = yaml_file(textwrap.dedent(_MINIMAL).lstrip() + tail, 'bad.yaml')
 
     with pytest.raises(error, match=match) as ei:
-        lpspec_linopy.build(bad, {})
+        lpspec_linopy.build(bad, data)
 
     assert context in str(ei.value) or _has_note(ei.value, context)
     assert _has_note(ei.value, f"while loading YAML '{bad}'")
