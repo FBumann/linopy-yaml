@@ -613,6 +613,11 @@ REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 #: Declared rather than assumed: `test_every_summary_declares_itself` fails on a
 #: page in neither list, so a new summary cannot quietly opt out of the check.
 DIVERGENT = {
+    'piecewise_conversion': (
+        'names the weights at the converter a flow belongs to — the c(f) the tie reads through '
+        'at(). The generator writes each row against the dims it carries, so the pullback is a '
+        'coordinate there and a subscript here.'
+    ),
     'piecewise_ragged': (
         "names each curve's own breakpoint set as K_g, which is what the page is about and "
         'what the generator has no notation for: the weights it writes run over the whole '

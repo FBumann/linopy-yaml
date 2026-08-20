@@ -1,0 +1,272 @@
+# piecewise_conversion
+
+Converters whose flows share one curve, where **how many flows** is data.
+
+> **✔ Agrees with hand-written linopy 0.9.0** — objective **5990**, matched to `rtol=1e-06`.
+
+## The problem
+
+A converter ties its flows together through one operating point: a boiler burns
+fuel to make heat, a CHP unit burns fuel to make heat *and* power. The curve is
+one convex combination per converter, and the number of expressions it ties is a
+property of the system, not of the file — two flows here, three there, and a
+unit with a fourth is a row in a table.
+
+$$\mathit{rate}_{f,t} = \sum_{k \in \mathcal{K}_{c(f)}} \lambda_{c(f),t,k}\, v_{f,k} \qquad \forall\thinspace f, t$$
+
+[`piecewise:`](../reference/language/piecewise.md) cannot say that: its `links:`
+are a list, so the arity would have to be written out. **The formulation it
+would have emitted is four declarations**, and each is ordinary:
+
+| what | how |
+|---|---|
+| the weights | a variable over `[converter, time, bp]`, masked by `where: bp_present` |
+| on one segment | [`sos:`](../reference/language/piecewise.md#sos) `type: 2` over that variable |
+| one operating point | `sum(weight, over=bp) == 1` |
+| the tie | one row per **flow**, reading its converter's weights through `at(…, by=converter_of)` |
+
+<!-- math:begin -->
+<details markdown="1">
+<summary>The same model, as math</summary>
+
+Least-cost heat and power from two converters whose flows are tied to one piecewise curve each — a boiler tying two flows, a CHP unit tying three, and neither number written anywhere in the file.
+
+#### Sets
+
+| Symbol | Meaning |
+|---|---|
+| $\mathcal{T}$ | index $t$ --- `time` --- dispatch periods |
+| $\mathcal{C}$ | index $c$ --- `converter` --- units converting one carrier into others |
+| $\mathcal{F}$ | index $f$ --- `flow` with $\mathrm{converter\_of}: \mathcal{F} \to \mathcal{C}$ --- a converter's inputs and outputs, one row each |
+| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints, as many as the longest curve needs |
+
+#### Parameters
+
+| Symbol | Meaning |
+|---|---|
+| $\mathit{bp}^{\mathrm{rate}}$ | `bp_rate` over $\mathcal{F} \times \mathcal{B}$ --- what each flow runs at, at each breakpoint of its converter's curve |
+| $\mathit{bp}^{\mathrm{present}}$ | `bp_present` over $\mathcal{C} \times \mathcal{B}$ --- how far each converter's curve runs |
+| $\mathit{rate}^{\mathrm{max}}$ | `rate_max` over $\mathcal{F}$ --- what each flow runs at when its converter is at its last breakpoint |
+| $\mathit{is\_heat}$ | `is_heat` over $\mathcal{F}$ --- which flows deliver heat |
+| $\mathit{is\_power}$ | `is_power` over $\mathcal{F}$ --- which flows deliver power |
+| $\mathit{fuel\_price}$ | `fuel_price` over $\mathcal{F}$ --- what a unit of each input flow costs |
+| $\mathit{heat\_demand}$ | `heat_demand` over $\mathcal{T}$ --- heat to be delivered |
+| $\mathit{power\_demand}$ | `power_demand` over $\mathcal{T}$ --- power to be delivered |
+
+#### Variables
+
+| Symbol | Meaning |
+|---|---|
+| $\mathit{rate}$ | `rate` over $\mathcal{F} \times \mathcal{T}$ --- what each flow runs at |
+| $\mathit{weight}$ | `weight` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ --- how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
+
+#### Objective
+
+$$\min \sum_{t \in \mathcal{T}} \sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{fuel\_price}_{f}$$
+
+#### Subject to
+
+**`one_operating_point`**
+
+$$\sum_{b \in \mathcal{B}} \mathit{weight}_{c,t,b} = 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T}$$
+
+**`on_the_curve`**
+
+$$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{weight}_{\mathrm{converter\_of}(f),t,b} \cdot \mathit{bp}^{\mathrm{rate}}_{f,b} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T}$$
+
+**`heat_balance`**
+
+$$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{is\_heat}_{f} = \mathit{heat\_demand}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+
+**`power_balance`**
+
+$$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{is\_power}_{f} = \mathit{power\_demand}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+
+#### Variable domains
+
+**`rate`**
+
+$$0 \le \mathit{rate}_{f,t} \le \mathit{rate}^{\mathrm{max}}_{f} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T}$$
+
+**`weight`**
+
+$$0 \le \mathit{weight}_{c,t,b} \le 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bp}^{\mathrm{present}}_{c,b}$$
+
+**`weight sos`**
+
+$$\left( \mathit{weight}_{c,t,b} \right)_{b \in \mathcal{B}} \in \mathrm{SOS}2 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T}$$
+
+</details>
+<!-- math:end -->
+
+The tabs start from [the instance’s tables](data.md) — one frame per parameter.
+
+=== "lpspec"
+
+    ```yaml
+    description: >-
+      Least-cost heat and power from two converters whose flows are tied to one
+      piecewise curve each — a boiler tying two flows, a CHP unit tying three, and
+      neither number written anywhere in the file.
+
+    dimensions:
+      time:
+        description: dispatch periods
+        dtype: int
+      converter:
+        description: units converting one carrier into others
+        dtype: str
+      flow:
+        description: a converter's inputs and outputs, one row each
+        dtype: str
+      bp:
+        description: breakpoints, as many as the longest curve needs
+        dtype: int
+
+    lookups:
+      converter_of:
+        description: which converter a flow belongs to
+        over: flow
+        into: converter
+
+    parameters:
+      bp_rate:
+        description: what each flow runs at, at each breakpoint of its converter's curve
+        dims: [flow, bp]
+      bp_present:
+        description: how far each converter's curve runs
+        dims: [converter, bp]
+        dtype: bool
+      rate_max:
+        description: what each flow runs at when its converter is at its last breakpoint
+        dims: [flow]
+      is_heat:
+        description: which flows deliver heat
+        dims: [flow]
+      is_power:
+        description: which flows deliver power
+        dims: [flow]
+      fuel_price:
+        description: what a unit of each input flow costs
+        dims: [flow]
+      heat_demand:
+        description: heat to be delivered
+        dims: [time]
+      power_demand:
+        description: power to be delivered
+        dims: [time]
+
+    variables:
+      rate:
+        description: what each flow runs at
+        foreach: [flow, time]
+        bounds:
+          lower: 0
+          upper: rate_max
+      weight:
+        description: >-
+          how much of each breakpoint the converter's operating point is made of —
+          one convex combination per converter and period, over the breakpoints its
+          own curve runs to
+        foreach: [converter, time, bp]
+        where: bp_present
+        bounds:
+          lower: 0
+          upper: 1
+
+    sos:
+      on_one_segment:
+        description: >-
+          at most two weights, and those two neighbours — which is what puts the
+          operating point on a segment of the curve rather than anywhere in its hull
+        variable: weight
+        over: bp
+        type: 2
+        big_m: 1
+
+    constraints:
+      one_operating_point:
+        description: each converter sits somewhere on its curve, in every period
+        foreach: [converter, time]
+        expression: sum(weight, over=bp) == 1
+      on_the_curve:
+        description: every flow reads its own value off its converter's weights
+        foreach: [flow, time]
+        expression: rate == sum(at(weight, by=converter_of) * bp_rate, over=bp)
+      heat_balance:
+        description: heat delivered meets the demand
+        foreach: [time]
+        expression: sum(rate * is_heat, over=flow) == heat_demand
+      power_balance:
+        description: power delivered meets the demand
+        foreach: [time]
+        expression: sum(rate * is_power, over=flow) == power_demand
+
+    objective:
+      sense: minimize
+      description: what the input flows cost
+      expression: sum(sum(rate * fuel_price, over=flow), over=time)
+    ```
+
+    ```python
+    # sources: parameter name -> frame or parquet path
+    with lps.solve('examples/piecewise_conversion.yaml', sources) as solution:
+        solution.objective  # 5990.0
+    ```
+
+=== "linopy"
+
+    The model-building half of `examples/ports/references/linopy/piecewise_conversion.py`:
+
+    ```python
+    def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
+        """The instance's tables as a linopy model, row for row.
+
+        ``tables`` is the same mapping the lpspec call binds as ``sources``.
+        """
+        flows: pd.DataFrame = tables['flow'].set_index('flow')
+        times = pd.Index(tables['time']['time'], name='time')
+        present = tables['bp_present'].set_index(['converter', 'bp'])['value']
+        runs_to = {c: int(present[c].sum()) for c in present.index.get_level_values('converter').unique()}
+
+        m = linopy.Model()
+        rate = m.add_variables(lower=0, coords=[pd.Index(flows.index, name='flow'), times], name='rate')
+
+        for converter, members in flows.groupby('converter_of'):
+            pairs = [
+                (rate.sel(flow=flow, drop=True), linopy.breakpoints(curve_of(tables, flow, runs_to[converter])))
+                for flow in members.index
+            ]
+            m.add_piecewise_formulation(*pairs, name=f'curve_{converter}')
+
+        for carrier, demand in (('is_heat', 'heat_demand'), ('is_power', 'power_demand')):
+            weights = tables[carrier].set_index('flow')['value'].reindex(flows.index)
+            wanted = tables[demand].set_index('time')['value'].reindex(times)
+            m.add_constraints((rate * weights).sum('flow') == wanted, name=demand)
+
+        price = tables['fuel_price'].set_index('flow')['value'].reindex(flows.index)
+        m.add_objective((rate * price).sum())
+        return m
+    ```
+
+## What it exercises
+
+**The arity is a row count.** `on_the_curve` builds one row per flow, so a
+converter tying three expressions and one tying two are the same declaration.
+Nothing in the file says how many flows a converter has; the `converter_of`
+lookup does, and it is data.
+
+**The mask is the variable's own.** `where: bp_present` decides which weights
+exist, and an [`sos:`](../reference/language/piecewise.md#sos) set is over the
+members present — so the boiler's three-breakpoint curve and the CHP's four sit
+on one axis with nothing padded. A solver without SOS gets binaries and big-M
+rows for the same set, which is why `big_m: 1` is there: a weight is at most 1.
+
+The comparison is worth reading in the other tab. linopy ties N expressions to
+one basis too — that is what `add_piecewise_formulation` does — but the pairs
+are an argument list, so the arity is written out per converter in a Python
+loop. That loop is what moves into the data here.
+
+---
+
+[`examples/piecewise_conversion.yaml`](https://github.com/fluxopt/lpspec/blob/main/examples/piecewise_conversion.yaml) · back to [all models](index.md)
