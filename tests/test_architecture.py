@@ -619,18 +619,25 @@ def test_every_model_is_on_one_side_of_the_extraction():
 #: pages in bulk and every one of those becomes an external link — a known
 #: rewrite, not a break, and listing them here would bury the ones that are.
 #:
-#: **Paths only, never imports.** An import of a moving module survives the cut
-#: as an import of the dependency, which is the bulk rewrite the facade exists
-#: to make one spelling; a *path* to a moving file resolves to nothing. That is
-#: why `tests/test_cli.py` is absent though it plainly travels with
-#: `__main__.py`: it names the CLI by importing it, so it is manifest business
-#: rather than a crossing.
+#: **Imports of shipped modules survive; imports of tests and tools do not.** An
+#: `lpspec.language` import becomes an import of the dependency — the bulk
+#: rewrite the facade exists to make one spelling — so it is manifest business
+#: rather than a crossing, which is why `tests/test_cli.py` is absent though it
+#: plainly travels with `__main__.py`. A `tests.language` import has no such
+#: future: a test package is not shipped, so nothing downstream can import it
+#: and the name resolves to nothing. Those are matched here in dotted form,
+#: alongside paths and mkdocs' docs-relative spelling.
 CROSSES_THE_CUT = {
     'tests/test_doc_examples.py': 'runs the code blocks in `docs/reference/language/`; those pages move',
     'tests/test_docs_site.py': 'checks the operator page against `examples/operators/`; both move',
     'tests/test_schema.py': 'asserts `schema/lpspec.schema.json` matches the model — moves, minus the '
     'lowering half `test_an_omitted_bound_means_unbounded_all_the_way_down` keeps here',
     'tests/README.md': 'prose naming `tests/language/`',
+    'tests/conftest.py': 're-exports the four fixtures from `tests.language.fixtures` so the tests that '
+    'stay import them from one place; at the cut it keeps its own copy of those thirty lines',
+    'tests/test_piecewise.py': 'reads the curves from `tests.language.piecewise_models`, where the '
+    'load-time tests that judge them live; at the cut it keeps a copy',
+    'tests/test_piecewise_lp.py': 'the same curves, for the `method: lp` half',
     'tests/test_api.py': 'a docstring citing `docs/about/ceiling.md`, and one naming `tests/language/`',
     'tests/test_architecture.py': 'the fences themselves: this file is split at the cut, not moved',
     'tools/constructs.py': 'a comment citing `docs/reference/language/` for its column order',
@@ -679,7 +686,11 @@ def _crossings() -> dict[str, list[str]]:
         # mkdocs writes its nav relative to `docs/`, so a moving page is named
         # there without the prefix — the same crossing, spelled shorter.
         named = sorted(
-            line for line in moving if line in text or (line.startswith('docs/') and line[len('docs/') :] in text)
+            line
+            for line in moving
+            if line in text
+            or (line.startswith('docs/') and line[len('docs/') :] in text)
+            or (line.startswith(('tests/', 'tools/')) and line.rstrip('/').replace('/', '.') in text)
         )
         if named:
             found[str(path.relative_to(REPO))] = named
