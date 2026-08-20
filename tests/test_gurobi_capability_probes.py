@@ -107,25 +107,18 @@ def test_both_quadratic_parts_take_a_matrix_through_their_bulk_entry_point(model
 
 
 def test_the_gurobi_descriptor_says_what_this_sink_does_with_what_it_measured():
-    """The claim beside its evidence — and the gap between them, stated.
+    """The claim beside its evidence — `test_sink_capability_probes.py`'s twin.
 
-    `test_sink_capability_probes.py`'s twin, with one difference this column
-    has and HiGHS's does not: **a descriptor describes the sink as shipped**,
-    not the library it wraps. Everything above solved, and nothing here passes
-    gurobipy a Hessian yet, so the quadratic entries are `absent` — claiming
-    otherwise would drop the quadratic part of an objective and answer a
-    different model's optimum.
-
-    So this is two assertions, not one: what the sink does today, and that the
-    gap is the hand-off rather than the solver.
+    Everything above solved, and this sink now hands gurobipy every one of them
+    but the quadratic *constraint*: no stream carries a quadratic row, and the
+    language cannot state one. **A capability describes the sink as shipped**,
+    so that entry stays `absent` however capable the library is.
     """
     capabilities = SOLVERS['gurobi'].capabilities
-    assert capabilities.support('sos') == 'native', 'a set is loaded natively, and was probed above'
-    assert capabilities.support('integrality') == 'native'
+    for capability in ('sos', 'integrality', 'quadratic_objective', 'nonconvex_quadratic_objective'):
+        assert capabilities.support(capability) == 'native', f'{capability} solved natively above'
     assert capabilities.excludes == (), 'every combination probed above solved; nothing here is excluded'
-    for capability in ('quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'):
-        assert capabilities.support(capability) == 'absent', (
-            f'gurobipy takes {capability} — the probes above measure it — but this sink does not '
-            f'hand it one. When the hand-off lands, this line moves to native and the refusal '
-            f'contract starts naming gurobi.'
-        )
+    assert capabilities.support('quadratic_constraint') == 'absent', (
+        'gurobipy takes one — the probe above measures it — but no stream carries a quadratic row '
+        'to this sink, and the language has no spelling for one'
+    )

@@ -40,6 +40,27 @@ LP = {
     'objective': {'sense': 'minimize', 'expression': 'sum(p * price, over=t)'},
 }
 
+#: A convex quadratic objective — the third convention for one form, so the two
+#: sinks agreeing is what says the conversion is right rather than consistent.
+QP = {
+    'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b']}},
+    'parameters': {'need': {'dims': []}, 'toll': {'dims': ['g']}},
+    'variables': {
+        'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
+        'q': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'meet': {'foreach': [], 'expression': 'sum(p, over=g) + sum(q, over=g) >= need'}},
+    #: A linear term beside the quadratic one, deliberately: ``setMObjective``
+    #: sets the *whole* objective, so a hand-off that passed only ``Q`` would
+    #: drop the linear half — and a purely quadratic case could not tell.
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * p + p * q + q * q + q * toll, over=g)'},
+}
+
+QP_SOURCES = {
+    'need': pl.DataFrame({'value': [24.0]}),
+    'toll': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 7.0]}),
+}
+
 #: Maximisation *and* an objective constant, which are the two things the
 #: sink states outside the frames: ``ModelSense`` and ``ObjCon``.
 MAX = {
@@ -85,6 +106,7 @@ CASES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
         },
     ),
     'INFEASIBLE': (INFEASIBLE, {'load': pl.DataFrame({'t': [0], 'value': [99.0]})}),
+    'QP': (QP, QP_SOURCES),
 }
 
 
@@ -95,7 +117,12 @@ CASES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
 
 @pytest.mark.parametrize(
     ('name', 'variable', 'constraint', 'has_duals'),
-    [('LP', 'p', 'meet', True), ('MAX', 'p', 'lim', True), ('MIP', 'x', 'budget', False)],
+    [
+        ('LP', 'p', 'meet', True),
+        ('MAX', 'p', 'lim', True),
+        ('MIP', 'x', 'budget', False),
+        ('QP', 'p', 'meet', True),
+    ],
 )
 def test_gurobi_and_highs_agree(name: str, variable: str, constraint: str, has_duals: bool) -> None:
     """The claim the second solver has to earn, on all four quantities.
@@ -171,6 +198,55 @@ def test_an_infeasible_solve_reports_both_axes_in_gurobis_wording() -> None:
         assert solution.objective != solution.objective, 'nan, not 0.0'
         with pytest.raises(NoSolutionError, match='INFEASIBLE'):
             solution.primal('p')
+
+
+def test_gurobi_takes_the_two_quadratic_models_highs_refuses() -> None:
+    """The capability axis from the side that has the capability: naming this
+    sink in a refusal is only true if it actually solves what HiGHS will not."""
+    need = QP_SOURCES
+
+    nonconvex = QP | {'objective': {'sense': 'minimize', 'expression': '-sum(p * p, over=g)'}}
+    with pytest.raises(LpspecError, match='not positive semidefinite'):
+        lps.solve(nonconvex, need)
+    assert lps.solve(nonconvex, need, solver_name='gurobi').objective == pytest.approx(-200.0), (
+        'the concave objective is driven to the bound on both columns, which only a spatial branch-and-bound finds'
+    )
+
+    integral = QP | {'variables': {**QP['variables'], 'p': {**QP['variables']['p'], 'domain': 'integer'}}}
+    with pytest.raises(LpspecError, match='separately and refuses them together'):
+        lps.solve(integral, need)
+    with lps.solve(integral, need, solver_name='gurobi') as mixed, lps.solve(QP, need, solver_name='gurobi') as lp:
+        assert mixed.is_ok
+        assert mixed.objective == pytest.approx(lp.objective), (
+            'the integral optimum is integral here, so the MIQP reaches the relaxation exactly — '
+            'what is under test is that the pair loads at all'
+        )
+
+
+def test_a_pushed_quadratic_objective_replaces_rather_than_accumulates() -> None:
+    """What a rebind must not do twice. ``setMObjective`` replaces the whole
+    objective, which is why the linear cost is passed to it again; accumulating
+    would answer twice the curvature on the second solve — a model that still
+    solves, and a number nobody would question."""
+    scaled = QP | {
+        'parameters': {'need': {'dims': []}, 'toll': {'dims': ['g']}, 'wear': {'dims': []}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p * p * wear + p * q + q * q + q * toll, over=g)'},
+    }
+    soft = QP_SOURCES | {'wear': pl.DataFrame({'value': [1.0]})}
+    stiff = QP_SOURCES | {'wear': pl.DataFrame({'value': [4.0]})}
+
+    with lps.build(scaled, soft) as bound:
+        first = bound.solve(solver_name='gurobi').objective
+        bound.rebind(stiff)
+        pushed = bound.solve(solver_name='gurobi').objective
+        assert bound.diagnostics().loads == 1, 'the pattern did not move, so the coefficients are pushed'
+
+    assert pushed != pytest.approx(first), 'a stiffer model is a different answer'
+    with lps.solve(scaled, stiff, solver_name='gurobi') as fresh:
+        assert pushed == pytest.approx(fresh.objective), (
+            'a rebind answers what a fresh build answers — a quadratic part left unreplaced would '
+            'report the old curvature, and one accumulated would report both'
+        )
 
 
 def test_a_mixed_integer_model_has_no_duals() -> None:
