@@ -148,13 +148,13 @@ Four things follow:
   carries; the same goes for a `<=` or `>=`, which needs two links to say which
   side is bounded only when the links are the quantities.
 
-  A sign under a map reaches **every member alike**, which is what a family of
-  costs wants — each bounded below by its own curve is the epigraph, and exact
-  under minimisation. It is not what a family of *flows* wants: bounding a
-  converter's outputs from below frees them, and the model buys heat without
-  fuel. Per-member senses are
-  [#1144](https://github.com/fluxopt/lpspec/issues/1144); the block cannot pick
-  for you, because nothing in the data says which flows are inputs.
+  A sign under a map reaches **every member alike**, so it fits a family whose
+  members are all pushed the same way. `>=` is exact for a quantity something
+  drives *onto* the curve — a cost or an input under minimisation, where the
+  bound binds at the optimum — and slack for one the model *wants*, where
+  nothing stops it rising: bound a converter's heat output from below and the
+  model buys heat without fuel. The block cannot tell those apart, because
+  which way a quantity is pushed is a property of the rest of the model.
 
 A link takes no mask of its own: its rows exist where its expression does, so a
 member missing the flow a curve ties builds no row for it and the build reports
