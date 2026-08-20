@@ -106,6 +106,26 @@ conversion:
     - [rate, bp_rate]         # carries `flow` — one row per flow
 ```
 
+The shape it is about: the block makes one set of weights per coordinate of
+`foreach:`, and every link is rows that read a set. Which set is the only
+question.
+
+```
+one set of weights ─────►  λ[boiler, t]            λ[chp, t]
+
+[fuel, bp_fuel]            fuel[boiler, t]         fuel[chp, t]
+  one row per set
+
+[rate, bp_rate]            rate[boiler_fuel, t]    rate[chp_fuel, t]
+  more rows than sets,     rate[boiler_heat, t]    rate[chp_heat, t]
+  grouped by converter_of                          rate[chp_power, t]
+```
+
+**The per-row answer is the lookup's own contents** — a table with one entry per
+flow, `boiler_heat → boiler` — so `by:` carries no per-row information. It names
+which table, which is one sentence about the block rather than a fact about any
+row.
+
 **A link uses the map when it carries the dim the lookup maps out of**, so the
 block says it once and no link says anything: the ordinary two-string form
 holds both kinds. That is how a curve ties **as many expressions as the data
