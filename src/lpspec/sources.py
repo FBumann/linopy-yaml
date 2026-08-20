@@ -622,8 +622,17 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     Only the curvature check needs xarray, for the broadcast over dims, so the
     import waits until a block that needs it is found.
 
+    **A curve is its marked breakpoints**, which is what ``points:`` names and
+    what every check here reads. The two spellings put the length in different
+    places — naming a values parameter leaves the unrun breakpoints out of the
+    table, a boolean mask marks them in a table that may be dense — so the rows
+    that carry a value are the curve under the first and a superset of it under
+    the second. Judged that way, values the curve does not run over are
+    differenced as if it did, and a curve masked down to one point counts as
+    however many rows its table holds.
+
     **A count is per curve, not per dimension.** ``method: lp`` needs a segment
-    to state a line for, and how many points a curve carries is its own
+    to state a line for, and how many points a curve runs over is its own
     property: a block spans one breakpoint dimension but as many curves as its
     frame has rows, and under ``points:`` the two no longer agree. Asking the
     dimension clears a curve that has no segment — its chord row excluded as
@@ -653,18 +662,24 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
         ctx = f"piecewise '{name}'"
         x_link, y_link = pw.curve
         try:
-            xa = _as_dataarray(schema, x_link.values, values)
-            ya = _as_dataarray(schema, y_link.values, values)
+            arrays = [_as_dataarray(schema, x_link.values, values), _as_dataarray(schema, y_link.values, values)]
+            if pw.points is not None:
+                mask = mask_of(name, pw)
+                assert mask is not None, 'a block that declares points: has a mask to read it from'
+                arrays.append(_as_dataarray(schema, mask, values, schema.parameters[pw.points].dims))
         except KeyError:
             continue
-        xa, ya = xr.broadcast(xa, ya)
+        arrays = list(xr.broadcast(*arrays))
         if (order := _breakpoint_order(pw.over, values)) is not None:
-            xa, ya = xa.reindex({pw.over: order}), ya.reindex({pw.over: order})
-        other = [d for d in xa.dims if d != pw.over]
-        stacked_x = xa.transpose(*other, pw.over).values.reshape(-1, xa.sizes[pw.over])
-        stacked_y = ya.transpose(*other, pw.over).values.reshape(-1, ya.sizes[pw.over])
-        for xs_all, ys_all in zip(stacked_x, stacked_y, strict=False):
+            arrays = [array.reindex({pw.over: order}) for array in arrays]
+        other = [d for d in arrays[0].dims if d != pw.over]
+        width = arrays[0].sizes[pw.over]
+        stacked = [array.transpose(*other, pw.over).values.reshape(-1, width) for array in arrays]
+        for curve in zip(*stacked, strict=False):
+            xs_all, ys_all = curve[0], curve[1]
             live = ~(np.isnan(xs_all) | np.isnan(ys_all))
+            if len(curve) > 2:
+                live &= np.equal(curve[2], True)
             xs, ys = xs_all[live], ys_all[live]
             if pw.method == 'lp' and xs.size < 2:
                 raise PiecewiseExpansionError(
@@ -714,7 +729,7 @@ def _breakpoint_order(over: str, values: Mapping[str, Any] | Any) -> list[Any] |
     return labels[over].to_list()
 
 
-def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) -> Any:
+def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any, dims: Sequence[str] | None = None) -> Any:
     """One source as a DataArray indexed by its declared dims.
 
     Three shapes reach here — the linopy lane's ``xr.Dataset`` entries, the
@@ -740,7 +755,7 @@ def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) ->
     obj = values[pname]
     if isinstance(obj, xr.DataArray):
         return obj
-    dims = list(schema.parameters[pname].dims)
+    dims = list(schema.parameters[pname].dims if dims is None else dims)
     frame = pl.scan_parquet(obj) if isinstance(obj, (str, Path)) else as_frame(obj, tuple(dims))
     if frame is None or not dims or 'value' not in frame.collect_schema().names():
         raise KeyError(pname)

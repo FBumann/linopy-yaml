@@ -269,24 +269,59 @@ def test_a_one_breakpoint_curve_is_that_point_under_the_weight_methods(method):
         )
 
 
-def test_a_ragged_curve_down_to_one_point_is_refused():
+@pytest.mark.parametrize('spelling', ['values-parameter', 'boolean-mask'])
+def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
     """The count that decides is the curve's, and `points:` makes them differ.
 
-    `bp` carries three breakpoints and unit `b` declares one of them, so a
+    `bp` carries three breakpoints and unit `b` runs over one of them, so a
     check asking the *dimension* clears a curve that has no segment: `b`'s
     chord row is excluded as its own first point, its two domain rows pin only
     `p`, and `op_cost` settles on its lower bound for an objective of 0 where
     `b`'s single point says 25. Its neighbour with two points is the same model
     built one breakpoint longer, and solves.
+
+    Both spellings of `points:`, because they put the length in different
+    places: naming a values parameter leaves the unrun breakpoints out of the
+    table, and a boolean mask marks them in a table that may be dense. A count
+    of the rows that carry a value gets the first right and the second wrong.
     """
     ragged = pyyaml.safe_load(PER_UNIT_MODEL)
-    ragged['piecewise']['cost_curve']['points'] = 'bp_x'
+    mask = spelling == 'boolean-mask'
+    if mask:
+        ragged['parameters']['runs_to'] = {'dims': ['unit', 'bp'], 'dtype': 'bool', 'description': 'curve length'}
+    ragged['piecewise']['cost_curve']['points'] = 'runs_to' if mask else 'bp_x'
 
-    with lps.solve(ragged, _per_unit_points(short=False)) as result:
+    with lps.solve(ragged, _per_unit_points(short=False, mask=mask)) as result:
         assert result.objective == pytest.approx(25.0, rel=RTOL), 'two points is one segment, and that is enough'
 
     with pytest.raises(PiecewiseExpansionError, match='this curve carries 1'):
-        lps.build(ragged, _per_unit_points(short=True))
+        lps.build(ragged, _per_unit_points(short=True, mask=mask))
+
+
+def test_values_past_the_mask_are_not_part_of_the_curve():
+    """`points:` says which breakpoints the curve runs over, and the guard reads it.
+
+    A table may be dense where the mask is not — the row exists, it is simply
+    not on this curve. Judged by which rows carry a value instead, `b`'s
+    unmarked third point counts: here it runs backwards *and* bends the wrong
+    way, either of which refused a block whose curves are both well-formed
+    over the breakpoints they actually run.
+    """
+    sources = _per_unit_points(short=False, mask=True)
+    past = (pl.col('unit') == 'b') & (pl.col('bp') == 2)
+    for name, unusable in (('bp_x', 1.0), ('bp_y', 500.0)):
+        sources[name] = sources[name].with_columns(
+            pl.when(past).then(unusable).otherwise(pl.col('value')).alias('value')
+        )
+
+    ragged = pyyaml.safe_load(PER_UNIT_MODEL)
+    ragged['parameters']['runs_to'] = {'dims': ['unit', 'bp'], 'dtype': 'bool', 'description': 'curve length'}
+    ragged['piecewise']['cost_curve']['points'] = 'runs_to'
+
+    with lps.solve(ragged, sources) as result:
+        assert result.objective == pytest.approx(25.0, rel=RTOL), (
+            'the answer is the marked curves, and the values past them are not read at all'
+        )
 
 
 def test_a_one_breakpoint_curve_is_refused_rather_than_dropped():
@@ -504,15 +539,31 @@ def _per_unit(first, second):
     }
 
 
-def _per_unit_points(short):
-    rows = [('a', 0), ('a', 1), ('a', 2), *([('b', 0)] if short else [('b', 0), ('b', 1)])]
-    xs = [0.0, 10.0, 20.0, *([5.0] if short else [5.0, 15.0])]
-    ys = [0.0, 10.0, 30.0, *([25.0] if short else [25.0, 60.0])]
-    return {
+def _per_unit_points(short, mask=False):
+    """`b` runs over one breakpoint or two; `mask` says so in a table of its own.
+
+    Under the boolean spelling the curve tables stay **dense** — every unit
+    carries all three breakpoints — which is the shape that separates reading
+    the mask from counting the rows that have a value.
+    """
+    run = [('a', 0), ('a', 1), ('a', 2), *([('b', 0)] if short else [('b', 0), ('b', 1)])]
+    rows = [('a', 0), ('a', 1), ('a', 2), ('b', 0), ('b', 1), ('b', 2)] if mask else run
+    curve = {('a', 0): (0.0, 0.0), ('a', 1): (10.0, 10.0), ('a', 2): (20.0, 30.0)}
+    curve |= {('b', 0): (5.0, 25.0), ('b', 1): (15.0, 60.0), ('b', 2): (40.0, 200.0)}
+    sources = {
         'snapshot': pl.DataFrame({'snapshot': [0]}),
         'unit': pl.DataFrame({'unit': ['a', 'b']}),
         'bp': pl.DataFrame({'bp': [0, 1, 2]}),
         'load': pl.DataFrame({'snapshot': [0], 'value': [5.0]}),
-        'bp_x': pl.DataFrame({'unit': [u for u, _ in rows], 'bp': [k for _, k in rows], 'value': xs}),
-        'bp_y': pl.DataFrame({'unit': [u for u, _ in rows], 'bp': [k for _, k in rows], 'value': ys}),
+        'bp_x': pl.DataFrame(
+            {'unit': [u for u, _ in rows], 'bp': [k for _, k in rows], 'value': [curve[r][0] for r in rows]}
+        ),
+        'bp_y': pl.DataFrame(
+            {'unit': [u for u, _ in rows], 'bp': [k for _, k in rows], 'value': [curve[r][1] for r in rows]}
+        ),
     }
+    if mask:
+        sources['runs_to'] = pl.DataFrame(
+            {'unit': [u for u, _ in run], 'bp': [k for _, k in run], 'value': [True] * len(run)}
+        )
+    return sources
