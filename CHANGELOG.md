@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.1-alpha.235](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.234...v0.0.1-alpha.235) (2026-08-20)
+
+
+### Features
+
+* **data:** a lookup's map has one data transport, not two ([#1185](https://github.com/fluxopt/lpspec/issues/1185)) ([65079b6](https://github.com/fluxopt/lpspec/commit/65079b63d38a4179770f97ce1f8f5e55e0d13029))
+
+
+### Refactoring
+
+* **data:** a lookup's values are checked once, not once per lane ([#1190](https://github.com/fluxopt/lpspec/issues/1190)) ([73c8bf6](https://github.com/fluxopt/lpspec/commit/73c8bf6b8adcb5d49b58f825c5bbda025c6a3891))
+* **engine:** an unmapped label is a row that is not there, inside as well ([#1187](https://github.com/fluxopt/lpspec/issues/1187)) ([903ec33](https://github.com/fluxopt/lpspec/commit/903ec338d27284299e3d22b9e1717025dca05d3d))
+
 ## [0.0.1-alpha.234](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.233...v0.0.1-alpha.234) (2026-08-20)
 
 
