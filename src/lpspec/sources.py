@@ -598,16 +598,51 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     the x-breakpoints are not strictly monotone. All of it is checkable once
     the breakpoint values are in hand, which the schema never has. *values*
     maps parameter names to whatever its lane holds — :func:`tidy_sources`'
-    frames and paths, or the linopy lane's ``xr.Dataset`` — and blocks whose
-    parameters are missing or bound to a path are skipped. Called by both
-    lanes, which is why it sits beside ``tidy_sources``.
+    frames and paths, or the linopy lane's ``xr.Dataset`` — and a path is
+    scanned for its two columns rather than skipped, since a verdict that
+    turned on how the numbers were handed over is no verdict at all. Only a
+    block whose parameters are absent is skipped. Called by both lanes, which
+    is why it sits beside ``tidy_sources``.
+
+    **The breakpoints are walked in the ``over`` dimension's own index order**,
+    which is the order the model is built in — what ``shift`` walks and what
+    ``index(bp, 0)`` names. A values table is a function of its coordinates and
+    carries no order of its own, so it is laid out on that index first
+    (:func:`_breakpoint_order`); reading it in the row order it happened to
+    arrive in judged an order the model never builds, in both directions.
+
+    **The bend is measured against a slope**, because that is what it is: a
+    difference of two slopes, in y per x. Judged against a share of ``y`` it
+    tracked the unit x happens to be measured in — stretch a curve along x and
+    a real bend passed, shrink it and a straight line was refused. The
+    tolerance is not zero because an exactly collinear curve need not difference
+    to exactly zero: ``[0, 0.1, 0.3]`` over ``[0, 1, 3]`` gives ``-1.4e-17``,
+    negative, which is the sign that refuses a convex curve.
 
     Only the curvature check needs xarray, for the broadcast over dims, so the
     import waits until a block that needs it is found.
 
+    **A curve is its marked breakpoints**, which is what ``points:`` names and
+    what every check here reads. The two spellings put the length in different
+    places — naming a values parameter leaves the unrun breakpoints out of the
+    table, a boolean mask marks them in a table that may be dense — so the rows
+    that carry a value are the curve under the first and a superset of it under
+    the second. Judged that way, values the curve does not run over are
+    differenced as if it did, and a curve masked down to one point counts as
+    however many rows its table holds.
+
+    **A count is per curve, not per dimension.** ``method: lp`` needs a segment
+    to state a line for, and how many points a curve runs over is its own
+    property: a block spans one breakpoint dimension but as many curves as its
+    frame has rows, and under ``points:`` the two no longer agree. Asking the
+    dimension clears a curve that has no segment — its chord row excluded as
+    its own first point, its domain rows pinning only the pinned link, and the
+    bounded one left on its bound.
+
     Raises:
         PiecewiseExpansionError: Breakpoints that are not strictly increasing,
-            or a curve of the curvature the method is not exact for.
+            a ``method: lp`` curve with no segment, or a curve of the curvature
+            the method is not exact for.
     """
     import numpy as np
 
@@ -627,25 +662,40 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
         ctx = f"piecewise '{name}'"
         x_link, y_link = pw.curve
         try:
-            xa = _as_dataarray(schema, x_link.values, values)
-            ya = _as_dataarray(schema, y_link.values, values)
+            arrays = [_as_dataarray(schema, x_link.values, values), _as_dataarray(schema, y_link.values, values)]
+            if pw.points is not None:
+                mask = mask_of(name, pw)
+                assert mask is not None, 'a block that declares points: has a mask to read it from'
+                arrays.append(_as_dataarray(schema, mask, values, schema.parameters[pw.points].dims))
         except KeyError:
             continue
-        xa, ya = xr.broadcast(xa, ya)
-        other = [d for d in xa.dims if d != pw.over]
-        stacked_x = xa.transpose(*other, pw.over).values.reshape(-1, xa.sizes[pw.over])
-        stacked_y = ya.transpose(*other, pw.over).values.reshape(-1, ya.sizes[pw.over])
-        for xs_all, ys_all in zip(stacked_x, stacked_y, strict=False):
+        arrays = list(xr.broadcast(*arrays))
+        if (order := _breakpoint_order(pw.over, values)) is not None:
+            arrays = [array.reindex({pw.over: order}) for array in arrays]
+        other = [d for d in arrays[0].dims if d != pw.over]
+        width = arrays[0].sizes[pw.over]
+        stacked = [array.transpose(*other, pw.over).values.reshape(-1, width) for array in arrays]
+        for curve in zip(*stacked, strict=False):
+            xs_all, ys_all = curve[0], curve[1]
             live = ~(np.isnan(xs_all) | np.isnan(ys_all))
+            if len(curve) > 2:
+                live &= np.equal(curve[2], True)
             xs, ys = xs_all[live], ys_all[live]
+            if pw.method == 'lp' and xs.size < 2:
+                raise PiecewiseExpansionError(
+                    f'{ctx}: method: lp needs at least two breakpoints and this curve carries '
+                    f'{xs.size} — the method *is* its segment lines, so a curve with no segment '
+                    f'states nothing and leaves the bounded link on its own bound. Use method: '
+                    f'adjacency, sos2 or convex, which pin it to the points it does have.'
+                )
             dx = np.diff(xs)
             if not (dx > 0).all():
                 raise PiecewiseExpansionError(
                     f'{ctx}: method: {pw.method} requires strictly increasing breakpoints in '
                     f"'{x_link.values}' (got {xs.tolist()})"
                 )
-            curvature = np.diff(np.diff(ys) / dx)
-            tol = 1e-9 * max(1.0, float(np.abs(ys).max()))
+            slopes = np.diff(ys) / dx
+            curvature, tol = np.diff(slopes), 1e-9 * float(np.abs(slopes).max(initial=0.0))
             rises, falls = bool((curvature > tol).any()), bool((curvature < -tol).any())
             wrong_bend = (rises and falls) if required == 'either' else (falls if required == 'convex' else rises)
             if wrong_bend:
@@ -659,11 +709,34 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
                 )
 
 
-def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) -> Any:
+def _breakpoint_order(over: str, values: Mapping[str, Any] | Any) -> list[Any] | None:
+    """*over*'s labels in the order the model builds them, or ``None``.
+
+    ``None`` where the caller holds no index this can read — the linopy lane's
+    ``xr.Dataset``, whose arrays its loader has already laid out on that index,
+    so there is nothing left to reorder.
+
+    Deduplicated by *first appearance* rather than sorted, because that is the
+    ordinal the engine assigns (``relational/engines/polars/binding.py``) and a
+    guard reading a second order would answer for a model nobody builds.
+    """
+    source = values.get(over)
+    if isinstance(source, (str, Path)):
+        source = pl.scan_parquet(source)
+    if not isinstance(source, (pl.LazyFrame, pl.DataFrame)):
+        return None
+    labels = source.lazy().select(over).unique(maintain_order=True).collect()
+    return labels[over].to_list()
+
+
+def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any, dims: Sequence[str] | None = None) -> Any:
     """One source as a DataArray indexed by its declared dims.
 
-    Two shapes reach here — the linopy lane's ``xr.Dataset`` entries and the
-    relational lane's tidy frames.
+    Three shapes reach here — the linopy lane's ``xr.Dataset`` entries, the
+    relational lane's tidy frames, and the parquet paths that lane passes
+    through untouched. The path is scanned for the columns the check reads,
+    which is what keeps the guard's answer a property of the numbers rather
+    than of how they arrived.
 
     The frame crosses to pandas column by column through numpy: a whole-frame
     conversion would reach for pyarrow, and this check already costs the caller
@@ -671,8 +744,9 @@ def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) ->
     and retire this function.
 
     Raises:
-        KeyError: If there is nothing to lay out in process (a parquet path,
-            or no ``value`` column), which the caller reads as "skip".
+        KeyError: If there is nothing to lay out — an absent parameter, or one
+            whose table carries no ``value`` column — which the caller reads as
+            "skip".
     """
     import xarray as xr
 
@@ -681,8 +755,8 @@ def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any) ->
     obj = values[pname]
     if isinstance(obj, xr.DataArray):
         return obj
-    dims = list(schema.parameters[pname].dims)
-    frame = as_frame(obj, tuple(dims))
+    dims = list(schema.parameters[pname].dims if dims is None else dims)
+    frame = pl.scan_parquet(obj) if isinstance(obj, (str, Path)) else as_frame(obj, tuple(dims))
     if frame is None or not dims or 'value' not in frame.collect_schema().names():
         raise KeyError(pname)
     import pandas as pd
