@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.224](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.223...v0.0.1-alpha.224) (2026-08-20)
+
+
+### Refactoring
+
+* **tools:** a generator that reads only the language lives with it ([#1147](https://github.com/fluxopt/lpspec/issues/1147)) ([810f1bd](https://github.com/fluxopt/lpspec/commit/810f1bd6a25420c16639bcbf7d008e72cd900cdf))
+
 ## [0.0.1-alpha.223](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.222...v0.0.1-alpha.223) (2026-08-20)
 
 
