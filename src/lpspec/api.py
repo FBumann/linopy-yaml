@@ -262,6 +262,8 @@ class BoundModel:
 
         Raises:
             ValueError: A suffix nothing writes.
+            LpspecError: A construct the format has no section for. What each
+                one carries is :func:`check`'s ``sink=`` answer, hours earlier.
         """
         self._engine.write(path)
 
@@ -419,6 +421,8 @@ def write(
 
     Raises:
         ValueError: A suffix nothing writes — checked before the build.
+        LpspecError: A construct the format has no section for, which is
+            ``check(model, sink=out.suffix)``'s answer with no data bound.
     """
     out = Path(out)
     writer(out.suffix.lower())

@@ -25,10 +25,11 @@ if TYPE_CHECKING:
 
 
 #: A section is text, so this format excludes no combination and curvature
-#: costs it nothing — but what it declares is what :func:`write_lp_file`
-#: **emits**, on the rule the gurobi sink's descriptor states: the format has a
-#: quadratic-constraint section and nothing here writes one, and claiming it
-#: would hand back a file missing the rows that make the model what it is.
+#: costs it nothing — and every construct the language can reach is a section
+#: this writer emits, quadratic rows included. What a descriptor declares is
+#: what :func:`write_lp_file` **emits**, on the rule the gurobi sink's states:
+#: an entry for a section nothing writes would hand back a file missing the
+#: rows that make the model what it is, which is why `.mps` declares none.
 #:
 #: What no descriptor promises is that the solver reading the file back parses
 #: what was written — that is a property of a *reader*, and HiGHS's refuses two

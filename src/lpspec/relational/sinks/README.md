@@ -196,8 +196,11 @@ own module: a `ClassVar` on a `Solver`, a field on a `Writer`. The *lanes*
 declare against the same vocabulary, in `api.LANES`, since a lane's capability
 is the runner's business and not a sink's.
 
-`ingestible` reads it today. Still missing is
-[the `check(model, sink=...)` half](https://github.com/fluxopt/lpspec/issues/89).
+Three callers read it, and between them a construct a sink has no spelling for
+cannot reach that sink by any door: `check(model, sink=...)` before any data is
+bound, `ingestible` at the solve, and the engine's `write` — which asks without
+being asked, a file written without the section being a different model that
+parses and solves.
 
 ## Stable output
 

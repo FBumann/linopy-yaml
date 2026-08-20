@@ -935,12 +935,25 @@ class PolarsEngine:
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
 
+        A construct the format has no section for is refused here, the way the
+        solve path refuses one a solver cannot ingest
+        (:func:`~lpspec.relational.sinks.ingestible`) and with the sentence
+        ``check(model, sink=...)`` would have given. Writing it anyway would
+        hand back a file that parses, solves, and is a different model: the
+        MPS writer spells no quadratic term, so those rows would arrive empty
+        (#942).
+
         Raises:
             ValueError: A suffix nothing writes.
+            LpspecError: A construct this format cannot spell.
         """
         path = Path(path)
-        chosen = sinks.writer(path.suffix.lower())
+        suffix = path.suffix.lower()
+        chosen = sinks.writer(suffix)
         tables = self._tables()
+        assert self._program is not None
+        if (refused := sinks.refusal(self._program, suffix)) is not None:
+            raise LpspecError(refused)
         with _clocked(self._timings, 'write'):
             chosen.write(tables, path)
 
