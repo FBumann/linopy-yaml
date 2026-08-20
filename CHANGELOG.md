@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.236](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.235...v0.0.1-alpha.236) (2026-08-20)
+
+
+### Documentation
+
+* a shown model, a key and a count each say what the tree says ([#1192](https://github.com/fluxopt/lpspec/issues/1192)) ([2b89ebf](https://github.com/fluxopt/lpspec/commit/2b89ebfb031e66e558ec631fdd4503db0f76f1ec))
+
 ## [0.0.1-alpha.235](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.234...v0.0.1-alpha.235) (2026-08-20)
 
 
