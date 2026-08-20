@@ -289,7 +289,8 @@ WIDE_DATA = {
 }
 
 WIDE_COORDS = {
-    'f': pd.DataFrame({'f': ['a', 'b', 'c', 'd'], 'grp': ['g0', 'g0', 'g1', 'g1']}),
+    'f': pd.DataFrame({'f': ['a', 'b', 'c', 'd']}),
+    'grp': pd.DataFrame({'f': ['a', 'b', 'c', 'd'], 'g': ['g0', 'g0', 'g1', 'g1']}),
     'g': pd.Index(['g0', 'g1'], name='g'),
     't': pd.Index([0, 1], name='t'),
 }

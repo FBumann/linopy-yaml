@@ -159,7 +159,7 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
         cost: pd.Series = tables['cost'].set_index('generator')['value']
         load: pd.Series = tables['load'].set_index('snapshot')['value']
         cap = xr.DataArray(tables['monthly_cap'].pivot(index='month', columns='generator', values='value'))
-        month = xr.DataArray(tables['snapshot'].set_index('snapshot')['month_of'].rename('month'))
+        month = xr.DataArray(tables['month_of'].set_index('snapshot')['month'])
 
         m = linopy.Model()
         p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')
@@ -171,29 +171,29 @@ The tabs start from [the instance’s tables](data.md) — one frame per paramet
 
 ## The grouping is data
 
-The `month` column is produced before the model, by whatever rule you want:
+The `month_of` map is produced before the model, by whatever rule you want:
 
 ```python
-index = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
+month_of = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
 ```
 
-What that produces is the snapshot index the model binds against — a second
-column beside the timestamps, and nothing else:
+What that produces is the relation the model binds under `month_of` — every
+snapshot beside the month it falls in, and nothing else:
 
 ```text
 shape: (6, 2)
-┌─────────────────────┬──────────┐
-│ snapshot            ┆ month_of │
-│ ---                 ┆ ---      │
-│ datetime[μs]        ┆ str      │
-╞═════════════════════╪══════════╡
-│ 2030-01-01 00:00:00 ┆ 2030-01  │
-│ 2030-01-16 00:00:00 ┆ 2030-01  │
-│ 2030-01-31 00:00:00 ┆ 2030-01  │
-│ 2030-02-15 00:00:00 ┆ 2030-02  │
-│ 2030-03-02 00:00:00 ┆ 2030-03  │
-│ 2030-03-17 00:00:00 ┆ 2030-03  │
-└─────────────────────┴──────────┘
+┌─────────────────────┬─────────┐
+│ snapshot            ┆ month   │
+│ ---                 ┆ ---     │
+│ datetime[μs]        ┆ str     │
+╞═════════════════════╪═════════╡
+│ 2030-01-01 00:00:00 ┆ 2030-01 │
+│ 2030-01-16 00:00:00 ┆ 2030-01 │
+│ 2030-01-31 00:00:00 ┆ 2030-01 │
+│ 2030-02-15 00:00:00 ┆ 2030-02 │
+│ 2030-03-02 00:00:00 ┆ 2030-03 │
+│ 2030-03-17 00:00:00 ┆ 2030-03 │
+└─────────────────────┴─────────┘
 ```
 
 Three snapshots in January, one in February, two in March: `sum(by=)` needs a

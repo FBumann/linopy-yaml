@@ -29,7 +29,7 @@ from lpspec.language import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Iterable, Sequence
 
 
 class LpspecWarning(UserWarning):
@@ -512,27 +512,6 @@ def dense_array_message(name: str) -> str:
     )
 
 
-def lookups_need_an_index_message(dim: str, lookups: list[str], got: str) -> str:
-    """A dimension carrying lookups and no index to read them from — one wording, both lanes.
-
-    A lookup is a *column* of its dimension's index, so unlike labels it cannot
-    be inferred from the parameters that happen to span the dimension: they
-    carry the label, never what it maps to.
-    """
-    return (
-        f"dimension '{dim}' carries lookups {sorted(lookups)} but has no index source "
-        f"(got {got}). Pass one under key '{dim}' — a parquet path, or any table "
-        f'carrying columns {[dim, *sorted(lookups)]}. A lookup cannot be inferred from '
-        f'the parameters that happen to use the dimension: they carry the label, not '
-        f'what it maps to.'
-    )
-
-
-def missing_lookup_columns_message(dim: str, missing: list[str], available: list[str]) -> str:
-    """An index that is present and short of a declared lookup — one wording, both lanes."""
-    return f"index for dimension '{dim}' is missing declared lookup column(s) {sorted(missing)} (has {available})"
-
-
 def index_without_its_label_column_message(dim: str, available: Sequence[str]) -> str:
     """An index table carrying everything but the labels — one wording, both lanes.
 
@@ -543,23 +522,6 @@ def index_without_its_label_column_message(dim: str, available: Sequence[str]) -
     return (
         f"index for dimension '{dim}' is a table without a '{dim}' column (has "
         f'{list(available)}). The label column is named after the dimension.'
-    )
-
-
-def lookup_not_single_valued_message(dim: str, offenders: Mapping[str, int]) -> str:
-    """A label with two lookup values — one wording, both lanes.
-
-    Every offending lookup is named rather than the first, so the rest are not
-    found one build at a time. A null counts as a value: a label mapped
-    nowhere in one row and somewhere in another does not have one answer
-    either, and reading the two as agreeing is what let a member fall out of
-    the group that was to hold it.
-    """
-    listed = '; '.join(f"'{name}' ({count} label(s))" for name, count in sorted(offenders.items()))
-    return (
-        f"dimension '{dim}' carries more than one value per label for lookup(s): "
-        f'{listed}. A lookup is single-valued per label — reduce the source to '
-        f'one row per {dim}, or model the relation as a parameter instead.'
     )
 
 
@@ -657,6 +619,35 @@ def declared_map_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
         f'omit members, and its key order is arbitrary. Declare dimensions.{dim}.values, or pass '
         f"the labels under key '{dim}': the maps are read against them, and a label no "
         f'map mentions gets a null.'
+    )
+
+
+def unsupplied_lookup_message(lookup: str, over: str, space: str) -> str:
+    """A lookup nothing gives a map for — one wording, both lanes.
+
+    The counterpart of a declared parameter with no data, and the refusal that
+    replaced three: with one data transport the map is present and
+    single-valued by construction, so the only thing left to be wrong about is
+    whether anyone said it at all.
+    """
+    return (
+        f"no data provided for lookup '{lookup}'. Pass it under key '{lookup}' as a table with "
+        f"columns ['{over}', '{space}'] — one row per '{over}' label it maps, and no row for a "
+        f'label it does not — or declare lookups.{lookup}.values in the file.'
+    )
+
+
+def lookup_column_on_an_index_message(dim: str, lookup: str) -> str:
+    """An index carrying a column named after a lookup over it — one wording, both lanes.
+
+    Refused rather than filtered away, unlike every other column a source
+    carries and the model does not take: this one is a map somebody meant to
+    supply, and dropping it silently would build the model they did not write.
+    """
+    return (
+        f"index for dimension '{dim}' carries a '{lookup}' column, and '{lookup}' is a lookup "
+        f"over '{dim}'. A map is supplied under its own key, not as a column of the index it "
+        f'runs over: pass it as sources[{lookup!r}], a table of the rows it maps.'
     )
 
 

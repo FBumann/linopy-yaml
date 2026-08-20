@@ -31,7 +31,6 @@ from lpspec.errors import (
     coordinates_shown,
     duplicate_coordinate_message,
     holes_in_values_message,
-    lookup_not_single_valued_message,
     lookup_values_are_not_labels_message,
     unknown_labels_message,
     wrong_value_dtype_message,
@@ -159,20 +158,6 @@ def check_value_dtype(p: plan.ParameterDeclaration, frame: pl.LazyFrame) -> None
         return
     arrived = next((name for name, types in _COLUMNS.items() if column in types), str(column))
     raise DataError(wrong_value_dtype_message(p.name, p.dtype, arrived))
-
-
-def check_lookups_single_valued(d: str, names: list[str], frame: pl.LazyFrame) -> None:
-    """One label, one lookup value — two rows disagreeing is a data bug.
-
-    It names *every* offending lookup in one pass, rather than raising on
-    the first and leaving the rest to be found one build at a time.
-    """
-    if not names:
-        return
-    counts = frame.group_by(d).agg(pl.col(c).n_unique().alias(c) for c in names).collect()
-    bad = {c: n for c in names if (n := int((counts[c] > 1).sum()))}
-    if bad:
-        raise DataError(lookup_not_single_valued_message(d, bad))
 
 
 def check_lookup_containment(d: str, lookup: str, target: str, dimensions: Dimensions) -> None:

@@ -52,11 +52,11 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     snapshots, buses = load.indexes['snapshot'], load.indexes['bus']
 
     gen_at = pd.DataFrame(0.0, index=buses, columns=p_max.index)
-    for gen, bus in zip(tables['generator']['generator'], tables['generator']['gen_bus'], strict=True):
+    for gen, bus in zip(tables['gen_bus']['generator'], tables['gen_bus']['bus'], strict=True):
         gen_at.loc[bus, gen] = 1.0
     flow_in = pd.DataFrame(0.0, index=buses, columns=cap.index)
     for line, src, dst in zip(
-        tables['line']['line'], tables['line']['line_from'], tables['line']['line_to'], strict=True
+        tables['line_from']['line'], tables['line_from']['bus'], tables['line_to']['bus'], strict=True
     ):
         flow_in.loc[dst, line] += 1.0
         flow_in.loc[src, line] -= 1.0

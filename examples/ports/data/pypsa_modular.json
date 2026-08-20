@@ -1,14 +1,102 @@
 {
-  "snapshot": {"snapshot": [0, 1, 2, 3]},
-  "bus": {"bus": ["hub"]},
-  "generator": {"generator": ["wind", "gas", "oil"], "gen_bus": ["hub", "hub", "hub"]},
-  "p_nom_mod": {"generator": ["wind", "gas", "oil"], "value": [30.0, 25.0, 20.0]},
-  "p_nom_max": {"generator": ["wind", "gas", "oil"], "value": [120.0, 150.0, 100.0]},
-  "capital_cost": {"generator": ["wind", "gas", "oil"], "value": [400.0, 300.0, 200.0]},
-  "marginal_cost": {"generator": ["wind", "gas", "oil"], "value": [0.0, 50.0, 80.0]},
+  "bus": {
+    "bus": [
+      "hub"
+    ]
+  },
+  "capital_cost": {
+    "generator": [
+      "wind",
+      "gas",
+      "oil"
+    ],
+    "value": [
+      400.0,
+      300.0,
+      200.0
+    ]
+  },
+  "gen_bus": {
+    "generator": [
+      "wind",
+      "gas",
+      "oil"
+    ],
+    "bus": [
+      "hub",
+      "hub",
+      "hub"
+    ]
+  },
+  "generator": {
+    "generator": [
+      "wind",
+      "gas",
+      "oil"
+    ]
+  },
   "load": {
-    "snapshot": [0, 1, 2, 3],
-    "bus": ["hub", "hub", "hub", "hub"],
-    "value": [108.0, 143.0, 121.0, 97.0]
+    "snapshot": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "bus": [
+      "hub",
+      "hub",
+      "hub",
+      "hub"
+    ],
+    "value": [
+      108.0,
+      143.0,
+      121.0,
+      97.0
+    ]
+  },
+  "marginal_cost": {
+    "generator": [
+      "wind",
+      "gas",
+      "oil"
+    ],
+    "value": [
+      0.0,
+      50.0,
+      80.0
+    ]
+  },
+  "p_nom_max": {
+    "generator": [
+      "wind",
+      "gas",
+      "oil"
+    ],
+    "value": [
+      120.0,
+      150.0,
+      100.0
+    ]
+  },
+  "p_nom_mod": {
+    "generator": [
+      "wind",
+      "gas",
+      "oil"
+    ],
+    "value": [
+      30.0,
+      25.0,
+      20.0
+    ]
+  },
+  "snapshot": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3
+    ]
   }
 }

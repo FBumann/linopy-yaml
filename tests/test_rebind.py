@@ -274,7 +274,7 @@ def _declared(given: dict[str, Any], schema: Any) -> dict[str, Any]:
     `reactance` its model reads through `cycle_incidence` instead — and this is
     what hands both of them the same thing.
     """
-    known = {**schema.parameters, **schema.dimensions}
+    known = {**schema.parameters, **schema.dimensions, **schema.lookups}
     return {name: value for name, value in given.items() if name in known}
 
 

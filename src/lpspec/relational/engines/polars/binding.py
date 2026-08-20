@@ -23,8 +23,6 @@ import polars as pl
 from lpspec.errors import (
     DataError,
     index_without_its_label_column_message,
-    lookups_need_an_index_message,
-    missing_lookup_columns_message,
     no_index_source_message,
 )
 from lpspec.frames import as_frame
@@ -193,9 +191,6 @@ class _Binder:
         for d in sorted(dims):
             if d in self.dimensions:
                 continue
-            carried = self.program.dimension(d).carried
-            if carried:
-                raise DataError(lookups_need_an_index_message(d, list(carried), 'nothing'))
             raise DataError(no_index_source_message(d))
 
         for d in sorted(dims):
@@ -217,9 +212,14 @@ class _Binder:
         it first appears at — so a translation moves by position exactly as the
         eager lane does, even for string labels.
 
+        The maps arrive already joined on and single-valued per label
+        (:func:`~lpspec.sources.tidy_sources`), so *names* is selected and not
+        checked: with one transport there is nothing for the index to be short
+        of or to disagree with itself about.
+
         Collected once, the frame being a scan: every pass over a lazy view
-        re-reads the source (#273), and both the single-valued check and the
-        grouping below read that one collect.
+        re-reads the source (#273), and the grouping below reads that one
+        collect.
         """
         frame = self._read(
             source,
@@ -229,11 +229,7 @@ class _Binder:
         available = frame.collect_schema().names()
         if d not in available:
             raise DataError(index_without_its_label_column_message(d, available))
-        missing = [c for c in names if c not in available]
-        if missing:
-            raise DataError(missing_lookup_columns_message(d, missing, available))
         labelled = frame.select(d, *names).with_row_index(_ROW_POSITION).collect().lazy()
-        data_validation.check_lookups_single_valued(d, names, labelled)
         return (
             labelled.group_by(d)
             .agg(pl.col(_ROW_POSITION).min(), *(pl.col(c).first() for c in names))

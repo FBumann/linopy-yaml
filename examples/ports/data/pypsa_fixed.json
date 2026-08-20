@@ -1,19 +1,114 @@
 {
-  "snapshot": {"snapshot": [0, 1, 2, 3]},
-  "bus": {"bus": ["hub"]},
-  "generator": {"generator": ["chp", "gas", "oil"], "gen_bus": ["hub", "hub", "hub"]},
-  "p_nom_max": {"generator": ["chp", "gas", "oil"], "value": [50.0, 200.0, 100.0]},
-  "capital_cost": {"generator": ["chp", "gas", "oil"], "value": [200.0, 50.0, 150.0]},
-  "marginal_cost": {"generator": ["chp", "gas", "oil"], "value": [100.0, 60.0, 90.0]},
-  "p_nom_set": {"generator": ["chp", "oil"], "value": [50.0, 100.0]},
-  "p_set": {
-    "snapshot": [0, 2],
-    "generator": ["chp", "chp"],
-    "value": [30.0, 45.0]
+  "bus": {
+    "bus": [
+      "hub"
+    ]
+  },
+  "capital_cost": {
+    "generator": [
+      "chp",
+      "gas",
+      "oil"
+    ],
+    "value": [
+      200.0,
+      50.0,
+      150.0
+    ]
+  },
+  "gen_bus": {
+    "generator": [
+      "chp",
+      "gas",
+      "oil"
+    ],
+    "bus": [
+      "hub",
+      "hub",
+      "hub"
+    ]
+  },
+  "generator": {
+    "generator": [
+      "chp",
+      "gas",
+      "oil"
+    ]
   },
   "load": {
-    "snapshot": [0, 1, 2, 3],
-    "bus": ["hub", "hub", "hub", "hub"],
-    "value": [80.0, 60.0, 100.0, 70.0]
+    "snapshot": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "bus": [
+      "hub",
+      "hub",
+      "hub",
+      "hub"
+    ],
+    "value": [
+      80.0,
+      60.0,
+      100.0,
+      70.0
+    ]
+  },
+  "marginal_cost": {
+    "generator": [
+      "chp",
+      "gas",
+      "oil"
+    ],
+    "value": [
+      100.0,
+      60.0,
+      90.0
+    ]
+  },
+  "p_nom_max": {
+    "generator": [
+      "chp",
+      "gas",
+      "oil"
+    ],
+    "value": [
+      50.0,
+      200.0,
+      100.0
+    ]
+  },
+  "p_nom_set": {
+    "generator": [
+      "chp",
+      "oil"
+    ],
+    "value": [
+      50.0,
+      100.0
+    ]
+  },
+  "p_set": {
+    "snapshot": [
+      0,
+      2
+    ],
+    "generator": [
+      "chp",
+      "chp"
+    ],
+    "value": [
+      30.0,
+      45.0
+    ]
+  },
+  "snapshot": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3
+    ]
   }
 }

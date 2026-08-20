@@ -303,11 +303,11 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
         offers = tables['offer'].set_index('offer')
         zones = pd.Index(series['zone_req'].index, name='zone')
 
-        gen_at = indicator(buses, tables['generator'], 'generator', 'gen_bus')
-        line_in = indicator(buses, tables['line'], 'line', 'line_to')
-        line_out = indicator(buses, tables['line'], 'line', 'line_from')
-        offer_gen = indicator(pd.Index(series['p_max'].index, name='generator'), tables['offer'], 'offer', 'gen_of')
-        offer_market = indicator(pd.Index(series['req'].index, name='market'), tables['offer'], 'offer', 'market_of')
+        gen_at = indicator(buses, tables['gen_bus'], 'generator', 'bus')
+        line_in = indicator(buses, tables['line_to'], 'line', 'bus')
+        line_out = indicator(buses, tables['line_from'], 'line', 'bus')
+        offer_gen = indicator(pd.Index(series['p_max'].index, name='generator'), tables['gen_of'], 'offer', 'generator')
+        offer_market = indicator(pd.Index(series['req'].index, name='market'), tables['market_of'], 'offer', 'market')
 
         zone_at = pd.DataFrame(0.0, index=zones, columns=series['p_max'].index)
         for gen, zone, share in zip(
@@ -316,8 +316,10 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
             zone_at.loc[zone, gen] = share
         zone_at.columns.name = 'generator'
 
-        r_cap = offers['tranche_of'].map(series['tranche_frac']) * offers['gen_of'].map(series['p_max'])
-        f_cap = tables['line'].set_index('line')['line_from'].map(series['bus_cap'])
+        tranche_of = tables['tranche_of'].set_index('offer')['tranche']
+        gen_of = tables['gen_of'].set_index('offer')['generator']
+        r_cap = tranche_of.map(series['tranche_frac']) * gen_of.map(series['p_max'])
+        f_cap = tables['line_from'].set_index('line')['bus'].map(series['bus_cap'])
 
         m = linopy.Model()
         p = m.add_variables(lower=0, coords=[series['p_max'].index], name='p')

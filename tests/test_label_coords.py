@@ -39,6 +39,11 @@ def _model(objective: str = 'sum(x, over=snapshot)') -> dict:
 
 
 def _index() -> pl.DataFrame:
+    return pl.DataFrame({'snapshot': [0, 1, 2]})
+
+
+def _period() -> pl.DataFrame:
+    """`period` as a relation, which is the only way a map arrives as data."""
     return pl.DataFrame({'snapshot': [0, 1, 2], 'period': [1, 1, 2]})
 
 
@@ -153,19 +158,18 @@ def test_a_clean_model_checks_silently():
         lps.check(_model())
 
 
-def test_the_lookup_column_arrives_with_the_index():
-    with lps.solve(_model(), {'load': _load(), 'snapshot': _index()}) as solution:
+def test_a_map_arrives_under_its_own_name():
+    with lps.solve(_model(), {'load': _load(), 'snapshot': _index(), 'period': _period()}) as solution:
         assert solution.objective == pytest.approx(6.0)
 
-    missing = _index().drop('period')
-    with pytest.raises(DataError, match='missing declared lookup column'):
-        lps.build(_model(), {'load': _load(), 'snapshot': missing})
+    with pytest.raises(DataError, match="no data provided for lookup 'period'"):
+        lps.build(_model(), {'load': _load(), 'snapshot': _index()})
 
 
 def test_a_lookup_is_single_valued_per_label():
     doubled = pl.DataFrame({'snapshot': [0, 0, 1, 2], 'period': [1, 2, 1, 2]})
-    with pytest.raises(DataError, match='more than one value per label'):
-        lps.build(_model(), {'load': _load(), 'snapshot': doubled})
+    with pytest.raises(DataError, match='more than once'):
+        lps.build(_model(), {'load': _load(), 'snapshot': _index(), 'period': doubled})
 
 
 def _unused_target_model(month: dict) -> dict:
@@ -193,9 +197,9 @@ def _unused_target_model(month: dict) -> dict:
 
 def _unused_target_sources() -> dict:
     return {
-        'snapshot': pl.DataFrame(
-            {'snapshot': [0, 1, 2], 'period_of': [2030, 2030, 2050], 'month_of': ['jan', 'feb', 'jan']}
-        ),
+        'snapshot': pl.DataFrame({'snapshot': [0, 1, 2]}),
+        'period_of': pl.DataFrame({'snapshot': [0, 1, 2], 'period': [2030, 2030, 2050]}),
+        'month_of': pl.DataFrame({'snapshot': [0, 1, 2], 'month': ['jan', 'feb', 'jan']}),
         'period': pl.DataFrame({'period': [2030, 2050]}),
         'cap': pl.DataFrame({'period': [2030, 2050], 'value': [5.0, 5.0]}),
     }
@@ -234,7 +238,7 @@ def test_the_legend_names_a_label():
 
 
 def test_both_lanes_read_the_same_index():
-    """The `period` lookup column arrives with the index on the eager lane too —
+    """The `period` relation is read the same way on the eager lane too —
     both lanes reach the 6.0 the relational test above asserts.
 
     The oracle is imported in the body rather than at module scope: every other
@@ -245,7 +249,10 @@ def test_both_lanes_read_the_same_index():
     from tests.oracle import pd
 
     data = {'load': pd.Series({0: 1.0, 1: 2.0, 2: 3.0}).rename_axis('snapshot')}
-    index = {'snapshot': pd.DataFrame({'snapshot': [0, 1, 2], 'period': [1, 1, 2]})}
+    index = {
+        'snapshot': pd.DataFrame({'snapshot': [0, 1, 2]}),
+        'period': pd.DataFrame({'snapshot': [0, 1, 2], 'period': [1, 1, 2]}),
+    }
     with differential(_model(), data | index) as run:
         assert run.oracle == pytest.approx(6.0)
 
@@ -274,17 +281,14 @@ NETWORK = {
 
 LINES = ['ring_a', 'ring_b', 'loop', 'spur']
 
-#: `loop` starts and ends on the same bus; `spur` has no receiving end at all.
+#: `loop` starts and ends on the same bus; `spur` has no receiving end at all,
+#: which `recv` says by having no row for it.
 NETWORK_SOURCES = {
     'bus': pl.DataFrame({'bus': ['north', 'south']}),
-    'line': pl.DataFrame(
-        {
-            'line': LINES,
-            'send': ['north', 'south', 'north', 'north'],
-            'recv': ['south', 'north', 'north', None],
-            'voltage': [220, 380, 220, 380],
-        }
-    ),
+    'line': pl.DataFrame({'line': LINES}),
+    'send': pl.DataFrame({'line': LINES, 'bus': ['north', 'south', 'north', 'north']}),
+    'recv': pl.DataFrame({'line': LINES[:3], 'bus': ['south', 'north', 'north']}),
+    'voltage': pl.DataFrame({'line': LINES, 'voltage': [220, 380, 220, 380]}),
     'cap': pl.DataFrame({'line': LINES, 'value': [10.0, 20.0, 30.0, 40.0]}),
     'price': pl.DataFrame({'line': LINES, 'value': [1.0, 1.0, 1.0, 1.0]}),
 }
@@ -347,11 +351,12 @@ def test_a_lookup_where_agrees_with_the_oracle(where, objective):
     }
     index = {
         'bus': pd.Index(['north', 'south'], name='bus'),
-        'line': pd.DataFrame(
+        'line': pd.DataFrame({'line': LINES}),
+        'send': pd.DataFrame({'line': LINES, 'bus': ['north', 'south', 'north', 'north']}),
+        'recv': pd.DataFrame({'line': LINES[:3], 'bus': ['south', 'north', 'north']}),
+        'voltage': pd.DataFrame(
             {
                 'line': LINES,
-                'send': ['north', 'south', 'north', 'north'],
-                'recv': ['south', 'north', 'north', None],
                 'voltage': [220, 380, 220, 380],
             }
         ),
@@ -531,18 +536,28 @@ _LABELS_AND_MAP = pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['so
     [
         pytest.param(DECLARED, {'generator': _LABELS}, 'dimensions.generator.values', id='labels-twice'),
         pytest.param(DECLARED, {'generator': ['g1', 'g2', 'g3']}, 'dimensions.generator.values', id='bare-labels'),
-        pytest.param(MAP_ONLY, {'generator': _LABELS_AND_MAP}, 'lookups.gen_bus.values', id='the-map-twice'),
     ],
 )
 def test_a_declared_index_refuses_a_supplied_one(model, sources, names):
-    """One fact, one home — for the labels, and for each map over them.
+    """One fact, one home — the labels, said by the file or by the caller.
 
     A precedence rule instead lets the file describe a model the caller does
-    not build: the YAML says ``g1`` sits on north, the passed column says south,
-    and the file a reviewer reads is not the model that solved.
+    not build, and the file a reviewer reads is not the model that solved.
     """
     with pytest.raises(DataError, match=re.escape(names)):
         lps.solve(model, {**DECLARED_SOURCES, **sources})
+
+
+def test_a_map_is_not_a_column_of_the_index_it_runs_over():
+    """The one stray column that is refused rather than filtered away.
+
+    An index may carry anything — attributes, other frameworks' fields — and
+    the extras are dropped. A column named after a lookup over that dimension
+    is not an extra: it is a map somebody meant to supply, and dropping it
+    would build the model they did not write.
+    """
+    with pytest.raises(DataError, match=re.escape("index for dimension 'generator' carries a 'gen_bus' column")):
+        lps.solve(MAP_ONLY, {**DECLARED_SOURCES, 'generator': _LABELS_AND_MAP})
 
 
 def test_a_map_alone_does_not_say_which_labels_exist():
@@ -805,34 +820,27 @@ def test_a_supplied_relation_is_held_to_what_a_map_is(relation, match):
         lps.solve(SUPPLIED, {**_SUPPLIED_SOURCES, 'gen_bus': relation})
 
 
-@pytest.mark.parametrize(
-    ('model', 'sources', 'first', 'second'),
-    [
-        pytest.param(
-            DECLARED,
-            {'generator': ['g1', 'g2', 'g3'], 'gen_bus': _RELATION},
-            'lookups.gen_bus.values',
-            "sources['gen_bus']",
-            id='file-and-key',
-        ),
-        pytest.param(
-            SUPPLIED,
-            {'generator': _LABELS_AND_MAP, 'gen_bus': _RELATION},
-            "sources['gen_bus']",
-            "the 'gen_bus' column of sources['generator']",
-            id='key-and-column',
-        ),
-    ],
-)
-def test_a_map_has_one_author(model, sources, first, second):
-    """Three homes for one map, and any two of them is a refusal.
+def test_a_map_has_one_author():
+    """Two homes for one map — the file or the key — and both is a refusal.
 
-    A precedence rule instead lets one author describe a model another does not
-    build. The third pair — the file against the index column — is
-    `test_a_declared_index_refuses_a_supplied_one`.
+    A precedence rule instead lets one author describe a model the other does
+    not build: the YAML says ``g1`` sits on north, the passed relation says
+    south, and the file a reviewer reads is not the model that solved.
     """
-    with pytest.raises(DataError, match=re.escape(f'is said twice — by {first} and by {second}')):
-        lps.solve(model, {**DECLARED_SOURCES, **sources})
+    said_twice = "is said twice — by lookups.gen_bus.values and by sources['gen_bus']"
+    with pytest.raises(DataError, match=re.escape(said_twice)):
+        lps.solve(DECLARED, {**DECLARED_SOURCES, 'generator': ['g1', 'g2', 'g3'], 'gen_bus': _RELATION})
+
+
+def test_a_map_with_no_author_at_all_is_refused():
+    """Neither is not a spelling of empty: a lookup nothing supplies is missing data.
+
+    The counterpart of a declared parameter with no data, and what replaced
+    three checks — a map arriving under its own key is present and
+    single-valued by construction, so the transport cannot be short of it.
+    """
+    with pytest.raises(DataError, match="no data provided for lookup 'gen_bus'"):
+        lps.solve(SUPPLIED, {**DECLARED_SOURCES, 'generator': ['g1', 'g2', 'g3']})
 
 
 def test_a_supplied_map_does_not_say_which_labels_exist():
@@ -895,9 +903,9 @@ def test_two_maps_into_one_target_each_take_their_own_key():
 
 
 def test_the_second_map_is_checked_as_hard_as_the_first():
-    """Per-map, not per-dimension: `line_from` is supplied and carried at once."""
+    """Per-map, not per-dimension: the check runs for `line_from` as for `line_to`."""
     index = pl.DataFrame({'line': ['l1', 'l2'], 'line_from': ['south', 'north']})
-    with pytest.raises(DataError, match=re.escape("the map for lookup 'line_from' is said twice")):
+    with pytest.raises(DataError, match=re.escape("carries a 'line_from' column")):
         lps.solve(TWO_MAPS, {**_TWO_MAP_SOURCES, 'line': index})
 
 

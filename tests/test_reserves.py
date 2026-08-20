@@ -44,21 +44,19 @@ def test_both_lanes_and_the_lp_file_reach_the_hand_derived_optimum():
 
 
 def _drop_line(sources: dict, line: str) -> dict:
-    for key in ('line', 'cap', 'neg_cap'):
+    for key in ('line', 'cap', 'neg_cap', 'line_from', 'line_to'):
         sources[key] = sources[key].filter(pl.col('line') != line)
     return sources
 
 
 def _drop_offer(sources: dict, offer: str) -> dict:
-    for key in ('offer', 'offer_cost'):
+    for key in ('offer', 'offer_cost', 'gen_of', 'market_of', 'tranche_of'):
         sources[key] = sources[key].filter(pl.col('offer') != offer)
     return sources
 
 
 def _repoint_dangling(sources: dict) -> dict:
-    sources['line'] = sources['line'].with_columns(
-        pl.when(pl.col('line') == 'l4').then(pl.lit('b1')).otherwise(pl.col('line_to')).alias('line_to')
-    )
+    sources['line_to'] = pl.concat([sources['line_to'], pl.DataFrame({'line': ['l4'], 'bus': ['b1']})])
     return sources
 
 
@@ -101,12 +99,15 @@ def test_the_instance_actually_holds_every_shape():
     assert set(schema.targeted_of('offer')) == {'gen_of', 'market_of', 'tranche_of'}, (
         'the offer set is three-legged — the k-ary case'
     )
-    line = port_sources('reserves')['line']
-    endpoints = line.select('line_from', 'line_to').to_dicts()
-    assert endpoints.count({'line_from': 'b2', 'line_to': 'b1'}) == 2, (
-        'l1 and l2 are parallel edges between one bus pair'
+    sources = port_sources('reserves')
+    endpoints = (
+        sources['line_from']
+        .join(sources['line_to'], on='line', how='left', suffix='_to')
+        .select(pl.col('bus').alias('from'), pl.col('bus_to').alias('to'))
+        .to_dicts()
     )
-    assert any(row['line_to'] is None for row in endpoints), 'l4 dangles: a null leg is a declared open end'
+    assert endpoints.count({'from': 'b2', 'to': 'b1'}) == 2, 'l1 and l2 are parallel edges between one bus pair'
+    assert any(row['to'] is None for row in endpoints), 'l4 dangles: line_to has no row for it, so its leg is open'
     zones_of_g2 = port_sources('reserves')['zone_share'].filter(pl.col('generator') == 'g2')
     assert zones_of_g2.height == 2, 'g2 backs two zones — membership is many-to-many'
     assert set(zones_of_g2['value'].to_list()) == {0.5, 1.0}, 'and at different weights, so the value is a weight'

@@ -204,8 +204,10 @@ def transport_program() -> Program:
 def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
-    A dim carrying declared lookups needs an index source that has them,
-    which is why `generator` and `line` ship their mapping columns.
+    Below the front door: `PolarsEngine.build` takes a *program* and the frames
+    a bound model reads, which is where a map is still a column of the index it
+    runs over. `tidy_sources` is what turns a caller's `gen_bus` relation into
+    that column, and this test is under it.
     """
     return {
         'p_max': gens[['generator', 'p_max']].rename(columns={'p_max': 'value'}),
@@ -744,7 +746,9 @@ def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
         'objective': {'sense': 'minimize', 'expression': 'sum(sum(f, over=line), over=snapshot)'},
     }
     sources = {
-        'line': pl.DataFrame({'line': ['l0', 'l1'], 'from': ['b0', ends[0]], 'to': ['b1', ends[1]]}),
+        'line': pl.DataFrame({'line': ['l0', 'l1']}),
+        'from': pl.DataFrame({'line': ['l0', 'l1'], 'bus': ['b0', ends[0]]}),
+        'to': pl.DataFrame({'line': ['l0', 'l1'], 'bus': ['b1', ends[1]]}),
         'cap': pl.DataFrame({'line': ['l0', 'l1'], 'value': [10.0, 10.0]}),
         'load': pl.DataFrame(
             {'snapshot': [0, 0, 1, 1], 'bus': ['b0', 'b1', 'b0', 'b1'], 'value': [0.0, 0.0, 0.0, 0.0]}
@@ -1362,7 +1366,8 @@ GROUPED_CONSTANT_MODEL = {
 
 def _grouped_constant_sources(capacity=('g1', 'g2')):
     return {
-        'generator': pl.DataFrame({'generator': ['g1', 'g2'], 'gen_bus': ['north', 'north']}),
+        'generator': pl.DataFrame({'generator': ['g1', 'g2']}),
+        'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
         'capacity': pl.DataFrame({'generator': list(capacity), 'value': [3.0, 4.0][: len(capacity)]}),
     }
 
@@ -1410,7 +1415,8 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
     zero was written to remove.
     """
     sources = {
-        'generator': pl.DataFrame({'generator': ['g1', 'g2'], 'gen_bus': ['north', 'north']}),
+        'generator': pl.DataFrame({'generator': ['g1', 'g2']}),
+        'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
         'capacity': pl.DataFrame(
             {'snapshot': [0, 0, 1, 1], 'generator': ['g1', 'g2', 'g1', 'g2'], 'value': [3.0, 4.0, 1.0, 1.0]}
         ),
@@ -1453,9 +1459,9 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     reached when nothing sits there.
     """
     sources = {
-        'generator': pl.DataFrame(
-            {'generator': ['g1', 'g2'], 'gen_bus': ['north', 'north'], 'gen_tech': ['wind', 'solar']}
-        ),
+        'generator': pl.DataFrame({'generator': ['g1', 'g2']}),
+        'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
+        'gen_tech': pl.DataFrame({'generator': ['g1', 'g2'], 'technology': ['wind', 'solar']}),
         'capacity': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [3.0, 4.0]}),
     }
     with differential(PLURAL_GROUPED_CONSTANT_MODEL, sources, lp=True) as run:
@@ -1853,19 +1859,21 @@ def test_every_multi_valued_coordinate_is_named_at_once():
     """The per-coordinate loop this replaced raised on the first offender, so a
     source with two bad coordinates was fixed, rebuilt, and refused again (#273).
 
-    Folding the counts into the caller's `group_by(d)` is what makes naming all
-    of them free — they arrive in one frame instead of one pass each.
+    A relation is one lookup's, so the pass is over its rows: both labels it
+    maps twice arrive in one count and are named together.
     """
     data = {
-        'cap': pl.DataFrame({'line': ['l1'], 'value': [1.0]}),
-        'line': pl.DataFrame({'line': ['l1', 'l1'], 'from': ['b1', 'b2'], 'to': ['b2', 'b1']}),
+        'cap': pl.DataFrame({'line': ['l1', 'l2'], 'value': [1.0, 1.0]}),
+        'line': pl.DataFrame({'line': ['l1', 'l2']}),
+        'from': pl.DataFrame({'line': ['l1', 'l1', 'l2', 'l2'], 'bus': ['b1', 'b2', 'b1', 'b2']}),
+        'to': pl.DataFrame({'line': ['l1', 'l2'], 'bus': ['b2', 'b1']}),
     }
 
     with pytest.raises(DataError) as exc:
         lps.solve(TWO_BAD_COORDS_MODEL, data)
 
     message = str(exc.value)
-    assert "'from'" in message and "'to'" in message, f'both offenders must be named; got: {message}'
+    assert 'l1' in message and 'l2' in message, f'both offenders must be named; got: {message}'
 
 
 def test_dense_columns_does_not_edit_the_model_it_projects():
@@ -2174,13 +2182,11 @@ def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = Fal
     and not three — which is the whole reason cardinality cannot stand in for
     the count.
     """
-    index = {'t': [0, 1, 2]}
-    sources: dict = {'k': [1.0, 1.0, 1.0], 'load': 10.0}
+    sources: dict = {'k': [1.0, 1.0, 1.0], 'load': 10.0, 't': pl.DataFrame({'t': [0, 1, 2]})}
     sources['d'] = [1.0, 1.0, 1.0] if over_the_dim else 1.0
     if 'r_of' in expression:
-        index['r_of'] = ['n', 'n', 's']
         sources['r'] = ['n', 's']
-    sources['t'] = pl.DataFrame(index)
+        sources['r_of'] = pl.DataFrame({'t': [0, 1, 2], 'r': ['n', 'n', 's']})
     return sources
 
 
@@ -2289,7 +2295,8 @@ ABSENT_SLOT_CASES = [
 ]
 
 ABSENT_SLOT_SOURCES = {
-    't': pl.DataFrame({'t': [0, 1, 2], 'r_of': ['n', 'n', 's']}),
+    't': pl.DataFrame({'t': [0, 1, 2]}),
+    'r_of': pl.DataFrame({'t': [0, 1, 2], 'r': ['n', 'n', 's']}),
     'r': ['n', 's'],
     'k': [1.0, 1.0, 1.0],
     'd': [1.0, 10.0, 100.0],

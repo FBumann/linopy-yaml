@@ -210,7 +210,8 @@ class BoundModel:
             DataError: A name the model does not declare — a rebind that named
                 nothing would silently re-solve the numbers already bound.
         """
-        self._sources.update(_known(sources, {**self._schema.parameters, **self._schema.dimensions}, 'sources'))
+        declared = {**self._schema.parameters, **self._schema.dimensions, **self._schema.lookups}
+        self._sources.update(_known(sources, declared, 'sources'))
         self._fill()
         return self
 

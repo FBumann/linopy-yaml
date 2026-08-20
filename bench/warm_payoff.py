@@ -309,7 +309,7 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
     def slice_for(model: Any, **extra: Any) -> dict[str, Any]:
         """The part of *dispatch* this model declares — `feasibility` reads no cost."""
         known = lps.load_model(model)
-        names = {**known.parameters, **known.dimensions}
+        names = {**known.parameters, **known.dimensions, **known.lookups}
         return {name: frame for name, frame in {**dispatch, **extra}.items() if name in names}
 
     cuts = _empty_cuts()

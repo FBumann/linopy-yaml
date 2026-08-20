@@ -1,17 +1,124 @@
 {
-  "snapshot": {"snapshot": [0, 1, 2, 3, 4, 5]},
-  "bus": {"bus": ["hub"]},
-  "generator": {"generator": ["cheap", "gas"], "gen_bus": ["hub", "hub"]},
-  "store": {"store": ["tank"], "store_bus": ["hub"]},
-  "p_nom": {"generator": ["cheap", "gas"], "value": [40.0, 100.0]},
-  "marginal_cost": {"generator": ["cheap", "gas"], "value": [10.0, 90.0]},
-  "e_nom_max": {"store": ["tank"], "value": [200.0]},
-  "e_capital_cost": {"store": ["tank"], "value": [5.0]},
-  "e_initial": {"store": ["tank"], "value": [20.0]},
-  "standing_loss": {"store": ["tank"], "value": [0.05]},
+  "bus": {
+    "bus": [
+      "hub"
+    ]
+  },
+  "e_capital_cost": {
+    "store": [
+      "tank"
+    ],
+    "value": [
+      5.0
+    ]
+  },
+  "e_initial": {
+    "store": [
+      "tank"
+    ],
+    "value": [
+      20.0
+    ]
+  },
+  "e_nom_max": {
+    "store": [
+      "tank"
+    ],
+    "value": [
+      200.0
+    ]
+  },
+  "gen_bus": {
+    "generator": [
+      "cheap",
+      "gas"
+    ],
+    "bus": [
+      "hub",
+      "hub"
+    ]
+  },
+  "generator": {
+    "generator": [
+      "cheap",
+      "gas"
+    ]
+  },
   "load": {
-    "snapshot": [0, 1, 2, 3, 4, 5],
-    "bus": ["hub", "hub", "hub", "hub", "hub", "hub"],
-    "value": [20.0, 20.0, 20.0, 100.0, 100.0, 20.0]
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "bus": [
+      "hub",
+      "hub",
+      "hub",
+      "hub",
+      "hub",
+      "hub"
+    ],
+    "value": [
+      20.0,
+      20.0,
+      20.0,
+      100.0,
+      100.0,
+      20.0
+    ]
+  },
+  "marginal_cost": {
+    "generator": [
+      "cheap",
+      "gas"
+    ],
+    "value": [
+      10.0,
+      90.0
+    ]
+  },
+  "p_nom": {
+    "generator": [
+      "cheap",
+      "gas"
+    ],
+    "value": [
+      40.0,
+      100.0
+    ]
+  },
+  "snapshot": {
+    "snapshot": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "standing_loss": {
+    "store": [
+      "tank"
+    ],
+    "value": [
+      0.05
+    ]
+  },
+  "store": {
+    "store": [
+      "tank"
+    ]
+  },
+  "store_bus": {
+    "store": [
+      "tank"
+    ],
+    "bus": [
+      "hub"
+    ]
   }
 }
