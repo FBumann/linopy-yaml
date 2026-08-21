@@ -8,8 +8,8 @@ Collection is the right thing to wrap: a lazy frame costs nothing until
 something asks for its rows, so every second of the build is inside one of
 these calls.
 
-    uv run python -m bench.profile_build dispatch l
-    uv run python -m bench.profile_build transport m
+    pixi run -e bench python -m bench.profile_build dispatch l
+    pixi run -e bench python -m bench.profile_build transport m
 
 The wrapper adds Python overhead per call, so **absolute times here are not
 comparable to the ladder's** — there are only a few dozen collections, but the

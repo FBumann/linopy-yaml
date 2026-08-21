@@ -1,7 +1,7 @@
 """Does carrying a basis across a genuine rebuild pay? A Benders master, swept.
 
-    uv run python -m bench.warm_payoff m
-    uv run python -m bench.warm_payoff s m l --steps 200 --wall
+    pixi run -e bench python -m bench.warm_payoff m
+    pixi run -e bench python -m bench.warm_payoff s m l --steps 200 --wall
 
 #382 wants a warm start across a rebuild. ``examples/benders/run.py`` is the
 only driver in the tree that rebuilds a model every iteration, and it is a toy:

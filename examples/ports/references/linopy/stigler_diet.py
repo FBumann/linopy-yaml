@@ -5,7 +5,7 @@
 # ///
 """Reference for ``stigler_diet``: the same LP, hand-written in linopy.
 
-    uv run --script examples/ports/references/linopy/stigler_diet.py
+    pixi exec -s uv uv run --script examples/ports/references/linopy/stigler_diet.py
 
 **Two things verify this port, and they answer different questions.**
 

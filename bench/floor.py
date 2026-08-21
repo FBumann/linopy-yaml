@@ -1,7 +1,7 @@
 """The speed-of-light floor: one model, hand-written into a populated HiGHS.
 
-    uv run python -m bench.floor l
-    uv run python -m bench.floor xs --check
+    pixi run -e bench python -m bench.floor l
+    pixi run -e bench python -m bench.floor xs --check
 
 The ladder's ratios have linopy as their only denominator, which ranks two
 engines without saying how much headroom either has left. This module is the

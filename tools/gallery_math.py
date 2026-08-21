@@ -1,7 +1,7 @@
 """Each gallery page's math, generated from the model the page shows.
 
-    uv run python -m tools.gallery_math           # rewrite every page's math block
-    uv run python -m tools.gallery_math --check   # fail if any has drifted
+    pixi run python -m tools.gallery_math           # rewrite every page's math block
+    pixi run python -m tools.gallery_math --check   # fail if any has drifted
 
 A page that states its model's math by hand is the same shape of claim as a
 hand-kept coverage table: written once when it was true, with nothing failing
@@ -233,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     if opts.check:
         if stale:
             print(
-                f'stale math on {len(stale)} page(s): {", ".join(stale)}\nrun `uv run python -m tools.gallery_math`',
+                f'stale math on {len(stale)} page(s): {", ".join(stale)}\nrun `pixi run python -m tools.gallery_math`',
                 file=sys.stderr,
             )
             return 1

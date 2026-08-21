@@ -5,7 +5,7 @@
 # ///
 """Reference for ``piecewise``: the same LP, hand-written in linopy.
 
-    uv run --script examples/ports/references/linopy/piecewise.py
+    pixi exec -s uv uv run --script examples/ports/references/linopy/piecewise.py
 
 A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.

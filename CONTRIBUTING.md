@@ -7,33 +7,43 @@ should be readable in one sitting and go stale only when a command changes.
 ## Setup
 
 ```bash
-uv sync  # dev group is the default: tools + the linopy oracle
-uv run pre-commit install  # once per clone
+pixi install                   # the default environment: tools + the linopy oracle
+pixi run pre-commit install    # once per clone
 ```
 
-`uv sync` installs the `[linopy]` extra too, because the differential test
-suite needs a second lane to compare against, and `[gurobi]` and `[xpress]`,
-because a solver sink is checked against another solver. Both of those wheels
-carry a size-limited licence of their own — gurobipy's needs nothing, and
-xpress's Community licence is active on import — so those tests run on a plain
-checkout with no licence of your own. They skip where the package is absent.
-The engine itself never imports linopy, xarray, pandas, gurobipy or xpress —
-see *the bare install* below.
+That is the whole of it — pixi brings its own interpreter, so there is no
+Python to install first and no virtualenv to activate. [Install
+pixi](https://pixi.sh/latest/) if you have not; `pixi run <task>` installs or
+updates whatever environment the task names before running it, so the two lines
+above are a convenience rather than a step you can forget.
+
+`pixi task list` prints every task with what it does. The ones you want most:
+`test`, `lint`, `format`, `typecheck`, `check` (all four), `docs`.
+
+The default environment carries the `[linopy]` extra, because the differential
+test suite needs a second lane to compare against, and `[gurobi]` and
+`[xpress]`, because a solver sink is checked against another solver. Both of
+those wheels carry a size-limited licence of their own — gurobipy's needs
+nothing, and xpress's Community licence is active on import — so those tests run
+on a plain checkout with no licence of your own. They skip where the package is
+absent. The engine itself never imports linopy, xarray, pandas, gurobipy or
+xpress — see *the floors gate* below.
 
 ## The loop
 
 ```bash
-uv run pytest -q -n auto  # ~20 s
-uv run ruff check --fix . && uv run ruff format .
-uv run pyrefly check
+pixi run test                      # the suite across cores, ~20 s
+pixi run lint --fix && pixi run format
+pixi run typecheck
+pixi run check                     # all four, which is what `ci` requires
 ```
 
 Narrower runs while working:
 
 ```bash
-uv run pytest tests/test_absence.py -q
-uv run pytest -k piecewise -q
-uv run pytest --lf  # last failures only
+pixi run pytest tests/test_absence.py -q
+pixi run pytest -k piecewise -q
+pixi run pytest --lf  # last failures only
 ```
 
 ### Which file a test goes in
@@ -61,21 +71,29 @@ Everything below is the first one, in the order it runs.
 
 | gate | what a failure means |
 |---|---|
-| `ruff check .` | a lint rule fired. `--fix` handles most; if the finding is wrong, silence the one line with a `# noqa: RULE` and say why. |
-| `ruff format --check .` | formatting drifted. Run `ruff format .`. |
-| `pyrefly check` | a type is wrong. **Fix the type, don't widen it** — if the finding is genuinely wrong, `# pyrefly: ignore[rule-name]` on the one line with a reason, never the rule off globally. |
-| `pytest -q` | the suite. Includes the differential lanes and the ported models. |
-| `mkdocs build --strict` | the site. A dead cross-link, an anchor that no longer resolves, or a page under `docs/` with no `nav:` entry — see *the docs* below. |
-| **bare install, at the floors** | the engine reached for something it does not declare. |
+| `pixi run lint` | a lint rule fired. `--fix` handles most; if the finding is wrong, silence the one line with a `# noqa: RULE` and say why. |
+| `pixi run format-check` | formatting drifted. Run `pixi run format`. |
+| `pixi run typecheck` | a type is wrong. **Fix the type, don't widen it** — if the finding is genuinely wrong, `# pyrefly: ignore[rule-name]` on the one line with a reason, never the rule off globally. |
+| `pixi run test` | the suite. Includes the differential lanes and the ported models. |
+| `pixi run docs-build` | the site. A dead cross-link, an anchor that no longer resolves, or a page under `docs/` with no `nav:` entry — see *the docs* below. |
+| `pixi run test-floors` | the engine reached for something it does not declare. |
 
-**The bare-install job is the one worth understanding.** It reinstalls with
-`--resolution lowest-direct` and *no* dev group, asserts `linopy` is absent,
-and runs the suite. It proves two things at once: that the relational lane
-builds, solves and reads results back with no pandas, pyarrow, linopy or
-xarray; and that the declared lower bounds are real rather than decorative.
-Tests that need a second lane route through `tests/oracle.py`, which skips
-them when it is not installed — a bare `import pandas` in a test file breaks
-this job, and only this job.
+Every one of them runs the same way locally as it does in CI, because the
+command is the task and the task is defined once, in `pyproject.toml`.
+
+**The floors gate is the one worth understanding.** It is an environment of its
+own: every runtime dependency pinned to the exact version
+`[project.dependencies]` names as its lower bound, the project installed from a
+built wheel, and no dev group, no extras and no linopy anywhere. It proves two
+things at once: that the relational lane builds, solves and reads results back
+with no pandas, pyarrow, linopy or xarray; and that the declared lower bounds
+are real rather than decorative. Tests that need a second lane route through
+`tests/oracle.py`, which skips them when it is not installed — a bare
+`import pandas` in a test file breaks this gate, and only this gate.
+
+Because it is an environment rather than a re-install, running it costs your
+working environment nothing: `pixi run test-floors` builds `.pixi/envs/floors`
+beside the default one and leaves it there.
 
 Raise a floor when the code relies on that version's behaviour. Do not raise
 one to chase a newer interpreter.
@@ -86,9 +104,8 @@ one to chase a newer interpreter.
 relative links, no site-only syntax — and the build handles the difference.
 
 ```bash
-uv sync --group docs
-uv run mkdocs serve  # http://127.0.0.1:8000, live-reloading
-uv run mkdocs build --strict  # what CI runs
+pixi run docs        # http://127.0.0.1:8000, live-reloading
+pixi run docs-build  # what CI runs, and what Read the Docs runs
 ```
 
 **A page states a rule or argues for one, and that decides where it goes.**
@@ -280,8 +297,11 @@ published figure.
   dependencies inline ([PEP 723](https://peps.python.org/pep-0723/)), pinned to
   whatever produced the recorded number, and are run out of band:
   ```bash
-  uv run --script examples/ports/references/pypsa/pypsa_transport.py
+  pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_transport.py
   ```
+  pixi does not read inline script metadata, so `pixi exec` fetches the one
+  tool that does into a throwaway environment. Nothing in this project's
+  manifest names it: the pins belong beside the script that earned them.
 - **Both sides read the same instance.** A reference optimum against a
   different instance means nothing. What must stay independent is the
   formulation, not the data.
@@ -294,7 +314,7 @@ published figure.
   it records none and the test skips rather than passing vacuously.
 - **Regenerate the gallery's tables**, don't write them: both the construct
   matrix and the reference table in `docs/examples/index.md` come from
-  `uv run python -m tools.constructs`, and a test fails if either is stale. The
+  `pixi run python -m tools.constructs`, and a test fails if either is stale. The
   reference table is rendered straight from `references.json`, so the published
   optimum and the asserted one cannot disagree.
 - **A rung that cannot be said is also a result.** It goes in the ledger with a
@@ -307,17 +327,13 @@ Full method, and why each measurement is taken the way it is, in
 [bench/README.md](bench/README.md). The short version:
 
 ```bash
-uv sync --group bench
-uv run pytest bench --benchmark-memory --sizes xs s m l \
-    --benchmark-json=bench/results/latest.json
-uv run pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --skip-gate \
-    --benchmark-json=bench/results/density.json
-uv run pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --skip-gate \
-    --benchmark-json=bench/results/declarations.json
-uv run python -m bench.report bench/results/latest.json bench/results/density.json \
-    bench/results/declarations.json
-uv run python -m bench.plot
+pixi run refresh
 ```
+
+That is the five rungs and both writers in order — `ladder`, `density`,
+`declarations`, then `report` and `plot`, each runnable on its own. The flags
+live in `pyproject.toml` so the published numbers cannot come from a selection
+somebody retyped.
 
 Three things that have each cost us a wrong published number:
 

@@ -165,7 +165,7 @@ what coverage moved where.
   precautions.
 
   ```bash
-  uv run python -m tools.mutate 'src/lpspec/sources.py:98-99#the empty-parameter guard'
+  pixi run python -m tools.mutate 'src/lpspec/sources.py:98-99#the empty-parameter guard'
   ```
 
   For #658's two-column form, run it once in each worktree and put the columns
@@ -284,6 +284,9 @@ git worktree add ../wt/<topic> -b <type>/<topic> origin/main
   0**, which reads as a pass. From one:
   `pyrefly check $(git ls-files 'src/**/*.py')`. Run `ruff format --check` on
   `.`, never on the changed `.py` files — it formats python inside markdown too.
+- A worktree solves and installs its own `.pixi/`, which is minutes and
+  gigabytes per topic. Share nothing between them by hand; the package cache is
+  already shared, so the second one is much cheaper than the first.
 - `git worktree remove` when the PR merges.
 - Verify claims about shipped behaviour against `origin/main`. `gh pr view`
   before rebasing or reviving anything.

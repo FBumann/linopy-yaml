@@ -5,7 +5,7 @@
 # ///
 """Reference for ``pypsa_cyclic_storage``: PyPSA's own LOPF. See docs/examples/index.md.
 
-    uv run --script examples/ports/references/pypsa/pypsa_cyclic_storage.py
+    pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_cyclic_storage.py
 
 Pinned above to the versions that produced the number in ``references.json``,
 and run out of band — PyPSA is not a dependency of this project. linopy is

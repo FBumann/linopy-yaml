@@ -1,6 +1,6 @@
 """Refresh the chart page's numbers.
 
-    uv run python -m bench.plot
+    pixi run -e bench python -m bench.plot
 
 The page is a tracked source file, not a build artifact: its markup, prose and
 renderer are edited by hand and reviewed in the diff. Only the measurements go

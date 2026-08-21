@@ -8,8 +8,8 @@ quote its seconds. This one wraps three methods per build, so what it prints is
 comparable to ``bench/`` — at the cost of saying nothing about what is inside
 them.
 
-    uv run python -m bench.profile_phases profiled l
-    uv run python -m bench.profile_phases transport l --rounds 15
+    pixi run -e bench python -m bench.profile_phases profiled l
+    pixi run -e bench python -m bench.profile_phases transport l --rounds 15
 
 **Everything that is not the build is hoisted out of the loop.** Timing
 ``lps.build`` repeatedly measures a YAML parse, a lowering pass, a parquet read

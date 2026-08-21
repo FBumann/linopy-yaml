@@ -1,6 +1,6 @@
 """Benders decomposition on lpspec, checked against the model it decomposes.
 
-    uv run python examples/benders/run.py
+    pixi run python examples/benders/run.py
 
 **This is evidence, not a feature.** It shows what the language can express and
 that the answer is right; lpspec ships no decomposition driver, and whether it

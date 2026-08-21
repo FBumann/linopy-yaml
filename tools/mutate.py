@@ -1,8 +1,8 @@
 """Delete a guard, run the tests, and record whether anything went red.
 
-    uv run python -m tools.mutate src/lpspec/sources.py:98-99
-    uv run python -m tools.mutate 'src/a.py:98-99#the empty-parameter guard' src/b.py:88
-    uv run python -m tools.mutate src/a.py:98-99 --tests tests/test_relational.py
+    pixi run python -m tools.mutate src/lpspec/sources.py:98-99
+    pixi run python -m tools.mutate 'src/a.py:98-99#the empty-parameter guard' src/b.py:88
+    pixi run python -m tools.mutate src/a.py:98-99 --tests tests/test_relational.py
 
 A *mutation table* is what AGENTS.md asks for beside a correctness guard: delete
 the guard, run the suite, and write down whether it was caught. A guard the

@@ -9,27 +9,27 @@ It is **one pytest suite** (`bench/test_ladder.py`), and every question below is
 a selection out of it: `--cases / --sizes / --arms / --sinks`, plus `-k`.
 
 ```bash
-uv sync --group bench
+# every rung docs/about/benchmarks.md publishes, then both writers. The size
+# ladder and each sweep go to separate files: a run REPLACES its results file
+# rather than adding to it, and the report takes as many files as you give it
+pixi run refresh
 
-# every rung docs/about/benchmarks.md publishes. The size ladder and each sweep go
-# to separate files: a run REPLACES its results file rather than adding to
-# it, and the report takes as many files as you give it
-uv run pytest bench --benchmark-memory --sizes xs s m l \
-    --benchmark-json=bench/results/latest.json
-uv run pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --skip-gate \
-    --benchmark-json=bench/results/density.json
-uv run pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --skip-gate \
-    --benchmark-json=bench/results/declarations.json
-
-uv run python -m bench.report bench/results/latest.json \
-    bench/results/density.json \
-    bench/results/declarations.json                         # -> markdown
-uv run python -m bench.plot                                 # -> the chart page
+# or a rung at a time — the same five tasks `refresh` depends on, in order
+pixi run ladder        # --sizes xs s m l          -> bench/results/latest.json
+pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
+pixi run declarations  # --sizes n002 … n128       -> bench/results/declarations.json
+pixi run report        # all three                 -> markdown
+pixi run plot          #                           -> the chart page
 
 # anything narrower than the published ladder: send it somewhere else
-uv run pytest bench --cases dispatch --sizes m l --benchmark-json=/tmp/two.json
-uv run pytest bench --sinks highs --benchmark-json=/tmp/highs.json
+pixi run -e bench pytest bench --cases dispatch --sizes m l --benchmark-json=/tmp/two.json
+pixi run -e bench pytest bench --sinks highs --benchmark-json=/tmp/highs.json
 ```
+
+The selections behind those five are in `pyproject.toml`, under
+`[tool.pixi.feature.bench.tasks]`, and that is the only place they are written
+down: a published number that came from a ladder somebody retyped is a number
+whose fingerprint no longer describes it.
 
 The committed `results/*.jsonl` are the provenance of the tables
 `docs/about/benchmarks.md` publishes *today*, written by the pre-pytest harness. The
@@ -281,8 +281,8 @@ the sentence becomes *"we are at Nx the floor and linopy is at Mx"* — a claim
 about engineering rather than a ranking.
 
 ```bash
-uv run python -m bench.floor l            # phase minima + peak RSS
-uv run python -m bench.floor xs --check   # one solve each way, objectives compared
+pixi run -e bench python -m bench.floor l            # phase minima + peak RSS
+pixi run -e bench python -m bench.floor xs --check   # one solve each way, objectives compared
 ```
 
 It is **not a fourth arm**: it hardcodes one model, so it has no place in the
@@ -309,8 +309,8 @@ measured: `cap_hat * avail` reaches the rows as a right-hand side, so a new
 capacity pushes values onto the loaded solver and never rebuilds.
 
 ```bash
-uv run python -m bench.warm_payoff s m l --steps 400
-uv run python -m bench.warm_payoff m --wall   # only on an idle box
+pixi run -e bench python -m bench.warm_payoff s m l --steps 400
+pixi run -e bench python -m bench.warm_payoff m --wall   # only on an idle box
 ```
 
 **Simplex iterations are the measurement.** They are deterministic, so this
@@ -338,8 +338,8 @@ to linopy*, and it wants a different metric — but it does not want a different
 harness. It is the same suite with one lane selected:
 
 ```bash
-uv run pytest bench --arms lpspec --sizes s m --benchmark-memory
-uv run pytest bench --arms lpspec --sizes s m --benchmark-memory \
+pixi run -e bench pytest bench --arms lpspec --sizes s m --benchmark-memory
+pixi run -e bench pytest bench --arms lpspec --sizes s m --benchmark-memory \
     --benchmark-memory-compare=0001 --benchmark-memory-compare-fail=mean:10%
 ```
 
@@ -372,8 +372,8 @@ is whichever plugin is loaded. That is not a detail — it is why there is no
 second set of benchmarks in this repository:
 
 ```bash
-uv run pytest bench --benchmark-memory   # memray peak + rss + timing
-uv run pytest bench --codspeed           # what CI measures
+pixi run -e bench pytest bench --benchmark-memory   # memray peak + rss + timing
+pixi run -e codspeed pytest bench --codspeed           # what CI measures
 ```
 
 `--benchmark-memory` patches the stock fixture and reads the `benchmem` marker;

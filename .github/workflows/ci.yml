@@ -2,9 +2,9 @@ name: CI
 
 # Billing is per job, rounded up to the minute, and the suite takes ~5s. So the
 # cost of CI is the number of jobs, not their duration: five jobs doing ninety
-# seconds of work cost five minutes. Hence one job, one Python, two installs.
-# Do not split a step out into a job of its own to parallelise it — that trades
-# a few seconds of wall clock for a whole billed minute.
+# seconds of work cost five minutes. Hence one job, one Python, three pixi
+# environments. Do not split a step out into a job of its own to parallelise it
+# — that trades a few seconds of wall clock for a whole billed minute.
 
 on:
   push:
@@ -27,16 +27,32 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+
+      # No `python-version:` here or in any other workflow: the interpreter is
+      # `[tool.pixi.dependencies]` in pyproject.toml, so which Python a gate
+      # runs on is one fact with one home. pixi itself floats; the floor that matters is
+      # `requires-pixi`, declared beside the features that need it.
+      #
+      # `run-install: false` because every step below names the environment it
+      # wants and pixi installs it on first use. Installing all three up front
+      # would pay for the docs and floors environments on a prose-only pull
+      # request, which is what the scope step exists to avoid.
+      - uses: prefix-dev/setup-pixi@v0.10.1
         with:
-          # The floor, and the only version we test. If it works on the oldest
-          # supported interpreter it almost certainly works on the newer ones;
-          # the common real breakage is reaching for a 3.13+ stdlib feature,
-          # which is exactly what this catches. Note that this leaves the 3.13
-          # and 3.14 classifiers in pyproject.toml as untested claims — see the
-          # early-development section of RELEASING.md.
-          python-version: "3.12"
-          enable-cache: true
+          run-install: false
+
+      # setup-pixi caches solved environments off a `pixi.lock`, and this tree
+      # has none — pyproject.toml says why. What is cached instead is the layer
+      # underneath, all of it under one directory: the conda packages, the
+      # repodata, and the wheels pixi's uv downloads. The solve is paid on every
+      # run, which is the point of refusing the lock — `linopy@master` and
+      # `math-spec` resolve fresh, and a break upstream shows up here rather
+      # than at the next bump.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-ci-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-ci-${{ runner.os }}-
 
       # A denylist, unlike the `paths:` filter bench.yml refuses: an allowlist
       # drifts and a job that stopped running looks like one that passed, so
@@ -66,7 +82,7 @@ jobs:
             '(^|/)[^/]+\.md$|^LICENSE$|^mkdocs\.yml$|^\.release-please-manifest\.json$' || true)
           if [ -n "$changed" ] && [ -z "$live" ]; then
             echo 'inert=true' >> "$GITHUB_OUTPUT"
-            echo 'Prose only — the TeX render and the bare install are skipped.'
+            echo 'Prose only — the TeX render and the floors gate are skipped.'
           else
             printf 'Running everything. Live files:\n%s\n' "$live"
           fi
@@ -103,33 +119,41 @@ jobs:
           nohup sudo -n bash "$RUNNER_TEMP/install-tex.sh" \
             > "$RUNNER_TEMP/tex-install.log" 2>&1 &
 
-      # Current dependencies, dev group: lint, format, types, suite.
-      - run: uv sync --group dev
-      - run: uv run --no-sync ruff check .
-      - run: uv run --no-sync ruff format --check .
-      # Only meaningful here, not below: missing-import is an error, and the
-      # linopy lane imports linopy/xarray, which a bare install deliberately lacks.
-      - run: uv run --no-sync pyrefly check --output-format=github
-      # The linopy reference scripts carry annotations the gallery shows, so
-      # they get their own config: a Series annotated as a DataFrame fails
-      # here rather than teaching a wrong type on the site.
-      - run: uv run --no-sync pyrefly check --output-format=github -c examples/ports/references/linopy/pyrefly.toml examples/ports/references/linopy
-      - run: uv run --no-sync pytest -q -n auto
+      # Current dependencies, the default environment: lint, format, types, suite.
+      # The install is its own step so its cost is legible in the timing view;
+      # the four below would each have triggered it anyway.
+      - run: pixi install -e default
+      - run: pixi run lint
+      - run: pixi run format-check
+      # `github` is the task's `--output-format` — a positional argument, and the
+      # task declares the four pyrefly accepts — so a finding lands as an
+      # annotation on the diff. The task covers both configs: the package, and
+      # the linopy reference scripts, which carry annotations the gallery shows,
+      # so a Series annotated as a DataFrame fails here rather than teaching a
+      # wrong type on the site.
+      #
+      # Only meaningful here, not in the floors environment below: missing-import
+      # is an error, and the linopy lane imports linopy/xarray, which the shipped
+      # shape deliberately lacks.
+      - run: pixi run typecheck github
+      - run: pixi run test
 
       # The site, built strictly: `strict: true` in mkdocs.yml turns every
       # warning into a failure, so this gate catches a dead cross-link, a model
       # page added without a nav entry, and an anchor that stopped resolving.
       # A step, not a job of its own — see the note at the top of this file;
-      # the docs group is small and adds a few seconds to a job we already pay
-      # a whole minute for. It comes after the suite and before the bare
-      # install, which wipes .venv.
+      # the docs environment is small and adds a few seconds to a job we already
+      # pay a whole minute for.
       #
       # The build also *runs* `docs/interactive.ipynb` (`execute: true`), so
-      # this step needs the package importable and a failing cell fails the
-      # gate. `uv sync` installs the project, which is what makes that work
-      # here and what `.readthedocs.yaml` had to be changed to match.
-      - run: uv sync --group docs
-      - run: uv run --no-sync mkdocs build --strict
+      # this needs the package importable and a failing cell fails the gate.
+      # That is why the `docs` environment carries the project as well as the
+      # toolchain — and it is the same environment `.readthedocs.yaml` builds,
+      # which is what stops CI and the published site from drifting apart.
+      #
+      # Its position among the steps is free: each environment is a directory of
+      # its own, so no step here disturbs another's.
+      - run: pixi run docs-build
 
       # The install started before the suite; this is where it is waited on,
       # so a failure reports apt's exit status and log rather than a missing
@@ -184,7 +208,7 @@ jobs:
         if: steps.scope.outputs.inert != 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/tex"
-          uv run --no-sync python - "$RUNNER_TEMP/tex" \
+          pixi run python - "$RUNNER_TEMP/tex" \
             examples/*.yaml examples/ports/*.yaml <<'PY'
           import sys
           from pathlib import Path
@@ -204,8 +228,11 @@ jobs:
             xargs -0 -P "$(nproc)" -n1 pdflatex -halt-on-error \
               -interaction=nonstopmode -output-directory "$RUNNER_TEMP/tex"
 
-      # Re-install the same checkout into the shipped shape, at the declared
-      # floors. Two claims in one install:
+      # The same checkout in the shipped shape, at the declared floors: the
+      # `floors` environment in pyproject.toml pins every runtime dependency to
+      # the version `[project.dependencies]` names as its lower bound, installs
+      # the project from a built wheel rather than editable, and carries nothing
+      # else. Two claims in one environment:
       #   1. the relational product runs with no linopy, xarray, pandas or
       #      pyarrow on disk — polars is the only dataframe library it needs;
       #   2. the lower bounds in pyproject.toml are real. Without this they are
@@ -213,36 +240,33 @@ jobs:
       #      once sat five minor versions below the first release carrying the
       #      method the sink called, and nothing noticed until this job existed.
       #
-      # `uv venv` + `uv pip install`, deliberately, not `uv sync`. uv locks
-      # *universally* — across every declared extra, whether or not it is being
-      # installed — so `uv sync --no-default-groups` still resolves under the
-      # `[linopy]` extra's constraints. linopy 0.9.0 requires `polars>=1.31.1`,
-      # which silently dragged the bare install to polars 1.32 and left our own
-      # `polars>=1.30` untested: claim 2 above, defeated by the thing it exists
-      # to catch. `uv pip install` resolves the requested set and nothing else.
+      # An environment of its own, deliberately, and one that names no extra:
+      # pixi solves each environment separately, so the `[linopy]` extra's
+      # `polars>=1.31.1` cannot reach this solve and raise the floor being
+      # tested. A resolver that answered across every declared extra would
+      # defeat claim 2 with exactly that constraint.
+      #
       # Verified green at polars 1.30.0 / numpy 1.26.0 / highspy 1.13.0. The
       # language's floors are not among them and cannot be: math-spec is a
-      # pinned direct reference, so `lowest-direct` holds it at the pin and
-      # resolves what it depends on — pydantic, pyparsing, pyyaml — at the
-      # highest. That repository's own bare-install job is where those floors
-      # are claims, which is where they are used.
+      # pinned direct reference, so it is already exact and has no lower bound
+      # to prove — what it depends on resolves freely. That repository's own
+      # bare-install job is where those floors are claims, which is where they
+      # are used.
       #
-      # pytest goes in as a second, unconstrained call: under `lowest-direct`
-      # an unpinned direct requirement resolves to pytest 2.0.0, which is a
-      # 2011 sdist that tries to build itself over plain HTTP. pytest alone,
-      # so this run stays serial where the dev-group one above is `-n auto`.
+      # Pinned exactly rather than resolved low, and the pins are checked:
+      # `tests/test_tooling_pins.py` fails when one stops matching the floor it
+      # mirrors. Verified green at polars 1.30.0 / numpy 1.26.0 / highspy
+      # 1.13.0 / pydantic 2.1.0 / pyparsing 3.1.0 / pyyaml 6.0.
       #
-      # The floors are a 3.12 claim only, which is the interpreter this job
-      # pins: numpy 1.26.0 predates 3.13 and has no wheel for it, so
-      # `lowest-direct` there tries a source build and fails. Raise a
-      # floor when the code relies on that version's behaviour, not to chase
-      # a newer interpreter — see the early-development note in RELEASING.md.
-      - name: bare install, at the dependency floors
+      # The task asserts linopy is absent before it runs the suite, serially: a
+      # green suite in an environment that quietly had linopy would be proving
+      # nothing this gate is for.
+      #
+      # The floors are a 3.12 claim only, which is the interpreter the
+      # environment names: numpy 1.26.0 predates 3.13 and has no wheel for it,
+      # so a newer one would try a source build and fail. Raise a floor when the
+      # code relies on that version's behaviour, not to chase a newer
+      # interpreter — see the early-development note in RELEASING.md.
+      - name: the shipped shape, at the dependency floors
         if: steps.scope.outputs.inert != 'true'
-        run: |
-          rm -rf .venv
-          uv venv
-          uv pip install --resolution lowest-direct .
-          uv pip install pytest
-          uv run --no-sync python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('linopy') is not None)"
-          uv run --no-sync pytest -q
+        run: pixi run test-floors

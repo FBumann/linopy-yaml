@@ -11,7 +11,7 @@ of them: 18 could silently become 31 and CI would stay green. So its whole
 output is committed as ``examples/walkthrough.out`` and compared line for line.
 When the pipeline legitimately changes, regenerate it —
 
-    uv run pytest tests/test_walkthrough.py --update-golden
+    pixi run pytest tests/test_walkthrough.py --update-golden
 
 — and the diff of that file is the review artifact: exactly how the
 architecture's story changed, in the same PR that changed it.
@@ -40,7 +40,7 @@ def test_walkthrough_matches_golden(output: str, pytestconfig: pytest.Config) ->
         pytestconfig,
         drifted='the walkthrough narrates something the pipeline no longer does.\n'
         'If this run is the correct story, regenerate the golden file:\n'
-        '    uv run pytest tests/test_walkthrough.py --update-golden\n',
+        '    pixi run pytest tests/test_walkthrough.py --update-golden\n',
     )
 
 

@@ -1,6 +1,6 @@
 """A rolling horizon on lpspec, checked against the horizon it approximates.
 
-    uv run python examples/rolling/run.py
+    pixi run python examples/rolling/run.py
 
 **This is evidence, not a feature.** `solve_over` ships; what this shows is
 that the pieces compose into the thing people actually want — a storage

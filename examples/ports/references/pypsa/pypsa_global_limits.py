@@ -5,7 +5,7 @@
 # ///
 """Reference for ``pypsa_global_limits``: PyPSA's own global constraints. See docs/examples/index.md.
 
-    uv run --script examples/ports/references/pypsa/pypsa_global_limits.py
+    pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_global_limits.py
 
 Pinned above to the versions that produced the number in ``references.json``,
 and run out of band — PyPSA is not a dependency of this project. linopy is
