@@ -1,0 +1,36 @@
+name: Sweep
+
+# A job of its own, against CI's rule that a step does not become one. That rule
+# is about billing: a job is rounded up to the minute, so splitting a few
+# seconds of work costs a whole one. This is minutes of work — 2,576 expressions
+# through both lanes — so it is the case the rule does not cover, and putting it
+# inside `ci` would add its whole duration to the required check on every PR.
+#
+# The per-PR half runs in `ci` at `--sweep-depth 2` with no flag needed. This is
+# the same module one dial further out.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.11'
+          enable-cache: true
+      - run: uv sync --group dev
+      - name: Every expression to depth three, on both lanes
+        run: uv run --no-sync pytest tests/test_expression_sweep.py -q -n auto --sweep-depth 3
