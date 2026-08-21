@@ -140,6 +140,14 @@ what coverage moved where.
   assert runs.keys == ['high', 'low', 'mid'], 'keys come back sorted, not in data order'
   ```
 
+  **Required where the claim is not on the line**, and checked there by
+  `tests/test_assertions.py`: a literal collection (which asserts an order and a
+  completeness), a count, a tolerance, an absence. Elsewhere it is a judgement —
+  `assert result.status == 'optimal'` says everything already, and a sentence
+  after it is the restatement the docstring rules tell you to cut. The check is
+  a ratchet on the count still in breach, so it falls as files are touched
+  rather than in one pass of invented sentences.
+
 - **A sequence of cases is parametrized, and the `id` is the label.** Five
   `pytest.raises` blocks in one test hide four failures behind the first and
   keep their labels in the source; five `pytest.param(..., id='…')` print the
