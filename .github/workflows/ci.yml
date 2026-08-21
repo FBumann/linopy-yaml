@@ -189,7 +189,7 @@ jobs:
           import sys
           from pathlib import Path
 
-          from lpspec.__main__ import main
+          from math_spec.__main__ import main
 
           out, models = Path(sys.argv[1]), sys.argv[2:]
           for model in models:
@@ -220,8 +220,12 @@ jobs:
       # which silently dragged the bare install to polars 1.32 and left our own
       # `polars>=1.30` untested: claim 2 above, defeated by the thing it exists
       # to catch. `uv pip install` resolves the requested set and nothing else.
-      # Verified green at polars 1.30.0 / numpy 1.26.0 / highspy 1.13.0 /
-      # pydantic 2.0 / pyparsing 3.1.0 / pyyaml 6.0.
+      # Verified green at polars 1.30.0 / numpy 1.26.0 / highspy 1.13.0. The
+      # language's floors are not among them and cannot be: math-spec is a
+      # pinned direct reference, so `lowest-direct` holds it at the pin and
+      # resolves what it depends on — pydantic, pyparsing, pyyaml — at the
+      # highest. That repository's own bare-install job is where those floors
+      # are claims, which is where they are used.
       #
       # pytest goes in as a second, unconstrained call: under `lowest-direct`
       # an unpinned direct requirement resolves to pytest 2.0.0, which is a
@@ -229,8 +233,8 @@ jobs:
       # so this run stays serial where the dev-group one above is `-n auto`.
       #
       # The floors are a 3.12 claim only, which is the interpreter this job
-      # pins: pyyaml 6.0 and numpy 1.26.0 predate 3.13 and have no wheel for
-      # it, so `lowest-direct` there tries a source build and fails. Raise a
+      # pins: numpy 1.26.0 predates 3.13 and has no wheel for it, so
+      # `lowest-direct` there tries a source build and fails. Raise a
       # floor when the code relies on that version's behaviour, not to chase
       # a newer interpreter — see the early-development note in RELEASING.md.
       - name: bare install, at the dependency floors
