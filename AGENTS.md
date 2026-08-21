@@ -163,6 +163,15 @@ what coverage moved where.
   `except BaseException`, a magic literal, a deliberate no-op.
 - **A number the code acts on stays inline** — a budget, a cap, a chunk size, a
   tolerance. There the number *is* the decision, not evidence for one.
+- **Coverage is a local instrument, and no CI job runs it.** `pytest --cov`
+  reports branch coverage from `[tool.coverage]` when you want it. It is not
+  gated and not printed, because it cannot answer either question this suite
+  asks: a guard whose false arm no test takes is a *fully covered line*, so
+  reachability is the mutation table's job and lane agreement is the sweep's.
+  Measured before deciding — 95.1% line and branch, and instrumenting the run
+  costs +49% (43.2s to 64.5s, three alternating repeats, idle machine) — so the
+  price was a minute of the required check per PR for a number nothing acts on.
+  Re-propose it with a use that number would serve, not with the percentage.
 
 ## Docstrings
 
