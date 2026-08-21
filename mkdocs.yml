@@ -96,7 +96,7 @@ nav:
           - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
           - Travelling salesman: examples/tsp_mtz.md
   - Reference:
-      - Language: https://math-spec.readthedocs.io/latest/reference/language/
+      - Language: https://math-spec.readthedocs.io/en/latest/reference/language/
       - Data binding: reference/data.md
       - Python API: reference/api.md
       - Sweeps and rolling horizons: reference/sweeps.md

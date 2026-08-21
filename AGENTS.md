@@ -94,7 +94,7 @@ what coverage moved where.
   above; "previously this used to…", "renamed from…", "as of the polars
   rewrite…" belong in git. Neither belongs in the code.
 - **Docs move with the change.** A construct added, renamed or retired updates
-  the [language reference](https://math-spec.readthedocs.io/latest/reference/language/) — its ten rules if
+  the [language reference](https://math-spec.readthedocs.io/en/latest/reference/language/) — its ten rules if
   the change moves a law, and it lives in math-spec now; structure updates
   [ARCHITECTURE](docs/about/architecture.md), diagrams included.
 - **After a decision in conversation, sweep for what now contradicts it**, stale
@@ -303,4 +303,4 @@ skipped. A body invalidated by a rewrite is closed and re-filed, not annotated.
 - **Recommend, do not survey.**
 - **A language feature is triaged first: macro, primitive, or escape** — the
   ceiling is relational ∩ local, degree 2 in the math and 1 beside it, and the deliberate non-primitives in
-  [ceiling.md](https://math-spec.readthedocs.io/latest/about/ceiling/) come first.
+  [ceiling.md](https://math-spec.readthedocs.io/en/latest/about/ceiling/) come first.

@@ -1,7 +1,7 @@
 # Python API
 
 How you *run* a model. The model itself is the YAML file — what it may contain
-is [the language](https://math-spec.readthedocs.io/latest/reference/language/); this page is what loads, checks, builds,
+is [the language](https://math-spec.readthedocs.io/en/latest/reference/language/); this page is what loads, checks, builds,
 solves and reads one back.
 
 ```python
@@ -26,12 +26,12 @@ result.dual('power_balance')
 | `lps.solve_over(model, sources, axis, ...)` | solve once per slice and fold the answers — [sweeps](sweeps.md) |
 | `lps.write(model, sources, out)` | build and stream to a file; the suffix picks the format |
 | `bound.row(name, **coordinate)` | what one built constraint row says — terms, comparison, right-hand side |
-| `math_spec.to_latex` / `to_typst` / `to_markdown` | the math as a document — [typeset](https://math-spec.readthedocs.io/latest/reference/typeset/) |
+| `math_spec.to_latex` / `to_typst` / `to_markdown` | the math as a document — [typeset](https://math-spec.readthedocs.io/en/latest/reference/typeset/) |
 
 Errors are one tree: `LpspecError` at the root, `LanguageError` (with
 `SchemaError`, `DimensionError`, `PiecewiseExpansionError`) for the model, and
 `DataError` for what was bound to it
-([errors](https://math-spec.readthedocs.io/latest/reference/language/errors/#which-error-you-get)).
+([errors](https://math-spec.readthedocs.io/en/latest/reference/language/errors/#which-error-you-get)).
 
 **`check` is the CI verb.** It parses, expands, resolves and lowers without
 binding anything, so a model repository can be validated on every commit
@@ -41,7 +41,7 @@ without shipping the data.
 
 Whether a model is *sayable* is solver-independent. Where it can *land* is a
 separate axis — [what a sink can
-ingest](https://math-spec.readthedocs.io/latest/about/ceiling/#capability-is-not-the-ceiling) — and `sink=` is how
+ingest](https://math-spec.readthedocs.io/en/latest/about/ceiling/#capability-is-not-the-ceiling) — and `sink=` is how
 you ask about it:
 
 ```python
@@ -118,9 +118,9 @@ out and need pandas / xarray, which ship with the `[linopy]` extra.
 |---|---|
 | **`is_ok` is not `has_primal`** | `is_ok` rolls up the termination condition; `has_primal` adds the solver's verdict on whether an incumbent exists, and is what every reader gates on. A MIP that hits `time_limit` before finding a feasible point is `ok` with nothing to read |
 | reading anyway | `NoSolutionError`; `objective` is `nan` |
-| **`expression` takes a declared name** | the value of a [named expression](https://math-spec.readthedocs.io/latest/reference/language/expressions/#named-expressions) at the solution, aggregated to its own dims. Never an expression string; an unknown name is a `KeyError` listing what is declared. It is compiled at the read, so a build with fifty declared expressions that reads none pays for none |
+| **`expression` takes a declared name** | the value of a [named expression](https://math-spec.readthedocs.io/en/latest/reference/language/expressions/#named-expressions) at the solution, aggregated to its own dims. Never an expression string; an unknown name is a `KeyError` listing what is declared. It is compiled at the read, so a build with fifty declared expressions that reads none pays for none |
 | `dual` **raises rather than zero-filling** | no values at all is `NoSolutionError`; values but no duals — any integer or binary variable makes them undefined — is `LpspecError`, because only this quantity is missing |
-| **a solver can make a model mixed-integer** | an [`sos:`](https://math-spec.readthedocs.io/latest/reference/language/piecewise/#sos) set reaches a solver with no SOS concept as binaries, so an otherwise continuous model solved on `highs` has no duals and says so. On `gurobi` and `xpress`, which branch on the set itself, it keeps them |
+| **a solver can make a model mixed-integer** | an [`sos:`](https://math-spec.readthedocs.io/en/latest/reference/language/piecewise/#sos) set reaches a solver with no SOS concept as binaries, so an otherwise continuous model solved on `highs` has no duals and says so. On `gurobi` and `xpress`, which branch on the set itself, it keeps them |
 | duals exist only where a solver ran | a model written to LP and solved elsewhere never passes back through here. Reduced costs and slacks are not exposed yet |
 | `to_dataset` costs what it says | each variable arrives dense over its own dims — name a subset, or use `to_parquet` |
 
@@ -318,7 +318,7 @@ one has made this engine's bookkeeping part of their model.
 |---|---|
 | `columns`, `rows`, `nonzeros` | the shape the build produced — what `check` cannot answer, needing no data where this needs all of it, and where a broadcast that multiplied rows shows up first |
 | `sink_columns`, `sink_rows` | what the last solve's solver had to *add* to that shape. Zero unless it had no concept of a set the model declares, in which case this is the binaries and linking rows it was handed instead |
-| `omissions` | rows a constraint declared but did not build ([absence](https://math-spec.readthedocs.io/latest/reference/language/absence/#a-row-with-no-variable-terms-is-not-built)) |
+| `omissions` | rows a constraint declared but did not build ([absence](https://math-spec.readthedocs.io/en/latest/reference/language/absence/#a-row-with-no-variable-terms-is-not-built)) |
 | `sparse_parameters` | `(parameter, coordinates, rows, missing)` — one row per parameter whose source is short of the coordinates its dims reach, empty where every one is complete. Sparsity is how a model masks, so this reports rather than judges: a table that lost a row and a `where:` that removed one build the same model, and nothing else would say which parameters could be either |
 | `coefficient_range` | `(constraint, smallest, largest)` — the coefficient **magnitudes** each block put in the matrix. A solver prints one range for the whole model, which says a repair is needed and not where; this says which declaration holds the outlier, and `largest / smallest` over the frame is the conditioning to compare against the solver's own |
 | `objective_range` | the same pair for the costs, or `None` where the model declares no objective. Beside the frame rather than in it: badly scaled costs and a badly scaled matrix are different faults with different repairs |

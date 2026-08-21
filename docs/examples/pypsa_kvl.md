@@ -255,7 +255,7 @@ different file.
 **Computing the basis is data preparation, and stays outside the language.**
 Finding a cycle basis is a graph algorithm — iteration over a structure
 discovered from data, which the
-[ceiling](https://math-spec.readthedocs.io/latest/about/ceiling/#two-tiers-and-the-ceiling) refuses by design. The
+[ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/#two-tiers-and-the-ceiling) refuses by design. The
 reference prints the rows PyPSA derived so the two can be checked against each
 other. They need only agree on the *cycle space*: PyPSA scales its coefficients
 for conditioning, and since the row is `= 0`, any nonzero multiple of a cycle

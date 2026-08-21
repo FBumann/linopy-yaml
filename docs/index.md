@@ -215,7 +215,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
     python -m math_spec typst dispatch.yaml --standalone -o dispatch.typ
     ```
 
-    The renderer is [math-spec](https://math-spec.readthedocs.io/latest/reference/typeset/)'s,
+    The renderer is [math-spec](https://math-spec.readthedocs.io/en/latest/reference/typeset/)'s,
     and reads the same file this page solves.
 <!-- home-math:end -->
 
@@ -256,7 +256,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
     What a YAML file may contain, and what it means — ten rules, ten
     declaration keys, one closed set of operators.
 
-    [:octicons-arrow-right-24: The language](https://math-spec.readthedocs.io/latest/reference/language/)
+    [:octicons-arrow-right-24: The language](https://math-spec.readthedocs.io/en/latest/reference/language/)
 
 -   :material-code-braces: __Python API__
 
@@ -267,7 +267,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     [:octicons-arrow-right-24: The API](reference/api.md) ·
     [Sweeps](reference/sweeps.md) ·
-    [Typeset](https://math-spec.readthedocs.io/latest/reference/typeset/)
+    [Typeset](https://math-spec.readthedocs.io/en/latest/reference/typeset/)
 
 -   :material-source-branch: __Why it is shaped this way__
 

@@ -45,7 +45,7 @@ The same idea runs through data binding, with one distinction worth learning
 early: a **variable** the mask removed is *absent*, and a term carrying it takes
 its whole row with it — while a **parameter** row that is missing is a
 zero coefficient, and the row survives without it. Absence is a property of
-variables. → [dispatch](examples/dispatch.md), [absence](https://math-spec.readthedocs.io/latest/reference/language/absence/)
+variables. → [dispatch](examples/dispatch.md), [absence](https://math-spec.readthedocs.io/en/latest/reference/language/absence/)
 
 ## 3. A lookup maps one dimension onto another, and that is your topology
 
@@ -102,7 +102,7 @@ constraints:
 Get it wrong and you are told at load time, not at solve time. A stray dim
 would multiply rows and an unused `foreach` dim would repeat one row across
 them; either way you would build a different model than the file reads as.
-→ [the dim algebra](https://math-spec.readthedocs.io/latest/reference/language/expressions/#dim-algebra)
+→ [the dim algebra](https://math-spec.readthedocs.io/en/latest/reference/language/expressions/#dim-algebra)
 
 ## Then: check, build, solve
 
@@ -172,7 +172,7 @@ Worth knowing before you start, rather than after:
   and constraints take `variable * variable`; a bound, a named expression and a
   `piecewise:` link need a variable-free factor. Where a quadratic model can be
   *solved* is a second question — `check(model, sink=…)` answers it. →
-  [The ceiling](https://math-spec.readthedocs.io/latest/about/ceiling/#two-tiers-and-the-ceiling)
+  [The ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/#two-tiers-and-the-ceiling)
 - **Several plausible features are refused on purpose**, with reasons.
   → [the roadmap](about/roadmap.md)
 
@@ -181,7 +181,7 @@ Worth knowing before you start, rather than after:
 | | |
 |---|---|
 | [Examples](examples/index.md) | every model in the repo, and which constructs each exercises |
-| [Language reference](https://math-spec.readthedocs.io/latest/reference/language/) | what a file may contain, exactly |
+| [Language reference](https://math-spec.readthedocs.io/en/latest/reference/language/) | what a file may contain, exactly |
 | [Python API](reference/api.md) | building, solving, and reading an answer back |
-| [Typeset the math](https://math-spec.readthedocs.io/latest/reference/typeset/) | the same file as LaTeX, Typst or Markdown |
+| [Typeset the math](https://math-spec.readthedocs.io/en/latest/reference/typeset/) | the same file as LaTeX, Typst or Markdown |
 | [About](about/index.md) | why it is shaped this way, what it costs, where it is going |

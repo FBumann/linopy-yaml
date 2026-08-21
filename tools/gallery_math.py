@@ -158,7 +158,7 @@ python -m math_spec latex dispatch.yaml --symbols dispatch.symbols.yaml
 python -m math_spec typst dispatch.yaml --standalone -o dispatch.typ
 ```
 
-The renderer is [math-spec](https://math-spec.readthedocs.io/latest/reference/typeset/)'s,
+The renderer is [math-spec](https://math-spec.readthedocs.io/en/latest/reference/typeset/)'s,
 and reads the same file this page solves."""
 
 

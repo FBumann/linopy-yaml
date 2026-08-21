@@ -3,7 +3,7 @@
 This folder is both the published site and what you read on GitHub.
 [index.md](index.md) is the site's front door and this page is the folder view;
 start at [writing a model](guide.md), then
-[the rules](https://math-spec.readthedocs.io/latest/reference/language/#ten-rules-the-language-reduces-to) for
+[the rules](https://math-spec.readthedocs.io/en/latest/reference/language/#ten-rules-the-language-reduces-to) for
 the exact one.
 
 **The layout is the reader's path.** `guide.md`, `examples/` and `reference/` are
