@@ -8,6 +8,7 @@ cannot silently drift from the code. Static checks parse source with ``ast``
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -731,6 +732,47 @@ def test_every_repository_path_a_workflow_names_exists():
     assert not missing, (
         f'a workflow names paths that do not exist: {missing} — a step reading them '
         f'reads nothing, and no test outside CI would notice'
+    )
+
+
+#: Directory prefixes that name a file in this repository, for the path check
+#: below. Anything else in a string is a runner path, a URL or prose.
+TRAVELLING_TEST_ROOTS = ('tests/language', 'tests/typeset')
+
+
+def test_the_travelling_tests_read_only_what_travels():
+    """An import fence cannot see a path, and a path is as much a dependency.
+
+    Found by running the extraction: `tests/typeset/` passed every import fence
+    and still could not run once cut, because it read `examples/transport.yaml`
+    and globbed `examples/symbols/` — both of which stay. The renderer's tests
+    now read the operator probes and the golden model, and the claims about the
+    *committed* pairs live in `tests/test_typeset_gallery.py` with the files
+    they are about.
+
+    Literal prefixes only. A path assembled at run time is beyond this, which is
+    why the check is a floor rather than a proof — but it is the channel that
+    actually bit.
+    """
+    moving = tuple(line.rstrip('/') for line in _manifest())
+    offenders = {}
+    for root in TRAVELLING_TEST_ROOTS:
+        for path in (REPO / root).rglob('*'):
+            if not path.is_file() or '__pycache__' in path.parts:
+                continue
+            text = path.read_text(errors='ignore')
+            stray = sorted(
+                {
+                    literal
+                    for literal in re.findall(r"['\"]((?:examples|docs|schema|src|tools|tests)/[^'\"]*)['\"]", text)
+                    if not literal.startswith(moving)
+                }
+            )
+            if stray:
+                offenders[str(path.relative_to(REPO))] = stray
+    assert not offenders, (
+        f'a travelling test reads what stays: {offenders} — point it at a fixture that travels, '
+        f'or move the test to the file that owns the corpus it is really about'
     )
 
 
