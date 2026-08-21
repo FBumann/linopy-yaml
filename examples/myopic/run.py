@@ -1,6 +1,6 @@
 """A myopic investment pathway on lpspec, one period at a time.
 
-    uv run python examples/myopic/run.py
+    pixi run python examples/myopic/run.py
 
 **This is evidence, not a feature.** It is the shape capacity-expansion models
 are actually run in: a handful of investment periods, each solved on a few

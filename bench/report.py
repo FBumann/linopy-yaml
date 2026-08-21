@@ -1,6 +1,6 @@
 """Turn a results JSONL into the markdown that goes in docs/about/benchmarks.md.
 
-    uv run python -m bench.report bench/results/latest.json
+    pixi run -e bench python -m bench.report bench/results/latest.json
 
 Nothing here recomputes or smooths anything: repeats collapse by *minimum*,
 which is the usual choice for a benchmark because noise only ever adds. The

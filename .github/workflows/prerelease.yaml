@@ -86,17 +86,12 @@ jobs:
           echo "tag=v$V-$C.$n" >>"$GITHUB_OUTPUT"
           echo "Next prerelease tag: v$V-$C.$n (branch ${GITHUB_REF_NAME})"
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: prefix-dev/setup-pixi@v0.10.1
         with:
-          python-version: "3.12"
-          enable-cache: true
+          run-install: false
 
-      - run: uv sync --group dev
-
-      - run: uv run --no-sync ruff check .
-      - run: uv run --no-sync ruff format --check .
-      - run: uv run --no-sync pyrefly check
-      - run: uv run --no-sync pytest -q -n auto
+      # The same four gates `ci` runs, by the name they are defined under.
+      - run: pixi run check
 
       - name: Push the tag
         if: inputs.dry-run != true

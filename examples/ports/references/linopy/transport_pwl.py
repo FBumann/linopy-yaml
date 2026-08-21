@@ -6,7 +6,7 @@
 """Reference for ``transport_pwl``: the same model through linopy's own
 piecewise formulation. See docs/examples/index.md.
 
-    uv run --script examples/ports/references/linopy/transport_pwl.py
+    pixi exec -s uv uv run --script examples/ports/references/linopy/transport_pwl.py
 
 **The independence here is sharper than usual.** Every other reference is
 independent of lpspec because it is a different program; this one is

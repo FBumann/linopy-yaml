@@ -5,7 +5,7 @@
 # ///
 """Reference for ``piecewise_ragged``: the same LP, hand-written in linopy.
 
-    uv run --script examples/ports/references/linopy/piecewise_ragged.py
+    pixi exec -s uv uv run --script examples/ports/references/linopy/piecewise_ragged.py
 
 A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``piecewise.py`` next door, whose

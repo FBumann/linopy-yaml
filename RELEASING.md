@@ -122,7 +122,8 @@ that deliberately trades coverage for cost. What that gives up:
 - **Only two dependency sets are installed:** current-with-dev, and the declared
   floors bare. The floors are exercised *without* linopy/xarray, so the linopy
   lane is only ever tested against current linopy — narrow, since the lane
-  resolves to one branch anyway (`[tool.uv.sources]`, pending the v1 release).
+  resolves to one branch anyway (the `[linopy]` extra's direct reference,
+  pending the v1 release).
 
 This list used to carry a third entry, and it is worth keeping the correction
 rather than the claim: *"the PR-title check does not re-run on `synchronize` …
@@ -190,8 +191,8 @@ To keep releasing 0.1.x after `main` moves to 0.2, cut a `0.1.x` branch and run
 Don't cut a release for this — install from the ref:
 
 ```bash
-uv add "lpspec @ git+ssh://git@github.com/fluxopt/lpspec@feat/some-branch"
-uv add "lpspec @ git+https://github.com/fluxopt/lpspec@d09aab6"
+pixi add --pypi "lpspec @ git+ssh://git@github.com/fluxopt/lpspec@feat/some-branch"
+pixi add --pypi "lpspec @ git+https://github.com/fluxopt/lpspec@d09aab6"
 ```
 
 Every tagged build also attaches its wheel and sdist to the GitHub release.

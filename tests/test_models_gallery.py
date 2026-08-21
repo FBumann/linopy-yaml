@@ -162,7 +162,7 @@ def test_the_generated_blocks_are_current() -> None:
     the *published* optimum and the *asserted* one cannot disagree.
     """
     page = constructs.PAGE.read_text()
-    assert constructs.rendered(page) == page, 'the gallery page is stale — run `uv run python -m tools.constructs`'
+    assert constructs.rendered(page) == page, 'the gallery page is stale — run `pixi run python -m tools.constructs`'
 
 
 @pytest.fixture(scope='module')

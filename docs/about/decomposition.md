@@ -238,7 +238,7 @@ what any driver over a fixed model does, and `solve_over` already does it.
 ## Running it
 
 ```bash
-uv run python examples/benders/run.py
+pixi run python examples/benders/run.py
 ```
 
 ```text

@@ -5,7 +5,7 @@
 # ///
 """Reference for ``dispatch``: the same LP, hand-written in linopy.
 
-    uv run --script examples/ports/references/linopy/dispatch.py
+    pixi exec -s uv uv run --script examples/ports/references/linopy/dispatch.py
 
 Unlike the ports, nothing here was published: the model is this project's own
 smallest teaching example, so what verifies it is *agreement* — an independent

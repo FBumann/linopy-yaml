@@ -84,10 +84,10 @@ Everything on this page is **generated** — the catalogue off the site nav and
 each page's own opening line, the constructs matrix off each model's resolved
 plan, the reference table off `examples/ports/references.json`, which is the
 same file the tests assert against. Regenerate with
-`uv run python -m tools.constructs`; a test fails if any of the three is stale.
+`pixi run python -m tools.constructs`; a test fails if any of the three is stale.
 
 Every page also carries the model **as math**, typeset from the same file the
-engine builds (`uv run python -m tools.gallery_math`, likewise gated). Where a
+engine builds (`pixi run python -m tools.gallery_math`, likewise gated). Where a
 model has a symbol table in `examples/symbols/`, the block uses the notation
 that model's prose already does.
 

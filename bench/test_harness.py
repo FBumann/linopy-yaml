@@ -301,7 +301,7 @@ def test_the_rounds_default_is_silent_where_the_plugin_is_absent() -> None:
 def test_the_rounds_default_is_wired_into_the_session(request: pytest.FixtureRequest) -> None:
     """A default and the session applying it can coexist without meeting (#321 did)."""
     if not hasattr(request.config.option, 'benchmark_min_rounds'):
-        pytest.skip('pytest-benchmark is not installed (uv sync --group bench)')
+        pytest.skip('pytest-benchmark is not installed — bench/ runs through `pixi run -e bench`')
     if flag_passed(request.config, '--benchmark-min-rounds'):
         pytest.skip('this session asked for a round count of its own')
     assert request.config.option.benchmark_min_rounds == MIN_ROUNDS, (

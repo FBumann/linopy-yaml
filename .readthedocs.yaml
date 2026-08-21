@@ -1,34 +1,25 @@
 version: 2
 
-mkdocs:
-  configuration: mkdocs.yml
-
 build:
   os: ubuntu-24.04
-  tools:
-    python: "3.13"
-  jobs:
-    # asdf put three network operations in front of every build — a plugin-repo
-    # clone, a version resolution, a shim rewrite — and a stall in any of them
-    # is indistinguishable from a hung build, which is what it looked like.
-    # The official installer is one request for the same result. Unpinned, to
-    # match `astral-sh/setup-uv` in the workflows: uv floats there or nowhere.
-    pre_create_environment:
-      - curl -LsSf https://astral.sh/uv/install.sh | sh
-    create_environment:
-      # by path rather than on PATH: each job runs in its own shell, so what the
-      # installer appended to the profile is not in scope here
-      - $HOME/.local/bin/uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
-    # The `docs` group *and* the project: mkdocs.yml executes
-    # `docs/interactive.ipynb` during the build and its first cell imports
-    # lpspec, so the site can no longer be built against the docs toolchain
-    # alone. A page whose outputs are this build's own is what that buys, and
-    # there is no way to have it without running the package here.
-    #
-    # Spelled out rather than `python.install: {method: uv}`, which RTD grew in
-    # April 2026: `--no-default-groups` is load-bearing and that form documents
-    # it — it is what keeps `dev` out, and `dev` resolves linopy from a git
-    # branch. A `groups:` key that lowers to a plain `uv sync --group docs`
-    # reinstates it, and RTD does not say whether it does.
-    install:
-      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" $HOME/.local/bin/uv sync --no-default-groups --group docs
+  # `commands:` takes the build over entirely: no `tools.python` for Read the
+  # Docs to install and no virtualenv for an install step to be pointed at. pixi
+  # brings its own interpreter, so the environment the site is built in here is
+  # the environment named in pyproject.toml and nothing else.
+  #
+  # `docs` is the same environment `ci` builds strictly, so a page that builds
+  # there builds here, and a dependency one of them needs cannot be one the
+  # other lacks — the environment is named, not assembled twice.
+  #
+  # The docs environment carries the project as well as the toolchain, because
+  # mkdocs.yml executes `docs/interactive.ipynb` during the build and its first
+  # cell imports lpspec. A page whose outputs are this build's own is what that
+  # buys, and there is no way to have it without running the package here.
+  #
+  # The installer is one request, unpinned, matching `prefix-dev/setup-pixi` in
+  # the workflows: pixi floats there or nowhere. It is invoked by path because
+  # each command runs in its own shell, so what the installer appended to the
+  # profile is not in scope for the next line.
+  commands:
+    - curl -fsSL https://pixi.sh/install.sh | bash
+    - ~/.pixi/bin/pixi run docs-build --site-dir "$READTHEDOCS_OUTPUT/html"

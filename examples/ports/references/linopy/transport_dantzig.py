@@ -5,7 +5,7 @@
 # ///
 """Reference for ``transport_dantzig``: the same LP, hand-written in linopy.
 
-    uv run --script examples/ports/references/linopy/transport_dantzig.py
+    pixi exec -s uv uv run --script examples/ports/references/linopy/transport_dantzig.py
 
 **This is not what verifies the port.** The optimum came from the literature —
 published with GAMS model library #1 — and that is what ``references.json``

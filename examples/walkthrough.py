@@ -5,7 +5,7 @@ a time and prints the artifact each stage produces. Nothing here is a
 reimplementation: every call is the same public entry point ``lps.solve`` takes
 internally, so what you see is what actually runs.
 
-    uv run python examples/walkthrough.py
+    pixi run python examples/walkthrough.py
 
 Its output is committed as ``examples/walkthrough.out`` and asserted line for
 line by ``tests/test_walkthrough.py``, so the narration cannot go stale

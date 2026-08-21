@@ -31,17 +31,12 @@ files because a run *replaces* its output: one narrower than the tables it
 publishes would leave them unprovenanced while still looking complete.
 
 ```bash
-uv run pytest bench --benchmark-memory --sizes xs s m l \
-    --benchmark-json=bench/results/latest.json
-uv run pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --skip-gate \
-    --benchmark-json=bench/results/density.json
-uv run pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --skip-gate \
-    --benchmark-json=bench/results/declarations.json
-
-uv run python -m bench.report bench/results/latest.json bench/results/density.json \
-    bench/results/declarations.json
-uv run python -m bench.plot  # the figures above, and the chart page's numbers
+pixi run refresh  # the three ladders, then the markdown and the chart page's numbers
 ```
+
+Each rung is a task of its own — `ladder`, `density`, `declarations`, `report`,
+`plot` — and every selection behind them is in `pyproject.toml`, so a table here
+and the run that produced it cannot describe different work.
 
 The results committed today are the `.jsonl` the runner before
 [#448](https://github.com/fluxopt/lpspec/pull/448) wrote; both readers take

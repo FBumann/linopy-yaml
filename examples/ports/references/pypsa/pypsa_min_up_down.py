@@ -5,7 +5,7 @@
 # ///
 """Reference for ``pypsa_min_up_down``: PyPSA's own minimum up and down times. See docs/examples/index.md.
 
-    uv run --script examples/ports/references/pypsa/pypsa_min_up_down.py
+    pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_min_up_down.py
 
 Pinned above to the versions that produced the number in ``references.json``,
 and run out of band — PyPSA is not a dependency of this project. linopy is

@@ -5,7 +5,7 @@
 # ///
 """Reference for ``monthly_budget``: the same LP, hand-written in linopy.
 
-    uv run --script examples/ports/references/linopy/monthly_budget.py
+    pixi exec -s uv uv run --script examples/ports/references/linopy/monthly_budget.py
 
 A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.

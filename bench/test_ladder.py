@@ -1,10 +1,10 @@
 """The ladder: one model, two lanes, one seam — measured by whichever plugin is loaded.
 
-    uv sync --group bench
-    uv run pytest bench --benchmark-memory --benchmark-json=bench/results/latest.json \\
+    pixi run refresh    # every rung, then both writers, in order — or by hand:
+    pixi run -e bench pytest bench --benchmark-memory --benchmark-json=bench/results/latest.json \\
         --sizes xs s m l
-    uv run python -m bench.report bench/results/latest.json    # -> markdown
-    uv run python -m bench.plot                                # -> the chart page
+    pixi run -e bench python -m bench.report bench/results/latest.json    # -> markdown
+    pixi run -e bench python -m bench.plot                                # -> the chart page
 
 Selection is `--cases / --sizes / --arms / --sinks` (see `conftest.py`), so the
 published ladder and a one-rung smoke test are the same command with different

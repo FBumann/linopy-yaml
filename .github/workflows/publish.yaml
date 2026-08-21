@@ -25,12 +25,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
-      - uses: astral-sh/setup-uv@v7
+      - uses: prefix-dev/setup-pixi@v0.10.1
         with:
-          python-version: "3.12"
-          enable-cache: true
-      - run: uv sync --group dev
-      - run: uv run --no-sync pytest -q -n auto
+          run-install: false
+      - run: pixi run test
 
   build:
     name: Build
@@ -43,18 +41,22 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0  # hatch-vcs reads the tag; a shallow clone yields a .dev version
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: prefix-dev/setup-pixi@v0.10.1
         with:
-          python-version: "3.12"
-          enable-cache: true
+          run-install: false
 
-      - run: uv build
+      # `pixi exec` rather than an environment of its own: this is a one-off
+      # tool, run once per tag, and nothing else in the tree needs a build
+      # backend on hand. The wheel is `py3-none-any`, so which interpreter runs
+      # the build decides nothing about what ships — it is pinned to `publish`'s
+      # only so the two halves of this workflow do not disagree.
+      - run: pixi exec --spec python-build --spec python=3.12 python -m build
 
       - name: Verify the built version matches the tag
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          uv run --no-project --with packaging python - <<'PY'
+          pixi exec --spec packaging --spec python=3.12 python - <<'PY'
           import os, pathlib, sys
           from packaging.utils import parse_wheel_filename
           from packaging.version import Version

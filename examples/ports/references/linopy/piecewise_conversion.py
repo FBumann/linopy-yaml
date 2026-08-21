@@ -5,7 +5,7 @@
 # ///
 """Reference for ``piecewise_conversion``: the same MILP, hand-written in linopy.
 
-    uv run --script examples/ports/references/linopy/piecewise_conversion.py
+    pixi exec -s uv uv run --script examples/ports/references/linopy/piecewise_conversion.py
 
 A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — here linopy's own

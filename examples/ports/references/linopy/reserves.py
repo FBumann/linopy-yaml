@@ -5,7 +5,7 @@
 # ///
 """Reference for ``reserves``: the same LP, hand-written as incidence matrices.
 
-    uv run --script examples/ports/references/linopy/reserves.py
+    pixi exec -s uv uv run --script examples/ports/references/linopy/reserves.py
 
 A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.

@@ -35,15 +35,20 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: prefix-dev/setup-pixi@v0.10.1
         with:
-          python-version: "3.12"
-          enable-cache: true
+          run-install: false
 
-      # `--with` overrides the pin for this run only, so nothing on disk is
-      # edited and a failure is about math-spec's `main` rather than about a
-      # half-applied bump.
+      # The one job in the tree that exists to resolve *differently*, which is
+      # the thing a named environment is deliberately bad at: overriding a pin
+      # for one run is not a shape `[tool.pixi.environments]` has, and an
+      # environment carrying the same package at a second ref does not resolve.
+      # So this is a one-off tool invocation, like the build in publish.yaml —
+      # `pixi exec` fetches uv, and `--with` overrides the pin for this run
+      # only, so nothing on disk is edited and a failure is about math-spec's
+      # `main` rather than about a half-applied bump.
       - name: the suite, against math-spec at main
         run: >
-          uv run --with "math-spec @ git+https://github.com/energy-models/math-spec@main"
+          pixi exec -s uv uv run
+          --with "math-spec @ git+https://github.com/energy-models/math-spec@main"
           pytest -q -n auto

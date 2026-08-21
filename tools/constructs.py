@@ -1,8 +1,8 @@
 """The gallery's catalogue and its two evidence tables: which models there are,
 what each exercises, and what somebody else says its answer is.
 
-    uv run python -m tools.constructs           # rewrite all three blocks
-    uv run python -m tools.constructs --check   # fail if any has drifted
+    pixi run python -m tools.constructs           # rewrite all three blocks
+    pixi run python -m tools.constructs --check   # fail if any has drifted
 
 The point of generating them is that a hand-kept table is the exact shape of
 claim that rots: it is written once when it is true, and nothing fails when a
@@ -271,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
     updated = rendered(page)
     if opts.check:
         if updated != page:
-            print(f'{PAGE} is stale — run `uv run python -m tools.constructs`', file=sys.stderr)
+            print(f'{PAGE} is stale — run `pixi run python -m tools.constructs`', file=sys.stderr)
             return 1
         print(f'{PAGE} matches the models')
         return 0
