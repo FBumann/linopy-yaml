@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from lpspec.typeset import FORMATS, to_latex, to_markdown, to_typst, typeset
+from lpspec.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
 from tests.conftest import MODEL_PATHS
 from tools import gallery_math
 
@@ -319,3 +319,67 @@ def test_a_generated_variable_carries_the_description_its_expander_gave_it():
     """`piecewise:` invents the λ weights, so nothing the author wrote can
     describe them — the expander is the only thing that knows what they are."""
     assert 'convex-combination weight on a breakpoint' in to_latex('examples/piecewise.yaml')
+
+
+# ---------------------------------------------------------------------------
+# the committed symbol tables
+# ---------------------------------------------------------------------------
+#
+# `examples/symbols/` stays: every table is the spelling for one model, and all
+# eight pair with models that stay. So the claims about the *committed* pairs
+# are here, and the renderer keeps the inline-dict equivalents, which is what
+# lets it travel.
+
+#: Committed tables written in typst, by what they declare rather than by what
+#: they are called — the notation is the file's own word (#740).
+TYPST_TABLES = sorted(p for p in Path('examples/symbols').glob('*.yaml') if SymbolTable.load(p).notation == 'typst')
+
+
+def test_the_typst_path_has_a_committed_artifact():
+    assert TYPST_TABLES, (
+        'no committed typst symbol table — the file-load, checked-against and compile paths '
+        'for a typst table would again be reached only by an inline dict in this file'
+    )
+
+
+@pytest.mark.parametrize('table', TYPST_TABLES, ids=lambda p: p.name)
+def test_a_committed_typst_table_compiles_beside_its_model(typst, tmp_path: Path, table: Path):
+    """The table on disk, against the model on disk, through the compiler.
+
+    `test_typst_output_with_a_symbol_table_compiles` proves the *dict* input
+    compiles; this proves the committed artifact does, so a typst table cannot
+    drift from its model — or stop compiling — while the suite stays green.
+    """
+    source = tmp_path / f'{table.name}.typ'
+    source.write_text(to_typst(_model_of(table), symbols=table, standalone=True))
+    typst.compile(str(source), output=str(tmp_path / f'{table.name}.pdf'))
+
+
+def test_the_table_loads_from_a_file_and_the_committed_one_applies():
+    tex = to_latex('examples/piecewise.yaml', symbols='examples/symbols/piecewise.yaml')
+    assert r'\lambda_{' in tex
+    assert r'k \in \mathcal{K}' in tex
+    assert 'breakpoints of the cost curve' in tex
+
+
+def _model_of(table: Path) -> Path:
+    """The model a committed symbol table belongs to.
+
+    The name up to the first dot, so one model may carry a table per notation:
+    `transport_dantzig.yaml` and `transport_dantzig.typst.yaml` both name
+    `transport_dantzig`. The unsuffixed file is the one `tools/gallery_math.py`
+    renders the page with.
+    """
+    stem = table.name.split('.')[0]
+    candidates = [Path('examples') / f'{stem}.yaml', Path('examples/ports') / f'{stem}.yaml']
+    model = next((c for c in candidates if c.exists()), None)
+    assert model is not None, f'{table} names no model: looked in {[str(c) for c in candidates]}'
+    return model
+
+
+@pytest.mark.parametrize('table', sorted(Path('examples/symbols').glob('*.yaml')), ids=lambda p: p.name)
+def test_every_committed_symbol_table_still_fits_its_model(table: Path):
+    """A sidecar is matched to its model by filename alone, so renaming a
+    parameter leaves the table naming nothing; `checked_against` makes that an
+    error, run here for every committed pair in its declared notation."""
+    assert typeset(_model_of(table), FORMATS[SymbolTable.load(table).notation], symbols=table).strip()
