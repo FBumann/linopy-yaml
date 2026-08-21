@@ -161,7 +161,7 @@ def expression(
             )
         lower_program(original)
         lower_expression(schema, name)
-        tidy = tidy_sources(schema, sources)
+        tidy = tidy_sources(original, sources)
         master_coords, dim_coords = dimension_coords(schema, tidy)
         dataset = load_parameters(schema, tidy, master_coords)
         ns = Namespace.of(schema)
