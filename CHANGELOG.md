@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.241](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.240...v0.0.1-alpha.241) (2026-08-21)
+
+
+### Documentation
+
+* **language:** a consumer of the AST has a page to read the contract in ([#1205](https://github.com/fluxopt/lpspec/issues/1205)) ([4e05dc6](https://github.com/fluxopt/lpspec/commit/4e05dc60fd8ca89ff96a836e119994799a098752))
+
 ## [0.0.1-alpha.240](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.239...v0.0.1-alpha.240) (2026-08-21)
 
 
