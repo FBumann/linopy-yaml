@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.245](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.244...v0.0.1-alpha.245) (2026-08-21)
+
+
+### Bug Fixes
+
+* **tests:** the renderer's tests read only what travels with it ([#1217](https://github.com/fluxopt/lpspec/issues/1217)) ([c486fff](https://github.com/fluxopt/lpspec/commit/c486fffb5067aab4cdb5751a8d63a216f8a4f712))
+
 ## [0.0.1-alpha.244](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.243...v0.0.1-alpha.244) (2026-08-21)
 
 
