@@ -267,7 +267,7 @@ a language feature wearing a method, and hard rule 5 refuses it wherever it is
 spelled. It is also why these are named for what they *are* rather than for what
 built them — a second engine must not change a top-level verb's return type.
 
-**What the data arrow carries** is [data binding](../reference/data.md) and is not
+**What the data arrow carries** is [the data contract](../reference/data.md) and is not
 restated here. The one structural fact: **binding is by name at both levels** —
 a mapping keyed by declared parameter, and inside each table, columns named for
 that parameter's declared dims. The single positional fallback (an *unnamed*

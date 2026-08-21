@@ -38,13 +38,21 @@ validation:
 
 nav:
   - Home: index.md
-  - Write a model: guide.md
-  - Change a model:
-      - The three loops: interactive.ipynb
+  - Run a model: guide.md
+  # The three sections this package is *about*, in the order a reader meets
+  # them: the data it binds, the verbs that bind it, and the models that do
+  # both. The language is a dependency and is documented with itself, so it is
+  # one entry near the bottom rather than a section here.
+  - Data:
+      - Preparing the data: examples/data.md
+      - The data contract: reference/data.md
+  - Python API:
+      - The verbs: reference/api.md
+      - Sweeps and rolling horizons: reference/sweeps.md
+      - Change a model: interactive.ipynb
       - Fix, relax, remove: lifecycle.ipynb
   - Examples:
       - examples/index.md
-      - Preparing the data: examples/data.md
       - Teaching examples:
           - dispatch: examples/dispatch.md
           - storage: examples/storage.md
@@ -95,11 +103,7 @@ nav:
           - Choosing the mode of transport: examples/transport_modes.md
           - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
           - Travelling salesman: examples/tsp_mtz.md
-  - Reference:
-      - Language: https://math-spec.readthedocs.io/en/latest/reference/language/
-      - Data binding: reference/data.md
-      - Python API: reference/api.md
-      - Sweeps and rolling horizons: reference/sweeps.md
+  - The language: https://math-spec.readthedocs.io/en/latest/reference/language/
   # Everything a reader does not need in order to write or run a model: design
   # notes, measured cost, project direction. One section, so the user path
   # above stays the whole of the top level.

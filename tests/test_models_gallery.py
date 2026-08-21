@@ -299,8 +299,16 @@ def test_no_tab_without_a_reference() -> None:
             )
 
 
-GUIDE = Path(__file__).resolve().parent.parent / 'docs' / 'guide.md'
-_TAUGHT_START = re.compile(r'^([ \t]*)(?:- expression:|where:)\s*\S')
+#: Hand-written prose that shows model YAML, checked against the models that
+#: run. `docs/guide.md` is not here: the language moved to math-spec and the
+#: guide links it rather than teaching it, so it shows no expressions to check.
+#: `README.md`'s block is what `docs/index.md` includes as the whole thing in
+#: one model, and until the guide's snippets left it was the one that had no
+#: check of its own.
+TEACHING_PAGES = (Path(__file__).resolve().parent.parent / 'README.md',)
+#: Both spellings of a declaration: a list item under `constraints:` and a
+#: mapping key under a named one.
+_TAUGHT_START = re.compile(r'^([ \t]*)(?:-\s*)?(?:expression|where):\s*\S')
 _QUOTED = ('expression', 'where')
 
 
@@ -316,7 +324,7 @@ def _normalise(text: str) -> str:
 
 
 def _taught(markdown: str) -> list[str]:
-    """Every expression and ``where`` the guide shows, as parsed strings.
+    """Every expression and ``where`` a page shows, as parsed strings.
 
     A snippet is its opening line plus the lines indented under it, so a folded
     scalar is collected whole rather than truncated to its ``>-`` header.
@@ -356,14 +364,14 @@ def _declared(node: object) -> Iterator[str]:
             yield from _declared(item)
 
 
-def test_the_guide_teaches_lines_that_exist() -> None:
-    """Every expression the guide shows is copied from a model that runs.
+@pytest.mark.parametrize('page', TEACHING_PAGES, ids=lambda p: p.name)
+def test_the_prose_teaches_lines_that_exist(page: Path) -> None:
+    """Every expression a prose page shows is copied from a model that runs.
 
-    The guide is prose, so nothing else would notice it drifting — and a
-    tutorial demonstrating syntax the compiler no longer accepts is worse than
-    no tutorial. Only expressions and `where` clauses are checked: the
-    dimension blocks are deliberately written in the compact form to be read,
-    not to be pasted.
+    Prose is prose, so nothing else would notice it drifting — and a page
+    demonstrating syntax the compiler no longer accepts is worse than no page.
+    Only expressions and `where` clauses are checked: the dimension blocks are
+    deliberately written in the compact form to be read, not to be pasted.
 
     Compared as **parsed values**, not as source lines. The line form was
     equivalent only while every expression fitted on one line; once a model
@@ -372,14 +380,14 @@ def test_the_guide_teaches_lines_that_exist() -> None:
 
     The corpus is ``constructs.models()`` — the same list the gallery and the
     matrix are built from — rather than a glob of ``examples/*.yaml``, which
-    silently excluded the two ports one directory down. A guide line taken
-    from a port would have failed here for not existing.
+    silently excluded the two ports one directory down. A line taken from a
+    port would have failed here for not existing.
     """
     declared = {text for _, path in constructs.models() for text in _declared(yaml.safe_load(path.read_text()))}
-    taught = _taught(GUIDE.read_text())
-    assert taught, 'no expressions found in docs/guide.md — the extractor is broken'
+    taught = _taught(page.read_text())
+    assert taught, f'no expressions found in {page.name} — the extractor is broken'
     for expression in taught:
-        assert expression in declared, f'docs/guide.md teaches an expression no example model contains:\n  {expression}'
+        assert expression in declared, f'{page.name} teaches an expression no example model contains:\n  {expression}'
 
 
 #: Every sentence that states how many ports there are, as ``(page, template)``.

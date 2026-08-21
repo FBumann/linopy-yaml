@@ -1,4 +1,4 @@
-# Data binding
+# The data contract
 
 The YAML declares shapes; `sources` supplies the numbers, keyed by the names
 the file declared:
@@ -11,6 +11,10 @@ result = lps.solve(
     {'load': 'load.parquet', 'cost': cost_frame, 'p_max': p_max_frame},
 )
 ```
+
+This page is what that mapping may contain — what binds, what is refused, and
+the sentence you get when it is. Getting *to* it from the files an instance
+actually arrives in is [preparing the data](../examples/data.md).
 
 ## What a parameter accepts
 

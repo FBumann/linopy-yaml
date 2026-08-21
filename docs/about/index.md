@@ -2,7 +2,8 @@
 
 Why the package is shaped the way it is, what it costs, where it came from and
 where it is going. Nothing here is needed to write or run a model — that is
-[the guide](../guide.md) and [the reference](https://math-spec.readthedocs.io/en/latest/reference/language/).
+[the guide](../guide.md), [the API](../reference/api.md) and
+[the language](https://math-spec.readthedocs.io/en/latest/reference/language/).
 
 | | |
 |---|---|
