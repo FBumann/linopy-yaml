@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from math_spec import expand_piecewise
 from math_spec.resolution import Namespace, expression_of, where_of
 from math_spec.validation import validate_expressions
 
@@ -98,7 +99,7 @@ def test_string_literal_rhs_still_works():
     coordinates are compared."""
     schema = _schema(**{'variables.p.where': 'generator == wind'})
     validate_expressions(schema)
-    program = lower_program(schema)
+    program = lower_program(expand_piecewise(schema))
     assert program.variables[0].where is not None
 
 

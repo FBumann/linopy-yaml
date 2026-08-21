@@ -85,7 +85,7 @@ def test_the_convex_flag_gives_the_hull_and_stays_a_pure_lp(nonconvex_inputs):
     """
     data = nonconvex_inputs
 
-    program = lower_program(schema_of(CONVEX_MODEL))
+    program = lower_program(expand_piecewise(schema_of(CONVEX_MODEL)))
     assert all(v.variable_type == 'continuous' for v in program.variables), 'method: convex is a pure LP'
 
     on_curve = sum(curve(v, data['bp_x'], data['bp_y']) for v in data['load'])
@@ -172,7 +172,7 @@ def test_breakpoints_may_vary_along_another_dim():
         'bp': bps,
     }
 
-    lower_program(schema_of(example))
+    lower_program(expand_piecewise(schema_of(example)))
 
     with differential(example, data) as run:
         p = by_coord(run.result, 'p', 'snapshot', 'generator')
@@ -203,7 +203,7 @@ def test_the_sos2_method_states_the_restriction_instead_of_building_it():
     emitted = expanded.sos['cost_curve']
     assert (emitted.variable, emitted.over, emitted.type, emitted.big_m) == ('cost_curve_lam', 'bp', 2, None)
 
-    program = lower_program(schema_of(SOS2_MODEL))
+    program = lower_program(expand_piecewise(schema_of(SOS2_MODEL)))
     assert all(v.variable_type == 'continuous' for v in program.variables), 'sos2 emits no binary of its own'
     assert [(s.variable, s.sos_type) for s in program.sos] == [('cost_curve_lam', 2)]
 

@@ -106,7 +106,7 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
     with note(f'while loading {_named(model)}'):
         original = load_model(model)
         schema = expand_piecewise(original)
-        lower_program(original)
+        lower_program(schema)
 
         tidy = tidy_sources(original, sources)
         validate_curve_extent(original, tidy)
@@ -160,7 +160,7 @@ def expression(
                 unknown_name_message('named expression', name, schema.expressions)
                 + ' expression() takes a name declared under expressions:, never an expression string.'
             )
-        lower_program(original)
+        lower_program(schema)
         lower_expression(schema, name)
         tidy = tidy_sources(original, sources)
         master_coords, dim_coords = dimension_coords(schema, tidy)

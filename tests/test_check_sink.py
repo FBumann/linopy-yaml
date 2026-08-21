@@ -11,6 +11,7 @@ from __future__ import annotations
 import warnings
 
 import pytest
+from math_spec import expand_piecewise, load_model
 
 import lpspec as lps
 from lpspec.errors import LpspecError, LpspecWarning
@@ -220,4 +221,4 @@ def test_a_set_beside_a_hessian_is_the_pair_highs_refuses():
 
 def _program(model):
     """The lowered plan a capability question is asked of."""
-    return lower_program(lps.load_model(model))
+    return lower_program(expand_piecewise(load_model(model)))

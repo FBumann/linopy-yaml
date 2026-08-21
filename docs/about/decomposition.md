@@ -202,7 +202,7 @@ objective on the subproblem.
 ## The loop
 
 ```python
-sub_model, feasibility_model, master_model = (lps.load_model(path) for path in paths)
+sub_model, feasibility_model, master_model = (load_model(path) for path in paths)
 
 for step in range(25):
     with lps.solve(sub_model, {**dispatch, 'cap_hat': capacity}) as sub:

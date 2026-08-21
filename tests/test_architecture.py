@@ -348,7 +348,6 @@ def test_every_repository_path_a_workflow_names_exists():
 PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
-    'load it': {'load_model', 'Model'},
     'catch it': {
         'LpspecError',
         'LanguageError',

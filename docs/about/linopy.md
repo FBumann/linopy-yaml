@@ -70,7 +70,7 @@ lpspec_linopy.expression(m, 'model.yaml', 'co2', {...})  # a named quantity, rea
 Both are *pure*: YAML in, a model or a value out, nothing retained. `build`
 returns a plain `linopy.Model` — no accessor, no attached schema, no patched
 attributes — so nothing is lost across `pickle`, `deepcopy` or `to_netcdf`. To
-inspect the math, re-read the file with `lps.load_model`.
+inspect the math, re-read the file with `load_model`.
 `expression` is the reader the same purity forces to take `sources` again: it
 evaluates a declared named expression ([named expressions](https://energy-models.github.io/math-spec/reference/language/expressions#named-expressions))
 on the solved model and hands back linopy's native `.solution` — the eager

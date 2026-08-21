@@ -20,6 +20,7 @@ from typing import Any
 
 import polars as pl
 import pytest
+from math_spec import load_model
 from math_spec.typeset import to_markdown
 
 import lpspec as lps
@@ -558,7 +559,7 @@ def _without_the_set() -> dict[str, Any]:
     block expands into, minus the set. ``method: convex`` cannot spell this
     relaxation: the curvature guard refuses it on a concave curve.
     """
-    raw = lps.load_model('examples/sos.yaml').to_dict()
+    raw = load_model('examples/sos.yaml').to_dict()
     raw.pop('piecewise')
     raw['variables']['lam'] = {'foreach': ['snapshot', 'generator', 'bp'], 'bounds': {'lower': 0, 'upper': 1}}
     raw['constraints'] |= {

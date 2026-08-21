@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
+from math_spec import expand_piecewise
 
 from lpspec.lowering import expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
@@ -127,9 +128,9 @@ def differential(
         if not np.isfinite(oracle):
             raise NoFiniteAnswerError('the eager oracle is infeasible or unbounded — fix the data, not the tolerance')
 
-        program = lower_program(schema)
+        program = lower_program(expand_piecewise(schema))
         with PolarsEngine() as engine:
-            engine.build(program, tidy_sources(schema, dict(sources)), expression_thunks(schema))
+            engine.build(program, tidy_sources(schema, dict(sources)), expression_thunks(expand_piecewise(schema)))
             result = engine.solve()
             assert result.is_ok
             assert result.objective == pytest.approx(oracle, rel=rel)

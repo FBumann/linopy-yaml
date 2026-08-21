@@ -64,7 +64,6 @@ from math_spec import (
     check_binary,
     dims_of,
     edge_error,
-    expand_piecewise,
     expression_of,
     where_of,
 )
@@ -75,13 +74,19 @@ from lpspec.relational import plan
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from math_spec import Buildable, Model
+    from math_spec import Buildable
 
 _SENSES = {'==', '<=', '>='}
 
 
-def lower_program(schema: Model) -> plan.Program:
-    """Compile a validated :class:`Model` into a :class:`Program`.
+def lower_program(schema: Buildable) -> plan.Program:
+    """Compile a :class:`Buildable` into a :class:`Program`.
+
+    Takes the expanded model rather than expanding one: a plan is built from
+    declarations, and `Buildable` is the type that guarantees they are all
+    there. Every caller already held one — the expansion is memoised on the
+    model — so this moves no work, it only stops the guarantee being a
+    convention four consumers happened to observe.
 
     A ``domain: binary`` variable lowers with fixed 0/1 bounds, matching
     linopy's ``binary=True``.
@@ -90,7 +95,7 @@ def lower_program(schema: Model) -> plan.Program:
         LanguageError: A construct outside the streaming language, named with
             its rewrite.
     """
-    expanded = expand_piecewise(schema)
+    expanded = schema
     ns = Namespace.of(expanded)
     parameters = tuple(
         plan.ParameterDeclaration(name, tuple(pdef.dims), pdef.dtype) for name, pdef in expanded.parameters.items()
@@ -168,7 +173,7 @@ def lower_program(schema: Model) -> plan.Program:
     return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos)
 
 
-def lower_expression(schema: Model, name: str) -> plan.Expression:
+def lower_expression(schema: Buildable, name: str) -> plan.Expression:
     """Compile the named expression *name* into a plan expression, on demand.
 
     The read-time half of ``expressions:``. :func:`lower_program` lowers none
@@ -183,7 +188,7 @@ def lower_expression(schema: Model, name: str) -> plan.Expression:
         KeyError: No named expression called *name*.
         LanguageError: A construct outside the streaming language.
     """
-    expanded = expand_piecewise(schema)
+    expanded = schema
     context = f"named expression '{name}'"
     ns = Namespace.of(expanded)
     ast = expression_of(expanded.expressions[name].expression, expanded, ns, context)
@@ -191,7 +196,7 @@ def lower_expression(schema: Model, name: str) -> plan.Expression:
     return _lower_expr(ast, expanded, context)
 
 
-def expression_thunks(schema: Model) -> dict[str, Callable[[], plan.Expression]]:
+def expression_thunks(schema: Buildable) -> dict[str, Callable[[], plan.Expression]]:
     """One deferred :func:`lower_expression` per declared named expression.
 
     What a build hands the engine so a solve's result can read them: thunks,

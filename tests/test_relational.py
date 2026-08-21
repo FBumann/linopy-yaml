@@ -24,6 +24,7 @@ from dataclasses import replace
 import numpy as np
 import polars as pl
 import pytest
+from math_spec import expand_piecewise
 from math_spec.model import Model
 
 import lpspec as lps
@@ -1002,7 +1003,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         """
         model, sources = _network(ends)
         with lps.build(model, sources) as bound:
-            program = lower_program(Model(**model))
+            program = lower_program(expand_piecewise(Model(**model)))
             terms = bound._engine._q.expression(program.constraints[0].lhs, 'test').terms
             assert len(terms) == 2
 
@@ -1031,7 +1032,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             'cost': pl.DataFrame({'i': [0, 1], 'value': [2.0, 3.0]}),
             'lb': pl.DataFrame({'i': [0, 1], 'value': [1.0, 1.0]}),
         }
-        assert _objective_table(lower_program(Model(**base)), sources) == (expected, 2)
+        assert _objective_table(lower_program(expand_piecewise(Model(**base))), sources) == (expected, 2)
 
     def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows(self):
         """A fragment's dims can match the variable's while its rows do not.
@@ -1059,7 +1060,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             ),
             'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 5.0]}),
         }
-        assert _objective_table(lower_program(Model(**model)), sources) == ({0: 6.0, 1: 6.0}, 2), (
+        assert _objective_table(lower_program(expand_piecewise(Model(**model))), sources) == ({0: 6.0, 1: 6.0}, 2), (
             'one row per column, each carrying the summed price — not three rows of one'
         )
 

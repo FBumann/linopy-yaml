@@ -28,7 +28,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from math_spec import expand_piecewise, load_model, unbounded_notes
+from math_spec import Model, expand_piecewise, load_model, unbounded_notes
 
 from lpspec.errors import DataError, LpspecError, LpspecWarning, lane_cannot_build_message
 from lpspec.lowering import advice, expression_thunks, lower_expression, lower_program
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
 #: Re-exported: parsing and validating a model is the *language's* job, and a
 #: consumer that binds no data (``typeset``) must be able to reach it without
-#: reaching the runner. Callers keep saying ``lps.load_model``.
+#: reaching the runner. Callers keep saying ``load_model``.
 __all__ = ['build', 'check', 'load_model', 'solve', 'write']
 
 
@@ -129,7 +129,7 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
             reformulated. Issued here and nowhere else.
     """
     schema = load_model(model)
-    program = lower_program(schema)
+    program = lower_program(expand_piecewise(schema))
     for name in schema.expressions:
         lower_expression(schema, name)
     notes = [*unbounded_notes(expand_piecewise(schema)), *advice(program)]
@@ -158,8 +158,13 @@ class BoundModel:
     """
 
     def __init__(self, schema: Model, sources: Mapping[str, Any]) -> None:
+        #: Both forms, because both are needed and they are not the same thing.
+        #: The plan is built from declarations, so it takes the expanded model;
+        #: binding reads `piecewise:` itself to derive a curve's mask, so it
+        #: takes the file as written. One expansion, memoised on the model.
         self._schema = schema
-        self._program = lower_program(schema)
+        self._buildable = expand_piecewise(schema)
+        self._program = lower_program(self._buildable)
         self._sources = dict(sources)
         self._engine = PolarsEngine()
         self._fill()
@@ -175,7 +180,7 @@ class BoundModel:
             self._engine.build(
                 self._program,
                 tidy_sources(self._schema, dict(self._sources)),
-                expressions=expression_thunks(self._schema),
+                expressions=expression_thunks(self._buildable),
             )
         except BaseException:
             self._engine.close()

@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import pytest
+from math_spec import expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError
@@ -83,7 +84,7 @@ def _flatten(expr):
 
 
 def test_sum_lowers_to_one_node_per_injection_term():
-    program = lower_program(schema_of(TRANSPORT_YAML))
+    program = lower_program(expand_piecewise(schema_of(TRANSPORT_YAML)))
 
     (c,) = program.constraints
     assert c.dims == ('snapshot', 'bus')
@@ -152,7 +153,7 @@ def test_a_lookup_over_another_dim_is_a_dim_error_not_a_resolution_one():
 def _relationally(data):
     schema = schema_of(TRANSPORT_YAML)
     with PolarsEngine() as engine:
-        engine.build(lower_program(schema), tidy_sources(schema, data))
+        engine.build(lower_program(expand_piecewise(schema)), tidy_sources(schema, data))
 
 
 def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):

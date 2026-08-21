@@ -9,6 +9,7 @@ Errors must carry the construct and its context, verbatim.
 from __future__ import annotations
 
 import pytest
+from math_spec import expand_piecewise
 from math_spec.dimensions import check_schema
 
 import lpspec as lps
@@ -40,7 +41,7 @@ def test_every_shipped_example_is_inside_the_language(path):
     """The examples are the language's own claim about itself — one of them
     falling outside the streaming subset would be a documentation bug that
     only shows up when a reader runs it."""
-    lower_program(schema_of(path))
+    lower_program(expand_piecewise(schema_of(path)))
 
 
 @pytest.mark.parametrize(
@@ -58,7 +59,7 @@ def test_every_shipped_example_is_inside_the_language(path):
 )
 def test_inside_the_language(patch):
     """Each of these lowers, so both lanes accept it."""
-    lower_program(schema_of(DISPATCH, **patch))
+    lower_program(expand_piecewise(schema_of(DISPATCH, **patch)))
 
 
 @pytest.mark.parametrize(
@@ -110,7 +111,7 @@ def test_an_unknown_operator_names_its_context_and_teaches_the_rewrite():
     would be telling the user to leave the language rather than restate it."""
     patch = {'constraints.power_balance.expression': 'my_helper(p, over=generator) == load'}
     with pytest.raises(LanguageError, match='my_helper') as exc:
-        lower_program(schema_of(DISPATCH, **patch))
+        lower_program(expand_piecewise(schema_of(DISPATCH, **patch)))
 
     reason = str(exc.value)
     assert 'power_balance' in reason, 'the reason carries its context'

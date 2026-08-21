@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from math_spec import expand_piecewise
 from math_spec.model import Model
 from math_spec.resolution import Namespace
 
@@ -62,7 +63,7 @@ def test_dispatch_yaml_agrees_variable_by_variable(dispatch_inputs):
 
 
 def test_lower_program_structure(dispatch_schema):
-    program = lower_program(dispatch_schema)
+    program = lower_program(expand_piecewise(dispatch_schema))
 
     assert [p.name for p in program.parameters] == ['p_max', 'load', 'cost']
     (v,) = program.variables
@@ -139,7 +140,9 @@ def test_a_power_lowers_only_where_no_variable_is_under_it(dispatch_schema):
 
 
 def test_a_binary_variable_lowers_to_a_vtype():
-    program = lower_program(schema_of(DISPATCH_YAML, **{'variables.p.domain': 'binary', 'variables.p.bounds': {}}))
+    program = lower_program(
+        expand_piecewise(schema_of(DISPATCH_YAML, **{'variables.p.domain': 'binary', 'variables.p.bounds': {}}))
+    )
     assert program.variable('p').variable_type == 'binary'
 
 

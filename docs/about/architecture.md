@@ -315,7 +315,7 @@ choice load-bearing in the language's rulebook.
    package of its own without an edit. `load_model` sits
    inside that fence — parsing and validating is the language's own job, and a
    consumer that binds no data must reach it without reaching a runner; `api.py`
-   re-exports it so callers keep saying `lps.load_model`. The traffic the other
+   re-exports it so callers keep saying `load_model`. The traffic the other
    way is shaped too: a consumer reads the AST through `math_spec` itself
    and never through a module under it, so what the waist promises is
    **fifty-eight names in one `__all__`** — thirty-one node types, seven for the

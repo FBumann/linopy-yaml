@@ -22,9 +22,7 @@ installed reads ``0.0.0``.
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
-from math_spec import Model
-
-from lpspec.api import build, check, load_model, solve, write
+from lpspec.api import build, check, solve, write
 from lpspec.errors import (
     DataError,
     DimensionError,
@@ -44,12 +42,10 @@ __all__ = [
     'LaneError',
     'LanguageError',
     'LpspecError',
-    'Model',
     'PiecewiseExpansionError',
     'SchemaError',
     'build',
     'check',
-    'load_model',
     'solve',
     'solve_over',
     'write',
