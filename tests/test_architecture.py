@@ -641,9 +641,10 @@ CROSSES_THE_CUT = {
     'tests/test_piecewise_lp.py': 'the same curves, for the `method: lp` half',
     'tests/test_api.py': 'a docstring citing `docs/about/ceiling.md`, and one naming `tests/language/`',
     'tests/test_architecture.py': 'the fences themselves: this file is split at the cut, not moved',
+    'tests/expression_space.py': 'its `shift` constructor cites `docs/reference/language/operators.md` '
+    'for the vacated edge being absent, which is the fact it encodes',
     'tools/constructs.py': 'a comment citing `docs/reference/language/` for its column order',
     'tests/test_absence.py': 'its docstring cites `docs/reference/language/absence.md` for the rule the whole file follows from; the page moves and the citation becomes a link',
-    'tests/expression_space.py': 'its `shift` rule cites `docs/reference/language/operators.md` for the vacated edge being absent — the fact the generator encodes, so the citation stays and becomes a link',
     'tests/test_typeset_gallery.py': 'its docstring names `tests/typeset/`, the renderer tests it was '
     'split out of; what it asserts is about the gallery, which stays',
     'tests/test_expansion_parity.py': 'a comment naming the language test whose model it copies '

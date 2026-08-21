@@ -53,6 +53,17 @@ if TYPE_CHECKING:
 RTOL = 1e-9
 
 
+class NoFiniteAnswerError(AssertionError):
+    """The fixture admits no finite optimum, so neither lane is on trial.
+
+    An ``AssertionError`` because that is what it was and what every caller
+    that does not catch it still wants: a failure naming the fixture. A class
+    of its own because a caller generating its models — ``test_expression_sweep``
+    — must tell "this data has no answer" from "the lanes disagree", and was
+    doing it by matching the message text.
+    """
+
+
 @dataclass
 class Agreement:
     """What the two lanes produced, for tests that assert past the objective."""
@@ -112,7 +123,8 @@ def differential(
         m = lpspec_linopy.build(path, dict(sources))
         m.solve(solver_name='highs', output_flag=False, reformulate_sos='auto')
         oracle = float(m.objective.value)
-        assert np.isfinite(oracle), 'the eager oracle is infeasible or unbounded — fix the data, not the tolerance'
+        if not np.isfinite(oracle):
+            raise NoFiniteAnswerError('the eager oracle is infeasible or unbounded — fix the data, not the tolerance')
 
         program = lower_program(schema)
         with PolarsEngine() as engine:

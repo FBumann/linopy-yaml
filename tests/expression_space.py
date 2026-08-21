@@ -6,19 +6,20 @@ three over two dimensions the space of spellings is *finite*, so the sweep in
 the same on both lanes — rather than "a hundred did".
 
 **Built well-formed, not filtered.** Each node carries the dimensions and the
-degree it produces, and a constructor refuses what the language would refuse:
-summing over a dimension the operand does not carry, a product past degree two,
-a constraint with no variable in it. Trial-loading the candidates instead cost
-twenty seconds of collection, in every xdist worker, and turned a genuine load
-error into one more rejected candidate. Here a load error is a failure.
+degree it produces, and the constructors that can fail refuse what the language
+would refuse: summing over a dimension the operand does not carry, a product
+past degree two. Trial-loading the candidates instead cost twenty seconds of
+collection, in every xdist worker, and turned a genuine load error into one more
+rejected candidate. Here a load error is a failure.
 
 **Rewrites are built, not found.** Depth bounds expression *size*, and the rules
 worth checking need a *shape* — which gets rarer as the space grows, not
 commoner. Enumerating to depth three and collecting the rules that happened to
-fire yielded 2,460 commutativity pairs, which ``test_arithmetic_laws.py``
-already states by hand, and **ten** of ``reduction-is-linear``, which is the one
-the sweep exists for. So the rule-carrying shapes are constructed over an
-operand pool instead, and the two commute rules are left to the curated file.
+fire yielded 3,824 commutativity pairs, which ``test_arithmetic_laws.py``
+already states by hand, and ten of ``reduction-is-linear``, which is the one the
+sweep exists for (#1203). So the rule-carrying shapes are constructed over an
+operand pool instead — one builder per rule, below — and the two commute rules
+are left to the curated file.
 
 ``reduction-is-linear`` is the rule with a side condition: ``sum(a + b)`` and
 ``sum(a) + sum(b)`` are equal only while every operand is *total*, and the
@@ -34,20 +35,13 @@ the sweep report a gap it already knows about.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING
 
+from tests.conftest import LAW_DIMS, law_model
+
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
-#: The two dimensions every expression is written over.
-DIMS = {'f': {'values': ['a', 'b']}, 't': {'dtype': 'int', 'values': [0, 1]}}
-
-#: `gate` masks `y`; `w` is a dense coefficient. The same fixture the curated
-#: laws use, because a sweep that agrees with them has to be over one model.
-DATA_SHAPE = {'gate': {'a': True}, 'w': {'a': 2.0, 'b': 3.0}}
-
-#: The degree past which the language refuses a product.
-MAX_DEGREE = 2
+    from collections.abc import Callable, Iterator
 
 
 @dataclass(frozen=True)
@@ -79,20 +73,26 @@ LEAVES = (
 )
 
 
-def negate(a: Node) -> Node | None:
+# ---------------------------------------------------------------------------
+# the constructors — the two that cannot fail return a node, the three that can
+# return None, which is how the enumeration drops what the language would refuse
+# without ever writing it down
+# ---------------------------------------------------------------------------
+
+
+def negate(a: Node) -> Node:
     return Node(f'-({a})', a.dims, a.degree, a.total)
 
 
-def add(a: Node, b: Node) -> Node | None:
+def add(a: Node, b: Node) -> Node:
     return Node(f'({a}) + ({b})', a.dims | b.dims, max(a.degree, b.degree), a.total and b.total)
 
 
 def multiply(a: Node, b: Node) -> Node | None:
     """A product past degree two is not in the language, so it is not generated."""
-    degree = a.degree + b.degree
-    if degree > MAX_DEGREE:
+    if a.degree + b.degree > 2:
         return None
-    return Node(f'({a}) * ({b})', a.dims | b.dims, degree, a.total and b.total)
+    return Node(f'({a}) * ({b})', a.dims | b.dims, a.degree + b.degree, a.total and b.total)
 
 
 def summed(a: Node, over: str) -> Node | None:
@@ -109,7 +109,7 @@ def shifted(a: Node, over: str) -> Node | None:
     (docs/reference/language/operators.md), so a shift introduces absence
     wherever it lands however total its operand was. Propagating ``total``
     through it made the generator emit ``reduction-is-linear`` pairs whose side
-    condition does not hold, and thirty-four of them duly disagreed — the law is
+    condition does not hold, and they duly disagreed (#1203) — the law is
     intact, the claim about the operand was not.
     """
     if over not in a.dims:
@@ -121,9 +121,9 @@ def shifted(a: Node, over: str) -> Node | None:
 #: the same list on every machine and a failing id can be found again.
 UNARY: tuple[Callable[[Node], Node | None], ...] = (
     negate,
-    lambda a: summed(a, 'f'),
-    lambda a: summed(a, 't'),
-    lambda a: shifted(a, 't'),
+    partial(summed, over='f'),
+    partial(summed, over='t'),
+    partial(shifted, over='t'),
 )
 BINARY: tuple[Callable[[Node, Node], Node | None], ...] = (add, multiply)
 
@@ -148,27 +148,18 @@ def expressions(depth: int) -> tuple[Node, ...]:
     return tuple(node for node in space if node.degree == 1)
 
 
-def model_of(node: Node) -> dict:
-    """A model whose only variable content is *node*, in a binding row.
+def row_model(node: Node) -> dict:
+    """The shared fixture's model, with *node* as its one binding row.
 
     ``foreach`` is the expression's own dimensions: anything else is a row
     repeated across a dimension the expression does not carry, which the
     language refuses — so it is computed rather than searched for.
     """
-    return {
-        'dimensions': dict(DIMS),
-        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'w': {'dims': ['f']}},
-        'variables': {
-            'x': {'foreach': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
-            'y': {'foreach': ['f', 't'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
-        },
-        'constraints': {'c': {'foreach': sorted(node.dims), 'expression': f'{node} <= 10'}},
-        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
-    }
+    return law_model(f'{node} <= 10', foreach=sorted(node.dims))
 
 
 # ---------------------------------------------------------------------------
-# the rewrites
+# the rewrites — one builder per rule, because the rule is the case
 # ---------------------------------------------------------------------------
 
 
@@ -188,45 +179,49 @@ def _pool() -> tuple[Node, ...]:
     conditional on, so it belongs in the curated non-laws rather than here,
     where every pair must be an equality.
     """
-    space: tuple[Node, ...] = LEAVES
-    space = _grown(space)
-    return tuple(node for node in space if node.total)
+    return tuple(node for node in _grown(LEAVES) if node.total)
+
+
+def _negate_through_sum(pool: tuple[Node, ...], over: str) -> Iterator[Rewrite]:
+    """A negation moves through a reduction: ``sum(-(a))`` is ``-(sum(a))``."""
+    for a in pool:
+        inner = summed(a, over)
+        if a.degree == 1 and inner is not None:
+            yield Rewrite('negate-through-sum', summed(negate(a), over), negate(inner))
+
+
+def _reduction_is_linear(pool: tuple[Node, ...], over: str) -> Iterator[Rewrite]:
+    """A reduction splits across a sum: ``sum(a + b)`` is ``sum(a) + sum(b)``.
+
+    Only while both operands are total, which is what ``pool`` guarantees, and
+    only where the whole is a row the eager lane can build — a degree-two
+    summand is #942's gap rather than a disagreement.
+    """
+    for a in pool:
+        for b in pool:
+            summand = add(a, b)
+            parts = summed(summand, over), summed(a, over), summed(b, over)
+            if summand.degree == 1 and all(part is not None for part in parts):
+                whole, left, right = parts
+                yield Rewrite('reduction-is-linear', whole, add(left, right))
+
+
+def _double_negation(pool: tuple[Node, ...]) -> Iterator[Rewrite]:
+    """Two negations are none: ``-(-(a))`` is ``a``."""
+    for a in pool:
+        if a.degree == 1:
+            yield Rewrite('double-negation', negate(negate(a)), a)
 
 
 def rewrites() -> tuple[Rewrite, ...]:
     """Every rule-carrying shape, built over the operand pool.
 
-    Three rules, each constructed rather than waited for:
-
-    - ``reduction-is-linear`` — ``sum(a + b, over=d)`` against
-      ``sum(a, over=d) + sum(b, over=d)``, for every total pair whose sum is a
-      constraint row the eager lane can build.
-    - ``negate-through-sum`` — ``sum(-(a), over=d)`` against ``-(sum(a, over=d))``.
-    - ``double-negation`` — ``-(-(a))`` against ``a``.
-
     Returns:
-        The pairs, ordered, so a failing id can be found again.
+        The pairs, ordered by rule and then by operand, so a failing id can be
+        found again and the census sampling a stride of them samples the same
+        stride on every machine.
     """
     pool = _pool()
-    built: list[Rewrite] = []
-    for over in sorted(DIMS):
-        for a in pool:
-            if a.degree == 1 and (negated := negate(a)) is not None and (lhs := summed(negated, over)) is not None:
-                inner = summed(a, over)
-                if inner is not None and (rhs := negate(inner)) is not None:
-                    built.append(Rewrite('negate-through-sum', lhs, rhs))
-            for b in pool:
-                summand = add(a, b)
-                if summand is None or summand.degree != 1:
-                    continue
-                lhs = summed(summand, over)
-                left, right = summed(a, over), summed(b, over)
-                if lhs is None or left is None or right is None:
-                    continue
-                built.append(Rewrite('reduction-is-linear', lhs, add(left, right)))
-    built += [
-        Rewrite('double-negation', doubled, a)
-        for a in pool
-        if a.degree == 1 and (doubled := negate(negate(a))) is not None
-    ]
-    return tuple(built)
+    over_a_dim = (_negate_through_sum, _reduction_is_linear)
+    built = [pair for rule in over_a_dim for over in sorted(LAW_DIMS) for pair in rule(pool, over)]
+    return tuple(built + list(_double_negation(pool)))

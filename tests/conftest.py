@@ -350,6 +350,64 @@ def commitment_inputs():
     }
 
 
+# ---------------------------------------------------------------------------
+# the law fixture: one model, one masked dimension
+# ---------------------------------------------------------------------------
+#
+# `test_arithmetic_laws.py` states the laws a reader should know, chosen by
+# hand; `test_expression_sweep.py` sweeps every spelling at a bounded depth.
+# The second is evidence about the first only while both are written over the
+# *same* model — otherwise a law holding there and a sweep agreeing here are
+# two unrelated facts — which is the second importer that brings it here.
+
+#: The two dimensions every expression in those two files is written over.
+LAW_DIMS = {'f': {'values': ['a', 'b']}, 't': {'dtype': 'int', 'values': [0, 1]}}
+
+
+def law_data() -> dict[str, Any]:
+    """``gate`` masks ``y`` at ``f=b``; ``w`` is a dense coefficient.
+
+    Every interesting law is conditional on whether absence is in play, so the
+    fixture keeps one masked variable and one total one, and one coefficient
+    that is not a variable at all.
+    """
+    import pandas as pd
+
+    return {'gate': pd.Series({'a': True}), 'w': pd.Series({'a': 2.0, 'b': 3.0})}
+
+
+def law_model(
+    expression: str,
+    *,
+    foreach: list[str],
+    objective: str = 'sum(x)',
+    also: dict | None = None,
+) -> dict:
+    """A model whose only variable content is *expression*, in a binding row.
+
+    Args:
+        expression: The constraint the model exists to state.
+        foreach: The dimensions the row is repeated over. Required rather than
+            defaulted: a row repeated across a dimension its expression does
+            not carry is refused, so the caller that built the expression is
+            the one that knows.
+        objective: What is maximised, unless the caller needs the row to bind
+            against something else.
+        also: A second named constraint, for the cases that need two rules —
+            which are two blocks rather than two entries in a list (#298).
+    """
+    return {
+        'dimensions': dict(LAW_DIMS),
+        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'w': {'dims': ['f']}},
+        'variables': {
+            'x': {'foreach': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
+            'y': {'foreach': ['f', 't'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
+        },
+        'constraints': {'c': {'foreach': foreach, 'expression': expression}, **(also or {})},
+        'objective': {'sense': 'maximize', 'expression': objective},
+    }
+
+
 @pytest.fixture
 def transport_data():
     """A four-bus network whose data is feasible by construction.
