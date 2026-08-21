@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.248](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.247...v0.0.1-alpha.248) (2026-08-21)
+
+
+### Documentation
+
+* **architecture:** the map describes the tree the cut left behind ([#1227](https://github.com/fluxopt/lpspec/issues/1227)) ([a987491](https://github.com/fluxopt/lpspec/commit/a9874915b10edddc35a52a00ef6b1fb0746ac934))
+
 ## [0.0.1-alpha.247](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.246...v0.0.1-alpha.247) (2026-08-21)
 
 
