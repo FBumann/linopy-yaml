@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.239](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.238...v0.0.1-alpha.239) (2026-08-21)
+
+
+### Features
+
+* **language:** a model still owing declarations cannot reach a builder ([#1200](https://github.com/fluxopt/lpspec/issues/1200)) ([5f53d6d](https://github.com/fluxopt/lpspec/commit/5f53d6dcb1332b05af6f80ae78e4ae22adab4eae))
+
+
+### Documentation
+
+* **ceiling:** the spec's ceiling names no solver ([#1196](https://github.com/fluxopt/lpspec/issues/1196)) ([992f1aa](https://github.com/fluxopt/lpspec/commit/992f1aa260c1035f5eeb98b1d01b897a8b2f8960))
+
 ## [0.0.1-alpha.238](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.237...v0.0.1-alpha.238) (2026-08-20)
 
 
