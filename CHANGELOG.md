@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.1-alpha.242](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.241...v0.0.1-alpha.242) (2026-08-21)
+
+
+### Refactoring
+
+* **tests:** a test is named for its construct, and the residue file is split ([#1209](https://github.com/fluxopt/lpspec/issues/1209)) ([935bfd7](https://github.com/fluxopt/lpspec/commit/935bfd7ca5ebe3f3e911125ceb8a682866835113))
+* **tests:** the relational tests say what each group shares ([#1211](https://github.com/fluxopt/lpspec/issues/1211)) ([c389f6c](https://github.com/fluxopt/lpspec/commit/c389f6c7b4a60e6711673b720dac9bebb43b7ce6))
+
+
+### Documentation
+
+* **agents:** coverage is a local instrument, and the tree says so ([#1207](https://github.com/fluxopt/lpspec/issues/1207)) ([a1dc544](https://github.com/fluxopt/lpspec/commit/a1dc544ba0573763835ab11ec927ed362f359ce7))
+
 ## [0.0.1-alpha.241](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.240...v0.0.1-alpha.241) (2026-08-21)
 
 
