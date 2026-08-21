@@ -136,6 +136,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help='rewrite committed golden output (examples/*.out) from this run instead of asserting on it',
     )
+    parser.addoption(
+        '--sweep-depth',
+        type=int,
+        default=2,
+        help='how deep tests/test_expression_sweep.py enumerates; 3 is minutes and has its own CI job',
+    )
 
 
 # ---------------------------------------------------------------------------
