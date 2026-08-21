@@ -80,7 +80,7 @@ if TYPE_CHECKING:
     import linopy
     import pandas as pd
 
-    from lpspec.language import Model
+    from lpspec.language import Buildable
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
 
@@ -115,7 +115,7 @@ class EvaluationContext:
     model: linopy.Model
     dataset: xr.Dataset
     master_coords: dict[str, pd.Index]
-    schema: Model
+    schema: Buildable
     ns: Namespace
     #: dim -> {coordinate name: values as a DataArray over that dim}
     dim_coords: dict[str, dict[str, xr.DataArray]] = field(default_factory=dict)
@@ -123,7 +123,7 @@ class EvaluationContext:
 
 def build_model(
     model: linopy.Model,
-    schema: Model,
+    schema: Buildable,
     dataset: xr.Dataset,
     master_coords: dict[str, pd.Index],
     dim_coords: dict[str, dict[str, xr.DataArray]] | None = None,

@@ -23,7 +23,7 @@ from lpspec.language import BinaryOperatorNode, NameNode, ParameterNode, Variabl
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from lpspec.language import ComparisonNode, ExpressionNode, Model
+    from lpspec.language import Buildable, ComparisonNode, ExpressionNode
 
 
 def gaps_under(array: Any, mask: Any) -> int:
@@ -40,7 +40,7 @@ def gaps_under(array: Any, mask: Any) -> int:
     return int(missing.sum())
 
 
-def check_constant_side_covers(name: str, node: ComparisonNode, schema: Model, dataset: Any, mask: Any) -> None:
+def check_constant_side_covers(name: str, node: ComparisonNode, schema: Buildable, dataset: Any, mask: Any) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
     The divisor argument, one position over. A missing row is read as 0, and on
@@ -67,7 +67,9 @@ def check_constant_side_covers(name: str, node: ComparisonNode, schema: Model, d
                 raise DataError(uncovered_constant_message(param, missing, name))
 
 
-def check_divisors_cover(name: str, node: ExpressionNode, schema: Model, dataset: Any, mask: Any, model: Any) -> None:
+def check_divisors_cover(
+    name: str, node: ExpressionNode, schema: Buildable, dataset: Any, mask: Any, model: Any
+) -> None:
     """A divisor must have a value wherever this declaration divides by it.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check

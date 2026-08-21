@@ -74,7 +74,7 @@ from lpspec.relational import plan
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from lpspec.language import Model
+    from lpspec.language import Buildable, Model
 
 _SENSES = {'==', '<=', '>='}
 
@@ -89,14 +89,14 @@ def lower_program(schema: Model) -> plan.Program:
         LanguageError: A construct outside the streaming language, named with
             its rewrite.
     """
-    schema = expand_piecewise(schema)
-    ns = Namespace.of(schema)
+    expanded = expand_piecewise(schema)
+    ns = Namespace.of(expanded)
     parameters = tuple(
-        plan.ParameterDeclaration(name, tuple(pdef.dims), pdef.dtype) for name, pdef in schema.parameters.items()
+        plan.ParameterDeclaration(name, tuple(pdef.dims), pdef.dtype) for name, pdef in expanded.parameters.items()
     )
 
     variables = []
-    for vname, vdef in schema.variables.items():
+    for vname, vdef in expanded.variables.items():
         variable_type = cast('plan.VariableType', vdef.domain)
         if variable_type == 'binary':
             lower, upper = plan.Constant(0.0), plan.Constant(1.0)
@@ -115,9 +115,9 @@ def lower_program(schema: Model) -> plan.Program:
         )
 
     constraints = []
-    for cname, cdef in schema.constraints.items():
+    for cname, cdef in expanded.constraints.items():
         where = _lower_where(cdef.where, ns, f"constraint '{cname}'")
-        ast = expression_of(cdef.expression, schema, ns, f"constraint '{cname}'")
+        ast = expression_of(cdef.expression, expanded, ns, f"constraint '{cname}'")
         if not isinstance(ast, ComparisonNode):
             raise LanguageError(
                 f"constraint '{cname}': expression must contain exactly one "
@@ -129,30 +129,30 @@ def lower_program(schema: Model) -> plan.Program:
             plan.ConstraintDeclaration(
                 cname,
                 tuple(cdef.foreach),
-                lhs=_lower_expr(ast.left, schema, f"constraint '{cname}'", ceiling=2),
+                lhs=_lower_expr(ast.left, expanded, f"constraint '{cname}'", ceiling=2),
                 sense=ast.op,
-                rhs=_lower_expr(ast.right, schema, f"constraint '{cname}'", ceiling=2),
+                rhs=_lower_expr(ast.right, expanded, f"constraint '{cname}'", ceiling=2),
                 where=where,
             )
         )
 
     objective = None
-    if (odef := schema.objective) is not None:
-        ast = expression_of(odef.expression, schema, ns, 'the objective')
+    if (odef := expanded.objective) is not None:
+        ast = expression_of(odef.expression, expanded, ns, 'the objective')
         if isinstance(ast, ComparisonNode):
             raise LanguageError('the objective: expression must not contain a comparison operator')
         objective = plan.ObjectiveDeclaration(
             'min' if odef.sense == 'minimize' else 'max',
-            _lower_expr(ast, schema, 'the objective', ceiling=2),
+            _lower_expr(ast, expanded, 'the objective', ceiling=2),
         )
 
     dimensions = tuple(
         plan.DimensionDeclaration(
             dname,
-            tuple(plan.LookupDeclaration(cname, target) for cname, target in schema.targeted_of(dname).items()),
-            tuple(schema.labels_of(dname)),
+            tuple(plan.LookupDeclaration(cname, target) for cname, target in expanded.targeted_of(dname).items()),
+            tuple(expanded.labels_of(dname)),
         )
-        for dname in schema.dimensions
+        for dname in expanded.dimensions
     )
     sos = tuple(
         plan.SosDeclaration(
@@ -162,7 +162,7 @@ def lower_program(schema: Model) -> plan.Program:
             sos_type=cast('Literal[1, 2]', sdef.type),
             big_m=sdef.big_m,
         )
-        for sname, sdef in schema.sos.items()
+        for sname, sdef in expanded.sos.items()
     )
     return plan.Program(parameters, tuple(variables), tuple(constraints), objective, dimensions, sos)
 
@@ -182,12 +182,12 @@ def lower_expression(schema: Model, name: str) -> plan.Expression:
         KeyError: No named expression called *name*.
         LanguageError: A construct outside the streaming language.
     """
-    schema = expand_piecewise(schema)
+    expanded = expand_piecewise(schema)
     context = f"named expression '{name}'"
-    ns = Namespace.of(schema)
-    ast = expression_of(schema.expressions[name].expression, schema, ns, context)
+    ns = Namespace.of(expanded)
+    ast = expression_of(expanded.expressions[name].expression, expanded, ns, context)
     assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
-    return _lower_expr(ast, schema, context)
+    return _lower_expr(ast, expanded, context)
 
 
 def expression_thunks(schema: Model) -> dict[str, Callable[[], plan.Expression]]:
@@ -204,7 +204,7 @@ def expression_thunks(schema: Model) -> dict[str, Callable[[], plan.Expression]]
 # ---------------------------------------------------------------------------
 
 
-def _lower_expr(node: ArithmeticNode, schema: Model, context: str, *, ceiling: int = 1) -> plan.Expression:
+def _lower_expr(node: ArithmeticNode, schema: Buildable, context: str, *, ceiling: int = 1) -> plan.Expression:
     """Rewrite one resolved core-AST expression as a plan expression.
 
     Three language rules are *asked* here and answered elsewhere: the call
@@ -365,7 +365,7 @@ def _lower_expr(node: ArithmeticNode, schema: Model, context: str, *, ceiling: i
     assert_never(node)
 
 
-def _check_dim_rules(node: FunctionCallNode, schema: Model, context: str) -> None:
+def _check_dim_rules(node: FunctionCallNode, schema: Buildable, context: str) -> None:
     """Apply the language's dim rules to an operator call, discarding the dim set.
 
     Lowering wants the *raise*, not the answer. Called after the plan-shape
@@ -476,7 +476,7 @@ def _window_edge(edge: ArithmeticNode | None, context: str) -> bool:
     )
 
 
-def _check_named_width(name: str, dimension: str, schema: Model, context: str) -> None:
+def _check_named_width(name: str, dimension: str, schema: Buildable, context: str) -> None:
     """The two rules that make a per-entity window width mean one thing.
 
     A width that varies along the dimension being summed over would make the
@@ -503,7 +503,7 @@ def _check_named_offset(
     name: str,
     node: FunctionCallNode,
     dimension: str,
-    schema: Model,
+    schema: Buildable,
     context: str,
     *,
     wrap: bool,
@@ -552,7 +552,7 @@ def _check_named_offset(
         )
 
 
-def _within_reach(node: FunctionCallNode, schema: Model, context: str) -> set[str]:
+def _within_reach(node: FunctionCallNode, schema: Buildable, context: str) -> set[str]:
     """The dims a named offset may vary over.
 
     Two ways for a coordinate of the offset to be one the shift can read it
