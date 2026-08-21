@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.246](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.245...v0.0.1-alpha.246) (2026-08-21)
+
+
+### Refactoring
+
+* **language:** the language is a dependency, not a directory ([#1223](https://github.com/fluxopt/lpspec/issues/1223)) ([ffbbee6](https://github.com/fluxopt/lpspec/commit/ffbbee60802538e89359875885d5d61d331d7461))
+
 ## [0.0.1-alpha.245](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.244...v0.0.1-alpha.245) (2026-08-21)
 
 
