@@ -600,6 +600,99 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
         assert got == pytest.approx(want), f"the two lanes disagree about named expression '{name}'"
 
 
+#: A curve masked by ``points:``, so the expansion declares a parameter the file
+#: does not — ``cost_curve_points``, derived from ``bp_x``'s own rows. Ragged on
+#: purpose: hydro states two breakpoints where the axis has four, which is the
+#: whole reason a mask exists.
+MASKED_CURVE_YAML = """
+dimensions:
+  snapshot: {dtype: int, values: [0]}
+  generator: {dtype: str, values: [hydro, gas]}
+  bp: {dtype: int, values: [0, 1, 2, 3]}
+parameters:
+  p_max: {dims: [generator]}
+  load: {dims: [snapshot]}
+  bp_x: {dims: [generator, bp]}
+  bp_y: {dims: [generator, bp]}
+variables:
+  p:
+    foreach: [snapshot, generator]
+    bounds: {lower: 0, upper: p_max}
+  op_cost:
+    foreach: [snapshot, generator]
+    bounds: {lower: 0}
+piecewise:
+  cost_curve:
+    over: bp
+    points: bp_x
+    links:
+      - [p, bp_x]
+      - [op_cost, bp_y, ">="]
+    method: convex
+expressions:
+  spend: sum(op_cost, over=generator)
+constraints:
+  balance:
+    foreach: [snapshot]
+    expression: sum(p, over=generator) == load
+objective:
+  sense: minimize
+  expression: sum(sum(op_cost, over=generator), over=snapshot)
+"""
+
+
+def _curve(points):
+    """A per-generator curve as the tidy frame it is supplied as."""
+    return pl.DataFrame(
+        {
+            'generator': [g for g, _ in points],
+            'bp': [k for _, k in points],
+            'value': list(points.values()),
+        }
+    )
+
+
+MASKED_CURVE_DATA = {
+    'p_max': pd.Series({'hydro': 40.0, 'gas': 80.0}),
+    'load': pd.Series([50.0], index=pd.RangeIndex(1, name='snapshot')),
+    'bp_x': _curve(
+        {('hydro', 0): 0.0, ('hydro', 1): 40.0, ('gas', 0): 0.0, ('gas', 1): 20.0, ('gas', 2): 50.0, ('gas', 3): 80.0}
+    ),
+    'bp_y': _curve(
+        {
+            ('hydro', 0): 0.0,
+            ('hydro', 1): 200.0,
+            ('gas', 0): 0.0,
+            ('gas', 1): 150.0,
+            ('gas', 2): 450.0,
+            ('gas', 3): 900.0,
+        }
+    ),
+}
+
+
+def test_a_named_expression_reads_off_a_masked_curve(yaml_file):
+    """A curve's derived mask is the file's to supply, so the file is what asks for it.
+
+    `points:` names a values parameter, and the mask that says where the curve
+    runs is then derived from that parameter's rows — by `derive_curve_masks`,
+    which reads `piecewise:`. The expansion has cleared `piecewise:`, so handing
+    it the expanded model asks for `cost_curve_points` and derives nothing:
+    `DataError: no data provided for parameter 'cost_curve_points'`, naming a
+    parameter no caller wrote and none can supply. `build` passed the file and
+    this reader passed the expansion, which is the only reason one worked.
+    """
+    from tests.differential import differential
+
+    path = yaml_file(MASKED_CURVE_YAML, 'masked_curve.yaml')
+    with differential(path, MASKED_CURVE_DATA) as run:
+        tidy = run.result.expression('spend')
+        eager = lpspec_linopy.expression(run.model, path, 'spend', dict(MASKED_CURVE_DATA))
+        got = {int(k): v for k, v in zip(tidy['snapshot'], tidy['value'], strict=True)}
+        want = {int(k): float(v) for k, v in eager.to_series().items()}
+        assert got == pytest.approx(want), 'the two lanes disagree about a named expression over a masked curve'
+
+
 def test_the_lane_refuses_an_unknown_expression_name(yaml_file):
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
     m = lpspec_linopy.build(path, dict(EXPRESSION_DATA))
