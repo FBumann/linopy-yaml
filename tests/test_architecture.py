@@ -649,7 +649,7 @@ CROSSES_THE_CUT = {
     '.github/workflows/ci.yml': 'the LaTeX-compiles step names the models it renders, `examples/operators/` and the golden model among them',
     '.github/workflows/codspeed.yml': 'a comment naming the golden model as one of the models',
     'pyproject.toml': "ruff's per-file-ignore for `src/lpspec/language/where_parser.py`",
-    'mkdocs.yml': 'fourteen nav entries for pages that move; the nav is rebuilt on both sides at the cut',
+    'mkdocs.yml': 'fifteen nav entries for pages that move; the nav is rebuilt on both sides at the cut',
 }
 
 #: Where a crossing would be a break rather than a link, and the suffixes worth

@@ -76,6 +76,7 @@ TRACKED = [
     'docs/reference/language/piecewise.md',
     'docs/reference/language/data.md',
     'docs/reference/language/errors.md',
+    'docs/reference/language/reading.md',
     'docs/reference/api.md',
     'docs/reference/sweeps.md',
     'docs/reference/typeset.md',
