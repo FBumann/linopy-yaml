@@ -484,7 +484,7 @@ Wall time behaves throughout: our advantage grows as the model thins, 1.0x to
 
 What each sink can ingest, measured against the shipped solvers rather than
 assumed. The architectural reading is in
-[the ceiling](ceiling.md#capability-is-not-the-ceiling); the plan is
+[the ceiling](https://energy-models.github.io/math-spec/about/ceiling#capability-is-not-the-ceiling); the plan is
 [Track 3](https://github.com/fluxopt/lpspec/issues/472).
 
 Three rows have since been acted on. Both quadratic rows are in the language —
@@ -510,7 +510,7 @@ so and as binaries plus linking rows where it says *no concept*.
 **A rewrite is not free, and the cost is what comes back.** An LP carrying a
 set returns from HiGHS without duals — the reformulation makes it a MIP — and
 from Gurobi with them. That asymmetry is the argument for declaring capability
-rather than papering over it ([the ceiling](ceiling.md#capability-is-not-the-ceiling)).
+rather than papering over it ([the ceiling](https://energy-models.github.io/math-spec/about/ceiling#capability-is-not-the-ceiling)).
 
 **"No path here" is about this tree, not about Xpress.** The Optimizer takes a
 Hessian and quadratic rows; the sink in `solvers/xpress.py` never hands it one,

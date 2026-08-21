@@ -124,33 +124,36 @@ without shipping the data.
 Sources accept polars, pandas, pyarrow, or parquet paths — anything exposing
 the Arrow PyCapsule protocol, and the recogniser imports none of them.
 Results come back as frames; `to_pandas`, `to_dataarray` and `to_parquet` are
-the bridges out. → [data binding](https://energy-models.github.io/math-spec/reference/language/data), [Python API](reference/api.md)
+the bridges out. → [data binding](reference/data.md), [Python API](reference/api.md)
 
 ## Editor completion and offline checking
 
 The YAML surface ships as a JSON Schema —
-[`schema/lpspec.schema.json`](https://github.com/energy-models/math-spec/blob/main/schema/lpspec.schema.json),
-generated from the same models `lps.check` runs, held current by a test. With
+[`schema/math-spec.schema.json`](https://github.com/energy-models/math-spec/blob/main/schema/math-spec.schema.json),
+generated from the same declarations `lps.check` validates against and held
+current by a test. It travels with the language, so the examples below read it
+from math-spec over the network; a vendored copy takes a path in the same slot.
+With
 the [Red Hat YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml)
 it gives key completion, hover docs, the closed vocabulary behind `dtype:`,
 `domain:`, `sense:` and the rest, and a squiggle on a misspelled key — before Python runs. Map it per workspace:
 
 ```jsonc
 // .vscode/settings.json
-"yaml.schemas": { "./schema/lpspec.schema.json": ["*.model.yaml"] }
+"yaml.schemas": { "https://raw.githubusercontent.com/energy-models/math-spec/main/schema/math-spec.schema.json": ["*.model.yaml"] }
 ```
 
 or per file, with a modeline on the first line:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/fluxopt/lpspec/main/schema/lpspec.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/energy-models/math-spec/main/schema/math-spec.schema.json
 ```
 
 The same file checks a model without Python, which is what a pre-commit hook
 or a non-Python CI job wants:
 
 ```bash
-uvx check-jsonschema --schemafile schema/lpspec.schema.json model.yaml
+uvx check-jsonschema --schemafile https://raw.githubusercontent.com/energy-models/math-spec/main/schema/math-spec.schema.json model.yaml
 ```
 
 It validates structure only. `expression:` and `where:` are strings to the

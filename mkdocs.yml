@@ -96,7 +96,8 @@ nav:
           - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
           - Travelling salesman: examples/tsp_mtz.md
   - Reference:
-      - Language:
+      - Language: https://energy-models.github.io/math-spec/reference/language
+      - Data binding: reference/data.md
       - Python API: reference/api.md
       - Sweeps and rolling horizons: reference/sweeps.md
   # Everything a reader does not need in order to write or run a model: design

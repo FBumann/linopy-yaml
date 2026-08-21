@@ -135,13 +135,13 @@ def _home_block() -> str:
 
 
 _HOW = """```python
-import lpspec as lps
+import math_spec as ms
 
 {symbols}
 
-lps.to_latex('dispatch.yaml', symbols=symbols)  # amsmath align
-lps.to_typst('dispatch.yaml')  # compiles without a TeX toolchain
-lps.to_markdown('dispatch.yaml')  # renders as-is on GitHub
+ms.to_latex('dispatch.yaml', symbols=symbols)  # amsmath align
+ms.to_typst('dispatch.yaml')  # compiles without a TeX toolchain
+ms.to_markdown('dispatch.yaml')  # renders as-is on GitHub
 ```
 
 `symbols` is optional — drop it and the same model prints as
@@ -154,9 +154,12 @@ Or from a shell, where the table is that same YAML on disk and `--standalone`
 emits a document that compiles rather than a fragment to `\\input`:
 
 ```bash
-python -m lpspec latex dispatch.yaml --symbols dispatch.symbols.yaml
-python -m lpspec typst dispatch.yaml --standalone -o dispatch.typ
-```"""
+python -m math_spec latex dispatch.yaml --symbols dispatch.symbols.yaml
+python -m math_spec typst dispatch.yaml --standalone -o dispatch.typ
+```
+
+The renderer is [math-spec](https://energy-models.github.io/math-spec/reference/typeset)'s,
+and reads the same file this page solves."""
 
 
 def rendered(page: str, name: str, path: Path) -> str:

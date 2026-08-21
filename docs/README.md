@@ -21,9 +21,7 @@ repo and 404s on the site, silently. The rest is in *the docs* in
 **Generated, so do not hand-edit:** the catalogue, the construct matrix and the
 reference table in [examples/index.md](examples/index.md) (`tools/constructs.py`),
 the *"the same model, as math"* block on each model page
-(`tools/gallery_math.py`), the operator math in
-[the operators page](https://energy-models.github.io/math-spec/reference/language/operators#as-math)
-(`tools/language/spec_math.py`), and the tables in
+(`tools/gallery_math.py`), and the tables in
 [benchmarks.md](about/benchmarks.md) (`bench.report`, `bench.plot`). The
 catalogue is read off `mkdocs.yml`'s nav,
 so a model is added to the gallery list by adding it to the sidebar — one list,
@@ -39,7 +37,7 @@ gallery catalogue quotes it rather than keeping a second one. It is allowed to
 be loose in a way the generated block beneath it is not: it is read at a
 glance, and three summaries had drifted far enough to be wrong before the block
 existed to check them against. So the
-looseness is bounded rather than assumed. `tests/typeset/test_typeset.py` requires each
+looseness is bounded rather than assumed. `tests/test_typeset_gallery.py` requires each
 of those six to **either** use only symbols the generator can reach — the
 hand-written notation is then an oracle *for* the typesetter, since the point
 of the format is that a gallery page could be generated — **or** name why it

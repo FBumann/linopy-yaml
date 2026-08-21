@@ -189,7 +189,7 @@ no name on the Python surface.
 ## What a sink can ingest
 
 `capabilities.py` is the second axis of [the
-ceiling](../../../../docs/about/ceiling.md#capability-is-not-the-ceiling) —
+ceiling](https://energy-models.github.io/math-spec/about/ceiling#capability-is-not-the-ceiling) —
 what a sink takes, as against what the language may say — and its docstring is
 where the entries are argued. One descriptor per sink, declared in the sink's
 own module: a `ClassVar` on a `Solver`, a field on a `Writer`. The *lanes*
