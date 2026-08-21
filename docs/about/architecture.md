@@ -24,10 +24,13 @@ sink — with both paths provably meaning the same thing. Every rule below prote
 it. (A *declared* memory ceiling is not something we have; see
 [the memory axis](roadmap.md#where-it-is-going).)
 
-**Four directories, four fences.** One produces the AST; three consume it and
-know nothing of each other. Each box below is a directory, and its subtitle is
-the import rule `tests/test_architecture.py` enforces off the path — so a
-module cannot step over a fence by being spelled differently.
+**The producer of the AST is a different package.** `math_spec` parses,
+expands, resolves and judges a file, and this repository consumes what comes
+out — so the widest fence in the drawing is not a directory rule at all, it is
+`pyproject.toml`. What remains here is two directories and two fences: each box
+below is one, and its subtitle is the import rule `tests/test_architecture.py`
+enforces off the path, so a module cannot step over a fence by being spelled
+differently.
 
 **The two dashed boxes are outside every fence, and that is the point.**
 `lowering.py` and `sources.py` are the seam: one turns the AST into a plan, the
@@ -63,9 +66,9 @@ has ever seen a value — which is what makes `show it` and `check it` free.
 flowchart TB
     Y[YAML file] --> LANG
 
-    subgraph LANG["language/ — imports nothing but errors.py"]
+    subgraph LANG["math-spec — another package, pinned in pyproject.toml"]
         direction TB
-        SCHEMA["_yaml.py → schema.py<br/>YAML 1.2, duplicate keys refused"]
+        SCHEMA["_yaml.py → model.py<br/>YAML 1.2, duplicate keys refused"]
         SCHEMA --> EXPAND["expansion.py · piecewise.py<br/>macros, expressions, formulations<br/>— no consumer sees any of them"]
         EXPAND --> RESOLVE["resolution.py · dimensions.py · degree.py<br/>names → typed nodes, dim sets, degree"]
     end
@@ -73,7 +76,7 @@ flowchart TB
     LANG --> AST["core AST — the narrow waist<br/>fully resolved: names typed, dims checked, degree judged<br/>closed from both sides"]
 
     AST --> LOWER
-    AST --> WALK
+    AST -.->|"another package again:<br/>math_spec.typeset"| WALK
     AST -.->|"opt-in: lpspec.linopy"| BUILD
 
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> SRC
@@ -100,9 +103,9 @@ flowchart TB
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
-    subgraph TS["typeset/ — reaches the language and nothing else"]
+    subgraph TS["math_spec.typeset — the consumer that left"]
         direction TB
-        WALK["walk.py — one walk of the AST"] --> FMT["latex · typst · markdown<br/>one spelling table each"]
+        WALK["one walk of the AST"] --> FMT["latex · typst · markdown<br/>one spelling table each"]
     end
 
     subgraph EAGER["linopy/ — the ONLY code importing linopy or xarray"]
@@ -127,11 +130,11 @@ flowchart TB
     class DATA data
 ```
 
-Only six modules sit outside a fence, and each is legitimately **both** halves:
-the two drawn above, plus `api.py`, which runs the lot, `errors.py`, the leaf
-every fence points at, and `__main__.py` / `_notes.py`, which are plumbing.
-That is a category, not a leftovers bin — see
-[What counts as language](#what-counts-as-language).
+Seven modules sit outside a fence, and each is legitimately **both** halves:
+the two drawn above, plus `api.py`, which runs the lot, `strategy.py`, which
+drives it a slice at a time, `frames.py` and `errors.py`, the two leaves every
+fence points at, and `_notes.py`, which is plumbing. That is a category, not a
+leftovers bin — see [What counts as language](#what-counts-as-language).
 
 Eligibility is decided by **attempting the lowering** — `lower_program` returns
 a `Program` or raises `lps.LanguageError` — so it cannot drift from what the
@@ -156,7 +159,7 @@ back.
 flowchart LR
     Y(["your math, written once<br/>one YAML file"]) --> AST
     AST["<b>the whole model</b> — <code>Model</code><br/>names typed, dims checked, degree judged<br/><i>before a byte of data is read</i>"]
-    AST --> SHOW["<b>show it</b><br/>typeset · CLI<br/><i>no data, no solver</i>"]
+    AST --> SHOW["<b>show it</b><br/>math_spec.typeset · its CLI<br/><i>no data, no solver</i>"]
     AST --> CHECK["<b>check it</b><br/>parse → expand → validate → lower<br/><i>no data, no solver</i>"]
     AST --> RUN["<b>run it</b><br/>solver · LP/MPS file · linopy"]
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> RUN
@@ -177,57 +180,53 @@ same model with the data arrow missing. `check` is the build's own front half
 run to completion and stopped before binding, which is why it is a CI verb,
 costs seconds, and needs nothing but the file.
 
-**Each box is a family, and [the table below](#the-python-surface) is its
-members** — including the ones nobody has built, which is the point: none of
-them is a rewrite. Each reads the same AST the engine reads, so a renderer is a
+**Each box is a family, and [the table below](#the-python-surface) is the
+members of the ones this package answers** — `show it` is answered upstream
+now, and that is the same point from the other side: none of them is a
+rewrite. Each reads the same AST the engine reads, so a renderer is a
 tree walk, a check is a pass with no data bound, and a new output format is one
 module in `relational/sinks/writers/`.
 
-`typeset/` is that claim cashed — a **spike** that typesets any model the lanes
-can build, in one walk of the resolved AST, holding no opinion the lanes do not
-already hold: a `piecewise:` block prints as the λ-formulation it expands to,
-not as the sugar it was written as. How names *print* is the one thing it does
-not read off the model, since a symbol table is presentation — hence a sidecar
-file (`examples/symbols/`) rather than keys on `Model`, and a model with no
-table still renders. It splits the way `relational/sinks/writers/` does, one
-module per output format, so a format is a spelling table rather than a second
-walk that could disagree. `python -m lpspec <format>` is its shell front, one verb per
-entry in `typeset.FORMATS`: a consumer that needs no data needs no runner.
+**The renderer is that claim cashed, and it is no longer here.**
+`math_spec.typeset` typesets any model the lanes can build, in one walk of the
+resolved AST, holding no opinion the lanes do not already hold: a `piecewise:`
+block prints as the λ-formulation it expands to, not as the sugar it was
+written as. It used to be a directory in this repository behind a fence saying
+it reached the language and nothing else. It now lives in the same package as
+the language, and this one does not depend on it — which is the strongest form
+the "a new consumer is free" claim can take. The fence became a package
+boundary, and nothing about the renderer had to change to cross it.
 
-**That front is typeset's, not the package's**, and it is not the start of a
-command line. It exists because rendering a model belongs in a Makefile beside
-`pdflatex`; the rule that keeps it from growing is that **no verb may become a
-second way to spell the source mapping** — `--source name=path` is `lps.solve`'s
-dict with worse errors, and `solve_over`'s axis and `carry` cannot be said in
-flags at all. A shell-driven *solve* would therefore have to arrive as one path
-argument over a run manifest, never as flags.
-
-That claim is enforced twice, because a renderer that imports only `language/`
-still pays for polars if some language module does: a path-scoped import rule
-like the other three fences, plus a check on the **transitive** closure. Two
-properties carry the rest — **data enters at exactly one place**, which is why
-checking a model costs seconds and needs nothing but the file, and the waist is
-**closed**, which is what the ceiling in
-[the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/) protects: a new consumer is free, a
-new primitive is taxed. What is planned, and why, is
-[the roadmap](roadmap.md).
+That is also the honest test of the waist: a consumer that can be *moved out*
+was reading the AST and nothing else. What stayed behind is what genuinely
+touches data or a plan. Two properties carry the rest — **data enters at
+exactly one place**, which is why checking a model costs seconds and needs
+nothing but the file, and the waist is **closed**, which is what
+[the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/)
+protects: a new consumer is free, a new primitive is taxed. What is planned,
+and why, is [the roadmap](roadmap.md).
 
 ### The Python surface
 
-**Twenty names, and the count is the feature.** The model is the YAML file; Python
-is how you *run* it — so the whole surface is the diagram above written out,
-with nothing that constructs math and nothing that reaches the plan. Names are
-`lpspec.` unless shown otherwise, and what each one *does* is
+**Fourteen names, and the count is the feature.** The model is the YAML file;
+Python is how you *run* it — so the whole surface is the diagram above written
+out, with nothing that constructs math and nothing that reaches the plan. Names
+are `lpspec.` unless shown otherwise, and what each one *does* is
 [the Python API](../reference/api.md). **Data?** is the column that matters: a verb
 that says *no* needs nothing but the file, which is what makes it a CI verb.
 *Italic rows are the ones the shape makes cheap and nobody has built.*
 
+**Loading a file and rendering one are not on this list.** Six names left the
+`__all__` with the language — `load_model`, `Model`, `SymbolTable` and the
+three `to_…` renderers — taking twenty down to fourteen, and
+`expand_piecewise` and the `python -m lpspec` shell front, neither of which was
+ever exported, went with them. They are `math_spec.`'s now, counted in its own
+`__all__`, and a caller that wants them imports that package rather than a
+re-export here: one name, one home. What this package exports is what it does,
+which is bind, build, solve and read back.
+
 | | you want to | the call | data? |
 |---|---|---|---|
-| **load it** | parse and validate, and stop there | `load_model` → `Model` | no |
-| | build rows from it rather than read it | `expand_piecewise` → `Buildable`, the same model with its curves emitted | no |
-| **show it** | typeset for a paper or a review | `to_latex` · `to_typst` · `to_markdown` (spelling: `SymbolTable`) | no |
-| | render one from a Makefile | `python -m lpspec <format>` — the only shell front, and typeset-only | no |
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
 | | *will that solver take it* | | |
 | **run it** | stream it straight into a solver | `solve`, or `build` → `BoundModel` to drive several sinks off one build | **yes** |
@@ -302,28 +301,24 @@ choice load-bearing in the language's rulebook.
    `DELIBERATE_LAZY_IMPORTS` in `tests/test_architecture.py` is empty, and an
    undeclared in-function import fails the build. A lazy import here is only
    ever a leftover — a cycle to remove, not to defer.
-1. **Core AST is the whole language.** Both backends consume only core AST —
-   macros, named expressions and `piecewise:` are expanded away before dispatch,
-   and the plan/query/xarray are backend-private. The AST crossing that seam is
-   **fully resolved**, names typed `Variable`/`Parameter`/`Dimension`, so a
-   backend cannot hold its own opinion about what a name refers to. The waist is
-   closed from the front too: nothing under `language/` imports `lowering`,
-   `sources`, `api` or any consuming subpackage (`LANGUAGE_MAY_IMPORT`), so what
-   a model *means* cannot depend on what is done with it. `LANGUAGE_MAY_IMPORT`
-   is now the **empty set**: the language raises its own errors, so the
-   directory imports nothing from the package at all and could be lifted into a
-   package of its own without an edit. `load_model` sits
-   inside that fence — parsing and validating is the language's own job, and a
-   consumer that binds no data must reach it without reaching a runner; `api.py`
-   re-exports it so callers keep saying `load_model`. The traffic the other
-   way is shaped too: a consumer reads the AST through `math_spec` itself
-   and never through a module under it, so what the waist promises is
-   **fifty-eight names in one `__all__`** — thirty-one node types, seven for the
-   errors it raises, and twenty oracles, front doors and message builders —
-   rather than the union of
-   whatever eleven submodules happen to expose. That list is pinned in both
-   directions, so an export nobody imports fails as loudly as an import nobody
-   exported, and a private name in it fails on sight.
+1. **Core AST is the whole language, and the language is upstream.** Both
+   backends consume only core AST — macros, named expressions and `piecewise:`
+   are expanded away before dispatch, and the plan/query/xarray are
+   backend-private. The AST crossing that seam is **fully resolved**, names
+   typed `Variable`/`Parameter`/`Dimension`, so a backend cannot hold its own
+   opinion about what a name refers to. The waist is closed from the front by
+   construction rather than by a test: what a model *means* cannot depend on
+   what is done with it, because the package that decides the meaning does not
+   depend on this one and cannot import it. The fence that used to say so
+   (`LANGUAGE_MAY_IMPORT`, an empty set) is gone with the directory it fenced;
+   the claim it made is now a line in `pyproject.toml`. **Our half of it is
+   still checked**: every `math_spec` import under `src/lpspec` names the
+   package and never a module inside it
+   (`test_the_language_is_imported_as_one_package`), so what this repository
+   depends on is the one `__all__` math-spec pins rather than the union of
+   whatever its submodules happen to expose. A submodule path would be a
+   contract nobody agreed to — it can carry a private name, and it cannot be
+   counted.
 2. **The engine knows nothing about linopy, xarray or YAML.** `relational/` goes
    plan → engine → a solver sink → solver, with linopy's semantics as a spec to match
    rather than code to share; it never sees the schema, the AST, or the eager
@@ -371,7 +366,7 @@ choice load-bearing in the language's rulebook.
    ([#381](https://github.com/fluxopt/lpspec/issues/381)). The Python surface is
    the runner (`api.py`) and the driver over it (`strategy.py`); the plan is
    internal. The whole of it is
-   [nineteen names](#the-python-surface), pinned by a test — so the surface grows
+   [fourteen names](#the-python-surface), pinned by a test — so the surface grows
    through a list a reviewer reads, like every other fence here.
 
 ## The relational lane
@@ -504,22 +499,8 @@ it.
 
 | Module | Role |
 |---|---|
-| `language/__init__.py` | **the seam**: the whole of what a consumer may read off the AST, and the only language module one may import |
-| `language/_yaml.py` | the only place a file is read: YAML 1.2 booleans, duplicate keys refused |
-| `language/model.py` | pydantic schema incl. `expressions:` / `macros:` / `piecewise:` |
-| `language/expression_parser.py`, `language/where_parser.py` | text → core AST; grammar only, dependency-free |
-| `language/expansion.py` | named-expression / macro substitution (pre-dispatch) |
-| `language/resolution.py` | one flat namespace; `NameNode` → typed `Variable`/`Parameter`/`Dimension` nodes |
-| `language/dimensions.py` | static dim-set checking over the resolved AST |
-| `language/degree.py` | the degree a position may hold — 2 in the objective, 1 elsewhere — asked by both lanes and stated by neither |
-| `language/boundedness.py` | the models no data can bound: a free variable the objective improves toward infinity, named by `check` |
-| `language/operators.py` | the closed set of built-in operators: their *names* and *call shapes* — no registry |
-| `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_model`, the language's front door |
-| `language/errors.py` | the model half of the exception hierarchy, and the root the run half extends |
-| `language/piecewise.py` | `piecewise:` → λ-formulation declarations, and the `Buildable` that says they are there |
-| `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_model` |
-| `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/energy-models/math-spec/blob/main/src/math_spec/typeset/README.md)) |
-| `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
+| `math_spec` (a dependency) | the whole language: the file is read, expanded, resolved and judged there, and what crosses into this repository is a `Model` — [its own reference](https://math-spec.readthedocs.io/en/latest/reference/language/) |
+| `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free |
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `method: convex` curvature guard, which is the one check that needs values |
 | `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver, the linopy lane and the engine |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
@@ -545,32 +526,28 @@ it.
 | `linopy/absence.py` | the four positions an absent value is spelled differently in — absence is positional in this lane |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
 
-**Four subpackages, and the directory *is* the rule in every case.** Everything
-under `language/` produces the AST and may not reach a consumer of it;
-everything under `relational/` is the relational lane and imports nothing else
-from the package, with a second boundary inside it — `engines/` holds
-implementations, the rest of `relational/` is what they implement; everything
-under `linopy/` is the opt-in eager lane and is the only code allowed to import
-linopy or xarray; everything under `typeset/` reads the
-AST and writes text, and reaches neither the plan nor any data.
-`tests/test_architecture.py` reads membership off the path in all four cases,
-so no fence can be stepped over by naming a file differently.
+**Two subpackages, and the directory *is* the rule in both cases.** Everything
+under `relational/` is the relational lane and imports nothing else from the
+package, with a second boundary inside it — `engines/` holds implementations,
+the rest of `relational/` is what they implement; everything under `linopy/` is
+the opt-in eager lane and is the only code allowed to import linopy or xarray.
+`tests/test_architecture.py` reads membership off the path in both cases, so
+neither fence can be stepped over by naming a file differently.
 
-`language/`'s fence has a second half the other three do not need, because it is
-the only directory anything is allowed to import *from*: a consumer reads
-`math_spec` and nothing under it. A submodule path would be a contract
-nobody agreed to — it can carry a private name, and it cannot be counted — so
-the AST surface is one list rather than the union of eleven modules' internals.
-That is also what would survive the language being lifted into a package of its
-own: the fence is already the import a consumer would keep writing.
+There used to be four, and the two that left are the same claim twice.
+`language/` was fenced to import nothing from this package — an empty
+allowlist, kept empty so the directory could be lifted out without an edit —
+and `typeset/` was fenced to read the AST and nothing else. Both were lifted
+out. **A fence whose allowlist is empty is a package waiting to happen**, and
+that is the one prediction in this file that has since been paid: what the two
+fences were protecting is now protected by them being somewhere else.
 
-`language/` and `relational/` are the two halves of the waist, and their fences
-no longer point the same way. `relational/`'s points outward at `errors.py`;
-`language/`'s points nowhere, because it raises its own errors and `errors.py`
-imports *it*. `typeset/`'s points at `errors.py` too, which is what makes "a new consumer is free" a
-measurable claim rather than a hope: it is enforced twice, once on the names a
-renderer imports and once on the transitive closure behind them, because a
-consumer's real cost is what it drags in, not what it spells.
+What remains points one way. `relational/`'s fence points outward at two
+declared leaves, `errors.py` and `frames.py`; the language's points nowhere at
+all, because it is not here. `errors.py` is the seam that survived in the other
+direction: the root class lives upstream, so importing this package's errors
+imports the language, and the run half extends the model half rather than
+paralleling it.
 
 ### What counts as language
 
@@ -580,12 +557,15 @@ may live here rather than how this package is arranged:
 > **A rule is language iff two consumers answering it separately would be a
 > bug.**
 
-Every "one implementation each" rule in this file is that test applied: names
-resolve once (`resolution.py`), the operator set is closed (`operators.py`) and a
-test proves both lanes implement exactly it, an operator's dim rule lives only in
-`dimensions.py` with lowering **asking** for the verdict rather than deciding
-again, and degree lives only in `degree.py`. `piecewise.py` is in `language/` by
-the same test: a formulation emits declarations, and declarations are language.
+Every "one implementation each" rule in this file is that test applied, and the
+implementations are now upstream: names resolve once
+(`math_spec.resolution`), the operator set is closed (`math_spec.operators`)
+and a test here proves both lanes implement exactly it, an operator's dim rule
+lives only in `math_spec.dimensions` with lowering **asking** for the verdict
+rather than deciding again, and degree lives only in `math_spec.degree`.
+`math_spec.piecewise` is upstream by the same test: a formulation emits
+declarations, and declarations are language. The rule decided where the cut
+fell — everything it called language went, and everything it did not stayed.
 
 The test cuts the other way here too. `lowering.py` legitimately refuses **plan
 shapes** — `shift(offset=)` must be an integer literal, `sum(by=)` a declared
@@ -605,9 +585,13 @@ suffix**, which is what keeps the three vocabularies from colliding:
 
 | Layer | Suffix | Example |
 |---|---|---|
-| YAML block (`language/model.py`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
-| Core AST (`*_parser.py`) | `Node` | `VariableNode`, `DimensionComparisonNode` |
+| YAML block (`math_spec.model`) | `Block` | `VariableBlock`, `PiecewiseBlock` |
+| Core AST (`math_spec.*_parser`) | `Node` | `VariableNode`, `DimensionComparisonNode` |
 | Logical plan (`relational/plan.py`) | none / `Declaration` | `Variable`, `VariableDeclaration` |
+
+The first two rows are another package's now, which is exactly why the table
+stays: a plan node is named against a vocabulary this repository does not
+control, and a rename upstream that collides here is a thing to notice.
 
 Two rules follow from that table, and a PR that adds a construct keeps them:
 
@@ -650,23 +634,31 @@ taking nothing. Nothing above it changes — no method on the engine, no branch 
 [README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/relational/sinks/README.md)
 is the full list, and `tests/test_architecture.py` checks the shape off the path.
 
-**Add a consumer of the AST** (a renderer, a checker, a report): a directory
-beside `typeset/`, a fence test naming what it may import, and a walk. It reads
-`language.load_model` and stops there — if it needs the plan it is a lane, not
-a consumer, and the ceiling doc is the conversation to have first.
+**Add a consumer of the AST** (a renderer, a checker, a report): a package of
+its own, depending on `math-spec` and not on this one. It reads
+`math_spec.load_model` and stops there — if it needs the plan it is a lane, not
+a consumer, and the ceiling doc is the conversation to have first. The
+renderer is the worked example: it was a fenced directory here until the fence
+turned out to be a package boundary.
 
-**Add an operator:** grammar (usually free — `f(x, k=v)` already parses) →
-signature in `operators.BUILTINS` (arity and which arguments name dimensions —
-resolution, validation and lowering all read it from there, so the shape is
-declared once) → eager implementation → plan node + locality class → engine →
-lowering case → differential test through a solver *and* the LP writer → the
-language reference (expressions, operators), and this file if structural.
+**Add an operator:** two repositories, in this order. **In math-spec:** grammar
+(usually free — `f(x, k=v)` already parses) → signature in `operators.BUILTINS`
+(arity and which arguments name dimensions — resolution, validation and
+lowering all read it from there, so the shape is declared once) → its dim rule
+and its degree verdict → the language reference. Then **here**, against a
+released tag: eager implementation → plan node + locality class → engine →
+lowering case → differential test through a solver *and* the LP writer, and
+this file if structural. The pin is what sequences them: nothing in this
+repository can lower an operator the pinned language does not parse, so the
+upstream half lands and is tagged first, and
+[the nightly canary](https://github.com/fluxopt/lpspec/blob/main/.github/workflows/canary.yml)
+is what says the two halves have not drifted since.
 
 Three things are deliberately *not* per-operator work, because they are one
-implementation each: an operator's dim rule lives only in `language/dimensions.py` —
+implementation each: an operator's dim rule lives only in `math_spec.dimensions` —
 both its dim *set* and its verdict on an operand that lacks the dim being
 reduced along, which lowering asks for rather than deciding again — its degree
-verdict lives only in `language/degree.py`, which both lanes ask; and the
+verdict lives only in `math_spec.degree`, which both lanes ask; and the
 dense-label assignment that gives a coordinate its solver index lives only in
 `relational/engines/polars/labels.py`, shared by variables and constraint
 rows. What a lowering case still owns is what is about the plan: which node the call becomes,

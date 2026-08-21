@@ -2,7 +2,7 @@
 
 The split that matters is **the model versus the run**. The model half —
 :class:`LanguageError` and what derives from it, decidable at load time with no
-data bound — belongs to ``language/`` and is re-exported here, so one
+data bound — belongs to ``math_spec`` and is re-exported here, so one
 ``except`` clause still covers the package and a caller keeps saying
 ``lps.LanguageError``. What is defined here is the run: :class:`DataError` is a
 fine file with the wrong thing bound to it, :class:`LaneError` a file one lane

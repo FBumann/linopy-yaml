@@ -299,13 +299,41 @@ def test_no_contract_module_names_an_engine():
     )
 
 
-#: What ``language/`` may reach: **nothing**. It used to reach ``errors.py`` for
-#: the exception hierarchy; the model half of that hierarchy now lives inside
-#: the language and the run half imports it, so the arrow points the other way
-#: and this set is empty. That is not tidiness — an empty set is the liftable
-#: claim, checked: the directory can be moved to a package of its own without
-#: an edit. Adding a name here takes that away.
-LANGUAGE_MAY_IMPORT: set[str] = set()
+def test_the_language_is_imported_as_one_package():
+    """Hard rule 1, the half of it that is still ours to keep.
+
+    The language moved to ``math_spec`` and took its fence with it: the
+    allowlist that said the directory imports nothing from this package is a
+    dependency edge now, and no test here can step over it. What a test here
+    *can* still hold is the traffic in the other direction — that this
+    repository depends on the one ``__all__`` math-spec pins rather than on the
+    union of whatever its submodules expose.
+
+    A submodule path is a contract nobody agreed to. It can carry a private
+    name, it is not counted in the surface upstream pins in both directions,
+    and it survives a refactor there that the package export would have caught.
+    ``from math_spec import Model`` fails loudly the day ``Model`` stops being
+    exported; ``from math_spec.model import Model`` keeps working until it does
+    not.
+
+    Tests are exempt and deliberately so: several read ``math_spec.model`` for
+    the dtype and domain vocabularies they hold this package's copies against,
+    which is a claim about a private table rather than a use of one.
+    """
+    offenders = {}
+    for path in _all_modules():
+        inside = []
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom) and (node.module or '').startswith('math_spec.'):
+                inside.append(node.module)
+            elif isinstance(node, ast.Import):
+                inside += [alias.name for alias in node.names if alias.name.startswith('math_spec.')]
+        if inside:
+            offenders[str(path.relative_to(PKG))] = sorted(inside)
+    assert not offenders, (
+        f'modules reach inside the language package: {offenders} — import the name from '
+        f'`math_spec` itself, which is the surface it pins'
+    )
 
 
 #: Directory prefixes a workflow can name that are files in this repository.
