@@ -301,6 +301,19 @@ markers = ["benchmem: pytest-benchmem settings for a benchmark (bench/, needs --
 xfail_strict = true
 filterwarnings = ["error"]
 
+[tool.coverage.run]
+# Settings for an ad-hoc local `pytest --cov`; no CI job runs one (AGENTS.md).
+# `branch` because the line number flatters — a guard whose false arm no test
+# takes is a fully covered line, and that is exactly the guard worth finding.
+# Deliberately not in `addopts`: the bare-install job installs pytest alone, and
+# an unknown `--cov` there is a usage error rather than a skipped measurement.
+branch = true
+source = ["lpspec"]
+
+[tool.coverage.report]
+skip_covered = true
+show_missing = true
+
 [tool.pyrefly]
 # check against the *lowest* supported interpreter, so 3.12+ syntax and stdlib
 # additions are caught here rather than by the 3.11 leg of the CI matrix.
