@@ -31,11 +31,11 @@ jobs:
         with:
           # The floor, and the only version we test. If it works on the oldest
           # supported interpreter it almost certainly works on the newer ones;
-          # the common real breakage is reaching for a 3.12+ stdlib feature,
-          # which is exactly what this catches. Note that this leaves the 3.12
-          # and 3.13 classifiers in pyproject.toml as untested claims — see the
+          # the common real breakage is reaching for a 3.13+ stdlib feature,
+          # which is exactly what this catches. Note that this leaves the 3.13
+          # and 3.14 classifiers in pyproject.toml as untested claims — see the
           # early-development section of RELEASING.md.
-          python-version: "3.11"
+          python-version: "3.12"
           enable-cache: true
 
       # A denylist, unlike the `paths:` filter bench.yml refuses: an allowlist
@@ -172,7 +172,6 @@ jobs:
       # and would cover five of sixteen, which is the bug #282 fixed in two
       # test globs. A port is exactly where an unusual construct shows up.
       #
-      # `examples/operators/` and the golden model join them for the same
       # reason from the other end: they are written to cover every operator, so
       # they are where a spelling nothing else reaches — \boxplus, a forward
       # translation — first meets a real TeX.
@@ -186,7 +185,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/tex"
           uv run --no-sync python - "$RUNNER_TEMP/tex" \
-            examples/*.yaml examples/ports/*.yaml examples/operators/*.yaml tests/typeset/golden/model.yaml <<'PY'
+            examples/*.yaml examples/ports/*.yaml <<'PY'
           import sys
           from pathlib import Path
 
@@ -229,7 +228,7 @@ jobs:
       # 2011 sdist that tries to build itself over plain HTTP. pytest alone,
       # so this run stays serial where the dev-group one above is `-n auto`.
       #
-      # The floors are a 3.11 claim only, which is the interpreter this job
+      # The floors are a 3.12 claim only, which is the interpreter this job
       # pins: pyyaml 6.0 and numpy 1.26.0 predate 3.13 and have no wheel for
       # it, so `lowest-direct` there tries a source build and fails. Raise a
       # floor when the code relies on that version's behaviour, not to chase

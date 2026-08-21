@@ -6,12 +6,12 @@ import warnings
 
 import pytest
 import yaml
+from math_spec.boundedness import unbounded_notes
+from math_spec.operators import BUILTIN_NAMES
+from math_spec.piecewise import expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import LpspecWarning
-from lpspec.language.boundedness import unbounded_notes
-from lpspec.language.operators import BUILTIN_NAMES
-from lpspec.language.piecewise import expand_piecewise
 from tests.conftest import EXAMPLES_DIR
 
 #: The issue's variant 1, as a mapping the cases below vary one key of:

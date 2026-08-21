@@ -45,7 +45,7 @@ The same idea runs through data binding, with one distinction worth learning
 early: a **variable** the mask removed is *absent*, and a term carrying it takes
 its whole row with it — while a **parameter** row that is missing is a
 zero coefficient, and the row survives without it. Absence is a property of
-variables. → [dispatch](examples/dispatch.md), [absence](reference/language/absence.md)
+variables. → [dispatch](examples/dispatch.md), [absence](https://energy-models.github.io/math-spec/reference/language/absence)
 
 ## 3. A lookup maps one dimension onto another, and that is your topology
 
@@ -102,7 +102,7 @@ constraints:
 Get it wrong and you are told at load time, not at solve time. A stray dim
 would multiply rows and an unused `foreach` dim would repeat one row across
 them; either way you would build a different model than the file reads as.
-→ [the dim algebra](reference/language/expressions.md#dim-algebra)
+→ [the dim algebra](https://energy-models.github.io/math-spec/reference/language/expressions#dim-algebra)
 
 ## Then: check, build, solve
 
@@ -124,12 +124,12 @@ without shipping the data.
 Sources accept polars, pandas, pyarrow, or parquet paths — anything exposing
 the Arrow PyCapsule protocol, and the recogniser imports none of them.
 Results come back as frames; `to_pandas`, `to_dataarray` and `to_parquet` are
-the bridges out. → [data binding](reference/language/data.md), [Python API](reference/api.md)
+the bridges out. → [data binding](https://energy-models.github.io/math-spec/reference/language/data), [Python API](reference/api.md)
 
 ## Editor completion and offline checking
 
 The YAML surface ships as a JSON Schema —
-[`schema/lpspec.schema.json`](https://github.com/fluxopt/lpspec/blob/main/schema/lpspec.schema.json),
+[`schema/lpspec.schema.json`](https://github.com/energy-models/math-spec/blob/main/schema/lpspec.schema.json),
 generated from the same models `lps.check` runs, held current by a test. With
 the [Red Hat YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml)
 it gives key completion, hover docs, the closed vocabulary behind `dtype:`,
@@ -169,7 +169,7 @@ Worth knowing before you start, rather than after:
   and constraints take `variable * variable`; a bound, a named expression and a
   `piecewise:` link need a variable-free factor. Where a quadratic model can be
   *solved* is a second question — `check(model, sink=…)` answers it. →
-  [The ceiling](about/ceiling.md#two-tiers-and-the-ceiling)
+  [The ceiling](https://energy-models.github.io/math-spec/about/ceiling#two-tiers-and-the-ceiling)
 - **Several plausible features are refused on purpose**, with reasons.
   → [the roadmap](about/roadmap.md)
 
@@ -178,7 +178,7 @@ Worth knowing before you start, rather than after:
 | | |
 |---|---|
 | [Examples](examples/index.md) | every model in the repo, and which constructs each exercises |
-| [Language reference](reference/language/index.md) | what a file may contain, exactly |
+| [Language reference](https://energy-models.github.io/math-spec/reference/language) | what a file may contain, exactly |
 | [Python API](reference/api.md) | building, solving, and reading an answer back |
-| [Typeset the math](reference/typeset.md) | the same file as LaTeX, Typst or Markdown |
+| [Typeset the math](https://energy-models.github.io/math-spec/reference/typeset) | the same file as LaTeX, Typst or Markdown |
 | [About](about/index.md) | why it is shaped this way, what it costs, where it is going |

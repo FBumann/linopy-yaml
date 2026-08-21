@@ -48,12 +48,12 @@ from pathlib import Path
 from typing import Any, NamedTuple, get_args
 
 import pytest
+from math_spec._yaml import parse_yaml
+from math_spec.model import Model
+from math_spec.validation import load_model
 
 import lpspec as lps
 from lpspec.api import BoundModel
-from lpspec.language._yaml import parse_yaml
-from lpspec.language.model import Model
-from lpspec.language.validation import load_model
 from lpspec.relational.result import Result
 
 try:
@@ -66,23 +66,10 @@ TRACKED = [
     'README.md',
     # not `docs/guide.md`: its snippets are fragments of models that run, and
     # `test_the_guide_teaches_lines_that_exist` checks them against those files.
-    'docs/reference/language/index.md',
-    'docs/reference/language/file.md',
-    'docs/reference/language/dimensions.md',
-    'docs/reference/language/declarations.md',
-    'docs/reference/language/expressions.md',
-    'docs/reference/language/operators.md',
-    'docs/reference/language/absence.md',
-    'docs/reference/language/piecewise.md',
-    'docs/reference/language/data.md',
-    'docs/reference/language/errors.md',
-    'docs/reference/language/reading.md',
     'docs/reference/api.md',
     'docs/reference/sweeps.md',
-    'docs/reference/typeset.md',
     'docs/about/linopy.md',
     'docs/about/architecture.md',
-    'docs/about/ceiling.md',
     'docs/about/roadmap.md',
     'docs/about/decomposition.md',
 ]

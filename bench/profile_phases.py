@@ -49,7 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--rounds', type=int, default=9, help='timed builds per arm; the minimum is reported')
     args = parser.parse_args(argv)
 
-    from lpspec.language.validation import load_model
+    from math_spec.validation import load_model
+
     from lpspec.lowering import lower_program
     from lpspec.relational.engines.polars import engine as executor_module
     from lpspec.relational.engines.polars.engine import PolarsEngine

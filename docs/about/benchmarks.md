@@ -493,7 +493,7 @@ exclusions and by having no quadratic-constraint concept at all, Gurobi by
 having none, `lp_file` by writing a section either way. A quadratic constraint
 is also the first construct one *lane* cannot build, which is what hard rule 3's
 `accepts ≠ builds` amendment is for. The third is `sos:`
-([sos](../reference/language/piecewise.md#sos)) ships to every sink, natively where the row says
+([sos](https://energy-models.github.io/math-spec/reference/language/piecewise#sos)) ships to every sink, natively where the row says
 so and as binaries plus linking rows where it says *no concept*.
 
 | | `lp_file` | `mps_file` | HiGHS direct | Gurobi direct | Xpress direct |

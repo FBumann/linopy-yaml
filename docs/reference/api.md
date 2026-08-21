@@ -41,7 +41,7 @@ without shipping the data.
 
 Whether a model is *sayable* is solver-independent. Where it can *land* is a
 separate axis — [what a sink can
-ingest](../about/ceiling.md#capability-is-not-the-ceiling) — and `sink=` is how
+ingest](https://energy-models.github.io/math-spec/about/ceiling#capability-is-not-the-ceiling) — and `sink=` is how
 you ask about it:
 
 ```python

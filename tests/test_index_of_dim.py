@@ -241,7 +241,7 @@ def test_two_different_dimensions_cannot_be_compared_by_position():
 
 def resolved_where(where: str):
     """The predicate a backend would receive — resolution is where these fail."""
-    from lpspec.language.resolution import Namespace, where_of
+    from math_spec.resolution import Namespace, where_of
 
     schema = schema_of(MODEL)
     return where_of(where, Namespace.of(schema), 't')

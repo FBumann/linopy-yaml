@@ -14,14 +14,14 @@ unit with a fourth is a row in a table.
 
 $$\mathit{rate}_{f,t} = \sum_{k \in \mathcal{K}_{c(f)}} \lambda_{c(f),t,k}\, v_{f,k} \qquad \forall\thinspace f, t$$
 
-[`piecewise:`](../reference/language/piecewise.md) cannot say that: its `links:`
+[`piecewise:`](https://energy-models.github.io/math-spec/reference/language/piecewise) cannot say that: its `links:`
 are a list, so the arity would have to be written out. **The formulation it
 would have emitted is four declarations**, and each is ordinary:
 
 | what | how |
 |---|---|
 | the weights | a variable over `[converter, time, bp]`, masked by `where: bp_present` |
-| on one segment | [`sos:`](../reference/language/piecewise.md#sos) `type: 2` over that variable |
+| on one segment | [`sos:`](https://energy-models.github.io/math-spec/reference/language/piecewise#sos) `type: 2` over that variable |
 | one operating point | `sum(weight, over=bp) == 1` |
 | the tie | one row per **flow**, reading its converter's weights through `at(…, by=converter_of)` |
 
@@ -257,7 +257,7 @@ Nothing in the file says how many flows a converter has; the `converter_of`
 lookup does, and it is data.
 
 **The mask is the variable's own.** `where: bp_present` decides which weights
-exist, and an [`sos:`](../reference/language/piecewise.md#sos) set is over the
+exist, and an [`sos:`](https://energy-models.github.io/math-spec/reference/language/piecewise#sos) set is over the
 members present — so the boiler's three-breakpoint curve and the CHP's four sit
 on one axis with nothing padded. A solver without SOS gets binaries and big-M
 rows for the same set, which is why `big_m: 1` is there: a weight is at most 1.

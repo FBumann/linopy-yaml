@@ -17,13 +17,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from math_spec import BinaryOperatorNode, NameNode, ParameterNode, VariableNode, children
+
 from lpspec.errors import DataError, sparse_divisor_message, uncovered_constant_message
-from lpspec.language import BinaryOperatorNode, NameNode, ParameterNode, VariableNode, children
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from lpspec.language import Buildable, ComparisonNode, ExpressionNode
+    from math_spec import Buildable, ComparisonNode, ExpressionNode
 
 
 def gaps_under(array: Any, mask: Any) -> int:

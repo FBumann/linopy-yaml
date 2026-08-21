@@ -26,10 +26,10 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
+from math_spec.expansion import parse_and_expand
+from math_spec.expression_parser import parse_expression
 
 import lpspec as lps
-from lpspec.language.expansion import parse_and_expand
-from lpspec.language.expression_parser import parse_expression
 from lpspec.lowering import expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources

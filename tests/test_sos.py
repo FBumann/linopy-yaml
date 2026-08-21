@@ -20,6 +20,7 @@ from typing import Any
 
 import polars as pl
 import pytest
+from math_spec.typeset import to_markdown
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError
@@ -411,7 +412,7 @@ def test_a_set_is_typeset_as_the_domain_it_restricts():
     family may be nonzero — not among the constraints, where it would read as
     a row a solver holds.
     """
-    rendered = lps.to_markdown(model(2))
+    rendered = to_markdown(model(2))
     assert r'\in \mathrm{SOS}2' in rendered, 'the set is missing from the rendered model'
     assert rendered.index('take sos') > rendered.index('Variable domains')
 

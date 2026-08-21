@@ -27,7 +27,7 @@ from tests.conftest import schema_of
 from tests.oracle import builder, linopy, loader, lpspec_linopy, pd, xr
 
 if TYPE_CHECKING:
-    from lpspec.language.model import Model
+    from math_spec.model import Model
 
 
 @pytest.fixture
@@ -305,7 +305,7 @@ def gens():
 
 def _resolved(text, parameters=('p_max',), dimensions=('g',)):
     """Resolve then evaluate — the evaluator no longer takes strings."""
-    from lpspec.language.resolution import Namespace, where_of
+    from math_spec.resolution import Namespace, where_of
 
     return where_of(text, Namespace((), parameters, dimensions), 'test')
 

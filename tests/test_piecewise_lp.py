@@ -34,8 +34,8 @@ import lpspec as lps
 from lpspec.errors import PiecewiseExpansionError
 from tests.conftest import schema_of
 from tests.differential import RTOL, differential
-from tests.language.piecewise_models import LP_MODEL as MODEL
 from tests.oracle import lpspec_linopy, pd
+from tests.piecewise_models import LP_MODEL as MODEL
 
 PER_UNIT_MODEL = """
 description: the same curve, one per unit — the shape a corpus of cost curves arrives in

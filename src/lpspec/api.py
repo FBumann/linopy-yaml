@@ -28,8 +28,9 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from math_spec import expand_piecewise, load_model, unbounded_notes
+
 from lpspec.errors import DataError, LpspecError, LpspecWarning, lane_cannot_build_message
-from lpspec.language import expand_piecewise, load_model, unbounded_notes
 from lpspec.lowering import advice, expression_thunks, lower_expression, lower_program
 from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
@@ -40,7 +41,8 @@ from lpspec.sources import tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language import Model
+    from math_spec import Model
+
     from lpspec.relational.plan import Program
     from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 

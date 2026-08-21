@@ -27,8 +27,7 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Literal, assert_never, cast
 
-from lpspec.errors import LanguageError
-from lpspec.language import (
+from math_spec import (
     AndNode,
     ArithmeticNode,
     BinaryOperatorNode,
@@ -69,12 +68,14 @@ from lpspec.language import (
     expression_of,
     where_of,
 )
+
+from lpspec.errors import LanguageError
 from lpspec.relational import plan
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from lpspec.language import Buildable, Model
+    from math_spec import Buildable, Model
 
 _SENSES = {'==', '<=', '>='}
 
@@ -669,7 +670,7 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
     if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode)):
         msg = (
             f'{type(node).__name__} reached lowering unresolved. Where strings '
-            f'must go through lpspec.language.where_of() first.'
+            f'must go through math_spec.where_of() first.'
         )
         raise AssertionError(msg)
 

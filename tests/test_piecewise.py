@@ -20,16 +20,16 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
+from math_spec.piecewise import PiecewiseExpansionError, expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import DataError
-from lpspec.language.piecewise import PiecewiseExpansionError, expand_piecewise
 from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources, validate_piecewise_data
 from tests.conftest import by_coord, override, raw_of, schema_of
 from tests.differential import differential
-from tests.language.piecewise_models import CHP_YAML, GATED_YAML, NONCONVEX_YAML, SOS2_MODEL, TWO_DIM_YAML
 from tests.oracle import lpspec_linopy, pd
+from tests.piecewise_models import CHP_YAML, GATED_YAML, NONCONVEX_YAML, SOS2_MODEL, TWO_DIM_YAML
 
 #: The same model with the hull instead of the curve — `method: convex` and
 #: nothing else changed.

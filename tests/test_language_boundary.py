@@ -9,10 +9,10 @@ Errors must carry the construct and its context, verbatim.
 from __future__ import annotations
 
 import pytest
+from math_spec.dimensions import check_schema
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from lpspec.language.dimensions import check_schema
 from lpspec.lowering import lower_program
 from tests.conftest import EXAMPLES_DIR, MODEL_PATHS, schema_of
 

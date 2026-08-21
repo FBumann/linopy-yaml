@@ -2,7 +2,7 @@
 
 Why the package is shaped the way it is, what it costs, where it came from and
 where it is going. Nothing here is needed to write or run a model — that is
-[the guide](../guide.md) and [the reference](../reference/language/index.md).
+[the guide](../guide.md) and [the reference](https://energy-models.github.io/math-spec/reference/language).
 
 | | |
 |---|---|

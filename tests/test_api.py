@@ -20,10 +20,10 @@ from unittest import mock
 import numpy as np
 import polars as pl
 import pytest
+from math_spec.model import Model
 
 import lpspec as lps
 from lpspec.errors import DimensionError
-from lpspec.language.model import Model
 from tests.conftest import (
     DISPATCH_COST,
     DISPATCH_GENERATORS,
@@ -466,7 +466,7 @@ def test_no_operator_registry_anywhere():
     makes the differential tests an oracle rather than a comparison of
     dialects (docs/about/architecture.md, "The expressive ceiling").
     """
-    import lpspec.language.operators as operators
+    import math_spec.operators as operators
 
     assert not hasattr(lps, 'register')
     assert not hasattr(operators, 'register')

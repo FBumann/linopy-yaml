@@ -29,9 +29,9 @@ model whose technologies are deliberately not alphabetical.
 from __future__ import annotations
 
 import pytest
+from math_spec.expression_parser import parse_expression
 
 from lpspec.errors import DimensionError, LanguageError, SchemaError
-from lpspec.language.expression_parser import parse_expression
 from lpspec.lowering import _lower_expr, lower_program
 from lpspec.relational.plan import GroupSum, Variable
 from tests.conftest import override, raw_of, relation, resolved, schema_of

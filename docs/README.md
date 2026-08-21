@@ -3,7 +3,7 @@
 This folder is both the published site and what you read on GitHub.
 [index.md](index.md) is the site's front door and this page is the folder view;
 start at [writing a model](guide.md), then
-[the rules](reference/language/index.md#ten-rules-the-language-reduces-to) for
+[the rules](https://energy-models.github.io/math-spec/reference/language#ten-rules-the-language-reduces-to) for
 the exact one.
 
 **The layout is the reader's path.** `guide.md`, `examples/` and `reference/` are
@@ -22,7 +22,7 @@ repo and 404s on the site, silently. The rest is in *the docs* in
 reference table in [examples/index.md](examples/index.md) (`tools/constructs.py`),
 the *"the same model, as math"* block on each model page
 (`tools/gallery_math.py`), the operator math in
-[the operators page](reference/language/operators.md#as-math)
+[the operators page](https://energy-models.github.io/math-spec/reference/language/operators#as-math)
 (`tools/language/spec_math.py`), and the tables in
 [benchmarks.md](about/benchmarks.md) (`bench.report`, `bench.plot`). The
 catalogue is read off `mkdocs.yml`'s nav,

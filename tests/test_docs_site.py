@@ -180,183 +180,16 @@ def _headings(page: Path) -> set[str]:
     return slugs
 
 
-def test_every_rule_cites_the_page_that_elaborates_it():
-    """A rule is the canonical statement and a page below is the detail.
-
-    An unlinked rule is the failure that would otherwise pass silently: mkdocs
-    fails the build on a *dead* anchor, but a row that cites nothing at all
-    resolves fine and quietly becomes a second, drifting home for the rule.
-    Splitting the reference across pages adds the other half — a citation whose
-    *page* moved — so both are checked here.
-    """
-    rules = _rules()
-    assert len(rules) >= 10, f'expected the rule block to be found and populated; got {len(rules)} rows'
-
-    broken = []
-    for number, _, citation in rules:
-        targets = re.findall(r'\]\(([a-z0-9_.-]+\.md)(?:#([a-z0-9-]+))?\)', citation)
-        if not targets:
-            broken.append(f'rule {number} cites no page')
-        for page, anchor in targets:
-            target = LANGUAGE / page
-            if not target.is_file():
-                broken.append(f'rule {number} -> {page} (no such page)')
-            elif anchor and anchor not in _headings(target):
-                broken.append(f'rule {number} -> {page}#{anchor}')
-    assert not broken, f'rules whose citation does not resolve under {LANGUAGE.relative_to(REPO)}: {broken}'
-
-
 # --------------------------------------------------------------------------
 # the operators as math
-
-
-def test_the_operator_math_is_current():
-    """The generated block equals what the probe models render.
-
-    The same bargain the gallery makes: a page showing a model is a copy, and a
-    copy rots unless something asserts it. Here the copy is one equation per
-    operator, and what it would rot into is a reference page describing an
-    operator the language stopped having.
-    """
-    from tools.language import spec_math
-
-    assert spec_math.main(['--check']) == 0, 'stale operator math'
-
-
-def test_every_operator_in_the_table_has_a_probe():
-    """The operator table and the math block are the same list, in the same order.
-
-    "As math" says it shows *each row above*, and nothing else makes that
-    true: an operator added to the language and to the table, but given no
-    probe, would leave a section quietly claiming to be all of them. The order
-    is asserted too — the prose table is the order a reader meets them, and two
-    tables that disagree about it are read as two different sets.
-    """
-    from tools.language import spec_math
-
-    assert spec_math.table_operators() == list(spec_math.OPERATORS), (
-        f'{spec_math.PAGE.name} and tools/spec_math.OPERATORS name different operators, '
-        'or name them in a different order — every row of the operator table needs '
-        'a probe in examples/operators/, and every probe needs its row'
-    )
-
-
-def test_no_probe_without_a_row():
-    """The reverse: a model in `examples/operators/` that the page never shows."""
-    from tools.language import spec_math
-
-    orphans = sorted(p.stem for p in spec_math.PROBES.glob('*.yaml') if p.stem not in set(spec_math.OPERATORS.values()))
-    assert not orphans, f'operator probes nothing renders: {orphans}'
 
 
 # --------------------------------------------------------------------------
 # every construct as math
 
 
-def test_the_notation_page_is_current():
-    """The generated page equals what the fixture renders."""
-    from tools.language import notation
-
-    assert notation.main(['--check']) == 0, 'stale notation page'
-
-
-def test_the_notation_page_shows_every_declaration_in_the_fixture():
-    """What makes the page's "every construct" true.
-
-    The chain is: `tests/typeset/test_typeset.py` holds the fixture to the language, so
-    a construct the language has is a declaration in that file; this asserts
-    every such declaration reaches the page. The fixture is read here rather
-    than through `tools.language.notation`, which would only prove the tool agrees with
-    itself — a block shape its scanner does not recognise is exactly the way
-    the page would quietly become *most* constructs.
-    """
-    from tools.language import notation
-
-    declared, section = set(), None
-    for line in notation.MODEL.read_text().splitlines():
-        if top := re.match(r'^(\w+):', line):
-            section = top[1]
-        elif (name := re.match(r'^  (\w+):', line)) and section in notation.SECTIONS:
-            declared.add(name[1] if section != 'objective' else 'objective')
-    shown = {match[1] for match in re.finditer(r'^#### `(.+?)`', notation.PAGE.read_text(), re.MULTILINE)}
-    assert not declared - shown, (
-        f'declarations in {notation.MODEL.name} that the notation page never shows: {sorted(declared - shown)}. '
-        f'Run `uv run python -m tools.language.notation`.'
-    )
-
-
-def test_the_notation_page_shows_every_way_a_curve_expands():
-    """Three methods, three formulations, and a page showing one of them shows a third.
-
-    `PIECEWISE_METHODS` is the closed set, so a method added to the language
-    fails here until it has a model on the page — which is also the only way
-    the section's `method:` captions can be read as the whole list.
-    """
-    from lpspec.language.model import PIECEWISE_METHODS
-    from tools.language import notation
-
-    shown = set(re.findall(r'\*\*`method: (\w+)`\*\*', notation.PAGE.read_text()))
-    assert shown == set(PIECEWISE_METHODS), (
-        f"the notation page shows {sorted(shown)} of the language's {sorted(PIECEWISE_METHODS)} — "
-        f'every method expands differently, so each needs a model in tools/notation.PIECEWISE'
-    )
-
-
 # --------------------------------------------------------------------------
 # the error tree
-
-
-#: The one table telling a caller which exception is which.
-ERROR_TABLE = LANGUAGE / 'errors.md'
-
-
-def _tabled_errors() -> set[str]:
-    """Every class named in the first column of the error table."""
-    section = ERROR_TABLE.read_text().split('## Which error you get', 1)[1].split('\n\n\n', 1)[0]
-    return set(re.findall(r'^\| `(\w+Error)` \|', section, re.MULTILINE))
-
-
-def _public_errors() -> set[str]:
-    """Every exception `lpspec.errors` exposes, which is what a caller can catch.
-
-    Read off `__all__` rather than off where the class is defined: the model
-    half of the hierarchy lives in `language/errors.py` and is re-exported
-    here, and a caller catching `lps.LanguageError` neither knows nor cares.
-
-    `LpspecWarning` is not one: it is raised by nothing and carries advice, and
-    the paragraph under the table is where it is documented.
-    """
-    from lpspec import errors
-
-    return {
-        name
-        for name in errors.__all__
-        if isinstance(obj := getattr(errors, name), type)
-        and issubclass(obj, Exception)
-        and not issubclass(obj, Warning)
-    }
-
-
-def test_every_error_class_has_a_row():
-    """A class a caller catches, and a table that says which is which.
-
-    The table is the only place the tree is written down for a reader, so a
-    class added without a row leaves it quietly claiming to be all of them —
-    which is what happened to `LaneError` (#1087), found by reading rather than
-    by anything failing.
-    """
-    assert _public_errors() <= _tabled_errors(), (
-        f'{ERROR_TABLE.name} names no row for {sorted(_public_errors() - _tabled_errors())} — '
-        'every class in lpspec.errors is one a caller may catch, so each needs its line'
-    )
-
-
-def test_no_row_without_a_class():
-    """The reverse: a row naming an exception that no longer exists."""
-    assert _tabled_errors() <= _public_errors(), (
-        f'{ERROR_TABLE.name} has a row for {sorted(_tabled_errors() - _public_errors())}, '
-        'which lpspec.errors does not define'
-    )
 
 
 # the lane, as a translation
@@ -371,7 +204,7 @@ def test_the_translation_table_names_every_built_in_operator():
     gained, since an operator with no row is an operator nobody wrote down the
     linopy call for.
     """
-    from lpspec.language.operators import BUILTIN_NAMES
+    from math_spec.operators import BUILTIN_NAMES
 
     page = (DOCS / 'about' / 'linopy.md').read_text()
     section = page.split('### What a construct becomes')[1].split('### The same language')[0]

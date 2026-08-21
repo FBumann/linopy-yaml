@@ -8,7 +8,6 @@ cannot silently drift from the code. Static checks parse source with ``ast``
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -309,399 +308,6 @@ def test_no_contract_module_names_an_engine():
 LANGUAGE_MAY_IMPORT: set[str] = set()
 
 
-def test_language_never_reaches_a_consumer():
-    """Hard rule 1, the other direction: the waist is closed from the front.
-
-    Hard rule 2 keeps the engine from seeing the schema or the AST. This is its
-    mirror: what a model *means* may not depend on what any consumer does with
-    it, so nothing under ``language/`` imports ``lowering``, ``piecewise``,
-    ``sources``, ``api``, or the relational / linopy / typeset subpackages.
-
-    That is what makes ``lps.check()`` a pass with no data and no plan, and a
-    second consumer cheap rather than a second opinion.
-    """
-    offenders = _reaches_past('language', ('lpspec.language',), LANGUAGE_MAY_IMPORT)
-    assert not offenders, (
-        f'the language reaches forward to a consumer: {offenders} — a front-end module '
-        f'may not depend on what is done with the AST it produces'
-    )
-
-
-def _consumer_paths() -> Iterator[Path]:
-    """Every module that reads the AST rather than producing it.
-
-    Membership is read off the path, like every other fence here: a consumer is
-    anything under ``src/lpspec`` that is not ``language/`` itself, so a new one
-    is inside the fence the moment it lands.
-    """
-    for path in PKG.rglob('*.py'):
-        if '__pycache__' in path.parts or 'language' in path.relative_to(PKG).parts:
-            continue
-        yield path
-
-
-def _from_the_language(tree: ast.AST) -> Iterator[tuple[str, str]]:
-    """Every ``from lpspec.language… import …`` in *tree*, as (module, name) pairs."""
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith('lpspec.language'):
-            for alias in node.names:
-                yield node.module, alias.name
-
-
-def _declared_surface() -> list[str]:
-    """``language.__all__``, read out of the source rather than imported.
-
-    Static like the rest of this module: the fences must be checkable on a bare
-    install, and importing the package to ask would drag in the engine.
-    """
-    tree = ast.parse((PKG / 'language' / '__init__.py').read_text())
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and any(
-            isinstance(target, ast.Name) and target.id == '__all__' for target in node.targets
-        ):
-            return [element.value for element in node.value.elts]
-    raise AssertionError('language/__init__.py declares no __all__ — the seam has to be a list somebody can read')
-
-
-def test_no_consumer_reaches_past_the_language_facade():
-    """The waist from the consumer's side — what makes it a contract rather than a habit.
-
-    Hard rule 1 stops the language reaching a consumer. This is the shape of the
-    traffic the other way: a consumer reads the AST through ``lpspec.language``
-    and nothing else, so what the waist promises is one reviewable list. A
-    submodule path is not that — nobody agreed to it, it can hold a private
-    name, and a name reached that way is invisible to the count below.
-    """
-    offenders = {}
-    for path in _consumer_paths():
-        deep = sorted(
-            {module for module, _ in _from_the_language(ast.parse(path.read_text())) if module != 'lpspec.language'}
-        )
-        if deep:
-            offenders[str(path.relative_to(PKG))] = deep
-    assert not offenders, (
-        f'a consumer imports a language submodule: {offenders} — read the AST through '
-        f'`lpspec.language`, and add the name to its __all__ if it is not there yet'
-    )
-
-
-def test_the_language_facade_is_exactly_what_consumers_read():
-    """The surface is a decision, so it is counted — in both directions.
-
-    A name exported and imported by nobody is surface the waist is carrying for
-    free, and YAGNI applies to a seam harder than anywhere else: it is what a
-    package boundary would have to keep stable. A name imported and not exported
-    means ``__all__`` has stopped describing the seam and the count has stopped
-    meaning anything.
-
-    Deliberately measured against ``src/`` alone. ``tests/`` reaches into the
-    language's own internals on purpose — they are its unit tests, not its
-    consumers — so counting them would make the seam look wider than it is.
-    """
-    used = {name for path in _consumer_paths() for _, name in _from_the_language(ast.parse(path.read_text()))}
-    declared = set(_declared_surface())
-    assert declared == used, (
-        f'the language surface and its consumers disagree: exported but unused '
-        f'{sorted(declared - used)}, used but not exported {sorted(used - declared)} — '
-        f'__all__ is the seam, so it says exactly what the AST is read through'
-    )
-
-
-#: What a test under ``tests/language/`` may reach, and it is an **allowlist**:
-#: anything rooted at ``lpspec``, ``tests`` or ``tools`` that is not named here
-#: fails. Enumerating what is forbidden kept missing things — ``tests.conftest``
-#: first (#1150), then ``tests.oracle`` and ``tests.differential``, each found by
-#: hand rather than by the guard whose job it was.
-#:
-#: Unlike the fence in ``src/``, submodules are fine: these are the language's
-#: own unit tests, and testing `expression_parser` through the facade would be
-#: testing the facade.
-LANGUAGE_TESTS_MAY_IMPORT = ('lpspec.language', 'lpspec.errors', 'tests.language')
-
-
-def test_the_languages_own_tests_reach_no_consumer():
-    """The prefix is the claim: everything here is decided at ``load_model``.
-
-    A test that needs `build`, `solve`, a plan or a lane is asserting something
-    about a *consumer* of the AST, however language-shaped its subject — and it
-    would not survive the language being lifted into a package of its own,
-    which is what this directory exists to make true. `import lpspec` counts as
-    reaching one: the top-level namespace is the runner.
-
-    So does `tests.conftest`, and that is the half this test used to miss
-    (#1150): it imports `tools.constructs`, which imports `api`, `lowering` and
-    `relational`, so a directory importing it is one that would not start. The
-    fixtures these tests need live in `tests/language/fixtures.py` instead, and
-    `conftest` re-exports them for everything on the other side of the cut. **A
-    test travels only if its fixtures travel** — the clause the criterion in
-    #1146 was missing.
-    """
-    offenders = {}
-    for path in (REPO / 'tests' / 'language').rglob('*.py'):
-        if '__pycache__' in path.parts:
-            continue
-        bad = sorted(
-            {
-                name
-                for name in _imported(ast.parse(path.read_text()))
-                if name.split('.')[0] in {'lpspec', 'tests', 'tools'} and not name.startswith(LANGUAGE_TESTS_MAY_IMPORT)
-            }
-        )
-        if bad:
-            offenders[path.name] = bad
-    assert not offenders, (
-        f'a language test reaches a consumer: {offenders} — assert it through `load_model`, '
-        f'or move the test to the file that owns the consumer it is really about'
-    )
-
-
-#: What a generator under ``tools/language/`` may reach. ``typeset`` is on the
-#: list because it moves with the language rather than despite being a consumer
-#: of the AST: the notation page and the operator table *are* the renderer's
-#: output, so a spec package that documents itself needs both halves.
-LANGUAGE_TOOLS_MAY_IMPORT = ('lpspec.language', 'lpspec.errors', 'lpspec.typeset')
-
-
-#: What a test under ``tests/typeset/`` may reach. The renderer, the language it
-#: reads, the CLI that fronts it, and the fixtures either owns — an allowlist for
-#: the same reason as the language's (#1150): enumerating what is forbidden kept
-#: missing things.
-#:
-#: ``lpspec.__main__`` is on it because the CLI moves with the renderer, and the
-#: test names it as a module rather than as ``from lpspec import __main__`` so
-#: that what it reaches is legible here.
-TYPESET_TESTS_MAY_IMPORT = (
-    'lpspec.language',
-    'lpspec.typeset',
-    'lpspec.errors',
-    'lpspec.__main__',
-    'tests.language',
-    'tests.typeset',
-)
-
-
-def test_the_renderers_own_tests_reach_no_further_than_the_renderer():
-    """`typeset/` travels with the language, so its tests have to travel too.
-
-    They did not: `test_typeset.py` swept `MODEL_PATHS` and read the gallery's
-    pages through `tools.gallery_math`, and `test_cli.py` drove the CLI over
-    `examples/dispatch.yaml` — the gallery, the generator and the model all stay.
-    What moved here is the renderer's own claims over fixtures that move with
-    it; the same claims over this repository's corpus are
-    `tests/test_typeset_gallery.py`.
-    """
-    offenders = {}
-    for path in (REPO / 'tests' / 'typeset').rglob('*.py'):
-        if '__pycache__' in path.parts:
-            continue
-        bad = sorted(
-            {
-                name
-                for name in _imported(ast.parse(path.read_text()))
-                if name.split('.')[0] in {'lpspec', 'tests', 'tools'} and not name.startswith(TYPESET_TESTS_MAY_IMPORT)
-            }
-        )
-        if bad:
-            offenders[str(path.relative_to(REPO))] = bad
-    assert not offenders, (
-        f'a renderer test reaches past the renderer: {offenders} — assert it over a fixture '
-        f'that travels, or move the test to `tests/test_typeset_gallery.py`'
-    )
-
-
-def test_the_languages_own_generators_reach_no_consumer():
-    """A generator that needs a plan is documenting lpspec, not the language.
-
-    These rewrite the JSON Schema, the operator table and the notation page from
-    the declarations themselves, so each is readable with no data and no engine
-    — which is also what lets them move with the thing they document.
-    ``constructs.py`` and ``gallery_math.py`` are deliberately *not* here: they
-    catalogue the gallery and the optima that did not come from us.
-
-    ``import lpspec`` counts as reaching a consumer, as it does for the tests:
-    the top-level namespace is the runner, and a generator that spells its
-    import that way stops saying which layer it reads.
-    """
-    offenders = {}
-    for path in (REPO / 'tools' / 'language').rglob('*.py'):
-        if '__pycache__' in path.parts:
-            continue
-        bad = sorted(
-            {
-                name
-                for name in _imported(ast.parse(path.read_text()))
-                if name == 'lpspec' or (name.startswith('lpspec') and not name.startswith(LANGUAGE_TOOLS_MAY_IMPORT))
-            }
-        )
-        if bad:
-            offenders[path.name] = bad
-    assert not offenders, (
-        f'a language generator reaches a consumer: {offenders} — read the declarations, '
-        f'or leave the generator in tools/ with the ones that document the gallery'
-    )
-
-
-MANIFEST = REPO / 'extraction.paths'
-
-#: The corpus that stays, and why. The ports and the drivers are evidence about
-#: lpspec — an external optimum reproduced, a driver taking slices. So are the
-#: teaching models, though each demonstrates a construct: every one has a
-#: gallery page that *solves* it and links to it in this repository, so what
-#: they are evidence of is that lpspec expresses and answers a real problem.
-#: `walkthrough.yaml` is the clearest case — `run.py` solves it and
-#: `walkthrough.out` is the golden, so the model and its answer are one thing.
-EXAMPLES_THAT_STAY = (
-    'examples/symbols/',
-    'examples/ports/',
-    'examples/benders/',
-    'examples/myopic/',
-    'examples/rolling/',
-    'examples/dispatch.yaml',
-    'examples/monthly_budget.yaml',
-    'examples/multi_period.yaml',
-    'examples/piecewise.yaml',
-    'examples/piecewise_conversion.yaml',
-    'examples/piecewise_lp.yaml',
-    'examples/piecewise_ragged.yaml',
-    'examples/reserves.yaml',
-    'examples/seasons.yaml',
-    'examples/sos.yaml',
-    'examples/storage.yaml',
-    'examples/transport.yaml',
-    'examples/walkthrough.yaml',
-)
-
-
-def _manifest() -> list[str]:
-    """The paths ``extraction.paths`` selects, comments and blanks dropped."""
-    lines = [line.strip() for line in MANIFEST.read_text().splitlines()]
-    return [line for line in lines if line and not line.startswith('#')]
-
-
-def test_every_path_the_extraction_selects_exists():
-    """A manifest naming a path that has moved selects nothing and says nothing.
-
-    ``git filter-repo`` does not fail on a path that matches no file — it
-    quietly keeps less than intended — so a stale line here would be discovered
-    as an absence in the new repository, after the history was rewritten.
-    """
-    missing = [line for line in _manifest() if not (REPO / line).exists()]
-    assert not missing, (
-        f'extraction.paths names paths that do not exist: {missing} — filter-repo would '
-        f'select nothing for them and report no error'
-    )
-
-
-def test_every_model_is_on_one_side_of_the_extraction():
-    """A model added to ``examples/`` lands on a side deliberately, or fails here.
-
-    The rule is what a model is evidence *of*: a construct the language can say,
-    or a claim about lpspec — that a plan builds, a solver agrees, a published
-    optimum is reproduced. Nothing decides that automatically, which is why an
-    unclassified model is an error rather than a default.
-    """
-    moves = tuple(line for line in _manifest() if line.startswith('examples/'))
-    unclassified = sorted(
-        str(path.relative_to(REPO))
-        for path in (REPO / 'examples').rglob('*.yaml')
-        if not str(path.relative_to(REPO)).startswith(moves + EXAMPLES_THAT_STAY)
-    )
-    assert not unclassified, (
-        f'{unclassified} is in neither extraction.paths nor EXAMPLES_THAT_STAY — say which '
-        f'side it is on: a model showing a construct moves, one proving lpspec builds stays'
-    )
-
-
-#: Everything that stays and names something the extraction takes, with what the
-#: cut owes it. Four are checks that read a moving artefact at run time and so
-#: must travel with it or be split; the rest are prose and configuration that
-#: become references to the other repository.
-#:
-#: Scoped to code and configuration on purpose. `docs/` cross-links to moving
-#: pages in bulk and every one of those becomes an external link — a known
-#: rewrite, not a break, and listing them here would bury the ones that are.
-#:
-#: **Imports of shipped modules survive; imports of tests and tools do not.** An
-#: `lpspec.language` import becomes an import of the dependency — the bulk
-#: rewrite the facade exists to make one spelling — so it is manifest business
-#: rather than a crossing, which is why `tests/test_cli.py` is absent though it
-#: plainly travels with `__main__.py`. A `tests.language` import has no such
-#: future: a test package is not shipped, so nothing downstream can import it
-#: and the name resolves to nothing. Those are matched here in dotted form,
-#: alongside paths and mkdocs' docs-relative spelling.
-CROSSES_THE_CUT = {
-    'tests/test_doc_examples.py': 'runs the code blocks in `docs/reference/language/`; those pages move',
-    'tests/test_docs_site.py': 'checks the operator page against `examples/operators/`; both move',
-    'tests/test_schema.py': 'asserts `schema/lpspec.schema.json` matches the model — moves, minus the '
-    'lowering half `test_an_omitted_bound_means_unbounded_all_the_way_down` keeps here',
-    'tests/README.md': 'prose naming `tests/language/`',
-    'tests/conftest.py': 're-exports the four fixtures from `tests.language.fixtures` so the tests that '
-    'stay import them from one place; at the cut it keeps its own copy of those thirty lines',
-    'tests/test_piecewise.py': 'reads the curves from `tests.language.piecewise_models`, where the '
-    'load-time tests that judge them live; at the cut it keeps a copy',
-    'tests/test_piecewise_lp.py': 'the same curves, for the `method: lp` half',
-    'tests/test_api.py': 'a docstring citing `docs/about/ceiling.md`, and one naming `tests/language/`',
-    'tests/test_architecture.py': 'the fences themselves: this file is split at the cut, not moved',
-    'tests/expression_space.py': 'its `shift` constructor cites `docs/reference/language/operators.md` '
-    'for the vacated edge being absent, which is the fact it encodes',
-    'tools/constructs.py': 'a comment citing `docs/reference/language/` for its column order',
-    'tests/test_absence.py': 'its docstring cites `docs/reference/language/absence.md` for the rule the whole file follows from; the page moves and the citation becomes a link',
-    'tests/test_typeset_gallery.py': 'its docstring names `tests/typeset/`, the renderer tests it was '
-    'split out of; what it asserts is about the gallery, which stays',
-    'tests/test_expansion_parity.py': 'a comment naming the language test whose model it copies '
-    'rather than imports, precisely so the import does not cross',
-    '.github/workflows/ci.yml': 'the LaTeX-compiles step names the models it renders, `examples/operators/` and the golden model among them',
-    '.github/workflows/codspeed.yml': 'a comment naming the golden model as one of the models',
-    'pyproject.toml': "ruff's per-file-ignore for `src/lpspec/language/where_parser.py`",
-    'mkdocs.yml': 'fifteen nav entries for pages that move; the nav is rebuilt on both sides at the cut',
-}
-
-#: Where a crossing would be a break rather than a link, and the suffixes worth
-#: reading. The directories that move are excluded — a moving file naming
-#: another moving file is not a crossing, it is two halves of the same package.
-#:
-#: ``.github/`` is here because it was missed: a CI step read the golden model
-#: by path, and moving that directory turned the step red on a tree whose whole
-#: suite was green locally. Configuration that names a file breaks the same way
-#: a test does.
-CUT_SCAN = (
-    ('tests', ('tests/language/', 'tests/typeset/')),
-    ('tools', ('tools/language/',)),
-    ('.github', ()),
-)
-CUT_SCAN_FILES = ('pyproject.toml', 'mkdocs.yml')
-
-
-def _crossings() -> dict[str, list[str]]:
-    """Staying code and configuration that names a path the manifest takes."""
-    moving = _manifest()
-    found = {}
-    candidates = [REPO / name for name in CUT_SCAN_FILES]
-    for root, skip in CUT_SCAN:
-        candidates += [
-            path
-            for path in (REPO / root).rglob('*')
-            if path.is_file()
-            and '__pycache__' not in path.parts
-            and not any(s in str(path.relative_to(REPO)) for s in skip)
-            and path.suffix in {'.py', '.md', '.yml', '.yaml', '.toml'}
-        ]
-    for path in candidates:
-        text = path.read_text(errors='ignore')
-        # mkdocs writes its nav relative to `docs/`, so a moving page is named
-        # there without the prefix — the same crossing, spelled shorter.
-        named = sorted(
-            line
-            for line in moving
-            if line in text
-            or (line.startswith('docs/') and line[len('docs/') :] in text)
-            or (line.startswith(('tests/', 'tools/')) and line.rstrip('/').replace('/', '.') in text)
-        )
-        if named:
-            found[str(path.relative_to(REPO))] = named
-    return found
-
-
 #: Directory prefixes a workflow can name that are files in this repository.
 #: Anything else in a `run:` block is a runner path, a container path or a shell
 #: variable, and none of those are ours to check.
@@ -735,147 +341,6 @@ def test_every_repository_path_a_workflow_names_exists():
     )
 
 
-#: Directory prefixes that name a file in this repository, for the path check
-#: below. Anything else in a string is a runner path, a URL or prose.
-TRAVELLING_TEST_ROOTS = ('tests/language', 'tests/typeset')
-
-
-def test_the_travelling_tests_read_only_what_travels():
-    """An import fence cannot see a path, and a path is as much a dependency.
-
-    Found by running the extraction: `tests/typeset/` passed every import fence
-    and still could not run once cut, because it read `examples/transport.yaml`
-    and globbed `examples/symbols/` — both of which stay. The renderer's tests
-    now read the operator probes and the golden model, and the claims about the
-    *committed* pairs live in `tests/test_typeset_gallery.py` with the files
-    they are about.
-
-    Literal prefixes only. A path assembled at run time is beyond this, which is
-    why the check is a floor rather than a proof — but it is the channel that
-    actually bit.
-    """
-    moving = tuple(line.rstrip('/') for line in _manifest())
-    offenders = {}
-    for root in TRAVELLING_TEST_ROOTS:
-        for path in (REPO / root).rglob('*'):
-            if not path.is_file() or '__pycache__' in path.parts:
-                continue
-            text = path.read_text(errors='ignore')
-            stray = sorted(
-                {
-                    literal
-                    for literal in re.findall(r"['\"]((?:examples|docs|schema|src|tools|tests)/[^'\"]*)['\"]", text)
-                    if not literal.startswith(moving)
-                }
-            )
-            if stray:
-                offenders[str(path.relative_to(REPO))] = stray
-    assert not offenders, (
-        f'a travelling test reads what stays: {offenders} — point it at a fixture that travels, '
-        f'or move the test to the file that owns the corpus it is really about'
-    )
-
-
-def test_everything_that_crosses_the_cut_is_declared():
-    """The manifest says what leaves; this says what stays behind pointing at it.
-
-    A misclassified path is the failure the exhaustiveness check cannot see — it
-    catches a model nobody classified, never one classified wrongly. Twice in
-    this PR's history the disproof was a *consumer* nobody had looked for: the
-    gallery pages that solve the teaching models, and the symbol tables paired
-    one-to-one with models that stay. So the consumers are enumerated, and the
-    set is exact in both directions: a new crossing fails as undeclared, and a
-    resolved one fails as stale rather than sitting here reading as work.
-    """
-    crossings = _crossings()
-    undeclared = sorted(set(crossings) - set(CROSSES_THE_CUT))
-    stale = sorted(set(CROSSES_THE_CUT) - set(crossings))
-    assert not undeclared and not stale, (
-        f'undeclared crossings {undeclared}, stale entries {stale} — a file that names a moving '
-        f'path either travels with it, is split, or is written down here with what the cut owes it'
-    )
-
-
-def test_the_language_facade_exports_no_private_name():
-    """A leading underscore in the seam is the surface admitting it is unfinished.
-
-    ``_UnresolvedPositionNode`` was in it, reached by all three consumers, and
-    nothing failed: the fence above counts a name, and the exactness check
-    above accepts whatever both sides spell the same. Only this reads the
-    spelling. A private name a consumer needs is a name that was never private.
-    """
-    private = sorted(name for name in _declared_surface() if name.startswith('_'))
-    assert not private, (
-        f'the language exports private names: {private} — a name the seam carries is public, '
-        f'so rename it rather than exporting the underscore'
-    )
-
-
-#: What ``typeset/`` may reach. The language and nothing else: a renderer reads
-#: the AST and writes text, so it must not be able to acquire an opinion an
-#: engine holds. ``lpspec.errors`` for the exception hierarchy, as everywhere.
-TYPESET_MAY_IMPORT = ENGINE_MAY_IMPORT
-
-
-def test_typeset_reads_the_language_and_reaches_no_engine():
-    """The fourth fence — the one that was prose only.
-
-    ``typeset/`` is the proof that a consumer of the AST is cheap: it renders
-    any model the lanes can build, from one walk, holding no opinion they do
-    not already hold. That claim is only worth anything if it *cannot* reach
-    the plan, a sink, a solver or a dataframe — so ``import lpspec.typeset``
-    must not drag in an engine. It used to, through ``api.load_model``, and
-    nothing failed; the module map said otherwise and no test read it.
-    """
-    offenders = _reaches_past('typeset', ('lpspec.language', 'lpspec.typeset'), TYPESET_MAY_IMPORT)
-    assert not offenders, (
-        f'typeset reaches past the language: {offenders} — a renderer reads the AST '
-        f'and writes text; it may not reach a plan, a sink, a solver or a dataframe'
-    )
-
-
-def test_typesets_import_closure_needs_no_third_party_engine():
-    """The same fence, transitively — the half a one-hop name check misses.
-
-    A renderer that imports only ``language/`` still pays for polars if some
-    language module does. So this walks the *closure* of module-level imports
-    from ``typeset/`` and asserts no engine third-party lands in it: what a
-    consumer binding no data costs is the point of the fence, not which names
-    it happens to spell.
-
-    Deliberately not observed via ``import lpspec.typeset`` in a subprocess:
-    importing a submodule runs ``lpspec/__init__.py``, which eagerly exposes
-    ``build``/``solve`` and so loads the runner whatever this subpackage does.
-    That is a property of the top-level namespace, not of ``typeset/``.
-
-    The walk follows module-level ``from lpspec.x import y`` edges, resolved
-    back to modules.
-    """
-    heavy = {'polars', 'highspy', 'numpy', 'pandas'} | FORBIDDEN_RUNTIME
-    by_module = {
-        f'lpspec.{p.relative_to(PKG).with_suffix("").as_posix().replace("/", ".").removesuffix(".__init__")}': p
-        for p in _all_modules()
-    }
-    seen, stack, reached = set(), ['lpspec.typeset'], {}
-    while stack:
-        mod = stack.pop()
-        if mod in seen or mod not in by_module:
-            continue
-        seen.add(mod)
-        for imported in _module_level_imports(by_module[mod]):
-            if imported in heavy:
-                reached.setdefault(imported, []).append(mod)
-        for node in ast.walk(ast.parse(by_module[mod].read_text())):
-            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith('lpspec'):
-                stack.append(node.module)
-            elif isinstance(node, ast.Import):
-                stack += [a.name for a in node.names if a.name.startswith('lpspec')]
-    assert not reached, (
-        f'the typeset import closure reaches an engine dependency: {reached} — '
-        f'typesetting a model must not cost a dataframe library or a solver binding'
-    )
-
-
 #: The whole Python surface, by role. Hard rule 5 says the public interface is
 #: a declared model rather than a Python API — this is what "rather than" is
 #: worth in names. Adding one is a row here, which is a line in a diff a
@@ -884,7 +349,6 @@ PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
     'load it': {'load_model', 'Model'},
-    'show it': {'to_latex', 'to_markdown', 'to_typst', 'SymbolTable'},
     'catch it': {
         'LpspecError',
         'LanguageError',
@@ -957,27 +421,6 @@ def test_the_linopy_lane_stays_two_verbs():
         if isinstance(node, ast.Assign) and any(ast.unparse(t) == '__all__' for t in node.targets)
     )
     assert set(declared) == PUBLIC_API_LINOPY, f'the linopy lane exports {sorted(declared)}'
-
-
-def test_expansion_has_no_mutable_module_state():
-    """Hard rule 5: YAML files are self-contained — nothing importable may
-    accumulate state that changes what a file means."""
-    tree = ast.parse((PKG / 'language' / 'expansion.py').read_text())
-    mutable = []
-    for node in tree.body:
-        if isinstance(node, (ast.Assign, ast.AnnAssign)):
-            value = node.value
-            if isinstance(value, (ast.Dict, ast.List, ast.Set)) or (
-                isinstance(value, ast.Call)
-                and isinstance(value.func, ast.Name)
-                and value.func.id in {'dict', 'list', 'set'}
-            ):
-                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-                mutable += [ast.unparse(t) for t in targets]
-    assert not mutable, (
-        f'expansion.py holds mutable module-level state {mutable} — '
-        f'macros/expressions must live in the schema, not a registry'
-    )
 
 
 #: The two sink families. The directory *is* the family, so a member cannot
@@ -1081,8 +524,9 @@ def test_the_engine_dtype_table_matches_the_declared_vocabulary():
     added to ``DIMENSION_DTYPES`` without a polars dtype here would fail
     ``labels_frame`` on the empty-index path with a ``KeyError``.
     """
+    from math_spec.model import DIMENSION_DTYPES
+
     from lpspec.frames import _DECLARED
-    from lpspec.language.model import DIMENSION_DTYPES
 
     assert set(_DECLARED) == set(DIMENSION_DTYPES), 'the two homes of the dimension dtype vocabulary disagree'
 
@@ -1099,7 +543,8 @@ def test_the_relational_lane_accepts_the_declared_parameter_dtype_vocabulary():
     is widened, because whole numbers are numbers and the shipped instances
     carry them. A second exception added quietly is what this catches.
     """
-    from lpspec.language.model import PARAMETER_DTYPES
+    from math_spec.model import PARAMETER_DTYPES
+
     from lpspec.relational.engines.polars.data_validation import _COLUMNS, ACCEPTED_VALUE_TYPES
 
     assert set(_COLUMNS) == set(PARAMETER_DTYPES), 'the column table and the language disagree'
@@ -1120,7 +565,8 @@ def test_the_eager_lane_takes_the_same_vocabulary_and_the_same_widening():
     """
     pytest.importorskip('linopy', reason='needs the [linopy] extra')
 
-    from lpspec.language.model import PARAMETER_DTYPES
+    from math_spec.model import PARAMETER_DTYPES
+
     from lpspec.linopy.loader import _ACCEPTED_KINDS, _KINDS
 
     assert set(_KINDS) == set(PARAMETER_DTYPES), 'the eager kind table and the language disagree'
@@ -1139,7 +585,8 @@ def test_the_plan_variable_type_matches_the_declared_domains():
     """
     from typing import get_args
 
-    from lpspec.language.model import VARIABLE_DOMAINS
+    from math_spec.model import VARIABLE_DOMAINS
+
     from lpspec.relational.plan import VariableType
 
     assert set(get_args(VariableType)) == set(VARIABLE_DOMAINS), (
@@ -1158,7 +605,8 @@ def test_the_plan_absence_matches_the_declared_absence():
     """
     from typing import get_args
 
-    from lpspec.language.model import VARIABLE_ABSENCE
+    from math_spec.model import VARIABLE_ABSENCE
+
     from lpspec.relational.plan import VariableAbsence
 
     assert set(get_args(VariableAbsence)) == set(VARIABLE_ABSENCE), (
@@ -1230,7 +678,7 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     ``lowering.py``, so every declared name has to appear there as a lowering
     branch.
     """
-    from lpspec.language.operators import BUILTIN_NAMES
+    from math_spec.operators import BUILTIN_NAMES
 
     tree = ast.parse((PKG / 'linopy' / 'builder.py').read_text())
     table = next(
@@ -1280,41 +728,15 @@ def test_every_module_is_documented_somewhere():
     )
 
 
-def test_every_schema_model_is_strict():
-    """A schema model that inherits BaseModel directly silently drops unknown
-    keys, which turns a typo into a different model. Strictness lives on
-    ``_StrictBlock``, so the check is that nothing bypasses it."""
-    tree = ast.parse((PKG / 'language' / 'model.py').read_text())
-    loose = [
-        node.name
-        for node in tree.body
-        if isinstance(node, ast.ClassDef)
-        and node.name != '_StrictBlock'
-        and any(isinstance(b, ast.Name) and b.id == 'BaseModel' for b in node.bases)
-    ]
-    assert not loose, (
-        f'schema models {loose} inherit BaseModel directly and so accept unknown keys — inherit _StrictBlock instead'
-    )
-
-
 #: Every in-function ``lpspec`` import in the package, with why it is one.
 #: Empty, and that is the claim: the layers are ordered with no exception at
 #: all. The one entry this used to hold broke a real cycle — ``piecewise``
 #: consulted the plan's subset test while lowering had to expand before it
 #: could lower. Expansion no longer asks the plan anything, so the cycle is
 #: gone rather than deferred, and a lazy import here is once again only ever
-#: a leftover.
-DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
-    ('language/model.py', 'lpspec.language.piecewise'): (
-        'Model validates its own expressions, and the checkers read Model. Both '
-        'sit in `language/`, so this is one layer calling itself rather than a '
-        'reach across layers.'
-    ),
-    ('language/model.py', 'lpspec.language.validation'): (
-        'Same cycle: validation.py imports Model to build one, and Model calls '
-        'validate_expressions on itself so the type cannot exist half-checked.'
-    ),
-}
+#: a leftover. Empty since the language left: both entries were `language/model.py`
+#: calling its own layer, and that layer is now another package.
+DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {}
 
 
 def test_lazy_intra_package_imports_are_all_declared():

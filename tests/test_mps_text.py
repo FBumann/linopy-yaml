@@ -19,10 +19,10 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
+from math_spec import expand_piecewise, load_model
 
 import lpspec as lps
 from lpspec.errors import LpspecError
-from lpspec.language import expand_piecewise, load_model
 from lpspec.relational.sinks.writers import mps_file
 from tests.conftest import (
     DISPATCH_MODEL,

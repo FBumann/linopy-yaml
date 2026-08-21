@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from math_spec.model import Model
+from math_spec.resolution import Namespace
 
 import lpspec as lps
 from lpspec.errors import DataError, DimensionError, LanguageError
-from lpspec.language.model import Model
-from lpspec.language.resolution import Namespace
 from lpspec.lowering import _lower_expr, _lower_where, lower_program
 from lpspec.relational.plan import (
     At,

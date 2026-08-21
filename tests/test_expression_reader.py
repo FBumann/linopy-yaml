@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from math_spec.dimensions import dims_of
+from math_spec.resolution import Namespace, expression_of
 
 import lpspec as lps
 from lpspec.errors import LpspecError
-from lpspec.language.dimensions import dims_of
-from lpspec.language.resolution import Namespace, expression_of
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
 MODEL = {

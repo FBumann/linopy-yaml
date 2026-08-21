@@ -21,14 +21,22 @@ keywords = [
     "declarative", "yaml", "polars", "highs", "operations-research",
 ]
 classifiers = [
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Development Status :: 3 - Alpha",
     "Typing :: Typed",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
+    # The language: `Model`, the two grammars, resolution, the dim rules and the
+    # degree check — everything decidable before a byte of data is read. Extracted
+    # to its own repository so a second consumer costs nothing (docs/about/architecture.md);
+    # this package is the first one, and PyPSA is the next.
+    #
+    # A direct reference until math-spec publishes, which is a thing PyPI refuses
+    # (RELEASING.md) — the same wall the `linopy` extra is behind, with the same
+    # exit: an ordinary floor the day there is a release to floor against.
+    "math-spec @ git+https://github.com/energy-models/math-spec@v0.0.1-alpha.1",
     # the relational engine: every frame a model is built from, and the parquet
     # reader that fills them. Arrow-backed, so a result frame exports the
     # PyCapsule protocol and any consumer takes it without this package
@@ -38,7 +46,6 @@ dependencies = [
     # row starts HiGHS wants, and the batch coercions are its dtypes. Array
     # work at the solver boundary, not a dataframe dependency.
     "numpy>=1.26",
-    "pyparsing>=3.1",
     # 2.1 is where a validator's own exception reaches `ctx['error']` as the
     # object rather than its str, which `errors.schema_error` unwraps to keep
     # the documented class. 2.0 flattens every model error to SchemaError.
@@ -315,9 +322,9 @@ skip_covered = true
 show_missing = true
 
 [tool.pyrefly]
-# check against the *lowest* supported interpreter, so 3.12+ syntax and stdlib
-# additions are caught here rather than by the 3.11 leg of the CI matrix.
-python-version = "3.11"
+# check against the *lowest* supported interpreter, so 3.13+ syntax and stdlib
+# additions are caught here rather than by the 3.12 leg of the CI matrix.
+python-version = "3.12"
 project-includes = ["src/lpspec"]
 preset = "strict"
 
@@ -340,10 +347,11 @@ preset = "strict"
 # handoff `explicit-any` is unpromoted for. Kept on rather than switched off so
 # a lambda outside those grammars still has to say what it takes.
 [tool.pyrefly.errors]
-# Off, and not per-line: `typing.override` is 3.12 and this project's floor is
-# 3.11, so satisfying it means a `typing_extensions` dependency bought for a
-# decorator. The sink family's overrides are held to their base by
-# `@abstractmethod` and `tests/test_architecture.py` instead.
+# Off, and the reason it was off has expired: `typing.override` is 3.12, and the
+# floor moved there with the language extraction, so it costs no dependency now.
+# Left off in that PR rather than turned on inside it — the sink family's
+# overrides are held to their base by `@abstractmethod` and
+# `tests/test_architecture.py`, so this buys a second guard rather than a first.
 missing-override-decorator = false
 implicit-import = true
 missing-import = true
@@ -359,3 +367,4 @@ unresolvable-dunder-all = true
 untyped-import = true
 unused-ignore = true
 variance-mismatch = true
+

@@ -267,7 +267,7 @@ def test_the_window_typesets_as_the_condition_on_its_index(edge: str | None, dif
     whole dimension — a different equation, and one the reader cannot tell
     from this one.
     """
-    from lpspec.typeset import to_latex
+    from math_spec.typeset import to_latex
 
     line = next(line for line in to_latex(schema_of(up_time_model(edge))).splitlines() if 'stays' in line)
     assert rf"\sum_{{t' \in \mathcal{{T}} \,:\, 0 \le {difference}' < \mathit{{min\_up}}}}" in line, (

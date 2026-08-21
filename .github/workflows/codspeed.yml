@@ -106,7 +106,6 @@ on:
     # **Config is listed by path, never by extension.** `**.md` is safe because
     # no markdown in this tree reaches a build; `**.yaml` would not be, because
     # `bench/models/*.yaml` *are* the benchmarked models and `examples/**` and
-    # `tests/typeset/golden/model.yaml` are models too. An extension glob cannot tell a
     # tool's configuration from a program's input, so the config entries below
     # are named one by one and a new one earns its line by being read.
     #
@@ -169,7 +168,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           # the floor, and the only version CI tests — see ci.yml
-          python-version: "3.11"
+          python-version: "3.12"
           enable-cache: true
 
       # `--no-default-groups` is the cost control: `dev` resolves linopy from a
@@ -236,7 +235,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           enable-cache: true
       - run: uv sync --no-default-groups --group codspeed
 

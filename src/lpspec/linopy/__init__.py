@@ -63,9 +63,10 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
+from math_spec import ComparisonNode, Namespace, expand_piecewise, expression_of, load_model
+
 from lpspec._notes import note
 from lpspec.errors import unknown_name_message
-from lpspec.language import ComparisonNode, Namespace, expand_piecewise, expression_of, load_model
 from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
 from lpspec.linopy.loader import dimension_coords, load_parameters
 from lpspec.lowering import lower_expression, lower_program
@@ -74,7 +75,7 @@ from lpspec.sources import tidy_sources, validate_curve_extent, validate_piecewi
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language import Model
+    from math_spec import Model
 
 linopy.options['semantics'] = 'v1'
 
@@ -88,7 +89,7 @@ def build(model: str | Path | dict[str, Any] | Model, sources: Mapping[str, Any]
     file is the caller's choice, so the call cannot differ.
 
     Args:
-        model: A YAML path, a mapping, or a loaded :class:`~lpspec.language.model.Model`.
+        model: A YAML path, a mapping, or a loaded :class:`~math_spec.model.Model`.
         sources: Parameter names to parquet paths or in-memory tables, and
             dimension names to their labels — an index table, a parquet path,
             or a bare sequence — wherever the YAML declares none.

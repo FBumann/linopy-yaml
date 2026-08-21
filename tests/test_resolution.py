@@ -9,15 +9,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from math_spec.resolution import Namespace, expression_of, where_of
+from math_spec.validation import validate_expressions
 
 from lpspec.errors import LanguageError
-from lpspec.language.resolution import Namespace, expression_of, where_of
-from lpspec.language.validation import validate_expressions
 from lpspec.lowering import lower_program
 from tests.conftest import DISPATCH_MODEL, schema_of
 
 if TYPE_CHECKING:
-    from lpspec.language.model import Model
+    from math_spec.model import Model
 
 
 def _schema(**overrides) -> Model:
@@ -30,7 +30,7 @@ def _schema(**overrides) -> Model:
 
 
 def test_no_unresolved_name_survives_the_pass():
-    from lpspec.language.expression_parser import NameNode
+    from math_spec.expression_parser import NameNode
 
     schema = _schema()
     ast = expression_of('sum(p * cost, over=generator) == load', schema, Namespace.of(schema), 't')
@@ -49,7 +49,7 @@ def test_no_unresolved_name_survives_the_pass():
 
 
 def test_names_are_typed_by_kind():
-    from lpspec.language.expression_parser import DimensionNode, ParameterNode, VariableNode
+    from math_spec.expression_parser import DimensionNode, ParameterNode, VariableNode
 
     schema = _schema()
     ast = expression_of('sum(p * cost, over=generator)', schema, Namespace.of(schema), 't')

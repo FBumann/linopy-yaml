@@ -32,13 +32,12 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
-
-from lpspec.language.validation import load_model
+from math_spec.validation import load_model
 
 # The language's own tests own these (#1150); the noqa marks the two this file
 # re-exports without using, so the forty-odd tests on the other side of the cut
 # keep importing all four from one place.
-from tests.language.fixtures import (  # noqa: F401
+from tests.fixtures import (  # noqa: F401
     DISPATCH_MODEL,
     override,
     raw_of,
@@ -192,7 +191,7 @@ def resolved(text, schema):
     this: a raw `parse_expression` result still holds NameNodes, and both
     backends now assert those never reach them (resolution.py).
     """
-    from lpspec.language.resolution import Namespace, expression_of
+    from math_spec.resolution import Namespace, expression_of
 
     return expression_of(text, schema, Namespace.of(schema), 't')
 

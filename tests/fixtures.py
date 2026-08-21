@@ -1,15 +1,13 @@
-"""What the language's own tests build a schema from, owned by this directory.
+"""What a test builds a schema from — this side of the extraction's copy.
 
-These used to live in `tests/conftest.py`, which imports `tools.constructs` and
-so reaches `api`, `lowering` and `relational`. The fence in #1146 reads direct
-`lpspec` imports and never saw that, so the directory was prefix-clean and would
-not have started in a package of its own (#1150).
+`math-spec` owns the same four names, and this is the copy its own extraction
+predicted rather than an accident: a test package is not shipped, so nothing
+here can import them from the dependency. Thirty lines of dict-patching
+duplicated to keep one copy of every *rule* — the models and the language are
+single-homed, this is scaffolding.
 
-Nothing here reaches past the language. `tests/conftest.py` re-exports the four
-names so the forty-odd tests on the other side of the cut are untouched; at the
-cut it keeps its own copy of these thirty lines and this file becomes math-spec's
-conftest. Two copies of a dict-patching helper is a cost worth paying to keep one
-copy of every *rule*.
+If they drift, the symptom is a test that passes here and fails there over a
+model that reads the same. Worth remembering before editing one of them.
 """
 
 from __future__ import annotations
@@ -18,16 +16,11 @@ import copy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from lpspec.language._yaml import parse_yaml, read_yaml
-from lpspec.language.validation import load_model
+from math_spec._yaml import parse_yaml, read_yaml
+from math_spec.validation import load_model
 
 if TYPE_CHECKING:
-    from lpspec.language import Model
-
-#: The operator probes: one construct per file, and the corpus that travels with
-#: the language. `tools/language/spec_math.py` generates the operator reference
-#: from the same directory, so a probe added for the page is swept here too.
-OPERATOR_PROBES = sorted((Path(__file__).resolve().parent.parent.parent / 'examples' / 'operators').glob('*.yaml'))
+    from math_spec import Model
 
 #: The dispatch model as a dict, for tests that need to mutate a declaration
 #: rather than read a file. Deliberately the same math as

@@ -205,7 +205,7 @@ does not care whether it is many-to-one or one-to-one.
 itself, `travel`'s `where` is that parameter, and absence spreads — so every
 row mentioning a self-arc simply is not built. No `i ≠ j` guard is written
 anywhere, because [dimension-to-dimension comparison is not in the
-language](../reference/language/expressions.md#where-strings) and here it is not needed.
+language](https://energy-models.github.io/math-spec/reference/language/expressions#where-strings) and here it is not needed.
 
 ## What it finds
 

@@ -24,10 +24,10 @@ from dataclasses import replace
 import numpy as np
 import polars as pl
 import pytest
+from math_spec.model import Model
 
 import lpspec as lps
 from lpspec.errors import DataError, LaneError, LanguageError, LpspecError
-from lpspec.language.model import Model
 from lpspec.lowering import lower_program
 from lpspec.relational import chunking
 from lpspec.relational.engines.polars.engine import PolarsEngine
