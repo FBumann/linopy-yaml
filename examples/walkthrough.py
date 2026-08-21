@@ -26,10 +26,11 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
+from math_spec import Model, load_model
+from math_spec.expansion import parse_and_expand
+from math_spec.expression_parser import parse_expression
 
 import lpspec as lps
-from lpspec.language.expansion import parse_and_expand
-from lpspec.language.expression_parser import parse_expression
 from lpspec.lowering import expression_thunks, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.sources import tidy_sources
@@ -86,7 +87,7 @@ def main() -> None:
     print(f'\n{_dim("docs/about/architecture.md has the rules these stages enforce.")}')
 
 
-def validated_model() -> lps.Model:
+def validated_model() -> Model:
     """Stage 1 — YAML text to a validated model.
 
     Parses the file, type-checks it against the pydantic schema, and
@@ -95,7 +96,7 @@ def validated_model() -> lps.Model:
     well-formed; no data has been touched.
     """
     banner(1, 'YAML text -> validated Model', 'schema.py, validation.py')
-    schema = lps.load_model(MODEL)
+    schema = load_model(MODEL)
     print(f'    dimensions   {", ".join(schema.dimensions)}')
     print(f'    parameters   {", ".join(schema.parameters)}')
     print(f'    variables    {", ".join(schema.variables)}')
@@ -105,7 +106,7 @@ def validated_model() -> lps.Model:
     return schema
 
 
-def expanded_ast(schema: lps.Model) -> None:
+def expanded_ast(schema: Model) -> None:
     """Stage 2 — macros and named expressions substituted away.
 
     Hard rule 1: the core AST is the whole language. Everything above it is
@@ -122,7 +123,7 @@ def expanded_ast(schema: lps.Model) -> None:
     print('                 ^ the macro is gone: sum(p * cost, over=generator)')
 
 
-def relational_ir(schema: lps.Model) -> Any:
+def relational_ir(schema: Model) -> Any:
     """Stage 3 — the core AST lowered to the relational plan.
 
     This is where the language's boundary is *decided*, by attempting the
@@ -141,7 +142,7 @@ def relational_ir(schema: lps.Model) -> Any:
     return program
 
 
-def model_frames(engine: PolarsEngine, schema: lps.Model, program: Any) -> None:
+def model_frames(engine: PolarsEngine, schema: Model, program: Any) -> None:
     """Stage 4 — plan plus data to the model frames, the first stage to see a number.
 
     Sources are adapted to tidy frames (dims..., value) and the engine

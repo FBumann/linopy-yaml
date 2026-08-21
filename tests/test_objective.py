@@ -19,6 +19,7 @@ with the LP about it (#1046).
 from __future__ import annotations
 
 import pytest
+from math_spec import load_model
 
 from tests.differential import differential
 from tests.oracle import pd  # through the guard: a bare import would beat it
@@ -120,12 +121,11 @@ def test_a_bracketed_addition_under_a_product_means_what_it_prints(expression, e
 
 def test_an_objective_carrying_dims_is_refused_with_the_wrapper_named():
     """The rule that used to be implied is now the load error that asks for it."""
-    import lpspec as lps
     from lpspec.errors import DimensionError
 
     model = {**DISJOINT_MODEL, 'objective': {'sense': 'minimize', 'expression': 'x * a + y * b'}}
     with pytest.raises(DimensionError, match=r"carries dims \['i', 'j'\].*Wrap each additive term"):
-        lps.load_model(model)
+        load_model(model)
 
 
 #: No `objective:` at all — the constraints are the whole question, and the

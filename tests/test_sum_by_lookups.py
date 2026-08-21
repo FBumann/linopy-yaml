@@ -29,9 +29,10 @@ model whose technologies are deliberately not alphabetical.
 from __future__ import annotations
 
 import pytest
+from math_spec import expand_piecewise
+from math_spec.expression_parser import parse_expression
 
 from lpspec.errors import DimensionError, LanguageError, SchemaError
-from lpspec.language.expression_parser import parse_expression
 from lpspec.lowering import _lower_expr, lower_program
 from lpspec.relational.plan import GroupSum, Variable
 from tests.conftest import override, raw_of, relation, resolved, schema_of
@@ -239,7 +240,7 @@ def test_two_lookups_lower_to_one_node_and_not_to_a_composition():
     A composition would consume `generator` twice, and the second pass would
     have nothing left to group.
     """
-    (limit, _demand) = lower_program(schema_of(MODEL)).constraints
+    (limit, _demand) = lower_program(expand_piecewise(schema_of(MODEL))).constraints
     assert limit.lhs == GroupSum(
         Variable('p'), over='generator', coordinate=('gen_bus', 'gen_tech'), into=('bus', 'technology')
     )

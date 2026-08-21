@@ -29,10 +29,7 @@ from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
 import xarray as xr
-
-from lpspec._notes import note
-from lpspec.errors import DataError, LaneError, LanguageError, lane_cannot_build_message, null_bounds_message
-from lpspec.language import (
+from math_spec import (
     EDGE_WRAP,
     AndNode,
     ArithmeticNode,
@@ -71,6 +68,9 @@ from lpspec.language import (
     unknown_operator_message,
     where_of,
 )
+
+from lpspec._notes import note
+from lpspec.errors import DataError, LaneError, LanguageError, lane_cannot_build_message, null_bounds_message
 from lpspec.linopy import absence
 from lpspec.linopy.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
 
@@ -79,8 +79,7 @@ if TYPE_CHECKING:
 
     import linopy
     import pandas as pd
-
-    from lpspec.language import Buildable
+    from math_spec import Buildable
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
 
@@ -997,7 +996,7 @@ def _eval_node(
     if isinstance(node, (UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode)):
         msg = (
             f'{type(node).__name__} reached the evaluator unresolved. '
-            f'Where strings must go through lpspec.language.where_of() first.'
+            f'Where strings must go through math_spec.where_of() first.'
         )
         raise AssertionError(msg)
 

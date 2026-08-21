@@ -96,30 +96,16 @@ nav:
           - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
           - Travelling salesman: examples/tsp_mtz.md
   - Reference:
-      - Language:
-          - reference/language/index.md
-          - File shape: reference/language/file.md
-          - Dimensions and lookups: reference/language/dimensions.md
-          - Parameters, variables, constraints: reference/language/declarations.md
-          - Expressions: reference/language/expressions.md
-          - Operators: reference/language/operators.md
-          - Absence and where: reference/language/absence.md
-          - Piecewise curves and SOS: reference/language/piecewise.md
-          - Data binding: reference/language/data.md
-          - Errors and limits: reference/language/errors.md
-          - Reading a loaded model: reference/language/reading.md
+      - Language: https://math-spec.readthedocs.io/en/latest/reference/language/
+      - Data binding: reference/data.md
       - Python API: reference/api.md
       - Sweeps and rolling horizons: reference/sweeps.md
-      - Typeset the math: reference/typeset.md
-      - Every construct, as math: reference/notation.md
   # Everything a reader does not need in order to write or run a model: design
   # notes, measured cost, project direction. One section, so the user path
   # above stays the whole of the top level.
   - About:
       - about/index.md
       - Architecture: about/architecture.md
-      - The ceiling: about/ceiling.md
-      - What counts as language: about/what-counts-as-language.md
       - Decomposition: about/decomposition.md
       - Benchmarks: about/benchmarks.md
       # A source file, not a generated page: mkdocs copies it through and the

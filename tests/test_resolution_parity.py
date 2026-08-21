@@ -126,8 +126,8 @@ def test_every_resolved_predicate_is_parity_tested():
     """
     from typing import get_args
 
-    from lpspec.language.resolution import Namespace, where_of
-    from lpspec.language.where_parser import (
+    from math_spec.resolution import Namespace, where_of
+    from math_spec.where_parser import (
         UnresolvedComparisonNode,
         UnresolvedNameNode,
         UnresolvedPositionNode,

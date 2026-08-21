@@ -18,13 +18,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from math_spec.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
 
-from lpspec.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
 from tests.conftest import MODEL_PATHS
 from tools import gallery_math
 
 if TYPE_CHECKING:
-    from lpspec.typeset.format import Format
+    from math_spec.typeset.format import Format
 
 #: Every format, as a parametrize mark — the same spelling the renderer's own
 #: tests use, duplicated rather than imported because that module travels.

@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from math_spec import load_model
+from math_spec.dimensions import dims_of
+from math_spec.resolution import Namespace, expression_of
 
 import lpspec as lps
 from lpspec.errors import LpspecError
-from lpspec.language.dimensions import dims_of
-from lpspec.language.resolution import Namespace, expression_of
 from lpspec.relational.engines.polars.compiler import PolarsCompiler
 
 MODEL = {
@@ -99,7 +100,7 @@ def test_a_variable_free_expression_is_legal_and_reads_its_constant(result):
 
 @pytest.mark.parametrize('name', [pytest.param(n, id=n) for n in MODEL['expressions']])
 def test_the_frame_carries_exactly_the_dims_dims_of_computes(result, name):
-    schema = lps.load_model(MODEL)
+    schema = load_model(MODEL)
     ast = expression_of(schema.expressions[name].expression, schema, Namespace.of(schema), name)
     frame = result.expression(name)
     assert set(frame.columns) - {'value'} == set(dims_of(ast, schema, name)), (

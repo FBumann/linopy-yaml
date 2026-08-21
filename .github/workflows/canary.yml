@@ -1,0 +1,49 @@
+# The language lives in another repository, and this asks one question a day:
+# would the next bump hurt?
+#
+# It reports and never changes anything. The pin in `pyproject.toml` stays where
+# it is; this run resolves `math-spec` at `main` instead and runs the suite
+# against it, so drift between the two repositories surfaces as a red nightly
+# rather than as a broken release. The things that would drift are real and
+# named: the dtype vocabulary and the variable domains are checked here against
+# definitions that live there, and `tests/fixtures.py` and
+# `tests/piecewise_models.py` are copies of files that repository also has.
+#
+# Bumping the pin is a separate job nobody has asked for yet. A scheduled run
+# that only ever reports is much harder to get wrong than one that opens pull
+# requests, and the bump it would open is a one-line edit to a tag whoever
+# reads the red nightly is already looking at.
+name: math-spec canary
+
+on:
+  schedule:
+    # Nightly, off the hour: a run that lands on :00 queues behind everyone
+    # else's cron and reports late enough to be read the next morning anyway.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canary
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      # `--with` overrides the pin for this run only, so nothing on disk is
+      # edited and a failure is about math-spec's `main` rather than about a
+      # half-applied bump.
+      - name: the suite, against math-spec at main
+        run: >
+          uv run --with "math-spec @ git+https://github.com/energy-models/math-spec@main"
+          pytest -q -n auto

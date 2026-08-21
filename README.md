@@ -144,7 +144,7 @@ construct outside the language is a load error naming its rewrite.
 
 Start with [**writing a model**](docs/guide.md) — five ideas, each shown in a
 model that runs. Then [the examples](docs/examples/index.md) to browse, the
-[language reference](docs/reference/language/index.md) for the exact rule, and
+[language reference](https://math-spec.readthedocs.io/en/latest/reference/language/) for the exact rule, and
 the [Python API](docs/reference/api.md) for running one. Why it is shaped this
 way, what it costs and what is refused are together under
 [about](docs/about/index.md). All of it is indexed in [docs/](docs/README.md);

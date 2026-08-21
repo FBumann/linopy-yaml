@@ -70,9 +70,9 @@ lpspec_linopy.expression(m, 'model.yaml', 'co2', {...})  # a named quantity, rea
 Both are *pure*: YAML in, a model or a value out, nothing retained. `build`
 returns a plain `linopy.Model` — no accessor, no attached schema, no patched
 attributes — so nothing is lost across `pickle`, `deepcopy` or `to_netcdf`. To
-inspect the math, re-read the file with `lps.load_model`.
+inspect the math, re-read the file with `load_model`.
 `expression` is the reader the same purity forces to take `sources` again: it
-evaluates a declared named expression ([named expressions](../reference/language/expressions.md#named-expressions))
+evaluates a declared named expression ([named expressions](https://math-spec.readthedocs.io/en/latest/reference/language/expressions/#named-expressions))
 on the solved model and hands back linopy's native `.solution` — the eager
 half of `result.expression(name)`, so the differential suite can hold the two
 lanes to one answer.
@@ -201,7 +201,7 @@ decided by an import and nothing else.
 
 Array operations (`merge`, `reindex`, `stack`), the Python modeling API, and the
 solver layer. The first is data prep
-([the limits](../reference/language/errors.md#what-the-language-will-not-say)), the second is
+([the limits](https://math-spec.readthedocs.io/en/latest/reference/language/errors/#what-the-language-will-not-say)), the second is
 [hard rule 5](architecture.md#hard-rules) — the model is the file you review
 and diff — and the third is
 [#106](https://github.com/fluxopt/lpspec/issues/106), where we adopt linopy's

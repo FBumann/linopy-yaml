@@ -104,11 +104,11 @@ drift from what the engine builds.
 | [multi_period](multi_period.md) | **✔** 10020 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
 | [piecewise](piecewise.md) | **✔** 3850 | **✓** | · | · | · | · | · | **✓** | **✓** | · | · |
 | [piecewise_conversion](piecewise_conversion.md) | **✔** 5990 | **✓** | · | **✓** | · | · | **✓** | **✓** | · | **✓** | · |
-| [piecewise_lp](piecewise_lp.md) | **✔** 3850 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
-| [piecewise_ragged](piecewise_ragged.md) | **✔** 426 | **✓** | · | · | · | · | **✓** | **✓** | **✓** | · | · |
+| [piecewise_lp](piecewise_lp.md) | **✔** 3850 | **✓** | · | · | · | · | · | **✓** | **✓** | · | · |
+| [piecewise_ragged](piecewise_ragged.md) | **✔** 426 | **✓** | · | · | · | · | · | **✓** | **✓** | · | · |
 | [reserves](reserves.md) | **✔** 915 | **✓** | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [seasons](seasons.md) | · | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
-| [sos](sos.md) | · | **✓** | · | · | · | · | · | **✓** | **✓** | **✓** | · |
+| [sos](sos.md) | · | **✓** | · | · | · | · | · | **✓** | **✓** | · | · |
 | [storage](storage.md) | **✔** 5650 | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
 | [transport](transport.md) | **✔** 4400 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [walkthrough](walkthrough.md) | · | **✓** | · | · | · | · | **✓** | **✓** | · | · | · |
@@ -143,7 +143,7 @@ drift from what the engine builds.
 | [telephone_routing](telephone_routing.md) | **✔** 380 | **✓** | **✓** | · | · | · | · | **✓** | · | · | **✓** |
 | [transport_dantzig](transport_dantzig.md) | **✔** 153.675 | **✓** | · | · | · | · | · | **✓** | · | · | · |
 | [transport_modes](transport_modes.md) | **✔** 1715 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
-| [transport_pwl](transport_pwl.md) | **✔** 8.78685 | **✓** | · | · | **✓** | · | · | **✓** | **✓** | · | **✓** |
+| [transport_pwl](transport_pwl.md) | **✔** 8.78685 | **✓** | · | · | · | · | · | **✓** | **✓** | · | · |
 | [tsp_mtz](tsp_mtz.md) | **✔** 2085 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | **✓** |
 <!-- constructs:end -->
 
@@ -174,7 +174,7 @@ Even the differential harness compares two lanes consuming the *same resolved
 AST* ([hard rule 1](../about/architecture.md#hard-rules)), which is what makes them
 an oracle for each other and also what they cannot see. This is the net for
 that class, and the evidence behind
-[the ceiling](../about/ceiling.md#two-tiers-and-the-ceiling).
+[the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/#two-tiers-and-the-ceiling).
 
 <!-- references:begin -->
 | port | optimum | `rtol` | duals | reference |

@@ -213,7 +213,7 @@ shape: (7, 2)
 
 A snapshot the table has no row for belongs to no season, so it reaches nothing
 and its row is not built — the same reading absence gets in
-[`sum(by=)`](../reference/language/operators.md).
+[`sum(by=)`](https://math-spec.readthedocs.io/en/latest/reference/language/operators/).
 
 Compare [monthly budget](monthly_budget.md), where such a column groups a *sum*,
 and [multi-period](multi_period.md), where it carries a capacity decision down

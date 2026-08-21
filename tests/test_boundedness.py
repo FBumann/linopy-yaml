@@ -6,12 +6,13 @@ import warnings
 
 import pytest
 import yaml
+from math_spec import load_model
+from math_spec.boundedness import unbounded_notes
+from math_spec.operators import BUILTIN_NAMES
+from math_spec.piecewise import expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import LpspecWarning
-from lpspec.language.boundedness import unbounded_notes
-from lpspec.language.operators import BUILTIN_NAMES
-from lpspec.language.piecewise import expand_piecewise
 from tests.conftest import EXAMPLES_DIR
 
 #: The issue's variant 1, as a mapping the cases below vary one key of:
@@ -163,7 +164,7 @@ def test_a_degree_2_operand_carries_no_sign(expression):
     the language accepts what the engine will not build. The guard is what
     keeps the order of those two answers from mattering.
     """
-    schema = lps.load_model({**FREE_SLACK, 'objective': {'sense': 'minimize', 'expression': expression}})
+    schema = load_model({**FREE_SLACK, 'objective': {'sense': 'minimize', 'expression': expression}})
     assert unbounded_notes(schema) == [], 'a variable multiplied by a variable is driven in no direction'
 
 
@@ -177,7 +178,7 @@ def test_a_variable_a_piecewise_block_holds_gets_no_note():
     """
     raw = yaml.safe_load((EXAMPLES_DIR / 'piecewise.yaml').read_text())
     del raw['variables']['op_cost']['bounds']
-    schema = lps.load_model(raw)
+    schema = load_model(raw)
 
     assert unbounded_notes(schema), 'unexpanded, nothing in the file names op_cost — this is what the test bites on'
     assert unbounded_notes(expand_piecewise(schema)) == [], 'the lambda formulation is what holds it'
@@ -232,7 +233,7 @@ def test_every_operator_hands_its_sign_to_its_operand(operator):
     inside an outer `sum` and two flips cancel. That mutation is caught by
     `a-unary-minus-flips-the-side` instead.
     """
-    notes = unbounded_notes(lps.load_model({**FREE_SLACK, **THROUGH_AN_OPERATOR[operator]}))
+    notes = unbounded_notes(load_model({**FREE_SLACK, **THROUGH_AN_OPERATOR[operator]}))
     assert len(notes) == 1, f'{operator}() should leave exactly one note, got {notes}'
     assert "'slack'" in notes[0] and 'bounds.lower' in notes[0], (
         f'{operator}() lost the term sign on the way down: {notes[0]}'

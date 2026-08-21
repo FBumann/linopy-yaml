@@ -28,8 +28,9 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from math_spec import Model, expand_piecewise, load_model, unbounded_notes
+
 from lpspec.errors import DataError, LpspecError, LpspecWarning, lane_cannot_build_message
-from lpspec.language import expand_piecewise, load_model, unbounded_notes
 from lpspec.lowering import advice, expression_thunks, lower_expression, lower_program
 from lpspec.relational import sinks
 from lpspec.relational.engines.polars.engine import PolarsEngine
@@ -40,14 +41,12 @@ from lpspec.sources import tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from lpspec.language import Model
+    from math_spec import Model
+
     from lpspec.relational.plan import Program
     from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 
-#: Re-exported: parsing and validating a model is the *language's* job, and a
-#: consumer that binds no data (``typeset``) must be able to reach it without
-#: reaching the runner. Callers keep saying ``lps.load_model``.
-__all__ = ['build', 'check', 'load_model', 'solve', 'write']
+__all__ = ['build', 'check', 'solve', 'write']
 
 
 #: What each **lane** can build, beside what each sink can ingest. Nothing is
@@ -127,10 +126,11 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
             reformulated. Issued here and nowhere else.
     """
     schema = load_model(model)
-    program = lower_program(schema)
+    buildable = expand_piecewise(schema)
+    program = lower_program(buildable)
     for name in schema.expressions:
-        lower_expression(schema, name)
-    notes = [*unbounded_notes(expand_piecewise(schema)), *advice(program)]
+        lower_expression(buildable, name)
+    notes = [*unbounded_notes(buildable), *advice(program)]
     refused = _refused_by(program, sink) if sink is not None else None
     if sink is not None and refused is None and sink not in LANES:
         notes += sinks.relaxations(program, sink)
@@ -156,8 +156,13 @@ class BoundModel:
     """
 
     def __init__(self, schema: Model, sources: Mapping[str, Any]) -> None:
+        #: Both forms, because both are needed and they are not the same thing.
+        #: The plan is built from declarations, so it takes the expanded model;
+        #: binding reads `piecewise:` itself to derive a curve's mask, so it
+        #: takes the file as written. One expansion, memoised on the model.
         self._schema = schema
-        self._program = lower_program(schema)
+        self._buildable = expand_piecewise(schema)
+        self._program = lower_program(self._buildable)
         self._sources = dict(sources)
         self._engine = PolarsEngine()
         self._fill()
@@ -173,7 +178,7 @@ class BoundModel:
             self._engine.build(
                 self._program,
                 tidy_sources(self._schema, dict(self._sources)),
-                expressions=expression_thunks(self._schema),
+                expressions=expression_thunks(self._buildable),
             )
         except BaseException:
             self._engine.close()

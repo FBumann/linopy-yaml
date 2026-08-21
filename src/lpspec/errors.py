@@ -22,15 +22,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from lpspec.language import (
+from math_spec import (
     DimensionError,
     LanguageError,
-    LpspecError,
+    MathSpecError,
     PiecewiseExpansionError,
     SchemaError,
     did_you_mean,
     schema_error,
 )
+
+#: The root, under the name callers have always caught it by. An alias and not a
+#: subclass: `except lps.LpspecError` has to keep catching a `LanguageError`, and
+#: it only does while the two names are one class. The language owns the root
+#: because a base cannot live downstream of what extends it, and that is now
+#: literally true — it lives in the other package.
+LpspecError = MathSpecError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence

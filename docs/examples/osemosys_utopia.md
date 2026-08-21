@@ -277,7 +277,7 @@ port carries `still_live[technology, year, vintage]`, one row per pair that is
 still live, and the standing capacity is a contraction against it. That is the
 same shape [`pypsa_kvl`](pypsa_kvl.md) uses for a cycle basis, and building it
 is arithmetic over years, which is where
-[the ceiling](../about/ceiling.md) puts it.
+[the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/) puts it.
 
 **Discounting, the annuity and salvage value never reach the model.** OSeMOSYS
 spends four parameters and four constraint families on them —

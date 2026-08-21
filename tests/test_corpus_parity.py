@@ -24,9 +24,9 @@ from typing import Any
 
 import polars as pl
 import pytest
+from math_spec import expand_piecewise, load_model
 
 from lpspec.errors import LaneError
-from lpspec.language import expand_piecewise, load_model
 from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_model, port_sources
 from tests.differential import differential
 

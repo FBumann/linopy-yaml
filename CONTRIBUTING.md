@@ -40,7 +40,7 @@ uv run pytest --lf  # last failures only
 
 **Named for the construct, not for the module it happens to exercise.**
 `test_shift.py`, `test_absence.py`, `test_grouped_sum.py`, `test_piecewise.py`:
-the same word the [language reference](docs/reference/language/index.md) uses,
+the same word the [language reference](https://math-spec.readthedocs.io/en/latest/reference/language/) uses,
 so "where is `shift` specified" and "where is `shift` tested" have one answer.
 It is also the axis that survives the two lanes — a behaviour spans both, while
 a module is on one side of the fence or the other.
@@ -160,7 +160,7 @@ Versioning, the release PR, and how to force a specific version:
 outlives several refactors; one written against internals dies with the next and
 takes its argument with it — four have had to be closed and re-filed for exactly
 that. So write `bounds accept a parameter name or a number, not an expression
-(language/model.py)`, not a line number inside the loop that enforces it.
+(math_spec/model.py)`, not a line number inside the loop that enforces it.
 
 **`now` is the only order label**, capped at five; everything else is backlog.
 Grouping is sub-issue parentage — a track is a parent issue — because parentage
@@ -202,17 +202,17 @@ declared `escape:` island rather than into the language.
 
 Read, in order:
 
-1. [the deliberate non-primitives](docs/about/ceiling.md#deliberate-non-primitives) — parity with
+1. [the deliberate non-primitives](https://math-spec.readthedocs.io/en/latest/about/ceiling/#deliberate-non-primitives) — parity with
    another tool is not by itself a reason to add anything, and several
    plausible-sounding features are refused there on purpose;
-2. [the ceiling in docs/about/ceiling.md](docs/about/ceiling.md#two-tiers-and-the-ceiling) —
+2. [the ceiling in math-spec](https://math-spec.readthedocs.io/en/latest/about/ceiling/#two-tiers-and-the-ceiling) —
    the admissibility test;
 3. [the extension checklists](docs/about/architecture.md#extension-checklists), which sit directly under that
    test. They stay there rather than moving here: *may I?* and *how?* are one
    question, and splitting them invites answering the second without the first.
 
 A PR that adds, renames or retires a construct updates the [language
-reference](docs/reference/language/index.md).
+reference](https://math-spec.readthedocs.io/en/latest/reference/language/).
 Rationale belongs in the PR description or a code comment; "this used to work
 differently" belongs in git.
 

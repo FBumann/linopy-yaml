@@ -21,7 +21,8 @@ from lpspec.errors import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from lpspec.language import Buildable
+    from math_spec import Buildable
+
     from lpspec.sources import TidySource
 
 

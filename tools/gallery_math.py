@@ -58,8 +58,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from lpspec.language._yaml import read_yaml
-from lpspec.typeset import to_latex, to_markdown
+from math_spec._yaml import read_yaml
+from math_spec.typeset import to_latex, to_markdown
+
 from tools.constructs import models
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -134,13 +135,13 @@ def _home_block() -> str:
 
 
 _HOW = """```python
-import lpspec as lps
+import math_spec as ms
 
 {symbols}
 
-lps.to_latex('dispatch.yaml', symbols=symbols)  # amsmath align
-lps.to_typst('dispatch.yaml')  # compiles without a TeX toolchain
-lps.to_markdown('dispatch.yaml')  # renders as-is on GitHub
+ms.to_latex('dispatch.yaml', symbols=symbols)  # amsmath align
+ms.to_typst('dispatch.yaml')  # compiles without a TeX toolchain
+ms.to_markdown('dispatch.yaml')  # renders as-is on GitHub
 ```
 
 `symbols` is optional — drop it and the same model prints as
@@ -153,9 +154,12 @@ Or from a shell, where the table is that same YAML on disk and `--standalone`
 emits a document that compiles rather than a fragment to `\\input`:
 
 ```bash
-python -m lpspec latex dispatch.yaml --symbols dispatch.symbols.yaml
-python -m lpspec typst dispatch.yaml --standalone -o dispatch.typ
-```"""
+python -m math_spec latex dispatch.yaml --symbols dispatch.symbols.yaml
+python -m math_spec typst dispatch.yaml --standalone -o dispatch.typ
+```
+
+The renderer is [math-spec](https://math-spec.readthedocs.io/en/latest/reference/typeset/)'s,
+and reads the same file this page solves."""
 
 
 def rendered(page: str, name: str, path: Path) -> str:

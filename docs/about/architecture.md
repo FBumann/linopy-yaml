@@ -1,8 +1,8 @@
 # Architecture
 
 Brief, current, precise. A PR that changes the structure described here updates
-this file in the same PR. The language is [the language reference](../reference/language/index.md); what may
-enter it is [the ceiling](ceiling.md); plans and refusals
+this file in the same PR. The language is [the language reference](https://math-spec.readthedocs.io/en/latest/reference/language/); what may
+enter it is [the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/); plans and refusals
 are [the roadmap](roadmap.md); measured results are
 [the benchmarks](benchmarks.md), produced by the harness in
 [bench/](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — which is
@@ -208,7 +208,7 @@ like the other three fences, plus a check on the **transitive** closure. Two
 properties carry the rest — **data enters at exactly one place**, which is why
 checking a model costs seconds and needs nothing but the file, and the waist is
 **closed**, which is what the ceiling in
-[the ceiling](ceiling.md) protects: a new consumer is free, a
+[the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/) protects: a new consumer is free, a
 new primitive is taxed. What is planned, and why, is
 [the roadmap](roadmap.md).
 
@@ -267,7 +267,7 @@ a language feature wearing a method, and hard rule 5 refuses it wherever it is
 spelled. It is also why these are named for what they *are* rather than for what
 built them — a second engine must not change a top-level verb's return type.
 
-**What the data arrow carries** is [data binding](../reference/language/data.md) and is not
+**What the data arrow carries** is [data binding](../reference/data.md) and is not
 restated here. The one structural fact: **binding is by name at both levels** —
 a mapping keyed by declared parameter, and inside each table, columns named for
 that parameter's declared dims. The single positional fallback (an *unnamed*
@@ -315,8 +315,8 @@ choice load-bearing in the language's rulebook.
    package of its own without an edit. `load_model` sits
    inside that fence — parsing and validating is the language's own job, and a
    consumer that binds no data must reach it without reaching a runner; `api.py`
-   re-exports it so callers keep saying `lps.load_model`. The traffic the other
-   way is shaped too: a consumer reads the AST through `lpspec.language` itself
+   re-exports it so callers keep saying `load_model`. The traffic the other
+   way is shaped too: a consumer reads the AST through `math_spec` itself
    and never through a module under it, so what the waist promises is
    **fifty-eight names in one `__all__`** — thirty-one node types, seven for the
    errors it raises, and twenty oracles, front doors and message builders —
@@ -357,7 +357,7 @@ choice load-bearing in the language's rulebook.
    a `QuadraticExpression`, so a quadratic *constraint* has no linopy lane.
    That is declared (`capabilities.LINOPY_LANE`), answerable before any build
    (`check(model, sink='linopy')`) and refused in the language's own words —
-   the axis [the ceiling](ceiling.md#capability-is-not-the-ceiling) draws for
+   the axis [the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/#capability-is-not-the-ceiling) draws for
    sinks, one level up. **What it costs is the oracle**: a construct one lane
    builds is checked by one lane, and the differential test is replaced by
    weaker ones — two independent encodings reaching one optimum, a residual at
@@ -518,7 +518,7 @@ it.
 | `language/errors.py` | the model half of the exception hierarchy, and the root the run half extends |
 | `language/piecewise.py` | `piecewise:` → λ-formulation declarations, and the `Buildable` that says they are there |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_model` |
-| `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/typeset/README.md)) |
+| `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/energy-models/math-spec/blob/main/src/math_spec/typeset/README.md)) |
 | `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
 | `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `method: convex` curvature guard, which is the one check that needs values |
 | `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver, the linopy lane and the engine |
@@ -558,7 +558,7 @@ so no fence can be stepped over by naming a file differently.
 
 `language/`'s fence has a second half the other three do not need, because it is
 the only directory anything is allowed to import *from*: a consumer reads
-`lpspec.language` and nothing under it. A submodule path would be a contract
+`math_spec` and nothing under it. A submodule path would be a contract
 nobody agreed to — it can carry a private name, and it cannot be counted — so
 the AST surface is one list rather than the union of eleven modules' internals.
 That is also what would survive the language being lifted into a package of its
@@ -574,7 +574,7 @@ consumer's real cost is what it drags in, not what it spells.
 
 ### What counts as language
 
-The rule is [its own page](what-counts-as-language.md), because it decides what
+The rule is [its own page](https://math-spec.readthedocs.io/en/latest/about/what-counts-as-language/), because it decides what
 may live here rather than how this package is arranged:
 
 > **A rule is language iff two consumers answering it separately would be a

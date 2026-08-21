@@ -125,7 +125,7 @@ objective:
 ```
 
 **`cut` and `fcut` take their members from data**
-([data binding](../reference/language/data.md)), so an iteration appends rows
+([data binding](../reference/data.md)), so an iteration appends rows
 to their parameter tables and this file never changes.
 No YAML is generated at runtime, which is what keeps the model a reviewer reads
 the model that runs.
@@ -202,7 +202,7 @@ objective on the subproblem.
 ## The loop
 
 ```python
-sub_model, feasibility_model, master_model = (lps.load_model(path) for path in paths)
+sub_model, feasibility_model, master_model = (load_model(path) for path in paths)
 
 for step in range(25):
     with lps.solve(sub_model, {**dispatch, 'cap_hat': capacity}) as sub:

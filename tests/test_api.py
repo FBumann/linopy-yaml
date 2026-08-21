@@ -20,10 +20,10 @@ from unittest import mock
 import numpy as np
 import polars as pl
 import pytest
+from math_spec import Model, load_model
 
 import lpspec as lps
 from lpspec.errors import DimensionError
-from lpspec.language.model import Model
 from tests.conftest import (
     DISPATCH_COST,
     DISPATCH_GENERATORS,
@@ -229,7 +229,7 @@ def test_runtime_is_linopy_free(dispatch_yaml):
 def test_check_and_load_model_need_no_data(dispatch_yaml):
     """The model stands for itself: the schema is read from the file when
     wanted, never carried on a built model."""
-    for schema in (lps.check(dispatch_yaml), lps.load_model(dispatch_yaml)):
+    for schema in (lps.check(dispatch_yaml), load_model(dispatch_yaml)):
         assert schema.variables['p'].foreach == ['snapshot', 'generator']
         assert schema.parameters['load'].dims == ['snapshot']
 
@@ -466,7 +466,7 @@ def test_no_operator_registry_anywhere():
     makes the differential tests an oracle rather than a comparison of
     dialects (docs/about/architecture.md, "The expressive ceiling").
     """
-    import lpspec.language.operators as operators
+    import math_spec.operators as operators
 
     assert not hasattr(lps, 'register')
     assert not hasattr(operators, 'register')
@@ -566,7 +566,7 @@ def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
     twice and the first time with no context, breaking `extend()`.
     """
     doors = {
-        'lps.load_model': lambda: lps.load_model(raw),
+        'load_model': lambda: load_model(raw),
         'lps.check': lambda: lps.check(raw),
         'lps.solve': lambda: lps.solve(raw, {}),
         'lps.write': lambda: lps.write(raw, {}, str(tmp_path / 'm.lp')),

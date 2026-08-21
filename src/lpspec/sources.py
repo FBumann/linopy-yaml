@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 import polars as pl
+from math_spec import mask_of
 
 from lpspec.errors import (
     DataError,
@@ -31,10 +32,9 @@ from lpspec.errors import (
     index_without_its_label_column_message,
 )
 from lpspec.frames import as_frame, is_dense_array, is_multi_indexed, labels_frame
-from lpspec.language import mask_of
 
 if TYPE_CHECKING:
-    from lpspec.language import Model
+    from math_spec import Model
 
 
 #: What a source is once :func:`tidy_sources` has read it: a tidy
@@ -181,7 +181,7 @@ def dimension_sources(schema: Model, data: Mapping[str, object]) -> dict[str, ob
     dims its program spans, the eager lane of every dim the file declares.
 
     A map does not travel with the source, whether the file declares it
-    (:meth:`~lpspec.language.model.Model.declared_maps`) or the caller supplies
+    (:meth:`~math_spec.model.Model.declared_maps`) or the caller supplies
     it under the lookup's own key. Both become the same relation in
     :func:`lookup_relations`, read against the labels this returns.
 
@@ -249,7 +249,7 @@ def lookup_relations(
 
     The value column is renamed to the lookup, which is the name every lane
     reads a map by; what the caller writes it as is the space its values are
-    labels of (:meth:`~lpspec.language.model.Model.label_space`).
+    labels of (:meth:`~math_spec.model.Model.label_space`).
 
     **Both label columns are checked here**, against the indices this is handed:
     the keys against ``over``'s, and — for a lookup with a target — the values
@@ -587,7 +587,7 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
     A declared map is deliberately *not* a claim on the labels: it is a partial
     relation over the dimension, free to omit members and written in whatever
     key order someone typed
-    (:meth:`~lpspec.language.model.Model.declared_maps`). A sparse map over a
+    (:meth:`~math_spec.model.Model.declared_maps`). A sparse map over a
     caller's label set is therefore the one index with two authors — one per
     fact — and it is the shape this check exists to keep honest.
 

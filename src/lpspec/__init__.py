@@ -22,7 +22,7 @@ installed reads ``0.0.0``.
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
-from lpspec.api import build, check, load_model, solve, write
+from lpspec.api import build, check, solve, write
 from lpspec.errors import (
     DataError,
     DimensionError,
@@ -32,9 +32,7 @@ from lpspec.errors import (
     PiecewiseExpansionError,
     SchemaError,
 )
-from lpspec.language import Model
 from lpspec.strategy import EachCoordinate, EachWindow, solve_over
-from lpspec.typeset import SymbolTable, to_latex, to_markdown, to_typst
 
 __all__ = [
     'DataError',
@@ -44,18 +42,12 @@ __all__ = [
     'LaneError',
     'LanguageError',
     'LpspecError',
-    'Model',
     'PiecewiseExpansionError',
     'SchemaError',
-    'SymbolTable',
     'build',
     'check',
-    'load_model',
     'solve',
     'solve_over',
-    'to_latex',
-    'to_markdown',
-    'to_typst',
     'write',
 ]
 

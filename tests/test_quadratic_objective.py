@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from math_spec.typeset import to_latex
 
 import lpspec as lps
 from lpspec.errors import LpspecError
@@ -263,7 +264,7 @@ def test_degree_three_is_refused_where_degree_two_is_taken():
     with pytest.raises(LpspecError, match='degree 3'):
         lps.check(model('sum(p * p * p, over=g)'))
     with pytest.raises(LpspecError, match='degree 3'):
-        lps.to_latex(model('sum(p * p * p, over=g)'))
+        to_latex(model('sum(p * p * p, over=g)'))
 
 
 def test_two_reductions_may_not_be_multiplied_even_in_the_objective():

@@ -1,21 +1,15 @@
-"""The curves the piecewise tests are written against, on both sides of the cut.
+"""The curves the piecewise tests build against — this side's copy.
 
-`piecewise:` expansion is the language's — a formulation emits declarations, and
-declarations are language — so its load-time tests live beside it. The same
-curves are what lpspec's suite *solves*, which is why these are here rather than
-in either test file: one model text, read by the tests that judge it and by the
-tests that build it.
-
-At the cut lpspec takes a copy of this module. That is a real duplication of
-about a hundred and fifty lines of model YAML and the reason it is accepted is
-narrow: rewriting the solve tests against smaller curves would change what they
-test, and a curve that exercises adjacency binaries, links and a gate is not
-something a minimal probe can stand in for.
+`math-spec` judges what these expand to; here they are solved. Same reason as
+`fixtures.py`: a test package is not shipped, so the load-time tests that moved
+took a copy rather than an import. About a hundred and fifty lines of model
+YAML, and the one duplication in this split that is a *model* rather than
+scaffolding — worth watching for drift.
 """
 
 from __future__ import annotations
 
-from tests.language.fixtures import override, raw_of
+from tests.fixtures import override, raw_of
 
 NONCONVEX_YAML = """
 dimensions:

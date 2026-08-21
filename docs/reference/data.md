@@ -48,7 +48,7 @@ rather than a table, and neither lane reads one: pass
 `array.to_series().reset_index()`. `Result.to_dataarray()` is the way back
 out.
 
-Everything on this list is read by the [linopy lane](../../about/linopy.md#3-it-is-a-lane)
+Everything on this list is read by the [linopy lane](../about/linopy.md#3-it-is-a-lane)
 too, so one `sources` mapping goes to either.
 
 Nothing on this path imports pandas, xarray or linopy on your behalf.
@@ -69,11 +69,11 @@ never both — so there is no precedence to remember, and no way for the file a
 reviewer reads to describe a model the caller quietly replaced. A model whose
 label set varies from run to run should not declare one.
 
-**A [map](dimensions.md#lookups) is not on that list either.** It says how
+**A [map](https://math-spec.readthedocs.io/en/latest/reference/language/dimensions/#lookups) is not on that list either.** It says how
 labels map, never which ones exist: a map is a partial relation over the
 dimension, free to omit members and written in whatever order someone typed,
 and neither may decide an extent nor an order that
-[`shift`](operators.md#shift) reads positionally. A map is instead *read
+[`shift`](https://math-spec.readthedocs.io/en/latest/reference/language/operators/#shift) reads positionally. A map is instead *read
 against* whichever of the two supplied the labels. Each has **one author out of
 two** — `lookups.<x>.values` in the file, or its own source key — and both of
 them, or neither, is a refusal. Which leaves one index with two authors, one
@@ -87,7 +87,7 @@ while the model built and solved. Where the file declares the labels too, that
 same refusal happens at load with no data at all.
 
 **A map supplied as data is a
-[`(over, <label space>)` table](dimensions.md#otherwise-it-is-supplied-under-the-lookups-own-name)
+[`(over, <label space>)` table](https://math-spec.readthedocs.io/en/latest/reference/language/dimensions/#otherwise-it-is-supplied-under-the-lookups-own-name)
 of the rows it has**, so an unmapped label is one with no row — the absence rule
 everything else obeys — and a null in the value column is refused for saying
 both at once. A column of the index named after a lookup over it is refused
@@ -96,7 +96,7 @@ too: every other stray column is a dump's extra, and that one is a map.
 There is no third step. A dimension neither of the two supplies raises, and
 labels are never read out of the parameters: they would *be* the definition,
 so a mistyped label could not be told from a new one, and the index is also
-what fixes label **order**, which [`shift`](operators.md#shift) reads
+what fixes label **order**, which [`shift`](https://math-spec.readthedocs.io/en/latest/reference/language/operators/#shift) reads
 positionally.
 
 ## The data contract
@@ -143,7 +143,7 @@ Sparsity is the absent row.
 | a declared map whose labels nothing supplies | names the map, and asks only for the labels |
 | a declared map keyed by something the labels do not carry | names the lookup and the strays |
 | a column that is not the declared `dtype` | names both, and the declaration the data would satisfy |
-| a divisor with no value where the model divides by it | names the parameter and how many rows ([absence](absence.md)) |
+| a divisor with no value where the model divides by it | names the parameter and how many rows ([absence](https://math-spec.readthedocs.io/en/latest/reference/language/absence/)) |
 | a comparison's whole constant side with no value where the row is built | the same, naming the constraint |
 | a bound parameter with no value where the variable exists | names both models the two repairs build |
 
@@ -152,7 +152,7 @@ Sparsity is the absent row.
 | | |
 |---|---|
 | an undeclared column in a table | ignored |
-| a coordinate with no row | sparse data gives sparse variables; what a missing row means where it is read is [absence](absence.md). `diagnostics().sparse_parameters` says which parameters arrived short of their dims, so a lost row is at least visible ([api](../api.md#diagnostics)) |
+| a coordinate with no row | sparse data gives sparse variables; what a missing row means where it is read is [absence](https://math-spec.readthedocs.io/en/latest/reference/language/absence/). `diagnostics().sparse_parameters` says which parameters arrived short of their dims, so a lost row is at least visible ([api](api.md#diagnostics)) |
 | a value that is readable and wrong | bound as given; no number is second-guessed |
 
 ### The index is what makes a stray label a stray
@@ -167,9 +167,9 @@ third generator, and answer a different question.
 ## Growing or replacing the data
 
 A model that is already built takes new numbers with
-[`rebind`](../api.md#re-solving-with-new-numbers), and a sweep over slices of
-one dimension is [`solve_over`](../sweeps.md). Both bind through the rules
+[`rebind`](api.md#re-solving-with-new-numbers), and a sweep over slices of
+one dimension is [`solve_over`](sweeps.md). Both bind through the rules
 above.
 
-The opt-in [linopy lane](../../about/linopy.md#the-same-language-and-the-same-data)
+The opt-in [linopy lane](../about/linopy.md#the-same-language-and-the-same-data)
 binds by these same rules, refusals included.

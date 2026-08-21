@@ -379,7 +379,7 @@ ergonomics case for a method deriving the fan from the curve: two columns and a
 segment count instead of six precomputed rows. What it is **not** is a
 capability gap — this port needs no construct the language lacks.
 
-[`method: lp`](../reference/language/piecewise.md#lp-the-one-that-declares-nothing)
+[`method: lp`](https://math-spec.readthedocs.io/en/latest/reference/language/piecewise/#lp-the-one-that-declares-nothing)
 emits rows of exactly this shape — one linear row per piece, no auxiliary
 variable — but it is **not** a drop-in here, and the difference is the whole
 approximation. It states the lines through consecutive breakpoints, which for a

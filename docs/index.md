@@ -181,7 +181,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 === "How"
 
     ```python
-    import lpspec as lps
+    import math_spec as ms
 
     symbols = {
         'notation': 'latex',
@@ -196,9 +196,9 @@ Only the notation is a choice, and **How** shows the one that was made here.
         },
     }
 
-    lps.to_latex('dispatch.yaml', symbols=symbols)  # amsmath align
-    lps.to_typst('dispatch.yaml')  # compiles without a TeX toolchain
-    lps.to_markdown('dispatch.yaml')  # renders as-is on GitHub
+    ms.to_latex('dispatch.yaml', symbols=symbols)  # amsmath align
+    ms.to_typst('dispatch.yaml')  # compiles without a TeX toolchain
+    ms.to_markdown('dispatch.yaml')  # renders as-is on GitHub
     ```
 
     `symbols` is optional — drop it and the same model prints as
@@ -211,9 +211,12 @@ Only the notation is a choice, and **How** shows the one that was made here.
     emits a document that compiles rather than a fragment to `\input`:
 
     ```bash
-    python -m lpspec latex dispatch.yaml --symbols dispatch.symbols.yaml
-    python -m lpspec typst dispatch.yaml --standalone -o dispatch.typ
+    python -m math_spec latex dispatch.yaml --symbols dispatch.symbols.yaml
+    python -m math_spec typst dispatch.yaml --standalone -o dispatch.typ
     ```
+
+    The renderer is [math-spec](https://math-spec.readthedocs.io/en/latest/reference/typeset/)'s,
+    and reads the same file this page solves.
 <!-- home-math:end -->
 
 ### Then you solve it
@@ -253,7 +256,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
     What a YAML file may contain, and what it means — ten rules, ten
     declaration keys, one closed set of operators.
 
-    [:octicons-arrow-right-24: The language](reference/language/index.md)
+    [:octicons-arrow-right-24: The language](https://math-spec.readthedocs.io/en/latest/reference/language/)
 
 -   :material-code-braces: __Python API__
 
@@ -264,7 +267,7 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     [:octicons-arrow-right-24: The API](reference/api.md) ·
     [Sweeps](reference/sweeps.md) ·
-    [Typeset](reference/typeset.md)
+    [Typeset](https://math-spec.readthedocs.io/en/latest/reference/typeset/)
 
 -   :material-source-branch: __Why it is shaped this way__
 

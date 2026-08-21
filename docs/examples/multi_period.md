@@ -15,7 +15,7 @@ snapshots — and a study that models 2030 hourly and 2050 in four-hour blocks i
 asking for exactly the opposite.
 
 So `snapshot` is one flat dimension carrying $\mathrm{period}$ as a
-[lookup](../reference/language/dimensions.md#lookups), the same way `generator`
+[lookup](https://math-spec.readthedocs.io/en/latest/reference/language/dimensions/#lookups), the same way `generator`
 carries $\mathrm{bus}$ in [transport](transport.md). Ragged periods then cost
 nothing: a lookup is a per-row column, and four snapshots in 2030 beside two in
 2050 is just a column with four of one value and two of another.

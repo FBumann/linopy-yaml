@@ -30,8 +30,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 import pytest
+from math_spec import load_model
 
-from lpspec import load_model
 from tools import constructs, gallery_math
 
 GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'examples'
