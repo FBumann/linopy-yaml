@@ -156,7 +156,20 @@ what coverage moved where.
   turn, run the suite, and put the table — guard → caught, or still green — in
   the PR (#658 is the template). A deletion the suite survives gets a
   purpose-built probe before merge; a green suite proves nothing about a guard
-  no test can reach.
+  no test can reach. **`tools/mutate.py` takes the table by default**, because a
+  hand-run one records a catch that did not happen: it refuses a tree with
+  uncommitted tracked changes, restores through `git checkout --` rather than
+  from memory, drops `__pycache__` on both sides of every mutation, and says
+  whether the tree came back clean. A mutation it cannot express — a negated
+  condition, a changed constant — is taken by hand, with the same three
+  precautions.
+
+  ```bash
+  uv run python -m tools.mutate 'src/lpspec/sources.py:98-99#the empty-parameter guard'
+  ```
+
+  For #658's two-column form, run it once in each worktree and put the columns
+  side by side. It takes minutes, so run it in the background.
 - **A bug is reproduced as a strict `xfail` before it is fixed.** Write the test
   against the reported behaviour and watch it fail first — one that passes on
   the broken tree is testing something else, and the fix it certifies is not the
