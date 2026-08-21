@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.247](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.246...v0.0.1-alpha.247) (2026-08-21)
+
+
+### Documentation
+
+* the site's sections are the three subjects this package still has ([#1226](https://github.com/fluxopt/lpspec/issues/1226)) ([2b04cb3](https://github.com/fluxopt/lpspec/commit/2b04cb321426f3f753632bd37cf780d2fcaf96b7))
+
 ## [0.0.1-alpha.246](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.245...v0.0.1-alpha.246) (2026-08-21)
 
 
