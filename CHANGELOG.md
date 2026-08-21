@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.240](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.239...v0.0.1-alpha.240) (2026-08-21)
+
+
+### Bug Fixes
+
+* **linopy:** reading a named expression over a masked curve derives its mask ([#1202](https://github.com/fluxopt/lpspec/issues/1202)) ([a83883b](https://github.com/fluxopt/lpspec/commit/a83883bbb7bf15574a1d366473763db7a88d8abc))
+
 ## [0.0.1-alpha.239](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.238...v0.0.1-alpha.239) (2026-08-21)
 
 
