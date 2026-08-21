@@ -39,20 +39,16 @@ from __future__ import annotations
 import pytest
 
 from lpspec.errors import DataError
-from tests.conftest import override
+from tests.conftest import law_data, law_model, override
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
 # ---------------------------------------------------------------------------
-# the fixture: `x` total, `y` absent at f=b, `w` a dense coefficient
+# the fixture: `x` total, `y` absent at f=b, `w` a dense coefficient. It is
+# `conftest.law_model`, shared with the sweep that has to be over one model.
 # ---------------------------------------------------------------------------
 
-DIMS = {'f': {'values': ['a', 'b']}, 't': {'dtype': 'int', 'values': [0, 1]}}
-
-DATA = {
-    'gate': pd.Series({'a': True}),
-    'w': pd.Series({'a': 2.0, 'b': 3.0}),
-}
+DATA = law_data()
 
 
 def _model(
@@ -62,24 +58,13 @@ def _model(
     foreach: list[str] | None = None,
     also: dict | None = None,
 ) -> dict:
-    """A model whose only variable content is *expression*, in a binding row.
-
-    *also* adds a second named constraint, for the cases that need two rules —
-    which are now two blocks rather than two entries in a list (#298).
-    """
-    return {
-        'dimensions': dict(DIMS),
-        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'w': {'dims': ['f']}},
-        'variables': {
-            'x': {'foreach': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
-            'y': {'foreach': ['f', 't'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
-        },
-        'constraints': {
-            'c': {'foreach': foreach if foreach is not None else ['t'], 'expression': expression},
-            **(also or {}),
-        },
-        'objective': {'sense': 'maximize', 'expression': objective},
-    }
+    """The shared model, over ``t`` unless the case says otherwise."""
+    return law_model(
+        expression,
+        foreach=foreach if foreach is not None else ['t'],
+        objective=objective,
+        also=also,
+    )
 
 
 def _objective_of(
