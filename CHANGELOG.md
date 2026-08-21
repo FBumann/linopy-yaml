@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.244](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.243...v0.0.1-alpha.244) (2026-08-21)
+
+
+### Refactoring
+
+* **tests:** the sweep's rules are readable one at a time ([#1213](https://github.com/fluxopt/lpspec/issues/1213)) ([fd3df65](https://github.com/fluxopt/lpspec/commit/fd3df65cecce4911641b92929f52c7673ca40ac0))
+
 ## [0.0.1-alpha.243](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.242...v0.0.1-alpha.243) (2026-08-21)
 
 
