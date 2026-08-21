@@ -125,7 +125,7 @@ objective:
 ```
 
 **`cut` and `fcut` take their members from data**
-([data binding](../reference/data.md)), so an iteration appends rows
+([the data contract](../reference/data.md)), so an iteration appends rows
 to their parameter tables and this file never changes.
 No YAML is generated at runtime, which is what keeps the model a reviewer reads
 the model that runs.

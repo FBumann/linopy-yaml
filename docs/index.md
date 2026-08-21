@@ -14,10 +14,10 @@ Write the math in YAML, bind data at runtime, solve.
 
 [![PyPI](https://img.shields.io/pypi/v/lpspec)](https://pypi.org/project/lpspec/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-[Write a model](guide.md){ .md-button .md-button--primary }
+[Run a model](guide.md){ .md-button .md-button--primary }
 [Browse the examples](examples/index.md){ .md-button }
 
 </div>
@@ -231,14 +231,24 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
 <div class="grid cards" markdown>
 
--   :material-school: __Write a model__
+-   :material-school: __Run a model__
 
     ---
 
-    Five ideas — dimensions, absence, topology, `shift`, the dim algebra — each
-    shown in a model that runs, and what the language will *not* do.
+    A file and your tables to an answer you can read back — check, build,
+    solve, and what the engine will *not* do.
 
     [:octicons-arrow-right-24: The guide](guide.md)
+
+-   :material-table-arrow-right: __Your data__
+
+    ---
+
+    The journey from the files an instance arrives in to one frame per
+    parameter — and what binding accepts, refuses, and says when it refuses.
+
+    [:octicons-arrow-right-24: Preparing the data](examples/data.md) ·
+    [The contract](reference/data.md)
 
 -   :material-view-gallery-outline: __Models__
 

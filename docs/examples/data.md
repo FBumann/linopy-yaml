@@ -4,7 +4,9 @@ Every model page's tabs start from the same place: **the instance's tables,
 one frame per parameter** — the mapping the lpspec call binds as `sources` and
 the reference scripts take as `tables`. Nobody's data is born in that shape.
 It is born in files, and this page is the one place the journey from files to
-that mapping is spelled out, so the model pages can start where it ends.
+that mapping is spelled out, so the model pages can start where it ends. What
+that mapping may contain once you have it — what binds, what is refused, and
+the sentence you get when it is — is [the data contract](../reference/data.md).
 
 ## The files
 

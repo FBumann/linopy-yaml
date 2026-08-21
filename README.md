@@ -142,10 +142,14 @@ construct outside the language is a load error naming its rewrite.
 
 ## Docs
 
-Start with [**writing a model**](docs/guide.md) — five ideas, each shown in a
-model that runs. Then [the examples](docs/examples/index.md) to browse, the
-[language reference](https://math-spec.readthedocs.io/en/latest/reference/language/) for the exact rule, and
-the [Python API](docs/reference/api.md) for running one. Why it is shaped this
+Start with [**running a model**](docs/guide.md) — a file and your tables to an
+answer, with the language in five links. Then
+[preparing the data](docs/examples/data.md) and
+[what binding refuses](docs/reference/data.md), the
+[Python API](docs/reference/api.md) for the verbs, and
+[the examples](docs/examples/index.md) to browse. What a file may contain is
+the [language reference](https://math-spec.readthedocs.io/en/latest/reference/language/),
+which lives with the language. Why it is shaped this
 way, what it costs and what is refused are together under
 [about](docs/about/index.md). All of it is indexed in [docs/](docs/README.md);
 to work on it,

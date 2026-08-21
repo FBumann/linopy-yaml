@@ -146,10 +146,10 @@ def nav_groups() -> list[tuple[str, list[tuple[str, str]]]]:
     """The Examples section of the site nav: group title, then its pages.
 
     Each page is ``(label, name)`` — the label the sidebar shows and the
-    model's name, which is also its page and its YAML file. Entries in the
-    section that are not groups (the index itself, the data page) are skipped:
-    they are not models, and :func:`catalogue` is checked against
-    :func:`models` for the ones that are.
+    model's name, which is also its page and its YAML file. An entry in the
+    section that is not a group — the index itself — is skipped: it is not a
+    model, and :func:`catalogue` is checked against :func:`models` for the ones
+    that are.
     """
     nav = yaml.load(MKDOCS.read_text(), Loader=_NavLoader)['nav']
     section = next(entry['Examples'] for entry in nav if isinstance(entry, dict) and 'Examples' in entry)
