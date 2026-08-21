@@ -21,12 +21,12 @@ from lpspec.errors import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from lpspec.language import Model
+    from lpspec.language import Buildable
     from lpspec.sources import TidySource
 
 
 def dimension_coords(
-    schema: Model,
+    schema: Buildable,
     tidy: Mapping[str, TidySource],
 ) -> tuple[dict[str, pd.Index], dict[str, dict[str, xr.DataArray]]]:
     """Every dimension's labels, and the lookup columns that arrived beside them.
@@ -88,7 +88,7 @@ def _through_numpy(table: pl.DataFrame) -> pd.DataFrame:
 
 
 def _lookup_arrays(
-    schema: Model,
+    schema: Buildable,
     relations: Mapping[str, pd.DataFrame],
     master: Mapping[str, pd.Index],
 ) -> dict[str, dict[str, xr.DataArray]]:
@@ -118,7 +118,7 @@ def _lookup_arrays(
 
 
 def load_parameters(
-    schema: Model,
+    schema: Buildable,
     tidy: Mapping[str, TidySource],
     master_coords: Mapping[str, pd.Index],
 ) -> xr.Dataset:

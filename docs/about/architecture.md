@@ -225,6 +225,7 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 | | you want to | the call | data? |
 |---|---|---|---|
 | **load it** | parse and validate, and stop there | `load_model` → `Model` | no |
+| | build rows from it rather than read it | `expand_piecewise` → `Buildable`, the same model with its curves emitted | no |
 | **show it** | typeset for a paper or a review | `to_latex` · `to_typst` · `to_markdown` (spelling: `SymbolTable`) | no |
 | | render one from a Makefile | `python -m lpspec <format>` — the only shell front, and typeset-only | no |
 | **check it** | will this build, is the math sayable, do the dims line up | `check` — parse → expand → validate → lower, one pass, every answer | no |
@@ -317,8 +318,8 @@ choice load-bearing in the language's rulebook.
    re-exports it so callers keep saying `lps.load_model`. The traffic the other
    way is shaped too: a consumer reads the AST through `lpspec.language` itself
    and never through a module under it, so what the waist promises is
-   **fifty-six names in one `__all__`** — thirty-one node types, seven for the
-   errors it raises, and eighteen oracles, front doors and message builders —
+   **fifty-eight names in one `__all__`** — thirty-one node types, seven for the
+   errors it raises, and twenty oracles, front doors and message builders —
    rather than the union of
    whatever eleven submodules happen to expose. That list is pinned in both
    directions, so an export nobody imports fails as loudly as an import nobody
@@ -515,7 +516,7 @@ it.
 | `language/operators.py` | the closed set of built-in operators: their *names* and *call shapes* — no registry |
 | `language/validation.py` | load-time: parse, expand, resolve, check everything — and `load_model`, the language's front door |
 | `language/errors.py` | the model half of the exception hierarchy, and the root the run half extends |
-| `language/piecewise.py` | `piecewise:` → λ-formulation declarations |
+| `language/piecewise.py` | `piecewise:` → λ-formulation declarations, and the `Buildable` that says they are there |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free; re-exports `load_model` |
 | `typeset/` | **spike** — resolved AST → LaTeX / Typst / Markdown. A reader, not a lane: no model, no data, no plan ([README](https://github.com/fluxopt/lpspec/blob/main/src/lpspec/typeset/README.md)) |
 | `__main__.py` | `python -m lpspec <format>` — the typeset shell front, and the only one there is |
