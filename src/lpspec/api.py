@@ -46,10 +46,7 @@ if TYPE_CHECKING:
     from lpspec.relational.plan import Program
     from lpspec.relational.result import ConstraintRow, Diagnostics, Keep, Result
 
-#: Re-exported: parsing and validating a model is the *language's* job, and a
-#: consumer that binds no data (``typeset``) must be able to reach it without
-#: reaching the runner. Callers keep saying ``load_model``.
-__all__ = ['build', 'check', 'load_model', 'solve', 'write']
+__all__ = ['build', 'check', 'solve', 'write']
 
 
 #: What each **lane** can build, beside what each sink can ingest. Nothing is
@@ -129,10 +126,11 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
             reformulated. Issued here and nowhere else.
     """
     schema = load_model(model)
-    program = lower_program(expand_piecewise(schema))
+    buildable = expand_piecewise(schema)
+    program = lower_program(buildable)
     for name in schema.expressions:
-        lower_expression(schema, name)
-    notes = [*unbounded_notes(expand_piecewise(schema)), *advice(program)]
+        lower_expression(buildable, name)
+    notes = [*unbounded_notes(buildable), *advice(program)]
     refused = _refused_by(program, sink) if sink is not None else None
     if sink is not None and refused is None and sink not in LANES:
         notes += sinks.relaxations(program, sink)
