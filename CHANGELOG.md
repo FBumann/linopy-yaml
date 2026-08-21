@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.243](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.242...v0.0.1-alpha.243) (2026-08-21)
+
+
+### Features
+
+* **tools:** a mutation table is produced rather than claimed ([#1199](https://github.com/fluxopt/lpspec/issues/1199)) ([8a50254](https://github.com/fluxopt/lpspec/commit/8a502541e118a4d84640e621446c66378861afd7))
+
 ## [0.0.1-alpha.242](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.241...v0.0.1-alpha.242) (2026-08-21)
 
 
