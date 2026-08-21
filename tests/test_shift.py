@@ -963,3 +963,66 @@ def test_a_named_offset_carries_its_sign_in_the_data():
     }
     with pytest.raises(LanguageError, match='negates a named offset'):
         lps.check(model)
+
+
+def _reindexed_parameter_model(op: str) -> dict:
+    return {
+        'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+        'parameters': {'dt': {'dims': ['t']}},
+        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
+        'constraints': {'r': {'foreach': ['t'], 'expression': f'x <= {op}'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
+    }
+
+
+@pytest.mark.parametrize(
+    ('op', 'expected'),
+    [
+        pytest.param(
+            "shift(dt, over=t, offset=1, edge='wrap')",
+            {0: 7.0, 1: 5.0, 2: 6.0},
+            id='cyclic-vacates-nothing-so-t0-reads-the-last-value',
+        ),
+        pytest.param(
+            'shift(dt, over=t, offset=1, edge=0)',
+            {0: 0.0, 1: 5.0, 2: 6.0},
+            id='the-vacated-position-contributes-zero-which-pins',
+        ),
+    ],
+)
+def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expected):
+    """``array`` is any node, so these operators read a parameter.
+
+    Worth its own test because every documented example took a variable, and a
+    downstream consumer built and shipped a hand-shifted copy of a parameter
+    table before probing revealed this works.
+
+    ``fill=0`` is what a *bare* ``shift`` used to mean here, and the pin it
+    produces at ``t=0`` is why it stopped being the default — see the refusal
+    below. Spelled out, it is a legitimate thing to ask for, so it still works.
+    """
+    data = {'dt': pd.Series({0: 5.0, 1: 6.0, 2: 7.0})}
+    with differential(_reindexed_parameter_model(op), data, lp=True) as run:
+        x = by_coord(run.result, 'x', 't')
+        for t, want in expected.items():
+            assert x[t] == pytest.approx(want, abs=1e-9), f'{op} at t={t}'
+
+
+def test_a_bare_shift_over_data_is_refused_rather_than_filled():
+    """The pin, removed at its source (#289).
+
+    ``x <= shift(dt, over=t, offset=1)`` used to build ``x <= 0`` at the first coordinate:
+    a bound invented from a slot that has no value. Absence would be the
+    consistent answer, but a parameter has no absence to propagate — a missing
+    row is a zero coefficient (the absence rules) — so this follows linopy v1
+    and refuses,
+    at load time, naming the three things the author might have meant.
+
+    Decidable without data, so ``lps.check()`` catches it: the operand is
+    variable-free by declaration, not by what arrives in ``sources``.
+    """
+    model = _reindexed_parameter_model('shift(dt, over=t, offset=1)')
+    with pytest.raises(LanguageError) as exc:
+        lps.check(model)
+    assert 'edge=0' in str(exc.value), 'the refusal must name the escape hatch'
+    assert "edge='wrap'" in str(exc.value), 'and the policy for a genuinely cyclic horizon'

@@ -416,3 +416,20 @@ def recomputed_row_values(engine, result) -> Any:
         pairs = quadratic['coeff'].to_numpy() * x[quadratic['col_l'].to_numpy()] * x[quadratic['col_r'].to_numpy()]
         np.add.at(values, quadratic['row'].to_numpy(), pairs)
     return values
+
+
+#: A three-period model whose solver vector is exactly three long — shared
+#: because the hand-off tests and the timing tests both need one that small.
+#: Three columns and three rows, the smallest model whose solution vector has a
+#: length worth disagreeing about — and, every declared row being built, the
+#: control for the omissions report.
+SOLVER_VECTOR_MODEL = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'parameters': {'load': {'dims': ['t']}},
+    'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'meet': {'foreach': ['t'], 'expression': 'x >= load'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
+}
+
+
+SOLVER_VECTOR_LOAD = {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
