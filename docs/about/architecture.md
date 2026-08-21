@@ -1,8 +1,8 @@
 # Architecture
 
 Brief, current, precise. A PR that changes the structure described here updates
-this file in the same PR. The language is [the language reference](https://energy-models.github.io/math-spec/reference/language); what may
-enter it is [the ceiling](https://energy-models.github.io/math-spec/about/ceiling); plans and refusals
+this file in the same PR. The language is [the language reference](https://math-spec.readthedocs.io/latest/reference/language/); what may
+enter it is [the ceiling](https://math-spec.readthedocs.io/latest/about/ceiling/); plans and refusals
 are [the roadmap](roadmap.md); measured results are
 [the benchmarks](benchmarks.md), produced by the harness in
 [bench/](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — which is
@@ -208,7 +208,7 @@ like the other three fences, plus a check on the **transitive** closure. Two
 properties carry the rest — **data enters at exactly one place**, which is why
 checking a model costs seconds and needs nothing but the file, and the waist is
 **closed**, which is what the ceiling in
-[the ceiling](https://energy-models.github.io/math-spec/about/ceiling) protects: a new consumer is free, a
+[the ceiling](https://math-spec.readthedocs.io/latest/about/ceiling/) protects: a new consumer is free, a
 new primitive is taxed. What is planned, and why, is
 [the roadmap](roadmap.md).
 
@@ -357,7 +357,7 @@ choice load-bearing in the language's rulebook.
    a `QuadraticExpression`, so a quadratic *constraint* has no linopy lane.
    That is declared (`capabilities.LINOPY_LANE`), answerable before any build
    (`check(model, sink='linopy')`) and refused in the language's own words —
-   the axis [the ceiling](https://energy-models.github.io/math-spec/about/ceiling#capability-is-not-the-ceiling) draws for
+   the axis [the ceiling](https://math-spec.readthedocs.io/latest/about/ceiling/#capability-is-not-the-ceiling) draws for
    sinks, one level up. **What it costs is the oracle**: a construct one lane
    builds is checked by one lane, and the differential test is replaced by
    weaker ones — two independent encodings reaching one optimum, a residual at
@@ -574,7 +574,7 @@ consumer's real cost is what it drags in, not what it spells.
 
 ### What counts as language
 
-The rule is [its own page](https://energy-models.github.io/math-spec/about/what-counts-as-language), because it decides what
+The rule is [its own page](https://math-spec.readthedocs.io/latest/about/what-counts-as-language/), because it decides what
 may live here rather than how this package is arranged:
 
 > **A rule is language iff two consumers answering it separately would be a

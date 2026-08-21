@@ -8,9 +8,9 @@ parsing the strings with pyparsing rather than `eval`. Our `expressions` is
 their `global_expressions`, our `piecewise` their `piecewise_constraints`. What
 is ours is the semantics underneath: one `expression` per block, macros that
 take arguments, a schema closed at every level, and the absence and degree-1
-laws ([the ten rules](https://energy-models.github.io/math-spec/reference/language#ten-rules-the-language-reduces-to)). Their math is also the corpus we score
+laws ([the ten rules](https://math-spec.readthedocs.io/latest/reference/language/#ten-rules-the-language-reduces-to)). Their math is also the corpus we score
 coverage against, which is a different thing from a specification we match
-([the limits](https://energy-models.github.io/math-spec/reference/language/errors#what-the-language-will-not-say)):
+([the limits](https://math-spec.readthedocs.io/latest/reference/language/errors/#what-the-language-will-not-say)):
 **file portability is not a goal** — a Calliope model does not load here — and
 neither is operation parity with xarray or pandas.
 

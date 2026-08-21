@@ -128,7 +128,7 @@ sources = {
 ```
 
 `gen_bus` is the last of those and the one that is not a parameter: a
-[lookup](https://energy-models.github.io/math-spec/reference/language/dimensions#lookups) arrives under its own name
+[lookup](https://math-spec.readthedocs.io/latest/reference/language/dimensions/#lookups) arrives under its own name
 as the relation it is, so PyPSA's `bus` column is passed across as it stands
 rather than merged into an index.
 

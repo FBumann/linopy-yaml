@@ -19,7 +19,7 @@ $$p = \sum_k \lambda_k x_k, \quad
 There are two ways to say the last line, and `method:` names them.
 `adjacency`, the default, *builds* it: a binary per segment, an adjacency row
 per breakpoint, and one more row picking a segment. `sos2` *declares* it: the
-expansion emits an [`sos:` block](https://energy-models.github.io/math-spec/reference/language/piecewise#sos) over
+expansion emits an [`sos:` block](https://math-spec.readthedocs.io/latest/reference/language/piecewise/#sos) over
 the same weights and leaves the
 formulation to the sink — which is the point, because a solver that knows what
 SOS2 means branches on the set directly rather than searching the binaries

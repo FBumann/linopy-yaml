@@ -448,7 +448,7 @@ dimensions, and a cycle basis as a sparse `(cycle, line)` parameter.
 The cycle basis carries **impedance** rather than reactance alone: PyPSA applies
 the voltage law with `x` inside an AC sub-network and `r` inside a DC one, and
 this network has one meshed loop of each. Which value belongs in the row is
-decided in data preparation, where [the ceiling](https://energy-models.github.io/math-spec/about/ceiling) puts
+decided in data preparation, where [the ceiling](https://math-spec.readthedocs.io/latest/about/ceiling/) puts
 graph work — the language sees one incidence table either way.
 
 No new construct was needed.

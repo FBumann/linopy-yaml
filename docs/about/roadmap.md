@@ -61,7 +61,7 @@ Everything else is scheduling.
 
 The specific refusals — data prep, arbitrary array ops, domain helpers,
 normalisation, in-plan conditionals, a Python modeling API — are in
-[the ceiling](https://energy-models.github.io/math-spec/about/ceiling#deliberate-non-primitives), with the reason and
+[the ceiling](https://math-spec.readthedocs.io/latest/about/ceiling/#deliberate-non-primitives), with the reason and
 the rewrite for each. Read them before proposing a feature: parity with another
 tool is not by itself a reason to add anything.
 

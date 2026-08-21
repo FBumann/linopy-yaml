@@ -174,7 +174,7 @@ Even the differential harness compares two lanes consuming the *same resolved
 AST* ([hard rule 1](../about/architecture.md#hard-rules)), which is what makes them
 an oracle for each other and also what they cannot see. This is the net for
 that class, and the evidence behind
-[the ceiling](https://energy-models.github.io/math-spec/about/ceiling#two-tiers-and-the-ceiling).
+[the ceiling](https://math-spec.readthedocs.io/latest/about/ceiling/#two-tiers-and-the-ceiling).
 
 <!-- references:begin -->
 | port | optimum | `rtol` | duals | reference |
