@@ -31,10 +31,28 @@ uv run pyrefly check
 Narrower runs while working:
 
 ```bash
-uv run pytest tests/test_relational.py -q
+uv run pytest tests/test_absence.py -q
 uv run pytest -k piecewise -q
 uv run pytest --lf  # last failures only
 ```
+
+### Which file a test goes in
+
+**Named for the construct, not for the module it happens to exercise.**
+`test_shift.py`, `test_absence.py`, `test_grouped_sum.py`, `test_piecewise.py`:
+the same word the [language reference](docs/reference/language/index.md) uses,
+so "where is `shift` specified" and "where is `shift` tested" have one answer.
+It is also the axis that survives the two lanes — a behaviour spans both, while
+a module is on one side of the fence or the other.
+
+A module-shaped file is the exception and earns it by being about the module as
+such: `test_compiler.py`, `test_schema.py`, and `test_relational.py`, which is
+matrix assembly and the solver hand-off rather than a language construct.
+
+The failure mode is a file that grows into everything that had no other home.
+`test_relational.py` reached 2,338 lines that way, larger than any module in
+`src/`. If a test does not obviously belong to the file you are about to add it
+to, that is the signal to name its construct.
 
 ## What each CI gate means
 
