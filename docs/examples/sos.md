@@ -39,26 +39,26 @@ A piecewise-linear cost curve stated as a special-ordered set, so the solver is 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` --- dispatchable units |
-| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints of the cost curve |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{G}$ | index $g$ — `generator` — dispatchable units |
+| $\mathcal{B}$ | index $b$ — `bp` — breakpoints of the cost curve |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ --- maximum dispatch |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
-| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{G} \times \mathcal{B}$ --- breakpoint dispatch levels, one curve per generator |
-| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{G} \times \mathcal{B}$ --- cost at each breakpoint, one curve per generator |
+| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ — maximum dispatch |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{G} \times \mathcal{B}$ — breakpoint dispatch levels, one curve per generator |
+| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{G} \times \mathcal{B}$ — cost at each breakpoint, one curve per generator |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- dispatched power |
-| $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ --- operating cost, piecewise-linear in dispatch |
-| $\mathit{cost\_curve\_lam}$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — dispatched power |
+| $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ — operating cost, piecewise-linear in dispatch |
+| $\mathit{cost\_curve\_lam}$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{B}$ — convex-combination weight on a breakpoint |
 
 #### Objective
 

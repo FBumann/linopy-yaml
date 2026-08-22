@@ -55,23 +55,23 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{C}$ | index $c$ --- `city` with $\mathrm{as\_from}: \mathcal{C} \to \mathcal{F},\enspace \mathrm{as\_to}: \mathcal{C} \to \mathcal{T}$ --- the cities of the tour, each also read as an arc endpoint |
-| $\mathcal{F}$ | index $f$ --- `from_city` --- the city an arc leaves |
-| $\mathcal{T}$ | index $t$ --- `to_city` --- the city an arc arrives at |
+| $\mathcal{C}$ | index $c$ — `city` with $\mathrm{as\_from}: \mathcal{C} \to \mathcal{F},\enspace \mathrm{as\_to}: \mathcal{C} \to \mathcal{T}$ — the cities of the tour, each also read as an arc endpoint |
+| $\mathcal{F}$ | index $f$ — `from_city` — the city an arc leaves |
+| $\mathcal{T}$ | index $t$ — `to_city` — the city an arc arrives at |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{distance}$ | `distance` over $\mathcal{F} \times \mathcal{T}$ --- distance along an arc, with no row on the diagonal — a city has no distance to itself, so no arc variable exists there |
-| $n$ | `n` (scalar) --- the number of cities, which is the big-M the ordering rows need |
+| $\mathit{distance}$ | `distance` over $\mathcal{F} \times \mathcal{T}$ — distance along an arc, with no row on the diagonal — a city has no distance to itself, so no arc variable exists there |
+| $n$ | `n` (scalar) — the number of cities, which is the big-M the ordering rows need |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{travel}$ | `travel` over $\mathcal{F} \times \mathcal{T}$ --- is this arc on the tour? |
-| $u$ | `u` over $\mathcal{C}$ --- position of a city in the tour — continuous, because the formulation needs only that the positions be orderable |
+| $\mathit{travel}$ | `travel` over $\mathcal{F} \times \mathcal{T}$ — is this arc on the tour? |
+| $u$ | `u` over $\mathcal{C}$ — position of a city in the tour — continuous, because the formulation needs only that the positions be orderable |
 
 #### Objective
 

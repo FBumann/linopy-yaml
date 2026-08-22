@@ -114,7 +114,7 @@ constraints:
       and the row the vacated position left is written here instead, from the
       level the unit was handed
     foreach: [snapshot, storage]
-    where: "NOT cyclic AND snapshot == index(snapshot, 0)"
+    where: "NOT cyclic AND position(snapshot) == 0"
     expression: soc == soc_initial + p_store - p_dispatch
 
 objective:

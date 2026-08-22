@@ -30,24 +30,24 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{D}$ | index $d$ --- `depot` --- depots the chemicals leave from |
-| $\mathcal{C}$ | index $c$ --- `connection` with $\mathrm{origin}: \mathcal{C} \to \mathcal{D}$ --- one way of reaching one centre from one depot, by rail or by road |
+| $\mathcal{D}$ | index $d$ — `depot` — depots the chemicals leave from |
+| $\mathcal{C}$ | index $c$ — `connection` with $\mathrm{origin}: \mathcal{C} \to \mathcal{D}$ — one way of reaching one centre from one depot, by rail or by road |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{stock}$ | `stock` over $\mathcal{D}$ --- tonnes standing at a depot |
-| $\mathit{cost}$ | `cost` over $\mathcal{C}$ --- cost per tonne moved over a connection |
-| $\mathit{min\_load}$ | `min_load` over $\mathcal{C}$ --- smallest delivery a connection accepts — rail carries between 10 and 50 tonnes per delivery, and road is unconstrained |
-| $\mathit{max\_load}$ | `max_load` over $\mathcal{C}$ --- largest delivery a connection accepts |
-| $\mathit{total\_to\_move}$ | `total_to_move` (scalar) --- tonnes that have to leave the depots altogether |
+| $\mathit{stock}$ | `stock` over $\mathcal{D}$ — tonnes standing at a depot |
+| $\mathit{cost}$ | `cost` over $\mathcal{C}$ — cost per tonne moved over a connection |
+| $\mathit{min\_load}$ | `min_load` over $\mathcal{C}$ — smallest delivery a connection accepts — rail carries between 10 and 50 tonnes per delivery, and road is unconstrained |
+| $\mathit{max\_load}$ | `max_load` over $\mathcal{C}$ — largest delivery a connection accepts |
+| $\mathit{total\_to\_move}$ | `total_to_move` (scalar) — tonnes that have to leave the depots altogether |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{moved}$ | `moved` over $\mathcal{C}$ --- tonnes sent over a connection |
+| $\mathit{moved}$ | `moved` over $\mathcal{C}$ — tonnes sent over a connection |
 
 #### Objective
 

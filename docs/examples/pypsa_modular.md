@@ -23,27 +23,27 @@ PyPSA modular capacity expansion: a technology bought in whole units. The capaci
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom,mod}}$ | `p_nom_mod` over $\mathcal{G}$ --- capacity of one module — what a single unit of this technology adds |
-| $p^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ --- most capacity that may stand at a generator once built |
-| $\mathit{capital\_cost}$ | `capital_cost` over $\mathcal{G}$ --- cost of holding one unit of capacity over the horizon |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $p^{\mathrm{nom,mod}}$ | `p_nom_mod` over $\mathcal{G}$ — capacity of one module — what a single unit of this technology adds |
+| $p^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ — most capacity that may stand at a generator once built |
+| $\mathit{capital\_cost}$ | `capital_cost` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- capacity built at a generator |
-| $n^{\mathrm{mod}}$ | `n_mod` over $\mathcal{G}$ --- how many whole modules are built |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator |
+| $n^{\mathrm{mod}}$ | `n_mod` over $\mathcal{G}$ — how many whole modules are built |
 
 #### Objective
 

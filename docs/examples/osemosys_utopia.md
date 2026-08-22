@@ -22,41 +22,41 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `technology` --- the plants and processes that may be built and run |
-| $\mathcal{F}$ | index $f$ --- `fuel` --- energy carriers, produced by one technology and consumed by another |
-| $\mathcal{I}$ | index $i$ --- `timeslice` --- the slices a year is dispatched over |
-| $\mathcal{M}$ | index $m$ --- `mode` --- the way a technology is being operated |
-| $\mathcal{Y}$ | index $y$ --- `year` --- the years the pathway covers |
-| $\mathcal{V}$ | index $v$ --- `vintage` --- a second axis over the same years — capacity standing in a year was built in some vintage |
+| $\mathcal{T}$ | index $t$ — `technology` — the plants and processes that may be built and run |
+| $\mathcal{F}$ | index $f$ — `fuel` — energy carriers, produced by one technology and consumed by another |
+| $\mathcal{I}$ | index $i$ — `timeslice` — the slices a year is dispatched over |
+| $\mathcal{M}$ | index $m$ — `mode` — the way a technology is being operated |
+| $\mathcal{Y}$ | index $y$ — `year` — the years the pathway covers |
+| $\mathcal{V}$ | index $v$ — `vintage` — a second axis over the same years — capacity standing in a year was built in some vintage |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{still\_live}$ | `still_live` over $\mathcal{T} \times \mathcal{Y} \times \mathcal{V}$ --- 1 where a vintage is still inside its technology's operational life in that year |
-| $\mathit{residual\_capacity}$ | `residual_capacity` over $\mathcal{T} \times \mathcal{Y}$ --- capacity that already stood in 1990 and has not yet retired |
-| $\mathit{build}^{\mathrm{cost}}$ | `build_cost` over $\mathcal{T} \times \mathcal{V}$ --- discounted cost of building a unit of capacity in a vintage |
-| $\mathit{holding\_cost}$ | `holding_cost` over $\mathcal{T} \times \mathcal{Y}$ --- discounted fixed cost of holding a unit of capacity through a year |
-| $\mathit{running\_cost}$ | `running_cost` over $\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}$ --- discounted variable cost of a unit of activity |
-| $\mathit{year}^{\mathrm{split}}$ | `year_split` over $\mathcal{I} \times \mathcal{Y}$ --- share of the year a timeslice stands for |
-| $\mathit{capacity\_available}$ | `capacity_available` over $\mathcal{T} \times \mathcal{I} \times \mathcal{Y}$ --- share of its capacity a technology can offer in a timeslice |
-| $\mathit{input\_ratio}$ | `input_ratio` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ --- fuel a technology consumes per unit of activity |
-| $\mathit{output\_ratio}$ | `output_ratio` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ --- fuel a technology produces per unit of activity |
-| $\mathit{sliced\_demand}$ | `sliced_demand` over $\mathcal{F} \times \mathcal{I} \times \mathcal{Y}$ --- demand for a fuel placed on one timeslice |
-| $\mathit{annual\_demand}$ | `annual_demand` over $\mathcal{F} \times \mathcal{Y}$ --- demand for a fuel placed on the year as a whole |
-| $\mathit{max\_capacity}$ | `max_capacity` over $\mathcal{T} \times \mathcal{Y}$ --- most capacity a technology may stand at |
-| $\mathit{min\_capacity}$ | `min_capacity` over $\mathcal{T} \times \mathcal{Y}$ --- least capacity a technology must stand at |
-| $\mathit{reserve\_margin}$ | `reserve_margin` over $\mathcal{Y}$ --- how far firm capacity must exceed the demand of the moment |
-| $\mathit{reserve\_tagged}$ | `reserve_tagged` over $\mathcal{T} \times \mathcal{Y}$ --- 1 where a technology's capacity counts towards the reserve |
-| $\mathit{reserve\_demand}$ | `reserve_demand` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ --- the activity the reserve margin is measured against |
-| $\mathit{residual\_holding}$ | `residual_holding` (scalar) --- fixed operating cost owed on the capacity that already stood in 1990 |
+| $\mathit{still\_live}$ | `still_live` over $\mathcal{T} \times \mathcal{Y} \times \mathcal{V}$ — 1 where a vintage is still inside its technology's operational life in that year |
+| $\mathit{residual\_capacity}$ | `residual_capacity` over $\mathcal{T} \times \mathcal{Y}$ — capacity that already stood in 1990 and has not yet retired |
+| $\mathit{build}^{\mathrm{cost}}$ | `build_cost` over $\mathcal{T} \times \mathcal{V}$ — discounted cost of building a unit of capacity in a vintage |
+| $\mathit{holding\_cost}$ | `holding_cost` over $\mathcal{T} \times \mathcal{Y}$ — discounted fixed cost of holding a unit of capacity through a year |
+| $\mathit{running\_cost}$ | `running_cost` over $\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}$ — discounted variable cost of a unit of activity |
+| $\mathit{year}^{\mathrm{split}}$ | `year_split` over $\mathcal{I} \times \mathcal{Y}$ — share of the year a timeslice stands for |
+| $\mathit{capacity\_available}$ | `capacity_available` over $\mathcal{T} \times \mathcal{I} \times \mathcal{Y}$ — share of its capacity a technology can offer in a timeslice |
+| $\mathit{input\_ratio}$ | `input_ratio` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ — fuel a technology consumes per unit of activity |
+| $\mathit{output\_ratio}$ | `output_ratio` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ — fuel a technology produces per unit of activity |
+| $\mathit{sliced\_demand}$ | `sliced_demand` over $\mathcal{F} \times \mathcal{I} \times \mathcal{Y}$ — demand for a fuel placed on one timeslice |
+| $\mathit{annual\_demand}$ | `annual_demand` over $\mathcal{F} \times \mathcal{Y}$ — demand for a fuel placed on the year as a whole |
+| $\mathit{max\_capacity}$ | `max_capacity` over $\mathcal{T} \times \mathcal{Y}$ — most capacity a technology may stand at |
+| $\mathit{min\_capacity}$ | `min_capacity` over $\mathcal{T} \times \mathcal{Y}$ — least capacity a technology must stand at |
+| $\mathit{reserve\_margin}$ | `reserve_margin` over $\mathcal{Y}$ — how far firm capacity must exceed the demand of the moment |
+| $\mathit{reserve\_tagged}$ | `reserve_tagged` over $\mathcal{T} \times \mathcal{Y}$ — 1 where a technology's capacity counts towards the reserve |
+| $\mathit{reserve\_demand}$ | `reserve_demand` over $\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}$ — the activity the reserve margin is measured against |
+| $\mathit{residual\_holding}$ | `residual_holding` (scalar) — fixed operating cost owed on the capacity that already stood in 1990 |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{activity}$ | `activity` over $\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}$ --- how hard a technology runs, per timeslice and mode |
-| $\mathit{build}$ | `build` over $\mathcal{T} \times \mathcal{V}$ --- how much capacity is built, and when |
+| $\mathit{activity}$ | `activity` over $\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}$ — how hard a technology runs, per timeslice and mode |
+| $\mathit{build}$ | `build` over $\mathcal{T} \times \mathcal{V}$ — how much capacity is built, and when |
 
 #### Objective
 

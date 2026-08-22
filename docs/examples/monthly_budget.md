@@ -33,24 +33,24 @@ A cap on what each technology may generate per calendar month — an aggregate o
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}$ --- dispatch periods, each falling in one month |
-| $\mathcal{M}$ | index $m$ --- `month` --- the grouping the budget is stated over |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units |
+| $\mathcal{T}$ | index $t$ — `snapshot` with $\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}$ — dispatch periods, each falling in one month |
+| $\mathcal{M}$ | index $m$ — `month` — the grouping the budget is stated over |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\bar p$ | `p_max` over $\mathcal{G}$ --- installed capacity |
-| $c$ | `cost` over $\mathcal{G}$ --- marginal cost |
-| $\ell$ | `load` over $\mathcal{T}$ --- demand to be met |
-| $\bar E$ | `monthly_cap` over $\mathcal{M} \times \mathcal{G}$ --- the budget the group sum is checked against, one per month and technology |
+| $\bar p$ | `p_max` over $\mathcal{G}$ — installed capacity |
+| $c$ | `cost` over $\mathcal{G}$ — marginal cost |
+| $\ell$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\bar E$ | `monthly_cap` over $\mathcal{M} \times \mathcal{G}$ — the budget the group sum is checked against, one per month and technology |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
 
 #### Objective
 

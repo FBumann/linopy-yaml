@@ -42,25 +42,25 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{S}$ | index $s$ --- `scenario` --- the futures the fleet is built against, one of which will happen |
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods, the same in every future |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, each built once and run in every future |
+| $\mathcal{S}$ | index $s$ — `scenario` — the futures the fleet is built against, one of which will happen |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods, the same in every future |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, each built once and run in every future |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{probability}$ | `probability` over $\mathcal{S}$ --- how likely a future is — the weights the expectation is taken with |
-| $\mathit{load}$ | `load` over $\mathcal{S} \times \mathcal{T}$ --- demand to be met, and the one thing that differs between futures |
-| $\mathit{capex}$ | `capex` over $\mathcal{G}$ --- cost of holding one unit of capacity over the horizon |
-| $\mathit{opex}$ | `opex` over $\mathcal{G}$ --- cost of one unit of output |
+| $\mathit{probability}$ | `probability` over $\mathcal{S}$ — how likely a future is — the weights the expectation is taken with |
+| $\mathit{load}$ | `load` over $\mathcal{S} \times \mathcal{T}$ — demand to be met, and the one thing that differs between futures |
+| $\mathit{capex}$ | `capex` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
+| $\mathit{opex}$ | `opex` over $\mathcal{G}$ — cost of one unit of output |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- capacity built at a generator — the first-stage decision, which spans no scenario because it is taken before anyone knows which future arrived |
-| $p$ | `p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot of a future — the second-stage decision, one per scenario |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator — the first-stage decision, which spans no scenario because it is taken before anyone knows which future arrived |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot of a future — the second-stage decision, one per scenario |
 
 #### Objective
 

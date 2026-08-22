@@ -38,37 +38,37 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{M}$ | index $m$ --- `market` --- reserve markets, each with a requirement to fill |
-| $\mathcal{T}$ | index $t$ --- `tranche` --- how fast a reserve has to be deliverable |
-| $\mathcal{Z}$ | index $z$ --- `zone` --- reserve zones, which overlap |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, which may have an open end |
-| $\mathcal{O}$ | index $o$ --- `offer` with $\mathrm{gen\_of}: \mathcal{O} \to \mathcal{G},\enspace \mathrm{market\_of}: \mathcal{O} \to \mathcal{M},\enspace \mathrm{tranche\_of}: \mathcal{O} \to \mathcal{T}$ --- one generator's bid into one market at one tranche |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{M}$ | index $m$ — `market` — reserve markets, each with a requirement to fill |
+| $\mathcal{T}$ | index $t$ — `tranche` — how fast a reserve has to be deliverable |
+| $\mathcal{Z}$ | index $z$ — `zone` — reserve zones, which overlap |
+| $\mathcal{L}$ | index $l$ — `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ — transmission lines, which may have an open end |
+| $\mathcal{O}$ | index $o$ — `offer` with $\mathrm{gen\_of}: \mathcal{O} \to \mathcal{G},\enspace \mathrm{market\_of}: \mathcal{O} \to \mathcal{M},\enspace \mathrm{tranche\_of}: \mathcal{O} \to \mathcal{T}$ — one generator's bid into one market at one tranche |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ --- installed capacity |
-| $\mathit{energy\_cost}$ | `energy_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{load}$ | `load` over $\mathcal{B}$ --- demand at each bus |
-| $\mathit{cap}$ | `cap` over $\mathcal{L}$ --- forward transmission limit |
-| $\mathit{neg\_cap}$ | `neg_cap` over $\mathcal{L}$ --- reverse transmission limit |
-| $\mathit{bus}^{\mathrm{cap}}$ | `bus_cap` over $\mathcal{B}$ --- most a bus may export over any one line |
-| $\mathit{offer}^{\mathrm{cost}}$ | `offer_cost` over $\mathcal{O}$ --- cost of holding one unit of reserve on an offer |
-| $\mathit{req}$ | `req` over $\mathcal{M}$ --- reserve a market has to be filled with |
-| $\mathit{tranche}^{\mathrm{frac}}$ | `tranche_frac` over $\mathcal{T}$ --- share of capacity a generator may offer at a tranche |
-| $\mathit{zone}^{\mathrm{share}}$ | `zone_share` over $\mathcal{G} \times \mathcal{Z}$ --- how much of a generator's reserve counts towards a zone — a generator may back several zones at a per-zone weight, so this cannot be a lookup over the generator, which is single-valued per label; rows are absent where a generator backs no part of a zone |
-| $\mathit{zone}^{\mathrm{req}}$ | `zone_req` over $\mathcal{Z}$ --- reserve a zone has to be covered by |
+| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ — installed capacity |
+| $\mathit{energy\_cost}$ | `energy_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathit{load}$ | `load` over $\mathcal{B}$ — demand at each bus |
+| $\mathit{cap}$ | `cap` over $\mathcal{L}$ — forward transmission limit |
+| $\mathit{neg\_cap}$ | `neg_cap` over $\mathcal{L}$ — reverse transmission limit |
+| $\mathit{bus}^{\mathrm{cap}}$ | `bus_cap` over $\mathcal{B}$ — most a bus may export over any one line |
+| $\mathit{offer}^{\mathrm{cost}}$ | `offer_cost` over $\mathcal{O}$ — cost of holding one unit of reserve on an offer |
+| $\mathit{req}$ | `req` over $\mathcal{M}$ — reserve a market has to be filled with |
+| $\mathit{tranche}^{\mathrm{frac}}$ | `tranche_frac` over $\mathcal{T}$ — share of capacity a generator may offer at a tranche |
+| $\mathit{zone}^{\mathrm{share}}$ | `zone_share` over $\mathcal{G} \times \mathcal{Z}$ — how much of a generator's reserve counts towards a zone — a generator may back several zones at a per-zone weight, so this cannot be a lookup over the generator, which is single-valued per label; rows are absent where a generator backs no part of a zone |
+| $\mathit{zone}^{\mathrm{req}}$ | `zone_req` over $\mathcal{Z}$ — reserve a zone has to be covered by |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{G}$ --- output of a generator |
-| $f$ | `f` over $\mathcal{L}$ --- flow on a line, signed towards its `line_to` bus |
-| $r$ | `r` over $\mathcal{O}$ --- reserve held against an offer |
+| $p$ | `p` over $\mathcal{G}$ — output of a generator |
+| $f$ | `f` over $\mathcal{L}$ — flow on a line, signed towards its `line_to` bus |
+| $r$ | `r` over $\mathcal{O}$ — reserve held against an offer |
 
 #### Objective
 

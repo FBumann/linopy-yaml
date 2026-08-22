@@ -27,23 +27,23 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{A}$ | index $a$ --- `arc` --- an undirected link between two cities, with capacity in circuits |
-| $\mathcal{C}$ | index $c$ --- `call` --- a city pair with circuits to place |
-| $\mathcal{P}$ | index $p$ --- `path` with $\mathrm{call\_of}: \mathcal{P} \to \mathcal{C}$ --- a route end to end, serving one city pair |
+| $\mathcal{A}$ | index $a$ — `arc` — an undirected link between two cities, with capacity in circuits |
+| $\mathcal{C}$ | index $c$ — `call` — a city pair with circuits to place |
+| $\mathcal{P}$ | index $p$ — `path` with $\mathrm{call\_of}: \mathcal{P} \to \mathcal{C}$ — a route end to end, serving one city pair |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{capacity}$ | `capacity` over $\mathcal{A}$ --- circuits an arc can carry |
-| $\mathit{demand}$ | `demand` over $\mathcal{C}$ --- circuits a city pair asked for |
-| $\mathit{uses}$ | `uses` over $\mathcal{P} \times \mathcal{A}$ --- which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
+| $\mathit{capacity}$ | `capacity` over $\mathcal{A}$ — circuits an arc can carry |
+| $\mathit{demand}$ | `demand` over $\mathcal{C}$ — circuits a city pair asked for |
+| $\mathit{uses}$ | `uses` over $\mathcal{P} \times \mathcal{A}$ — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{flow}$ | `flow` over $\mathcal{P}$ --- circuits carried on a path — integral because a multi-commodity flow is not integral by nature, even though this instance's relaxation happens to be |
+| $\mathit{flow}$ | `flow` over $\mathcal{P}$ — circuits carried on a path — integral because a multi-commodity flow is not integral by nature, even though this instance's relaxation happens to be |
 
 #### Objective
 

@@ -32,31 +32,31 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{S}$ | index $s$ --- `store` with $\mathrm{store\_bus}: \mathcal{S} \to \mathcal{B}$ --- energy stores, each sitting on one bus |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{S}$ | index $s$ — `store` with $\mathrm{store\_bus}: \mathcal{S} \to \mathcal{B}$ — energy stores, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $e^{\mathrm{nom,max}}$ | `e_nom_max` over $\mathcal{S}$ --- most energy capacity that may be built at a store |
-| $e^{\mathrm{capital,cost}}$ | `e_capital_cost` over $\mathcal{S}$ --- cost of holding one unit of energy capacity over the horizon |
-| $e^{\mathrm{initial}}$ | `e_initial` over $\mathcal{S}$ --- energy in the store before the first snapshot |
-| $\mathit{standing\_loss}$ | `standing_loss` over $\mathcal{S}$ --- share of the carried-over level lost between snapshots |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $e^{\mathrm{nom,max}}$ | `e_nom_max` over $\mathcal{S}$ — most energy capacity that may be built at a store |
+| $e^{\mathrm{capital,cost}}$ | `e_capital_cost` over $\mathcal{S}$ — cost of holding one unit of energy capacity over the horizon |
+| $e^{\mathrm{initial}}$ | `e_initial` over $\mathcal{S}$ — energy in the store before the first snapshot |
+| $\mathit{standing\_loss}$ | `standing_loss` over $\mathcal{S}$ — share of the carried-over level lost between snapshots |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $\mathit{store}^{\mathrm{p}}$ | `store_p` over $\mathcal{T} \times \mathcal{S}$ --- power a store puts onto its bus, negative when it takes power off — unbounded, because a Store has no rating of its own |
-| $e$ | `e` over $\mathcal{T} \times \mathcal{S}$ --- energy in the store at the end of a snapshot |
-| $e^{\mathrm{nom}}$ | `e_nom` over $\mathcal{S}$ --- energy capacity built at a store |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $\mathit{store}^{\mathrm{p}}$ | `store_p` over $\mathcal{T} \times \mathcal{S}$ — power a store puts onto its bus, negative when it takes power off — unbounded, because a Store has no rating of its own |
+| $e$ | `e` over $\mathcal{T} \times \mathcal{S}$ — energy in the store at the end of a snapshot |
+| $e^{\mathrm{nom}}$ | `e_nom` over $\mathcal{S}$ — energy capacity built at a store |
 
 #### Objective
 
@@ -74,7 +74,7 @@ $$e_{t,s} \le e^{\mathrm{nom}}_{s} \qquad \forall\thinspace t \in \mathcal{T},\e
 
 **`energy_balance_initial`**
 
-$$e_{t,s} = e^{\mathrm{initial}}_{s} - \mathit{store}^{\mathrm{p}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
+$$e_{t,s} = e^{\mathrm{initial}}_{s} - \mathit{store}^{\mathrm{p}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathrm{pos}(t) = 0$$
 
 **`energy_balance`**
 
@@ -200,7 +200,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           the first snapshot's level starts from the initial energy, which the
           standing loss does not decay because nothing was carried into it
         foreach: [snapshot, store]
-        where: "snapshot == index(snapshot, 0)"
+        where: "position(snapshot) == 0"
         expression: e == e_initial - store_p
 
       energy_balance:

@@ -27,28 +27,28 @@ PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one, so
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{E}$ | index $e$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{L}$ | index $l$ --- `link` with $\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}$ --- controllable connections, each joining two buses |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{E}$ | index $e$ — `generator` with $\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{L}$ | index $l$ — `link` with $\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}$ — controllable connections, each joining two buses |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ --- cost of one unit of output |
-| $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{L}$ --- most a link may take in during one snapshot |
-| $\mathit{efficiency}$ | `efficiency` over $\mathcal{L}$ --- share of what entered a link that arrives at the other end |
-| $\mathit{delay}$ | `delay` over $\mathcal{L}$ --- how many snapshots a link takes to deliver what it took in |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ — cost of one unit of output |
+| $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{L}$ — most a link may take in during one snapshot |
+| $\mathit{efficiency}$ | `efficiency` over $\mathcal{L}$ — share of what entered a link that arrives at the other end |
+| $\mathit{delay}$ | `delay` over $\mathcal{L}$ — how many snapshots a link takes to deliver what it took in |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ --- output of a generator in a snapshot |
-| $g$ | `g` over $\mathcal{T} \times \mathcal{L}$ --- what a link takes in during a snapshot, at the bus it leaves |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ — output of a generator in a snapshot |
+| $g$ | `g` over $\mathcal{T} \times \mathcal{L}$ — what a link takes in during a snapshot, at the bus it leaves |
 
 $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
 

@@ -31,29 +31,29 @@ PyPSA linear optimal power flow, rung 5: passive AC lines under Kirchhoff's volt
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
-| $\mathcal{C}$ | index $c$ --- `cycle` --- one independent loop of the network |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{L}$ | index $l$ — `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ — passive AC lines, each joining two buses |
+| $\mathcal{C}$ | index $c$ — `cycle` — one independent loop of the network |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- most a line may carry towards its `line_to` bus |
-| $\mathit{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ --- most a line may carry the other way, negative by convention |
-| $\mathit{cycle}^{\mathrm{incidence}}$ | `cycle_incidence` over $\mathcal{C} \times \mathcal{L}$ --- the cycle basis, as a sparse table of reactance times direction — a line may belong to several cycles, so this is a parameter over both dimensions rather than a coordinate, and rows are absent where a line is in no cycle |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ — most a line may carry towards its `line_to` bus |
+| $\mathit{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ — most a line may carry the other way, negative by convention |
+| $\mathit{cycle}^{\mathrm{incidence}}$ | `cycle_incidence` over $\mathcal{C} \times \mathcal{L}$ — the cycle basis, as a sparse table of reactance times direction — a line may belong to several cycles, so this is a parameter over both dimensions rather than a coordinate, and rows are absent where a line is in no cycle |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ — flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
 
 #### Objective
 

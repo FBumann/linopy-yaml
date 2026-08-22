@@ -24,32 +24,32 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{S}$ | index $s$ --- `storage` with $\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}$ --- storage units, each sitting on one bus |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{S}$ | index $s$ — `storage` with $\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}$ — storage units, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{storage}^{\mathrm{p,nom}}$ | `storage_p_nom` over $\mathcal{S}$ --- most a storage unit may charge or discharge in one snapshot |
-| $\mathit{soc}^{\mathrm{max}}$ | `soc_max` over $\mathcal{S}$ --- how much energy a storage unit holds when full |
-| $\mathit{soc}^{\mathrm{initial}}$ | `soc_initial` over $\mathcal{S}$ --- energy in the store before the first snapshot |
-| $\mathit{inflow}$ | `inflow` over $\mathcal{T} \times \mathcal{S}$ --- energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathit{storage}^{\mathrm{p,nom}}$ | `storage_p_nom` over $\mathcal{S}$ — most a storage unit may charge or discharge in one snapshot |
+| $\mathit{soc}^{\mathrm{max}}$ | `soc_max` over $\mathcal{S}$ — how much energy a storage unit holds when full |
+| $\mathit{soc}^{\mathrm{initial}}$ | `soc_initial` over $\mathcal{S}$ — energy in the store before the first snapshot |
+| $\mathit{inflow}$ | `inflow` over $\mathcal{T} \times \mathcal{S}$ — energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $p^{\mathrm{dispatch}}$ | `p_dispatch` over $\mathcal{T} \times \mathcal{S}$ --- power a storage unit puts onto its bus |
-| $p^{\mathrm{store}}$ | `p_store` over $\mathcal{T} \times \mathcal{S}$ --- power a storage unit takes off its bus |
-| $\mathit{soc}$ | `soc` over $\mathcal{T} \times \mathcal{S}$ --- energy in the store at the end of a snapshot |
-| $\mathit{spill}$ | `spill` over $\mathcal{T} \times \mathcal{S}$ --- inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $p^{\mathrm{dispatch}}$ | `p_dispatch` over $\mathcal{T} \times \mathcal{S}$ — power a storage unit puts onto its bus |
+| $p^{\mathrm{store}}$ | `p_store` over $\mathcal{T} \times \mathcal{S}$ — power a storage unit takes off its bus |
+| $\mathit{soc}$ | `soc` over $\mathcal{T} \times \mathcal{S}$ — energy in the store at the end of a snapshot |
+| $\mathit{spill}$ | `spill` over $\mathcal{T} \times \mathcal{S}$ — inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
 
 #### Objective
 
@@ -63,7 +63,7 @@ $$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g
 
 **`energy_balance_initial`**
 
-$$\mathit{soc}_{t,s} = \mathit{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} + \mathit{inflow}_{t,s} - \mathit{spill}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
+$$\mathit{soc}_{t,s} = \mathit{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} + \mathit{inflow}_{t,s} - \mathit{spill}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathrm{pos}(t) = 0$$
 
 **`energy_balance`**
 
@@ -207,7 +207,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
       energy_balance_initial:
         description: the first snapshot's level is carried from the initial state of charge
         foreach: [snapshot, storage]
-        where: "snapshot == index(snapshot, 0)"
+        where: "position(snapshot) == 0"
         expression: soc == soc_initial + p_store - p_dispatch + inflow - spill
 
       energy_balance:

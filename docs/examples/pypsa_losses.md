@@ -34,32 +34,32 @@ PyPSA transmission losses, tangent form: the quadratic loss on a line, underesti
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- passive branches, each joining two buses |
-| $\mathcal{S}$ | index $s$ --- `segment` --- the tangent points the loss curve is approximated at |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{L}$ | index $l$ — `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ — passive branches, each joining two buses |
+| $\mathcal{S}$ | index $s$ — `segment` — the tangent points the loss curve is approximated at |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- most a line may carry towards its `to` bus |
-| $\mathit{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ --- most a line may carry the other way, negative by convention |
-| $\mathit{loss}^{\mathrm{max}}$ | `loss_max` over $\mathcal{L}$ --- the loss at a line's rating — the top of the curve being approximated, carried as a column because a bound takes a name or a number, and given only for the lines that dissipate anything |
-| $\mathit{loss}^{\mathrm{slope}}$ | `loss_slope` over $\mathcal{L} \times \mathcal{S}$ --- the slope of this segment's half-plane — how much loss the flow buys along it. Where the segments come from is the instance's business, not the model's: a tangent to the loss curve and a secant across it both arrive here as a slope and an offset. |
-| $\mathit{loss}^{\mathrm{offset}}$ | `loss_offset` over $\mathcal{L} \times \mathcal{S}$ --- where this segment's half-plane meets the loss axis, negative for a curve through the origin |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ — most a line may carry towards its `to` bus |
+| $\mathit{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ — most a line may carry the other way, negative by convention |
+| $\mathit{loss}^{\mathrm{max}}$ | `loss_max` over $\mathcal{L}$ — the loss at a line's rating — the top of the curve being approximated, carried as a column because a bound takes a name or a number, and given only for the lines that dissipate anything |
+| $\mathit{loss}^{\mathrm{slope}}$ | `loss_slope` over $\mathcal{L} \times \mathcal{S}$ — the slope of this segment's half-plane — how much loss the flow buys along it. Where the segments come from is the instance's business, not the model's: a tangent to the loss curve and a secant across it both arrive here as a slope and an offset. |
+| $\mathit{loss}^{\mathrm{offset}}$ | `loss_offset` over $\mathcal{L} \times \mathcal{S}$ — where this segment's half-plane meets the loss axis, negative for a curve through the origin |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `to` bus — unbounded here, because the rating covers the flow *and* its loss and so is a row rather than a bound |
-| $\mathit{loss}$ | `loss` over $\mathcal{T} \times \mathcal{L}$ --- the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ — flow on a line, signed towards its `to` bus — unbounded here, because the rating covers the flow *and* its loss and so is a row rather than a bound |
+| $\mathit{loss}$ | `loss` over $\mathcal{T} \times \mathcal{L}$ — the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
 
 #### Objective
 

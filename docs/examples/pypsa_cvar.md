@@ -38,30 +38,30 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{S}$ | index $s$ --- `scenario` --- the futures the fleet is built against, one of which will happen |
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods, the same in every future |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, each built once and run in every future |
+| $\mathcal{S}$ | index $s$ — `scenario` — the futures the fleet is built against, one of which will happen |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods, the same in every future |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, each built once and run in every future |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{probability}$ | `probability` over $\mathcal{S}$ --- how likely a future is — the weights the expectation is taken with |
-| $\mathit{load}$ | `load` over $\mathcal{S} \times \mathcal{T}$ --- demand to be met, and the one thing that differs between futures |
-| $\mathit{capex}$ | `capex` over $\mathcal{G}$ --- cost of holding one unit of capacity over the horizon |
-| $\mathit{opex}$ | `opex` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{alpha}$ | `alpha` (scalar) --- where the tail begins: the confidence level whose worst 1 - alpha of the probability mass the risk term averages over |
-| $\mathit{omega}$ | `omega` (scalar) --- how much of the objective is the tail rather than the expectation — 0 is the risk-neutral plan, 1 prices nothing but the worst futures |
+| $\mathit{probability}$ | `probability` over $\mathcal{S}$ — how likely a future is — the weights the expectation is taken with |
+| $\mathit{load}$ | `load` over $\mathcal{S} \times \mathcal{T}$ — demand to be met, and the one thing that differs between futures |
+| $\mathit{capex}$ | `capex` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
+| $\mathit{opex}$ | `opex` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathit{alpha}$ | `alpha` (scalar) — where the tail begins: the confidence level whose worst 1 - alpha of the probability mass the risk term averages over |
+| $\mathit{omega}$ | `omega` (scalar) — how much of the objective is the tail rather than the expectation — 0 is the risk-neutral plan, 1 prices nothing but the worst futures |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- capacity built at a generator — the first-stage decision, taken before anyone knows which future arrived |
-| $p$ | `p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot of a future |
-| $\mathit{excess}$ | `excess` over $\mathcal{S}$ --- how far a future's operating cost runs past the level the tail begins at, and zero for the futures that do not reach it |
-| $\mathit{tail\_start}$ | `tail_start` (scalar) --- the level the tail begins at — the value at risk, which the epigraph rows pin to the alpha quantile of the operating cost rather than the model declaring it |
-| $\mathit{tail\_average}$ | `tail_average` (scalar) --- the average operating cost of the futures beyond that level |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator — the first-stage decision, taken before anyone knows which future arrived |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot of a future |
+| $\mathit{excess}$ | `excess` over $\mathcal{S}$ — how far a future's operating cost runs past the level the tail begins at, and zero for the futures that do not reach it |
+| $\mathit{tail\_start}$ | `tail_start` (scalar) — the level the tail begins at — the value at risk, which the epigraph rows pin to the alpha quantile of the operating cost rather than the model declaring it |
+| $\mathit{tail\_average}$ | `tail_average` (scalar) — the average operating cost of the futures beyond that level |
 
 #### Objective
 

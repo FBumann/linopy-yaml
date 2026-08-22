@@ -714,10 +714,10 @@ def derive_curve_edges(
 
     ``lp`` states a curve as its segment lines, so it needs two rows holding the
     linked expression inside the curve's *own* range — and under ``points:``
-    that range is per curve, where ``index(over, 0)`` and ``index(over, -1)``
-    are the axis'. A ``where:`` takes no operators to find it with, so the two
-    edges are marked here instead, from the mask the caller supplied: the first
-    and last position it marks, per curve.
+    that range is per curve, where ``position(over) == 0`` and
+    ``position(over) == -1`` are the axis'. A ``where:`` takes no operators to
+    find it with, so the two edges are marked here instead, from the mask the
+    caller supplied: the first and last position it marks, per curve.
 
     True-only and sparse, since a missing row reads as false in a ``where``.
     Called from :func:`tidy_sources`, which both lanes enter, and only for the
@@ -997,8 +997,8 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
 
     **The breakpoints are walked in the ``over`` dimension's own index order**,
     which is the order the model is built in — what ``shift`` walks and what
-    ``index(bp, 0)`` names. A values table is a function of its coordinates and
-    carries no order of its own, so it is laid out on that index first
+    ``position(bp)`` counts along. A values table is a function of its
+    coordinates and carries no order of its own, so it is laid out on that index first
     (:func:`_breakpoint_order`); reading it in the row order it happened to
     arrive in judged an order the model never builds, in both directions.
 

@@ -25,28 +25,28 @@ PyPSA unit commitment: which generators are on, not just how much they produce �
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, each either committed or off |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, each either committed or off |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ --- share of capacity a committed unit must produce at least |
-| $\mathit{start\_up\_cost}$ | `start_up_cost` over $\mathcal{G}$ --- what bringing a unit up costs, once per start |
-| $\mathit{shut\_down\_cost}$ | `shut_down_cost` over $\mathcal{G}$ --- what taking a unit down costs, once per stop |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ — share of capacity a committed unit must produce at least |
+| $\mathit{start\_up\_cost}$ | `start_up_cost` over $\mathcal{G}$ — what bringing a unit up costs, once per start |
+| $\mathit{shut\_down\_cost}$ | `shut_down_cost` over $\mathcal{G}$ — what taking a unit down costs, once per stop |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ --- is this unit committed in this snapshot? |
-| $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ --- does this unit come up entering this snapshot? |
-| $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ --- does this unit go down entering this snapshot? |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ — is this unit committed in this snapshot? |
+| $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ — does this unit come up entering this snapshot? |
+| $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ — does this unit go down entering this snapshot? |
 
 #### Objective
 
@@ -68,7 +68,7 @@ $$p_{t,g} - p^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} \cdot \mathit{sta
 
 **`start_up_initial`**
 
-$$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} \ge -1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
+$$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} \ge -1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{pos}(t) = 0$$
 
 **`start_up`**
 
@@ -76,7 +76,7 @@ $$\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} + \mathit{status}_{t - 1,g} \
 
 **`shut_down_initial`**
 
-$$\mathit{shut\_down}_{t,g} + \mathit{status}_{t,g} \ge 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace t = \mathrm{index}(\mathcal{T}, 0)$$
+$$\mathit{shut\_down}_{t,g} + \mathit{status}_{t,g} \ge 1 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{pos}(t) = 0$$
 
 **`shut_down`**
 
@@ -184,7 +184,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           unit was already up before the horizon — so the start-up row is slackened
           here and never binds
         foreach: [snapshot, generator]
-        where: "snapshot == index(snapshot, 0)"
+        where: "position(snapshot) == 0"
         expression: start_up - status >= -1
 
       start_up:
@@ -202,7 +202,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           horizon off is charged for the shut-down, which is PyPSA's asymmetry and
           worth 50 on this instance
         foreach: [snapshot, generator]
-        where: "snapshot == index(snapshot, 0)"
+        where: "position(snapshot) == 0"
         expression: shut_down + status >= 1
 
       shut_down:

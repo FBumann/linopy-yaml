@@ -16,27 +16,27 @@ PyPSA linear optimal power flow, rung 1: a transport model — linear marginal c
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{L}$ | index $l$ --- `link` with $\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}$ --- controllable connections, each joining two buses |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{L}$ | index $l$ — `link` with $\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}$ — controllable connections, each joining two buses |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{rating}$ | `rating` over $\mathcal{L}$ --- most a link may carry towards its `link_to` bus |
-| $\mathit{neg\_rating}$ | `neg_rating` over $\mathcal{L}$ --- most a link may carry the other way, negative by convention |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathit{rating}$ | `rating` over $\mathcal{L}$ — most a link may carry towards its `link_to` bus |
+| $\mathit{neg\_rating}$ | `neg_rating` over $\mathcal{L}$ — most a link may carry the other way, negative by convention |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- PyPSA's p0 — flow measured at the link's `link_from` end, so a positive value withdraws there and injects at `link_to` |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ — PyPSA's p0 — flow measured at the link's `link_from` end, so a positive value withdraws there and injects at `link_to` |
 
 #### Objective
 

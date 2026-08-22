@@ -145,7 +145,7 @@ constraints:
       decays only what was carried over and PyPSA does not apply it to the
       initial state of charge
     foreach: [snapshot, storage]
-    where: "snapshot == index(snapshot, 0)"
+    where: "position(snapshot) == 0"
     expression: >-
       soc == soc_initial
       + p_store * efficiency_store

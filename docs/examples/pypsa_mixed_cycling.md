@@ -23,7 +23,7 @@ flag itself:
 |---|---|---|
 | `energy_balance_cyclic` | `cyclic` | the unit's own last snapshot (`edge='wrap'`) |
 | `energy_balance_carry` | `NOT cyclic` | nothing — the vacated position is absent, so no row is built there |
-| `energy_balance_seed` | `NOT cyclic AND snapshot == index(snapshot, 0)` | `soc_initial` |
+| `energy_balance_seed` | `NOT cyclic AND position(snapshot) == 0` | `soc_initial` |
 
 `NOT` is a real complement over a boolean column, so every unit falls in exactly
 one regime — including one whose flag row is missing, which reads as not cyclic.
@@ -43,33 +43,33 @@ PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one ne
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{S}$ | index $s$ --- `storage` with $\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}$ --- storage units, each sitting on one bus |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{S}$ | index $s$ — `storage` with $\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}$ — storage units, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{cyclic}$ | `cyclic` over $\mathcal{S}$ --- whether a unit closes its own horizon. PyPSA's flag, and the one column that decides which of the two balance rules a unit obeys |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of generation |
-| $\mathit{storage}^{\mathrm{p,nom}}$ | `storage_p_nom` over $\mathcal{S}$ --- how fast a storage unit may charge or discharge |
-| $\mathit{soc}^{\mathrm{max}}$ | `soc_max` over $\mathcal{S}$ --- most energy a storage unit may hold |
-| $\mathit{soc}^{\mathrm{initial}}$ | `soc_initial` over $\mathcal{S}$ --- the level a seeded unit begins with. A cyclic unit has one in the data and never reads it — its own last snapshot is its opening level |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand to be met at a bus |
+| $\mathit{cyclic}$ | `cyclic` over $\mathcal{S}$ — whether a unit closes its own horizon. PyPSA's flag, and the one column that decides which of the two balance rules a unit obeys |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of generation |
+| $\mathit{storage}^{\mathrm{p,nom}}$ | `storage_p_nom` over $\mathcal{S}$ — how fast a storage unit may charge or discharge |
+| $\mathit{soc}^{\mathrm{max}}$ | `soc_max` over $\mathcal{S}$ — most energy a storage unit may hold |
+| $\mathit{soc}^{\mathrm{initial}}$ | `soc_initial` over $\mathcal{S}$ — the level a seeded unit begins with. A cyclic unit has one in the data and never reads it — its own last snapshot is its opening level |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand to be met at a bus |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $p^{\mathrm{dispatch}}$ | `p_dispatch` over $\mathcal{T} \times \mathcal{S}$ --- power a storage unit puts onto its bus |
-| $p^{\mathrm{store}}$ | `p_store` over $\mathcal{T} \times \mathcal{S}$ --- power a storage unit takes off its bus |
-| $\mathit{soc}$ | `soc` over $\mathcal{T} \times \mathcal{S}$ --- energy in the store at the end of a snapshot |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $p^{\mathrm{dispatch}}$ | `p_dispatch` over $\mathcal{T} \times \mathcal{S}$ — power a storage unit puts onto its bus |
+| $p^{\mathrm{store}}$ | `p_store` over $\mathcal{T} \times \mathcal{S}$ — power a storage unit takes off its bus |
+| $\mathit{soc}$ | `soc` over $\mathcal{T} \times \mathcal{S}$ — energy in the store at the end of a snapshot |
 
-$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound --- terms translated past the edge are simply absent.
+$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
 
 #### Objective
 
@@ -91,7 +91,7 @@ $$\mathit{soc}_{t,s} = \mathit{soc}_{t - 1,s} + p^{\mathrm{store}}_{t,s} - p^{\m
 
 **`energy_balance_seed`**
 
-$$\mathit{soc}_{t,s} = \mathit{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \neg \mathit{cyclic}_{s} \wedge t = \mathrm{index}(\mathcal{T}, 0)$$
+$$\mathit{soc}_{t,s} = \mathit{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \neg \mathit{cyclic}_{s} \wedge \mathrm{pos}(t) = 0$$
 
 #### Variable domains
 
@@ -235,7 +235,7 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           and the row the vacated position left is written here instead, from the
           level the unit was handed
         foreach: [snapshot, storage]
-        where: "NOT cyclic AND snapshot == index(snapshot, 0)"
+        where: "NOT cyclic AND position(snapshot) == 0"
         expression: soc == soc_initial + p_store - p_dispatch
 
     objective:

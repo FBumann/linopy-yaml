@@ -31,27 +31,27 @@ PyPSA multi-period investment: a build year and a lifetime decide which periods 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ --- dispatch periods, each falling in one investment period |
-| $\mathcal{E}$ | index $e$ --- `period` --- investment periods, the grouping capacity is decided and paid over |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, each existing in some periods and not others |
+| $\mathcal{T}$ | index $t$ — `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ — dispatch periods, each falling in one investment period |
+| $\mathcal{E}$ | index $e$ — `period` — investment periods, the grouping capacity is decided and paid over |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, each existing in some periods and not others |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
-| $\mathit{period}^{\mathrm{weight}}$ | `period_weight` over $\mathcal{E}$ --- what one period's costs are worth at the horizon's start — the discount that makes a 2040 decision comparable with a 2030 one |
-| $\mathit{opex}$ | `opex` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{capex}$ | `capex` over $\mathcal{G}$ --- cost of holding one unit of capacity through one period |
-| $p^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ --- most capacity a generator may build |
-| $\mathit{activity}$ | `activity` over $\mathcal{E} \times \mathcal{G}$ --- 1 where a generator exists in a period and 0 where it does not — PyPSA derives this from a build year and a lifetime, and it decides both what may run and what is paid for |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\mathit{period}^{\mathrm{weight}}$ | `period_weight` over $\mathcal{E}$ — what one period's costs are worth at the horizon's start — the discount that makes a 2040 decision comparable with a 2030 one |
+| $\mathit{opex}$ | `opex` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathit{capex}$ | `capex` over $\mathcal{G}$ — cost of holding one unit of capacity through one period |
+| $p^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ — most capacity a generator may build |
+| $\mathit{activity}$ | `activity` over $\mathcal{E} \times \mathcal{G}$ — 1 where a generator exists in a period and 0 where it does not — PyPSA derives this from a build year and a lifetime, and it decides both what may run and what is paid for |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot, held at zero in the snapshots whose period the generator does not exist in |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- capacity built at a generator |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot, held at zero in the snapshots whose period the generator does not exist in |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator |
 
 #### Objective
 

@@ -35,27 +35,27 @@ PyPSA's committable unit whose capacity is also being built: the minimum output 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, some of which are committed rather than merely dispatched |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, some of which are committed rather than merely dispatched |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ --- share of its built capacity a committed unit must produce while on |
-| $p^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ --- most capacity a generator may build |
-| $\mathit{big\_m}$ | `big_m` over $\mathcal{G}$ --- a bound on the output of a committed unit, large enough never to bind on its own — the capacity ceiling times the availability, and present only for the units that are committed at all |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{capital\_cost}$ | `capital_cost` over $\mathcal{G}$ --- cost of holding one unit of capacity over the horizon |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
+| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ — share of its built capacity a committed unit must produce while on |
+| $p^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ — most capacity a generator may build |
+| $\mathit{big\_m}$ | `big_m` over $\mathcal{G}$ — a bound on the output of a committed unit, large enough never to bind on its own — the capacity ceiling times the availability, and present only for the units that are committed at all |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathit{capital\_cost}$ | `capital_cost` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- capacity built at a generator |
-| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ --- is this unit committed in this snapshot? Declared only for the units that carry a big-M, which is what marks a unit as committed rather than merely dispatched |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator |
+| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ — is this unit committed in this snapshot? Declared only for the units that carry a big-M, which is what marks a unit as committed rather than merely dispatched |
 
 #### Objective
 

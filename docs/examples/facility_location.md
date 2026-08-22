@@ -28,22 +28,22 @@ Uncapacitated facility location, OR-Library instance cap71: 16 possible warehous
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{W}$ | index $w$ --- `warehouse` --- sites a warehouse may be opened on |
-| $\mathcal{C}$ | index $c$ --- `customer` --- customers, each served in full from one warehouse |
+| $\mathcal{W}$ | index $w$ — `warehouse` — sites a warehouse may be opened on |
+| $\mathcal{C}$ | index $c$ — `customer` — customers, each served in full from one warehouse |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{fixed\_cost}$ | `fixed_cost` over $\mathcal{W}$ --- what opening a warehouse costs, whoever it ends up serving |
-| $\mathit{serve}^{\mathrm{cost}}$ | `serve_cost` over $\mathcal{W} \times \mathcal{C}$ --- what it costs to serve all of this customer's demand from this warehouse |
+| $\mathit{fixed\_cost}$ | `fixed_cost` over $\mathcal{W}$ — what opening a warehouse costs, whoever it ends up serving |
+| $\mathit{serve}^{\mathrm{cost}}$ | `serve_cost` over $\mathcal{W} \times \mathcal{C}$ — what it costs to serve all of this customer's demand from this warehouse |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{is\_open}$ | `is_open` over $\mathcal{W}$ --- is this warehouse open? The only integrality in the model |
-| $\mathit{serve}$ | `serve` over $\mathcal{W} \times \mathcal{C}$ --- the share of a customer's demand served from a warehouse |
+| $\mathit{is\_open}$ | `is_open` over $\mathcal{W}$ — is this warehouse open? The only integrality in the model |
+| $\mathit{serve}$ | `serve` over $\mathcal{W} \times \mathcal{C}$ — the share of a customer's demand served from a warehouse |
 
 #### Objective
 

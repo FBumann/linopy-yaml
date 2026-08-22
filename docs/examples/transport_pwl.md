@@ -39,28 +39,28 @@ Dantzig's transportation problem with economies of scale — GAMS model library 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{P}$ | index $p$ --- `plant` --- canning plants, with limited capacity |
-| $\mathcal{M}$ | index $m$ --- `market` --- markets, with demand to be met |
-| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints of the discretised square-root curve |
+| $\mathcal{P}$ | index $p$ — `plant` — canning plants, with limited capacity |
+| $\mathcal{M}$ | index $m$ — `market` — markets, with demand to be met |
+| $\mathcal{B}$ | index $b$ — `bp` — breakpoints of the discretised square-root curve |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{capacity}$ | `capacity` over $\mathcal{P}$ --- capacity of each plant |
-| $\mathit{demand}$ | `demand` over $\mathcal{M}$ --- demand at each market |
-| $\mathit{distance}$ | `distance` over $\mathcal{P} \times \mathcal{M}$ --- distance from plant to market |
-| $\mathit{freight}$ | `freight` (scalar) --- freight rate per case per unit distance |
-| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{B}$ --- breakpoint shipment levels — one curve, the same on every route, so it carries the breakpoint dimension alone and broadcasts across the pairs |
-| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{B}$ --- the curve's value at each breakpoint |
+| $\mathit{capacity}$ | `capacity` over $\mathcal{P}$ — capacity of each plant |
+| $\mathit{demand}$ | `demand` over $\mathcal{M}$ — demand at each market |
+| $\mathit{distance}$ | `distance` over $\mathcal{P} \times \mathcal{M}$ — distance from plant to market |
+| $\mathit{freight}$ | `freight` (scalar) — freight rate per case per unit distance |
+| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{B}$ — breakpoint shipment levels — one curve, the same on every route, so it carries the breakpoint dimension alone and broadcasts across the pairs |
+| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{B}$ — the curve's value at each breakpoint |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{shipment}$ | `shipment` over $\mathcal{P} \times \mathcal{M}$ --- cases shipped from a plant to a market |
-| $\mathit{scaled}$ | `scaled` over $\mathcal{P} \times \mathcal{M}$ --- what the objective is charged on — the square root of the shipment, read off the curve rather than computed |
-| $\mathit{economies\_of\_scale\_lam}$ | `economies_of_scale_lam` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
+| $\mathit{shipment}$ | `shipment` over $\mathcal{P} \times \mathcal{M}$ — cases shipped from a plant to a market |
+| $\mathit{scaled}$ | `scaled` over $\mathcal{P} \times \mathcal{M}$ — what the objective is charged on — the square root of the shipment, read off the curve rather than computed |
+| $\mathit{economies\_of\_scale\_lam}$ | `economies_of_scale_lam` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ — convex-combination weight on a breakpoint |
 | $\mathit{economies\_of\_scale\_seg}$ | `economies_of_scale_seg` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ |
 
 $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.

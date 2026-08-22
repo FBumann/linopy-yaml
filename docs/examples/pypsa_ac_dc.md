@@ -27,42 +27,42 @@ PyPSA linear optimal power flow, rung 6: a meshed AC-DC network whose generators
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{C}$ | index $c$ --- `carrier` --- what a generator burns, and what its emissions are a property of |
-| $\mathcal{E}$ | index $e$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\enspace \mathrm{gen\_carrier}: \mathcal{E} \to \mathcal{C}$ --- generating units, each sitting on a bus and burning a carrier — two coordinates on one dimension, landing on two different axes |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ --- passive AC lines, each joining two buses |
-| $\mathcal{I}$ | index $i$ --- `link` with $\mathrm{link\_from}: \mathcal{I} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{I} \to \mathcal{B}$ --- controllable connections, each joining two buses |
-| $\mathcal{Y}$ | index $y$ --- `cycle` --- one independent loop per meshed sub-network |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{C}$ | index $c$ — `carrier` — what a generator burns, and what its emissions are a property of |
+| $\mathcal{E}$ | index $e$ — `generator` with $\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\enspace \mathrm{gen\_carrier}: \mathcal{E} \to \mathcal{C}$ — generating units, each sitting on a bus and burning a carrier — two coordinates on one dimension, landing on two different axes |
+| $\mathcal{L}$ | index $l$ — `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ — passive AC lines, each joining two buses |
+| $\mathcal{I}$ | index $i$ — `link` with $\mathrm{link\_from}: \mathcal{I} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{I} \to \mathcal{B}$ — controllable connections, each joining two buses |
+| $\mathcal{Y}$ | index $y$ — `cycle` — one independent loop per meshed sub-network |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
-| $p^{\mathrm{max,pu}}$ | `p_max_pu` over $\mathcal{T} \times \mathcal{E}$ --- share of built capacity a generator can produce in a snapshot |
-| $p^{\mathrm{nom,min}}$ | `p_nom_min` over $\mathcal{E}$ --- capacity a generator already has, and cannot fall below |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ --- cost of one unit of output |
-| $\mathit{gen\_capital\_cost}$ | `gen_capital_cost` over $\mathcal{E}$ --- annualised cost of a unit of generator capacity |
-| $\mathit{efficiency}$ | `efficiency` over $\mathcal{E}$ --- share of the carrier's energy a generator turns into output |
-| $\mathit{co2\_per\_mwh}$ | `co2_per_mwh` over $\mathcal{C}$ --- emissions per unit of carrier burned, a property of the carrier |
-| $\mathit{line}^{\mathrm{capital,cost}}$ | `line_capital_cost` over $\mathcal{L}$ --- annualised cost of a unit of line capacity |
-| $\mathit{link}^{\mathrm{capital,cost}}$ | `link_capital_cost` over $\mathcal{I}$ --- annualised cost of a unit of link capacity |
-| $\mathit{link}^{\mathrm{p,max,pu}}$ | `link_p_max_pu` over $\mathcal{I}$ --- share of its capacity a link may carry forwards |
-| $\mathit{link}^{\mathrm{p,min,pu}}$ | `link_p_min_pu` over $\mathcal{I}$ --- share of its capacity a link may carry backwards, negative by convention |
-| $\mathit{cycle}^{\mathrm{incidence}}$ | `cycle_incidence` over $\mathcal{Y} \times \mathcal{L}$ --- the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
-| $\mathit{co2\_limit}$ | `co2_limit` (scalar) --- emissions the whole horizon is allowed |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
+| $p^{\mathrm{max,pu}}$ | `p_max_pu` over $\mathcal{T} \times \mathcal{E}$ — share of built capacity a generator can produce in a snapshot |
+| $p^{\mathrm{nom,min}}$ | `p_nom_min` over $\mathcal{E}$ — capacity a generator already has, and cannot fall below |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ — cost of one unit of output |
+| $\mathit{gen\_capital\_cost}$ | `gen_capital_cost` over $\mathcal{E}$ — annualised cost of a unit of generator capacity |
+| $\mathit{efficiency}$ | `efficiency` over $\mathcal{E}$ — share of the carrier's energy a generator turns into output |
+| $\mathit{co2\_per\_mwh}$ | `co2_per_mwh` over $\mathcal{C}$ — emissions per unit of carrier burned, a property of the carrier |
+| $\mathit{line}^{\mathrm{capital,cost}}$ | `line_capital_cost` over $\mathcal{L}$ — annualised cost of a unit of line capacity |
+| $\mathit{link}^{\mathrm{capital,cost}}$ | `link_capital_cost` over $\mathcal{I}$ — annualised cost of a unit of link capacity |
+| $\mathit{link}^{\mathrm{p,max,pu}}$ | `link_p_max_pu` over $\mathcal{I}$ — share of its capacity a link may carry forwards |
+| $\mathit{link}^{\mathrm{p,min,pu}}$ | `link_p_min_pu` over $\mathcal{I}$ — share of its capacity a link may carry backwards, negative by convention |
+| $\mathit{cycle}^{\mathrm{incidence}}$ | `cycle_incidence` over $\mathcal{Y} \times \mathcal{L}$ — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
+| $\mathit{co2\_limit}$ | `co2_limit` (scalar) — emissions the whole horizon is allowed |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ --- output of a generator in a snapshot |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ --- generator capacity to hold, built on top of what already stands |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
-| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- line capacity to build |
-| $g$ | `g` over $\mathcal{T} \times \mathcal{I}$ --- flow on a link, signed towards the bus it delivers at — chosen, which is what makes it a link and not a line |
-| $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{I}$ --- link capacity to build |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ — output of a generator in a snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ — generator capacity to hold, built on top of what already stands |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ — flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
+| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ — line capacity to build |
+| $g$ | `g` over $\mathcal{T} \times \mathcal{I}$ — flow on a link, signed towards the bus it delivers at — chosen, which is what makes it a link and not a line |
+| $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{I}$ — link capacity to build |
 
 #### Objective
 

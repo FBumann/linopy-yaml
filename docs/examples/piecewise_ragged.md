@@ -30,27 +30,27 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` --- dispatchable units |
-| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints, as many as the longest curve needs |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{G}$ | index $g$ — `generator` — dispatchable units |
+| $\mathcal{B}$ | index $b$ — `bp` — breakpoints, as many as the longest curve needs |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ --- maximum dispatch |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
-| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{G} \times \mathcal{B}$ --- breakpoint dispatch levels, one curve per generator and no two the same length |
-| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{G} \times \mathcal{B}$ --- cost at each breakpoint |
-| $\mathit{cost\_curve\_points}$ | `cost_curve_points` over $\mathcal{G} \times \mathcal{B}$ --- where 'bp_x' has a row, and so where the curve runs |
+| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ — maximum dispatch |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{G} \times \mathcal{B}$ — breakpoint dispatch levels, one curve per generator and no two the same length |
+| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{G} \times \mathcal{B}$ — cost at each breakpoint |
+| $\mathit{cost\_curve\_points}$ | `cost_curve_points` over $\mathcal{G} \times \mathcal{B}$ — where 'bp_x' has a row, and so where the curve runs |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- dispatched power |
-| $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ --- operating cost, piecewise-linear in dispatch |
-| $\mathit{cost\_curve\_lam}$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — dispatched power |
+| $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ — operating cost, piecewise-linear in dispatch |
+| $\mathit{cost\_curve\_lam}$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{B}$ — convex-combination weight on a breakpoint |
 
 #### Objective
 

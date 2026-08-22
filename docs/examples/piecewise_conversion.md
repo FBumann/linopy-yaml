@@ -35,30 +35,30 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `time` --- dispatch periods |
-| $\mathcal{C}$ | index $c$ --- `converter` --- units converting one carrier into others |
-| $\mathcal{F}$ | index $f$ --- `flow` with $\mathrm{converter\_of}: \mathcal{F} \to \mathcal{C}$ --- a converter's inputs and outputs, one row each |
-| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints, as many as the longest curve needs |
+| $\mathcal{T}$ | index $t$ — `time` — dispatch periods |
+| $\mathcal{C}$ | index $c$ — `converter` — units converting one carrier into others |
+| $\mathcal{F}$ | index $f$ — `flow` with $\mathrm{converter\_of}: \mathcal{F} \to \mathcal{C}$ — a converter's inputs and outputs, one row each |
+| $\mathcal{B}$ | index $b$ — `bp` — breakpoints, as many as the longest curve needs |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{bp}^{\mathrm{rate}}$ | `bp_rate` over $\mathcal{F} \times \mathcal{B}$ --- what each flow runs at, at each breakpoint of its converter's curve |
-| $\mathit{bp}^{\mathrm{present}}$ | `bp_present` over $\mathcal{C} \times \mathcal{B}$ --- how far each converter's curve runs |
-| $\mathit{rate}^{\mathrm{max}}$ | `rate_max` over $\mathcal{F}$ --- what each flow runs at when its converter is at its last breakpoint |
-| $\mathit{is\_heat}$ | `is_heat` over $\mathcal{F}$ --- which flows deliver heat |
-| $\mathit{is\_power}$ | `is_power` over $\mathcal{F}$ --- which flows deliver power |
-| $\mathit{fuel\_price}$ | `fuel_price` over $\mathcal{F}$ --- what a unit of each input flow costs |
-| $\mathit{heat\_demand}$ | `heat_demand` over $\mathcal{T}$ --- heat to be delivered |
-| $\mathit{power\_demand}$ | `power_demand` over $\mathcal{T}$ --- power to be delivered |
+| $\mathit{bp}^{\mathrm{rate}}$ | `bp_rate` over $\mathcal{F} \times \mathcal{B}$ — what each flow runs at, at each breakpoint of its converter's curve |
+| $\mathit{bp}^{\mathrm{present}}$ | `bp_present` over $\mathcal{C} \times \mathcal{B}$ — how far each converter's curve runs |
+| $\mathit{rate}^{\mathrm{max}}$ | `rate_max` over $\mathcal{F}$ — what each flow runs at when its converter is at its last breakpoint |
+| $\mathit{is\_heat}$ | `is_heat` over $\mathcal{F}$ — which flows deliver heat |
+| $\mathit{is\_power}$ | `is_power` over $\mathcal{F}$ — which flows deliver power |
+| $\mathit{fuel\_price}$ | `fuel_price` over $\mathcal{F}$ — what a unit of each input flow costs |
+| $\mathit{heat\_demand}$ | `heat_demand` over $\mathcal{T}$ — heat to be delivered |
+| $\mathit{power\_demand}$ | `power_demand` over $\mathcal{T}$ — power to be delivered |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{rate}$ | `rate` over $\mathcal{F} \times \mathcal{T}$ --- what each flow runs at |
-| $\mathit{weight}$ | `weight` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ --- how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
+| $\mathit{rate}$ | `rate` over $\mathcal{F} \times \mathcal{T}$ — what each flow runs at |
+| $\mathit{weight}$ | `weight` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ — how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
 
 #### Objective
 

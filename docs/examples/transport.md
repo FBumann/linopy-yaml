@@ -25,27 +25,27 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{S}$ | index $s$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{L}$ | index $\ell$ --- `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, each joining two buses |
+| $\mathcal{S}$ | index $s$ — `snapshot` — dispatch periods |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{L}$ | index $\ell$ — `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ — transmission lines, each joining two buses |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\bar p$ | `p_max` over $\mathcal{G}$ --- installed capacity |
-| $c$ | `cost` over $\mathcal{G}$ --- marginal cost |
-| $\bar f$ | `cap` over $\mathcal{L}$ --- forward transmission limit |
-| $\underline{f}$ | `neg_cap` over $\mathcal{L}$ --- reverse transmission limit |
-| $d$ | `load` over $\mathcal{S} \times \mathcal{B}$ --- demand at each bus |
+| $\bar p$ | `p_max` over $\mathcal{G}$ — installed capacity |
+| $c$ | `cost` over $\mathcal{G}$ — marginal cost |
+| $\bar f$ | `cap` over $\mathcal{L}$ — forward transmission limit |
+| $\underline{f}$ | `neg_cap` over $\mathcal{L}$ — reverse transmission limit |
+| $d$ | `load` over $\mathcal{S} \times \mathcal{B}$ — demand at each bus |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $f$ | `f` over $\mathcal{S} \times \mathcal{L}$ --- flow on a line, signed towards its `line_to` bus |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $f$ | `f` over $\mathcal{S} \times \mathcal{L}$ — flow on a line, signed towards its `line_to` bus |
 
 #### Objective
 

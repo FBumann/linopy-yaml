@@ -27,30 +27,30 @@ PyPSA minimum up and down times: a unit that has started must stay on, and one t
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, each either committed or off |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, each either committed or off |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ --- share of capacity a committed unit must produce at least |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{start\_up\_cost}$ | `start_up_cost` over $\mathcal{G}$ --- what bringing a unit up costs, once per start |
-| $\mathit{shut\_down\_cost}$ | `shut_down_cost` over $\mathcal{G}$ --- what taking a unit down costs, once per stop |
-| $\mathit{min\_up\_time}$ | `min_up_time` over $\mathcal{G}$ --- how many snapshots a unit must stay on once it has started |
-| $\mathit{min\_down\_time}$ | `min_down_time` over $\mathcal{G}$ --- how many snapshots a unit must stay off once it has stopped |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ — share of capacity a committed unit must produce at least |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathit{start\_up\_cost}$ | `start_up_cost` over $\mathcal{G}$ — what bringing a unit up costs, once per start |
+| $\mathit{shut\_down\_cost}$ | `shut_down_cost` over $\mathcal{G}$ — what taking a unit down costs, once per stop |
+| $\mathit{min\_up\_time}$ | `min_up_time` over $\mathcal{G}$ — how many snapshots a unit must stay on once it has started |
+| $\mathit{min\_down\_time}$ | `min_down_time` over $\mathcal{G}$ — how many snapshots a unit must stay off once it has stopped |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ --- is this unit committed in this snapshot? |
-| $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ --- does this unit come up entering this snapshot? |
-| $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ --- does this unit go down entering this snapshot? |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ — is this unit committed in this snapshot? |
+| $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ — does this unit come up entering this snapshot? |
+| $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ — does this unit go down entering this snapshot? |
 
 $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
 

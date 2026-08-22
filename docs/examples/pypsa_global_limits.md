@@ -32,35 +32,35 @@ PyPSA's global constraints: four limits over four different selected sets — th
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{C}$ | index $c$ --- `carrier` --- what a generator burns, and what a global limit selects on |
-| $\mathcal{E}$ | index $e$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\enspace \mathrm{gen\_carrier}: \mathcal{E} \to \mathcal{C}$ --- generating units, each sitting on a bus and burning a carrier |
-| $\mathcal{L}$ | index $l$ --- `link` with $\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}$ --- controllable connections, each joining two buses |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{C}$ | index $c$ — `carrier` — what a generator burns, and what a global limit selects on |
+| $\mathcal{E}$ | index $e$ — `generator` with $\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\enspace \mathrm{gen\_carrier}: \mathcal{E} \to \mathcal{C}$ — generating units, each sitting on a bus and burning a carrier |
+| $\mathcal{L}$ | index $l$ — `link` with $\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}$ — controllable connections, each joining two buses |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
-| $p^{\mathrm{max,pu}}$ | `p_max_pu` over $\mathcal{T} \times \mathcal{E}$ --- share of built capacity a generator can produce in a snapshot |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ --- cost of one unit of output |
-| $\mathit{gen\_capital\_cost}$ | `gen_capital_cost` over $\mathcal{E}$ --- annualised cost of a unit of generator capacity |
-| $\mathit{link}^{\mathrm{capital,cost}}$ | `link_capital_cost` over $\mathcal{L}$ --- annualised cost of a unit of link capacity |
-| $\mathit{link}^{\mathrm{length}}$ | `link_length` over $\mathcal{L}$ --- how far a link reaches — what turns built capacity into a volume |
-| $\mathit{energy\_cap}$ | `energy_cap` over $\mathcal{C}$ --- energy a carrier may deliver over the whole horizon, for the carriers that have such a limit |
-| $\mathit{bus}^{\mathrm{capacity,cap}}$ | `bus_capacity_cap` over $\mathcal{B} \times \mathcal{C}$ --- capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA writes the carrier into a column name (`nom_max_wind`), so the pair is the limit's own key |
-| $\mathit{volume\_cap}$ | `volume_cap` (scalar) --- capacity times length the whole network may build |
-| $\mathit{expansion\_cost\_cap}$ | `expansion_cost_cap` (scalar) --- money the whole network may spend building links |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
+| $p^{\mathrm{max,pu}}$ | `p_max_pu` over $\mathcal{T} \times \mathcal{E}$ — share of built capacity a generator can produce in a snapshot |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ — cost of one unit of output |
+| $\mathit{gen\_capital\_cost}$ | `gen_capital_cost` over $\mathcal{E}$ — annualised cost of a unit of generator capacity |
+| $\mathit{link}^{\mathrm{capital,cost}}$ | `link_capital_cost` over $\mathcal{L}$ — annualised cost of a unit of link capacity |
+| $\mathit{link}^{\mathrm{length}}$ | `link_length` over $\mathcal{L}$ — how far a link reaches — what turns built capacity into a volume |
+| $\mathit{energy\_cap}$ | `energy_cap` over $\mathcal{C}$ — energy a carrier may deliver over the whole horizon, for the carriers that have such a limit |
+| $\mathit{bus}^{\mathrm{capacity,cap}}$ | `bus_capacity_cap` over $\mathcal{B} \times \mathcal{C}$ — capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA writes the carrier into a column name (`nom_max_wind`), so the pair is the limit's own key |
+| $\mathit{volume\_cap}$ | `volume_cap` (scalar) — capacity times length the whole network may build |
+| $\mathit{expansion\_cost\_cap}$ | `expansion_cost_cap` (scalar) — money the whole network may spend building links |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ --- output of a generator in a snapshot |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ --- capacity built at a generator |
-| $g$ | `g` over $\mathcal{T} \times \mathcal{L}$ --- flow on a link, towards the bus it delivers at |
-| $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{L}$ --- capacity built on a link |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ — output of a generator in a snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ — capacity built at a generator |
+| $g$ | `g` over $\mathcal{T} \times \mathcal{L}$ — flow on a link, towards the bus it delivers at |
+| $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{L}$ — capacity built on a link |
 
 #### Objective
 

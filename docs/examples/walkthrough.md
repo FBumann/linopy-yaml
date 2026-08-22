@@ -14,22 +14,22 @@ The dispatch model of README.md, plus one macro and one named expression — sma
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{S}$ | index $s$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, including oil, which is retired and gets no columns at all |
+| $\mathcal{S}$ | index $s$ — `snapshot` — dispatch periods |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, including oil, which is retired and gets no columns at all |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\bar p$ | `p_max` over $\mathcal{G}$ --- installed capacity, zero for a retired unit |
-| $\ell$ | `load` over $\mathcal{S}$ --- demand to be met |
-| $c$ | `cost` over $\mathcal{G}$ --- marginal cost |
+| $\bar p$ | `p_max` over $\mathcal{G}$ — installed capacity, zero for a retired unit |
+| $\ell$ | `load` over $\mathcal{S}$ — demand to be met |
+| $c$ | `cost` over $\mathcal{G}$ — marginal cost |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ — output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product |
 
 #### Objective
 

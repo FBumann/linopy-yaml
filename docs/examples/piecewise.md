@@ -25,26 +25,26 @@ Least-cost dispatch where each generator's cost curve is piecewise-linear in its
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` --- dispatchable units |
-| $\mathcal{K}$ | index $k$ --- `bp` --- breakpoints of the cost curve |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{G}$ | index $g$ — `generator` — dispatchable units |
+| $\mathcal{K}$ | index $k$ — `bp` — breakpoints of the cost curve |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ --- maximum dispatch |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
-| $x$ | `bp_x` over $\mathcal{G} \times \mathcal{K}$ --- breakpoint dispatch levels, one curve per generator |
-| $y$ | `bp_y` over $\mathcal{G} \times \mathcal{K}$ --- cost at each breakpoint, one curve per generator |
+| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ — maximum dispatch |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $x$ | `bp_x` over $\mathcal{G} \times \mathcal{K}$ — breakpoint dispatch levels, one curve per generator |
+| $y$ | `bp_y` over $\mathcal{G} \times \mathcal{K}$ — cost at each breakpoint, one curve per generator |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- dispatched power |
-| $\mathrm{cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ --- operating cost, piecewise-linear in dispatch |
-| $\lambda$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{K}$ --- convex-combination weight on a breakpoint |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — dispatched power |
+| $\mathrm{cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ — operating cost, piecewise-linear in dispatch |
+| $\lambda$ | `cost_curve_lam` over $\mathcal{T} \times \mathcal{G} \times \mathcal{K}$ — convex-combination weight on a breakpoint |
 
 #### Objective
 

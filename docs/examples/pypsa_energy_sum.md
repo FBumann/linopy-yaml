@@ -24,26 +24,26 @@ PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{weighting}$ | `weighting` over $\mathcal{T}$ --- hours a snapshot stands for — what turns a power into an energy |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $e^{\mathrm{sum,max}}$ | `e_sum_max` over $\mathcal{G}$ --- most energy a generator may deliver over the whole horizon, for the generators that have such a limit |
-| $e^{\mathrm{sum,min}}$ | `e_sum_min` over $\mathcal{G}$ --- least energy a generator must deliver over the whole horizon, for the generators that owe one |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $\mathit{weighting}$ | `weighting` over $\mathcal{T}$ — hours a snapshot stands for — what turns a power into an energy |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $e^{\mathrm{sum,max}}$ | `e_sum_max` over $\mathcal{G}$ — most energy a generator may deliver over the whole horizon, for the generators that have such a limit |
+| $e^{\mathrm{sum,min}}$ | `e_sum_min` over $\mathcal{G}$ — least energy a generator must deliver over the whole horizon, for the generators that owe one |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
 
 #### Objective
 

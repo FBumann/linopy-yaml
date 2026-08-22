@@ -12,7 +12,7 @@ changes by one token: `shift` vacates the first snapshot and drops that row,
 
 ```diff
 -  energy_balance_initial:
--    where: "snapshot == index(snapshot, 0)"
+-    where: "position(snapshot) == 0"
 -    expression: soc == soc_initial + p_store * ... - p_dispatch / ...
    energy_balance:
 -    expression: soc == shift(soc, over=snapshot, offset=1) * (1 - standing_loss) + ...
@@ -40,40 +40,40 @@ PyPSA linear optimal power flow, rung 4: rung 3's storage, closed into a cycle �
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods, cyclic at the horizon |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{L}$ | index $l$ --- `link` with $\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}$ --- controllable connections, each joining two buses |
-| $\mathcal{S}$ | index $s$ --- `storage` with $\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}$ --- storage units, each sitting on one bus |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods, cyclic at the horizon |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{L}$ | index $l$ — `link` with $\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}$ — controllable connections, each joining two buses |
+| $\mathcal{S}$ | index $s$ — `storage` with $\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}$ — storage units, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{ramp\_limit\_up}$ | `ramp_limit_up` over $\mathcal{G}$ --- share of capacity output may rise by from one snapshot to the next |
-| $\mathit{ramp\_limit\_down}$ | `ramp_limit_down` over $\mathcal{G}$ --- share of capacity output may fall by from one snapshot to the next |
-| $\mathit{rating}$ | `rating` over $\mathcal{L}$ --- most a link may carry towards its `link_to` bus |
-| $\mathit{neg\_rating}$ | `neg_rating` over $\mathcal{L}$ --- most a link may carry the other way, negative by convention |
-| $\mathit{storage}^{\mathrm{p,nom}}$ | `storage_p_nom` over $\mathcal{S}$ --- most a storage unit may charge or discharge in one snapshot |
-| $\mathit{soc}^{\mathrm{max}}$ | `soc_max` over $\mathcal{S}$ --- how much energy a storage unit holds when full |
-| $\mathit{efficiency\_store}$ | `efficiency_store` over $\mathcal{S}$ --- share of charging energy that reaches the store |
-| $\mathit{efficiency\_dispatch}$ | `efficiency_dispatch` over $\mathcal{S}$ --- share of stored energy that reaches the bus on the way out |
-| $\mathit{standing\_loss}$ | `standing_loss` over $\mathcal{S}$ --- share of the carried-over level lost between snapshots |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathit{ramp\_limit\_up}$ | `ramp_limit_up` over $\mathcal{G}$ — share of capacity output may rise by from one snapshot to the next |
+| $\mathit{ramp\_limit\_down}$ | `ramp_limit_down` over $\mathcal{G}$ — share of capacity output may fall by from one snapshot to the next |
+| $\mathit{rating}$ | `rating` over $\mathcal{L}$ — most a link may carry towards its `link_to` bus |
+| $\mathit{neg\_rating}$ | `neg_rating` over $\mathcal{L}$ — most a link may carry the other way, negative by convention |
+| $\mathit{storage}^{\mathrm{p,nom}}$ | `storage_p_nom` over $\mathcal{S}$ — most a storage unit may charge or discharge in one snapshot |
+| $\mathit{soc}^{\mathrm{max}}$ | `soc_max` over $\mathcal{S}$ — how much energy a storage unit holds when full |
+| $\mathit{efficiency\_store}$ | `efficiency_store` over $\mathcal{S}$ — share of charging energy that reaches the store |
+| $\mathit{efficiency\_dispatch}$ | `efficiency_dispatch` over $\mathcal{S}$ — share of stored energy that reaches the bus on the way out |
+| $\mathit{standing\_loss}$ | `standing_loss` over $\mathcal{S}$ — share of the carried-over level lost between snapshots |
+| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a link, signed towards its `link_to` bus |
-| $p^{\mathrm{dispatch}}$ | `p_dispatch` over $\mathcal{T} \times \mathcal{S}$ --- power a storage unit puts onto its bus |
-| $p^{\mathrm{store}}$ | `p_store` over $\mathcal{T} \times \mathcal{S}$ --- power a storage unit takes off its bus |
-| $\mathit{soc}$ | `soc` over $\mathcal{T} \times \mathcal{S}$ --- energy in the store at the end of a snapshot |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ — flow on a link, signed towards its `link_to` bus |
+| $p^{\mathrm{dispatch}}$ | `p_dispatch` over $\mathcal{T} \times \mathcal{S}$ — power a storage unit puts onto its bus |
+| $p^{\mathrm{store}}$ | `p_store` over $\mathcal{T} \times \mathcal{S}$ — power a storage unit takes off its bus |
+| $\mathit{soc}$ | `soc` over $\mathcal{T} \times \mathcal{S}$ — energy in the store at the end of a snapshot |
 
-$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound --- terms translated past the edge are simply absent.
+$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
 
 #### Objective
 

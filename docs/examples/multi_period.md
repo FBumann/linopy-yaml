@@ -54,25 +54,25 @@ Least-cost investment and dispatch together: capacity is decided once per period
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ --- dispatch periods, each falling in one investment period |
-| $\mathcal{E}$ | index $e$ --- `period` --- investment periods, the grouping capacity is decided over |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units |
+| $\mathcal{T}$ | index $t$ — `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ — dispatch periods, each falling in one investment period |
+| $\mathcal{E}$ | index $e$ — `period` — investment periods, the grouping capacity is decided over |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
-| $\mathit{weight}$ | `weight` over $\mathcal{T}$ --- what one snapshot stands for — a 2050 snapshot represents four hours, so the operating cost of a coarse period is not understated against a fine one |
-| $\mathit{opex}$ | `opex` over $\mathcal{G}$ --- cost of running a generator for one snapshot-hour |
-| $\mathit{capex}$ | `capex` over $\mathcal{G} \times \mathcal{E}$ --- cost of holding a unit of capacity through a period |
+| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\mathit{weight}$ | `weight` over $\mathcal{T}$ — what one snapshot stands for — a 2050 snapshot represents four hours, so the operating cost of a coarse period is not understated against a fine one |
+| $\mathit{opex}$ | `opex` over $\mathcal{G}$ — cost of running a generator for one snapshot-hour |
+| $\mathit{capex}$ | `capex` over $\mathcal{G} \times \mathcal{E}$ — cost of holding a unit of capacity through a period |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E} \times \mathcal{G}$ --- capacity a generator holds for the whole of a period |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E} \times \mathcal{G}$ — capacity a generator holds for the whole of a period |
 
 #### Objective
 

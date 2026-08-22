@@ -42,24 +42,24 @@ A store that cycles inside each season rather than across the horizon, with seas
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}$ --- dispatch periods in order |
-| $\mathcal{S}$ | index $s$ --- `season` --- the blocks the store cycles over |
+| $\mathcal{T}$ | index $t$ — `snapshot` with $\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}$ — dispatch periods in order |
+| $\mathcal{S}$ | index $s$ — `season` — the blocks the store cycles over |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{inflow}$ | `inflow` over $\mathcal{T}$ --- energy arriving in a snapshot, whether or not it is wanted then |
-| $\mathit{price}$ | `price` over $\mathcal{T}$ --- what one unit of release earns in a snapshot |
+| $\mathit{inflow}$ | `inflow` over $\mathcal{T}$ — energy arriving in a snapshot, whether or not it is wanted then |
+| $\mathit{price}$ | `price` over $\mathcal{T}$ — what one unit of release earns in a snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{soc}$ | `soc` over $\mathcal{T}$ --- energy held at the end of a snapshot |
-| $\mathit{release}$ | `release` over $\mathcal{T}$ --- energy released in a snapshot |
+| $\mathit{soc}$ | `soc` over $\mathcal{T}$ — energy held at the end of a snapshot |
+| $\mathit{release}$ | `release` over $\mathcal{T}$ — energy released in a snapshot |
 
-$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound --- terms translated past the edge are simply absent.
+$t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
 
 #### Objective
 
