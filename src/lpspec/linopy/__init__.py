@@ -69,7 +69,7 @@ from lpspec._notes import note
 from lpspec.errors import unknown_name_message
 from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
 from lpspec.linopy.loader import dimension_coords, load_parameters
-from lpspec.lowering import lower_expression, lower_program
+from lpspec.lowering import body_of, lower_expression, lower_program
 from lpspec.sources import tidy_sources, validate_curve_extent, validate_piecewise_data
 
 if TYPE_CHECKING:
@@ -166,7 +166,7 @@ def expression(
         master_coords, dim_coords = dimension_coords(schema, tidy)
         dataset = load_parameters(schema, tidy, master_coords)
         ns = Namespace.of(schema)
-        ast = expression_of(schema.expressions[name].expression, schema, ns, f"named expression '{name}'")
+        ast = expression_of(body_of(schema, name), schema, ns, f"named expression '{name}'")
         assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
         value = _eval_ast(ast, EvaluationContext(built, dataset, master_coords, schema, ns, dim_coords))
         if hasattr(value, 'solution'):

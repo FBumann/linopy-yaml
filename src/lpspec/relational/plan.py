@@ -242,6 +242,35 @@ class Window(Expression):
     wrap: bool = False
 
 
+@dataclass(frozen=True)
+class CaseArm:
+    """One region of a :class:`Cases`: where it applies, and the value there."""
+
+    label: str
+    when: Predicate
+    value: Expression
+
+
+@dataclass(frozen=True)
+class Cases(Expression):
+    """A named expression's ``cases:``, where a reference to it stood.
+
+    The arms **partition** *dims* — proved at load with no data bound
+    (``math_spec.partition``) — so exactly one applies at every coordinate and
+    this is a value rather than a choice. That is what lets the arms be summed:
+    restricted to disjoint coordinate sets, a sum *is* the selection, and no
+    fragment shape has to know it was a case.
+
+    *dims* is the declared ``foreach`` rather than the union of the arms. An
+    arm narrower than the frame broadcasts, exactly as a parameter with fewer
+    dims does.
+    """
+
+    name: str
+    dims: tuple[str, ...]
+    arms: tuple[CaseArm, ...]
+
+
 def children(expression: Expression) -> tuple[Expression, ...]:
     """The sub-expressions of *expression* — the structural half of any walk.
 
@@ -257,6 +286,8 @@ def children(expression: Expression) -> tuple[Expression, ...]:
         return (expression.numerator, expression.divisor)
     if isinstance(expression, (Sum, GroupSum, At, Translate, Window)):
         return (expression.operand,)
+    if isinstance(expression, Cases):
+        return tuple(arm.value for arm in expression.arms)
     return ()
 
 

@@ -1,9 +1,9 @@
 description: >-
   PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one
   network runs both regimes at once: a unit that must end each horizon where it
-  began, beside one handed a level it may simply spend. The two are one rule
-  under complementary masks, and the seeded unit's boundary row is what a cyclic
-  one does not have. Optimum 4800.0, from PyPSA itself.
+  began, beside one handed a level it may simply spend. What differs between them
+  is the level a unit opens a snapshot with, so that is the cased quantity and
+  the balance is written once. Optimum 4800.0, from PyPSA itself.
 
 dimensions:
   snapshot:
@@ -83,6 +83,27 @@ variables:
       lower: 0
       upper: soc_max
 
+expressions:
+  opening_level:
+    description: >-
+      the level a unit carries into a snapshot. The two regimes and the seeded
+      unit's boundary are three answers to that one question, so they are three
+      cases of one quantity rather than three copies of one inequality
+    foreach: [snapshot, storage]
+    cases:
+      wrapped:
+        when: "cyclic"
+        expression: shift(soc, over=snapshot, offset=1, edge='wrap')
+        description: a cyclic unit's first snapshot inherits from its last, so it ends where it began
+      seeded:
+        when: "not cyclic and position(snapshot) == 0"
+        expression: soc_initial
+        description: a seeded unit's first snapshot reads the level it was handed
+      carried:
+        when: "not cyclic and position(snapshot) > 0"
+        expression: shift(soc, over=snapshot, offset=1)
+        description: and every later one carries from the snapshot before
+
 constraints:
   nodal_balance:
     description: what is generated at a bus, plus what the stores give back, meets the load there
@@ -93,29 +114,12 @@ constraints:
       - sum(p_store, by=storage_bus)
       == load
 
-  energy_balance_cyclic:
+  energy_balance:
     description: >-
-      a cyclic unit's level wraps at the horizon, so its first snapshot inherits
-      from its last and it ends every horizon where it began
+      one rule for both regimes: what a unit holds is what it opened with, plus
+      what it took off its bus, less what it gave back
     foreach: [snapshot, storage]
-    where: "cyclic"
-    expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap') + p_store - p_dispatch
-
-  energy_balance_carry:
-    description: >-
-      a seeded unit carries from the snapshot before, and has no predecessor at
-      the first — the vacated position is absent, so that row is not built here
-    foreach: [snapshot, storage]
-    where: "NOT cyclic"
-    expression: soc == shift(soc, over=snapshot, offset=1) + p_store - p_dispatch
-
-  energy_balance_seed:
-    description: >-
-      and the row the vacated position left is written here instead, from the
-      level the unit was handed
-    foreach: [snapshot, storage]
-    where: "NOT cyclic AND position(snapshot) == 0"
-    expression: soc == soc_initial + p_store - p_dispatch
+    expression: soc == opening_level + p_store - p_dispatch
 
 objective:
   sense: minimize

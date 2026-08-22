@@ -17,14 +17,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from math_spec import BinaryOperatorNode, NameNode, ParameterNode, VariableNode, children
+from math_spec import BinaryOperatorNode, CasesNode, NameNode, ParameterNode, VariableNode, children
 
 from lpspec.errors import DataError, sparse_divisor_message, uncovered_constant_message
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable, Iterator
 
-    from math_spec import Buildable, ComparisonNode, ExpressionNode
+    from math_spec import Buildable, ComparisonNode, ExpressionNode, WhereNode
 
 
 def gaps_under(array: Any, mask: Any) -> int:
@@ -41,7 +41,14 @@ def gaps_under(array: Any, mask: Any) -> int:
     return int(missing.sum())
 
 
-def check_constant_side_covers(name: str, node: ComparisonNode, schema: Buildable, dataset: Any, mask: Any) -> None:
+def check_constant_side_covers(
+    name: str,
+    node: ComparisonNode,
+    schema: Buildable,
+    dataset: Any,
+    mask: Any,
+    arm_mask: Callable[[WhereNode], Any] | None = None,
+) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
     The divisor argument, one position over. A missing row is read as 0, and on
@@ -55,17 +62,53 @@ def check_constant_side_covers(name: str, node: ComparisonNode, schema: Buildabl
     The relational lane asks the same thing from the other end — it left-joins
     the constant parts and looks for a null before the fill. Same answer,
     reached by the shape each lane has to hand.
+
+    *arm_mask* evaluates a case arm's ``when``, which is what lets a parameter
+    read by one arm be asked only where that arm applies. Without it a cased
+    expression would make this stricter than the relational lane, refusing a
+    file that lane builds.
     """
     for side in (node.left, node.right):
         if _names_of(side, schema.variables):
             continue
-        params = _names_of(side, schema.parameters)
-        if not params:
-            continue
-        for param in sorted(params):
-            missing = gaps_under(dataset[param], mask)
+        asked: dict[str, Any] = {}
+        for param, where in _constant_parameters(side, schema.parameters, mask, arm_mask):
+            asked[param] = where if param not in asked else _either(asked[param], where)
+        for param in sorted(asked):
+            missing = gaps_under(dataset[param], asked[param])
             if missing:
                 raise DataError(uncovered_constant_message(param, missing, name))
+
+
+def _either(left: Any, right: Any) -> Any:
+    """The coordinates *either* mask admits — a parameter read by two arms needs both."""
+    if left is None or right is None:
+        return None
+    return left | right
+
+
+def _constant_parameters(
+    node: ExpressionNode,
+    declared: Iterable[str],
+    mask: Any,
+    arm_mask: Callable[[WhereNode], Any] | None,
+) -> Iterator[tuple[str, Any]]:
+    """Each declared parameter under *node*, with the mask it must be dense under.
+
+    The mask narrows on the way down: a parameter inside a case arm is read only
+    where that arm applies, so it is asked under the arm's ``when`` conjoined
+    with whatever the declaration already narrowed to. A parameter two arms both
+    name is asked under the union, since either arm can be the one that reads it.
+    """
+    if isinstance(node, CasesNode) and arm_mask is not None:
+        for arm in node.arms:
+            here = arm_mask(arm.when)
+            yield from _constant_parameters(arm.value, declared, here if mask is None else mask & here, arm_mask)
+        return
+    if isinstance(node, (NameNode, ParameterNode, VariableNode)) and node.name in declared:
+        yield node.name, mask
+    for child in children(node):
+        yield from _constant_parameters(child, declared, mask, arm_mask)
 
 
 def check_divisors_cover(

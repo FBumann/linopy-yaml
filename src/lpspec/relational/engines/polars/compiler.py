@@ -154,6 +154,40 @@ class TermFragment:
         return carried_columns(self.kind)
 
 
+def _carries_cases(expression: plan.Expression) -> bool:
+    """Whether a cased expression appears anywhere under *expression*."""
+    if isinstance(expression, plan.Cases):
+        return True
+    return any(_carries_cases(child) for child in plan.children(expression))
+
+
+def _refuse_a_cased_operand(context: str, position: str) -> NoReturn:
+    """Refuse a cased expression where this lane needs a single fragment.
+
+    ``a / b`` inverts *one* fragment and ``a ** b`` raises one to another. A
+    cased expression compiles to one fragment per arm — disjoint, so their sum
+    is the value — and there is no single frame to invert or exponentiate
+    without first folding the arms together, which is a join per arm to
+    reconstruct what the partition already guarantees.
+
+    Asked of the *node* rather than of the fragment count, which is what tells
+    this apart from an operand that **adds**: that one the language already
+    refuses at load, and the assertion downstream is its plan-boundary
+    backstop.
+
+    A language error would be the wrong class here: the file is inside the
+    language and the eager lane evaluates it, so this is the relational lane's
+    shortfall and says so.
+    """
+    raise LaneError(
+        f'in {context}: {position} is a cased expression, and this lane cannot build that. Each case '
+        f'compiles to its own frame, and dividing or exponentiating needs one — the arms would have to '
+        f'be folded into a single frame first. Inline the case you mean, or name the quotient as its '
+        f'own cased expression so the division happens inside each arm. The eager lane builds the file '
+        f'as written, so only this lane is short — run it with `lpspec.linopy.build`.'
+    )
+
+
 def _refuse_a_fragment_without_the_dims(p: TermFragment, dims: list[str], context: str, operator: str) -> NoReturn:
     """Refuse a fragment an operator cannot act on, in the right class.
 
@@ -692,7 +726,10 @@ class PolarsCompiler:
             """``a / b``, where *b* is one variable-free factor.
 
             That it is *one* is ``degree.check_binary``'s answer, given at load
-            with no data bound, so a divisor that adds never reaches a plan.
+            with no data bound, so a divisor that adds never reaches a plan. A
+            **cased** divisor is refused a node earlier, in :func:`ev`, where
+            the operand is still an expression and can be told apart from one
+            that adds.
             """
             if b.terms or b.quads:
                 raise LanguageError(f'nonlinear quotient in {context}: the divisor contains variables')
@@ -732,8 +769,12 @@ class PolarsCompiler:
             if isinstance(e, plan.Multiply):
                 return product(ev(e.left), ev(e.right))
             if isinstance(e, plan.Divide):
+                if _carries_cases(e.divisor):
+                    _refuse_a_cased_operand(context, 'a divisor')
                 return quotient(ev(e.numerator), ev(e.divisor))
             if isinstance(e, plan.Power):
+                if _carries_cases(e.base) or _carries_cases(e.exponent):
+                    _refuse_a_cased_operand(context, 'a base or an exponent')
                 return power(ev(e.base), ev(e.exponent))
             if isinstance(e, plan.Sum):
                 inner = _propagate_absence(ev(e.operand))
@@ -748,6 +789,8 @@ class PolarsCompiler:
             if isinstance(e, plan.Window):
                 inner = _propagate_absence(ev(e.operand))
                 return _map_fragments(inner, lambda p: self._window_fragment(p, e, context))
+            if isinstance(e, plan.Cases):
+                return self._cases(e, ev)
             raise LanguageError(f'unsupported expression node {type(e).__name__} in {context}')
 
         return ev(expr)
@@ -987,6 +1030,120 @@ class PolarsCompiler:
         mapping = self._mapping(node.over, node.coordinate, node.into)
         frame = p.frame.join(mapping, on=list(consumed), how='inner').select(*keep, *produced, *p.carried)
         return TermFragment((*keep, *produced), frame, p.kind)
+
+    def _cases(
+        self, e: plan.Cases, compile_value: Callable[[plan.Expression], CompiledExpression]
+    ) -> CompiledExpression:
+        """A cased value as the concatenation of its arms' restricted fragments.
+
+        A :class:`CompiledExpression` is already a *sum* of fragments, and the
+        arms partition the frame — so restricting each arm's fragments to the
+        coordinates its ``when`` claims makes that sum a selection. Nothing
+        downstream learns it was a case: an arm's terms are terms, and the
+        terminal ``sum(coeff)`` adds one contribution per coordinate because
+        only one arm ever reaches it.
+
+        This is what the partition check buys. Without it two arms could reach
+        one coordinate and the sum would silently be their total.
+        """
+        terms: list[TermFragment] = []
+        consts: list[TermFragment] = []
+        quads: list[TermFragment] = []
+        for arm in e.arms:
+            compiled = compile_value(arm.value)
+            for into, fragments in ((terms, compiled.terms), (consts, compiled.consts), (quads, compiled.quads)):
+                into.extend(f for p in fragments if (f := self._restricted(p, arm, e)) is not None)
+        return CompiledExpression(tuple(terms), tuple(consts), tuple(quads))
+
+    def _restricted(self, p: TermFragment, arm: plan.CaseArm, e: plan.Cases) -> TermFragment | None:
+        """*p* widened to the whole declared frame, then cut to its arm's mask.
+
+        Widening first is what makes the cut mean anything: an arm may be a
+        scalar where its ``when`` is not — ``1`` for every non-committable unit
+        — and a scalar fragment has no coordinate for the mask to remove.
+
+        **To the whole of** ``e.dims``, not merely as far as the mask reaches.
+        A cased expression's dims *are* its declared ``foreach`` — that is what
+        ``dims_of`` answers upstream — so a fragment narrower than that is a
+        fragment lying about the quantity's shape. Broadcasting the missing dims
+        at the row join happens to give the right rows for a constraint, and the
+        wrong answer everywhere the dim has to be *there*: ``sum(over=)`` finds
+        no slots to act on, and reading the value back drops the axis the
+        declaration promised.
+
+        **A constant keeps a row outside its arm, holding zero; a term does
+        not.** Both say "this arm contributes nothing here", but they are read
+        by different halves of the engine. Constants are left-joined onto the
+        rows and a missing one is a *gap* — the coverage check cannot tell an
+        arm that does not apply from a parameter row nobody supplied, so the
+        arm says so with a zero. Terms are inner-joined and summed, where an
+        absent row already contributes nothing: a zero there would be an
+        explicit zero coefficient handed to the solver for every arm that does
+        not apply. Within the arm a missing value is still missing, and still
+        reported.
+
+        **An arm's absence is confined to the arm too**, which is
+        :meth:`_arm_presence`'s job — a shift that vacates the first position
+        says nothing about a coordinate its arm never claimed.
+
+        ``None`` where the mask is dimensionless and false, which is the one
+        arm with no coordinates to carry it.
+        """
+        touched = predicate_dims(arm.when, self.name_dims)
+        claimed_dims = tuple(d for d in e.dims if d in touched)
+        if not claimed_dims:
+            claims_something = self.frame((), arm.when).select(pl.len()).collect().item()
+            return p if claims_something else None
+        needed = e.dims
+        claimed = self.frame(claimed_dims, arm.when).select(*claimed_dims)
+        frame = p.frame
+        for d in needed:
+            if d not in p.dims:
+                frame = frame.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
+        inside = frame.select(*needed, *p.carried).join(claimed, on=list(claimed_dims), how='semi')
+        if p.kind != 'const':
+            confined = tuple(self._arm_presence(x, x.keys(p.dims), claimed_dims, claimed, e) for x in p.presences)
+            return TermFragment(needed, inside, p.kind, presences=confined)
+        outside = (
+            self._coordinate_product(needed)
+            .select(*needed)
+            .join(claimed, on=list(claimed_dims), how='anti')
+            .with_columns(pl.lit(0.0, dtype=pl.Float64).alias(p.value_column))
+        )
+        return TermFragment(needed, pl.concat([inside, outside], how='vertical'), p.kind)
+
+    def _arm_presence(
+        self,
+        x: Presence,
+        keys: tuple[str, ...],
+        claimed_dims: tuple[str, ...],
+        claimed: pl.LazyFrame,
+        e: plan.Cases,
+    ) -> Presence:
+        """*x*, widened so it admits every coordinate its arm does not claim.
+
+        A presence deletes constraint rows, and it is collected across *all* a
+        row's terms — so an arm's left unrestricted would speak for coordinates
+        another arm defines. ``shift(soc, over=snapshot, offset=1)`` vacates the
+        first snapshot, and under `cases:` that arm is masked off the first
+        snapshot anyway: the row there belongs to the arm reading the initial
+        level, and would be deleted by an edge that says nothing about it.
+
+        So the admitted set is *the value exists* **or** *this arm does not
+        claim the coordinate*, keyed by both spans at once — the one place a
+        presence widens past the edge it names, and only for an arm that has
+        one.
+        """
+        span = tuple(d for d in e.dims if d in keys or d in claimed_dims)
+        product = self._coordinate_product(span).select(*span)
+        unclaimed = product.join(claimed, on=list(claimed_dims), how='anti')
+        if not keys:
+            # a masked scalar variable: present everywhere or nowhere, so the
+            # arm's own rows survive only in the first case
+            exists = product if x.frame.select(pl.len()).collect().item() else product.clear()
+        else:
+            exists = product.join(x.frame, on=list(keys), how='semi')
+        return Presence(pl.concat([exists, unclaimed], how='vertical').unique(), span)
 
     def _window_fragment(self, p: TermFragment, s: plan.Window, context: str) -> TermFragment:
         """A one-to-many remap of the dim through its ord.

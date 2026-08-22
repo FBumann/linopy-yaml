@@ -32,6 +32,7 @@ from math_spec import (
     ArithmeticNode,
     BinaryOperatorNode,
     BooleanLiteralNode,
+    CasesNode,
     ComparisonNode,
     DimensionComparisonNode,
     DimensionNode,
@@ -191,9 +192,24 @@ def lower_expression(schema: Buildable, name: str) -> plan.Expression:
     expanded = schema
     context = f"named expression '{name}'"
     ns = Namespace.of(expanded)
-    ast = expression_of(expanded.expressions[name].expression, expanded, ns, context)
+    ast = expression_of(body_of(expanded, name), expanded, ns, context)
     assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
     return _lower_expr(ast, expanded, context)
+
+
+def body_of(schema: Buildable, name: str) -> str:
+    """The text that reads named expression *name* — its own name where it is cased.
+
+    A cased expression declares no body: the arms live on the declaration and
+    it is the *reference* that carries them, which expansion builds from the
+    name. So reading one is written the way a constraint writes it, and both
+    lanes reach the same :class:`~math_spec.CasesNode` rather than each
+    assembling the arms itself.
+    """
+    block = schema.expressions[name]
+    if block.expression is None:
+        return name
+    return block.expression
 
 
 def expression_thunks(schema: Buildable) -> dict[str, Callable[[], plan.Expression]]:
@@ -252,6 +268,20 @@ def _lower_expr(node: ArithmeticNode, schema: Buildable, context: str, *, ceilin
             f'(docs/about/architecture.md hard rule 1).'
         )
         raise AssertionError(msg)
+
+    if isinstance(node, CasesNode):
+        return plan.Cases(
+            node.name,
+            tuple(node.foreach),
+            tuple(
+                plan.CaseArm(
+                    arm.label,
+                    _lower_where_node(arm.when, f"{context}, case '{arm.label}'"),
+                    _lower_expr(arm.value, schema, context, ceiling=ceiling),
+                )
+                for arm in node.arms
+            ),
+        )
 
     if isinstance(node, UnaryOperatorNode):
         inner = _lower_expr(node.operand, schema, context, ceiling=ceiling)

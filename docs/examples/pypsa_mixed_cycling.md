@@ -16,20 +16,26 @@ n.add('StorageUnit', ..., cyclic_state_of_charge=[True, False])
 
 The two regimes are **one rule and a different predecessor**. A cyclic unit's
 first snapshot carries from its last; a seeded unit's carries from a level in the
-data. Here that is three blocks under complementary masks, and the masks are the
-flag itself:
+data. So the thing that varies is not the rule, it is the *opening level* — one
+quantity with three answers, which is what a named expression's `cases:` says:
 
-| Block | Where | What carries into the first snapshot |
+| Case | When | What the unit opens with |
 |---|---|---|
-| `energy_balance_cyclic` | `cyclic` | the unit's own last snapshot (`edge='wrap'`) |
-| `energy_balance_carry` | `NOT cyclic` | nothing — the vacated position is absent, so no row is built there |
-| `energy_balance_seed` | `NOT cyclic AND position(snapshot) == 0` | `soc_initial` |
+| `wrapped` | `cyclic` | the unit's own last snapshot (`edge='wrap'`) |
+| `seeded` | `not cyclic and position(snapshot) == 0` | `soc_initial` |
+| `carried` | `not cyclic and position(snapshot) > 0` | the snapshot before |
 
-`NOT` is a real complement over a boolean column, so every unit falls in exactly
-one regime — including one whose flag row is missing, which reads as not cyclic.
-The row `energy_balance_carry` does not build at each seeded unit's first
-snapshot is reported: `diagnostics().omissions` gives 1, and
-`energy_balance_seed` writes it instead.
+The balance is then written **once**, against `opening_level`. The cases have to
+partition `[snapshot, storage]` and are checked to at load, with no data read:
+`not` is a real complement over a boolean column, and the two position clauses
+split the rest, so every coordinate falls in exactly one — including a unit whose
+flag row is missing, which reads as not cyclic.
+
+Written as three constraints instead, the seeded unit's first row is the one
+`shift` leaves absent, so a fourth block has to write it back and
+`diagnostics().omissions` reports the dropped row. Under `cases:` there is no
+dropped row to report: the arm that vacates the first position is the arm that
+does not claim it.
 
 ## The model
 
@@ -37,7 +43,7 @@ snapshot is reported: `diagnostics().omissions` gives 1, and
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one network runs both regimes at once: a unit that must end each horizon where it began, beside one handed a level it may simply spend. The two are one rule under complementary masks, and the seeded unit's boundary row is what a cyclic one does not have. Optimum 4800.0, from PyPSA itself.
+PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one network runs both regimes at once: a unit that must end each horizon where it began, beside one handed a level it may simply spend. What differs between them is the level a unit opens a snapshot with, so that is the cased quantity and the balance is written once. Optimum 4800.0, from PyPSA itself.
 
 #### Sets
 
@@ -85,17 +91,15 @@ $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathrm
 
 $$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{s \in \mathcal{S} \thinspace:\thinspace \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \thinspace:\thinspace \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
-**`energy_balance_cyclic`**
+**`energy_balance`**
 
-$$\mathit{soc}_{t,s} = \mathit{soc}_{t \ominus 1,s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathrm{cyclic}_{s}$$
+$$\mathit{soc}_{t,s} = \mathit{opening\_level}_{t,s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S}$$
 
-**`energy_balance_carry`**
+#### Definitions
 
-$$\mathit{soc}_{t,s} = \mathit{soc}_{t - 1,s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \neg \mathrm{cyclic}_{s}$$
+**`opening_level`**
 
-**`energy_balance_seed`**
-
-$$\mathit{soc}_{t,s} = \mathrm{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S} \thinspace:\thinspace \neg \mathrm{cyclic}_{s} \wedge \mathrm{pos}(t) = 0$$
+$$\mathit{opening\_level}_{t,s} = \begin{cases} \mathit{soc}_{t \ominus 1,s} & \text{if } \mathrm{cyclic}_{s} \cr \mathrm{soc}^{\mathrm{initial}}_{s} & \text{if } \neg \mathrm{cyclic}_{s} \wedge \mathrm{pos}(t) = 0 \cr \mathit{soc}_{t - 1,s} & \text{if } \neg \mathrm{cyclic}_{s} \wedge \mathrm{pos}(t) > 0 \end{cases} \qquad \forall\thinspace t \in \mathcal{T},\enspace s \in \mathcal{S}$$
 
 #### Variable domains
 
@@ -126,9 +130,9 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
     description: >-
       PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one
       network runs both regimes at once: a unit that must end each horizon where it
-      began, beside one handed a level it may simply spend. The two are one rule
-      under complementary masks, and the seeded unit's boundary row is what a cyclic
-      one does not have. Optimum 4800.0, from PyPSA itself.
+      began, beside one handed a level it may simply spend. What differs between them
+      is the level a unit opens a snapshot with, so that is the cased quantity and
+      the balance is written once. Optimum 4800.0, from PyPSA itself.
 
     dimensions:
       snapshot:
@@ -208,6 +212,27 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           lower: 0
           upper: soc_max
 
+    expressions:
+      opening_level:
+        description: >-
+          the level a unit carries into a snapshot. The two regimes and the seeded
+          unit's boundary are three answers to that one question, so they are three
+          cases of one quantity rather than three copies of one inequality
+        foreach: [snapshot, storage]
+        cases:
+          wrapped:
+            when: "cyclic"
+            expression: shift(soc, over=snapshot, offset=1, edge='wrap')
+            description: a cyclic unit's first snapshot inherits from its last, so it ends where it began
+          seeded:
+            when: "not cyclic and position(snapshot) == 0"
+            expression: soc_initial
+            description: a seeded unit's first snapshot reads the level it was handed
+          carried:
+            when: "not cyclic and position(snapshot) > 0"
+            expression: shift(soc, over=snapshot, offset=1)
+            description: and every later one carries from the snapshot before
+
     constraints:
       nodal_balance:
         description: what is generated at a bus, plus what the stores give back, meets the load there
@@ -218,29 +243,12 @@ The tabs start from [the instance's tables](data.md) — one frame per parameter
           - sum(p_store, by=storage_bus)
           == load
 
-      energy_balance_cyclic:
+      energy_balance:
         description: >-
-          a cyclic unit's level wraps at the horizon, so its first snapshot inherits
-          from its last and it ends every horizon where it began
+          one rule for both regimes: what a unit holds is what it opened with, plus
+          what it took off its bus, less what it gave back
         foreach: [snapshot, storage]
-        where: "cyclic"
-        expression: soc == shift(soc, over=snapshot, offset=1, edge='wrap') + p_store - p_dispatch
-
-      energy_balance_carry:
-        description: >-
-          a seeded unit carries from the snapshot before, and has no predecessor at
-          the first — the vacated position is absent, so that row is not built here
-        foreach: [snapshot, storage]
-        where: "NOT cyclic"
-        expression: soc == shift(soc, over=snapshot, offset=1) + p_store - p_dispatch
-
-      energy_balance_seed:
-        description: >-
-          and the row the vacated position left is written here instead, from the
-          level the unit was handed
-        foreach: [snapshot, storage]
-        where: "NOT cyclic AND position(snapshot) == 0"
-        expression: soc == soc_initial + p_store - p_dispatch
+        expression: soc == opening_level + p_store - p_dispatch
 
     objective:
       sense: minimize
@@ -333,6 +341,12 @@ worth anything at all.
 
 It is the shape neither storage rung has. Rung 3 and rung 4 differ by one deleted
 `where`, and each is uniform — so nothing in the corpus exercised *a data column
-choosing between two boundary regimes* until this one. The finding is that it
-needs no language feature: three blocks, complementary masks, and the dropped row
-visible in `omissions`.
+choosing between two boundary regimes* until this one.
+
+It was first written as three blocks under complementary masks, which worked and
+needed no language feature. What `cases:` changes is where the variation sits:
+the regimes are three answers to *what does this unit open with*, and the model
+now says that rather than repeating one inequality three times under three
+masks. The inequality is written once, and the partition is proved at load
+instead of being a property of three `where` strings a reader has to check
+against each other.

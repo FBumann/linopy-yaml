@@ -35,6 +35,7 @@ from math_spec import (
     ArithmeticNode,
     BinaryOperatorNode,
     BooleanLiteralNode,
+    CasesNode,
     ComparisonNode,
     DimensionComparisonNode,
     DimensionNode,
@@ -270,7 +271,14 @@ def _build_constraints(ctx: EvaluationContext) -> None:
 
             _refuse_quadratic(ast)
             check_divisors_cover(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask, ctx.model)
-            check_constant_side_covers(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask)
+            check_constant_side_covers(
+                f"constraint '{cname}'",
+                ast,
+                ctx.schema,
+                ctx.dataset,
+                mask,
+                lambda when: evaluate_where(when, ctx.dataset, ctx.master_coords, ctx.model, ctx.dim_coords),
+            )
 
             lhs = _eval_ast(ast.left, ctx)
             rhs = _eval_ast(ast.right, ctx)
@@ -432,7 +440,32 @@ def _eval_ast(
     if isinstance(node, FunctionCallNode):
         return _call(node, ctx, ceiling=ceiling)
 
+    if isinstance(node, CasesNode):
+        return _eval_cases(node, ctx, ceiling=ceiling)
+
     assert_never(node)
+
+
+def _eval_cases(node: CasesNode, ctx: EvaluationContext, *, ceiling: int = 1) -> Any:
+    """A cased value as the sum of its arms, each zeroed outside its own region.
+
+    The arms partition the frame — proved at load — so at every coordinate
+    exactly one contributes and the sum is the selection. Zero rather than
+    ``nan`` outside an arm, because the arms that do not apply are not absent
+    data: they are the other branches of one defined quantity, and a ``nan``
+    would spread through the addition and delete the coordinate.
+
+    An arm narrower than the frame broadcasts against its own mask first, which
+    is what gives a scalar arm the coordinates the mask selects among.
+    """
+    total: Any = None
+    for arm in node.arms:
+        mask = evaluate_where(arm.when, ctx.dataset, ctx.master_coords, ctx.model, ctx.dim_coords)
+        value = _eval_ast(arm.value, ctx, ceiling=ceiling)
+        selected = (value * xr.ones_like(mask, dtype=float)).where(mask, 0)
+        total = selected if total is None else total + selected
+    assert total is not None, 'a cased expression with no arms cannot partition its frame'
+    return total
 
 
 def _call(node: FunctionCallNode, ctx: EvaluationContext, *, ceiling: int = 1) -> Any:
