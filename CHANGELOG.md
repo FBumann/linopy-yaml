@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.249](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.248...v0.0.1-alpha.249) (2026-08-23)
+
+
+### Features
+
+* **language:** a boundary clause names a position, not the label at one ([#1230](https://github.com/fluxopt/lpspec/issues/1230)) ([3e018da](https://github.com/fluxopt/lpspec/commit/3e018da9c85586dd9061ee91a794b7d74f213f43))
+
 ## [0.0.1-alpha.248](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.247...v0.0.1-alpha.248) (2026-08-21)
 
 
