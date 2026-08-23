@@ -23,23 +23,23 @@ Dantzig's transportation problem, the first model of the GAMS library: ship cann
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{I}$ | index $i$ --- `plant` --- canning plants, with limited capacity |
-| $\mathcal{J}$ | index $j$ --- `market` --- markets, with demand to be met |
+| $\mathcal{I}$ | index $i$ — `plant` — canning plants, with limited capacity |
+| $\mathcal{J}$ | index $j$ — `market` — markets, with demand to be met |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $a$ | `capacity` over $\mathcal{I}$ --- capacity of each plant |
-| $b$ | `demand` over $\mathcal{J}$ --- demand at each market |
-| $d$ | `distance` over $\mathcal{I} \times \mathcal{J}$ --- distance from plant to market |
-| $f$ | `freight` (scalar) --- freight rate per case per unit distance |
+| $a$ | `capacity` over $\mathcal{I}$ — capacity of each plant |
+| $b$ | `demand` over $\mathcal{J}$ — demand at each market |
+| $d$ | `distance` over $\mathcal{I} \times \mathcal{J}$ — distance from plant to market |
+| $f$ | `freight` (scalar) — freight rate per case per unit distance |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $x$ | `shipment` over $\mathcal{I} \times \mathcal{J}$ --- cases shipped from a plant to a market |
+| $x$ | `shipment` over $\mathcal{I} \times \mathcal{J}$ — cases shipped from a plant to a market |
 
 #### Objective
 

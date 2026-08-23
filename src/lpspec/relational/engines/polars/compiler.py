@@ -1419,7 +1419,7 @@ def _refuse_short_groups(p: plan.DimensionPosition, table: pl.LazyFrame) -> None
     short = sorted(str(g) for g, n in sizes.iter_rows() if n < needed)
     if short:
         msg = (
-            f'where: index({p.dimension}, {p.position}, by={p.by}) names position '
+            f'where: position({p.dimension}, by={p.by}) {p.op} {p.position} names position '
             f'{p.position} within each group, and {len(short)} of them are shorter than '
             f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
             f'was to seed unseeded.'
@@ -1447,7 +1447,7 @@ def _position_ordinal(p: plan.DimensionPosition, cardinality: int) -> int:
     at = p.position + cardinality if p.position < 0 else p.position
     if not 0 <= at < cardinality:
         raise DataError(
-            f'where: index({p.dimension}, {p.position}) names position {at} of '
+            f'where: position({p.dimension}) {p.op} {p.position} names position {at} of '
             f"'{p.dimension}', which has {cardinality} coordinate(s). A boundary that "
             f'names no coordinate leaves the rows it was to seed unseeded.'
         )

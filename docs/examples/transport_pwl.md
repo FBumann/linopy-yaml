@@ -39,45 +39,47 @@ Dantzig's transportation problem with economies of scale — GAMS model library 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{P}$ | index $p$ --- `plant` --- canning plants, with limited capacity |
-| $\mathcal{M}$ | index $m$ --- `market` --- markets, with demand to be met |
-| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints of the discretised square-root curve |
+| $\mathcal{P}$ | index $p$ — `plant` — canning plants, with limited capacity |
+| $\mathcal{M}$ | index $m$ — `market` — markets, with demand to be met |
+| $\mathcal{B}$ | index $b$ — `bp` — breakpoints of the discretised square-root curve |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{capacity}$ | `capacity` over $\mathcal{P}$ --- capacity of each plant |
-| $\mathit{demand}$ | `demand` over $\mathcal{M}$ --- demand at each market |
-| $\mathit{distance}$ | `distance` over $\mathcal{P} \times \mathcal{M}$ --- distance from plant to market |
-| $\mathit{freight}$ | `freight` (scalar) --- freight rate per case per unit distance |
-| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{B}$ --- breakpoint shipment levels — one curve, the same on every route, so it carries the breakpoint dimension alone and broadcasts across the pairs |
-| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{B}$ --- the curve's value at each breakpoint |
+| $\mathrm{capacity}$ | `capacity` over $\mathcal{P}$ — capacity of each plant |
+| $\mathrm{demand}$ | `demand` over $\mathcal{M}$ — demand at each market |
+| $\mathrm{distance}$ | `distance` over $\mathcal{P} \times \mathcal{M}$ — distance from plant to market |
+| $\mathrm{freight}$ | `freight` (scalar) — freight rate per case per unit distance |
+| $\mathrm{bp\_x}$ | `bp_x` over $\mathcal{B}$ — breakpoint shipment levels — one curve, the same on every route, so it carries the breakpoint dimension alone and broadcasts across the pairs |
+| $\mathrm{bp\_y}$ | `bp_y` over $\mathcal{B}$ — the curve's value at each breakpoint |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{shipment}$ | `shipment` over $\mathcal{P} \times \mathcal{M}$ --- cases shipped from a plant to a market |
-| $\mathit{scaled}$ | `scaled` over $\mathcal{P} \times \mathcal{M}$ --- what the objective is charged on — the square root of the shipment, read off the curve rather than computed |
-| $\mathit{economies\_of\_scale\_lam}$ | `economies_of_scale_lam` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ --- convex-combination weight on a breakpoint |
+| $\mathit{shipment}$ | `shipment` over $\mathcal{P} \times \mathcal{M}$ — cases shipped from a plant to a market |
+| $\mathit{scaled}$ | `scaled` over $\mathcal{P} \times \mathcal{M}$ — what the objective is charged on — the square root of the shipment, read off the curve rather than computed |
+| $\mathit{economies\_of\_scale\_lam}$ | `economies_of_scale_lam` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ — convex-combination weight on a breakpoint |
 | $\mathit{economies\_of\_scale\_seg}$ | `economies_of_scale_seg` over $\mathcal{P} \times \mathcal{M} \times \mathcal{B}$ |
+
+Upright is what the model is given — a parameter such as $\mathrm{capacity}$, a coordinate map, a label — and italic is what the solver chooses, such as $\mathit{shipment}$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
 
 #### Objective
 
-$$\min \sum_{p \in \mathcal{P},\enspace m \in \mathcal{M}} \frac{\mathit{scaled}_{p,m} \cdot \mathit{distance}_{p,m} \cdot \mathit{freight}}{1000}$$
+$$\min \sum_{p \in \mathcal{P},\enspace m \in \mathcal{M}} \frac{\mathit{scaled}_{p,m} \cdot \mathrm{distance}_{p,m} \cdot \mathrm{freight}}{1000}$$
 
 #### Subject to
 
 **`within_capacity`**
 
-$$\sum_{m \in \mathcal{M}} \mathit{shipment}_{p,m} \le \mathit{capacity}_{p} \qquad \forall\thinspace p \in \mathcal{P}$$
+$$\sum_{m \in \mathcal{M}} \mathit{shipment}_{p,m} \le \mathrm{capacity}_{p} \qquad \forall\thinspace p \in \mathcal{P}$$
 
 **`meet_demand`**
 
-$$\sum_{p \in \mathcal{P}} \mathit{shipment}_{p,m} \ge \mathit{demand}_{m} \qquad \forall\thinspace m \in \mathcal{M}$$
+$$\sum_{p \in \mathcal{P}} \mathit{shipment}_{p,m} \ge \mathrm{demand}_{m} \qquad \forall\thinspace m \in \mathcal{M}$$
 
 **`economies_of_scale_convexity`**
 
@@ -85,11 +87,11 @@ $$\sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_lam}_{p,m,b} = 1 \qquad
 
 **`economies_of_scale_link0`**
 
-$$\mathit{shipment}_{p,m} = \sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_lam}_{p,m,b} \cdot \mathit{bp}^{\mathrm{x}}_{b} \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M}$$
+$$\mathit{shipment}_{p,m} = \sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_lam}_{p,m,b} \cdot \mathrm{bp\_x}_{b} \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M}$$
 
 **`economies_of_scale_link1`**
 
-$$\mathit{scaled}_{p,m} = \sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_lam}_{p,m,b} \cdot \mathit{bp}^{\mathrm{y}}_{b} \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M}$$
+$$\mathit{scaled}_{p,m} = \sum_{b \in \mathcal{B}} \mathit{economies\_of\_scale\_lam}_{p,m,b} \cdot \mathrm{bp\_y}_{b} \qquad \forall\thinspace p \in \mathcal{P},\enspace m \in \mathcal{M}$$
 
 **`economies_of_scale_pick`**
 

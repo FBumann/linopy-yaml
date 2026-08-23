@@ -31,41 +31,43 @@ PyPSA multi-period investment: a build year and a lifetime decide which periods 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ --- dispatch periods, each falling in one investment period |
-| $\mathcal{E}$ | index $e$ --- `period` --- investment periods, the grouping capacity is decided and paid over |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, each existing in some periods and not others |
+| $\mathcal{T}$ | index $t$ — `snapshot` with $\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}$ — dispatch periods, each falling in one investment period |
+| $\mathcal{E}$ | index $e$ — `period` — investment periods, the grouping capacity is decided and paid over |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, each existing in some periods and not others |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
-| $\mathit{period}^{\mathrm{weight}}$ | `period_weight` over $\mathcal{E}$ --- what one period's costs are worth at the horizon's start — the discount that makes a 2040 decision comparable with a 2030 one |
-| $\mathit{opex}$ | `opex` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{capex}$ | `capex` over $\mathcal{G}$ --- cost of holding one unit of capacity through one period |
-| $p^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ --- most capacity a generator may build |
-| $\mathit{activity}$ | `activity` over $\mathcal{E} \times \mathcal{G}$ --- 1 where a generator exists in a period and 0 where it does not — PyPSA derives this from a build year and a lifetime, and it decides both what may run and what is paid for |
+| $\mathrm{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\mathrm{period\_weight}$ | `period_weight` over $\mathcal{E}$ — what one period's costs are worth at the horizon's start — the discount that makes a 2040 decision comparable with a 2030 one |
+| $\mathrm{opex}$ | `opex` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathrm{capex}$ | `capex` over $\mathcal{G}$ — cost of holding one unit of capacity through one period |
+| $\mathrm{p}^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ — most capacity a generator may build |
+| $\mathrm{activity}$ | `activity` over $\mathcal{E} \times \mathcal{G}$ — 1 where a generator exists in a period and 0 where it does not — PyPSA derives this from a build year and a lifetime, and it decides both what may run and what is paid for |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot, held at zero in the snapshots whose period the generator does not exist in |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- capacity built at a generator |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot, held at zero in the snapshots whose period the generator does not exist in |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator |
+
+Upright is what the model is given — a parameter such as $\mathrm{load}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{opex}_{g} \cdot \mathit{period}^{\mathrm{weight}}_{\mathrm{period\_of}(t)} + \sum_{e \in \mathcal{E},\enspace g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathit{capex}_{g} \cdot \mathit{activity}_{e,g} \cdot \mathit{period}^{\mathrm{weight}}_{e}$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{period\_weight}_{\mathrm{period\_of}(t)} + \sum_{e \in \mathcal{E},\enspace g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} \cdot \mathrm{activity}_{e,g} \cdot \mathrm{period\_weight}_{e}$$
 
 #### Subject to
 
 **`within_capacity`**
 
-$$p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathit{activity}_{\mathrm{period\_of}(t),g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t),g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 **`power_balance`**
 
-$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathit{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
 #### Variable domains
 
@@ -75,7 +77,7 @@ $$p_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathc
 
 **`p_nom`**
 
-$$0 \le p^{\mathrm{nom}}_{g} \le p^{\mathrm{nom,max}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
+$$0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
 
 </details>
 <!-- math:end -->

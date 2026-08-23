@@ -42,27 +42,33 @@ The same least-cost dispatch as `piecewise.yaml`, with each generator's cost cur
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{G}$ | index $g$ --- `generator` --- dispatchable units |
-| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints of the cost curve |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{G}$ | index $g$ — `generator` — dispatchable units |
+| $\mathcal{B}$ | index $b$ — `bp` — breakpoints of the cost curve |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ --- maximum dispatch |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ --- demand to be met |
-| $\mathit{bp}^{\mathrm{x}}$ | `bp_x` over $\mathcal{G} \times \mathcal{B}$ --- breakpoint dispatch levels, one curve per generator |
-| $\mathit{bp}^{\mathrm{y}}$ | `bp_y` over $\mathcal{G} \times \mathcal{B}$ --- cost at each breakpoint, one curve per generator |
+| $\mathrm{p}^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ — maximum dispatch |
+| $\mathrm{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\mathrm{bp\_x}$ | `bp_x` over $\mathcal{G} \times \mathcal{B}$ — breakpoint dispatch levels, one curve per generator |
+| $\mathrm{bp\_y}$ | `bp_y` over $\mathcal{G} \times \mathcal{B}$ — cost at each breakpoint, one curve per generator |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- dispatched power |
-| $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ --- operating cost, held above every segment of the generator's curve |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — dispatched power |
+| $\mathit{op\_cost}$ | `op_cost` over $\mathcal{T} \times \mathcal{G}$ — operating cost, held above every segment of the generator's curve |
+
+Upright is what the model is given — a parameter such as $\mathrm{p}^{\mathrm{max}}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
+
+$\mathrm{pos}(t)$ denotes where index $t$ sits along its dimension's own order — the order `shift` walks, not the order labels sort in — counted from $0$. The index itself stays the coordinate, so $t$ compares against labels and $\mathrm{pos}(t)$ against positions.
+
+$\lvert \mathcal{T} \rvert$ denotes the size of the set being counted along, and a position counted from the end prints against it — $\lvert \mathcal{T} \rvert - 1$ is the last position, one less than the size because the first is $0$.
 
 #### Objective
 
@@ -72,25 +78,25 @@ $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{op\_cost}_{t,
 
 **`balance`**
 
-$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathit{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
 **`cost_curve_chord`**
 
-$$\mathit{op\_cost}_{t,g} \cdot \left( \mathit{bp}^{\mathrm{x}}_{g,b} - \mathit{bp}^{\mathrm{x}}_{g,b \boxminus_{0} 1} \right) \ge \left( \mathit{bp}^{\mathrm{y}}_{g,b} - \mathit{bp}^{\mathrm{y}}_{g,b \boxminus_{0} 1} \right) \cdot \left( p_{t,g} - \mathit{bp}^{\mathrm{x}}_{g,b} \right) + \mathit{bp}^{\mathrm{y}}_{g,b} \cdot \left( \mathit{bp}^{\mathrm{x}}_{g,b} - \mathit{bp}^{\mathrm{x}}_{g,b \boxminus_{0} 1} \right) \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B} \thinspace:\thinspace b \neq \mathrm{index}(\mathcal{B}, 0)$$
+$$\mathit{op\_cost}_{t,g} \cdot \left( \mathrm{bp\_x}_{g,b} - \mathrm{bp\_x}_{g,b \boxminus_{0} 1} \right) \ge \left( \mathrm{bp\_y}_{g,b} - \mathrm{bp\_y}_{g,b \boxminus_{0} 1} \right) \cdot \left( p_{t,g} - \mathrm{bp\_x}_{g,b} \right) + \mathrm{bp\_y}_{g,b} \cdot \left( \mathrm{bp\_x}_{g,b} - \mathrm{bp\_x}_{g,b \boxminus_{0} 1} \right) \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{pos}(b) \neq 0$$
 
 **`cost_curve_domain_lo`**
 
-$$p_{t,g} \ge \mathit{bp}^{\mathrm{x}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B} \thinspace:\thinspace b = \mathrm{index}(\mathcal{B}, 0)$$
+$$p_{t,g} \ge \mathrm{bp\_x}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{pos}(b) = 0$$
 
 **`cost_curve_domain_hi`**
 
-$$p_{t,g} \le \mathit{bp}^{\mathrm{x}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B} \thinspace:\thinspace b = \mathrm{index}(\mathcal{B}, -1)$$
+$$p_{t,g} \le \mathrm{bp\_x}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{pos}(b) = \lvert \mathcal{B} \rvert - 1$$
 
 #### Variable domains
 
 **`p`**
 
-$$0 \le p_{t,g} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$0 \le p_{t,g} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 **`op_cost`**
 

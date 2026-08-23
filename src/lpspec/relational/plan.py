@@ -294,14 +294,16 @@ class DimensionComparison(Predicate):
 
 @dataclass(frozen=True)
 class DimensionPosition(Predicate):
-    """Compare a dimension's coordinates against the one at *position*.
+    """Compare where a row sits along a dimension against *position*.
 
-    ``where: "snapshot == index(snapshot, 0)"``. The position is resolved
+    ``where: "position(snapshot) == 0"``. The position is resolved
     against the *bound* coordinate order rather than lowered to a label, so a
     relabelled index moves the boundary with it. Negative counts from the end.
+    Both sides are integers, so every comparator reads the one way.
 
     ``by`` names a lookup over the same dimension, and then the position is
-    counted **within each group** it makes: ``index(snapshot, 0, by=period_of)``
+    counted **within each group** it makes:
+    ``position(snapshot, by=period_of) == 0``
     is every period's first snapshot. A coordinate its lookup sends nowhere is
     in no group and matches nothing, as a null group does everywhere else.
 

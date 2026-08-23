@@ -30,44 +30,46 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{D}$ | index $d$ --- `depot` --- depots the chemicals leave from |
-| $\mathcal{C}$ | index $c$ --- `connection` with $\mathrm{origin}: \mathcal{C} \to \mathcal{D}$ --- one way of reaching one centre from one depot, by rail or by road |
+| $\mathcal{D}$ | index $d$ — `depot` — depots the chemicals leave from |
+| $\mathcal{C}$ | index $c$ — `connection` with $\mathrm{origin}: \mathcal{C} \to \mathcal{D}$ — one way of reaching one centre from one depot, by rail or by road |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{stock}$ | `stock` over $\mathcal{D}$ --- tonnes standing at a depot |
-| $\mathit{cost}$ | `cost` over $\mathcal{C}$ --- cost per tonne moved over a connection |
-| $\mathit{min\_load}$ | `min_load` over $\mathcal{C}$ --- smallest delivery a connection accepts — rail carries between 10 and 50 tonnes per delivery, and road is unconstrained |
-| $\mathit{max\_load}$ | `max_load` over $\mathcal{C}$ --- largest delivery a connection accepts |
-| $\mathit{total\_to\_move}$ | `total_to_move` (scalar) --- tonnes that have to leave the depots altogether |
+| $\mathrm{stock}$ | `stock` over $\mathcal{D}$ — tonnes standing at a depot |
+| $\mathrm{cost}$ | `cost` over $\mathcal{C}$ — cost per tonne moved over a connection |
+| $\mathrm{min\_load}$ | `min_load` over $\mathcal{C}$ — smallest delivery a connection accepts — rail carries between 10 and 50 tonnes per delivery, and road is unconstrained |
+| $\mathrm{max\_load}$ | `max_load` over $\mathcal{C}$ — largest delivery a connection accepts |
+| $\mathrm{total\_to\_move}$ | `total_to_move` (scalar) — tonnes that have to leave the depots altogether |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{moved}$ | `moved` over $\mathcal{C}$ --- tonnes sent over a connection |
+| $\mathit{moved}$ | `moved` over $\mathcal{C}$ — tonnes sent over a connection |
+
+Upright is what the model is given — a parameter such as $\mathrm{stock}$, a coordinate map, a label — and italic is what the solver chooses, such as $\mathit{moved}$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Objective
 
-$$\min \sum_{c \in \mathcal{C}} \mathit{moved}_{c} \cdot \mathit{cost}_{c}$$
+$$\min \sum_{c \in \mathcal{C}} \mathit{moved}_{c} \cdot \mathrm{cost}_{c}$$
 
 #### Subject to
 
 **`within_stock`**
 
-$$\sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{origin}(c) = d} \mathit{moved}_{c} \le \mathit{stock}_{d} \qquad \forall\thinspace d \in \mathcal{D}$$
+$$\sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{origin}(c) = d} \mathit{moved}_{c} \le \mathrm{stock}_{d} \qquad \forall\thinspace d \in \mathcal{D}$$
 
 **`move_the_lot`**
 
-$$\sum_{c \in \mathcal{C}} \mathit{moved}_{c} = \mathit{total\_to\_move}$$
+$$\sum_{c \in \mathcal{C}} \mathit{moved}_{c} = \mathrm{total\_to\_move}$$
 
 #### Variable domains
 
 **`moved`**
 
-$$\mathit{min\_load}_{c} \le \mathit{moved}_{c} \le \mathit{max\_load}_{c} \qquad \forall\thinspace c \in \mathcal{C}$$
+$$\mathrm{min\_load}_{c} \le \mathit{moved}_{c} \le \mathrm{max\_load}_{c} \qquad \forall\thinspace c \in \mathcal{C}$$
 
 </details>
 <!-- math:end -->

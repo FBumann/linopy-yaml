@@ -68,7 +68,7 @@ ACCEPTED = [
     'p_max',
     'p_max > 0',
     'snapshot >= 0',
-    'snapshot >= index(snapshot, 0)',
+    'position(snapshot) >= 0',
     'NOT p_max > 150',
     'p_max > 0 AND snapshot >= 0',
     'p_max > 0 OR snapshot >= 0',

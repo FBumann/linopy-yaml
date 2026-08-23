@@ -92,7 +92,7 @@ constraints:
       the first snapshot's level starts from the initial energy, which the
       standing loss does not decay because nothing was carried into it
     foreach: [snapshot, store]
-    where: "snapshot == index(snapshot, 0)"
+    where: "position(snapshot) == 0"
     expression: e == e_initial - store_p
 
   energy_balance:

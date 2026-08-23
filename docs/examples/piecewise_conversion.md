@@ -35,34 +35,36 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `time` --- dispatch periods |
-| $\mathcal{C}$ | index $c$ --- `converter` --- units converting one carrier into others |
-| $\mathcal{F}$ | index $f$ --- `flow` with $\mathrm{converter\_of}: \mathcal{F} \to \mathcal{C}$ --- a converter's inputs and outputs, one row each |
-| $\mathcal{B}$ | index $b$ --- `bp` --- breakpoints, as many as the longest curve needs |
+| $\mathcal{T}$ | index $t$ — `time` — dispatch periods |
+| $\mathcal{C}$ | index $c$ — `converter` — units converting one carrier into others |
+| $\mathcal{F}$ | index $f$ — `flow` with $\mathrm{converter\_of}: \mathcal{F} \to \mathcal{C}$ — a converter's inputs and outputs, one row each |
+| $\mathcal{B}$ | index $b$ — `bp` — breakpoints, as many as the longest curve needs |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{bp}^{\mathrm{rate}}$ | `bp_rate` over $\mathcal{F} \times \mathcal{B}$ --- what each flow runs at, at each breakpoint of its converter's curve |
-| $\mathit{bp}^{\mathrm{present}}$ | `bp_present` over $\mathcal{C} \times \mathcal{B}$ --- how far each converter's curve runs |
-| $\mathit{rate}^{\mathrm{max}}$ | `rate_max` over $\mathcal{F}$ --- what each flow runs at when its converter is at its last breakpoint |
-| $\mathit{is\_heat}$ | `is_heat` over $\mathcal{F}$ --- which flows deliver heat |
-| $\mathit{is\_power}$ | `is_power` over $\mathcal{F}$ --- which flows deliver power |
-| $\mathit{fuel\_price}$ | `fuel_price` over $\mathcal{F}$ --- what a unit of each input flow costs |
-| $\mathit{heat\_demand}$ | `heat_demand` over $\mathcal{T}$ --- heat to be delivered |
-| $\mathit{power\_demand}$ | `power_demand` over $\mathcal{T}$ --- power to be delivered |
+| $\mathrm{bp\_rate}$ | `bp_rate` over $\mathcal{F} \times \mathcal{B}$ — what each flow runs at, at each breakpoint of its converter's curve |
+| $\mathrm{bp\_present}$ | `bp_present` over $\mathcal{C} \times \mathcal{B}$ — how far each converter's curve runs |
+| $\mathrm{rate}^{\mathrm{max}}$ | `rate_max` over $\mathcal{F}$ — what each flow runs at when its converter is at its last breakpoint |
+| $\mathrm{is\_heat}$ | `is_heat` over $\mathcal{F}$ — which flows deliver heat |
+| $\mathrm{is\_power}$ | `is_power` over $\mathcal{F}$ — which flows deliver power |
+| $\mathrm{fuel\_price}$ | `fuel_price` over $\mathcal{F}$ — what a unit of each input flow costs |
+| $\mathrm{heat\_demand}$ | `heat_demand` over $\mathcal{T}$ — heat to be delivered |
+| $\mathrm{power\_demand}$ | `power_demand` over $\mathcal{T}$ — power to be delivered |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{rate}$ | `rate` over $\mathcal{F} \times \mathcal{T}$ --- what each flow runs at |
-| $\mathit{weight}$ | `weight` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ --- how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
+| $\mathit{rate}$ | `rate` over $\mathcal{F} \times \mathcal{T}$ — what each flow runs at |
+| $\mathit{weight}$ | `weight` over $\mathcal{C} \times \mathcal{T} \times \mathcal{B}$ — how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
+
+Upright is what the model is given — a parameter such as $\mathrm{bp\_rate}$, a coordinate map, a label — and italic is what the solver chooses, such as $\mathit{rate}$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T}} \sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{fuel\_price}_{f}$$
+$$\min \sum_{t \in \mathcal{T}} \sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathrm{fuel\_price}_{f}$$
 
 #### Subject to
 
@@ -72,25 +74,25 @@ $$\sum_{b \in \mathcal{B}} \mathit{weight}_{c,t,b} = 1 \qquad \forall\thinspace 
 
 **`on_the_curve`**
 
-$$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{weight}_{\mathrm{converter\_of}(f),t,b} \cdot \mathit{bp}^{\mathrm{rate}}_{f,b} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T}$$
+$$\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{weight}_{\mathrm{converter\_of}(f),t,b} \cdot \mathrm{bp\_rate}_{f,b} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T}$$
 
 **`heat_balance`**
 
-$$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{is\_heat}_{f} = \mathit{heat\_demand}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+$$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathrm{is\_heat}_{f} = \mathrm{heat\_demand}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
 **`power_balance`**
 
-$$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathit{is\_power}_{f} = \mathit{power\_demand}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+$$\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathrm{is\_power}_{f} = \mathrm{power\_demand}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
 #### Variable domains
 
 **`rate`**
 
-$$0 \le \mathit{rate}_{f,t} \le \mathit{rate}^{\mathrm{max}}_{f} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T}$$
+$$0 \le \mathit{rate}_{f,t} \le \mathrm{rate}^{\mathrm{max}}_{f} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T}$$
 
 **`weight`**
 
-$$0 \le \mathit{weight}_{c,t,b} \le 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathit{bp}^{\mathrm{present}}_{c,b}$$
+$$0 \le \mathit{weight}_{c,t,b} \le 1 \qquad \forall\thinspace c \in \mathcal{C},\enspace t \in \mathcal{T},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{bp\_present}_{c,b}$$
 
 **`weight sos`**
 

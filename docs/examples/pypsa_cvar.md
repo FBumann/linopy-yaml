@@ -38,34 +38,36 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{S}$ | index $s$ --- `scenario` --- the futures the fleet is built against, one of which will happen |
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods, the same in every future |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, each built once and run in every future |
+| $\mathcal{S}$ | index $s$ — `scenario` — the futures the fleet is built against, one of which will happen |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods, the same in every future |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, each built once and run in every future |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{probability}$ | `probability` over $\mathcal{S}$ --- how likely a future is — the weights the expectation is taken with |
-| $\mathit{load}$ | `load` over $\mathcal{S} \times \mathcal{T}$ --- demand to be met, and the one thing that differs between futures |
-| $\mathit{capex}$ | `capex` over $\mathcal{G}$ --- cost of holding one unit of capacity over the horizon |
-| $\mathit{opex}$ | `opex` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{alpha}$ | `alpha` (scalar) --- where the tail begins: the confidence level whose worst 1 - alpha of the probability mass the risk term averages over |
-| $\mathit{omega}$ | `omega` (scalar) --- how much of the objective is the tail rather than the expectation — 0 is the risk-neutral plan, 1 prices nothing but the worst futures |
+| $\mathrm{probability}$ | `probability` over $\mathcal{S}$ — how likely a future is — the weights the expectation is taken with |
+| $\mathrm{load}$ | `load` over $\mathcal{S} \times \mathcal{T}$ — demand to be met, and the one thing that differs between futures |
+| $\mathrm{capex}$ | `capex` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
+| $\mathrm{opex}$ | `opex` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathrm{alpha}$ | `alpha` (scalar) — where the tail begins: the confidence level whose worst 1 - alpha of the probability mass the risk term averages over |
+| $\mathrm{omega}$ | `omega` (scalar) — how much of the objective is the tail rather than the expectation — 0 is the risk-neutral plan, 1 prices nothing but the worst futures |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- capacity built at a generator — the first-stage decision, taken before anyone knows which future arrived |
-| $p$ | `p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot of a future |
-| $\mathit{excess}$ | `excess` over $\mathcal{S}$ --- how far a future's operating cost runs past the level the tail begins at, and zero for the futures that do not reach it |
-| $\mathit{tail\_start}$ | `tail_start` (scalar) --- the level the tail begins at — the value at risk, which the epigraph rows pin to the alpha quantile of the operating cost rather than the model declaring it |
-| $\mathit{tail\_average}$ | `tail_average` (scalar) --- the average operating cost of the futures beyond that level |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator — the first-stage decision, taken before anyone knows which future arrived |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot of a future |
+| $\mathit{excess}$ | `excess` over $\mathcal{S}$ — how far a future's operating cost runs past the level the tail begins at, and zero for the futures that do not reach it |
+| $\mathit{tail\_start}$ | `tail_start` (scalar) — the level the tail begins at — the value at risk, which the epigraph rows pin to the alpha quantile of the operating cost rather than the model declaring it |
+| $\mathit{tail\_average}$ | `tail_average` (scalar) — the average operating cost of the futures beyond that level |
+
+Upright is what the model is given — a parameter such as $\mathrm{probability}$, a coordinate map, a label — and italic is what the solver chooses, such as $p^{\mathrm{nom}}$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Objective
 
-$$\min \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathit{capex}_{g} + \sum_{s \in \mathcal{S}} \left( 1 - \mathit{omega} \right) \cdot \mathit{probability}_{s} \cdot \left( \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{s,t,g} \cdot \mathit{opex}_{g} \right) + \mathit{omega} \cdot \mathit{tail\_average}$$
+$$\min \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} + \sum_{s \in \mathcal{S}} \left( 1 - \mathrm{omega} \right) \cdot \mathrm{probability}_{s} \cdot \left( \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{s,t,g} \cdot \mathrm{opex}_{g} \right) + \mathrm{omega} \cdot \mathit{tail\_average}$$
 
 #### Subject to
 
@@ -75,15 +77,15 @@ $$p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\thinspace s \in \mathcal{S},
 
 **`power_balance`**
 
-$$\sum_{g \in \mathcal{G}} p_{s,t,g} = \mathit{load}_{s,t} \qquad \forall\thinspace s \in \mathcal{S},\enspace t \in \mathcal{T}$$
+$$\sum_{g \in \mathcal{G}} p_{s,t,g} = \mathrm{load}_{s,t} \qquad \forall\thinspace s \in \mathcal{S},\enspace t \in \mathcal{T}$$
 
 **`tail_excess`**
 
-$$\mathit{excess}_{s} \ge \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{s,t,g} \cdot \mathit{opex}_{g} - \mathit{tail\_start} \qquad \forall\thinspace s \in \mathcal{S}$$
+$$\mathit{excess}_{s} \ge \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{s,t,g} \cdot \mathrm{opex}_{g} - \mathit{tail\_start} \qquad \forall\thinspace s \in \mathcal{S}$$
 
 **`tail_definition`**
 
-$$\left( 1 - \mathit{alpha} \right) \cdot \left( \mathit{tail\_average} - \mathit{tail\_start} \right) \ge \sum_{s \in \mathcal{S}} \mathit{probability}_{s} \cdot \mathit{excess}_{s}$$
+$$\left( 1 - \mathrm{alpha} \right) \cdot \left( \mathit{tail\_average} - \mathit{tail\_start} \right) \ge \sum_{s \in \mathcal{S}} \mathrm{probability}_{s} \cdot \mathit{excess}_{s}$$
 
 #### Variable domains
 

@@ -27,23 +27,25 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{A}$ | index $a$ --- `arc` --- an undirected link between two cities, with capacity in circuits |
-| $\mathcal{C}$ | index $c$ --- `call` --- a city pair with circuits to place |
-| $\mathcal{P}$ | index $p$ --- `path` with $\mathrm{call\_of}: \mathcal{P} \to \mathcal{C}$ --- a route end to end, serving one city pair |
+| $\mathcal{A}$ | index $a$ — `arc` — an undirected link between two cities, with capacity in circuits |
+| $\mathcal{C}$ | index $c$ — `call` — a city pair with circuits to place |
+| $\mathcal{P}$ | index $p$ — `path` with $\mathrm{call\_of}: \mathcal{P} \to \mathcal{C}$ — a route end to end, serving one city pair |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{capacity}$ | `capacity` over $\mathcal{A}$ --- circuits an arc can carry |
-| $\mathit{demand}$ | `demand` over $\mathcal{C}$ --- circuits a city pair asked for |
-| $\mathit{uses}$ | `uses` over $\mathcal{P} \times \mathcal{A}$ --- which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
+| $\mathrm{capacity}$ | `capacity` over $\mathcal{A}$ — circuits an arc can carry |
+| $\mathrm{demand}$ | `demand` over $\mathcal{C}$ — circuits a city pair asked for |
+| $\mathrm{uses}$ | `uses` over $\mathcal{P} \times \mathcal{A}$ — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{flow}$ | `flow` over $\mathcal{P}$ --- circuits carried on a path — integral because a multi-commodity flow is not integral by nature, even though this instance's relaxation happens to be |
+| $\mathit{flow}$ | `flow` over $\mathcal{P}$ — circuits carried on a path — integral because a multi-commodity flow is not integral by nature, even though this instance's relaxation happens to be |
+
+Upright is what the model is given — a parameter such as $\mathrm{capacity}$, a coordinate map, a label — and italic is what the solver chooses, such as $\mathit{flow}$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Objective
 
@@ -53,11 +55,11 @@ $$\max \sum_{p \in \mathcal{P}} \mathit{flow}_{p}$$
 
 **`within_demand`**
 
-$$\sum_{p \in \mathcal{P} \thinspace:\thinspace \mathrm{call\_of}(p) = c} \mathit{flow}_{p} \le \mathit{demand}_{c} \qquad \forall\thinspace c \in \mathcal{C}$$
+$$\sum_{p \in \mathcal{P} \thinspace:\thinspace \mathrm{call\_of}(p) = c} \mathit{flow}_{p} \le \mathrm{demand}_{c} \qquad \forall\thinspace c \in \mathcal{C}$$
 
 **`within_capacity`**
 
-$$\sum_{p \in \mathcal{P}} \mathit{flow}_{p} \cdot \mathit{uses}_{p,a} \le \mathit{capacity}_{a} \qquad \forall\thinspace a \in \mathcal{A}$$
+$$\sum_{p \in \mathcal{P}} \mathit{flow}_{p} \cdot \mathrm{uses}_{p,a} \le \mathrm{capacity}_{a} \qquad \forall\thinspace a \in \mathcal{A}$$
 
 #### Variable domains
 

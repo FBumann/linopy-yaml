@@ -42,29 +42,31 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{S}$ | index $s$ --- `scenario` --- the futures the fleet is built against, one of which will happen |
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods, the same in every future |
-| $\mathcal{G}$ | index $g$ --- `generator` --- generating units, each built once and run in every future |
+| $\mathcal{S}$ | index $s$ — `scenario` — the futures the fleet is built against, one of which will happen |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods, the same in every future |
+| $\mathcal{G}$ | index $g$ — `generator` — generating units, each built once and run in every future |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{probability}$ | `probability` over $\mathcal{S}$ --- how likely a future is — the weights the expectation is taken with |
-| $\mathit{load}$ | `load` over $\mathcal{S} \times \mathcal{T}$ --- demand to be met, and the one thing that differs between futures |
-| $\mathit{capex}$ | `capex` over $\mathcal{G}$ --- cost of holding one unit of capacity over the horizon |
-| $\mathit{opex}$ | `opex` over $\mathcal{G}$ --- cost of one unit of output |
+| $\mathrm{probability}$ | `probability` over $\mathcal{S}$ — how likely a future is — the weights the expectation is taken with |
+| $\mathrm{load}$ | `load` over $\mathcal{S} \times \mathcal{T}$ — demand to be met, and the one thing that differs between futures |
+| $\mathrm{capex}$ | `capex` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
+| $\mathrm{opex}$ | `opex` over $\mathcal{G}$ — cost of one unit of output |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- capacity built at a generator — the first-stage decision, which spans no scenario because it is taken before anyone knows which future arrived |
-| $p$ | `p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot of a future — the second-stage decision, one per scenario |
+| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator — the first-stage decision, which spans no scenario because it is taken before anyone knows which future arrived |
+| $p$ | `p` over $\mathcal{S} \times \mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot of a future — the second-stage decision, one per scenario |
+
+Upright is what the model is given — a parameter such as $\mathrm{probability}$, a coordinate map, a label — and italic is what the solver chooses, such as $p^{\mathrm{nom}}$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Objective
 
-$$\min \sum_{s \in \mathcal{S},\enspace t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{s,t,g} \cdot \mathit{opex}_{g} \cdot \mathit{probability}_{s} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathit{capex}_{g}$$
+$$\min \sum_{s \in \mathcal{S},\enspace t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{s,t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{probability}_{s} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g}$$
 
 #### Subject to
 
@@ -74,7 +76,7 @@ $$p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\thinspace s \in \mathcal{S},
 
 **`power_balance`**
 
-$$\sum_{g \in \mathcal{G}} p_{s,t,g} = \mathit{load}_{s,t} \qquad \forall\thinspace s \in \mathcal{S},\enspace t \in \mathcal{T}$$
+$$\sum_{g \in \mathcal{G}} p_{s,t,g} = \mathrm{load}_{s,t} \qquad \forall\thinspace s \in \mathcal{S},\enspace t \in \mathcal{T}$$
 
 #### Variable domains
 

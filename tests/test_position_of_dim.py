@@ -1,4 +1,4 @@
-"""``index(dim, i)`` — a boundary named by position, not by the label there.
+"""``position(dim)`` — a boundary named by where a row sits, not by the label there.
 
 A recurrence needs its first position seeded, and every seeding clause in the
 corpus used to name the label that happened to sit there (``snapshot == 0``).
@@ -54,12 +54,12 @@ variables:
 constraints:
   soc_start:
     foreach: [snapshot]
-    where: "snapshot == index(snapshot, 0)"
+    where: "position(snapshot) == 0"
     expression: soc == soc_initial + inflow - out
     description: the first period has no predecessor, so it carries the initial level
   soc_carry:
     foreach: [snapshot]
-    where: "snapshot != index(snapshot, 0)"
+    where: "position(snapshot) != 0"
     expression: soc == shift(soc, over=snapshot, offset=1) + inflow - out
     description: every later period carries the previous one's level
 
@@ -132,7 +132,7 @@ def test_the_hardcoded_label_is_what_this_replaces():
     number says how wrong it was rather than that it was wrong.
     """
     sources = _inputs()
-    hardcoded = pyyaml.safe_load(MODEL.replace('index(snapshot, 0)', '0'))
+    hardcoded = pyyaml.safe_load(MODEL.replace('position(snapshot) == 0', 'snapshot == 0'))
     with lps.solve(hardcoded, _relational(sources)) as result:
         assert result.is_ok, 'the point is that nothing complains'
         assert result.objective == pytest.approx(420.0), (
@@ -150,7 +150,7 @@ def test_a_negative_position_counts_from_the_end():
         """objective:""",
         """  soc_final:
     foreach: [snapshot]
-    where: "snapshot == index(snapshot, -1)"
+    where: "position(snapshot) == -1"
     expression: soc >= 10
     description: the last period ends with at least ten stored
 
@@ -186,7 +186,7 @@ def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, positio
     model back where the hardcoded label left it.
     """
     sources = _inputs()
-    model = MODEL.replace('index(snapshot, 0)', f'index(snapshot, {position})')
+    model = MODEL.replace('position(snapshot) == 0', f'position(snapshot) == {position}')
     path = tmp_path / 'model.yaml'
     path.write_text(model)
 
@@ -203,35 +203,49 @@ def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, positio
     ('where', 'match'),
     [
         pytest.param(
-            'inflow == index(inflow, 0)',
-            r"index\(\) counts along a dimension's coordinates, and 'inflow' is a parameter",
-            id='index-of-a-parameter',
+            'position(inflow) == 0',
+            r"position\(\) counts along a dimension's coordinates, and 'inflow' is a parameter",
+            id='position-of-a-parameter',
         ),
         pytest.param(
-            'snapshot == index(nowhere, 0)',
-            r"index\(\) counts along a dimension's coordinates, and 'nowhere' is not declared",
-            id='index-of-nothing',
+            'position(nowhere) == 0',
+            r"position\(\) counts along a dimension's coordinates, and 'nowhere' is not declared",
+            id='position-of-nothing',
         ),
     ],
 )
-def test_a_name_index_cannot_count_along_is_refused(where, match):
+def test_a_name_position_cannot_count_along_is_refused(where, match):
     with pytest.raises(LanguageError, match=match):
         resolved_where(where)
 
 
-def test_two_different_dimensions_cannot_be_compared_by_position():
-    """One dimension's coordinate against another's masks everything out.
+def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
+    """Counting along an axis the constraint does not range over is a frame error.
 
-    The same refusal a bare `generator == snapshot` gets, and for the same
-    reason: no label of one is a label of the other.
+    `index(dim, i)` compared two coordinates and needed its own rule for the
+    pair naming different dimensions. `position(dim)` yields an integer, so
+    there is no pair and no cross-label comparison left to refuse — what
+    remains is the ordinary dim-algebra rule every where-comparison meets, and
+    it is the one that speaks.
     """
     model = MODEL.replace(
         'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order}',
         'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order}\n'
         '  other: {dtype: int, description: a second axis}',
-    ).replace('"snapshot == index(snapshot, 0)"', '"snapshot == index(other, 0)"')
-    with pytest.raises(LanguageError, match=r'compares a .snapshot. coordinate against an? .other. one'):
+    ).replace('"position(snapshot) == 0"', '"position(other) == 0"')
+    with pytest.raises(LpspecError, match=r"dimension 'other', which is not in the frame \['snapshot'\]"):
         schema_of(model)
+
+
+def test_the_retired_index_spelling_names_its_rewrite():
+    """A corpus written against `index()` gets the migration, not a parse error.
+
+    Every seeding clause in this tree was `dim == index(dim, i)` until
+    energy-models/math-spec#31, so the message a stale model hits is the one
+    thing standing between it and "Expected end of text, found '('".
+    """
+    with pytest.raises(LpspecError, match=r'index\(\) is now position\(\), and converts on the left'):
+        schema_of(MODEL.replace('position(snapshot) == 0', 'snapshot == index(snapshot, 0)'))
 
 
 # ---------------------------------------------------------------------------
@@ -313,10 +327,10 @@ def _masked(where: str) -> list[int]:
 
 def test_each_group_is_seeded_at_its_own_first_position():
     """The whole point: one boundary per group, not one for the axis."""
-    assert _masked('snapshot == index(snapshot, 0, by=period_of)') == [10, 20], (
+    assert _masked('position(snapshot, by=period_of) == 0') == [10, 20], (
         "each period's first snapshot, not just the horizon's"
     )
-    assert _masked('snapshot == index(snapshot, 0)') == [10], 'and the ungrouped spelling still names one'
+    assert _masked('position(snapshot) == 0') == [10], 'and the ungrouped spelling still names one'
 
 
 def test_a_negative_position_is_each_group_s_last():
@@ -325,7 +339,7 @@ def test_a_negative_position_is_each_group_s_last():
     With periods of different lengths there is no single position that is the
     last of both, which is why this is the case that decided the design.
     """
-    assert _masked('snapshot == index(snapshot, -1, by=period_of)') == [11, 22]
+    assert _masked('position(snapshot, by=period_of) == -1') == [11, 22]
 
 
 def test_a_comparator_reads_the_same_grouped_as_ungrouped():
@@ -336,10 +350,10 @@ def test_a_comparator_reads_the_same_grouped_as_ungrouped():
     wraps to a huge positive number instead — which `==` cannot see and every
     other comparator reads backwards.
     """
-    assert _masked('snapshot >= index(snapshot, 1, by=period_of)') == [11, 21, 22], (
+    assert _masked('position(snapshot, by=period_of) >= 1') == [11, 21, 22], (
         "everything from each period's second snapshot on"
     )
-    assert _masked('snapshot < index(snapshot, 1, by=period_of)') == [10, 20], 'and its complement'
+    assert _masked('position(snapshot, by=period_of) < 1') == [10, 20], 'and its complement'
 
 
 def test_a_coordinate_in_no_group_has_no_boundary():
@@ -349,9 +363,9 @@ def test_a_coordinate_in_no_group_has_no_boundary():
     no group, so `sum(by=)` places its terms nowhere and this places no row.
     """
     for where in (
-        'snapshot == index(snapshot, 0, by=period_of)',
-        'snapshot == index(snapshot, -1, by=period_of)',
-        'snapshot >= index(snapshot, 0, by=period_of)',
+        'position(snapshot, by=period_of) == 0',
+        'position(snapshot, by=period_of) == -1',
+        'position(snapshot, by=period_of) >= 0',
     ):
         assert 99 not in _masked(where), f'{where} claimed a coordinate that is in no group'
 
@@ -363,7 +377,7 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
     one, which is precisely the failure grouping makes easy to write and
     impossible to see in the answer.
     """
-    model = MASK.replace('WHERE', 'snapshot == index(snapshot, 2, by=period_of)')
+    model = MASK.replace('WHERE', 'position(snapshot, by=period_of) == 2')
     path = tmp_path / 'model.yaml'
     path.write_text(model)
     sources = _grouped_sources()
@@ -387,7 +401,7 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
 )
 def test_by_takes_a_lookup(by, match):
     """`by=` is the same word it is in `sum(by=)` and `at(by=)`, or it is nothing."""
-    model = MASK.replace('WHERE', f'snapshot == index(snapshot, 0, by={by})')
+    model = MASK.replace('WHERE', f'position(snapshot, by={by}) == 0')
     with pytest.raises(LanguageError, match=match):
         schema_of(model)
 
@@ -399,7 +413,7 @@ def test_a_lookup_over_another_dimension_carries_no_position():
     so there is no position within a group for the clause to be about.
     """
     model = (
-        MASK.replace('WHERE', 'snapshot == index(snapshot, 0, by=plant_period)')
+        MASK.replace('WHERE', 'position(snapshot, by=plant_period) == 0')
         .replace('  period: {dtype: int}', '  period: {dtype: int}\n  plant: {dtype: str}')
         .replace(
             '  period_of: {over: snapshot, into: period}',

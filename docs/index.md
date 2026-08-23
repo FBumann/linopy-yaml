@@ -106,22 +106,22 @@ Only the notation is a choice, and **How** shows the one that was made here.
 
     | Symbol | Meaning |
     |---|---|
-    | $\mathcal{S}$ | index $s$ --- `snapshot` --- dispatch periods |
-    | $\mathcal{G}$ | index $g$ --- `generator` --- generating units |
+    | $\mathcal{S}$ | index $s$ — `snapshot` — dispatch periods |
+    | $\mathcal{G}$ | index $g$ — `generator` — generating units |
 
     #### Parameters
 
     | Symbol | Meaning |
     |---|---|
-    | $\bar p$ | `p_max` over $\mathcal{G}$ --- installed capacity |
-    | $\ell$ | `load` over $\mathcal{S}$ --- demand to be met |
-    | $c$ | `cost` over $\mathcal{G}$ --- marginal cost |
+    | $\bar p$ | `p_max` over $\mathcal{G}$ — installed capacity |
+    | $\ell$ | `load` over $\mathcal{S}$ — demand to be met |
+    | $c$ | `cost` over $\mathcal{G}$ — marginal cost |
 
     #### Variables
 
     | Symbol | Meaning |
     |---|---|
-    | $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ --- output of a generator in a snapshot |
+    | $p$ | `p` over $\mathcal{S} \times \mathcal{G}$ — output of a generator in a snapshot |
 
     #### Objective
 

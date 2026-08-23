@@ -135,7 +135,7 @@ DIVERGENT = {
     'seasons': (
         'states one boundary row rather than the model: the page is about where a '
         'clause points, so its summary shows the opening equation alone and names '
-        "the position with the generator's own index() notation."
+        "the translation with the generator's own grouped-wrap notation."
     ),
     'reserves': (
         'compresses two constraints into reader notation: phi, sigma and the barred '

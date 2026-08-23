@@ -38,67 +38,69 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{M}$ | index $m$ --- `market` --- reserve markets, each with a requirement to fill |
-| $\mathcal{T}$ | index $t$ --- `tranche` --- how fast a reserve has to be deliverable |
-| $\mathcal{Z}$ | index $z$ --- `zone` --- reserve zones, which overlap |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ --- transmission lines, which may have an open end |
-| $\mathcal{O}$ | index $o$ --- `offer` with $\mathrm{gen\_of}: \mathcal{O} \to \mathcal{G},\enspace \mathrm{market\_of}: \mathcal{O} \to \mathcal{M},\enspace \mathrm{tranche\_of}: \mathcal{O} \to \mathcal{T}$ --- one generator's bid into one market at one tranche |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{M}$ | index $m$ — `market` — reserve markets, each with a requirement to fill |
+| $\mathcal{T}$ | index $t$ — `tranche` — how fast a reserve has to be deliverable |
+| $\mathcal{Z}$ | index $z$ — `zone` — reserve zones, which overlap |
+| $\mathcal{L}$ | index $l$ — `line` with $\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}$ — transmission lines, which may have an open end |
+| $\mathcal{O}$ | index $o$ — `offer` with $\mathrm{gen\_of}: \mathcal{O} \to \mathcal{G},\enspace \mathrm{market\_of}: \mathcal{O} \to \mathcal{M},\enspace \mathrm{tranche\_of}: \mathcal{O} \to \mathcal{T}$ — one generator's bid into one market at one tranche |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ --- installed capacity |
-| $\mathit{energy\_cost}$ | `energy_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $\mathit{load}$ | `load` over $\mathcal{B}$ --- demand at each bus |
-| $\mathit{cap}$ | `cap` over $\mathcal{L}$ --- forward transmission limit |
-| $\mathit{neg\_cap}$ | `neg_cap` over $\mathcal{L}$ --- reverse transmission limit |
-| $\mathit{bus}^{\mathrm{cap}}$ | `bus_cap` over $\mathcal{B}$ --- most a bus may export over any one line |
-| $\mathit{offer}^{\mathrm{cost}}$ | `offer_cost` over $\mathcal{O}$ --- cost of holding one unit of reserve on an offer |
-| $\mathit{req}$ | `req` over $\mathcal{M}$ --- reserve a market has to be filled with |
-| $\mathit{tranche}^{\mathrm{frac}}$ | `tranche_frac` over $\mathcal{T}$ --- share of capacity a generator may offer at a tranche |
-| $\mathit{zone}^{\mathrm{share}}$ | `zone_share` over $\mathcal{G} \times \mathcal{Z}$ --- how much of a generator's reserve counts towards a zone — a generator may back several zones at a per-zone weight, so this cannot be a lookup over the generator, which is single-valued per label; rows are absent where a generator backs no part of a zone |
-| $\mathit{zone}^{\mathrm{req}}$ | `zone_req` over $\mathcal{Z}$ --- reserve a zone has to be covered by |
+| $\mathrm{p}^{\mathrm{max}}$ | `p_max` over $\mathcal{G}$ — installed capacity |
+| $\mathrm{energy\_cost}$ | `energy_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathrm{load}$ | `load` over $\mathcal{B}$ — demand at each bus |
+| $\mathrm{cap}$ | `cap` over $\mathcal{L}$ — forward transmission limit |
+| $\mathrm{neg\_cap}$ | `neg_cap` over $\mathcal{L}$ — reverse transmission limit |
+| $\mathrm{bus\_cap}$ | `bus_cap` over $\mathcal{B}$ — most a bus may export over any one line |
+| $\mathrm{offer\_cost}$ | `offer_cost` over $\mathcal{O}$ — cost of holding one unit of reserve on an offer |
+| $\mathrm{req}$ | `req` over $\mathcal{M}$ — reserve a market has to be filled with |
+| $\mathrm{tranche\_frac}$ | `tranche_frac` over $\mathcal{T}$ — share of capacity a generator may offer at a tranche |
+| $\mathrm{zone\_share}$ | `zone_share` over $\mathcal{G} \times \mathcal{Z}$ — how much of a generator's reserve counts towards a zone — a generator may back several zones at a per-zone weight, so this cannot be a lookup over the generator, which is single-valued per label; rows are absent where a generator backs no part of a zone |
+| $\mathrm{zone\_req}$ | `zone_req` over $\mathcal{Z}$ — reserve a zone has to be covered by |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{G}$ --- output of a generator |
-| $f$ | `f` over $\mathcal{L}$ --- flow on a line, signed towards its `line_to` bus |
-| $r$ | `r` over $\mathcal{O}$ --- reserve held against an offer |
+| $p$ | `p` over $\mathcal{G}$ — output of a generator |
+| $f$ | `f` over $\mathcal{L}$ — flow on a line, signed towards its `line_to` bus |
+| $r$ | `r` over $\mathcal{O}$ — reserve held against an offer |
+
+Upright is what the model is given — a parameter such as $\mathrm{p}^{\mathrm{max}}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Objective
 
-$$\min \sum_{g \in \mathcal{G}} p_{g} \cdot \mathit{energy\_cost}_{g} + \sum_{o \in \mathcal{O}} r_{o} \cdot \mathit{offer}^{\mathrm{cost}}_{o}$$
+$$\min \sum_{g \in \mathcal{G}} p_{g} \cdot \mathrm{energy\_cost}_{g} + \sum_{o \in \mathcal{O}} r_{o} \cdot \mathrm{offer\_cost}_{o}$$
 
 #### Subject to
 
 **`balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_to}(l) = b} f_{l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_from}(l) = b} f_{l} \right) = \mathit{load}_{b} \qquad \forall\thinspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_to}(l) = b} f_{l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{line\_from}(l) = b} f_{l} \right) = \mathrm{load}_{b} \qquad \forall\thinspace b \in \mathcal{B}$$
 
 **`export_cap`**
 
-$$f_{l} \le \mathit{bus}^{\mathrm{cap}}_{\mathrm{line\_from}(l)} \qquad \forall\thinspace l \in \mathcal{L}$$
+$$f_{l} \le \mathrm{bus\_cap}_{\mathrm{line\_from}(l)} \qquad \forall\thinspace l \in \mathcal{L}$$
 
 **`requirement`**
 
-$$\sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{market\_of}(o) = m} r_{o} \ge \mathit{req}_{m} \qquad \forall\thinspace m \in \mathcal{M}$$
+$$\sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{market\_of}(o) = m} r_{o} \ge \mathrm{req}_{m} \qquad \forall\thinspace m \in \mathcal{M}$$
 
 **`headroom`**
 
-$$p_{g} + \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{gen\_of}(o) = g} r_{o} \le p^{\mathrm{max}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
+$$p_{g} + \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{gen\_of}(o) = g} r_{o} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
 
 **`offer_cap`**
 
-$$r_{o} \le \mathit{tranche}^{\mathrm{frac}}_{\mathrm{tranche\_of}(o)} \cdot p^{\mathrm{max}}_{\mathrm{gen\_of}(o)} \qquad \forall\thinspace o \in \mathcal{O}$$
+$$r_{o} \le \mathrm{tranche\_frac}_{\mathrm{tranche\_of}(o)} \cdot \mathrm{p}^{\mathrm{max}}_{\mathrm{gen\_of}(o)} \qquad \forall\thinspace o \in \mathcal{O}$$
 
 **`zone_cover`**
 
-$$\sum_{g \in \mathcal{G}} \mathit{zone}^{\mathrm{share}}_{g,z} \cdot \left( \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{gen\_of}(o) = g} r_{o} \right) \ge \mathit{zone}^{\mathrm{req}}_{z} \qquad \forall\thinspace z \in \mathcal{Z}$$
+$$\sum_{g \in \mathcal{G}} \mathrm{zone\_share}_{g,z} \cdot \left( \sum_{o \in \mathcal{O} \thinspace:\thinspace \mathrm{gen\_of}(o) = g} r_{o} \right) \ge \mathrm{zone\_req}_{z} \qquad \forall\thinspace z \in \mathcal{Z}$$
 
 #### Variable domains
 
@@ -108,7 +110,7 @@ $$p_{g} \ge 0 \qquad \forall\thinspace g \in \mathcal{G}$$
 
 **`f`**
 
-$$\mathit{neg\_cap}_{l} \le f_{l} \le \mathit{cap}_{l} \qquad \forall\thinspace l \in \mathcal{L}$$
+$$\mathrm{neg\_cap}_{l} \le f_{l} \le \mathrm{cap}_{l} \qquad \forall\thinspace l \in \mathcal{L}$$
 
 **`r`**
 

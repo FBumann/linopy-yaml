@@ -1040,7 +1040,7 @@ def _eval_node(
         at = node.position + len(labels) if node.position < 0 else node.position
         if not 0 <= at < len(labels):
             msg = (
-                f'where: index({node.name}, {node.position}) names position {at} of '
+                f'where: position({node.name}) {node.op} {node.position} names position {at} of '
                 f"'{node.name}', which has {len(labels)} coordinate(s). A boundary that "
                 f'names no coordinate leaves the rows it was to seed unseeded.'
             )
@@ -1097,7 +1097,7 @@ def _group_offsets(node: DimensionPositionNode, groups: np.ndarray) -> np.ndarra
     short = sorted(str(g) for g, n in counts.items() if n < needed)
     if short:
         msg = (
-            f'where: index({node.name}, {node.position}, by={node.by}) names position '
+            f'where: position({node.name}, by={node.by}) {node.op} {node.position} names position '
             f'{node.position} within each group, and {len(short)} of them are shorter than '
             f'that: {short[:5]}. A boundary that names no coordinate leaves the rows it '
             f'was to seed unseeded.'

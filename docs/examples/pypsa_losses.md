@@ -34,64 +34,66 @@ PyPSA transmission losses, tangent form: the quadratic loss on a line, underesti
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ --- `snapshot` --- dispatch periods |
-| $\mathcal{B}$ | index $b$ --- `bus` --- network nodes |
-| $\mathcal{G}$ | index $g$ --- `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ --- generating units, each sitting on one bus |
-| $\mathcal{L}$ | index $l$ --- `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ --- passive branches, each joining two buses |
-| $\mathcal{S}$ | index $s$ --- `segment` --- the tangent points the loss curve is approximated at |
+| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{B}$ | index $b$ — `bus` — network nodes |
+| $\mathcal{G}$ | index $g$ — `generator` with $\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}$ — generating units, each sitting on one bus |
+| $\mathcal{L}$ | index $l$ — `line` with $\mathrm{from}: \mathcal{L} \to \mathcal{B},\enspace \mathrm{to}: \mathcal{L} \to \mathcal{B}$ — passive branches, each joining two buses |
+| $\mathcal{S}$ | index $s$ — `segment` — the tangent points the loss curve is approximated at |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ --- installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ --- cost of one unit of output |
-| $s^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ --- most a line may carry towards its `to` bus |
-| $\mathit{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ --- most a line may carry the other way, negative by convention |
-| $\mathit{loss}^{\mathrm{max}}$ | `loss_max` over $\mathcal{L}$ --- the loss at a line's rating — the top of the curve being approximated, carried as a column because a bound takes a name or a number, and given only for the lines that dissipate anything |
-| $\mathit{loss}^{\mathrm{slope}}$ | `loss_slope` over $\mathcal{L} \times \mathcal{S}$ --- the slope of this segment's half-plane — how much loss the flow buys along it. Where the segments come from is the instance's business, not the model's: a tangent to the loss curve and a secant across it both arrive here as a slope and an offset. |
-| $\mathit{loss}^{\mathrm{offset}}$ | `loss_offset` over $\mathcal{L} \times \mathcal{S}$ --- where this segment's half-plane meets the loss axis, negative for a curve through the origin |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ --- demand at each bus in each snapshot |
+| $\mathrm{p}^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathrm{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathrm{s}^{\mathrm{nom}}$ | `s_nom` over $\mathcal{L}$ — most a line may carry towards its `to` bus |
+| $\mathrm{neg\_s\_nom}$ | `neg_s_nom` over $\mathcal{L}$ — most a line may carry the other way, negative by convention |
+| $\mathrm{loss}^{\mathrm{max}}$ | `loss_max` over $\mathcal{L}$ — the loss at a line's rating — the top of the curve being approximated, carried as a column because a bound takes a name or a number, and given only for the lines that dissipate anything |
+| $\mathrm{loss}^{\mathrm{slope}}$ | `loss_slope` over $\mathcal{L} \times \mathcal{S}$ — the slope of this segment's half-plane — how much loss the flow buys along it. Where the segments come from is the instance's business, not the model's: a tangent to the loss curve and a secant across it both arrive here as a slope and an offset. |
+| $\mathrm{loss}^{\mathrm{offset}}$ | `loss_offset` over $\mathcal{L} \times \mathcal{S}$ — where this segment's half-plane meets the loss axis, negative for a curve through the origin |
+| $\mathrm{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ --- output of a generator in a snapshot |
-| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ --- flow on a line, signed towards its `to` bus — unbounded here, because the rating covers the flow *and* its loss and so is a row rather than a bound |
-| $\mathit{loss}$ | `loss` over $\mathcal{T} \times \mathcal{L}$ --- the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
+| $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
+| $f$ | `f` over $\mathcal{T} \times \mathcal{L}$ — flow on a line, signed towards its `to` bus — unbounded here, because the rating covers the flow *and* its loss and so is a row rather than a bound |
+| $\mathit{loss}$ | `loss` over $\mathcal{T} \times \mathcal{L}$ — the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
+
+Upright is what the model is given — a parameter such as $\mathrm{p}^{\mathrm{nom}}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g}$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g}$$
 
 #### Subject to
 
 **`nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) - 0.5 \cdot \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} \mathit{loss}_{t,l} \right) - 0.5 \cdot \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} \mathit{loss}_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} f_{t,l} \right) - 0.5 \cdot \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{from}(l) = b} \mathit{loss}_{t,l} \right) - 0.5 \cdot \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{to}(l) = b} \mathit{loss}_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 **`within_rating_forward`**
 
-$$f_{t,l} + \mathit{loss}_{t,l} \le s^{\mathrm{nom}}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L}$$
+$$f_{t,l} + \mathit{loss}_{t,l} \le \mathrm{s}^{\mathrm{nom}}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L}$$
 
 **`within_rating_reverse`**
 
-$$f_{t,l} - \mathit{loss}_{t,l} \ge \mathit{neg\_s\_nom}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L}$$
+$$f_{t,l} - \mathit{loss}_{t,l} \ge \mathrm{neg\_s\_nom}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L}$$
 
 **`loss_above_segment_forward`**
 
-$$\mathit{loss}_{t,l} + \mathit{loss}^{\mathrm{slope}}_{l,s} \cdot f_{t,l} \ge \mathit{loss}^{\mathrm{offset}}_{l,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathit{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
+$$\mathit{loss}_{t,l} + \mathrm{loss}^{\mathrm{slope}}_{l,s} \cdot f_{t,l} \ge \mathrm{loss}^{\mathrm{offset}}_{l,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathrm{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
 
 **`loss_above_segment_reverse`**
 
-$$\mathit{loss}_{t,l} - \mathit{loss}^{\mathrm{slope}}_{l,s} \cdot f_{t,l} \ge \mathit{loss}^{\mathrm{offset}}_{l,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathit{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
+$$\mathit{loss}_{t,l} - \mathrm{loss}^{\mathrm{slope}}_{l,s} \cdot f_{t,l} \ge \mathrm{loss}^{\mathrm{offset}}_{l,s} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L},\enspace s \in \mathcal{S} \thinspace:\thinspace \mathrm{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
 
 #### Variable domains
 
 **`p`**
 
-$$0 \le p_{t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 **`f`**
 
@@ -99,7 +101,7 @@ $$f_{t,l} \in \mathbb{R} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \
 
 **`loss`**
 
-$$0 \le \mathit{loss}_{t,l} \le \mathit{loss}^{\mathrm{max}}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L} \thinspace:\thinspace \mathit{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
+$$0 \le \mathit{loss}_{t,l} \le \mathrm{loss}^{\mathrm{max}}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L} \thinspace:\thinspace \mathrm{loss}^{\mathrm{max}}_{l} \text{ is defined}$$
 
 </details>
 <!-- math:end -->
