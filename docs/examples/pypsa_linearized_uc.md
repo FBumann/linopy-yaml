@@ -35,12 +35,12 @@ PyPSA linearized unit commitment: commitment with the status continuous in [0, 1
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
-| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ — share of capacity a committed unit must produce at least |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
-| $\mathit{start\_up\_cost}$ | `start_up_cost` over $\mathcal{G}$ — what bringing a unit up costs, once per start |
-| $\mathit{shut\_down\_cost}$ | `shut_down_cost` over $\mathcal{G}$ — what taking a unit down costs, once per stop |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\mathrm{p}^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathrm{p}^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ — share of capacity a committed unit must produce at least |
+| $\mathrm{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathrm{start\_up\_cost}$ | `start_up_cost` over $\mathcal{G}$ — what bringing a unit up costs, once per start |
+| $\mathrm{shut\_down\_cost}$ | `shut_down_cost` over $\mathcal{G}$ — what taking a unit down costs, once per stop |
+| $\mathrm{load}$ | `load` over $\mathcal{T}$ — demand to be met |
 
 #### Variables
 
@@ -51,25 +51,27 @@ PyPSA linearized unit commitment: commitment with the status continuous in [0, 1
 | $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ — how much of this unit comes up entering this snapshot |
 | $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ — how much of this unit goes down entering this snapshot |
 
+Upright is what the model is given — a parameter such as $\mathrm{p}^{\mathrm{nom}}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
+
 $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{start\_up}_{t,g} \cdot \mathit{start\_up\_cost}_{g} + \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{shut\_down}_{t,g} \cdot \mathit{shut\_down\_cost}_{g}$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} + \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{start\_up}_{t,g} \cdot \mathrm{start\_up\_cost}_{g} + \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{shut\_down}_{t,g} \cdot \mathrm{shut\_down\_cost}_{g}$$
 
 #### Subject to
 
 **`power_balance`**
 
-$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathit{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
 **`commitment_max`**
 
-$$p_{t,g} - p^{\mathrm{nom}}_{g} \cdot \mathit{status}_{t,g} \le 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$p_{t,g} - \mathrm{p}^{\mathrm{nom}}_{g} \cdot \mathit{status}_{t,g} \le 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 **`commitment_min`**
 
-$$p_{t,g} - p^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} \cdot \mathit{status}_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$p_{t,g} - \mathrm{p}^{\mathrm{min,pu}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \mathit{status}_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 **`start_up`**
 

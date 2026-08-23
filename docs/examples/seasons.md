@@ -49,8 +49,8 @@ A store that cycles inside each season rather than across the horizon, with seas
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{inflow}$ | `inflow` over $\mathcal{T}$ — energy arriving in a snapshot, whether or not it is wanted then |
-| $\mathit{price}$ | `price` over $\mathcal{T}$ — what one unit of release earns in a snapshot |
+| $\mathrm{inflow}$ | `inflow` over $\mathcal{T}$ — energy arriving in a snapshot, whether or not it is wanted then |
+| $\mathrm{price}$ | `price` over $\mathcal{T}$ — what one unit of release earns in a snapshot |
 
 #### Variables
 
@@ -59,17 +59,21 @@ A store that cycles inside each season rather than across the horizon, with seas
 | $\mathit{soc}$ | `soc` over $\mathcal{T}$ — energy held at the end of a snapshot |
 | $\mathit{release}$ | `release` over $\mathcal{T}$ — energy released in a snapshot |
 
+Upright is what the model is given — a parameter such as $\mathrm{inflow}$, a coordinate map, a label — and italic is what the solver chooses, such as $\mathit{soc}$. An index is italic too, being what a quantifier chooses, and a set is script.
+
 $t \ominus k$ denotes cyclic translation: index $t-k$ taken modulo the size of the dimension (`roll`). Plain $t-k$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+
+$t \ominus^{\mathrm{lookup}(t)} k$ denotes a translation counted inside the group a lookup puts $t$ in (`shift(by=lookup)`), so a term never crosses out of its own group.
 
 #### Objective
 
-$$\max \sum_{t \in \mathcal{T}} \mathit{release}_{t} \cdot \mathit{price}_{t}$$
+$$\max \sum_{t \in \mathcal{T}} \mathit{release}_{t} \cdot \mathrm{price}_{t}$$
 
 #### Subject to
 
 **`season_balance`**
 
-$$\mathit{soc}_{t} = \mathit{soc}_{t \ominus_{\mathrm{season\_of}(t)} 1} + \mathit{inflow}_{t} - \mathit{release}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+$$\mathit{soc}_{t} = \mathit{soc}_{t \ominus^{\mathrm{season\_of}(t)} 1} + \mathrm{inflow}_{t} - \mathit{release}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
 #### Variable domains
 

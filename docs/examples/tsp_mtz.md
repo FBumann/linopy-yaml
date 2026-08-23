@@ -63,8 +63,8 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{distance}$ | `distance` over $\mathcal{F} \times \mathcal{T}$ — distance along an arc, with no row on the diagonal — a city has no distance to itself, so no arc variable exists there |
-| $n$ | `n` (scalar) — the number of cities, which is the big-M the ordering rows need |
+| $\mathrm{distance}$ | `distance` over $\mathcal{F} \times \mathcal{T}$ — distance along an arc, with no row on the diagonal — a city has no distance to itself, so no arc variable exists there |
+| $\mathrm{n}$ | `n` (scalar) — the number of cities, which is the big-M the ordering rows need |
 
 #### Variables
 
@@ -73,9 +73,11 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 | $\mathit{travel}$ | `travel` over $\mathcal{F} \times \mathcal{T}$ — is this arc on the tour? |
 | $u$ | `u` over $\mathcal{C}$ — position of a city in the tour — continuous, because the formulation needs only that the positions be orderable |
 
+Upright is what the model is given — a parameter such as $\mathrm{distance}$, a coordinate map, a label — and italic is what the solver chooses, such as $\mathit{travel}$. An index is italic too, being what a quantifier chooses, and a set is script.
+
 #### Objective
 
-$$\min \sum_{f \in \mathcal{F},\enspace t \in \mathcal{T}} \mathit{travel}_{f,t} \cdot \mathit{distance}_{f,t}$$
+$$\min \sum_{f \in \mathcal{F},\enspace t \in \mathcal{T}} \mathit{travel}_{f,t} \cdot \mathrm{distance}_{f,t}$$
 
 #### Subject to
 
@@ -89,13 +91,13 @@ $$\sum_{f \in \mathcal{F}} \mathit{travel}_{f,t} = 1 \qquad \forall\thinspace t 
 
 **`ordering`**
 
-$$\sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{as\_from}(c) = f} u_{c} - \left( \sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{as\_to}(c) = t} u_{c} \right) + n \cdot \mathit{travel}_{f,t} \le n - 1 \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T} \thinspace:\thinspace f \neq \text{c01} \wedge t \neq \text{c01}$$
+$$\sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{as\_from}(c) = f} u_{c} - \left( \sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{as\_to}(c) = t} u_{c} \right) + \mathrm{n} \cdot \mathit{travel}_{f,t} \le \mathrm{n} - 1 \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T} \thinspace:\thinspace f \neq \text{c01} \wedge t \neq \text{c01}$$
 
 #### Variable domains
 
 **`travel`**
 
-$$\mathit{travel}_{f,t} \in \{0, 1\} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T} \thinspace:\thinspace \mathit{distance}_{f,t} \text{ is defined}$$
+$$\mathit{travel}_{f,t} \in \{0, 1\} \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T} \thinspace:\thinspace \mathrm{distance}_{f,t} \text{ is defined}$$
 
 **`u`**
 

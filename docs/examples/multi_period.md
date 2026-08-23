@@ -62,10 +62,10 @@ Least-cost investment and dispatch together: capacity is decided once per period
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
-| $\mathit{weight}$ | `weight` over $\mathcal{T}$ — what one snapshot stands for — a 2050 snapshot represents four hours, so the operating cost of a coarse period is not understated against a fine one |
-| $\mathit{opex}$ | `opex` over $\mathcal{G}$ — cost of running a generator for one snapshot-hour |
-| $\mathit{capex}$ | `capex` over $\mathcal{G} \times \mathcal{E}$ — cost of holding a unit of capacity through a period |
+| $\mathrm{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\mathrm{weight}$ | `weight` over $\mathcal{T}$ — what one snapshot stands for — a 2050 snapshot represents four hours, so the operating cost of a coarse period is not understated against a fine one |
+| $\mathrm{opex}$ | `opex` over $\mathcal{G}$ — cost of running a generator for one snapshot-hour |
+| $\mathrm{capex}$ | `capex` over $\mathcal{G} \times \mathcal{E}$ — cost of holding a unit of capacity through a period |
 
 #### Variables
 
@@ -74,9 +74,11 @@ Least-cost investment and dispatch together: capacity is decided once per period
 | $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
 | $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E} \times \mathcal{G}$ — capacity a generator holds for the whole of a period |
 
+Upright is what the model is given — a parameter such as $\mathrm{load}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
+
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{opex}_{g} \cdot \mathit{weight}_{t} + \sum_{e \in \mathcal{E},\enspace g \in \mathcal{G}} p^{\mathrm{nom}}_{e,g} \cdot \mathit{capex}_{g,e}$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{weight}_{t} + \sum_{e \in \mathcal{E},\enspace g \in \mathcal{G}} p^{\mathrm{nom}}_{e,g} \cdot \mathrm{capex}_{g,e}$$
 
 #### Subject to
 
@@ -86,7 +88,7 @@ $$p_{t,g} \le p^{\mathrm{nom}}_{\mathrm{period\_of}(t),g} \qquad \forall\thinspa
 
 **`balance`**
 
-$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathit{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
 #### Variable domains
 

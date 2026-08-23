@@ -36,12 +36,12 @@ PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one, so
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ — installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ — cost of one unit of output |
-| $\mathit{link}^{\mathrm{p,nom}}$ | `link_p_nom` over $\mathcal{L}$ — most a link may take in during one snapshot |
-| $\mathit{efficiency}$ | `efficiency` over $\mathcal{L}$ — share of what entered a link that arrives at the other end |
-| $\mathit{delay}$ | `delay` over $\mathcal{L}$ — how many snapshots a link takes to deliver what it took in |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
+| $\mathrm{p}^{\mathrm{nom}}$ | `p_nom` over $\mathcal{E}$ — installed capacity of a generator |
+| $\mathrm{marginal\_cost}$ | `marginal_cost` over $\mathcal{E}$ — cost of one unit of output |
+| $\mathrm{link\_p\_nom}$ | `link_p_nom` over $\mathcal{L}$ — most a link may take in during one snapshot |
+| $\mathrm{efficiency}$ | `efficiency` over $\mathcal{L}$ — share of what entered a link that arrives at the other end |
+| $\mathrm{delay}$ | `delay` over $\mathcal{L}$ — how many snapshots a link takes to deliver what it took in |
+| $\mathrm{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
@@ -50,27 +50,29 @@ PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one, so
 | $p$ | `p` over $\mathcal{T} \times \mathcal{E}$ — output of a generator in a snapshot |
 | $g$ | `g` over $\mathcal{T} \times \mathcal{L}$ — what a link takes in during a snapshot, at the bus it leaves |
 
+Upright is what the model is given — a parameter such as $\mathrm{p}^{\mathrm{nom}}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
+
 $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
 
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E}} p_{t,e} \cdot \mathit{marginal\_cost}_{e}$$
+$$\min \sum_{t \in \mathcal{T},\enspace e \in \mathcal{E}} p_{t,e} \cdot \mathrm{marginal\_cost}_{e}$$
 
 #### Subject to
 
 **`nodal_balance`**
 
-$$\sum_{e \in \mathcal{E} \thinspace:\thinspace \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{link\_to}(l) = b} g_{t \boxminus_{0} \mathit{delay},l} \cdot \mathit{efficiency}_{l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{link\_from}(l) = b} g_{t,l} \right) = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{e \in \mathcal{E} \thinspace:\thinspace \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{link\_to}(l) = b} g_{t \boxminus_{0} \mathrm{delay},l} \cdot \mathrm{efficiency}_{l} - \left( \sum_{l \in \mathcal{L} \thinspace:\thinspace \mathrm{link\_from}(l) = b} g_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 #### Variable domains
 
 **`p`**
 
-$$0 \le p_{t,e} \le p^{\mathrm{nom}}_{e} \qquad \forall\thinspace t \in \mathcal{T},\enspace e \in \mathcal{E}$$
+$$0 \le p_{t,e} \le \mathrm{p}^{\mathrm{nom}}_{e} \qquad \forall\thinspace t \in \mathcal{T},\enspace e \in \mathcal{E}$$
 
 **`g`**
 
-$$0 \le g_{t,l} \le \mathit{link}^{\mathrm{p,nom}}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L}$$
+$$0 \le g_{t,l} \le \mathrm{link\_p\_nom}_{l} \qquad \forall\thinspace t \in \mathcal{T},\enspace l \in \mathcal{L}$$
 
 </details>
 <!-- math:end -->

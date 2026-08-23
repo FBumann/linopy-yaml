@@ -35,14 +35,16 @@ Stigler's diet problem (1945): the cheapest set of foods meeting a year's nutrit
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{nutrient}^{\mathrm{per,dollar}}$ | `nutrient_per_dollar` over $\mathcal{F} \times \mathcal{N}$ — how much of each nutrient a dollar of each food buys |
-| $\mathit{daily\_minimum}$ | `daily_minimum` over $\mathcal{N}$ — how much of a nutrient a day has to supply |
+| $\mathrm{nutrient\_per\_dollar}$ | `nutrient_per_dollar` over $\mathcal{F} \times \mathcal{N}$ — how much of each nutrient a dollar of each food buys |
+| $\mathrm{daily\_minimum}$ | `daily_minimum` over $\mathcal{N}$ — how much of a nutrient a day has to supply |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
 | $\mathit{spend}$ | `spend` over $\mathcal{F}$ — dollars per day spent on this food |
+
+Upright is what the model is given — a parameter such as $\mathrm{nutrient\_per\_dollar}$, a coordinate map, a label — and italic is what the solver chooses, such as $\mathit{spend}$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Objective
 
@@ -52,7 +54,7 @@ $$\min \sum_{f \in \mathcal{F}} \mathit{spend}_{f}$$
 
 **`meet_requirement`**
 
-$$\sum_{f \in \mathcal{F}} \mathit{spend}_{f} \cdot \mathit{nutrient}^{\mathrm{per,dollar}}_{f,n} \ge \mathit{daily\_minimum}_{n} \qquad \forall\thinspace n \in \mathcal{N}$$
+$$\sum_{f \in \mathcal{F}} \mathit{spend}_{f} \cdot \mathrm{nutrient\_per\_dollar}_{f,n} \ge \mathrm{daily\_minimum}_{n} \qquad \forall\thinspace n \in \mathcal{N}$$
 
 #### Variable domains
 

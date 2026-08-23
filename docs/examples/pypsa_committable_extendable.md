@@ -42,12 +42,12 @@ PyPSA's committable unit whose capacity is also being built: the minimum output 
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ — share of its built capacity a committed unit must produce while on |
-| $p^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ — most capacity a generator may build |
-| $\mathit{big\_m}$ | `big_m` over $\mathcal{G}$ — a bound on the output of a committed unit, large enough never to bind on its own — the capacity ceiling times the availability, and present only for the units that are committed at all |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
-| $\mathit{capital\_cost}$ | `capital_cost` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
-| $\mathit{load}$ | `load` over $\mathcal{T}$ — demand to be met |
+| $\mathrm{p}^{\mathrm{min,pu}}$ | `p_min_pu` over $\mathcal{G}$ — share of its built capacity a committed unit must produce while on |
+| $\mathrm{p}^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ — most capacity a generator may build |
+| $\mathrm{big\_m}$ | `big_m` over $\mathcal{G}$ — a bound on the output of a committed unit, large enough never to bind on its own — the capacity ceiling times the availability, and present only for the units that are committed at all |
+| $\mathrm{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathrm{capital\_cost}$ | `capital_cost` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
+| $\mathrm{load}$ | `load` over $\mathcal{T}$ — demand to be met |
 
 #### Variables
 
@@ -57,9 +57,11 @@ PyPSA's committable unit whose capacity is also being built: the minimum output 
 | $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator |
 | $\mathit{status}$ | `status` over $\mathcal{T} \times \mathcal{G}$ — is this unit committed in this snapshot? Declared only for the units that carry a big-M, which is what marks a unit as committed rather than merely dispatched |
 
+Upright is what the model is given — a parameter such as $\mathrm{p}^{\mathrm{min,pu}}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
+
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathit{capital\_cost}_{g}$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capital\_cost}_{g}$$
 
 #### Subject to
 
@@ -69,15 +71,15 @@ $$p_{t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\e
 
 **`off_means_zero`**
 
-$$p_{t,g} - \mathit{big\_m}_{g} \cdot \mathit{status}_{t,g} \le 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathit{big\_m}_{g} \text{ is defined}$$
+$$p_{t,g} - \mathrm{big\_m}_{g} \cdot \mathit{status}_{t,g} \le 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{big\_m}_{g} \text{ is defined}$$
 
 **`commitment_floor`**
 
-$$p_{t,g} - p^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} - \mathit{big\_m}_{g} \cdot \mathit{status}_{t,g} \ge -\mathit{big\_m}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathit{big\_m}_{g} \text{ is defined}$$
+$$p_{t,g} - \mathrm{p}^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} - \mathrm{big\_m}_{g} \cdot \mathit{status}_{t,g} \ge -\mathrm{big\_m}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{big\_m}_{g} \text{ is defined}$$
 
 **`power_balance`**
 
-$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathit{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
+$$\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\thinspace t \in \mathcal{T}$$
 
 #### Variable domains
 
@@ -87,11 +89,11 @@ $$p_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathc
 
 **`p_nom`**
 
-$$0 \le p^{\mathrm{nom}}_{g} \le p^{\mathrm{nom,max}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
+$$0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
 
 **`status`**
 
-$$\mathit{status}_{t,g} \in \{0, 1\} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathit{big\_m}_{g} \text{ is defined}$$
+$$\mathit{status}_{t,g} \in \{0, 1\} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{big\_m}_{g} \text{ is defined}$$
 
 </details>
 <!-- math:end -->

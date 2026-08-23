@@ -32,12 +32,12 @@ PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{weighting}$ | `weighting` over $\mathcal{T}$ — hours a snapshot stands for — what turns a power into an energy |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
-| $e^{\mathrm{sum,max}}$ | `e_sum_max` over $\mathcal{G}$ — most energy a generator may deliver over the whole horizon, for the generators that have such a limit |
-| $e^{\mathrm{sum,min}}$ | `e_sum_min` over $\mathcal{G}$ — least energy a generator must deliver over the whole horizon, for the generators that owe one |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
+| $\mathrm{weighting}$ | `weighting` over $\mathcal{T}$ — hours a snapshot stands for — what turns a power into an energy |
+| $\mathrm{p}^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathrm{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathrm{e}^{\mathrm{sum,max}}$ | `e_sum_max` over $\mathcal{G}$ — most energy a generator may deliver over the whole horizon, for the generators that have such a limit |
+| $\mathrm{e}^{\mathrm{sum,min}}$ | `e_sum_min` over $\mathcal{G}$ — least energy a generator must deliver over the whole horizon, for the generators that owe one |
+| $\mathrm{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
@@ -45,29 +45,31 @@ PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon
 |---|---|
 | $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
 
+Upright is what the model is given — a parameter such as $\mathrm{weighting}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
+
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g} \cdot \mathit{weighting}_{t}$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} \cdot \mathrm{weighting}_{t}$$
 
 #### Subject to
 
 **`nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathrm{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 **`energy_cap`**
 
-$$\sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathit{weighting}_{t} \le e^{\mathrm{sum,max}}_{g} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\thinspace e^{\mathrm{sum,max}}_{g} \text{ is defined}$$
+$$\sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathrm{weighting}_{t} \le \mathrm{e}^{\mathrm{sum,max}}_{g} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{e}^{\mathrm{sum,max}}_{g} \text{ is defined}$$
 
 **`energy_floor`**
 
-$$\sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathit{weighting}_{t} \ge e^{\mathrm{sum,min}}_{g} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\thinspace e^{\mathrm{sum,min}}_{g} \text{ is defined}$$
+$$\sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathrm{weighting}_{t} \ge \mathrm{e}^{\mathrm{sum,min}}_{g} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{e}^{\mathrm{sum,min}}_{g} \text{ is defined}$$
 
 #### Variable domains
 
 **`p`**
 
-$$0 \le p_{t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
+$$0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G}$$
 
 </details>
 <!-- math:end -->

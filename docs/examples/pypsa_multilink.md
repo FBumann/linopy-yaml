@@ -50,11 +50,11 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 
 | Symbol | Meaning |
 |---|---|
-| $\mathit{gen}^{\mathrm{p,nom}}$ | `gen_p_nom` over $\mathcal{G}$ — installed capacity of a generator |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
-| $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{L}$ — the link's own capacity — a cap on what it draws at its input, p0 in PyPSA |
-| $\mathit{incidence}$ | `incidence` over $\mathcal{L} \times \mathcal{B}$ — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
-| $\mathit{load}$ | `load` over $\mathcal{B}$ — demand at each bus |
+| $\mathrm{gen}^{\mathrm{p,nom}}$ | `gen_p_nom` over $\mathcal{G}$ — installed capacity of a generator |
+| $\mathrm{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathrm{p}^{\mathrm{nom}}$ | `p_nom` over $\mathcal{L}$ — the link's own capacity — a cap on what it draws at its input, p0 in PyPSA |
+| $\mathrm{incidence}$ | `incidence` over $\mathcal{L} \times \mathcal{B}$ — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
+| $\mathrm{load}$ | `load` over $\mathcal{B}$ — demand at each bus |
 
 #### Variables
 
@@ -63,25 +63,27 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 | $\mathit{gen}$ | `gen` over $\mathcal{G}$ — output of a generator |
 | $p$ | `p` over $\mathcal{L}$ — the one decision per link, PyPSA's p — what it draws at its input. Every other end's flow is that draw scaled by its incidence entry, so it needs no variable of its own. |
 
+Upright is what the model is given — a parameter such as $\mathrm{gen}^{\mathrm{p,nom}}$, a coordinate map, a label — and italic is what the solver chooses, such as $\mathit{gen}$. An index is italic too, being what a quantifier chooses, and a set is script.
+
 #### Objective
 
-$$\min \sum_{g \in \mathcal{G}} \mathit{gen}_{g} \cdot \mathit{marginal\_cost}_{g}$$
+$$\min \sum_{g \in \mathcal{G}} \mathit{gen}_{g} \cdot \mathrm{marginal\_cost}_{g}$$
 
 #### Subject to
 
 **`nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathit{incidence}_{l,b} \cdot p_{l} = \mathit{load}_{b} \qquad \forall\thinspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathrm{incidence}_{l,b} \cdot p_{l} = \mathrm{load}_{b} \qquad \forall\thinspace b \in \mathcal{B}$$
 
 #### Variable domains
 
 **`gen`**
 
-$$0 \le \mathit{gen}_{g} \le \mathit{gen}^{\mathrm{p,nom}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
+$$0 \le \mathit{gen}_{g} \le \mathrm{gen}^{\mathrm{p,nom}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
 
 **`p`**
 
-$$0 \le p_{l} \le p^{\mathrm{nom}}_{l} \qquad \forall\thinspace l \in \mathcal{L}$$
+$$0 \le p_{l} \le \mathrm{p}^{\mathrm{nom}}_{l} \qquad \forall\thinspace l \in \mathcal{L}$$
 
 </details>
 <!-- math:end -->

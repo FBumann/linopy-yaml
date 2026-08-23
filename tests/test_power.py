@@ -111,16 +111,16 @@ def test_the_typesetter_prints_the_exponent_as_one():
     """A superscript, not a spelled-out product: the file said `**` and the page
     says what the file said."""
     latex = to_latex(model('sum(p * cost / growth ** period)'))
-    assert r'\mathit{growth}^{\mathit{period}_{g}}' in latex, 'the exponent is not a superscript'
+    assert r'\mathrm{growth}^{\mathrm{period}_{g}}' in latex, 'the exponent is not a superscript'
     typst = to_typst(model('sum(p * cost / growth ** period)'))
-    assert 'italic("growth")^(italic("period")_(g))' in typst, 'typst spells the superscript its own way'
+    assert 'upright("growth")^(upright("period")_(g))' in typst, 'typst spells the superscript its own way'
 
 
 def test_a_power_of_a_power_keeps_its_brackets():
     """`**` is right-associative, so `(a ** b) ** c` has to print its own
     parentheses or it would read back as the other grouping."""
     nested = to_latex(model('sum(p * (growth ** period) ** period)'))
-    assert r'\left( \mathit{growth}^{\mathit{period}_{g}} \right)^{' in nested, (
+    assert r'\left( \mathrm{growth}^{\mathrm{period}_{g}} \right)^{' in nested, (
         'a parenthesised base lost its brackets, so the page says the other association'
     )
 

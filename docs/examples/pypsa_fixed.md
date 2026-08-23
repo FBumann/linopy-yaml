@@ -32,12 +32,12 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 
 | Symbol | Meaning |
 |---|---|
-| $p^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ — most capacity that may stand at a generator once built |
-| $\mathit{capital\_cost}$ | `capital_cost` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
-| $\mathit{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
-| $p^{\mathrm{nom,set}}$ | `p_nom_set` over $\mathcal{G}$ — the capacity a generator is to hold, for the generators whose capacity is already decided |
-| $p^{\mathrm{set}}$ | `p_set` over $\mathcal{T} \times \mathcal{G}$ — the output a generator is to deliver, for the snapshots in which it is scheduled rather than chosen |
-| $\mathit{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
+| $\mathrm{p}^{\mathrm{nom,max}}$ | `p_nom_max` over $\mathcal{G}$ — most capacity that may stand at a generator once built |
+| $\mathrm{capital\_cost}$ | `capital_cost` over $\mathcal{G}$ — cost of holding one unit of capacity over the horizon |
+| $\mathrm{marginal\_cost}$ | `marginal_cost` over $\mathcal{G}$ — cost of one unit of output |
+| $\mathrm{p}^{\mathrm{nom,set}}$ | `p_nom_set` over $\mathcal{G}$ — the capacity a generator is to hold, for the generators whose capacity is already decided |
+| $\mathrm{p}^{\mathrm{set}}$ | `p_set` over $\mathcal{T} \times \mathcal{G}$ — the output a generator is to deliver, for the snapshots in which it is scheduled rather than chosen |
+| $\mathrm{load}$ | `load` over $\mathcal{T} \times \mathcal{B}$ — demand at each bus in each snapshot |
 
 #### Variables
 
@@ -46,9 +46,11 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 | $p$ | `p` over $\mathcal{T} \times \mathcal{G}$ — output of a generator in a snapshot |
 | $p^{\mathrm{nom}}$ | `p_nom` over $\mathcal{G}$ — capacity built at a generator |
 
+Upright is what the model is given — a parameter such as $\mathrm{p}^{\mathrm{nom,max}}$, a coordinate map, a label — and italic is what the solver chooses, such as $p$. An index is italic too, being what a quantifier chooses, and a set is script.
+
 #### Objective
 
-$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathit{capital\_cost}_{g}$$
+$$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capital\_cost}_{g}$$
 
 #### Subject to
 
@@ -58,15 +60,15 @@ $$p_{t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\thinspace t \in \mathcal{T},\e
 
 **`capacity_fixed`**
 
-$$p^{\mathrm{nom}}_{g} = p^{\mathrm{nom,set}}_{g} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\thinspace p^{\mathrm{nom,set}}_{g} \text{ is defined}$$
+$$p^{\mathrm{nom}}_{g} = \mathrm{p}^{\mathrm{nom,set}}_{g} \qquad \forall\thinspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{p}^{\mathrm{nom,set}}_{g} \text{ is defined}$$
 
 **`dispatch_fixed`**
 
-$$p_{t,g} = p^{\mathrm{set}}_{t,g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace p^{\mathrm{set}}_{t,g} \text{ is defined}$$
+$$p_{t,g} = \mathrm{p}^{\mathrm{set}}_{t,g} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G} \thinspace:\thinspace \mathrm{p}^{\mathrm{set}}_{t,g} \text{ is defined}$$
 
 **`nodal_balance`**
 
-$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathit{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
+$$\sum_{g \in \mathcal{G} \thinspace:\thinspace \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathrm{load}_{t,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace b \in \mathcal{B}$$
 
 #### Variable domains
 
@@ -76,7 +78,7 @@ $$p_{t,g} \ge 0 \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathc
 
 **`p_nom`**
 
-$$0 \le p^{\mathrm{nom}}_{g} \le p^{\mathrm{nom,max}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
+$$0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\thinspace g \in \mathcal{G}$$
 
 </details>
 <!-- math:end -->
