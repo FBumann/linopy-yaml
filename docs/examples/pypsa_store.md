@@ -58,6 +58,8 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 | $e$ | `e` over $\mathcal{T} \times \mathcal{S}$ — energy in the store at the end of a snapshot |
 | $e^{\mathrm{nom}}$ | `e_nom` over $\mathcal{S}$ — energy capacity built at a store |
 
+$\mathrm{pos}(t)$ denotes where index $t$ sits along its dimension's own order — the order `shift` walks, not the order labels sort in — counted from $0$. The index itself stays the coordinate, so $t$ compares against labels and $\mathrm{pos}(t)$ against positions.
+
 #### Objective
 
 $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \sum_{s \in \mathcal{S}} e^{\mathrm{nom}}_{s} \cdot e^{\mathrm{capital,cost}}_{s}$$

@@ -67,7 +67,7 @@ def test_ruff_is_the_same_version_in_ci_and_in_the_hook():
 #: lower bound is a claim the `floors` environment has to pin to prove.
 _FLOOR = re.compile(r'^([A-Za-z0-9._-]+)>=([0-9][0-9a-zA-Z.]*)$')
 
-#: `math-spec @ git+https://…@afb0e6a`. A direct reference is already
+#: `math-spec @ git+https://…@d414e87`. A direct reference is already
 #: exact, so it has no lower bound to prove and nothing to pin — it must stay
 #: out of the floors environment rather than be pinned twice.
 _DIRECT = re.compile(r'^([A-Za-z0-9._-]+) @ \S+$')

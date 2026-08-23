@@ -64,6 +64,10 @@ The same least-cost dispatch as `piecewise.yaml`, with each generator's cost cur
 
 $t \boxminus_{v} k$ denotes translation with $v$ standing where index $t-k$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $v$ rather than being dropped.
 
+$\mathrm{pos}(t)$ denotes where index $t$ sits along its dimension's own order — the order `shift` walks, not the order labels sort in — counted from $0$. The index itself stays the coordinate, so $t$ compares against labels and $\mathrm{pos}(t)$ against positions.
+
+$\lvert \mathcal{T} \rvert$ denotes the size of the set being counted along, and a position counted from the end prints against it — $\lvert \mathcal{T} \rvert - 1$ is the last position, one less than the size because the first is $0$.
+
 #### Objective
 
 $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{op\_cost}_{t,g}$$
@@ -84,7 +88,7 @@ $$p_{t,g} \ge \mathit{bp}^{\mathrm{x}}_{g,b} \qquad \forall\thinspace t \in \mat
 
 **`cost_curve_domain_hi`**
 
-$$p_{t,g} \le \mathit{bp}^{\mathrm{x}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{pos}(b) = -1$$
+$$p_{t,g} \le \mathit{bp}^{\mathrm{x}}_{g,b} \qquad \forall\thinspace t \in \mathcal{T},\enspace g \in \mathcal{G},\enspace b \in \mathcal{B} \thinspace:\thinspace \mathrm{pos}(b) = \lvert \mathcal{B} \rvert - 1$$
 
 #### Variable domains
 

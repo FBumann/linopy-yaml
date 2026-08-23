@@ -48,6 +48,8 @@ PyPSA unit commitment: which generators are on, not just how much they produce �
 | $\mathit{start\_up}$ | `start_up` over $\mathcal{T} \times \mathcal{G}$ — does this unit come up entering this snapshot? |
 | $\mathit{shut\_down}$ | `shut_down` over $\mathcal{T} \times \mathcal{G}$ — does this unit go down entering this snapshot? |
 
+$\mathrm{pos}(t)$ denotes where index $t$ sits along its dimension's own order — the order `shift` walks, not the order labels sort in — counted from $0$. The index itself stays the coordinate, so $t$ compares against labels and $\mathrm{pos}(t)$ against positions.
+
 #### Objective
 
 $$\min \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} p_{t,g} \cdot \mathit{marginal\_cost}_{g} + \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{start\_up}_{t,g} \cdot \mathit{start\_up\_cost}_{g} + \sum_{t \in \mathcal{T},\enspace g \in \mathcal{G}} \mathit{shut\_down}_{t,g} \cdot \mathit{shut\_down\_cost}_{g}$$

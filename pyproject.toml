@@ -39,13 +39,14 @@ dependencies = [
     #
     # A commit rather than a tag, because the construct this tree is written
     # against is on an unmerged branch: energy-models/math-spec#31 retires
-    # `index(dim, i)` for `position(dim)`, and no release carries it. A commit
-    # and not the branch name, so what CI resolves is what this was verified
-    # against — the `linopy` extra tracks `master` deliberately and says why,
-    # and the reason does not transfer: this pin is a language surface both
-    # lanes parse against, not upstream work being tracked. It goes back to a
-    # tag when #31 lands in one.
-    "math-spec @ git+https://github.com/energy-models/math-spec@afb0e6a4482aba9ddb6aef1301de274fed968a18",
+    # `index(dim, i)` for `position(dim)`, and no release carries it — the
+    # commit sits on `v0.0.0-alpha.7`, whose fixes it therefore brings with it.
+    # A commit and not the branch name, so what CI resolves is what this was
+    # verified against — the `linopy` extra tracks `master` deliberately and
+    # says why, and the reason does not transfer: this pin is a language
+    # surface both lanes parse against, not upstream work being tracked. It
+    # goes back to a tag when #31 lands in one.
+    "math-spec @ git+https://github.com/energy-models/math-spec@d414e87ee637dc7834714f2a7089bd40d8613bfb",
     # the relational engine: every frame a model is built from, and the parquet
     # reader that fills them. Arrow-backed, so a result frame exports the
     # PyCapsule protocol and any consumer takes it without this package

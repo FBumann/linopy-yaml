@@ -27,7 +27,7 @@ PyPSA minimum up and down times: a unit that has started must stay on, and one t
 
 | Symbol | Meaning |
 |---|---|
-| $\mathcal{T}$ | index $t$ — `snapshot` — dispatch periods |
+| $\mathcal{T}$ | index $t$ — `snapshot` (`int` coordinates) — dispatch periods |
 | $\mathcal{G}$ | index $g$ — `generator` — generating units, each either committed or off |
 
 #### Parameters
