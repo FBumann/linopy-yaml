@@ -541,6 +541,8 @@ it.
 | `linopy/coverage.py` | the two positions an absent row has no reading for: a divisor and a constant side |
 | `linopy/absence.py` | the four positions an absent value is spelled differently in — absence is positional in this lane |
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
+| `linopy/operators.py` | the eager evaluation of every built-in, on xarray and linopy; the table `tests/test_architecture.py` holds to the language's own |
+| `linopy/where.py` | a resolved `where:` as a boolean array, and the shape linopy's `mask=` takes |
 
 **Two subpackages, and the directory *is* the rule in both cases.** Everything
 under `relational/` is the relational lane and imports nothing else from the

@@ -716,8 +716,8 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     evaluates but the relational lane cannot lower (or vice versa) is a
     dialect split, and it would make the differential tests meaningless.
 
-    Read statically: ``linopy/builder.py`` imports xarray at module level (it
-    is linopy lane), and this check must still run on a bare install.
+    Read statically: ``linopy/operators.py`` imports xarray at module level
+    (it is linopy lane), and this check must still run on a bare install.
 
     The eager lane keeps a table; the relational lane spells its cases out in
     ``lowering.py``, so every declared name has to appear there as a lowering
@@ -725,9 +725,9 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     """
     from math_spec import BUILTIN_NAMES
 
-    tree = ast.parse((PKG / 'linopy' / 'builder.py').read_text())
+    tree = ast.parse((PKG / 'linopy' / 'operators.py').read_text())
     table = next(
-        node.value for node in tree.body if isinstance(node, ast.AnnAssign) and ast.unparse(node.target) == '_OPERATORS'
+        node.value for node in tree.body if isinstance(node, ast.AnnAssign) and ast.unparse(node.target) == 'OPERATORS'
     )
     assert isinstance(table, ast.Dict)
     eager = {ast.literal_eval(k) for k in table.keys if k is not None}

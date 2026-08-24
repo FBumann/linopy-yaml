@@ -24,7 +24,7 @@ import pytest
 from lpspec.errors import DataError, LaneError, LanguageError
 from lpspec.sources import tidy_sources
 from tests.conftest import schema_of
-from tests.oracle import builder, linopy, loader, lpspec_linopy, pd, xr
+from tests.oracle import builder, linopy, loader, lpspec_linopy, operators, pd, where, xr
 
 if TYPE_CHECKING:
     from math_spec import Model
@@ -243,9 +243,11 @@ class TestOperandShapesAnOperatorRefuses:
         ('call', 'kwargs'),
         [
             pytest.param(
-                builder._operator_grouped_sum, {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}}, id='sum-by'
+                operators.operator_grouped_sum,
+                {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}},
+                id='sum-by',
             ),
-            pytest.param(builder._operator_at, {'into': ('b',)}, id='at'),
+            pytest.param(operators.operator_at, {'into': ('b',)}, id='at'),
         ],
     )
     def test_a_lookup_that_is_not_an_array_names_what_arrived(self, call, kwargs):
@@ -258,9 +260,11 @@ class TestOperandShapesAnOperatorRefuses:
         ('call', 'kwargs'),
         [
             pytest.param(
-                builder._operator_grouped_sum, {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}}, id='sum-by'
+                operators.operator_grouped_sum,
+                {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}},
+                id='sum-by',
             ),
-            pytest.param(builder._operator_at, {'into': ('b',)}, id='at'),
+            pytest.param(operators.operator_at, {'into': ('b',)}, id='at'),
         ],
     )
     def test_a_lookup_over_two_dims_is_refused_as_language(self, call, kwargs):
@@ -275,12 +279,12 @@ class TestOperandShapesAnOperatorRefuses:
         ('call', 'kwargs', 'named'),
         [
             pytest.param(
-                builder._operator_grouped_sum,
+                operators.operator_grouped_sum,
                 {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}},
                 'sum(by=)',
                 id='sum-by',
             ),
-            pytest.param(builder._operator_at, {'into': ('b',)}, 'at()', id='at'),
+            pytest.param(operators.operator_at, {'into': ('b',)}, 'at()', id='at'),
         ],
     )
     def test_an_operand_the_operator_cannot_read_names_the_call(self, call, kwargs, named):
@@ -292,7 +296,7 @@ class TestOperandShapesAnOperatorRefuses:
 
 
 # ---------------------------------------------------------------------------
-# builder.evaluate_where: the eager reading of a resolved where AST
+# where.evaluate_where: the eager reading of a resolved where AST
 # ---------------------------------------------------------------------------
 
 
@@ -311,23 +315,23 @@ def _resolved(text, parameters=('p_max',), dimensions=('g',)):
 
 
 def test_no_where_is_a_scalar_true(gens):
-    mask = builder.evaluate_where(None, *gens)
+    mask = where.evaluate_where(None, *gens)
     assert mask.ndim == 0
     assert bool(mask) is True
 
 
 def test_a_bare_parameter_name_is_an_existence_check(gens):
-    assert builder.evaluate_where(_resolved('p_max'), *gens).all()
+    assert where.evaluate_where(_resolved('p_max'), *gens).all()
 
 
 def test_a_comparison_masks_per_coordinate(gens):
-    mask = builder.evaluate_where(_resolved('p_max > 0'), *gens)
+    mask = where.evaluate_where(_resolved('p_max > 0'), *gens)
     assert [bool(mask.sel(g=g)) for g in ('wind', 'solar', 'gas')] == [True, False, True]
 
 
 def test_a_dimension_comparison_masks_on_the_coordinate_itself():
     node = _resolved('t > 0', parameters=(), dimensions=('t',))
-    mask = builder.evaluate_where(node, xr.Dataset(), {'t': pd.Index([0, 1, 2], name='t')})
+    mask = where.evaluate_where(node, xr.Dataset(), {'t': pd.Index([0, 1, 2], name='t')})
     assert [bool(mask.sel(t=t)) for t in (0, 1, 2)] == [False, True, True]
 
 

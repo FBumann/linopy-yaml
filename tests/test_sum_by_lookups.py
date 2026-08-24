@@ -36,7 +36,7 @@ from lpspec.lowering import _lower_expr, lower_program
 from lpspec.relational.plan import GroupSum, Variable
 from tests.conftest import override, raw_of, relation, resolved, schema_of
 from tests.differential import RTOL, differential
-from tests.oracle import builder, pd, xr
+from tests.oracle import operators, pd, xr
 from tests.test_compiler import compiler
 
 MODEL = """
@@ -218,7 +218,7 @@ def test_a_grouped_parameter_reads_zero_where_no_member_lands():
     of_tech = xr.DataArray(['wind', 'sun'], coords=[generator])
     labels = {'bus': pd.Index(['a', 'b'], name='bus'), 'technology': pd.Index(['wind', 'sun'], name='technology')}
 
-    grouped = builder._operator_grouped_sum(cost, (of_bus, of_tech), into=('bus', 'technology'), labels=labels)
+    grouped = operators.operator_grouped_sum(cost, (of_bus, of_tech), into=('bus', 'technology'), labels=labels)
 
     assert grouped.to_series().to_dict() == {
         ('a', 'wind'): 1.0,
