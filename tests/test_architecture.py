@@ -8,13 +8,14 @@ cannot silently drift from the code. Static checks parse source with ``ast``
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Mapping
 
 REPO = Path(__file__).parent.parent
 PKG = REPO / 'src' / 'lpspec'
@@ -747,6 +748,117 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     assert relational == set(BUILTIN_NAMES), (
         f'relational lane lowers {sorted(relational)}, language declares {sorted(BUILTIN_NAMES)}'
     )
+
+
+#: A kwarg no built-in declares, passed to :func:`call_shape_error` to make it
+#: answer with the usage line it refuses against. A probe rather than a read of
+#: the descriptors, which are math-spec-private (hard rule 1).
+_NOT_A_KEYWORD = '#no such keyword'
+
+
+def _declared_keywords(usage: str) -> set[str]:
+    """The keywords a built-in takes, read off the language's own usage line."""
+    return set(re.findall(r'([a-z_]+)=', usage))
+
+
+def _keywords_read(fn: ast.FunctionDef, helpers: Mapping[str, ast.FunctionDef]) -> set[str]:
+    """Every literal key *fn* takes off a ``.kwargs`` mapping, helpers included.
+
+    One level of indirection is followed because a lowering may delegate a
+    keyword to a module-level reader — ``shift`` reads its partition through
+    ``_partition_of`` — and a keyword read there is read.
+    """
+    found: set[str] = set()
+    called: set[str] = set()
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Subscript) and _is_kwargs(node.value) and isinstance(node.slice, ast.Constant):
+            found.add(node.slice.value)
+        elif isinstance(node, ast.Compare) and isinstance(node.left, ast.Constant):
+            found |= {node.left.value for c in node.comparators if _is_kwargs(c)}
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute) and node.func.attr == 'get' and _is_kwargs(node.func.value):
+                found |= {a.value for a in node.args[:1] if isinstance(a, ast.Constant)}
+            elif isinstance(node.func, ast.Name) and node.func.id in helpers:
+                called.add(node.func.id)
+    for name in called:
+        found |= _keywords_read(helpers[name], {})
+    return found
+
+
+def _is_kwargs(node: ast.expr) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == 'kwargs'
+
+
+def _functions(tree: ast.Module) -> dict[str, ast.FunctionDef]:
+    """Every function in *tree* by name, methods included, last definition winning."""
+    return {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+
+
+def _table(tree: ast.Module, name: str) -> dict[str, str]:
+    """An annotated ``{'operator': function}`` table, as names — ``_CALLS``, ``OPERATORS``."""
+    literal = next(
+        node.value for node in tree.body if isinstance(node, ast.AnnAssign) and ast.unparse(node.target) == name
+    )
+    assert isinstance(literal, ast.Dict), f'{name} is not a dict literal, so it cannot be read statically'
+    return {
+        ast.literal_eval(k): ast.unparse(v).rsplit('.', 1)[-1]
+        for k, v in zip(literal.keys, literal.values, strict=True)
+        if k is not None
+    }
+
+
+def test_both_lanes_read_every_keyword_the_language_declares():
+    """Hard rule 3 on the other axis: the same operator *names*, the same shapes.
+
+    The sibling test above compares names, and a name is not a call. A keyword
+    added to a built-in this repository already lowers passes every check here
+    while the lanes disagree about it — measured on ``sum(x, over=t, where=…)``
+    against a language that declared ``where``: the relational lane never reads
+    the key and builds as though the clause were not written, and the eager one
+    raises ``TypeError`` out of a function signature. A silent wrong answer on
+    one lane and a library exception on the other is the dialect split rule 3
+    exists to refuse, and nothing was red.
+
+    Read statically for the reason the sibling test is — ``linopy/operators.py``
+    imports xarray at module level, and this must run on a bare install — which
+    is also why the eager side is its parameter *names* rather than a signature.
+
+    The two lanes cover a keyword differently and both count. A lowering reads
+    it off ``node.kwargs``; an eager operator takes it as a parameter, unless
+    ``_call`` consumed it first — ``by=`` names a lookup rather than an operand
+    and decides *which* operation runs, so what ``_call`` reads by name is read
+    for every operator rather than exempted for the two it dispatches.
+    """
+    from math_spec import BUILTIN_NAMES, call_shape_error
+
+    declared = {
+        name: _declared_keywords(call_shape_error(name, 1, {_NOT_A_KEYWORD: None}) or '') for name in BUILTIN_NAMES
+    }
+    assert all(declared.values()), (
+        f'no usage line to read a shape off: {sorted(n for n, k in declared.items() if not k)}'
+    )
+
+    lowering = ast.parse((PKG / 'lowering.py').read_text())
+    lowerings = _functions(lowering)
+    relational = {
+        name: _keywords_read(lowerings[method], lowerings) for name, method in _table(lowering, '_CALLS').items()
+    }
+
+    eager_tree = ast.parse((PKG / 'linopy' / 'operators.py').read_text())
+    eager_fns = _functions(eager_tree)
+    intercepted = _keywords_read(_functions(ast.parse((PKG / 'linopy' / 'builder.py').read_text()))['_call'], {})
+    eager = {
+        name: {a.arg for a in eager_fns[fn].args.args + eager_fns[fn].args.kwonlyargs} | intercepted
+        for name, fn in _table(eager_tree, 'OPERATORS').items()
+    }
+
+    for lane, read in (('relational', relational), ('eager', eager)):
+        unread = {
+            name: sorted(declared[name] - read.get(name, set()))
+            for name in declared
+            if declared[name] - read.get(name, set())
+        }
+        assert not unread, f'{lane} lane ignores keywords the language declares: {unread}'
 
 
 def test_every_module_is_documented_somewhere():
