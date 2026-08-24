@@ -118,6 +118,11 @@ class _Measured:
     Separate from :class:`BuiltModel` because it outlives it: ``close()``
     releases the frames and :meth:`PolarsEngine.diagnostics` still answers, so
     everything here is a count or a small frame rather than a read of the model.
+
+    Most of it is taken as it is measured, so a build that raises still reports
+    what it got to. The three **sizes** are the exception: :class:`_Assembly`
+    writes them once it has finished, which leaves them at zero after a raise
+    rather than at a partial count of a model no engine holds.
     """
 
     #: ``name -> (coordinates, rows)`` for each parameter bound short of the
@@ -847,8 +852,8 @@ class PolarsEngine:
         so a driver that re-solves in a loop stays at one model's peak; what
         the loaded solver holds survives as the digest it recorded at its load.
         A build that raises leaves no model at all rather than half of one, and
-        the measurements it took before raising are what ``diagnostics()``
-        reports.
+        ``diagnostics()`` answers from what :class:`_Measured` had by then —
+        the bind's own numbers, and no size.
 
         *expressions* maps each declared named expression to a thunk producing
         its plan expression. None is called here — a build pays nothing for a
