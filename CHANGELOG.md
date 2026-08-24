@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.250](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.249...v0.0.1-alpha.250) (2026-08-24)
+
+
+### Refactoring
+
+* **tests:** the whole repository imports the language by the surface it pins ([#1237](https://github.com/fluxopt/lpspec/issues/1237)) ([e6e1d72](https://github.com/fluxopt/lpspec/commit/e6e1d72d37cc33932c18a4a5c5f1f18237458825))
+
 ## [0.0.1-alpha.249](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.248...v0.0.1-alpha.249) (2026-08-23)
 
 
