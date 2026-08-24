@@ -7,6 +7,11 @@
 
 * **diagnostics:** a build that raises says which half of the report survived ([#1252](https://github.com/fluxopt/lpspec/issues/1252)) ([216cd2d](https://github.com/fluxopt/lpspec/commit/216cd2df206cf67c9031cbde3e53bca6b7e649f6))
 
+
+### Documentation
+
+* **api:** diagnostics() says what it answers with when a build raised ([#1253](https://github.com/fluxopt/lpspec/issues/1253)) ([b4d91b9](https://github.com/fluxopt/lpspec/commit/b4d91b9a561e3d49d1bbf065ff40d0d768243abf))
+
 ## [0.0.1-alpha.251](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.250...v0.0.1-alpha.251) (2026-08-24)
 
 
