@@ -693,13 +693,22 @@ def test_every_plan_node_is_handled_by_the_compiler():
     SQL, so a node it does not mention has no relational meaning however much
     the engine moves around it. Grep-level drift alarm; the differential
     tests prove semantics.
+
+    Each base is checked against the *one* module that walks it, not against
+    either: an expression node answered only in ``predicates.py`` would be as
+    wrong as one answered nowhere.
     """
     import lpspec.relational.plan as plan
 
-    compiler_src = (PKG / 'relational' / 'engines' / 'polars' / 'compiler.py').read_text()
-    for base in (plan.Expression, plan.Predicate):
-        unhandled = [c.__name__ for c in base.__subclasses__() if f'plan.{c.__name__}' not in compiler_src]
-        assert not unhandled, f'plan.{base.__name__} nodes unknown to the compiler: {unhandled}'
+    engine_dir = PKG / 'relational' / 'engines' / 'polars'
+    walkers = {
+        plan.Expression: engine_dir / 'compiler.py',
+        plan.Predicate: engine_dir / 'predicates.py',
+    }
+    for base, module in walkers.items():
+        source = module.read_text()
+        unhandled = [c.__name__ for c in base.__subclasses__() if f'plan.{c.__name__}' not in source]
+        assert not unhandled, f'plan.{base.__name__} nodes unknown to {module.name}: {unhandled}'
 
 
 def test_both_lanes_implement_exactly_the_closed_operator_set():
