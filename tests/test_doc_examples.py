@@ -48,8 +48,7 @@ from pathlib import Path
 from typing import Any, NamedTuple, get_args
 
 import pytest
-from math_spec import Model, load_model
-from math_spec._yaml import parse_yaml
+from math_spec import Model, load_model, parse_yaml
 
 import lpspec as lps
 from lpspec.api import BoundModel

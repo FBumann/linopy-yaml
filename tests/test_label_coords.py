@@ -18,8 +18,7 @@ import warnings
 
 import polars as pl
 import pytest
-from math_spec import load_model
-from math_spec.typeset import FORMATS, typeset
+from math_spec import FORMATS, load_model, typeset
 
 import lpspec as lps
 from lpspec.errors import DataError, LpspecError, LpspecWarning

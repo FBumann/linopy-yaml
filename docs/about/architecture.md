@@ -76,7 +76,7 @@ flowchart TB
     LANG --> AST["core AST — the narrow waist<br/>fully resolved: names typed, dims checked, degree judged<br/>closed from both sides"]
 
     AST --> LOWER
-    AST -.->|"another package again:<br/>math_spec.typeset"| WALK
+    AST -.->|"another package again:<br/>math_spec.typesetting"| WALK
     AST -.->|"opt-in: lpspec.linopy"| BUILD
 
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> SRC
@@ -103,7 +103,7 @@ flowchart TB
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
-    subgraph TS["math_spec.typeset — the consumer that left"]
+    subgraph TS["math_spec.typesetting — the consumer that left"]
         direction TB
         WALK["one walk of the AST"] --> FMT["latex · typst · markdown<br/>one spelling table each"]
     end
@@ -159,7 +159,7 @@ back.
 flowchart LR
     Y(["your math, written once<br/>one YAML file"]) --> AST
     AST["<b>the whole model</b> — <code>Model</code><br/>names typed, dims checked, degree judged<br/><i>before a byte of data is read</i>"]
-    AST --> SHOW["<b>show it</b><br/>math_spec.typeset · its CLI<br/><i>no data, no solver</i>"]
+    AST --> SHOW["<b>show it</b><br/>math_spec.typesetting · its CLI<br/><i>no data, no solver</i>"]
     AST --> CHECK["<b>check it</b><br/>parse → expand → validate → lower<br/><i>no data, no solver</i>"]
     AST --> RUN["<b>run it</b><br/>solver · LP/MPS file · linopy"]
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> RUN
@@ -188,7 +188,7 @@ tree walk, a check is a pass with no data bound, and a new output format is one
 module in `relational/sinks/writers/`.
 
 **The renderer is that claim cashed, and it is no longer here.**
-`math_spec.typeset` typesets any model the lanes can build, in one walk of the
+`math_spec.typesetting` typesets any model the lanes can build, in one walk of the
 resolved AST, holding no opinion the lanes do not already hold: a `piecewise:`
 block prints as the λ-formulation it expands to, not as the sugar it was
 written as. It used to be a directory in this repository behind a fence saying

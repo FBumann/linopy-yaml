@@ -6,8 +6,7 @@ import warnings
 
 import pytest
 import yaml
-from math_spec import expand_piecewise, load_model, unbounded_notes
-from math_spec.operators import BUILTIN_NAMES
+from math_spec import BUILTIN_NAMES, expand_piecewise, load_model, unbounded_notes
 
 import lpspec as lps
 from lpspec.errors import LpspecWarning

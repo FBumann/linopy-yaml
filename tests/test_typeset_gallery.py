@@ -17,8 +17,7 @@ import subprocess  # noqa: F401  — used by the typst compile check
 from pathlib import Path
 
 import pytest
-from math_spec import SymbolTable, to_latex, to_markdown, to_typst
-from math_spec.typeset import FORMATS, typeset
+from math_spec import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
 
 from tests.conftest import MODEL_PATHS
 from tools import gallery_math
