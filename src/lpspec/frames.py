@@ -15,7 +15,8 @@ lane builds internally, never what either lane reads.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import polars as pl
 
@@ -25,7 +26,18 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-__all__ = ['as_frame', 'is_dense_array', 'labels_frame']
+__all__ = ['TidySource', 'as_frame', 'is_dense_array', 'labels_frame']
+
+#: What a source is once :func:`~lpspec.sources.tidy_sources` has read it: a
+#: tidy ``(dims…, value)`` frame, or the parquet path the engine scans for
+#: itself. A dimension index is always the frame —
+#: :func:`~lpspec.sources.polars_index` reads every shape one supports, a path
+#: included, because a declared map may have to be joined onto it.
+#:
+#: Here rather than beside that function because three modules annotate with
+#: it — the door, the curve guard and the linopy lane's loader — and this is
+#: the boundary module all three already import.
+TidySource: TypeAlias = pl.LazyFrame | str | Path
 
 
 def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:

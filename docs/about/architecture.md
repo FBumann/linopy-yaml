@@ -57,8 +57,9 @@ A conversion cannot disagree with itself: past `tidy_sources` nothing about the
 library a caller reached for survives. It is paid for in a copy the eager lane
 makes of what a pandas caller passed, which is the trade named in #1076.
 
-The `method: convex` curvature guard sits with the data for the neighbouring
-reason — it needs values rather than a schema. What matters for the waist is
+The `method: convex` curvature guard sits below the seam for the neighbouring
+reason — it needs values rather than a schema — in `curves.py`, which the door
+calls so that neither lane can enter without it. What matters for the waist is
 the direction: data goes no further **up** than here, so nothing above the seam
 has ever seen a value — which is what makes `show it` and `check it` free.
 
@@ -130,10 +131,11 @@ flowchart TB
     class DATA data
 ```
 
-Seven modules sit outside a fence, and each is legitimately **both** halves:
-the two drawn above, plus `api.py`, which runs the lot, `strategy.py`, which
-drives it a slice at a time, `frames.py` and `errors.py`, the two leaves every
-fence points at, and `_notes.py`, which is plumbing. That is a category, not a
+Eight modules sit outside a fence, and each is legitimately **both** halves:
+the two drawn above, plus `curves.py`, the one guard that needs numbers,
+`api.py`, which runs the lot, `strategy.py`, which drives it a slice at a time,
+`frames.py` and `errors.py`, the two leaves every fence points at, and
+`_notes.py`, which is plumbing. That is a category, not a
 leftovers bin — see [What counts as language](#what-counts-as-language).
 
 Eligibility is decided by **attempting the lowering** — `lower_program` returns
@@ -514,8 +516,9 @@ it.
 |---|---|
 | `math_spec` (a dependency) | the whole language: the file is read, expanded, resolved and judged there, and what crosses into this repository is a `Model` — [its own reference](https://math-spec.readthedocs.io/en/latest/reference/language/) |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, linopy-free |
-| `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema; the `method: convex` curvature guard, which is the one check that needs values |
-| `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver, the linopy lane and the engine |
+| `sources.py` | bind runtime data (parquet paths / in-memory tables) to a validated schema |
+| `curves.py` | the one guard that needs numbers rather than a schema: is a `piecewise:` curve supplied everywhere it is built, monotone, and of the curvature its method is exact for |
+| `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol, and `TidySource`, what one is once read; read by the front door, the driver, the linopy lane and the engine |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.`; a wording lives here only where two modules raise it |
 | `_notes.py` | attach context to an exception on the way out; no package imports, no opinions |
