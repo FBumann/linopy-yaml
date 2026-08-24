@@ -1326,7 +1326,6 @@ class PolarsEngine:
 
     def __exit__(self, *exc: object) -> Literal[False]:
         self.close()
-
         return False
 
 
