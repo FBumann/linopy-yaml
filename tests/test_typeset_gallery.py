@@ -15,16 +15,13 @@ from __future__ import annotations
 import re
 import subprocess  # noqa: F401  — used by the typst compile check
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
-from math_spec.typeset import FORMATS, SymbolTable, to_latex, to_markdown, to_typst, typeset
+from math_spec import SymbolTable, to_latex, to_markdown, to_typst
+from math_spec.typeset import FORMATS, typeset
 
 from tests.conftest import MODEL_PATHS
 from tools import gallery_math
-
-if TYPE_CHECKING:
-    from math_spec.typeset.format import Format
 
 #: Every format, as a parametrize mark — the same spelling the renderer's own
 #: tests use, duplicated rather than imported because that module travels.
@@ -53,7 +50,7 @@ TYPESET_PATHS = MODEL_PATHS
 
 
 @EVERY_FORMAT
-def test_every_example_renders(fmt: Format):
+def test_every_example_renders(fmt):
     """The walk consumes the same AST as lowering, so anything ``check``
     accepts it must print — a node it forgot is an exception, not a blank."""
     for path in TYPESET_PATHS:

@@ -46,7 +46,7 @@ from tests.oracle import linopy, lpspec_linopy
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
-    from math_spec.model import Model
+    from math_spec import Model
 
     from lpspec.relational.engines.polars.engine import Result
 

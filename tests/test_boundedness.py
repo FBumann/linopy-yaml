@@ -6,10 +6,8 @@ import warnings
 
 import pytest
 import yaml
-from math_spec import load_model
-from math_spec.boundedness import unbounded_notes
+from math_spec import expand_piecewise, load_model, unbounded_notes
 from math_spec.operators import BUILTIN_NAMES
-from math_spec.piecewise import expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import LpspecWarning

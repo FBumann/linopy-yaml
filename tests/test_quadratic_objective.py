@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-from math_spec.typeset import to_latex
+from math_spec import to_latex
 
 import lpspec as lps
 from lpspec.errors import LpspecError

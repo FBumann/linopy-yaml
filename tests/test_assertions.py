@@ -35,7 +35,7 @@ TESTS = Path(__file__).resolve().parent
 #: Assertions in breach when the rule was mechanised. A ratchet: this may fall,
 #: and a PR that raises it is adding an assertion whose claim is not written
 #: down. Lower it in the PR that lowers the count.
-IN_BREACH = 230
+IN_BREACH = 229
 
 
 def _unwritten_claim(node: ast.Assert) -> str | None:

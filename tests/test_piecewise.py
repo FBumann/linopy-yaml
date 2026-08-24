@@ -20,7 +20,7 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
-from math_spec.piecewise import PiecewiseExpansionError, expand_piecewise
+from math_spec import PiecewiseExpansionError, expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import DataError

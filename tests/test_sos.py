@@ -20,8 +20,7 @@ from typing import Any
 
 import polars as pl
 import pytest
-from math_spec import load_model
-from math_spec.typeset import to_markdown
+from math_spec import load_model, to_markdown
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError

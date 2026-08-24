@@ -318,7 +318,7 @@ def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: P
     file the validator refuses would kill every rung of the sweep at once, and
     only at run time.
     """
-    from math_spec.validation import load_model
+    from math_spec import load_model
 
     from lpspec.lowering import lower_program
 
@@ -377,7 +377,7 @@ def test_the_milp_case_lowers_with_both_variable_types() -> None:
     and nothing downstream would notice — every sink handles an all-continuous
     model happily.
     """
-    from math_spec.validation import load_model
+    from math_spec import load_model
 
     from lpspec.lowering import lower_program
 

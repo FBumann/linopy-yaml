@@ -16,8 +16,8 @@ import copy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from math_spec._yaml import parse_yaml, read_yaml
-from math_spec.validation import load_model
+from math_spec import load_model, read_yaml
+from math_spec._yaml import parse_yaml
 
 if TYPE_CHECKING:
     from math_spec import Model

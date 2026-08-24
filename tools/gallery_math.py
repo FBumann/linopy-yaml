@@ -58,8 +58,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from math_spec._yaml import read_yaml
-from math_spec.typeset import to_latex, to_markdown
+from math_spec import read_yaml, to_latex, to_markdown
 
 from tools.constructs import models
 

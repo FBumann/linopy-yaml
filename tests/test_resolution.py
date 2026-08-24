@@ -9,16 +9,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from math_spec import expand_piecewise
-from math_spec.resolution import Namespace, expression_of, where_of
-from math_spec.validation import validate_expressions
+from math_spec import Namespace, expand_piecewise, expression_of, where_of
 
 from lpspec.errors import LanguageError
 from lpspec.lowering import lower_program
 from tests.conftest import DISPATCH_MODEL, schema_of
 
 if TYPE_CHECKING:
-    from math_spec.model import Model
+    from math_spec import Model
 
 
 def _schema(**overrides) -> Model:
@@ -31,7 +29,7 @@ def _schema(**overrides) -> Model:
 
 
 def test_no_unresolved_name_survives_the_pass():
-    from math_spec.expression_parser import NameNode
+    from math_spec import NameNode
 
     schema = _schema()
     ast = expression_of('sum(p * cost, over=generator) == load', schema, Namespace.of(schema), 't')
@@ -50,7 +48,7 @@ def test_no_unresolved_name_survives_the_pass():
 
 
 def test_names_are_typed_by_kind():
-    from math_spec.expression_parser import DimensionNode, ParameterNode, VariableNode
+    from math_spec import DimensionNode, ParameterNode, VariableNode
 
     schema = _schema()
     ast = expression_of('sum(p * cost, over=generator)', schema, Namespace.of(schema), 't')
@@ -98,7 +96,6 @@ def test_string_literal_rhs_still_works():
     """A bare name that is not declared stays a literal — this is how string
     coordinates are compared."""
     schema = _schema(**{'variables.p.where': 'generator == wind'})
-    validate_expressions(schema)
     program = lower_program(expand_piecewise(schema))
     assert program.variables[0].where is not None
 
@@ -139,8 +136,7 @@ def test_declaring_a_parameter_cannot_change_an_existing_where():
 
 
 def test_macro_formal_may_shadow_a_parameter():
-    schema = _schema(**{'macros.scale': {'args': ['cost'], 'template': 'cost * 2'}})
-    validate_expressions(schema)
+    _schema(**{'macros.scale': {'args': ['cost'], 'template': 'cost * 2'}})
 
 
 def test_macro_formal_may_not_shadow_a_dimension():

@@ -116,8 +116,8 @@ language refuses and why. The committed output is
 if you would rather read than run.
 
 It is the only model here that uses **tier 2**: a macro and a named
-expression. The macro does not survive past expansion — nothing downstream of
-`expansion.py` knows it existed, which is what makes it free. The named
+expression. The macro does not survive the language's expansion — nothing
+downstream of `math_spec` knows it existed, which is what makes it free. The named
 expression is substituted the same way wherever a constraint uses it, but its
 name survives on the model: stage 6 reads `total_supply` back at the solution
 with `expression()`, lowered on that read rather than at build, so declaring

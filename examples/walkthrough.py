@@ -26,9 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
-from math_spec import Model, load_model
-from math_spec.expansion import parse_and_expand
-from math_spec.expression_parser import parse_expression
+from math_spec import Model, Namespace, expression_of, load_model
 
 import lpspec as lps
 from lpspec.lowering import expression_thunks, lower_program
@@ -95,7 +93,7 @@ def validated_model() -> Model:
     template, used or not. After this call the model is known to be
     well-formed; no data has been touched.
     """
-    banner(1, 'YAML text -> validated Model', 'schema.py, validation.py')
+    banner(1, 'YAML text -> validated Model', 'math_spec.load_model')
     schema = load_model(MODEL)
     print(f'    dimensions   {", ".join(schema.dimensions)}')
     print(f'    parameters   {", ".join(schema.parameters)}')
@@ -114,12 +112,16 @@ def expanded_ast(schema: Model) -> None:
     two lanes disagree — neither lane ever sees one. A named expression is
     substituted the same way wherever a constraint uses it, but its name
     survives on the model: stage 6 reads it back at the solution.
+
+    Substitution is the language's own business, and so are the passes that do
+    it: this asks ``math_spec`` for the finished AST rather than walking it
+    through their stages, which are math-spec's to rearrange.
     """
-    banner(2, 'expand macros / named expressions -> core AST', 'expansion.py')
+    banner(2, 'expand macros / named expressions -> core AST', 'math_spec.expression_of')
     objective_text = schema.objective.expression
+    core = expression_of(objective_text, schema, Namespace.of(schema), 'the objective')
     print(f'    written      {objective_text!r}')
-    print(f'    parsed       {parse_expression(objective_text)}')
-    print(f'    expanded     {parse_and_expand(objective_text, schema)}')
+    print(f'    core AST     {core}')
     print('                 ^ the macro is gone: sum(p * cost, over=generator)')
 
 
@@ -227,7 +229,7 @@ def refusals() -> None:
 
     ``LanguageError`` is a ``ValueError`` subclass, so that is what is caught.
     """
-    banner(7, 'and what the language refuses', 'validation.py, lowering.py')
+    banner(7, 'and what the language refuses', 'math_spec, lowering.py')
     for label, patch in _REFUSED:
         print(f'\n    {label}:')
         model = {**_raw(MODEL), **patch}

@@ -126,12 +126,13 @@ def test_every_resolved_predicate_is_parity_tested():
     """
     from typing import get_args
 
-    from math_spec.resolution import Namespace, where_of
-    from math_spec.where_parser import (
+    from math_spec import (
+        Namespace,
         UnresolvedComparisonNode,
         UnresolvedNameNode,
         UnresolvedPositionNode,
         WhereNode,
+        where_of,
     )
 
     # rewritten by resolution, never evaluated

@@ -465,12 +465,15 @@ def test_no_operator_registry_anywhere():
     This is what makes the two lanes accept the same language, and hence what
     makes the differential tests an oracle rather than a comparison of
     dialects (docs/about/architecture.md, "The expressive ceiling").
+
+    Both surfaces a model author can reach, and no more: whether
+    ``math_spec.operators`` keeps a private registry behind its exports is
+    math-spec's own claim to make, in math-spec's suite.
     """
-    import math_spec.operators as operators
+    import math_spec
 
     assert not hasattr(lps, 'register')
-    assert not hasattr(operators, 'register')
-    assert not hasattr(operators, '_REGISTRY')
+    assert not hasattr(math_spec, 'register')
 
 
 def test_solution_to_dataarray(dispatch_solution):
