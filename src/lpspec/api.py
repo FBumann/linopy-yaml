@@ -312,8 +312,10 @@ class BoundModel:
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show.
 
-        Answerable after :meth:`close`: every field is a count, a clock or a
-        small frame the engine keeps, not a read of the model it releases.
+        Answerable after :meth:`close`, and after a build that raised: every
+        field is a count, a clock or a small frame the engine keeps, not a read
+        of the model it releases. A raise leaves the sizes at zero — they are
+        taken once a model is whole — and everything measured before it stands.
         """
         return self._engine.diagnostics()
 
