@@ -378,10 +378,11 @@ lazy frames and reads nothing; `engine.py` fills the model frames; `sinks/`
 drains them. Two more sit beside the engine rather than inside it, because
 each answers a question the engine merely *uses*: `labels.py` decides which
 coordinate gets which solver index, and `result.py` is what a caller reads a
-solve back through. The remaining seven are not on the spine and the diagram
+solve back through. The remaining eight are not on the spine and the diagram
 does not draw them — `plan.py` is the vocabulary the spine speaks,
 `fragments.py` the vocabulary a compiled expression is *in*,
-`predicates.py` the one a `where:` is, `status.py`
+`predicates.py` the one a `where:` is, `reindex.py` the two operators that
+walk a dimension's own order, `status.py`
 is the boundary a solver's verdict comes back over, and `chunking.py` and
 `data_validation.py` are single rules lifted out of whoever needed them first.
 The other boundary, a caller's table on the way in, is `frames.py` — top level
@@ -511,6 +512,7 @@ it.
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `relational/plan.py` | frozen logical-plan dataclasses — what an engine consumes |
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
+| `relational/engines/polars/reindex.py` | `shift` and `sum_back`: moving a fragment's rows along one dimension's own order, and what happens at the edge |
 | `relational/engines/polars/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes, and nothing else |
 | `relational/engines/polars/fragments.py` | what an expression compiles *to*: the additive pieces and the arithmetic over them; holds no state and reads no data |
 | `relational/chunking.py` | how a batched pass sizes its chunk: budget ÷ the width of one unit |
