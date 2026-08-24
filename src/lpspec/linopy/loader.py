@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from math_spec import Buildable
 
-    from lpspec.sources import TidySource
+    from lpspec.frames import TidySource
 
 
 def dimension_coords(
