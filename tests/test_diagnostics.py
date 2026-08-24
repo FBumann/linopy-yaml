@@ -263,6 +263,48 @@ def test_the_sparsity_report_survives_the_model_being_released():
     assert released.sparse_parameters.equals(held.sparse_parameters)
 
 
+#: A model whose one constraint divides by a parameter: with a value missing
+#: the assembly refuses it, which is a raise *after* the bind has succeeded.
+UNDEFINED_DIVISOR = {
+    'dimensions': {'f': {'values': ['a', 'b']}},
+    'parameters': {'d': {'dims': ['f']}},
+    'variables': {'x': {'foreach': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {'c': {'foreach': ['f'], 'expression': 'x / d <= 10'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+DENSE_DIVISOR = {'d': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 5.0]})}
+HALF_A_DIVISOR = {'d': pl.DataFrame({'f': ['a'], 'value': [2.0]})}
+
+
+def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
+    """The two halves of the report part company exactly where the build stopped.
+
+    A size is written when the model is whole, so there is none — and none of
+    the *previous* build's either, which is the point: those numbers described
+    a model the engine released before this build started, and reporting them
+    would be the half-a-model state a failed build exists to refuse.
+
+    What the bind measured is a different kind of fact. It was taken before
+    anything raised and it is still true, and here it is the reason the build
+    then raised at all — the parameter it names is the one the divisor lacked.
+    """
+    with lps.build(UNDEFINED_DIVISOR, DENSE_DIVISOR) as bound:
+        built = bound.diagnostics()
+        assert (built.columns, built.rows) == (2, 2), 'the model under test builds before it is asked not to'
+
+        with pytest.raises(lps.DataError, match='used as a divisor'):
+            bound.rebind(HALF_A_DIVISOR)
+        after = bound.diagnostics()
+
+    assert (after.columns, after.rows, after.nonzeros) == (0, 0, 0), (
+        "a build that raised reported a size — a partial count, or the released build's"
+    )
+    assert after.sparse_parameters.to_dicts() == [{'parameter': 'd', 'coordinates': 2, 'rows': 1, 'missing': 1}], (
+        'the bind that succeeded is still reported, and it names the gap the assembly then refused'
+    )
+
+
 def test_the_coefficient_range_survives_the_model_being_released():
     """Read off each share as it is built, so it outlives the frames it came from.
 
