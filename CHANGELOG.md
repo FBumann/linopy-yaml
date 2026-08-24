@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.0.1-alpha.251](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.250...v0.0.1-alpha.251) (2026-08-24)
+
+
+### Refactoring
+
+* **data:** a curve's numbers are checked somewhere of their own ([#1236](https://github.com/fluxopt/lpspec/issues/1236)) ([d69dad1](https://github.com/fluxopt/lpspec/commit/d69dad13fce8758b5bdf97826ec28995602f1eba))
+* **engine:** a build is a value, so the engine holds one field not twenty-six ([#1245](https://github.com/fluxopt/lpspec/issues/1245)) ([3daf67d](https://github.com/fluxopt/lpspec/commit/3daf67df4ce385ba233724025365dcad1cde3cc8))
+* **engine:** a where-mask is its own vocabulary, not a method ([#1240](https://github.com/fluxopt/lpspec/issues/1240)) ([fde62ee](https://github.com/fluxopt/lpspec/commit/fde62ee52f46ede3b0c987bf7702598227e5cc9c))
+* **engine:** walking a dimension's own order is one subject, not nine methods ([#1244](https://github.com/fluxopt/lpspec/issues/1244)) ([cf229e6](https://github.com/fluxopt/lpspec/commit/cf229e636b78fed43c50339b1246a366c222323f))
+* **engine:** what a term is stops being the compiler's business ([#1234](https://github.com/fluxopt/lpspec/issues/1234)) ([49b655f](https://github.com/fluxopt/lpspec/commit/49b655f7aec461f5b6c71afccbcbf9a98ecf552d))
+* **linopy:** the builder builds; it stops also being the operator table ([#1235](https://github.com/fluxopt/lpspec/issues/1235)) ([dfb6283](https://github.com/fluxopt/lpspec/commit/dfb6283cec5a4a66ae571613d43ff324bdb1ee47))
+* **lowering:** a walk stops handing itself the same three arguments ([#1249](https://github.com/fluxopt/lpspec/issues/1249)) ([5db1df9](https://github.com/fluxopt/lpspec/commit/5db1df9bbbc2c0281fcd5e1c9d21b9f7986494d9))
+* **lowering:** each built-in lowers in a function with its own name ([#1247](https://github.com/fluxopt/lpspec/issues/1247)) ([7c009d1](https://github.com/fluxopt/lpspec/commit/7c009d1189148dbd8d6251efd060031687af9102))
+
+
+### Documentation
+
+* **refactor:** the modules that moved stop being described where they were ([#1250](https://github.com/fluxopt/lpspec/issues/1250)) ([e3cc1e0](https://github.com/fluxopt/lpspec/commit/e3cc1e0a0ba7a8dfa7539c31cfe0c37ca0eed8e8))
+
 ## [0.0.1-alpha.250](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.249...v0.0.1-alpha.250) (2026-08-24)
 
 
