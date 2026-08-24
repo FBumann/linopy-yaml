@@ -37,7 +37,8 @@ from lpspec.errors import (
 from lpspec.relational import plan, sinks
 from lpspec.relational.engines.polars import labels
 from lpspec.relational.engines.polars.binding import BoundSources, bind
-from lpspec.relational.engines.polars.compiler import PolarsCompiler, Presence, TermFragment
+from lpspec.relational.engines.polars.compiler import PolarsCompiler
+from lpspec.relational.engines.polars.fragments import Presence, TermFragment, constant_scalar
 from lpspec.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
 from lpspec.relational.sinks.tables import SENSE
 
@@ -533,7 +534,7 @@ class PolarsEngine:
         carrier = frame
         for i, (p, sign) in enumerate(consts):
             column = f'__const {i}__'
-            aggregated = self._q.constant_scalar(p).rename({'cval': column})
+            aggregated = constant_scalar(p).rename({'cval': column})
             carrier = (
                 carrier.join(aggregated, on=list(p.dims), how='left')
                 if p.dims
