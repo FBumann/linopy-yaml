@@ -464,9 +464,9 @@ def recomputed_row_values(engine, result) -> Any:
     """
     import numpy as np
 
-    tables = engine._tables()
+    tables = engine._model.tables()
     x = np.zeros(tables.column_count)
-    for name, block in engine._variable_blocks.items():
+    for name, block in engine._model.variable_blocks.items():
         x[block.start : block.start + block.height] = result.primal(name)['value'].to_numpy()
 
     values = np.zeros(tables.row_count)

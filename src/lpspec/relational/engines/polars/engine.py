@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal, get_args
@@ -111,115 +111,145 @@ class _Block:
         return values.slice(self.start, self.height)
 
 
-class PolarsEngine:
-    """Build a :class:`Program` into polars frames, then sink it."""
+@dataclass
+class _Measured:
+    """What one build measured about itself, and a rebuild replaces wholesale.
 
-    def __init__(self) -> None:
-        #: The solver holding this model, kept between solves — the only thing
-        #: a rebuild does *not* throw away. ``None`` until one has been solved.
-        self._solver: sinks.Solver | None = None
-        #: How many solves this model has been through, and how many of them
-        #: had to load the solver from scratch instead of pushing values onto
-        #: one that already held it. Read together: one load in many solves is
-        #: a driver on the fast path, a load per solve is one that is not.
-        self._solves = 0
-        self._loads = 0
-        #: What the last solve's sink had to add to take the model — nothing,
-        #: unless it had no concept of a set the model declares. Kept beside
-        #: the counters rather than in :meth:`_reset` for their reason: it is
-        #: a fact about a *solve*, so a rebuild does not clear it.
-        self._sink_columns = 0
-        self._sink_rows = 0
-        #: Wall seconds each phase has spent, cumulatively — what
-        #: :meth:`diagnostics` reports as ``timings``. Kept beside the
-        #: counters for their reason: time spent is a fact about what ran,
-        #: so a rebuild adds to it rather than clearing it.
-        self._timings: dict[str, float] = {}
-        self._reset()
+    Separate from :class:`BuiltModel` because it outlives it: ``close()``
+    releases the frames and :meth:`PolarsEngine.diagnostics` still answers, so
+    everything here is a count or a small frame rather than a read of the model.
+    """
 
-    def _reset(self) -> None:
-        """The state one build owns, emptied.
+    #: ``name -> (coordinates, rows)`` for each parameter bound short of the
+    #: coordinates its dims reach. Summarised at bind rather than read at
+    #: :meth:`PolarsEngine.diagnostics`, which answers after the frames are
+    #: released.
+    sparse: dict[str, tuple[int, int]] = field(default_factory=dict)
+    #: ``name -> rows not built``, because every term they had vanished.
+    #: Empty for a model whose every declared row reached the solver.
+    omitted: dict[str, int] = field(default_factory=dict)
+    #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint
+    #: block. Taken as each share is built, where the numbers are still in
+    #: cache, rather than off the assembled matrix the model releases.
+    coefficients: dict[str, tuple[float, float]] = field(default_factory=dict)
+    objective_range: tuple[float, float] | None = None
+    columns: int = 0
+    rows: int = 0
+    #: Entries in the matrix, kept as a count rather than read off the frame:
+    #: the frames go when the model is released and this is what a caller
+    #: asking how big it *was* is asking for.
+    nonzeros: int = 0
 
-        What a second :meth:`build` over the same object clears, so that what
-        survives a rebuild is exactly what is *not* the built model: the
-        loaded solver and the counters.
-        """
-        self._program: plan.Program | None = None
-        self._compiler: PolarsCompiler | None = None
-        self._bound: BoundSources | None = None
-        #: ``name -> deferred plan expression``, one per declared named
-        #: expression. Thunks, never plans: a build lowers none of them
-        #: (the rules for named expressions), and a solve turns each into a reader that lowers on its
-        #: first call (:meth:`_expression_readers`).
-        self._expression_thunks: dict[str, Callable[[], plan.Expression]] = {}
-        self._variables: dict[str, pl.LazyFrame] = {}
-        self._constraints: dict[str, pl.LazyFrame] = {}
-        #: ``name -> (coordinates, rows)`` for each parameter bound short of
-        #: the coordinates its dims reach. Summarised at bind rather than read
-        #: at :meth:`diagnostics`, which answers after the frames are released.
-        self._sparse: dict[str, tuple[int, int]] = {}
-        #: ``name -> rows not built``, because every term they had vanished.
-        #: Empty for a model whose every declared row reached the solver.
-        self._omitted: dict[str, int] = {}
-        #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint
-        #: block and for the objective. Taken as each share is built, where the
-        #: numbers are still in cache, rather than off the assembled matrix the
-        #: model releases.
-        self._coefficients: dict[str, tuple[float, float]] = {}
-        self._objective_range: tuple[float, float] | None = None
-        #: One :class:`_Block` per declaration, one map per label space.
-        #: Columns and rows are numbered independently and a model may name a
-        #: variable and a constraint alike, so one map keyed by name would
-        #: hand the primal reader a row block.
-        self._variable_blocks: dict[str, _Block] = {}
-        self._constraint_blocks: dict[str, _Block] = {}
-        self._cols: pl.DataFrame | None = None
-        self._obj: pl.DataFrame | None = None
-        #: The objective's quadratic part, one row per *unordered pair* of
-        #: columns: ``coeff`` is the coefficient of ``x[col_l] · x[col_r]`` in
-        #: the objective as written, and never half of it. Each sink converts
-        #: into its own spelling of the same form, which is three different
-        #: spellings (:class:`~lpspec.relational.sinks.tables.ModelTables`).
-        #: Empty for every model with an affine objective, which is most.
-        self._quad: pl.DataFrame | None = None
-        #: The quadratic part of every quadratic constraint row, one row per
-        #: ``(row, unordered pair)``. Its rows are the **tail** of the label
-        #: space (:func:`_linear_first`), so a sink can take them as a slice
-        #: rather than hunting for them among the linear ones.
-        self._qmatrix: pl.DataFrame | None = None
-        self._rows: pl.DataFrame | None = None
-        self._matrix: pl.DataFrame | None = None
-        self._sos: pl.DataFrame | None = None
-        self._matrix_starts: Any = None
-        self._n_cols = 0
-        self._n_rows = 0
+
+@dataclass(frozen=True)
+class BuiltModel:
+    """One build's product: the frames a sink drains, and what reads them back.
+
+    A value, because a build is finished when it exists — which is what makes
+    releasing it one assignment (:meth:`PolarsEngine.close`) and makes "has
+    this engine got a model" one question rather than seven.
+
+    The two registries are the ones that filled *during* assembly, since a
+    declaration built later has to see what earlier ones produced; they are
+    frozen here along with everything else, and the compiler holds the same
+    ``variables`` dict rather than a copy.
+    """
+
+    program: plan.Program
+    bound: BoundSources
+    compiler: PolarsCompiler
+    #: ``name -> deferred plan expression``, one per declared named expression.
+    #: Thunks, never plans: a build lowers none of them (the rules for named
+    #: expressions), and a solve turns each into a reader that lowers on its
+    #: first call (:meth:`PolarsEngine._expression_readers`).
+    expression_thunks: dict[str, Callable[[], plan.Expression]]
+
+    variables: dict[str, pl.LazyFrame]
+    constraints: dict[str, pl.LazyFrame]
+    #: One :class:`_Block` per declaration, one map per label space. Columns
+    #: and rows are numbered independently and a model may name a variable and
+    #: a constraint alike, so one map keyed by name would hand the primal
+    #: reader a row block.
+    variable_blocks: dict[str, _Block]
+    constraint_blocks: dict[str, _Block]
+
+    cols: pl.DataFrame
+    obj: pl.DataFrame
+    #: The objective's quadratic part, one row per *unordered pair* of columns:
+    #: ``coeff`` is the coefficient of ``x[col_l] · x[col_r]`` in the objective
+    #: as written, and never half of it. Each sink converts into its own
+    #: spelling of the same form, which is three different spellings
+    #: (:class:`~lpspec.relational.sinks.tables.ModelTables`). Empty for every
+    #: model with an affine objective, which is most.
+    quad: pl.DataFrame
+    #: The quadratic part of every quadratic constraint row, one row per
+    #: ``(row, unordered pair)``. Its rows are the **tail** of the label space
+    #: (:func:`_linear_first`), so a sink can take them as a slice rather than
+    #: hunting for them among the linear ones.
+    qmatrix: pl.DataFrame
+    rows: pl.DataFrame
+    matrix: pl.DataFrame
+    sos: pl.DataFrame
+    matrix_starts: Any
+
+    column_count: int
+    row_count: int
+    objective_constant: float
+    objective_sense: str
+
+    def tables(self) -> sinks.ModelTables:
+        """What every sink reads, and no more."""
+        return sinks.ModelTables(
+            cols=self.cols,
+            obj=self.obj,
+            quad=self.quad,
+            qmatrix=self.qmatrix,
+            rows=self.rows,
+            matrix=self.matrix,
+            sos=self.sos,
+            row_starts=self.matrix_starts,
+            column_count=self.column_count,
+            row_count=self.row_count,
+            objective_sense=self.objective_sense,
+            objective_constant=self.objective_constant,
+        )
+
+
+class _Assembly:
+    """One build in progress: the mutable half, discarded once it has frozen.
+
+    Every counter here is one a declaration *advances* — a variable claims the
+    next run of columns, a constraint the next run of rows — so they cannot be
+    on the frozen product and cannot be recomputed from it. :meth:`run` turns
+    the lot into a :class:`BuiltModel`, and nothing outside this class writes
+    to any of it.
+    """
+
+    def __init__(self, program: plan.Program, bound: BoundSources, measured: _Measured) -> None:
+        self.program = program
+        self.bound = bound
+        self.measured = measured
+        self.variables: dict[str, pl.LazyFrame] = {}
+        self.constraints: dict[str, pl.LazyFrame] = {}
+        self.variable_blocks: dict[str, _Block] = {}
+        self.constraint_blocks: dict[str, _Block] = {}
+        self.compiler = PolarsCompiler(program, bound, self.variables)
+        self.n_cols = 0
+        self.n_rows = 0
         #: How many special-ordered sets have been numbered. Sets are dense
         #: ``0..n-1`` across the model, like columns and rows, so a sink names
         #: one by its number and two builds agree on which.
-        self._n_sets = 0
-        #: Entries in the matrix, kept as a count rather than read off the
-        #: frame: the frames go when the model is released and this is what a
-        #: caller asking how big it *was* is asking for.
-        self._n_entries = 0
-        self._obj_const = 0.0
-        self._obj_sense: str = 'min'
+        self.n_sets = 0
+        self.quad: pl.DataFrame | None = None
+        self.obj_const = 0.0
+        self.obj_sense: str = 'min'
 
-    # ------------------------------------------------------------------
-    # build
-    # ------------------------------------------------------------------
+    def run(self, expression_thunks: dict[str, Callable[[], plan.Expression]]) -> BuiltModel:
+        """Build every declaration, then freeze what they produced.
 
-    def build(
-        self,
-        program: plan.Program,
-        sources: Mapping[str, Any],
-        expressions: Mapping[str, Callable[[], plan.Expression]] | None = None,
-    ) -> None:
-        """Bind *sources*, then build every declaration into the model frames.
-
-        The compiler comes after binding, two of its answers being read off the
-        data — a dim's size, whether a parameter is boolean. Declarations build
-        one at a time and concatenate at the end; their rows are independent,
-        which is what lets the model be four frames rather than a graph.
+        Declarations build one at a time and concatenate at the end; their rows
+        are independent, which is what lets the model be four frames rather
+        than a graph.
 
         The matrix leaves in ``(row, col)`` order, as ``ModelTables`` promises
         its sinks. The stack already has it — each share leaves sorted and owns
@@ -227,12 +257,6 @@ class PolarsEngine:
         linear scan rather than sorting the model's largest frame at the peak
         of the build. :func:`_row_starts` reads the CSR index off that order,
         after which ``row`` is dropped: 8 bytes per entry no sink reads.
-
-        **What a zero coefficient states, absence already states**, so each
-        share arrives already pruned of them (:func:`_without_zeros`) and the
-        objective of its own. Sparsity that arrives as absence never becomes a
-        term at all; sparsity spelled out as zeros used to become one, and a
-        solver's own load is most of what a hand-off costs.
 
         **``rows`` leaves in row order too**, which a solver reads as its own
         index — so :meth:`~lpspec.relational.sinks.tables.ModelTables.dense_rows`
@@ -243,47 +267,41 @@ class PolarsEngine:
         usually loses it, and forcing that join to hold it is a bet on the
         model's shape rather than a fix — free on `fleet` and most of a build
         again on `dispatch`.
-
-        **A second call rebuilds over the same object**, which is what
-        ``rebind`` is. The previous build is released *before* this one starts,
-        so a driver that re-solves in a loop stays at one model's peak; what
-        the loaded solver holds survives as the digest it recorded at its load.
-
-        *expressions* maps each declared named expression to a thunk producing
-        its plan expression. None is called here — a build pays nothing for a
-        declared expression (the rules for named expressions) — they become the deferred readers a
-        solve's result hands out (:meth:`_expression_readers`).
         """
-        self._reset()
-        self._expression_thunks = dict(expressions or {})
+        cols = [self._build_variable(v) for v in self.program.variables]
+        sets = [self._build_sos(s, self.program.variable(s.variable)) for s in self.program.sos]
+        built = [self._build_constraint(c) for c in _linear_first(self.program.constraints)]
+        objective = self._build_objective(self.program.objective)
 
-        self._program = program
-        with _clocked(self._timings, 'bind'):
-            self._bound = bind(program, sources)
-        self._sparse = _short_parameters(program, self._bound)
-        self._compiler = PolarsCompiler(program, self._bound, self._variables)
+        ordered = _in_row_order(_stack([m for _, m, _ in built if m is not None], _MATRIX))
+        matrix_starts = _row_starts(ordered, self.n_rows)
+        matrix = ordered.select('col', 'coeff').rechunk()
 
-        with _clocked(self._timings, 'build'):
-            cols = [self._build_variable(v) for v in program.variables]
-            sets = [self._build_sos(s, program.variable(s.variable)) for s in program.sos]
-            built = [self._build_constraint(c) for c in _linear_first(program.constraints)]
-            objective = self._build_objective(program.objective)
-
-            self._sos = _stack(sets, _SOS)
-            self._cols = _stack(cols, _COLS)
-            self._rows = labels.in_position_order(_stack([r for r, _, _ in built], _ROWS), 'row')
-            ordered = _in_row_order(_stack([m for _, m, _ in built if m is not None], _MATRIX))
-            self._matrix_starts = _row_starts(ordered, self._n_rows)
-            self._matrix = ordered.select('col', 'coeff').rechunk()
-            self._n_entries = self._matrix.height
-            self._obj = _stack([objective] if objective is not None else [], _OBJ)
-            self._quad = _stack([] if self._quad is None else [self._quad], _QUAD)
-            self._qmatrix = _in_row_order(_stack([q for _, _, q in built if q is not None], _QMATRIX))
-
-    @property
-    def _q(self) -> PolarsCompiler:
-        assert self._compiler is not None, 'build() has not run'
-        return self._compiler
+        self.measured.columns = self.n_cols
+        self.measured.rows = self.n_rows
+        self.measured.nonzeros = matrix.height
+        return BuiltModel(
+            program=self.program,
+            bound=self.bound,
+            compiler=self.compiler,
+            expression_thunks=expression_thunks,
+            variables=self.variables,
+            constraints=self.constraints,
+            variable_blocks=self.variable_blocks,
+            constraint_blocks=self.constraint_blocks,
+            cols=_stack(cols, _COLS),
+            obj=_stack([objective] if objective is not None else [], _OBJ),
+            quad=_stack([] if self.quad is None else [self.quad], _QUAD),
+            qmatrix=_in_row_order(_stack([q for _, _, q in built if q is not None], _QMATRIX)),
+            rows=labels.in_position_order(_stack([r for r, _, _ in built], _ROWS), 'row'),
+            matrix=matrix,
+            sos=_stack(sets, _SOS),
+            matrix_starts=matrix_starts,
+            column_count=self.n_cols,
+            row_count=self.n_rows,
+            objective_constant=self.obj_const,
+            objective_sense=self.obj_sense,
+        )
 
     def _refuse_undefined_divisors(self, stacked: pl.DataFrame, name: str, *expressions: plan.Expression) -> None:
         """A null coefficient means a divisor had no value where the model divided.
@@ -380,14 +398,14 @@ class PolarsEngine:
         than materialising them to be dropped. The label then goes too, having
         been the order's witness and nothing else.
         """
-        start = self._n_cols
-        labelled = labels.frame(self._q, v.dims, v.where, 'var_label', start)
-        self._n_cols = start + labelled.height
-        self._variables[v.name] = labelled.lazy()
-        self._variable_blocks[v.name] = _Block(start, labelled.height)
+        start = self.n_cols
+        labelled = labels.frame(self.compiler, v.dims, v.where, 'var_label', start)
+        self.n_cols = start + labelled.height
+        self.variables[v.name] = labelled.lazy()
+        self.variable_blocks[v.name] = _Block(start, labelled.height)
 
         bounded = labels.in_position_order(
-            self._q.bounds(labelled.lazy(), v)
+            self.compiler.bounds(labelled.lazy(), v)
             .select('var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64))
             .collect(engine='streaming'),
             'var_label',
@@ -446,8 +464,8 @@ class PolarsEngine:
         ``big_m`` rides along per member, at ``inf`` where the block declared
         none — the one thing here no sink taking a set natively reads.
         """
-        block = self._variable_blocks[s.variable]
-        cardinality = self._q.data.cardinality
+        block = self.variable_blocks[s.variable]
+        cardinality = self.compiler.data.cardinality
         stride = math.prod(cardinality[d] for d in v.dims[v.dims.index(s.over) + 1 :])
         span = cardinality[s.over] * stride
 
@@ -455,8 +473,8 @@ class PolarsEngine:
             frame = pl.select(pl.int_range(block.height, dtype=pl.Int64).alias('#position')).lazy()
             place, col = pl.col('#position'), (pl.col('#position') + block.start)
         else:
-            frame = self._variables[s.variable]
-            place, col = labels.row_major(self._q, v.dims, self._q.ordinal_of), pl.col('var_label')
+            frame = self.variables[s.variable]
+            place, col = labels.row_major(self.compiler, v.dims, self.compiler.ordinal_of), pl.col('var_label')
         placed = frame.select(
             ((place // span) * stride + place % stride).alias('#set position'),
             ((place // stride) % cardinality[s.over] + 1).cast(_DTYPES['weight']).alias('weight'),
@@ -467,14 +485,14 @@ class PolarsEngine:
         grouped = placed if placed.get_column('#set position').is_sorted() else placed.sort('#set position', 'weight')
         dense = position if v.where is None else (position != position.shift(1)).fill_null(True).cum_sum() - 1
         built = grouped.select(
-            (dense + self._n_sets).cast(_DTYPES['set']).alias('set'),
+            (dense + self.n_sets).cast(_DTYPES['set']).alias('set'),
             pl.lit(s.sos_type, dtype=_DTYPES['type']).alias('type'),
             'col',
             'weight',
             pl.lit(float('inf') if s.big_m is None else s.big_m, dtype=_DTYPES['big_m']).alias('big_m'),
         )
         if built.height:
-            self._n_sets = built.item(-1, 'set') + 1
+            self.n_sets = built.item(-1, 'set') + 1
         return built
 
     def _build_constraint(
@@ -505,8 +523,8 @@ class PolarsEngine:
         decides whether a row is built is whether *either* matrix has a term.
         """
         quadratic = _declares_quadratic(c)
-        lhs = self._q.expression(c.lhs, f"constraint '{c.name}' lhs", quadratic=quadratic)
-        rhs = self._q.expression(c.rhs, f"constraint '{c.name}' rhs", quadratic=quadratic)
+        lhs = self.compiler.expression(c.lhs, f"constraint '{c.name}' lhs", quadratic=quadratic)
+        rhs = self.compiler.expression(c.rhs, f"constraint '{c.name}' rhs", quadratic=quadratic)
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
         quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
         consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
@@ -519,15 +537,15 @@ class PolarsEngine:
                 )
 
         restrictions = _absence_restrictions([p for p, _ in (*terms, *quads)])
-        start = self._n_rows
-        declared = labels.declared_height(self._q, c.dims, c.where) if restrictions else None
-        labelled = labels.frame(self._q, c.dims, c.where, 'row', start, restrictions)
+        start = self.n_rows
+        declared = labels.declared_height(self.compiler, c.dims, c.where) if restrictions else None
+        labelled = labels.frame(self.compiler, c.dims, c.where, 'row', start, restrictions)
         if declared is not None and declared > labelled.height:
-            self._omitted[c.name] = self._omitted.get(c.name, 0) + declared - labelled.height
-        self._n_rows = start + labelled.height
+            self.measured.omitted[c.name] = self.measured.omitted.get(c.name, 0) + declared - labelled.height
+        self.n_rows = start + labelled.height
         frame = labelled.lazy()
-        self._constraints[c.name] = frame
-        self._constraint_blocks[c.name] = _Block(start, labelled.height)
+        self.constraints[c.name] = frame
+        self.constraint_blocks[c.name] = _Block(start, labelled.height)
 
         accumulated = pl.lit(0.0, dtype=pl.Float64)
         uncovered: pl.Expr | None = None
@@ -560,10 +578,10 @@ class PolarsEngine:
             rows = rows.drop(gap_column)
 
         if not terms and not quads:
-            self._omitted[c.name] = rows.height
-            self._constraint_blocks[c.name] = _Block(start, 0)
-            self._n_rows = start
-            self._constraints[c.name] = self._constraints[c.name].clear()
+            self.measured.omitted[c.name] = rows.height
+            self.constraint_blocks[c.name] = _Block(start, 0)
+            self.n_rows = start
+            self.constraints[c.name] = self.constraints[c.name].clear()
             return rows.clear(), None, None
 
         pieces = []
@@ -589,10 +607,10 @@ class PolarsEngine:
         qmatrix = self._quadratic_share(frame, quads, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
-        rows, matrix, self._n_rows = self._drop_termless_rows(c.name, rows, matrix, term_rows, start)
+        rows, matrix, self.n_rows = self._drop_termless_rows(c.name, rows, matrix, term_rows, start)
         spread = _magnitude_range(matrix.get_column('coeff'))
         if spread is not None:
-            self._coefficients[c.name] = spread
+            self.measured.coefficients[c.name] = spread
         if qmatrix is not None:
             qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
         return rows, matrix, qmatrix
@@ -657,13 +675,13 @@ class PolarsEngine:
 
         surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
         renumber = surviving.select('row').with_row_index('__new__', offset=start)
-        self._omitted[name] = rows.height - surviving.height
-        self._constraint_blocks[name] = _Block(start, surviving.height)
+        self.measured.omitted[name] = rows.height - surviving.height
+        self.constraint_blocks[name] = _Block(start, surviving.height)
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
         rows = surviving.with_columns(pl.col('row').replace_strict(remap))
         matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
-        self._constraints[name] = (
-            self._constraints[name].filter(pl.col('row').is_in(kept)).with_columns(pl.col('row').replace_strict(remap))
+        self.constraints[name] = (
+            self.constraints[name].filter(pl.col('row').is_in(kept)).with_columns(pl.col('row').replace_strict(remap))
         )
         return rows, matrix, start + surviving.height
 
@@ -695,16 +713,16 @@ class PolarsEngine:
         """
         if o is None:
             return None
-        comp = self._q.expression(o.expression, 'objective', quadratic=True)
+        comp = self.compiler.expression(o.expression, 'objective', quadratic=True)
         for p in comp.consts:
             if p.dims:
                 raise LanguageError(
                     'objective constant part has dims — wrap parameter terms in '
                     'Mul with a Var, or pre-aggregate to a scalar'
                 )
-            self._obj_const += p.frame.select(pl.col('cval').sum()).collect().item() or 0.0
-        self._obj_sense = o.sense
-        self._quad = self._objective_quadratic(comp.quads, o.expression)
+            self.obj_const += p.frame.select(pl.col('cval').sum()).collect().item() or 0.0
+        self.obj_sense = o.sense
+        self.quad = self._objective_quadratic(comp.quads, o.expression)
         if not comp.terms:
             return None
         pieces = [
@@ -715,7 +733,7 @@ class PolarsEngine:
         if stacked.get_column('col').n_unique() != stacked.height:
             stacked = stacked.lazy().group_by('col').agg(pl.col('coeff').sum()).collect(engine='streaming')
         objective = _without_zeros(stacked)
-        self._objective_range = _magnitude_range(objective.get_column('coeff'))
+        self.measured.objective_range = _magnitude_range(objective.get_column('coeff'))
         return objective
 
     def _objective_quadratic(self, quads: tuple[TermFragment, ...], expression: plan.Expression) -> pl.DataFrame | None:
@@ -756,39 +774,100 @@ class PolarsEngine:
             stacked = stacked.lazy().group_by('col_l', 'col_r').agg(pl.col('coeff').sum()).collect(engine='streaming')
         return _without_zeros(stacked.sort('col_l', 'col_r'))
 
+
+#: Why there is no model to hand over, in the two ways it can happen.
+_NO_BUILT_MODEL = (
+    'there is no built model to hand over: it was closed, or a rebind raised and released '
+    'it rather than leaving half of one behind. Build it again — rebind() with data it can '
+    'bind, or build() from the start.'
+)
+
+
+class PolarsEngine:
+    """Build a :class:`Program` into polars frames, then sink it."""
+
+    def __init__(self) -> None:
+        #: The build, or ``None`` where there is not one — closed, released by
+        #: a rebind that raised, or never run. One field rather than a frame
+        #: each, because a build is finished when it exists.
+        self._built: BuiltModel | None = None
+        #: What the last build measured about itself. Outlives ``_built``,
+        #: since :meth:`diagnostics` answers after :meth:`close`.
+        self._measured = _Measured()
+        #: The solver holding this model, kept between solves — the only thing
+        #: a rebuild does *not* throw away. ``None`` until one has been solved.
+        self._solver: sinks.Solver | None = None
+        #: How many solves this model has been through, and how many of them
+        #: had to load the solver from scratch instead of pushing values onto
+        #: one that already held it. Read together: one load in many solves is
+        #: a driver on the fast path, a load per solve is one that is not.
+        self._solves = 0
+        self._loads = 0
+        #: What the last solve's sink had to add to take the model — nothing,
+        #: unless it had no concept of a set the model declares. A fact about a
+        #: *solve*, so a rebuild does not clear it.
+        self._sink_columns = 0
+        self._sink_rows = 0
+        #: Wall seconds each phase has spent, cumulatively — what
+        #: :meth:`diagnostics` reports as ``timings``. Time spent is a fact
+        #: about what ran, so a rebuild adds to it rather than clearing it.
+        self._timings: dict[str, float] = {}
+
+    @property
+    def _model(self) -> BuiltModel:
+        """The built model, or why there is not one."""
+        if self._built is None:
+            raise LpspecError(_NO_BUILT_MODEL)
+        return self._built
+
+    # ------------------------------------------------------------------
+    # build
+    # ------------------------------------------------------------------
+
+    def build(
+        self,
+        program: plan.Program,
+        sources: Mapping[str, Any],
+        expressions: Mapping[str, Callable[[], plan.Expression]] | None = None,
+    ) -> None:
+        """Bind *sources*, then build every declaration into the model frames.
+
+        The compiler comes after binding, two of its answers being read off the
+        data — a dim's size, whether a parameter is boolean. What each
+        declaration contributes, and in what order, is :meth:`_Assembly.run`.
+
+        **What a zero coefficient states, absence already states**, so each
+        share arrives already pruned of them (:func:`_without_zeros`) and the
+        objective of its own. Sparsity that arrives as absence never becomes a
+        term at all; sparsity spelled out as zeros used to become one, and a
+        solver's own load is most of what a hand-off costs.
+
+        **A second call rebuilds over the same object**, which is what
+        ``rebind`` is. The previous build is released *before* this one starts,
+        so a driver that re-solves in a loop stays at one model's peak; what
+        the loaded solver holds survives as the digest it recorded at its load.
+        A build that raises leaves no model at all rather than half of one, and
+        the measurements it took before raising are what ``diagnostics()``
+        reports.
+
+        *expressions* maps each declared named expression to a thunk producing
+        its plan expression. None is called here — a build pays nothing for a
+        declared expression (the rules for named expressions) — they become the
+        deferred readers a solve's result hands out
+        (:meth:`_expression_readers`).
+        """
+        self._built = None
+        self._measured = _Measured()
+        with _clocked(self._timings, 'bind'):
+            bound = bind(program, sources)
+        self._measured.sparse = _short_parameters(program, bound)
+        assembly = _Assembly(program, bound, self._measured)
+        with _clocked(self._timings, 'build'):
+            self._built = assembly.run(dict(expressions or {}))
+
     # ------------------------------------------------------------------
     # sinks — see relational/sinks/; the engine only supplies the frames
     # ------------------------------------------------------------------
-
-    def _tables(self) -> sinks.ModelTables:
-        if (
-            self._cols is None
-            or self._obj is None
-            or self._quad is None
-            or self._qmatrix is None
-            or self._rows is None
-            or self._matrix is None
-            or self._sos is None
-        ):
-            raise LpspecError(
-                'there is no built model to hand over: it was closed, or a rebind raised and released '
-                'it rather than leaving half of one behind. Build it again — rebind() with data it can '
-                'bind, or build() from the start.'
-            )
-        return sinks.ModelTables(
-            cols=self._cols,
-            obj=self._obj,
-            quad=self._quad,
-            qmatrix=self._qmatrix,
-            rows=self._rows,
-            matrix=self._matrix,
-            sos=self._sos,
-            row_starts=self._matrix_starts,
-            column_count=self._n_cols,
-            row_count=self._n_rows,
-            objective_sense=self._obj_sense,
-            objective_constant=self._obj_const,
-        )
 
     def row(self, name: str, coordinate: Mapping[str, Any]) -> ConstraintRow:
         """One built constraint row, spelled back out. See :meth:`~lpspec.api.BoundModel.row`.
@@ -804,20 +883,20 @@ class PolarsEngine:
         block's start (:class:`_Block`), so a label's position in its frame is
         the label minus that start.
         """
-        if self._matrix is None or self._rows is None:
+        if self._built is None:
             raise LpspecError(
                 f"there is no built model to read '{name}' out of: it was closed, or a rebind raised "
                 'and released it. Build it again — rebind() with data it can bind, or build() from '
                 'the start.'
             )
-        if name not in self._constraints:
-            raise KeyError(unknown_name_message('constraint', name, sorted(self._constraints)))
+        model = self._built
+        if name not in model.constraints:
+            raise KeyError(unknown_name_message('constraint', name, sorted(model.constraints)))
 
         at, ordered = self._row_index(name, coordinate)
-        entries = self._matrix.slice(
-            int(self._matrix_starts[at]), int(self._matrix_starts[at + 1] - self._matrix_starts[at])
-        )
-        stated = self._rows.slice(at, 1)
+        starts = model.matrix_starts
+        entries = model.matrix.slice(int(starts[at]), int(starts[at + 1] - starts[at]))
+        stated = model.rows.slice(at, 1)
         return ConstraintRow(
             name=name,
             coordinate=ordered,
@@ -844,7 +923,7 @@ class PolarsEngine:
                 row masked out by ``where`` or dropped for having no terms,
                 and is itself the answer to why a model says nothing here.
         """
-        frame = self._constraints[name]
+        frame = self._model.constraints[name]
         schema = frame.collect_schema()
         dims = tuple(d for d in schema.names() if d != 'row')
         if set(coordinate) != set(dims):
@@ -906,11 +985,11 @@ class PolarsEngine:
         """
         wanted = entries['col'].to_numpy()
         named = []
-        for variable, block in self._variable_blocks.items():
+        for variable, block in self._model.variable_blocks.items():
             inside = wanted[(wanted >= block.start) & (wanted < block.start + block.height)]
             if not inside.size:
                 continue
-            frame = self._variables[variable]
+            frame = self._model.variables[variable]
             dims = [d for d in frame.collect_schema().names() if d != 'var_label']
             at = pl.Series('#position', inside - block.start, dtype=pl.UInt32)
             picked = frame.select(pl.col('var_label'), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
@@ -951,9 +1030,8 @@ class PolarsEngine:
         path = Path(path)
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
-        tables = self._tables()
-        assert self._program is not None
-        if (refused := sinks.refusal(self._program, suffix)) is not None:
+        tables = self._model.tables()
+        if (refused := sinks.refusal(self._model.program, suffix)) is not None:
             raise LpspecError(refused)
         with _clocked(self._timings, 'write'):
             chosen.write(tables, path)
@@ -1010,9 +1088,9 @@ class PolarsEngine:
         """
         if keep not in KEEPS:
             raise LpspecError(unknown_keep_message(keep))
-        built = self._tables()
+        built = self._model.tables()
         with _clocked(self._timings, 'handoff'):
-            tables = sinks.ingestible(solver_name, built, self._program)
+            tables = sinks.ingestible(solver_name, built, self._model.program)
             self._sink_columns = tables.column_count - built.column_count
             self._sink_rows = tables.row_count - built.row_count
             if keep == 'nothing' and self._solver is not None:
@@ -1060,29 +1138,29 @@ class PolarsEngine:
         small frame this keeps, not a read of the model it releases.
         """
         return Diagnostics(
-            columns=self._n_cols,
-            rows=self._n_rows,
-            nonzeros=self._n_entries,
+            columns=self._measured.columns,
+            rows=self._measured.rows,
+            nonzeros=self._measured.nonzeros,
             sink_columns=self._sink_columns,
             sink_rows=self._sink_rows,
             omissions=pl.DataFrame(
-                {'constraint': list(self._omitted), 'rows_not_built': list(self._omitted.values())},
+                {'constraint': list(self._measured.omitted), 'rows_not_built': list(self._measured.omitted.values())},
                 schema={'constraint': pl.String, 'rows_not_built': pl.UInt32},
             ),
             coefficient_range=pl.DataFrame(
                 {
-                    'constraint': list(self._coefficients),
-                    'smallest': [low for low, _ in self._coefficients.values()],
-                    'largest': [high for _, high in self._coefficients.values()],
+                    'constraint': list(self._measured.coefficients),
+                    'smallest': [low for low, _ in self._measured.coefficients.values()],
+                    'largest': [high for _, high in self._measured.coefficients.values()],
                 },
                 schema={'constraint': pl.String, 'smallest': pl.Float64, 'largest': pl.Float64},
             ),
             sparse_parameters=pl.DataFrame(
                 {
-                    'parameter': list(self._sparse),
-                    'coordinates': [reach for reach, _ in self._sparse.values()],
-                    'rows': [rows for _, rows in self._sparse.values()],
-                    'missing': [reach - rows for reach, rows in self._sparse.values()],
+                    'parameter': list(self._measured.sparse),
+                    'coordinates': [reach for reach, _ in self._measured.sparse.values()],
+                    'rows': [rows for _, rows in self._measured.sparse.values()],
+                    'missing': [reach - rows for reach, rows in self._measured.sparse.values()],
                 },
                 schema={
                     'parameter': pl.String,
@@ -1091,7 +1169,7 @@ class PolarsEngine:
                     'missing': pl.UInt64,
                 },
             ),
-            objective_range=self._objective_range,
+            objective_range=self._measured.objective_range,
             solves=self._solves,
             loads=self._loads,
             timings=dict(self._timings),
@@ -1116,20 +1194,20 @@ class PolarsEngine:
         ones, which is the state :class:`Result` reports through the status and
         through ``_no_duals``.
         """
-        assert self._program is not None
-        program = self._program
+        model = self._model
+        program = model.program
 
         def rows(values: pl.Series | None) -> dict[str, pl.LazyFrame]:
             if values is None:
                 return {}
             return {
-                c.name: self._laid_out(self._constraint_blocks[c.name], self._constraints[c.name], c.dims, values)
+                c.name: self._laid_out(model.constraint_blocks[c.name], model.constraints[c.name], c.dims, values)
                 for c in program.constraints
             }
 
         return (
             {
-                v.name: self._laid_out(self._variable_blocks[v.name], self._variables[v.name], v.dims, primal)
+                v.name: self._laid_out(model.variable_blocks[v.name], model.variables[v.name], v.dims, primal)
                 for v in program.variables
             }
             if primal is not None
@@ -1151,8 +1229,8 @@ class PolarsEngine:
         """
         if primal is None:
             return {}
-        assert self._program is not None and self._bound is not None
-        compiler = PolarsCompiler(self._program, self._bound, dict(self._variables))
+        model = self._model
+        compiler = PolarsCompiler(model.program, model.bound, dict(model.variables))
         values = pl.DataFrame(
             {'var_label': pl.int_range(primal.len(), dtype=pl.Int64, eager=True), _SOLUTION: primal}
         ).lazy()
@@ -1160,7 +1238,7 @@ class PolarsEngine:
         def reader(name: str, thunk: Callable[[], plan.Expression]) -> Callable[[], pl.DataFrame]:
             return lambda: _expression_frame(name, thunk(), compiler, values)
 
-        return {name: reader(name, thunk) for name, thunk in self._expression_thunks.items()}
+        return {name: reader(name, thunk) for name, thunk in model.expression_thunks.items()}
 
     def _laid_out(
         self,
@@ -1201,13 +1279,11 @@ class PolarsEngine:
 
     def _string_dims(self, dims: tuple[str, ...]) -> list[str]:
         """Those of *dims* the binder encoded as ``Enum`` — its string ones."""
-        assert self._bound is not None, 'build() has not run'
-        return [d for d in dims if self._bound.is_enum_encoded(d)]
+        return [d for d in dims if self._model.bound.is_enum_encoded(d)]
 
     def _discrete(self) -> list[str]:
         """The variables this model declared as anything but continuous."""
-        assert self._program is not None
-        return sorted(v.name for v in self._program.variables if v.variable_type != 'continuous')
+        return sorted(v.name for v in self._model.program.variables if v.variable_type != 'continuous')
 
     def _quadratic_constraints(self) -> list[str]:
         """The constraints this model declared as quadratic.
@@ -1216,8 +1292,7 @@ class PolarsEngine:
         duals, and like the sets one it is a fact about the *model* rather than
         about the solve — so it is read off the program and not off the answer.
         """
-        assert self._program is not None
-        return sorted(c.name for c in self._program.constraints if _declares_quadratic(c))
+        return sorted(c.name for c in self._model.program.constraints if _declares_quadratic(c))
 
     def _reformulated_sets(self, reformulated: bool) -> list[str]:
         """The sets that reached the solver as binaries, if any did.
@@ -1226,37 +1301,32 @@ class PolarsEngine:
         the one such reason no declaration shows: the model declares no
         integrality, and the sink added some.
         """
-        assert self._program is not None
-        return sorted(s.name for s in self._program.sos) if reformulated else []
+        return sorted(s.name for s in self._model.program.sos) if reformulated else []
 
     # ------------------------------------------------------------------
 
     def close(self) -> None:
         """Drop the built model. A :class:`Result` keeps its own frames.
 
-        ``BoundSources`` is frozen, so it cannot be emptied in place the way
-        the registries can: what frees the bound frames is dropping every
-        reference to them, and the compiler holds one. A loaded solver goes
-        too, being the one thing here that is not this process's memory.
+        One assignment, because the build is one value: the four model frames,
+        the label frames, ``BoundSources`` and the compiler that holds it all
+        become unreachable together. A loaded solver goes first, being the one
+        thing here that is not this process's memory.
+
+        :meth:`diagnostics` still answers afterwards — what it reports is
+        measurements, kept beside the model rather than inside it.
         """
         if self._solver is not None:
             self._solver.close()
             self._solver = None
-        self._cols = self._obj = self._rows = self._matrix = self._sos = self._matrix_starts = None
-        self._quad = self._qmatrix = None
-        self._variables.clear()
-        self._constraints.clear()
-        self._variable_blocks.clear()
-        self._constraint_blocks.clear()
-        self._bound = None
-        self._compiler = None
-        self._expression_thunks = {}
+        self._built = None
 
     def __enter__(self) -> PolarsEngine:
         return self
 
     def __exit__(self, *exc: object) -> Literal[False]:
         self.close()
+
         return False
 
 

@@ -110,7 +110,7 @@ def test_the_activity_is_the_whole_left_hand_side():
     with lps.build(MODEL, SOURCES) as bound:
         result = bound.solve(solver_name='gurobi')
         recomputed = recomputed_row_values(bound._engine, result)
-        block = bound._engine._constraint_blocks['coupled']
+        block = bound._engine._model.constraint_blocks['coupled']
         reported = result.activity('coupled')['value'].to_numpy()
         assert reported == pytest.approx(recomputed[block.start : block.start + block.height], rel=RTOL)
         assert reported == pytest.approx([4.0, 4.0], rel=RTOL), 'the row binds, and its value is the product'
@@ -149,8 +149,8 @@ def test_quadratic_declarations_take_the_tail_of_the_label_space():
         }
     )
     with lps.build(first, SOURCES) as bound:
-        tables = bound._engine._tables()
-        assert bound._engine._constraint_blocks['cap'].start == 0, 'the linear declaration is built first'
+        tables = bound._engine._model.tables()
+        assert bound._engine._model.constraint_blocks['cap'].start == 0, 'the linear declaration is built first'
         assert [row for row, _ in tables.quadratic_blocks()] == [1, 2], (
             'the quadratic rows are the tail, however the file was written'
         )
@@ -195,7 +195,7 @@ def _entries(expression: str, sources=None) -> pl.DataFrame:
     """The quadratic stream of a model whose row is *expression*."""
     varied = model(constraints={'coupled': {'foreach': ['g'], 'expression': expression}})
     with lps.build(varied, dict(sources or SOURCES)) as bound:
-        return bound._engine._qmatrix
+        return bound._engine._model.qmatrix
 
 
 def test_a_pair_in_a_row_is_stored_once_whichever_order_it_was_written():
@@ -252,7 +252,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     from dataclasses import replace
 
     with lps.build(MODEL, SOURCES) as bound:
-        tables = bound._engine._tables()
+        tables = bound._engine._model.tables()
         assert tables.qmatrix.height, 'the model under test carries a quadratic row'
         moved = replace(tables, qmatrix=tables.qmatrix.with_columns(pl.col('col_r') + 1))
         assert moved.structure != tables.structure, (
@@ -303,7 +303,7 @@ def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
     from lpspec.relational.sinks.solvers.highs import build_highs
 
     with lps.build(MODEL, SOURCES) as bound, pytest.raises(LpspecError, match='no quadratic-constraint concept'):
-        build_highs(bound._engine._tables())
+        build_highs(bound._engine._model.tables())
 
 
 def test_a_bare_check_stays_silent_about_all_of_it():

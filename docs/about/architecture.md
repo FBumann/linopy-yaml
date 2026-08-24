@@ -404,6 +404,16 @@ declaration is built and a constraint compiled afterwards has to see it. That
 is the one live registry in the lane, and keeping it out of the carrier is
 what makes it visible in a signature rather than only in a docstring.
 
+**What a build produces is a value too, for the same reason.** `BuiltModel` is
+frozen — the model frames, the label frames, the per-declaration blocks and the
+compiler that made them — because a build is finished when it exists. What
+fills during assembly lives on `_Assembly`, which is discarded once it has
+frozen, so the engine holds one field where it used to hold a frame each: "has
+this engine got a model" is one question rather than seven, `close()` is one
+assignment, and a build that raises leaves no model rather than half of one.
+What survives that release is `_Measured` — the counts `diagnostics()` reports,
+which are measurements about the build rather than parts of it.
+
 **Tidy tables.** Parameters are `(dims…, value)`; a variable frame is
 `(dims…, var_label)`, one row per *existing* variable; a linear expression is
 `(frame dims…, var_label, coeff)` plus a constant part; constraint rows are
