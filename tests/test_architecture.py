@@ -719,9 +719,10 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     Read statically: ``linopy/operators.py`` imports xarray at module level
     (it is linopy lane), and this check must still run on a bare install.
 
-    The eager lane keeps a table; the relational lane spells its cases out in
-    ``lowering.py``, so every declared name has to appear there as a lowering
-    branch.
+    Both lanes keep a table — ``linopy/operators.py``'s ``OPERATORS`` and
+    ``lowering.py``'s ``_CALLS`` — so this is two set comparisons against the
+    language's own names rather than a grep. A name in one table and not the
+    other cannot reach here: it fails against ``BUILTIN_NAMES`` first.
     """
     from math_spec import BUILTIN_NAMES
 
@@ -736,9 +737,16 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
         f'eager lane implements {sorted(eager)}, language declares {sorted(BUILTIN_NAMES)}'
     )
 
-    lowering_src = (PKG / 'lowering.py').read_text()
-    missing = [name for name in BUILTIN_NAMES if f"'{name}'" not in lowering_src]
-    assert not missing, f'built-in operators with no lowering case: {missing}'
+    lowering = ast.parse((PKG / 'lowering.py').read_text())
+    calls = next(
+        node.value for node in lowering.body if isinstance(node, ast.AnnAssign) and ast.unparse(node.target) == '_CALLS'
+    )
+    assert isinstance(calls, ast.Dict)
+    relational = {ast.literal_eval(k) for k in calls.keys if k is not None}
+
+    assert relational == set(BUILTIN_NAMES), (
+        f'relational lane lowers {sorted(relational)}, language declares {sorted(BUILTIN_NAMES)}'
+    )
 
 
 def test_every_module_is_documented_somewhere():
