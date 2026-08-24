@@ -65,11 +65,15 @@ def _tables(handle: Any) -> Any:
     """The built model's frames, wherever the checkout under test keeps them.
 
     ``build`` returns a handle *over* the engine; a checkout from before it
-    returned the engine itself. Written the tolerant way for the same reason
-    the nonzero count below is optional — the ladder is run across checkouts,
-    and a comparison that cannot reach the older one measures nothing.
+    returned the engine itself, and one from before ``BuiltModel`` kept the
+    frames on the engine rather than on a value. Written the tolerant way for
+    the same reason the nonzero count below is optional — the ladder is run
+    across checkouts, and a comparison that cannot reach the older one measures
+    nothing.
     """
-    return getattr(handle, '_engine', handle)._tables()
+    engine = getattr(handle, '_engine', handle)
+    built = getattr(engine, '_model', None)
+    return built.tables() if built is not None else engine._tables()
 
 
 def lpspec_build_and_emit(case_name: str, size: str, sink: str, sources: dict[str, str]) -> Counts:
