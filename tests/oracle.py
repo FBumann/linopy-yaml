@@ -52,9 +52,19 @@ if 'semantics' not in getattr(linopy.options, '_defaults', {}):
         f'(the [linopy] extra: PyPSA/linopy@master) — `pixi install`.'
     )
 from lpspec import linopy as lpspec_linopy  # noqa: E402  — must follow the guard above
-from lpspec.linopy import builder, loader  # noqa: E402
+from lpspec.linopy import builder, loader, operators, where  # noqa: E402
 
-__all__ = ['builder', 'linopy', 'loader', 'lpspec_linopy', 'pd', 'transport_eager_objective', 'xr']
+__all__ = [
+    'builder',
+    'linopy',
+    'loader',
+    'lpspec_linopy',
+    'operators',
+    'pd',
+    'transport_eager_objective',
+    'where',
+    'xr',
+]
 
 
 def transport_eager_objective(gens, lines, load) -> float:
