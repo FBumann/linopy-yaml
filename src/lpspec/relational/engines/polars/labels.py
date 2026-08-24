@@ -24,7 +24,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from lpspec.relational.engines.polars.compiler import UNIT, ordinal, predicate_dims
+from lpspec.relational.engines.polars.compiler import UNIT, ordinal
+from lpspec.relational.engines.polars.predicates import predicate_dims
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
