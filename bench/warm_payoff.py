@@ -289,7 +289,6 @@ def _empty_cuts() -> dict[str, pl.DataFrame]:
 
 def _blocks(engine: PolarsEngine) -> tuple[dict[str, Any], list[str]]:
     """The engine's row blocks and the order they were numbered in."""
-    assert engine._model.program is not None, 'the master has to have been built before its rows can be spliced'
     return dict(engine._model.constraint_blocks), [c.name for c in engine._model.program.constraints]
 
 

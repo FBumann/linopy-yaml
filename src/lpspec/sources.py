@@ -10,9 +10,8 @@ own is a dependency of either lane.
 Not lowering, which turns an AST into a plan and touches no data; this touches
 only data and knows nothing about expressions.
 
-The ``piecewise:`` curvature guard lives here because convexity is a property
-of the breakpoint *values* — the one check a schema cannot answer — and this is
-the module that already knows what shape a caller's table is in.
+The guards that need the numbers rather than the shapes are
+:mod:`lpspec.curves`, which :func:`tidy_sources` calls on the way through.
 """
 
 from __future__ import annotations
