@@ -157,7 +157,7 @@ def model_frames(engine: PolarsEngine, schema: Model, program: Any) -> None:
     """
     banner(4, 'plan + data -> the model frames', 'relational/engines/polars/engine.py')
     engine.build(program, tidy_sources(schema, SOURCES), expression_thunks(schema))
-    model = engine._tables()
+    model = engine._model.tables()
     for name, frame in (
         ('cols', model.cols),
         ('obj', model.obj),
@@ -169,7 +169,7 @@ def model_frames(engine: PolarsEngine, schema: Model, program: Any) -> None:
     print('    a column is a bound and a cost, a row a sense and a rhs,')
     print('    and A is every nonzero coefficient as (row, col, coeff).')
 
-    variables = engine._variables['p'].collect()
+    variables = engine._model.variables['p'].collect()
     n_full = 6 * 4
     print('\n    where "p_max > 0" is not a mask array — it is row absence:')
     print(f'    p has {variables.height} rows, not {n_full}: retired oil never becomes a column.')

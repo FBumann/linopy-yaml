@@ -410,7 +410,7 @@ def test_only_a_rebind_that_moves_a_label_loads_the_solver_again(dispatch_yaml, 
 def _tables(model: Any) -> Any:
     """*model*'s solver tables, read off it built on the reach data."""
     with lps.build(model, reach_sources()) as built:
-        return built._engine._tables()
+        return built._engine._model.tables()
 
 
 #: The three fields of the digest **no rung above can reach**: a variable's
@@ -680,13 +680,13 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
     given = reach_sources()
     with lps.build(REACH, given) as bound:
         bound.solve()
-        before = bound._engine._obj.height
+        before = bound._engine._model.obj.height
         assert bound.diagnostics().loads == 1, 'the first solve has nothing loaded to keep'
 
         zeroed = pl.DataFrame({'plant': PLANTS, 'value': [0.0, 2.0, 3.0, 4.0]})
         rebound = bound.rebind({'cost': zeroed}).solve()
 
-        assert bound._engine._obj.height == before - 1, 'the zero cost should have left the objective frame'
+        assert bound._engine._model.obj.height == before - 1, 'the zero cost should have left the objective frame'
         assert bound.diagnostics().loads == 1, 'a cost is pushed, so a cost falling to zero may not reload'
 
     with lps.build(REACH, {**given, 'cost': zeroed}) as fresh:

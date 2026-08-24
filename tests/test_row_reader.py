@@ -198,9 +198,16 @@ def test_an_unknown_constraint_lists_the_declared_ones() -> None:
 
 
 def test_a_closed_model_says_it_was_closed() -> None:
+    """And says which row was being asked for, which is what the reader came with.
+
+    ``row()`` keeps a refusal of its own rather than the engine's general one
+    for that clause alone, so the clause is what pins it: without this the
+    bespoke message could be replaced by the general one and the suite would
+    not notice.
+    """
     bound = lps.build(DISPATCH_MODEL, DATA)
     bound.close()
-    with pytest.raises(LpspecError, match='no built model'):
+    with pytest.raises(LpspecError, match="no built model to read 'balance' out of"):
         bound.row('balance', snapshot=0)
 
 
@@ -220,10 +227,10 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
     still return plausible terms — this is what says they are *that* row's.
     """
     with lps.build(COMMITMENT, COMMITMENT_DATA) as bound:
-        tables = bound._engine._tables()
+        tables = bound._engine._model.tables()
         for name in ('commit', 'balance'):
-            block = bound._engine._constraint_blocks[name]
-            coordinates = bound._engine._constraints[name].collect()
+            block = bound._engine._model.constraint_blocks[name]
+            coordinates = bound._engine._model.constraints[name].collect()
             for offset in range(block.height):
                 at = block.start + offset
                 given = tables.matrix_block(at, at + 1)

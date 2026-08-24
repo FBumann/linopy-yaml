@@ -90,8 +90,8 @@ def _same_matrix(name: str, run: Any) -> None:
     ``-0.556229727``. How many terms a row has is a fact about the model; its
     last bit is not.
     """
-    tables = run.engine._tables()
-    for constraint, block in run.engine._constraint_blocks.items():
+    tables = run.engine._model.tables()
+    for constraint, block in run.engine._model.constraint_blocks.items():
         if not block.height:
             continue
         got = _canonical(tables.matrix_block(block.start, block.start + block.height))

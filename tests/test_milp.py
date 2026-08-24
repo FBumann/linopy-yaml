@@ -108,8 +108,8 @@ def test_cols_vtype_is_an_enum_over_every_declared_variable_type(commitment_run)
     fails where the column is built rather than in whichever sink first
     compares against a name it does not know.
     """
-    vtype = commitment_run.engine._tables().cols.schema['vtype']
-    held = set(commitment_run.engine._tables().cols['vtype'].unique().to_list())
+    vtype = commitment_run.engine._model.tables().cols.schema['vtype']
+    held = set(commitment_run.engine._model.tables().cols['vtype'].unique().to_list())
 
     assert isinstance(vtype, pl.Enum), f'vtype is {vtype}, so it stores a word per column'
     assert set(vtype.categories.to_list()) == set(get_args(plan.VariableType))

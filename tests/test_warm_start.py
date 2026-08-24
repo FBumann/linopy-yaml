@@ -127,7 +127,7 @@ def solver_name(request: pytest.FixtureRequest) -> str:
 def _tables(model: dict[str, Any], given: dict[str, Any]) -> Any:
     """*model*'s solver tables, read off it built on *given*."""
     with lps.build(model, given) as built:
-        return built._engine._tables()
+        return built._engine._model.tables()
 
 
 #: Each member's own iteration counter — the noise-free observable of warmth.

@@ -15,6 +15,7 @@ import json
 import subprocess
 import sys
 import textwrap
+from dataclasses import replace
 from unittest import mock
 
 import numpy as np
@@ -405,8 +406,8 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
         before = first.primal('p').sort(key)
         assert first.is_ok
 
-        assert bound._engine._obj is not None
-        bound._engine._obj = bound._engine._obj.with_columns(-pl.col('coeff'))
+        built = bound._engine._model
+        bound._engine._built = replace(built, obj=built.obj.with_columns(-pl.col('coeff')))
         second = bound.solve()
 
         assert not second.primal('p').sort(key).equals(before), 'the second solve really moved'

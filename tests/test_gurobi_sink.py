@@ -284,14 +284,14 @@ def test_solver_options_land_on_the_environment() -> None:
     the model sees it as its default, which is what environment-level means.
     """
     with lps.build(*CASES['MIP']) as bound:
-        assert build_gurobi(bound._engine._tables(), solver_options={'TimeLimit': 5.0}).Params.TimeLimit == 5.0
+        assert build_gurobi(bound._engine._model.tables(), solver_options={'TimeLimit': 5.0}).Params.TimeLimit == 5.0
 
 
 def test_build_gurobi_loads_the_model_and_stops() -> None:
     """`bench/`'s seam: the hand-off with no search behind it, so what it
     reports is what was loaded rather than what was solved."""
     with lps.build(*CASES['MIP']) as bound:
-        tables = bound._engine._tables()
+        tables = bound._engine._model.tables()
         m = build_gurobi(tables)
         assert (m.NumVars, m.NumConstrs) == (tables.column_count, tables.row_count)
         assert m.NumIntVars == tables.cols.filter(pl.col('vtype') != 'continuous').height
@@ -309,7 +309,7 @@ def test_nothing_keeps_a_built_model_alive() -> None:
     ``close()`` disposes both explicitly.
     """
     with lps.build(*CASES['MIP']) as bound:
-        reference = weakref.ref(build_gurobi(bound._engine._tables()))
+        reference = weakref.ref(build_gurobi(bound._engine._model.tables()))
     gc.collect()
     assert reference() is None, 'a built gurobi model outlived its caller — its environment cannot be released'
 
@@ -319,7 +319,7 @@ def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     which makes the build seam a complete hand-off rather than a model plus a
     number to remember."""
     with lps.build(*CASES['MAX']) as bound:
-        assert build_gurobi(bound._engine._tables()).ObjCon == pytest.approx(5.0)
+        assert build_gurobi(bound._engine._model.tables()).ObjCon == pytest.approx(5.0)
 
 
 def test_the_missing_extra_is_named() -> None:

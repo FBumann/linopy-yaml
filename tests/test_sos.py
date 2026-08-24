@@ -256,7 +256,7 @@ def test_a_big_m_stands_in_for_the_missing_bound():
 def test_the_tighter_of_the_bound_and_big_m_is_the_coefficient():
     """``M = min(big_m, ub)``, linopy's rule — a looser one is a worse search."""
     with lps.build(model(1, big_m=2.5), DATA) as bound:
-        tables = sos_sink.reformulated(bound._engine._tables())
+        tables = sos_sink.reformulated(bound._engine._model.tables())
     used = sorted({-coeff for coeff in tables.matrix['coeff'].to_list() if coeff < 0})
     assert used == [1.0, 2.0, 2.5], 'a member whose bound is looser than big_m did not take big_m'
 
@@ -393,11 +393,11 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
         return {'worth': worth, 'live': _table({(s, k): mask[s][k] for s in SITES for k in (0, 1)})}
 
     with lps.build(raw, live(together)) as bound:
-        one_set = bound._engine._tables()
+        one_set = bound._engine._model.tables()
         assert bound.solve().objective == pytest.approx(5.0), 'two members of one set are both nonzero'
 
         bound.rebind(live(apart))
-        two_sets = bound._engine._tables()
+        two_sets = bound._engine._model.tables()
         assert (one_set.cols.equals(two_sets.cols), one_set.column_count, one_set.row_count) == (True, 2, 0), (
             'the two binds differ in something other than their sets, so this proves nothing'
         )
@@ -428,7 +428,7 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
     raw = model(1)
     raw['variables'] = {'take': {'foreach': ['size', 'site'], 'bounds': {'lower': 0, 'upper': 'cap'}}}
     with lps.build(raw, DATA) as bound:
-        sets = bound._engine._tables().sos
+        sets = bound._engine._model.tables().sos
         assert sets['set'].to_list() == [0, 0, 0, 0, 1, 1, 1, 1], 'the members of a set did not end up together'
         assert sets['weight'].to_list() == [1, 2, 3, 4] * 2, 'a set is not in weight order'
         assert sets['col'].to_list() == [0, 2, 4, 6, 1, 3, 5, 7], 'a member is not the column its coordinate got'
@@ -459,7 +459,7 @@ def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(for
         pl.col('value').cast(pl.Boolean)
     )
     with lps.build(raw, DATA) as placed, lps.build(masked, DATA | {'live': live}) as counted:
-        assert placed._engine._tables().sos.equals(counted._engine._tables().sos), (
+        assert placed._engine._model.tables().sos.equals(counted._engine._model.tables().sos), (
             'the two placements disagree about which coordinate is in which set, or at which weight'
         )
 
@@ -483,7 +483,7 @@ def test_a_mask_that_empties_a_set_leaves_the_numbering_dense():
         pl.col('value').cast(pl.Boolean)
     )
     with lps.build(raw, DATA | {'live': live}) as bound:
-        assert bound._engine._tables().sos['set'].to_list() == [0, 0, 0, 0], (
+        assert bound._engine._model.tables().sos['set'].to_list() == [0, 0, 0, 0], (
             'the emptied set left a hole, so a set number is a position rather than an index'
         )
 
