@@ -204,7 +204,7 @@ def test_the_translation_table_names_every_built_in_operator():
     gained, since an operator with no row is an operator nobody wrote down the
     linopy call for.
     """
-    from math_spec.operators import BUILTIN_NAMES
+    from math_spec import BUILTIN_NAMES
 
     page = (DOCS / 'about' / 'linopy.md').read_text()
     section = page.split('### What a construct becomes')[1].split('### The same language')[0]

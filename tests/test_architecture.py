@@ -299,25 +299,6 @@ def test_no_contract_module_names_an_engine():
     )
 
 
-#: Names this repository reaches through a ``math_spec`` submodule because the
-#: package does not export them. Every one is a vocabulary this repository keeps
-#: a copy of and holds against the language's — the fence upstream forbids
-#: importing the language into the engine, so a test is what keeps the copies
-#: honest, and a table with no export to check against is a table that drifts.
-#: All eight are pinned in math-spec's own ``__all__`` already
-#: (energy-models/math-spec#51), so the day the dependency floor moves this
-#: table empties and :func:`test_no_reach_in_survives_its_export` says so.
-UNEXPORTED_LANGUAGE_NAMES = {
-    'BUILTIN_NAMES': 'the operator set both lanes implement and the linopy page tabulates',
-    'DIMENSION_DTYPES': 'the dimension dtype vocabulary `frames._DECLARED` copies',
-    'FORMATS': 'the format registry the gallery renders every model through',
-    'PARAMETER_DTYPES': 'the parameter dtype vocabulary both lanes copy',
-    'VARIABLE_ABSENCE': 'the absence readings `plan.VariableAbsence` copies',
-    'VARIABLE_DOMAINS': 'the domain set `plan.VariableType` copies',
-    'parse_yaml': 'YAML *text* to a mapping, which `read_yaml` does not do',
-    'typeset': 'the format-agnostic entry point behind `to_latex` and friends',
-}
-
 #: Where python this repository owns lives. ``.pixi`` and a worktree parked
 #: under the checkout are neither ours nor scanned.
 SOURCE_DIRS = ('src', 'tests', 'tools', 'bench', 'examples')
@@ -344,20 +325,16 @@ def test_the_language_is_imported_as_one_package():
     exported; ``from math_spec.model import Model`` keeps working until it does
     not.
 
-    Nothing is exempt by directory. A test reaching inside is the same
-    unagreed contract as a module doing it, and the exemption this test used to
-    grant to ``tests/`` is where every one of them had accumulated.
-    :data:`UNEXPORTED_LANGUAGE_NAMES` is the whole of what is still allowed,
-    per name rather than per file, so each one is read as a decision — and
-    :func:`test_no_reach_in_survives_its_export` empties it.
+    Nothing is exempt, by directory or by name. A test reaching inside is the
+    same unagreed contract as a module doing it, and the exemption this rule
+    used to grant to ``tests/`` is where every one of them had accumulated.
     """
     offenders = {}
     for path in _repository_modules():
         inside = []
         for node in ast.walk(ast.parse(path.read_text())):
             if isinstance(node, ast.ImportFrom) and (node.module or '').startswith('math_spec.'):
-                reached = [a.name for a in node.names if a.name not in UNEXPORTED_LANGUAGE_NAMES]
-                inside += [f'{node.module}.{name}' for name in reached]
+                inside += [f'{node.module}.{alias.name}' for alias in node.names]
             elif isinstance(node, ast.Import):
                 inside += [alias.name for alias in node.names if alias.name.startswith('math_spec.')]
         if inside:
@@ -365,22 +342,6 @@ def test_the_language_is_imported_as_one_package():
     assert not offenders, (
         f'modules reach inside the language package: {offenders} — import the name from '
         f'`math_spec` itself, which is the surface it pins'
-    )
-
-
-def test_no_reach_in_survives_its_export():
-    """The ratchet: a name math-spec exports has no row left to stand on.
-
-    Without this the table only grows — an entry whose reason expired reads
-    exactly like one that still holds, and the reach-in outlives the release
-    that made it unnecessary.
-    """
-    import math_spec
-
-    stale = {name: why for name, why in UNEXPORTED_LANGUAGE_NAMES.items() if name in math_spec.__all__}
-    assert not stale, (
-        f'math_spec exports these now, so the reason each row gives has expired: {stale} — drop the '
-        f'rows and import the names from `math_spec`'
     )
 
 
@@ -599,7 +560,7 @@ def test_the_engine_dtype_table_matches_the_declared_vocabulary():
     added to ``DIMENSION_DTYPES`` without a polars dtype here would fail
     ``labels_frame`` on the empty-index path with a ``KeyError``.
     """
-    from math_spec.model import DIMENSION_DTYPES
+    from math_spec import DIMENSION_DTYPES
 
     from lpspec.frames import _DECLARED
 
@@ -618,7 +579,7 @@ def test_the_relational_lane_accepts_the_declared_parameter_dtype_vocabulary():
     is widened, because whole numbers are numbers and the shipped instances
     carry them. A second exception added quietly is what this catches.
     """
-    from math_spec.model import PARAMETER_DTYPES
+    from math_spec import PARAMETER_DTYPES
 
     from lpspec.relational.engines.polars.data_validation import _COLUMNS, ACCEPTED_VALUE_TYPES
 
@@ -640,7 +601,7 @@ def test_the_eager_lane_takes_the_same_vocabulary_and_the_same_widening():
     """
     pytest.importorskip('linopy', reason='needs the [linopy] extra')
 
-    from math_spec.model import PARAMETER_DTYPES
+    from math_spec import PARAMETER_DTYPES
 
     from lpspec.linopy.loader import _ACCEPTED_KINDS, _KINDS
 
@@ -660,7 +621,7 @@ def test_the_plan_variable_type_matches_the_declared_domains():
     """
     from typing import get_args
 
-    from math_spec.model import VARIABLE_DOMAINS
+    from math_spec import VARIABLE_DOMAINS
 
     from lpspec.relational.plan import VariableType
 
@@ -680,7 +641,7 @@ def test_the_plan_absence_matches_the_declared_absence():
     """
     from typing import get_args
 
-    from math_spec.model import VARIABLE_ABSENCE
+    from math_spec import VARIABLE_ABSENCE
 
     from lpspec.relational.plan import VariableAbsence
 
@@ -753,7 +714,7 @@ def test_both_lanes_implement_exactly_the_closed_operator_set():
     ``lowering.py``, so every declared name has to appear there as a lowering
     branch.
     """
-    from math_spec.operators import BUILTIN_NAMES
+    from math_spec import BUILTIN_NAMES
 
     tree = ast.parse((PKG / 'linopy' / 'builder.py').read_text())
     table = next(
