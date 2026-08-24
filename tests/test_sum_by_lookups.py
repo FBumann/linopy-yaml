@@ -32,7 +32,7 @@ import pytest
 from math_spec import expand_piecewise
 
 from lpspec.errors import DimensionError, LanguageError, SchemaError
-from lpspec.lowering import _lower_expr, lower_program
+from lpspec.lowering import _Lowering, lower_program
 from lpspec.relational.plan import GroupSum, Variable
 from tests.conftest import override, raw_of, relation, resolved, schema_of
 from tests.differential import RTOL, differential
@@ -248,8 +248,8 @@ def test_two_lookups_lower_to_one_node_and_not_to_a_composition():
 def test_the_one_element_list_is_the_plain_form():
     """`by=[l]` and `by=l` are the same call, so nothing branches on arity."""
     schema = schema_of(MODEL)
-    assert _lower_expr(resolved('sum(p, by=[gen_bus])', schema), schema, 't') == _lower_expr(
-        resolved('sum(p, by=gen_bus)', schema), schema, 't'
+    assert _Lowering(schema, 't').expr(resolved('sum(p, by=[gen_bus])', schema)) == _Lowering(schema, 't').expr(
+        resolved('sum(p, by=gen_bus)', schema)
     )
 
 
@@ -343,4 +343,4 @@ def test_grouping_into_a_dim_the_operand_already_carries_is_refused():
     schema = schema_of(MODEL)
     node = resolved('sum(p * limit, by=[gen_bus, gen_tech])', schema)
     with pytest.raises(LanguageError, match=r"targets \['bus', 'technology'\], which the expression already carries"):
-        _lower_expr(node, schema, 't')
+        _Lowering(schema, 't').expr(node)

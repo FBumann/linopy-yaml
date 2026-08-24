@@ -14,7 +14,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import LanguageError
-from lpspec.lowering import _lower_expr
+from lpspec.lowering import _Lowering
 from lpspec.relational.plan import (
     Translate,
     Variable,
@@ -626,7 +626,7 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
     ],
 )
 def test_translation_lowers_to_a_bounded_halo(expression, expected):
-    assert _lower_expr(resolved(expression, STORAGE_SCHEMA), STORAGE_SCHEMA, 't') == expected
+    assert _Lowering(STORAGE_SCHEMA, 't').expr(resolved(expression, STORAGE_SCHEMA)) == expected
 
 
 @pytest.mark.parametrize(
@@ -660,7 +660,7 @@ def test_translation_lowers_to_a_bounded_halo(expression, expected):
 )
 def test_a_shift_neither_lane_can_honour_is_refused_at_lowering(expression, match):
     with pytest.raises(LanguageError, match=match):
-        _lower_expr(resolved(expression, STORAGE_SCHEMA), STORAGE_SCHEMA, 't')
+        _Lowering(STORAGE_SCHEMA, 't').expr(resolved(expression, STORAGE_SCHEMA))
 
 
 FILL_IDENTITY_MODEL = """

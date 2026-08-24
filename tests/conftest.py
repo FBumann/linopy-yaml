@@ -187,7 +187,7 @@ def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
 def resolved(text, schema):
     """Parse + expand + resolve — exactly what a backend receives.
 
-    Tests that call `_lower_expr` or `evaluate_where` directly must go through
+    Tests that call `_Lowering.expr` or `evaluate_where` directly must go through
     this: a raw `parse_expression` result still holds NameNodes, and both
     backends now assert those never reach them (resolution.py).
     """

@@ -16,7 +16,7 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import DimensionError, LanguageError
-from lpspec.lowering import _lower_expr
+from lpspec.lowering import _Lowering
 from lpspec.relational.plan import Window
 from tests.conftest import resolved, schema_of
 from tests.differential import differential
@@ -251,7 +251,7 @@ def test_the_window_lowers_to_one_node():
     one node's mask has.
     """
     schema = schema_of(up_time_model(None))
-    plan = _lower_expr(resolved('sum_back(started, over=t, within=min_up)', schema), schema, 'k')
+    plan = _Lowering(schema, 'k').expr(resolved('sum_back(started, over=t, within=min_up)', schema))
     assert isinstance(plan, Window), 'a window is its own plan node'
     assert plan.width == 'min_up', 'the width travels as the parameter name, resolved at bind'
 

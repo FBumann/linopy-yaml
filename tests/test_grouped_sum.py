@@ -24,7 +24,7 @@ from math_spec import expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError
-from lpspec.lowering import _lower_expr, lower_program
+from lpspec.lowering import _Lowering, lower_program
 from lpspec.relational.engines.polars.engine import PolarsEngine
 from lpspec.relational.plan import (
     Add,
@@ -129,7 +129,7 @@ def test_grouping_an_expression_that_lacks_the_dim_is_refused():
     lowering raises it by asking `dimensions`, not by restating it."""
     schema = schema_of(TRANSPORT_YAML)
     with pytest.raises(LanguageError, match='but the expression'):
-        _lower_expr(resolved('sum(f, by=gen_bus)', schema), schema, 't')
+        _Lowering(schema, 't').expr(resolved('sum(f, by=gen_bus)', schema))
 
 
 def test_a_lookup_over_another_dim_is_a_dim_error_not_a_resolution_one():
@@ -142,7 +142,7 @@ def test_a_lookup_over_another_dim_is_a_dim_error_not_a_resolution_one():
     schema = schema_of(TRANSPORT_YAML)
     node = resolved('sum(p, by=line_to)', schema)
     with pytest.raises(LanguageError, match=r"sum\(by=line_to\) consumes 'line', the dim it maps out of"):
-        _lower_expr(node, schema, 't')
+        _Lowering(schema, 't').expr(node)
 
 
 # ---------------------------------------------------------------------------
