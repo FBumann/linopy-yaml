@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.252](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.251...v0.0.1-alpha.252) (2026-08-24)
+
+
+### Bug Fixes
+
+* **diagnostics:** a build that raises says which half of the report survived ([#1252](https://github.com/fluxopt/lpspec/issues/1252)) ([216cd2d](https://github.com/fluxopt/lpspec/commit/216cd2df206cf67c9031cbde3e53bca6b7e649f6))
+
 ## [0.0.1-alpha.251](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.250...v0.0.1-alpha.251) (2026-08-24)
 
 
