@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-from math_spec import load_model
-from math_spec.dimensions import dims_of
-from math_spec.resolution import Namespace, expression_of
+from math_spec import Namespace, dims_of, expression_of, load_model
 
 import lpspec as lps
 from lpspec.errors import LpspecError

@@ -299,6 +299,34 @@ def test_no_contract_module_names_an_engine():
     )
 
 
+#: Names this repository reaches through a ``math_spec`` submodule because the
+#: package does not export them. Every one is a vocabulary this repository keeps
+#: a copy of and holds against the language's — the fence upstream forbids
+#: importing the language into the engine, so a test is what keeps the copies
+#: honest, and a table with no export to check against is a table that drifts.
+#: All eight are pinned in math-spec's own ``__all__`` already
+#: (energy-models/math-spec#51), so the day the dependency floor moves this
+#: table empties and :func:`test_no_reach_in_survives_its_export` says so.
+UNEXPORTED_LANGUAGE_NAMES = {
+    'BUILTIN_NAMES': 'the operator set both lanes implement and the linopy page tabulates',
+    'DIMENSION_DTYPES': 'the dimension dtype vocabulary `frames._DECLARED` copies',
+    'FORMATS': 'the format registry the gallery renders every model through',
+    'PARAMETER_DTYPES': 'the parameter dtype vocabulary both lanes copy',
+    'VARIABLE_ABSENCE': 'the absence readings `plan.VariableAbsence` copies',
+    'VARIABLE_DOMAINS': 'the domain set `plan.VariableType` copies',
+    'parse_yaml': 'YAML *text* to a mapping, which `read_yaml` does not do',
+    'typeset': 'the format-agnostic entry point behind `to_latex` and friends',
+}
+
+#: Where python this repository owns lives. ``.pixi`` and a worktree parked
+#: under the checkout are neither ours nor scanned.
+SOURCE_DIRS = ('src', 'tests', 'tools', 'bench', 'examples')
+
+
+def _repository_modules() -> list[Path]:
+    return [p for d in SOURCE_DIRS for p in (REPO / d).rglob('*.py') if '__pycache__' not in p.parts]
+
+
 def test_the_language_is_imported_as_one_package():
     """Hard rule 1, the half of it that is still ours to keep.
 
@@ -316,23 +344,43 @@ def test_the_language_is_imported_as_one_package():
     exported; ``from math_spec.model import Model`` keeps working until it does
     not.
 
-    Tests are exempt and deliberately so: several read ``math_spec.model`` for
-    the dtype and domain vocabularies they hold this package's copies against,
-    which is a claim about a private table rather than a use of one.
+    Nothing is exempt by directory. A test reaching inside is the same
+    unagreed contract as a module doing it, and the exemption this test used to
+    grant to ``tests/`` is where every one of them had accumulated.
+    :data:`UNEXPORTED_LANGUAGE_NAMES` is the whole of what is still allowed,
+    per name rather than per file, so each one is read as a decision — and
+    :func:`test_no_reach_in_survives_its_export` empties it.
     """
     offenders = {}
-    for path in _all_modules():
+    for path in _repository_modules():
         inside = []
         for node in ast.walk(ast.parse(path.read_text())):
             if isinstance(node, ast.ImportFrom) and (node.module or '').startswith('math_spec.'):
-                inside.append(node.module)
+                reached = [a.name for a in node.names if a.name not in UNEXPORTED_LANGUAGE_NAMES]
+                inside += [f'{node.module}.{name}' for name in reached]
             elif isinstance(node, ast.Import):
                 inside += [alias.name for alias in node.names if alias.name.startswith('math_spec.')]
         if inside:
-            offenders[str(path.relative_to(PKG))] = sorted(inside)
+            offenders[str(path.relative_to(REPO))] = sorted(inside)
     assert not offenders, (
         f'modules reach inside the language package: {offenders} — import the name from '
         f'`math_spec` itself, which is the surface it pins'
+    )
+
+
+def test_no_reach_in_survives_its_export():
+    """The ratchet: a name math-spec exports has no row left to stand on.
+
+    Without this the table only grows — an entry whose reason expired reads
+    exactly like one that still holds, and the reach-in outlives the release
+    that made it unnecessary.
+    """
+    import math_spec
+
+    stale = {name: why for name, why in UNEXPORTED_LANGUAGE_NAMES.items() if name in math_spec.__all__}
+    assert not stale, (
+        f'math_spec exports these now, so the reason each row gives has expired: {stale} — drop the '
+        f'rows and import the names from `math_spec`'
     )
 
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 from math_spec import expand_piecewise
-from math_spec.dimensions import check_schema
 
 import lpspec as lps
 from lpspec.errors import LanguageError
@@ -32,8 +31,12 @@ def test_every_shipped_example_typechecks(path):
     travel with them; this is the same sweep over the gallery and the ports,
     which stay. Both are needed: a rule with no corpus proves nothing, and a
     corpus with no rule applied to it is a directory of files.
+
+    Loading *is* the sweep: a ``Model`` runs every dim rule on the way out, so
+    the call below is the whole test — ``test_objective.py`` pins that a rule
+    ``dimensions.check_schema`` owns reaches a caller through ``load_model``.
     """
-    check_schema(schema_of(path))
+    schema_of(path)
 
 
 @pytest.mark.parametrize('path', MODEL_PATHS, ids=lambda p: p.name)

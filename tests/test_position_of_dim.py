@@ -255,7 +255,7 @@ def test_the_retired_index_spelling_names_its_rewrite():
 
 def resolved_where(where: str):
     """The predicate a backend would receive — resolution is where these fail."""
-    from math_spec.resolution import Namespace, where_of
+    from math_spec import Namespace, where_of
 
     schema = schema_of(MODEL)
     return where_of(where, Namespace.of(schema), 't')

@@ -10,9 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from math_spec import expand_piecewise
-from math_spec.model import Model
-from math_spec.resolution import Namespace
+from math_spec import Model, Namespace, expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import DataError, DimensionError, LanguageError

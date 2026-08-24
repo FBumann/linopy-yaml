@@ -14,7 +14,7 @@ import dataclasses
 
 import polars as pl
 import pytest
-from math_spec.typeset import to_latex, to_typst
+from math_spec import to_latex, to_typst
 
 import lpspec as lps
 from lpspec.errors import LanguageError

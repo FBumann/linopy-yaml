@@ -2,7 +2,7 @@ The whole architecture, one model, one stage at a time — run it and read.
 
 model: examples/walkthrough.yaml
 
-[1] YAML text -> validated Model  (schema.py, validation.py)
+[1] YAML text -> validated Model  (math_spec.load_model)
     dimensions   snapshot, generator
     parameters   p_max, load, cost
     variables    p
@@ -10,10 +10,9 @@ model: examples/walkthrough.yaml
     expressions  total_supply    <- tier 2, still present
     macros       weighted_sum   <- tier 2, still present
 
-[2] expand macros / named expressions -> core AST  (expansion.py)
+[2] expand macros / named expressions -> core AST  (math_spec.expression_of)
     written      'sum(weighted_sum(p, cost, over=generator))'
-    parsed       FunctionCallNode(name='sum', args=[FunctionCallNode(name='weighted_sum', args=[NameNode(name='p'), NameNode(name='cost')], kwargs={'over': NameNode(name='generator')})], kwargs={})
-    expanded     FunctionCallNode(name='sum', args=[FunctionCallNode(name='sum', args=[BinaryOperatorNode(op='*', left=NameNode(name='p'), right=NameNode(name='cost'))], kwargs={'over': NameNode(name='generator')})], kwargs={})
+    core AST     FunctionCallNode(name='sum', args=[FunctionCallNode(name='sum', args=[BinaryOperatorNode(op='*', left=VariableNode(name='p'), right=ParameterNode(name='cost'))], kwargs={'over': DimensionNode(name='generator')})], kwargs={})
                  ^ the macro is gone: sum(p * cost, over=generator)
 
 [3] core AST -> relational IR  (lowering.py)
@@ -90,7 +89,7 @@ model: examples/walkthrough.yaml
     └──────────┴───────┘
                  ^ the named expression, read back at the solution
 
-[7] and what the language refuses  (validation.py, lowering.py)
+[7] and what the language refuses  (math_spec, lowering.py)
 
     an operator that is not in the closed built-in set:
     caught by check() as SchemaError

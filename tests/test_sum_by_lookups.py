@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import pytest
 from math_spec import expand_piecewise
-from math_spec.expression_parser import parse_expression
 
 from lpspec.errors import DimensionError, LanguageError, SchemaError
 from lpspec.lowering import _lower_expr, lower_program
@@ -299,9 +298,10 @@ def test_a_list_the_language_cannot_read_is_refused_at_load(expression, match):
 
 def test_a_list_is_only_legal_in_a_kwarg_value():
     """The grammar admits a bracketed list where a kwarg value goes, and nowhere
-    else — a list has no meaning in arithmetic, so it never reaches resolution."""
+    else — a list has no meaning in arithmetic, so it never reaches resolution:
+    asked for one anyway, the refusal comes from the parse."""
     with pytest.raises(SchemaError, match='Failed to parse expression'):
-        parse_expression('p * [gen_bus, gen_tech]')
+        resolved('p * [gen_bus, gen_tech]', schema_of(MODEL))
 
 
 def test_lookups_over_different_dimensions_cannot_be_one_grouping():
