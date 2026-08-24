@@ -24,6 +24,7 @@ Semantics mirror the eager builder exactly:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Literal, assert_never, cast
 
@@ -131,13 +132,14 @@ def lower_program(schema: Buildable) -> plan.Program:
             )
         if ast.op not in _SENSES:
             raise LanguageError(f"constraint '{cname}': unsupported sense '{ast.op}'")
+        lowering = _Lowering(expanded, f"constraint '{cname}'", ceiling=2)
         constraints.append(
             plan.ConstraintDeclaration(
                 cname,
                 tuple(cdef.foreach),
-                lhs=_lower_expr(ast.left, expanded, f"constraint '{cname}'", ceiling=2),
+                lhs=lowering.expr(ast.left),
                 sense=ast.op,
-                rhs=_lower_expr(ast.right, expanded, f"constraint '{cname}'", ceiling=2),
+                rhs=lowering.expr(ast.right),
                 where=where,
             )
         )
@@ -149,7 +151,7 @@ def lower_program(schema: Buildable) -> plan.Program:
             raise LanguageError('the objective: expression must not contain a comparison operator')
         objective = plan.ObjectiveDeclaration(
             'min' if odef.sense == 'minimize' else 'max',
-            _lower_expr(ast, expanded, 'the objective', ceiling=2),
+            _Lowering(expanded, 'the objective', ceiling=2).expr(ast),
         )
 
     dimensions = tuple(
@@ -193,7 +195,7 @@ def lower_expression(schema: Buildable, name: str) -> plan.Expression:
     ns = Namespace.of(expanded)
     ast = expression_of(expanded.expressions[name].expression, expanded, ns, context)
     assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in a named expression'
-    return _lower_expr(ast, expanded, context)
+    return _Lowering(expanded, context).expr(ast)
 
 
 def expression_thunks(schema: Buildable) -> dict[str, Callable[[], plan.Expression]]:
@@ -210,205 +212,308 @@ def expression_thunks(schema: Buildable) -> dict[str, Callable[[], plan.Expressi
 # ---------------------------------------------------------------------------
 
 
-def _lower_expr(node: ArithmeticNode, schema: Buildable, context: str, *, ceiling: int = 1) -> plan.Expression:
-    """Rewrite one resolved core-AST expression as a plan expression.
+@dataclass(frozen=True)
+class _Lowering:
+    """One expression walk, and the three things every step of it reads.
 
-    Three language rules are *asked* here and answered elsewhere: the call
-    shape (``operators.call_shape_error``, re-asked so an AST that skipped
-    resolution gets the language's wording rather than an ``IndexError``), the
-    dim rules (``dims_of``) and degree (``check_binary``), both asked for
-    their verdict rather than decided again here.
+    ``schema``, ``context`` and ``ceiling`` are fixed for a whole walk: the
+    ceiling is chosen once by the position being lowered — 2 inside a
+    constraint or the objective, 1 elsewhere — and the other two never vary at
+    all. So they are the walk's state rather than three arguments every
+    recursion and every check repeats. Extend this rather than adding a
+    parameter to :meth:`expr` and every operator seam, which is the rule
+    ``linopy/builder.py``'s ``EvaluationContext`` already states for the other
+    lane.
 
-    What stays is about the plan: which node a call becomes, and the shapes a
-    node cannot represent — a ``GroupSum`` groups by a declared lookup, a
-    ``Translate`` distance is an integer literal. ``Sum`` and ``GroupSum`` stay
-    two nodes under one surface verb, reducing a dim away and reducing it into
-    another being different relational shapes.
+    Frozen, because a walk that could change its own ceiling half way through
+    would be a degree rule no file states.
     """
-    if isinstance(node, NumberNode):
-        return plan.Constant(node.value)
 
-    if isinstance(node, VariableNode):
-        return plan.Variable(node.name)
+    schema: Buildable
+    context: str
+    ceiling: int = 1
 
-    if isinstance(node, ParameterNode):
-        return plan.Parameter(node.name)
+    def expr(self, node: ArithmeticNode) -> plan.Expression:
+        """Rewrite one resolved core-AST expression as a plan expression.
 
-    if isinstance(node, EdgeNode):
-        msg = f'EdgeNode({node.policy!r}) reached lowering: an edge policy is a shift() kwarg, not a value.'
-        raise AssertionError(msg)
+        Three language rules are *asked* here and answered elsewhere: the call
+        shape (``operators.call_shape_error``, re-asked so an AST that skipped
+        resolution gets the language's wording rather than an ``IndexError``), the
+        dim rules (``dims_of``) and degree (``check_binary``), both asked for
+        their verdict rather than decided again here.
 
-    if isinstance(node, KeywordNode):
-        msg = (
-            f'KeywordNode({node.value!r}) reached lowering. A quoted keyword is consumed '
-            f'by its kwarg during resolution (docs/about/architecture.md hard rule 1).'
+        What stays is about the plan: which node a call becomes, and the shapes a
+        node cannot represent — a ``GroupSum`` groups by a declared lookup, a
+        ``Translate`` distance is an integer literal. ``Sum`` and ``GroupSum`` stay
+        two nodes under one surface verb, reducing a dim away and reducing it into
+        another being different relational shapes.
+        """
+        if isinstance(node, NumberNode):
+            return plan.Constant(node.value)
+
+        if isinstance(node, VariableNode):
+            return plan.Variable(node.name)
+
+        if isinstance(node, ParameterNode):
+            return plan.Parameter(node.name)
+
+        if isinstance(node, EdgeNode):
+            msg = f'EdgeNode({node.policy!r}) reached lowering: an edge policy is a shift() kwarg, not a value.'
+            raise AssertionError(msg)
+
+        if isinstance(node, KeywordNode):
+            msg = (
+                f'KeywordNode({node.value!r}) reached lowering. A quoted keyword is consumed '
+                f'by its kwarg during resolution (docs/about/architecture.md hard rule 1).'
+            )
+            raise AssertionError(msg)
+        if isinstance(node, (NameNode, NameListNode, DimensionNode, LookupNode)):
+            shown = node.name if isinstance(node, (NameNode, DimensionNode)) else node.shown
+            msg = (
+                f'{type(node).__name__}({shown!r}) reached lowering. Expressions '
+                f'must go through resolution.expression_of() first '
+                f'(docs/about/architecture.md hard rule 1).'
+            )
+            raise AssertionError(msg)
+
+        if isinstance(node, UnaryOperatorNode):
+            inner = self.expr(node.operand)
+            return plan.Negate(inner) if node.op == '-' else inner
+
+        if isinstance(node, BinaryOperatorNode):
+            left = self.expr(node.left)
+            right = self.expr(node.right)
+            check_binary(node, self.context, ceiling=self.ceiling)
+            match node.op:
+                case '+':
+                    return plan.Add(left, right)
+                case '-':
+                    return plan.Add(left, plan.Negate(right))
+                case '*':
+                    return plan.Multiply(left, right)
+                case '/':
+                    return plan.Divide(left, right)
+                case '**':
+                    return plan.Power(left, right)
+                case _:  # pragma: no cover — check_binary refuses every other operator
+                    raise AssertionError(f'{self.context}: operator {node.op!r} passed the degree check')
+
+        if isinstance(node, FunctionCallNode):
+            shape_error = call_shape_error(node.name, len(node.args), node.kwargs)
+            if shape_error is not None:
+                raise LanguageError(f'{self.context}: {shape_error}')
+            try:
+                lower_call = _CALLS[node.name]
+            except KeyError:
+                raise LanguageError(f"{self.context}: built-in '{node.name}' declares no lowering case") from None
+            return lower_call(self, node)
+
+        assert_never(node)
+
+    def sum(self, node: FunctionCallNode) -> plan.Expression:
+        """``sum(x)``, ``sum(x, over=d)`` or ``sum(x, by=lookup)``.
+
+        Two plan nodes under one surface verb: reducing a dim away and reducing it
+        *into* another are different relational shapes, so ``by=`` decides which
+        before anything else is read.
+        """
+        by_node = node.kwargs.get('by')
+        self._dim_rules(node)
+        operand = self.expr(node.args[0])
+        if by_node is None and 'over' not in node.kwargs:
+            return plan.Sum(operand, tuple(sorted(dims_of(node.args[0], self.schema, self.context))))
+        if by_node is None:
+            over_node = node.kwargs['over']
+            if not isinstance(over_node, DimensionNode):
+                raise LanguageError(f'{self.context}: sum(over=...) must name a dimension')
+            return plan.Sum(operand, (over_node.name,))
+        if not isinstance(by_node, LookupNode):
+            raise LanguageError(f'{self.context}: sum(by=...) must name a lookup')
+        return plan.GroupSum(operand, over=by_node.dimension, coordinate=by_node.names, into=by_node.into)
+
+    def at(self, node: FunctionCallNode) -> plan.Expression:
+        """``at(x, by=lookup)`` — the adjoint of :meth:`sum`'s ``by=`` form."""
+        by_node = node.kwargs['by']
+        if not isinstance(by_node, LookupNode):
+            raise LanguageError(f'{self.context}: at(by=...) must name a lookup')
+        self._dim_rules(node)
+        return plan.At(
+            self.expr(node.args[0]),
+            over=by_node.dimension,
+            coordinate=by_node.names,
+            into=by_node.into,
         )
-        raise AssertionError(msg)
-    if isinstance(node, (NameNode, NameListNode, DimensionNode, LookupNode)):
-        shown = node.name if isinstance(node, (NameNode, DimensionNode)) else node.shown
-        msg = (
-            f'{type(node).__name__}({shown!r}) reached lowering. Expressions '
-            f'must go through resolution.expression_of() first '
-            f'(docs/about/architecture.md hard rule 1).'
-        )
-        raise AssertionError(msg)
 
-    if isinstance(node, UnaryOperatorNode):
-        inner = _lower_expr(node.operand, schema, context, ceiling=ceiling)
-        return plan.Negate(inner) if node.op == '-' else inner
+    def sum_back(self, node: FunctionCallNode) -> plan.Expression:
+        """``sum_back(x, over=d, within=w)`` — a trailing window along one dimension.
 
-    if isinstance(node, BinaryOperatorNode):
-        left = _lower_expr(node.left, schema, context, ceiling=ceiling)
-        right = _lower_expr(node.right, schema, context, ceiling=ceiling)
-        check_binary(node, context, ceiling=ceiling)
-        match node.op:
-            case '+':
-                return plan.Add(left, right)
-            case '-':
-                return plan.Add(left, plan.Negate(right))
-            case '*':
-                return plan.Multiply(left, right)
-            case '/':
-                return plan.Divide(left, right)
-            case '**':
-                return plan.Power(left, right)
-            case _:  # pragma: no cover — check_binary refuses every other operator
-                raise AssertionError(f'{context}: operator {node.op!r} passed the degree check')
-
-    if isinstance(node, FunctionCallNode):
-        shape_error = call_shape_error(node.name, len(node.args), node.kwargs)
-        if shape_error is not None:
-            raise LanguageError(f'{context}: {shape_error}')
-        try:
-            lower_call = _CALLS[node.name]
-        except KeyError:
-            raise LanguageError(f"{context}: built-in '{node.name}' declares no lowering case") from None
-        return lower_call(node, schema, context, ceiling)
-
-    assert_never(node)
-
-
-def _lower_sum(node: FunctionCallNode, schema: Buildable, context: str, ceiling: int) -> plan.Expression:
-    """``sum(x)``, ``sum(x, over=d)`` or ``sum(x, by=lookup)``.
-
-    Two plan nodes under one surface verb: reducing a dim away and reducing it
-    *into* another are different relational shapes, so ``by=`` decides which
-    before anything else is read.
-    """
-    by_node = node.kwargs.get('by')
-    _check_dim_rules(node, schema, context)
-    operand = _lower_expr(node.args[0], schema, context, ceiling=ceiling)
-    if by_node is None and 'over' not in node.kwargs:
-        return plan.Sum(operand, tuple(sorted(dims_of(node.args[0], schema, context))))
-    if by_node is None:
+        *within* is an integer literal of at least one, or a parameter naming a
+        per-entity width, which :meth:`_named_width` holds to the two rules
+        that make it mean one thing.
+        """
         over_node = node.kwargs['over']
         if not isinstance(over_node, DimensionNode):
-            raise LanguageError(f'{context}: sum(over=...) must name a dimension')
-        return plan.Sum(operand, (over_node.name,))
-    if not isinstance(by_node, LookupNode):
-        raise LanguageError(f'{context}: sum(by=...) must name a lookup')
-    return plan.GroupSum(operand, over=by_node.dimension, coordinate=by_node.names, into=by_node.into)
+            raise LanguageError(f'{self.context}: sum_back(over=...) must name a dimension')
+        within_node = node.kwargs['within']
+        self._dim_rules(node)
+        operand = self.expr(node.args[0])
+        wrap = _window_edge(node.kwargs.get('edge'), self.context)
+        width: int | str
+        if isinstance(within_node, ParameterNode):
+            self._named_width(within_node.name, over_node.name)
+            width = within_node.name
+        elif (
+            isinstance(within_node, NumberNode)
+            and within_node.value >= 1
+            and int(within_node.value) == within_node.value
+        ):
+            width = int(within_node.value)
+        else:
+            raise LanguageError(f'{self.context}: {_window_width_message()}')
+        return plan.Window(operand, over_node.name, width=width, wrap=wrap)
 
+    def shift(self, node: FunctionCallNode) -> plan.Expression:
+        """``shift(x, over=d, offset=n)`` — the value at *t - offset* along one dim.
 
-def _lower_at(node: FunctionCallNode, schema: Buildable, context: str, ceiling: int) -> plan.Expression:
-    """``at(x, by=lookup)`` — the adjoint of :func:`_lower_sum`'s ``by=`` form."""
-    by_node = node.kwargs['by']
-    if not isinstance(by_node, LookupNode):
-        raise LanguageError(f'{context}: at(by=...) must name a lookup')
-    _check_dim_rules(node, schema, context)
-    return plan.At(
-        _lower_expr(node.args[0], schema, context, ceiling=ceiling),
-        over=by_node.dimension,
-        coordinate=by_node.names,
-        into=by_node.into,
-    )
+        The longest of the four because *offset* and *edge* are read together: a
+        named offset is refused a negation and held to :meth:`_named_offset`'s
+        four rules, and what the vacated positions contribute has to be decided
+        before either is checked.
+        """
+        over_node = node.kwargs['over']
+        if not isinstance(over_node, DimensionNode):
+            raise LanguageError(f'{self.context}: shift(over=...) must name a dimension')
+        partition = _partition_of(node)
+        by_node = node.kwargs['offset']
+        sign = 1
+        if isinstance(by_node, UnaryOperatorNode) and by_node.op == '-':
+            sign, by_node = -1, by_node.operand
+        if not isinstance(by_node, ParameterNode) and (
+            not isinstance(by_node, NumberNode) or int(by_node.value) != by_node.value
+        ):
+            raise LanguageError(f'{self.context}: {_shift_by_message()}')
+        self._dim_rules(node)
+        operand = self.expr(node.args[0])
+        has_var = carries_variable(node.args[0])
+        edge = node.kwargs.get('edge')
+        wrap = isinstance(edge, EdgeNode)
+        fill = None if wrap else _translate_fill(edge, self.context, has_var=has_var)
+        if not wrap and fill is None and not has_var:
+            raise LanguageError(_shift_over_data_message(self.context))
+        by: int | str
+        if isinstance(by_node, ParameterNode):
+            self._named_offset(by_node.name, node, over_node.name, wrap=wrap, fill=fill)
+            if sign < 0:
+                raise LanguageError(f'{self.context}: {_negated_offset_message(by_node.name)}')
+            by = by_node.name
+        else:
+            assert isinstance(by_node, NumberNode)
+            by = sign * int(by_node.value)
+        return plan.Translate(operand, over_node.name, offset=by, wrap=wrap, fill=fill, partition=partition)
 
+    def _dim_rules(self, node: FunctionCallNode) -> None:
+        """Apply the language's dim rules to an operator call, discarding the dim set.
 
-def _lower_sum_back(node: FunctionCallNode, schema: Buildable, context: str, ceiling: int) -> plan.Expression:
-    """``sum_back(x, over=d, within=w)`` — a trailing window along one dimension.
+        Lowering wants the *raise*, not the answer. Called after the plan-shape
+        checks so those speak first, and only for one call's dims — the enclosing
+        frame is ``dimensions.check_schema``'s business.
+        """
+        dims_of(node, self.schema, self.context)
 
-    *within* is an integer literal of at least one, or a parameter naming a
-    per-entity width, which :func:`_check_named_width` holds to the two rules
-    that make it mean one thing.
-    """
-    over_node = node.kwargs['over']
-    if not isinstance(over_node, DimensionNode):
-        raise LanguageError(f'{context}: sum_back(over=...) must name a dimension')
-    within_node = node.kwargs['within']
-    _check_dim_rules(node, schema, context)
-    operand = _lower_expr(node.args[0], schema, context, ceiling=ceiling)
-    wrap = _window_edge(node.kwargs.get('edge'), context)
-    width: int | str
-    if isinstance(within_node, ParameterNode):
-        _check_named_width(within_node.name, over_node.name, schema, context)
-        width = within_node.name
-    elif isinstance(within_node, NumberNode) and within_node.value >= 1 and int(within_node.value) == within_node.value:
-        width = int(within_node.value)
-    else:
-        raise LanguageError(f'{context}: {_window_width_message()}')
-    return plan.Window(operand, over_node.name, width=width, wrap=wrap)
+    def _named_width(self, name: str, dimension: str) -> None:
+        """The two rules that make a per-entity window width mean one thing.
 
+        A width that varies along the dimension being summed over would make the
+        window a different length at every position, which no longer reads as
+        "the last *n*"; and a non-integral width cannot count positions.
+        """
+        declared = self.schema.parameters[name]
+        if declared.dtype != 'int':
+            raise LanguageError(
+                f"{self.context}: sum_back(within={name}) needs an integer parameter, and '{name}' is "
+                f"declared '{declared.dtype}'. A width counts positions rather than measuring a "
+                f'distance.'
+            )
+        if dimension in declared.dims:
+            raise LanguageError(
+                f"{self.context}: sum_back(within={name}) sums over '{dimension}', and '{name}' is "
+                f'declared over it ({sorted(declared.dims)}). A width that changes along '
+                f"'{dimension}' gives a different window at every position, which is not a "
+                f'trailing window. Sum over a width that is constant along it.'
+            )
 
-def _lower_shift(node: FunctionCallNode, schema: Buildable, context: str, ceiling: int) -> plan.Expression:
-    """``shift(x, over=d, offset=n)`` — the value at *t - offset* along one dim.
+    def _named_offset(
+        self, name: str, node: FunctionCallNode, dimension: str, *, wrap: bool, fill: float | None
+    ) -> None:
+        """The four rules that make a per-entity offset mean one thing.
 
-    The longest of the four because *offset* and *edge* are read together: a
-    named offset is refused a negation and held to :func:`_check_named_offset`'s
-    four rules, and what the vacated positions contribute has to be decided
-    before either is checked.
-    """
-    over_node = node.kwargs['over']
-    if not isinstance(over_node, DimensionNode):
-        raise LanguageError(f'{context}: shift(over=...) must name a dimension')
-    partition = _partition_of(node)
-    by_node = node.kwargs['offset']
-    sign = 1
-    if isinstance(by_node, UnaryOperatorNode) and by_node.op == '-':
-        sign, by_node = -1, by_node.operand
-    if not isinstance(by_node, ParameterNode) and (
-        not isinstance(by_node, NumberNode) or int(by_node.value) != by_node.value
-    ):
-        raise LanguageError(f'{context}: {_shift_by_message()}')
-    _check_dim_rules(node, schema, context)
-    operand = _lower_expr(node.args[0], schema, context, ceiling=ceiling)
-    has_var = carries_variable(node.args[0])
-    edge = node.kwargs.get('edge')
-    wrap = isinstance(edge, EdgeNode)
-    fill = None if wrap else _translate_fill(edge, context, has_var=has_var)
-    if not wrap and fill is None and not has_var:
-        raise LanguageError(_shift_over_data_message(context))
-    by: int | str
-    if isinstance(by_node, ParameterNode):
-        _check_named_offset(by_node.name, node, over_node.name, schema, context, wrap=wrap, fill=fill)
-        if sign < 0:
-            raise LanguageError(f'{context}: {_negated_offset_message(by_node.name)}')
-        by = by_node.name
-    else:
-        assert isinstance(by_node, NumberNode)
-        by = sign * int(by_node.value)
-    return plan.Translate(operand, over_node.name, offset=by, wrap=wrap, fill=fill, partition=partition)
+        An offset that depends on the dimension it translates would move each
+        position by a different amount *along that axis*, which is a permutation
+        rather than a translation and has no reading as a lag. An offset that is
+        not integral cannot land on a coordinate. An offset varying over a
+        dimension neither the operand nor a partition puts within reach has no
+        coordinate to be read at, and would broadcast the shifted expression onto
+        a dimension the operator's dim rule says it does not have (#1161). And a
+        named offset must say what the vacated positions contribute: the absent
+        edge propagates through a presence frame keyed by the dimension alone,
+        which a per-entity edge is not — refused here rather than answered wrongly
+        (#850).
+        """
+        # An undeclared name never reaches here: resolution refuses it first, and
+        # names the parameters that do exist, which is the better message.
+        declared = self.schema.parameters[name]
+        if declared.dtype != 'int':
+            raise LanguageError(
+                f"{self.context}: shift(offset={name}) needs an integer parameter, and '{name}' is "
+                f"declared '{declared.dtype}'. An offset lands on a coordinate, so it counts "
+                f'positions rather than measuring a distance.'
+            )
+        if dimension in declared.dims:
+            raise LanguageError(
+                f'{self.context}: shift(offset={name}) is offset by a parameter that itself spans '
+                f"'{dimension}', the dimension being translated. That moves each position by "
+                f'a different amount along the axis it is moving, which is a permutation and '
+                f'not a lag — drop the dimension from the parameter, or state the map you mean '
+                f'as a lookup.'
+            )
+        stray = sorted(set(declared.dims) - self._within_reach(node))
+        if stray:
+            raise LanguageError(f'{self.context}: {_stray_offset_message(name, stray, _partition_of(node))}')
+        if not wrap and fill is None:
+            raise LanguageError(
+                f'{self.context}: shift(offset={name}) leaves the vacated positions absent, which a '
+                f'per-entity offset cannot say yet.\n'
+                f"Add edge='wrap' for a cyclic translation, or edge=<number> for what the "
+                f'vacated positions contribute.'
+            )
+
+    def _within_reach(self, node: FunctionCallNode) -> set[str]:
+        """The dims a named offset may vary over.
+
+        Two ways for a coordinate of the offset to be one the shift can read it
+        at: the shifted expression carries the dim, or the partition groups the
+        walked axis *into* it, and then every coordinate of a group shares the
+        group's own lag.
+        """
+        reach = set(dims_of(node.args[0], self.schema, self.context))
+        by_node = node.kwargs.get('by')
+        if by_node is not None:
+            assert isinstance(by_node, LookupNode)
+            reach |= set(by_node.into)
+        return reach
 
 
 #: One lowering per name in the language's ``BUILTIN_NAMES``. A table rather
 #: than a chain of ``if``s because the set is *closed* — nothing registers into
 #: it, and a name the language declares with no entry here is the failure
-#: ``tests/test_architecture.py`` looks for.
-_CALLS: dict[str, Callable[[FunctionCallNode, Buildable, str, int], plan.Expression]] = {
-    'sum': _lower_sum,
-    'at': _lower_at,
-    'sum_back': _lower_sum_back,
-    'shift': _lower_shift,
+#: ``tests/test_architecture.py`` looks for. Each method is named for the
+#: operator it lowers, so the table reads as the identity it nearly is.
+_CALLS: dict[str, Callable[[_Lowering, FunctionCallNode], plan.Expression]] = {
+    'sum': _Lowering.sum,
+    'at': _Lowering.at,
+    'sum_back': _Lowering.sum_back,
+    'shift': _Lowering.shift,
 }
-
-
-def _check_dim_rules(node: FunctionCallNode, schema: Buildable, context: str) -> None:
-    """Apply the language's dim rules to an operator call, discarding the dim set.
-
-    Lowering wants the *raise*, not the answer. Called after the plan-shape
-    checks so those speak first, and only for one call's dims — the enclosing
-    frame is ``dimensions.check_schema``'s business.
-    """
-    dims_of(node, schema, context)
 
 
 def _translate_fill(node: ArithmeticNode | None, context: str, *, has_var: bool) -> float | None:
@@ -510,98 +615,6 @@ def _window_edge(edge: ArithmeticNode | None, context: str) -> bool:
         f'it reaches, so a position before the first contributes nothing rather than a '
         f'fill value; add the constant to the expression if you want one.'
     )
-
-
-def _check_named_width(name: str, dimension: str, schema: Buildable, context: str) -> None:
-    """The two rules that make a per-entity window width mean one thing.
-
-    A width that varies along the dimension being summed over would make the
-    window a different length at every position, which no longer reads as
-    "the last *n*"; and a non-integral width cannot count positions.
-    """
-    declared = schema.parameters[name]
-    if declared.dtype != 'int':
-        raise LanguageError(
-            f"{context}: sum_back(within={name}) needs an integer parameter, and '{name}' is "
-            f"declared '{declared.dtype}'. A width counts positions rather than measuring a "
-            f'distance.'
-        )
-    if dimension in declared.dims:
-        raise LanguageError(
-            f"{context}: sum_back(within={name}) sums over '{dimension}', and '{name}' is "
-            f'declared over it ({sorted(declared.dims)}). A width that changes along '
-            f"'{dimension}' gives a different window at every position, which is not a "
-            f'trailing window. Sum over a width that is constant along it.'
-        )
-
-
-def _check_named_offset(
-    name: str,
-    node: FunctionCallNode,
-    dimension: str,
-    schema: Buildable,
-    context: str,
-    *,
-    wrap: bool,
-    fill: float | None,
-) -> None:
-    """The four rules that make a per-entity offset mean one thing.
-
-    An offset that depends on the dimension it translates would move each
-    position by a different amount *along that axis*, which is a permutation
-    rather than a translation and has no reading as a lag. An offset that is
-    not integral cannot land on a coordinate. An offset varying over a
-    dimension neither the operand nor a partition puts within reach has no
-    coordinate to be read at, and would broadcast the shifted expression onto
-    a dimension the operator's dim rule says it does not have (#1161). And a
-    named offset must say what the vacated positions contribute: the absent
-    edge propagates through a presence frame keyed by the dimension alone,
-    which a per-entity edge is not — refused here rather than answered wrongly
-    (#850).
-    """
-    # An undeclared name never reaches here: resolution refuses it first, and
-    # names the parameters that do exist, which is the better message.
-    declared = schema.parameters[name]
-    if declared.dtype != 'int':
-        raise LanguageError(
-            f"{context}: shift(offset={name}) needs an integer parameter, and '{name}' is "
-            f"declared '{declared.dtype}'. An offset lands on a coordinate, so it counts "
-            f'positions rather than measuring a distance.'
-        )
-    if dimension in declared.dims:
-        raise LanguageError(
-            f'{context}: shift(offset={name}) is offset by a parameter that itself spans '
-            f"'{dimension}', the dimension being translated. That moves each position by "
-            f'a different amount along the axis it is moving, which is a permutation and '
-            f'not a lag — drop the dimension from the parameter, or state the map you mean '
-            f'as a lookup.'
-        )
-    stray = sorted(set(declared.dims) - _within_reach(node, schema, context))
-    if stray:
-        raise LanguageError(f'{context}: {_stray_offset_message(name, stray, _partition_of(node))}')
-    if not wrap and fill is None:
-        raise LanguageError(
-            f'{context}: shift(offset={name}) leaves the vacated positions absent, which a '
-            f'per-entity offset cannot say yet.\n'
-            f"Add edge='wrap' for a cyclic translation, or edge=<number> for what the "
-            f'vacated positions contribute.'
-        )
-
-
-def _within_reach(node: FunctionCallNode, schema: Buildable, context: str) -> set[str]:
-    """The dims a named offset may vary over.
-
-    Two ways for a coordinate of the offset to be one the shift can read it
-    at: the shifted expression carries the dim, or the partition groups the
-    walked axis *into* it, and then every coordinate of a group shares the
-    group's own lag.
-    """
-    reach = set(dims_of(node.args[0], schema, context))
-    by_node = node.kwargs.get('by')
-    if by_node is not None:
-        assert isinstance(by_node, LookupNode)
-        reach |= set(by_node.into)
-    return reach
 
 
 def _stray_offset_message(name: str, stray: list[str], partition: str | None) -> str:

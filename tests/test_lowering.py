@@ -14,7 +14,7 @@ from math_spec import Model, Namespace, expand_piecewise
 
 import lpspec as lps
 from lpspec.errors import DataError, DimensionError, LanguageError
-from lpspec.lowering import _lower_expr, _lower_where, lower_program
+from lpspec.lowering import _lower_where, _Lowering, lower_program
 from lpspec.relational.plan import (
     At,
     DimensionComparison,
@@ -118,23 +118,23 @@ def test_sum_over_absent_dim_raises_at_lowering_too(dispatch_schema):
     the operand does not carry builds a model that solves and is wrong, so it
     is an error rather than the silent identity it once was. ``check_schema``
     raises it for anything entering through ``lps.check``; this pins that
-    ``_lower_expr`` does not quietly disagree one layer down, which is what it
+    ``_Lowering.expr`` does not quietly disagree one layer down, which is what it
     used to do — it returned the operand unchanged, and the comment claiming
     eager parity outlived the parity.
     """
     with pytest.raises(DimensionError, match='no-op that builds and solves wrong'):
-        _lower_expr(resolved('sum(load, over=generator)', dispatch_schema), dispatch_schema, 't')
+        _Lowering(dispatch_schema, 't').expr(resolved('sum(load, over=generator)', dispatch_schema))
 
 
 def test_a_power_lowers_only_where_no_variable_is_under_it(dispatch_schema):
     """roll/shift lower to plan.Translate and binary/integer to variable_type;
     `**` lowers to plan.Power, but only over operands that carry no variable —
     with one under it there is no affine reading and nowhere to go."""
-    lowered = _lower_expr(resolved('cost ** cost', dispatch_schema), dispatch_schema, 't')
+    lowered = _Lowering(dispatch_schema, 't').expr(resolved('cost ** cost', dispatch_schema))
     assert isinstance(lowered, Power), 'a variable-free power has a plan node of its own'
 
     with pytest.raises(LanguageError, match='over variables'):
-        _lower_expr(resolved('p ** 2', dispatch_schema), dispatch_schema, 't')
+        _Lowering(dispatch_schema, 't').expr(resolved('p ** 2', dispatch_schema))
 
 
 def test_a_binary_variable_lowers_to_a_vtype():
