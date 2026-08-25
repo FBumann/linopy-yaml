@@ -414,7 +414,7 @@ every consumer whichever of the two the case has.
 | file | |
 |---|---|
 | `cases.py` | the models, the data generators, the ladders |
-| `workloads.py` | what is measured — one verb per arm, picklable, lpspec imported inside |
+| `arms/` | one module per arm — `prepare` before the clock, then build-and-emit, build-only, objective. Picklable, and the library imported inside the verb |
 | `conftest.py` | selection flags, the ragged parametrization, the data fixture, the parity gate |
 | `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |

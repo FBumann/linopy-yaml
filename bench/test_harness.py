@@ -21,6 +21,7 @@ import pytest
 
 from bench import conftest as harness
 from bench import floor, plot, report, warm_payoff
+from bench.arms.lpspec import _tables, checked_sources
 from bench.cases import CASES, Shape
 from bench.conftest import (
     MIN_ROUNDS,
@@ -30,7 +31,6 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
-from bench.workloads import _tables, checked_sources
 from lpspec.relational.engines.polars.engine import _Block
 from lpspec.relational.sinks.solvers.base import WarmStart
 
