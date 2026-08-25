@@ -388,10 +388,24 @@ def test_the_ratio_beside_a_marked_cell_is_marked_too() -> None:
 
 def test_a_cell_with_no_number_in_it_is_never_marked() -> None:
     """A ratio needs both arms. One noisy arm and nothing to divide it by leaves
-    an em dash, and a mark on that claims doubt about a measurement nobody took."""
-    table = report.table('dispatch', report.best([_timing('lpspec', iqr=1.9)]), 'lp')
-    assert '| — |' in table, 'the arm that was not measured still renders as absent'
-    assert f'—{report.MARK}' not in table, 'an absent measurement cannot be noisy'
+    an em dash, and a mark on that claims doubt about a measurement nobody took.
+
+    The rung below is measured on `lpspec` only while the run as a whole
+    carries a second arm, which is what leaves an empty cell in the table at
+    all now that the columns are whichever arms the run measured.
+    """
+    rows = report.best([_timing('lpspec', iqr=1.9), _timing('linopy', size='l')])
+    table = report.table('dispatch', rows, 'lp')
+    assert '| \u2014 |' in table, 'the arm that did not run this rung still renders as absent'
+    assert f'\u2014{report.MARK}' not in table, 'an absent measurement cannot be noisy'
+
+
+def test_a_run_of_one_arm_has_no_ratio_column() -> None:
+    """A number divided by itself is not a comparison, and a column of 1.00x
+    reads like one."""
+    table = report.table('dispatch', report.best([_timing('lpspec')]), 'lp')
+    assert 'wall: lpspec' in table, 'the arm that ran is still a column'
+    assert '\u00f7' not in table, 'nothing to divide against, so no ratio column at all'
 
 
 def test_a_measurement_without_a_peak_is_skipped_rather_than_divided(tmp_path: Path) -> None:
