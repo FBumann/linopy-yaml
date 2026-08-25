@@ -46,9 +46,9 @@ from math_spec import (
     where_of,
 )
 
-from lpspec._notes import note
 from lpspec.errors import DataError, LaneError, LanguageError, lane_cannot_build_message, null_bounds_message
 from lpspec.linopy import absence
+from lpspec.linopy._notes import note
 from lpspec.linopy.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
 from lpspec.linopy.operators import OPERATORS, operator_at, operator_grouped_sum
 from lpspec.linopy.where import as_linopy_mask, evaluate_where
