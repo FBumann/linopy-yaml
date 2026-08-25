@@ -17,6 +17,14 @@ YAML→`linopy.Model` lane, so it carries our loader on top of linopy's work.
 Against hand-written linopy on the same model that lane costs a constant
 **~2.3 ms**: a fixed offset, nowhere near enough to move a conclusion.
 
+**Every linopy column here is frozen at the run that took it.** The harness no
+longer measures that arm: what it says about *our* eager lane is not what this
+page is for, and the column a reader wants under the name `linopy` is
+hand-written linopy, which is being added as an arm of its own. Until it lands
+the tables below stand on their committed provenance and are not re-taken;
+`bench/floor.py` — one model hand-written straight into HiGHS — is the only
+denominator a fresh run can still produce.
+
 **Two sinks, and they are not the same comparison.** The LP file is the artifact
 fewest callers want; `highs` is the one most reach for, and there HiGHS's own
 dense model is resident in both arms, which narrows every ratio. Read the sink

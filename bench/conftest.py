@@ -1,9 +1,16 @@
-"""The harness: selection, data, and the parity gate.
+"""The harness: selection, and the data every arm reads.
 
 Every moving part is pytest's own: the case x size x sink x arm product is a
 `parametrize`, isolation is `benchmem(isolate=True)`, repetition and its
-minimum are pytest-benchmark's rounds, the output is `--benchmark-json`, and
-the parity gate is a session fixture. Nothing here re-implements a runner.
+minimum are pytest-benchmark's rounds, and the output is `--benchmark-json`.
+Nothing here re-implements a runner.
+
+**There is one arm, so there is no parity gate.** It compared the arms'
+objectives at the smallest rung, which is a check with one counterparty — and
+with one arm it has none. It returns with the second arm, where it means
+something again; until then `bench.floor`'s ``--check`` is the only
+same-model check here, and `test_ladder._record` is the arithmetic one that
+runs on every measurement.
 
 What is *not* free is the ragged shape: cases have different ladders, and the
 density rungs exist on one case only. So the (case, size) axis is built here
@@ -26,21 +33,18 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from bench.arms import ARMS, solved
+from bench.arms import ARMS
 from bench.cases import CASES
 
 if TYPE_CHECKING:
     from bench.cases import Shape
-
-#: The relative gap two arms' objectives may differ by and still be one model.
-GATE_RTOL = 1e-9
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     g = parser.getgroup('ladder', 'the lpspec benchmark ladder')
     g.addoption('--cases', nargs='+', default=sorted(CASES), choices=sorted(CASES))
     g.addoption('--sizes', nargs='+', default=['xs', 's', 'm'], help="rung labels, or 'all' for every rung a case has")
-    g.addoption('--arms', nargs='+', default=['lpspec', 'linopy'], choices=sorted(ARMS))
+    g.addoption('--arms', nargs='+', default=sorted(ARMS), choices=sorted(ARMS))
     g.addoption(
         '--sinks',
         nargs='+',
@@ -52,8 +56,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         '[gurobi] extra, and it is measured against linopy the same way, through `to_gurobipy()`.',
     )
     g.addoption('--builds', type=int, default=5, help='rebuilds per process in the first-vs-steady pass; 0 skips it')
-    g.addoption('--io-api', default='lp-polars')
-    g.addoption('--skip-gate', action='store_true', help='measure without checking the arms agree')
     g.addoption(
         '--i-know-another-is-running',
         action='store_true',
@@ -194,14 +196,12 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
 #: solver — scipy being what carries the matrix into it.
 TRACKED = (
     'lpspec',
-    'linopy',
     'highspy',
     'gurobipy',
     'scipy',
     'polars',
     'pandas',
     'numpy',
-    'xarray',
     'pyarrow',
     'pytest-benchmem',
 )
@@ -298,48 +298,8 @@ def paths() -> Any:
 
 
 @pytest.fixture(scope='session')
-def io_api(request: pytest.FixtureRequest) -> str:
-    """linopy's LP writer backend — a flag rather than a constant because it is
-    the one place the two arms' `lp` sink is not literally the same call."""
-    return str(request.config.getoption('--io-api'))
-
-
-@pytest.fixture(scope='session')
 def builds(request: pytest.FixtureRequest) -> int:
     return int(request.config.getoption('--builds'))
-
-
-@pytest.fixture(scope='session')
-def gate(request: pytest.FixtureRequest) -> Any:
-    """The smallest rung of a case, solved on every arm, objectives compared.
-
-    Runs before the first measurement of each case and at most once per case.
-    The differential suite proves the two lanes agree on the *language*; it says
-    nothing about the data this harness generates, and a performance number
-    describing two different models is worse than none.
-
-    Gating *the arms being measured* rather than a fixed pair: an arm that is
-    fast because it built a different model is the one result this harness must
-    never publish, so an arm added later answers to the check from its first
-    run rather than from whenever someone remembers to widen this.
-    """
-    checked: dict[str, None] = {}
-    skip = request.config.getoption('--skip-gate')
-    arms = request.config.getoption('--arms')
-    options = {'io_api': request.config.getoption('--io-api')}
-
-    def check(case_name: str, resolve: Any) -> None:
-        if skip or case_name in checked:
-            return
-        checked[case_name] = None
-        smallest = CASES[case_name].ladder[0].label
-        paths_ = resolve(case_name, smallest)
-        objectives = {a: solved(a, case_name, smallest, paths_, options) for a in arms}
-        lo, hi = min(objectives.values()), max(objectives.values())
-        if abs(hi - lo) / max(abs(lo), 1e-12) > GATE_RTOL:
-            raise AssertionError(f'{case_name}/{smallest}: arms disagree on the objective — {objectives}')
-
-    return check
 
 
 def shape_of(case_name: str, size: str) -> Shape:

@@ -418,10 +418,8 @@ def test_the_rounds_default_is_wired_into_the_session(request: pytest.FixtureReq
 def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: Path) -> None:
     """A model file nobody committed still has to pass the front door.
 
-    Both arms parse the same YAML — the linopy arm through
-    `lpspec.linopy.build`, the lpspec arm through `lps.build` — so a generated
-    file the validator refuses would kill every rung of the sweep at once, and
-    only at run time.
+    Every arm parses the same YAML, so a generated file the validator refuses
+    would kill every rung of the sweep at once, and only at run time.
     """
     from math_spec import load_model
 

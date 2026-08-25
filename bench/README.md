@@ -70,48 +70,42 @@ closely. `git checkout` gets it back; noticing is the hard part.
 
 ## What it measures
 
-**Peak RSS and wall time**, per phase, for the same model built two ways:
+**Peak RSS and wall time**, per phase, for one model into three destinations:
 
 | | `lp` | `highs` | `gurobi` |
 |---|---|---|---|
 | `lpspec` | `lps.build(...)` then `bound.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
-| `linopy` | `lpspec.linopy.build(...)` then `Model.to_file(io_api='lp-polars')` | … then `Model.to_highspy(set_names=False)` | … then `Model.to_gurobipy(set_names=False)` |
 
 `gurobi` is opt-in (`--sinks gurobi`): it needs the `[gurobi]` extra, where the
-other two need nothing a contributor does not already have. It measures the
-same seam — `build_gurobi` never calls `optimize()`, `to_gurobipy` never
-returns a solved model.
+other two need nothing a contributor does not already have.
 
-**`set_names=False` on the linopy side is load-bearing.** linopy names every
-variable and constraint by default and neither of our solver sinks names
-anything, so the default call would time a feature only one arm's model
-carries. It is not a rounding error: naming is **82% of linopy's HiGHS
-hand-off** (0.11s against 0.02s at 200k variables) and 35% of its Gurobi one.
-The two arms have to end holding the same artifact or the number means
-nothing — and the correction runs against us, which is the direction an
-honest harness should err.
+**One arm.** The eager arm — `lpspec.linopy.build`, our own YAML→`linopy.Model`
+lane — is gone: what it costs is not what this harness is for, and the column a
+reader wants under the name `linopy` is *hand-written* linopy, which is being
+added as an arm of its own. Everything the two-arm shape bought is still here
+and is what the next arm inherits: `--arms` is a registry (`bench/arms/`), the
+rungs and their parquet are shared, and the seam is the same artifact for
+whoever fills it.
 
-**The solver sinks stop at the handoff — `run()` / `optimize()` is never called.** That is the
-whole discipline of it. HiGHS's simplex is the same work whoever filled the
-model, so including it would swamp the phase this harness exists to measure and
-publish a number about HiGHS under our name. Both arms end holding a populated
-`highspy.Highs` and neither runs it, which is the only reason the two are
-comparable: `Model.to_highspy()` is the same seam on linopy's side.
+**The solver sinks stop at the handoff — `run()` / `optimize()` is never
+called.** That is the whole discipline of it. HiGHS's simplex is the same work
+whoever filled the model, so including it would swamp the phase this harness
+exists to measure and publish a number about HiGHS under our name.
 
 `highs` is the sink most callers actually reach for, and it is **not the lp sink
-minus a file** — HiGHS's own dense model is resident in both arms and narrows
-the gap between them. Measuring only the LP path reports the wrong number for
-the common case, which is why both run by default.
+minus a file** — HiGHS's own dense model is resident in the process and narrows
+every ratio drawn against it. Measuring only the LP path reports the wrong
+number for the common case, which is why both run by default.
 
-Both arms read the same parquet files and end at the same seam — an LP file on
-disk, or a populated `highspy.Highs` — so the comparison is one language, one
-destination, two engines. The linopy arm is the right
-comparison and the only one worth making first: it accepts *exactly* the same
-YAML (docs/about/architecture.md hard rule 3), which is what makes it the oracle rather
-than a rival dialect.
+**What an arm's own defaults cost is the next arm's problem, and it is
+load-bearing.** The retired eager arm passed `set_names=False` because linopy
+names every variable and constraint while our sinks name nothing, and naming is
+**82% of linopy's HiGHS hand-off** (0.11s against 0.02s at 200k variables) and
+35% of its Gurobi one. Any arm added here answers the same question in its own
+docstring: which defaults were switched off, and what each one cost.
 
-Not measured, deliberately: solve time (that is HiGHS, identical either way, and
-it would swamp the build), and anything about expressiveness.
+Not measured, deliberately: solve time (that is the solver, identical either
+way, and it would swamp the build), and anything about expressiveness.
 
 **A number the run cannot stand behind is marked, not dropped.** Every
 measurement's distribution — `iqr`, `median`, `rounds` — is carried into the
@@ -146,58 +140,55 @@ one a table reads is a decision, not an accident. The measured reason is below.
 **The harness is pytest, and deliberately nothing more.** Selection, the
 ragged parametrization, per-pass isolation, the JSON, the repeats and the
 minimum are all things pytest and its plugins already do and have tested. What
-is left in this directory is what is specific to lpspec: the cases, the verbs,
-and the parity gate.
+is left in this directory is what is specific to lpspec: the cases and the
+verbs.
 
-**The parity gate runs before any timing.** The smallest rung of each case is
-solved on both arms and the objectives compared to 1e-9 relative; a mismatch
-aborts the whole run. The differential test suite proves the two lanes agree on
-the *language* — it says nothing about the data this harness generates, and a
-performance number describing two different models is worse than none.
+**There is no parity gate while there is one arm.** It solved each case's
+smallest rung on every arm and compared the objectives to 1e-9 relative — a
+check with one counterparty, which with one arm it has none of. It comes back
+with the second arm, where it means something again. Until then the same-model
+guards are `test_ladder._record`, which checks every measurement's counts
+against the rung it claims, and `bench/floor.py --check`, which solves
+`transport` two ways and compares.
 
 ## Where the clock starts and stops
 
 The easiest way to publish a wrong number is to time something in one arm that
-the other never does. The boundaries are therefore explicit:
+another never does. The boundaries are therefore explicit, and a new arm is
+written against this table:
 
-| | lpspec | linopy |
-|---|---|---|
-| **before the clock** | splitting parquet paths into parameters vs dimensions (harness bookkeeping — it re-parses the YAML only because the *runner* decides which file is which) | — |
-| `import` | `import lpspec` | `import lpspec.linopy` → linopy, xarray |
-| `build` | `lps.build(...)` — the engine scans the parquet itself | `read_parquet` + reshape + `lpspec.linopy.build(...)` |
-| `emit` | `bound.write(path)` / `build_highs(_tables(bound))` | `Model.to_file(path, io_api='lp-polars')` / `Model.to_highspy()` |
-| `teardown` | `bound.close()` — releases the built model | — (nothing to release) |
-| **after the clock** | row, column and nonzero counts off the built frames | `nvars` / `ncons` |
+| | lpspec |
+|---|---|
+| **before the clock** | `prepare` — splitting parquet paths into parameters vs dimensions (harness bookkeeping: it re-parses the YAML only because the *runner* decides which file is which) |
+| `import` | `import lpspec` |
+| `build` | `lps.build(...)` — the engine scans the parquet itself |
+| `emit` | `bound.write(path)` / `build_highs(_tables(bound))` |
+| `teardown` | `bound.close()` — releases the built model |
+| **after the clock** | row, column and nonzero counts off the built frames |
 
-Three of those are deliberate calls rather than defaults:
+Two of those are deliberate calls rather than defaults:
 
 - **Import is excluded from `wall_seconds`** but recorded. It is fixed, paid
-  once per process, and at the `xs` rung linopy's import alone exceeds lpspec's
-  entire build — including it would make the small end meaningless.
+  once per process, and a modelling library's import can exceed lpspec's entire
+  build at the `xs` rung — including it would make the small end meaningless.
 - **Teardown is included, and it is now near-free.** It was there to charge the
   arm holding a scratch database for releasing it. There is no scratch database
   any more — `close()` drops frames this process owns — so the phase is kept as
   a tripwire rather than a cost: if it ever stops reading ~0, something
   acquired a lifetime again.
-- **`progress=False` is passed to linopy.** Its default is
-  `m._xCounter > 10_000`, so every rung above `xs` would render tqdm bars that
-  the lpspec arm has no equivalent of — ~7% of the write at 10M variables, and
-  stderr noise in a harness that parses stdout.
-
-Both arms start from the same parquet files and stop at the same seam, so
+Every arm starts from the same parquet files and stops at the same seam, so
 each pays for its own data ingestion. That is the honest unit. The *phases* are
-not comparable one-for-one, because linopy defers coefficient materialisation to
-`to_polars()` inside `to_file` — its `build` allocates dense arrays and little
-else. Compare totals, and read the phases as attribution
-within an arm.
+not comparable one-for-one across arms — a library that defers coefficient
+materialisation to its writer spends nothing in `build` that another spends
+there. Compare totals, and read the phases as attribution within an arm.
 
 **Peak RSS is the whole cost, because nothing spills to disk.** An engine that
 traded RAM for a workdir could show a peak-RSS win while holding a
 multi-gigabyte temp file, and the harness once recorded `workdir_bytes` to stop
-that. Neither arm writes anything but the LP file now, so that field is gone
-rather than left reading zero — a column that is always 0 reads as "measured
-and fine", which is the same failure in the other direction. Restore it in
-`bench/workloads.py` if a sink ever spills again.
+that. Nothing writes anything but the LP file now, so that field is gone rather
+than left reading zero — a column that is always 0 reads as "measured and
+fine", which is the same failure in the other direction. Restore it in
+`bench/arms/` if a sink ever spills again.
 
 **Failures are results.** A run that dies is written to the JSONL with the
 exception line that killed it, and the report renders it as a cell. An OOM is
@@ -210,9 +201,9 @@ cost claim is settled, because cost is not one of the architecture's rules.
 invocation collapse noise *within* a few seconds; they do nothing about drift
 across a session, and this machine has drifted 2x on wall time between the
 start of a session and the end of one. Check out A, measure, check out B,
-measure, and go back — not A once and B once an hour later. The tell that you
-needed to is the other arm: if linopy moved too, the machine moved, because
-nothing in `src/lpspec/relational/` can reach it. Peak RSS is far steadier than
+measure, and go back — not A once and B once an hour later. A second arm used
+to be the tell — if it moved too, the machine moved, because nothing in
+`src/lpspec/relational/` can reach it — and `bench/floor.py` is that tell now. Peak RSS is far steadier than
 wall time and is usually the honest half of a before/after claim.
 
 ## The cases
@@ -285,15 +276,15 @@ decision rather than an omission.
 
 ## The speed-of-light floor
 
-The ladder's ratios have linopy as their only denominator, which ranks two
-engines without saying how much headroom either has left. `bench/floor.py` is
-the missing denominator: it hand-writes **one** model — `transport` — from the
+**This is the ladder's only denominator now.** A wall time on its own says
+nothing about how much headroom is left in it. `bench/floor.py` is what a
+number is read against: it hand-writes **one** model — `transport` — from the
 case's cached parquet straight into numpy arrays and a CSR matrix, no lpspec
 and no expression engine anywhere in the path, and ends at the same seam as
 the `highs` sink: a populated `highspy.Highs` with `run()` never called. What
 it costs is the irreducible price of emitting the coefficients, and with it
-the sentence becomes *"we are at Nx the floor and linopy is at Mx"* — a claim
-about engineering rather than a ranking.
+the sentence becomes *"we are at Nx the floor"* — a claim about engineering
+rather than a ranking.
 
 ```bash
 pixi run -e bench python -m bench.floor l            # phase minima + peak RSS
@@ -348,13 +339,13 @@ splice is shown to be worth its complication at all.
 
 ## The other question: regressions
 
-*Did this change make it worse?* is a different question from *how do we compare
-to linopy*, and it wants a different metric — but it does not want a different
-harness. It is the same suite with one lane selected:
+*Did this change make it worse?* is a different question from *how do we
+compare to another library*, and it wants a different metric — but it does not
+want a different harness. It is the same suite, run twice:
 
 ```bash
-pixi run -e bench pytest bench --arms lpspec --sizes s m --benchmark-memory
-pixi run -e bench pytest bench --arms lpspec --sizes s m --benchmark-memory \
+pixi run -e bench pytest bench --sizes s m --benchmark-memory
+pixi run -e bench pytest bench --sizes s m --benchmark-memory \
     --benchmark-memory-compare=0001 --benchmark-memory-compare-fail=mean:10%
 ```
 
@@ -366,7 +357,7 @@ request's base and once against its head — and what it gates on.
 | arm | `ru_maxrss` | memray peak |
 |---|---|---|
 | lpspec | 309 MB | 211 MB |
-| linopy | 604 MB | **2967 MB** |
+| the retired eager arm | 604 MB | **2967 MB** |
 
 memray counts polars' reserved arenas as allocated and does not count the
 interpreter or mapped libraries at all, so the bias points in *opposite*
@@ -415,10 +406,9 @@ workflow runs and uploads nothing.
 
 ## Adding a case
 
-Add a YAML file under `bench/models/`, a data generator and a ladder to `CASES`
-in `bench/cases.py`, and a function turning the same parquet paths into the
-linopy lane's `sources` shapes. Nothing else: the parametrization reads
-`CASES`, and the gate and the report are case-agnostic.
+Add a YAML file under `bench/models/`, and a data generator and a ladder to
+`CASES` in `bench/cases.py`. Nothing else: the parametrization reads `CASES`,
+and the report is case-agnostic.
 
 A case whose YAML has to vary per rung sets `generate_model` instead of
 `model` — `declarations` is the template — and `Case.model_path(shape)` hands
@@ -430,7 +420,7 @@ every consumer whichever of the two the case has.
 |---|---|
 | `cases.py` | the models, the data generators, the ladders |
 | `arms/` | one module per arm — `prepare` before the clock, then build-and-emit, build-only, objective. Picklable, and the library imported inside the verb |
-| `conftest.py` | selection flags, the ragged parametrization, the data fixture, the parity gate |
+| `conftest.py` | selection flags, the ragged parametrization, the data fixture, the machine interlock |
 | `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `tidy.py` | the same records as one long CSV — a row per number, dims in columns, no nulls. What a plot nobody planned for is built from |

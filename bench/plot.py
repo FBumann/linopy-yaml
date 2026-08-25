@@ -72,10 +72,27 @@ def _at(table: dict[Any, Any], key: Any) -> Any:
     return table[key]
 
 
-def panel(t: dict[str, dict[Any, Any]], case: str, rungs: tuple[str, ...], arms: tuple[str, ...]) -> dict[str, Any]:
+def arms(t: dict[str, dict[Any, Any]]) -> tuple[str, ...]:
+    """Whichever arms the run measured.
+
+    Read off the records rather than named here: a committed file from a
+    two-arm run and a fresh single-arm one both have to plot, and a hardcoded
+    pair turns the second into `_at` refusing a point that was never measured.
+
+    First appearance, not sorted: the order here is the order the page draws
+    its series in, and sorting would redraw the committed chart to say the same
+    thing differently.
+    """
+    return tuple(dict.fromkeys(a for _, _, a in t['wall']))
+
+
+def panel(t: dict[str, dict[Any, Any]], case: str, rungs: tuple[str, ...]) -> dict[str, Any]:
     return {
         'vars': [_at(t['cols'], (case, r)) for r in rungs],
-        **{m: {NAME[a]: [round(_at(t[m], (case, r, a)), 3) for r in rungs] for a in arms} for m in ('wall', 'peak')},
+        **{
+            m: {NAME.get(a, a): [round(_at(t[m], (case, r, a)), 3) for r in rungs] for a in arms(t)}
+            for m in ('wall', 'peak')
+        },
     }
 
 
@@ -84,8 +101,8 @@ def main() -> int:
     scaling = best(measurements('scaling'), 'lp')
     cases = sorted({c for c, _, _ in ladder['wall']})
     data = {
-        'scaling': panel(scaling, 'dispatch', SCALING, ('lpspec', 'linopy')),
-        'cases': {c: panel(ladder, c, LADDER, ('lpspec', 'linopy')) for c in cases},
+        'scaling': panel(scaling, 'dispatch', SCALING),
+        'cases': {c: panel(ladder, c, LADDER) for c in cases},
         'caseNames': cases,
         'rungs': list(LADDER),
     }

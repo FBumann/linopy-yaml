@@ -37,9 +37,9 @@ from bench.conftest import shape_of
 def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -> None:
     """Attach the dims the published tables read, and check the model is the right one.
 
-    A benchmark that silently built the wrong model is worse than none. The
-    ladder has a parity gate against linopy; this is the arithmetic one that
-    runs on every single measurement.
+    A benchmark that silently built the wrong model is worse than none. With
+    one arm there is nothing to compare an objective against, so this
+    arithmetic check on every measurement is the whole of it.
 
     Written only when the fixture carries `extra_info` — CodSpeed's reports to a
     service rather than to a JSON file and has none, and an assertion that held
@@ -65,9 +65,7 @@ def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -
 
 
 @pytest.mark.benchmem(isolate=True)
-def test_emit(
-    benchmark: Any, gate: Any, paths: Any, io_api: str, case_name: str, size: str, arm: str, sink: str
-) -> None:
+def test_emit(benchmark: Any, paths: Any, case_name: str, size: str, arm: str, sink: str) -> None:
     """Build the model and hand it over — an LP file on disk, or a populated solver.
 
     Both arms start from the same parquet and stop at the same seam, so each
@@ -79,15 +77,14 @@ def test_emit(
     """
     if sink == 'gurobi':
         pytest.importorskip('gurobipy')
-    gate(case_name, paths)
 
     module = ARMS[arm]
-    prepared = module.prepare(case_name, size, paths(case_name, size), {'io_api': io_api})
+    prepared = module.prepare(case_name, size, paths(case_name, size), {})
     counts = benchmark(module.build_and_emit, sink, prepared)
     _record(benchmark, counts, case_name, size)
 
 
-def test_rebuild(benchmark: Any, gate: Any, paths: Any, builds: int, case_name: str, size: str, arm: str) -> None:
+def test_rebuild(benchmark: Any, paths: Any, builds: int, case_name: str, size: str, arm: str) -> None:
     """First build against every later one, in one process.
 
     Two questions, two numbers. **First** is what a caller pays who builds one
@@ -105,8 +102,6 @@ def test_rebuild(benchmark: Any, gate: Any, paths: Any, builds: int, case_name: 
     Not run under CodSpeed at all — its instruments ignore `rounds`, so there is
     no second build to compare the first against. `conftest.py` deselects it.
     """
-    gate(case_name, paths)
-
     if builds < 1:
         pytest.skip('--builds 0')
     module = ARMS[arm]
