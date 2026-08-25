@@ -175,7 +175,7 @@ def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) 
     compared. It is slow for a test — four LPs — and it is the whole reason to
     believe any number these arms produce.
     """
-    pytest.importorskip('gurobipy')
+    pytest.importorskip('gurobipy' if dialect.startswith('gurobipy') else dialect)
     case = CASES[case_name]
     smallest = case.ladder[0].label
     paths = case.data(case.shape(smallest))
