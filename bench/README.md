@@ -75,6 +75,7 @@ closely. `git checkout` gets it back; noticing is the hard part.
 | | `lp` | `highs` | `gurobi` |
 |---|---|---|---|
 | `lpspec` | `lps.build(...)` then `bound.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
+| `linopy` | `Model.to_file(io_api='lp-polars')` | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` |
 | `gurobipy-matrix` | — | — | `addMVar` + `addMConstr` over a scipy CSR, then `update()` |
 
@@ -90,6 +91,13 @@ them is how much of any result is the library and how much is the style, and
 that is a question about our arm too — `gurobipy-matrix` reaches the same
 `addMVar`/`addMConstr` seam our own `build_gurobi` does, so what separates it
 from `lpspec` is only where the matrix came from.
+
+**The `linopy` arm is hand-written, and its formulations are the gallery's.**
+`bench/models/<case>/linopy.py` is `examples/ports/references/linopy/<case>.py`
+against the ladder's parquet — scripts #681 reviewed for idiom and the docs
+execute, which is what keeps this arm from being a strawman somebody wrote in
+an afternoon. The retired `lpspec.linopy` lane is not this arm and is not
+measured.
 
 **A hand-written arm is a model somebody typed twice**, and nothing structural
 stops it being a *different* model that benchmarks beautifully. The eager arm

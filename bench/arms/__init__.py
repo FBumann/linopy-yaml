@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from bench.arms import gurobipy_loop, gurobipy_matrix, lpspec
+from bench.arms import gurobipy_loop, gurobipy_matrix, linopy, lpspec
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -52,6 +52,7 @@ Counts = dict[str, Any]
 #: as "not measured" rather than as the error it is.
 ARMS: dict[str, ModuleType] = {
     'lpspec': lpspec,
+    'linopy': linopy,
     'gurobipy-loop': gurobipy_loop,
     'gurobipy-matrix': gurobipy_matrix,
 }
@@ -75,9 +76,9 @@ def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
         return f'{arm} does not reach the {sink} sink — it has {", ".join(module.SINKS)}'
     dialect = getattr(module, 'DIALECT', None)
     if dialect is not None:
-        from bench.arms import gurobipy as gurobipy_runtime
+        from bench.models import formulation
 
-        if gurobipy_runtime.formulation(case_name, dialect) is None:
+        if formulation(case_name, dialect) is None:
             return f'{case_name} has no {dialect} formulation'
     return None
 

@@ -50,21 +50,6 @@ class Prepared(NamedTuple):
     paths: dict[str, str]
 
 
-def formulation(case_name: str, dialect: str) -> Any:
-    """The case's model in *dialect*, or None where nobody has written one.
-
-    A case package names what it holds in `FORMULATIONS`; a case that holds
-    nothing has no package at all, which is the same answer.
-    """
-    import importlib
-
-    try:
-        case = importlib.import_module(f'bench.models.{case_name}')
-    except ModuleNotFoundError:
-        return None
-    return getattr(case, 'FORMULATIONS', {}).get(dialect)
-
-
 def prepare(dialect: str, case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]) -> Prepared:
     del size, options
     return Prepared(dialect, case_name, dict(paths))
@@ -74,6 +59,8 @@ def _built(prepared: Prepared) -> tuple[Any, Any]:
     """The environment and a flushed model — every timed verb's whole body."""
     import gurobipy as gp
     import polars as pl
+
+    from bench.models import formulation
 
     tables = {name: pl.read_parquet(path) for name, path in prepared.paths.items()}
     env = gp.Env(params={'OutputFlag': 0})
