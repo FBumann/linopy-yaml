@@ -27,7 +27,7 @@ result.dual('power_balance')
 | `lps.write(model, sources, out)` | build and stream to a file; the suffix picks the format |
 | `bound.row(name, **coordinate)` | what one built constraint row says — terms, comparison, right-hand side |
 | `math_spec.to_latex` / `to_typst` / `to_markdown` | the math as a document — [typeset](https://math-spec.readthedocs.io/en/latest/reference/typeset/) |
-| `lps.BoundModel` / `lps.Result` / `lps.Runs` | what `build`, `solve` and `solve_over` hand back, importable — a wrapper annotates its own signature with them rather than reaching a submodule for the name |
+| `lps.Model` / `lps.BoundModel` / `lps.Result` / `lps.Runs` | the types the verbs pass and hand back, importable — a wrapper annotates its own signature with them rather than reaching a second package or a submodule for the name. `lps.Model is math_spec.Model` |
 
 Errors are one tree: `LpspecError` at the root, `LanguageError` (with
 `SchemaError`, `DimensionError`, `PiecewiseExpansionError`) for the model,

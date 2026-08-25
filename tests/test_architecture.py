@@ -386,7 +386,7 @@ def test_every_repository_path_a_workflow_names_exists():
 PUBLIC_API = {
     'run it': {'build', 'check', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
-    'name what came back': {'BoundModel', 'Result', 'Runs'},
+    'name what came back': {'Model', 'BoundModel', 'Result', 'Runs'},
     'catch it': {
         'LpspecError',
         'LanguageError',
@@ -413,12 +413,15 @@ def test_the_public_surface_is_exactly_what_is_declared():
     YAML; Python is how you *run* it, so the runner has four verbs, a fold and
     its two axes, and one error hierarchy.
 
-    The three types are here because a name a verb *returns* is part of that
-    verb's signature: a caller wrapping this package annotates what it hands
-    back and catches what its readers raise, and neither is reachable through
-    a call. What is still refused is a name that would let Python *construct*
-    math or reach the plan — none of these does, each being what a verb
-    already handed over.
+    The four types are here because a name a verb *passes or returns* is part
+    of that verb's signature: a caller wrapping this package annotates what it
+    hands back and catches what its readers raise, and neither is reachable
+    through a call. ``Model`` is the language's own class, re-exported for the
+    same reason its errors are — it arrives out of ``check`` rather than by
+    being asked for. What is still refused is a name that would let Python
+    *construct* math or reach the plan, and ``load_model`` with it: that one is
+    a verb a caller elects to call instead of ``check``, so it stays in the
+    package that owns it.
 
     Two directions, because either alone rots. ``__all__`` must match the
     table (a name added quietly, or documented and never exported), and no
