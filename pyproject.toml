@@ -221,6 +221,13 @@ dev = [
     # claims about itself, and jupyter_client plus ipykernel would prove no more
     # of it while adding a process to every run of the suite.
     "ipython>=8.18",
+    # The benchmark harness's pyomo arm (bench/models/<case>/pyomo.py). In `dev`
+    # rather than in `bench` beside pytest-benchmem, because what makes a
+    # hand-written arm trustworthy is the objective check in
+    # `bench/test_harness.py`, and that runs in *this* environment on every pull
+    # request. An arm nobody checks is worse than no arm. Pure Python, so it
+    # costs a contributor nothing but the download.
+    "pyomo>=6.7",
 ]
 
 # ---------------------------------------------------------------------------

@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from bench.arms import gurobipy_loop, gurobipy_matrix, linopy, lpspec
+from bench.arms import gurobipy_loop, gurobipy_matrix, linopy, lpspec, pyomo
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -53,6 +53,7 @@ Counts = dict[str, Any]
 ARMS: dict[str, ModuleType] = {
     'lpspec': lpspec,
     'linopy': linopy,
+    'pyomo': pyomo,
     'gurobipy-loop': gurobipy_loop,
     'gurobipy-matrix': gurobipy_matrix,
 }

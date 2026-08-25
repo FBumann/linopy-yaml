@@ -76,6 +76,7 @@ closely. `git checkout` gets it back; noticing is the hard part.
 |---|---|---|---|
 | `lpspec` | `lps.build(...)` then `bound.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
 | `linopy` | `Model.to_file(io_api='lp-polars')` | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` |
+| `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` |
 | `gurobipy-matrix` | — | — | `addMVar` + `addMConstr` over a scipy CSR, then `update()` |
 
@@ -91,6 +92,14 @@ them is how much of any result is the library and how much is the style, and
 that is a question about our arm too — `gurobipy-matrix` reaches the same
 `addMVar`/`addMConstr` seam our own `build_gurobi` does, so what separates it
 from `lpspec` is only where the matrix came from.
+
+**`pyomo` is here because leaving it out would look chosen.** Slow is the
+expected answer and not the point: it is the baseline most readers already
+have, and appsi's `set_instance` reaches the same seam our sinks do — the
+solver's own model, populated, with nothing solved. Nothing of pyomo's is
+switched off that pyomo does not switch off itself; `symbolic_solver_labels`
+is already false by default, which is the cheap side of the same choice
+`set_names=False` makes on the linopy arm.
 
 **The `linopy` arm is hand-written, and its formulations are the gallery's.**
 `bench/models/<case>/linopy.py` is `examples/ports/references/linopy/<case>.py`
