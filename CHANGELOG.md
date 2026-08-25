@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.254](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.253...v0.0.1-alpha.254) (2026-08-25)
+
+
+### Features
+
+* **operators:** a window may stop at each group's edge ([#1260](https://github.com/fluxopt/lpspec/issues/1260)) ([027345c](https://github.com/fluxopt/lpspec/commit/027345cd8a5ea41248f370e1415c907953b3224b))
+
 ## [0.0.1-alpha.253](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.252...v0.0.1-alpha.253) (2026-08-25)
 
 
