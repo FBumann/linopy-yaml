@@ -22,6 +22,8 @@ and this arm cannot reach HiGHS at all.
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 if TYPE_CHECKING:
@@ -31,6 +33,12 @@ if TYPE_CHECKING:
 
 #: Where this arm can hand a model over.
 SINKS = ('gurobi',)
+
+#: What has to be importable for this arm to run. An environment without it
+#: skips the arm with that as the reason: CI has several environments and only
+#: some carry every modelling library, and a missing one is a fact about the
+#: environment rather than a failure of the harness.
+REQUIRES = ('gurobipy',)
 
 
 class Prepared(NamedTuple):
@@ -110,12 +118,32 @@ def build_only(prepared: Prepared) -> Counts:
 
 
 def objective(prepared: Prepared) -> float:
-    """Solve, and return what the arms are checked against."""
+    """Write the model out and solve it with HiGHS — never with Gurobi.
+
+    Not squeamishness about the solver: `gurobipy`'s own wheel carries a
+    size-limited licence that refuses `optimize()` above 2000 columns, so a
+    check that solved here would pass on a developer box with a full licence
+    and fail on every runner without one — which is exactly what it did.
+    Writing is not limited, and HiGHS reads what Gurobi wrote.
+
+    It also makes the check stronger than it was: what crosses to HiGHS is the
+    *model*, so an agreement here is agreement about the model rather than
+    about two solvers reading their own author's memory.
+    """
+    import highspy
+
     env, model = _built(prepared)
     try:
-        model.optimize()
-        if model.Status != 2:
-            raise RuntimeError(f'gurobi finished with status {model.Status}, not optimal')
-        return float(model.ObjVal)
+        with tempfile.TemporaryDirectory(prefix='lpspec-bench-') as tmp:
+            path = str(Path(tmp) / 'model.lp')
+            model.write(path)
+            highs = highspy.Highs()
+            highs.setOptionValue('output_flag', False)
+            highs.readModel(path)
+            highs.run()
+            status = highs.getModelStatus()
+            if highs.modelStatusToString(status) != 'Optimal':
+                raise RuntimeError(f'HiGHS finished {highs.modelStatusToString(status)!r} on the gurobipy model')
+            return float(highs.getInfo().objective_function_value)
     finally:
         _release(env, model)

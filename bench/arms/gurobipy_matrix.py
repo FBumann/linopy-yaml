@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 DIALECT = 'gurobipy-matrix'
 SINKS = runtime.SINKS
+REQUIRES = runtime.REQUIRES
 
 build_and_emit = runtime.build_and_emit
 build_only = runtime.build_only

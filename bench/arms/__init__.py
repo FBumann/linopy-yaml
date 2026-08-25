@@ -60,12 +60,17 @@ ARMS: dict[str, ModuleType] = {
 def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
     """Why this cell is not measured, or None when it is.
 
-    A cell can be missing for two honest reasons — the arm cannot reach that
-    sink, or nobody has written the case in that arm's dialect — and both are
-    results. Returned as a sentence rather than a bool so the skip says which
+    A cell can be missing for three honest reasons — the arm's library is not
+    installed here, the arm cannot reach that sink, or nobody has written the
+    case in that arm's dialect — and all three are results. Returned as a sentence rather than a bool so the skip says which
     it was, and so a table can print the reason where a reader is looking.
     """
+    import importlib.util
+
     module = ARMS[arm]
+    absent = [r for r in getattr(module, 'REQUIRES', ()) if importlib.util.find_spec(r) is None]
+    if absent:
+        return f'{arm} needs {", ".join(absent)}, which this environment does not have'
     if sink not in module.SINKS:
         return f'{arm} does not reach the {sink} sink — it has {", ".join(module.SINKS)}'
     dialect = getattr(module, 'DIALECT', None)

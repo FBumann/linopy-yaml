@@ -75,8 +75,6 @@ def test_emit(benchmark: Any, paths: Any, case_name: str, size: str, arm: str, s
     ``checked_sources`` runs before the clock: it is harness bookkeeping, and the
     linopy arm has no counterpart to be charged for it.
     """
-    if sink == 'gurobi':
-        pytest.importorskip('gurobipy')
     missing = unmeasurable(arm, case_name, sink)
     if missing:
         pytest.skip(missing)
@@ -110,8 +108,6 @@ def test_rebuild(benchmark: Any, paths: Any, builds: int, case_name: str, size: 
     missing = unmeasurable(arm, case_name, ARMS[arm].SINKS[0])
     if missing:
         pytest.skip(missing)
-    if arm != 'lpspec':
-        pytest.importorskip('gurobipy')
     module = ARMS[arm]
     counts = benchmark.pedantic(
         module.build_only,

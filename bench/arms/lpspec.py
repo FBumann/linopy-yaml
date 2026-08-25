@@ -11,6 +11,12 @@ from bench.cases import CASES
 #: Every sink the relational lane can hand a model to.
 SINKS = ('lp', 'highs', 'gurobi')
 
+#: What has to be importable for this arm to run. An environment without it
+#: skips the arm with that as the reason: CI has several environments and only
+#: some carry every modelling library, and a missing one is a fact about the
+#: environment rather than a failure of the harness.
+REQUIRES = ()
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
