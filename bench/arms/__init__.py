@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from bench.arms import lpspec
+from bench.arms import gurobipy_loop, gurobipy_matrix, lpspec
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -50,7 +50,31 @@ Counts = dict[str, Any]
 #: Name to the module that speaks for it. Written out rather than discovered by
 #: scanning: a misnamed module would go missing as an *absent arm*, which reads
 #: as "not measured" rather than as the error it is.
-ARMS: dict[str, ModuleType] = {'lpspec': lpspec}
+ARMS: dict[str, ModuleType] = {
+    'lpspec': lpspec,
+    'gurobipy-loop': gurobipy_loop,
+    'gurobipy-matrix': gurobipy_matrix,
+}
+
+
+def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
+    """Why this cell is not measured, or None when it is.
+
+    A cell can be missing for two honest reasons — the arm cannot reach that
+    sink, or nobody has written the case in that arm's dialect — and both are
+    results. Returned as a sentence rather than a bool so the skip says which
+    it was, and so a table can print the reason where a reader is looking.
+    """
+    module = ARMS[arm]
+    if sink not in module.SINKS:
+        return f'{arm} does not reach the {sink} sink — it has {", ".join(module.SINKS)}'
+    dialect = getattr(module, 'DIALECT', None)
+    if dialect is not None:
+        from bench.arms import gurobipy as gurobipy_runtime
+
+        if gurobipy_runtime.formulation(case_name, dialect) is None:
+            return f'{case_name} has no {dialect} formulation'
+    return None
 
 
 def solved(arm: str, case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]) -> float:

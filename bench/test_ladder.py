@@ -30,7 +30,7 @@ from typing import Any
 
 import pytest
 
-from bench.arms import ARMS
+from bench.arms import ARMS, unmeasurable
 from bench.conftest import shape_of
 
 
@@ -77,6 +77,9 @@ def test_emit(benchmark: Any, paths: Any, case_name: str, size: str, arm: str, s
     """
     if sink == 'gurobi':
         pytest.importorskip('gurobipy')
+    missing = unmeasurable(arm, case_name, sink)
+    if missing:
+        pytest.skip(missing)
 
     module = ARMS[arm]
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
@@ -104,6 +107,11 @@ def test_rebuild(benchmark: Any, paths: Any, builds: int, case_name: str, size: 
     """
     if builds < 1:
         pytest.skip('--builds 0')
+    missing = unmeasurable(arm, case_name, ARMS[arm].SINKS[0])
+    if missing:
+        pytest.skip(missing)
+    if arm != 'lpspec':
+        pytest.importorskip('gurobipy')
     module = ARMS[arm]
     counts = benchmark.pedantic(
         module.build_only,

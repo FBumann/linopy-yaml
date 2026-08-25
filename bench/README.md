@@ -75,17 +75,28 @@ closely. `git checkout` gets it back; noticing is the hard part.
 | | `lp` | `highs` | `gurobi` |
 |---|---|---|---|
 | `lpspec` | `lps.build(...)` then `bound.write(...)` | `lps.build(...)` then `build_highs(...)` | `lps.build(...)` then `build_gurobi(...)` |
+| `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` |
+| `gurobipy-matrix` | — | — | `addMVar` + `addMConstr` over a scipy CSR, then `update()` |
 
 `gurobi` is opt-in (`--sinks gurobi`): it needs the `[gurobi]` extra, where the
-other two need nothing a contributor does not already have.
+other two need nothing a contributor does not already have. It is also the only
+sink two of the three arms can reach, and a cell an arm cannot reach is skipped
+with the reason rather than left to look like a measurement that failed.
 
-**One arm.** The eager arm — `lpspec.linopy.build`, our own YAML→`linopy.Model`
-lane — is gone: what it costs is not what this harness is for, and the column a
-reader wants under the name `linopy` is *hand-written* linopy, which is being
-added as an arm of its own. Everything the two-arm shape bought is still here
-and is what the next arm inherits: `--arms` is a registry (`bench/arms/`), the
-rungs and their parquet are shared, and the seam is the same artifact for
-whoever fills it.
+**One framework, two dialects, on purpose.** `gurobipy-loop` and
+`gurobipy-matrix` are the same library written the two ways people write it.
+Publishing both is the answer to *"you wrote their arm badly"*: the gap between
+them is how much of any result is the library and how much is the style, and
+that is a question about our arm too — `gurobipy-matrix` reaches the same
+`addMVar`/`addMConstr` seam our own `build_gurobi` does, so what separates it
+from `lpspec` is only where the matrix came from.
+
+**A hand-written arm is a model somebody typed twice**, and nothing structural
+stops it being a *different* model that benchmarks beautifully. The eager arm
+never had that risk — it read the same YAML. So each dialect's smallest rung is
+solved against `lpspec`'s and the objectives compared, in
+`test_the_hand_written_arm...` under `bench/test_harness.py`, which CI runs on
+every pull request.
 
 **The solver sinks stop at the handoff — `run()` / `optimize()` is never
 called.** That is the whole discipline of it. HiGHS's simplex is the same work
@@ -406,9 +417,26 @@ workflow runs and uploads nothing.
 
 ## Adding a case
 
-Add a YAML file under `bench/models/`, and a data generator and a ladder to
+Add `bench/models/<case>/model.yaml`, and a data generator and a ladder to
 `CASES` in `bench/cases.py`. Nothing else: the parametrization reads `CASES`,
 and the report is case-agnostic.
+
+## Adding an arm
+
+Two files, because an arm is two different kinds of knowledge:
+
+- **`bench/arms/<arm>.py`** — everything true of the library whatever the model
+  is: what its `prepare` needs before the clock, how it builds and emits, which
+  `SINKS` it can reach, how a solution comes back, and which of its defaults are
+  switched off with what each one costs. Register it in `ARMS`.
+- **`bench/models/<case>/<arm>.py`** — the model itself, one per case, listed in
+  that case's `FORMULATIONS`. Modelling only: no timing, no sink, no counts, no
+  lpspec import. That is what lets the dialects of one case be read side by
+  side, which is how a reader judges whether the comparison is fair.
+
+A case an arm cannot express ships no module and prints its reason. Write the
+model the way that library's own community writes it, and expect the objective
+check above to be the first thing that fails.
 
 A case whose YAML has to vary per rung sets `generate_model` instead of
 `model` — `declarations` is the template — and `Case.model_path(shape)` hands
@@ -419,6 +447,7 @@ every consumer whichever of the two the case has.
 | file | |
 |---|---|
 | `cases.py` | the models, the data generators, the ladders |
+| `models/<case>/` | one directory per case: `model.yaml`, and the same model in each hand-written dialect |
 | `arms/` | one module per arm — `prepare` before the clock, then build-and-emit, build-only, objective. Picklable, and the library imported inside the verb |
 | `conftest.py` | selection flags, the ragged parametrization, the data fixture, the machine interlock |
 | `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |

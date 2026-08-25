@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 from bench.cases import CASES
 
+#: Every sink the relational lane can hand a model to.
+SINKS = ('lp', 'highs', 'gurobi')
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
