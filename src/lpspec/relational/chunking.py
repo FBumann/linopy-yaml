@@ -12,10 +12,6 @@ since a row is nine entries in one model and a hundred in another, so what the
 pass holds tracks the model's shape rather than the budget. Requiring a width
 at every call site is the point of this module — a pass whose unit really does
 cost one element says so, in one character, where a reviewer can see it.
-
-(The engine's own peak tracks the model deliberately; declaring a ceiling is
-the memory axis in docs/about/roadmap.md. This is the narrower promise that a pass
-holds a bounded slice, not the whole.)
 """
 
 from __future__ import annotations
