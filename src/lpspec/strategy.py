@@ -1,30 +1,23 @@
 """Solving strategies: one plan per slice, folded.
 
-A plan cannot contain a loop; a *process* may loop over plans, each with its
-shape fixed before its own data (docs/about/ceiling.md). So a strategy is
-never a language feature and never an engine feature — it is a driver above
-:mod:`lpspec.api`, built from the public verbs, and no lane learns a new word.
+A plan cannot contain a loop; a *process* may loop over plans
+(docs/about/ceiling.md). So a strategy is a driver above :mod:`lpspec.api`,
+built from the public verbs — never a language or engine feature.
 
-Every strategy is the same fold: **partition → bind → solve → carry →
-stitch**. Only how slices are cut and whether they couple differs. (The
-*stage* stitches; a reader asks for its result by the index it wants, which is
-:meth:`Runs.primal`'s ``original_index``.)
-
-*Bind* rather than *build*, because a serial fold builds once and rebinds each
-slice onto that model (:func:`_serially`) — every slice being the same math
-over different numbers, which is what ``rebind`` is for. A fold under a process
-pool builds per slice (:func:`_pooled`), a built model being the one thing that
-cannot cross. The two differ in that and nothing else: both yield an
-:class:`_Answer`, and the fold that absorbs them is written once.
+Every strategy is the same fold: **partition → bind → solve → carry → stitch**.
+Only how slices are cut and whether they couple differs. A serial fold builds
+once and rebinds each slice (:func:`_serially`); under a process pool it builds
+per slice (:func:`_pooled`), a built model being the one thing that cannot
+cross. Both yield an :class:`_Answer`, and the fold that absorbs them is
+written once.
 
     scenario / sweep    ``EachCoordinate('scenario')``              independent
     myopic pathway      ``EachCoordinate('period', ordered=True)``  + ``carry``
     rolling horizon     ``EachWindow('snapshot', 48, 24, 't')``     + ``carry``
 
-**A partition is a filter on the sources, not a narrower index.** Narrowing a
-dimension alone leaves the parameter rows outside the window in place, and the
-containment check refuses them by design, so an axis rewrites the rows and the
-index it is over in one mapping.
+**A partition is a filter on the sources, not a narrower index** — the
+containment check refuses parameter rows outside a narrowed index, so an axis
+rewrites the rows and the index together.
 
 The caller-facing rules are [docs/reference/sweeps.md](../../docs/reference/sweeps.md).
 """
@@ -65,10 +58,8 @@ _COMPRESSION = 'zstd'
 class _Cut(NamedTuple):
     """One slice of a sweep: the key, and the sources that build it.
 
-    A tuple on purpose: a hand-built axis is documented as a plain list of
-    ``(key, sources)``, and those unpack the same way. An axis that re-indexes
-    a dimension puts the new index in ``sources`` under the dimension's own
-    key, which is where every other index lives.
+    A tuple on purpose: a hand-built axis is a plain list of ``(key, sources)``,
+    and those unpack the same way.
     """
 
     key: Any
@@ -100,12 +91,10 @@ class _CarryRule:
         """One carry checked against the schema — construction and validation, together.
 
         The variable's dims minus the parameter's is the one dimension the
-        carry collapses, and ``index`` names a coordinate of it; everything
-        else passes through, which is what lets a myopic pathway hand a whole
-        capacity vector forward rather than one number at a time.
-
-        **Nothing here reads data**, which is why the plan resolves before the
-        axis cuts any.
+        carry collapses; everything else passes through, so a myopic pathway
+        hands a whole capacity vector forward rather than one number at a time.
+        Nothing here reads data, which is why the plan resolves before the axis
+        cuts any.
         """
         if parameter not in schema.parameters:
             raise LpspecError(f'carry writes parameter {parameter!r}, which the model does not declare')
@@ -143,10 +132,8 @@ class _CarryRule:
         """What this rule hands the next slice, read out of one slice's primals.
 
         ``index`` is a **coordinate** of the dropped dimension, never a row
-        number. That is the same integer for the case this started with —
-        ``into`` is dense ``0..n-1``, so window position and coordinate
-        coincide — and it is the only one of the two that still means
-        something once a second dimension is there.
+        number — the only one of the two that still means something once a
+        second dimension is there.
 
         Raises:
             LpspecError: ``index`` names a coordinate the slice does not have
@@ -170,13 +157,9 @@ class _CarryRule:
 class _Answer:
     """One slice, solved and read out — what the fold absorbs.
 
-    What :func:`_serially` and :func:`_pooled` both produce, so the fold reads
-    the same either way and only *how* a slice was solved differs between them.
-
-    **Plain data throughout**, because it is what a worker returns and so has
-    to pickle: frames, strings and numbers, never a result or a model. The
-    frames cross as ``bytes`` on that path, which is why :func:`_encode` and
-    :func:`_decode` rewrite the two frame fields rather than the whole of it.
+    What :func:`_serially` and :func:`_pooled` both produce. Plain data
+    throughout, because a worker returns it and so it has to pickle: frames,
+    strings and numbers, never a result or a model.
     """
 
     meta: _SliceMeta
@@ -198,14 +181,9 @@ class _OriginalIndex:
 
     ``owned`` is ``(key, local, dim)`` for the coordinates each window is
     *responsible* for — its first ``step``, the rest being lookahead the next
-    window recomputes. An inner join against it is the whole operation: it
-    restores the original coordinate, and because a coordinate may appear only
-    once under its own index, the lookahead rows have nowhere to go.
-
-    **One-way, and that is why it holds only the owned coordinates.** It is the
-    return path, not a record of the slicing: the lookahead rows are not in it,
-    so a sliced frame cannot be rebuilt from it. Slicing is
-    :meth:`EachWindow._slices`' business and stays there.
+    window recomputes. One-way: the lookahead rows are not in it, so a sliced
+    frame cannot be rebuilt from it — slicing stays
+    :meth:`EachWindow._slices`' business.
     """
 
     local: str
@@ -416,9 +394,9 @@ class Runs:
         """One constraint's shadow prices across every slice, the key prepended.
 
         :meth:`primal`'s shape and arguments. A slice whose model had an
-        integer variable contributes no duals, so a mixed sweep can be shorter
-        here than there; over the original index each coordinate carries the
-        price of the window that owns it, never a blend of several.
+        integer variable contributes no duals; over the original index each
+        coordinate carries the price of the window that owns it, never a blend
+        of several.
 
         Raises:
             LpspecError: No slice produced duals for *name* — the message says
@@ -433,15 +411,12 @@ class Runs:
 
         :meth:`primal`'s shape and arguments, for the quantities the model
         declares under ``expressions:`` — each slice's value was evaluated at
-        that slice's solution when the fold read it, so it costs a sweep the
-        same as one more variable and a reader nothing it has not already paid.
+        that slice's solution when the fold read it.
 
         Over the original index each coordinate carries the value of the window
-        that owns it — the lookahead rows every overlapping window recomputed
-        are dropped, which is what makes summing the stitched frame safe where
-        summing per-window values double-counts. An expression *reduced over*
-        the sliced dimension has no way back to it and is refused there; read
-        it without ``original_index`` for the per-slice values instead.
+        that owns it — the recomputed lookahead rows are dropped, which is what
+        makes summing the stitched frame safe where summing per-window values
+        double-counts.
 
         Raises:
             LpspecError: No slice produced *name* — an evaluation that failed
@@ -456,32 +431,10 @@ class Runs:
     def _reindexed(self, frame: pl.DataFrame, *, original_index: bool) -> pl.DataFrame:
         """*frame* over the dimension the axis sliced, rather than over its slices.
 
-        **One operation, not two.** Restoring the original coordinate is the
-        whole of it; dropping the overlap falls out, because a coordinate may
-        appear only once under its own index and the lookahead rows have
-        nowhere to go. That is why a single window with no overlap at all still
-        needs this — the re-index fires regardless of how many pieces there
-        are, which is what the word *stitch* got wrong.
-
-        Each window contributes the ``step`` coordinates it owns, the final one
-        included, which can hold no more and so keeps all of it.
-
-        **Every axis answers it**, so code handed one need not ask which it
-        got. :class:`EachCoordinate` and a hand-built axis re-indexed nothing —
-        their key column already *is* a coordinate of the answer — so the frame
-        comes back unchanged, which is a satisfied request rather than an
-        ignored one.
-
-        A flag on the readers rather than a reader of its own, because what has
-        to be undone depends on the *axis* and not on which quantity was read:
-        duals get it for free, and a name that is both a variable and a
-        constraint (which the language permits) never has to be dispatched.
-
-        It takes a *frame* rather than a name, so making it public would be a
-        rename plus a precondition — the frame has to carry the key column and
-        the local index — for a caller with a quantity the sweep does not hold.
-        Nothing here forecloses that; it is private because the readers are
-        where a sweep's frames come from.
+        Every axis answers it: :class:`EachCoordinate` and a hand-built axis
+        re-indexed nothing — their key column already *is* a coordinate of the
+        answer — so there the frame comes back unchanged, a satisfied request
+        rather than an ignored one.
         """
         if not original_index or self._original is None:
             return frame
@@ -490,25 +443,20 @@ class Runs:
     def to_pandas(self, name: str, *, original_index: bool = False) -> pd.DataFrame:
         """:meth:`primal` as a tidy :class:`pandas.DataFrame`.
 
-        **The name is resolved before pandas is imported.** A sweep that never
-        held *name* should say so on any install, where importing first answers
-        a question about the environment when the caller asked one about their
-        model.
+        The name is resolved before pandas is imported, so a sweep that never
+        held *name* says so on any install.
         """
         return tidy_to_pandas(self.primal(name, original_index=original_index))
 
     def to_dataarray(self, name: str, *, original_index: bool = False) -> xr.DataArray:
         """:meth:`primal` as a :class:`xarray.DataArray`, the slice key a dimension.
 
-        The extra dimension is named by the axis, not by this class — a
-        scenario sweep gives ``(scenario, …)`` and a window ``(<dim>_start, …)``
-        — which is what a sweep is *for*: ``.sel`` one slice, take a quantile
-        across them, plot the spread. A slice that reached no solution has no
-        rows and comes back NaN, the same answer a masked coordinate gets from
-        ``Result``.
-
-        ``original_index=True`` gives the array over the dimension the axis
-        sliced instead, so a rolling horizon comes back indexed by time.
+        The extra dimension is named by the axis — a scenario sweep gives
+        ``(scenario, …)`` and a window ``(<dim>_start, …)``. A slice that
+        reached no solution has no rows and comes back NaN, the same answer a
+        masked coordinate gets from ``Result``. ``original_index=True`` gives
+        the array over the dimension the axis sliced instead, so a rolling
+        horizon comes back indexed by time.
         """
         return tidy_to_dataarray(self.to_pandas(name, original_index=original_index), name)
 
@@ -520,9 +468,8 @@ class Runs:
         :meth:`to_parquet`.
 
         No ``original_index``: this and :meth:`to_parquet` export what the
-        sweep *holds*, and the original index is lossy — the lookahead rows
-        every overlapping window computed cannot survive it. A bulk export is
-        the wrong place to lose them.
+        sweep *holds*, and the original index is lossy — a bulk export is the
+        wrong place to drop the lookahead rows.
 
         Raises:
             LpspecError: The sweep holds no variable values at all.
@@ -536,8 +483,7 @@ class Runs:
         """One parquet file per variable the sweep holds, ``(key, dims…, value)``.
 
         Written in :meth:`primal`'s order, so the same sweep writes the same
-        bytes. This is a *copy out* of frames already held and bounds nothing —
-        what a sweep holds is #610.
+        bytes. A *copy out* of frames already held — what a sweep holds is #610.
 
         Returns:
             Each variable's name, mapped to the file it was written to.
@@ -598,35 +544,28 @@ def solve_over(
 
     The caller-facing rules — what a carry copies, how a key column is named,
     which executor to choose — are the table in
-    [docs/reference/sweeps.md](../../docs/reference/sweeps.md), so that they
-    are stated once. What this docstring adds is the order the work happens in.
+    [docs/reference/sweeps.md](../../docs/reference/sweeps.md). What this
+    docstring adds is the order the work happens in.
 
     **Everything answerable from the declarations is answered before a source
-    is read.** A mistyped carry, a key column that collides, an axis a carry
-    cannot run on: each costs a parse rather than a scan of every parquet file.
+    is read** — a mistyped carry, a key column that collides, an axis a carry
+    cannot run on each cost a parse rather than a scan of every parquet file.
     The schema then rides down to the slices already parsed, so no slice — and
     no worker — reads the same YAML again.
 
-    **It is a fold.** The previous slice's model is released as the loop goes —
-    rebound in place, serially — so build peak stays at one slice however many
-    there are; what accumulates is the answer, which is what the caller asked
-    for.
+    **It is a fold.** The previous slice's model is released as the loop goes,
+    so build peak stays at one slice however many there are; what accumulates
+    is the answer.
 
     **``keep`` reaches every slice unchanged**, defaulting as
-    :meth:`~lpspec.api.BoundModel.solve` does. A fold is where
-    ``keep='progress'`` has something to carry — consecutive slices differ by
-    one step — but whether carrying pays is a question about one *model*, and
-    a driver knows no more about that than a caller does: on a model its
-    solver's preprocessing can crack, carrying is the slower path by a wide
-    margin. So the fold offers the option and picks neither. A slice whose
-    labels move is loaded again and keeps nothing, which the fold neither
-    prevents nor needs to know; the pooled branch can keep nothing at all,
-    building per slice, and asking there is not an error.
+    :meth:`~lpspec.api.BoundModel.solve` does. Whether ``keep='progress'``
+    pays is a question about one *model* — on some, carrying is the slower
+    path by a wide margin — so the fold offers the option and picks neither.
+    The pooled branch builds per slice and can keep nothing at all; asking
+    there is not an error.
 
-    **The last slice carries nothing**, there being no next slice to read it.
-    A short tail window can hold fewer coordinates than the carry index names,
-    and computing a value nothing will use would fail an otherwise complete
-    sweep at the final slice.
+    **The last slice carries nothing**, there being no next slice to read it —
+    a short tail window can hold fewer coordinates than the carry index names.
 
     **A process pool must not use the ``fork`` start method.** polars' thread
     pool does not survive a fork, and a forked worker hangs rather than
@@ -665,10 +604,9 @@ def solve_over(
         cut, original = axis._slices(sources, key_name)
     else:
         cut, original = list(axis), None
-    if not cut:
-        raise DataError('the axis produced no slices')
-
     cuts = [_Cut(*entry) for entry in cut]
+    if not cuts:
+        raise DataError('the axis produced no slices')
     solving = {'solver_name': solver_name, 'solver_options': dict(solver_options or {}) or None}
     rows: list[dict[str, Any]] = []
     primals: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
@@ -714,28 +652,20 @@ def _serially(
     """Each slice's answer, off one model rebound in place.
 
     Every slice of a sweep is the same math over different numbers, which is
-    what :meth:`~lpspec.api.BoundModel.rebind` is: the YAML is parsed once, the
-    plan lowered once, and a slice whose structure matches the last one keeps
-    the loaded solver — carrying the work it did too only where *keep* asks. A
-    rebuild releases the previous model before it starts, so the fold still
-    holds one slice's model however many there are.
+    what :meth:`~lpspec.api.BoundModel.rebind` is for; a rebuild releases the
+    previous model before it starts, so the fold holds one slice's model
+    however many there are.
 
     **A slice that names something else is rebuilt, not rebound.** A cut is
-    *total* — it says what the whole model binds — where ``rebind`` is partial
-    by construction and keeps whatever the last slice bound. The two agree only
-    while every slice names the same sources and the same coordinates, which
-    the class axes guarantee (each rewrites a copy of the whole mapping) and a
-    hand-built list does not. Compared by *name*, values being what a rebind
-    exists to replace: a slice inheriting the previous one's data would answer
-    a question nobody asked, and would answer it differently from the same
-    sweep under ``executor=``.
+    *total* where ``rebind`` is partial by construction: the two agree only
+    while every slice names the same sources, which the class axes guarantee
+    and a hand-built list does not. Compared by *name* — values are what a
+    rebind exists to replace.
 
-    **A generator because of the carry**, which is the one thing that makes a
-    slice depend on the one before it: slice ``i+1``'s sources are not known
-    until slice ``i``'s frames have been read, and resuming after the yield is
-    where that happens. The caller closes this — :func:`solve_over` does it
-    with ``closing`` — which is what releases the model when a fold is
-    abandoned part way.
+    **A generator because of the carry**: slice ``i+1``'s sources are not
+    known until slice ``i``'s frames have been read, and resuming after the
+    yield is where that happens. The caller closes this — that is what
+    releases the model when a fold is abandoned part way.
     """
     bound: Any = None
     named: frozenset[str] | None = None
@@ -770,11 +700,9 @@ def _pooled(
 
     Yielded in **slice order, never completion order**: the futures are walked
     in the order they were submitted, so a sweep cannot reorder itself under a
-    pool.
-
-    A built model is the one thing that cannot cross a process, so this branch
-    builds per slice however many there are — the same fact that makes ``carry``
-    and ``executor`` mutually exclusive.
+    pool. A built model cannot cross a process, so this branch builds per
+    slice — the same fact that makes ``carry`` and ``executor`` mutually
+    exclusive.
     """
     crosses = _crosses_a_process(executor)
     shared = _shares_filesystem(executor, workers_share_fs)
@@ -807,20 +735,14 @@ def _answers(result: Any, model: Any) -> _Answer:
     """One slice's answer, read out of *result*: its meta row, and its frames.
 
     Read here rather than held, so that what a sweep accumulates is frames and
-    never results — a result keeps reading across a rebind (#634), but holding
-    one per slice would hold that slice's label frames with it. That is also
-    why every declared expression is **evaluated here, eagerly**, where a lone
-    :meth:`~lpspec.relational.result.Result.expression` defers: its deferred
-    reader holds the build's frames, which is the very thing this fold refuses
-    to accumulate. Per slice the expression costs what one more primal read
-    does, symmetric with reading every variable and every constraint above.
+    never results — holding a result per slice would hold that slice's label
+    frames with it (#634). Every declared expression is evaluated here,
+    eagerly, for the same reason: the deferred reader holds the build's frames.
 
     **A slice that answered nothing is not a failure**, and neither is one
     whose duals are undefined: an integer variable makes them so, and one such
     slice must not fail a whole sweep. ``Result.dual`` already writes the
-    sentence saying why and names the variable, so it is caught and carried
-    rather than rewritten — a sweep of one model has one answer, so the first
-    is the answer.
+    sentence saying why, so it is caught and carried rather than rewritten.
     """
     meta = _SliceMeta(
         status=result.status,
@@ -854,9 +776,7 @@ def _run_slice(
 
     Module-level and closure-free on purpose: a remote executor has to pickle
     what it is handed, and a bound method or a lambda over the axis object
-    cannot cross. Everything in the signature is a path, a frame, a string or a
-    number — which is also why this one builds per slice where the serial
-    branch rebinds.
+    cannot cross.
     """
     with _solve(model, _decode(encoded), **call) as result:
         answer = _answers(result, model)
@@ -878,14 +798,10 @@ def _key_column(
     """What to call the column holding the slice key.
 
     The class axes know: a coordinate sweep keys on the dimension it cut, a
-    window on where it *started* — never on ``dim`` itself, which the slice
-    dropped and re-indexed. A column called ``snapshot`` holding window starts
-    would join against real snapshot-indexed data and keep a fraction of it,
-    silently.
-
-    A hand-built list knows neither and has to be told, for the reason
-    :attr:`EachWindow.into` has no default: ``'slice'`` would be this library's
-    word for the caller's draw, ladder or pathway.
+    window on where it *started* — never on ``dim`` itself, since a column
+    called ``snapshot`` holding window starts would join against real
+    snapshot-indexed data and keep a fraction of it, silently. A hand-built
+    list knows neither and has to be told.
     """
     if key_name is None:
         if isinstance(axis, EachWindow):
