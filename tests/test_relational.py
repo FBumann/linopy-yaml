@@ -558,7 +558,7 @@ class TestTheLabelSpace:
         ]
 
         with lps.build(model, sources) as bound:
-            labelled = bound._engine._model.variables['p'].collect()
+            labelled = bound._engine._model.variables['p'].frame.collect()
 
         assert labelled['var_label'].to_list() == list(range(len(expected))), 'labels must be dense and ascending'
         assert list(labelled.select('snapshot', 'node', 'tech').iter_rows()) == expected
@@ -578,7 +578,7 @@ class TestTheLabelSpace:
         declared = pl.Enum(['c', 'a', 'b'])
 
         with lps.build(model, {'cap': cap}) as bound:
-            assert bound._engine._model.variables['x'].collect_schema()['node'] == declared
+            assert bound._engine._model.variables['x'].frame.collect_schema()['node'] == declared
             primal = bound.solve().primal('x')
 
         assert primal.schema['node'] == pl.String, 'what leaves is what a caller can join against'
@@ -599,7 +599,7 @@ class TestTheLabelSpace:
         cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
 
         with lps.build(model, {'cap': cap}) as bound:
-            assert sorted(bound._engine._model.variables['x'].collect()['node'].to_list()) == ['b', 'c']
+            assert sorted(bound._engine._model.variables['x'].frame.collect()['node'].to_list()) == ['b', 'c']
             assert bound.solve().objective == pytest.approx(5.0)
 
     def test_a_where_naming_an_undeclared_label_masks_nothing_in(self):
@@ -631,7 +631,7 @@ class TestTheLabelSpace:
             program = replace(base, variables=(replace(base.variables[0], where=where),))
             with PolarsEngine() as engine:
                 engine.build(program, dispatch_sources(gens, load))
-                labels.append(engine._model.variables['p'].collect().sort('var_label'))
+                labels.append(engine._model.variables['p'].frame.collect().sort('var_label'))
         assert labels[0].equals(labels[1])
 
     def test_a_mask_a_missing_value_can_satisfy_keeps_the_rows_with_no_value(self):
@@ -665,7 +665,7 @@ class TestTheLabelSpace:
         }
         with lps.build(model, sources) as bound:
             surviving = {
-                name: sorted(bound._engine._model.variables[name].select('i').collect().to_series().to_list())
+                name: sorted(bound._engine._model.variables[name].frame.select('i').collect().to_series().to_list())
                 for name in ('absent', 'either', 'both', 'mixed')
             }
         assert surviving == {
@@ -702,21 +702,15 @@ class TestTheLabelSpace:
         with lps.build(model, {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as bound:
             engine = bound._engine
             tables = engine._model.tables()
-            for names, total, frames, blocks, label in (
-                (
-                    ['x', 'y', 'z'],
-                    tables.column_count,
-                    engine._model.variables,
-                    engine._model.variable_blocks,
-                    'var_label',
-                ),
-                (['c1', 'c2'], tables.row_count, engine._model.constraints, engine._model.constraint_blocks, 'row'),
+            for names, total, held, label in (
+                (['x', 'y', 'z'], tables.column_count, engine._model.variables, 'var_label'),
+                (['c1', 'c2'], tables.row_count, engine._model.constraints, 'row'),
             ):
                 at = 0
                 for name in names:
-                    start, height = blocks[name].start, blocks[name].height
+                    start, height = held[name].start, held[name].height
                     assert start == at, f'{name} does not start where the previous declaration ended'
-                    labels = frames[name].select(label).collect().to_series()
+                    labels = held[name].frame.select(label).collect().to_series()
                     assert sorted(labels) == list(range(start, start + height)), f'{name} is not a dense run'
                     at += height
                 assert at == total, 'the runs do not tile the index'
@@ -1420,7 +1414,7 @@ class TestThePositionalHandoff:
             assert 'col' not in tables.cols.columns, 'cols carries an index it does not need'
             assert tables.cols.height == tables.column_count
 
-            labels = bound._engine._model.variables['x'].collect().sort('var_label')
+            labels = bound._engine._model.variables['x'].frame.collect().sort('var_label')
             raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(labels['j'].dtype))
             expected = labels.join(raw, on=['i', 'j'], how='left')['value'].to_list()
             assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'

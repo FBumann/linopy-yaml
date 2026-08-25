@@ -206,11 +206,12 @@ class Gurobi(Solver):
         sliced per block the way a push slices the right-hand sides —
         and ``update`` after, gurobipy's changes being queued.
         """
-        if ws.is_basis:
-            self._x.VBasis = ws.column_statuses
+        if (basis := ws.basis()) is not None:
+            column_statuses, row_statuses = basis
+            self._x.VBasis = column_statuses
             at = 0
             for block in self._blocks:
-                block.CBasis = ws.row_statuses[at : at + block.shape[0]]
+                block.CBasis = row_statuses[at : at + block.shape[0]]
                 at += block.shape[0]
         else:
             assert ws.column_values is not None, (

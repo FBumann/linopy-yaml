@@ -20,6 +20,7 @@ rectangle is a few hundred rows plus the output (#520).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -33,6 +34,25 @@ if TYPE_CHECKING:
     from lpspec.relational import plan
     from lpspec.relational.engines.polars.compiler import PolarsCompiler
     from lpspec.relational.engines.polars.fragments import Presence
+
+
+@dataclass(frozen=True)
+class Labelled:
+    """One declaration's labelled frame, and the contiguous run of labels it owns.
+
+    The frame and its run move together — a dropped row renumbers both — so
+    they are one value: two registries kept in lockstep by convention was the
+    hazard. :func:`frame` numbers a declaration's survivors contiguously from
+    ``start``, which is what makes its share of a solver vector a slice.
+    """
+
+    frame: pl.LazyFrame
+    start: int
+    height: int
+
+    def share(self, values: pl.Series) -> pl.Series:
+        """This declaration's share of a solver vector — a slice, never a join."""
+        return values.slice(self.start, self.height)
 
 
 def frame(

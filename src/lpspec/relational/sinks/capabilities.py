@@ -127,7 +127,7 @@ def required(program: plan.Program, /) -> frozenset[Capability]:
         needed.add('integrality')
     if program.objective is not None and plan.is_quadratic(program.objective.expression):
         needed.add('quadratic_objective')
-    if any(plan.is_quadratic(c.lhs) or plan.is_quadratic(c.rhs) for c in program.constraints):
+    if any(plan.declares_quadratic(c) for c in program.constraints):
         needed.add('quadratic_constraint')
     if program.sos:
         needed.add('sos')

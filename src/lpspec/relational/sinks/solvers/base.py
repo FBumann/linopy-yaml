@@ -62,10 +62,11 @@ class WarmStart:
     #: or ``None`` where the basis carries the start instead.
     column_values: Any | None
 
-    @property
-    def is_basis(self) -> bool:
-        """Whether this start is a basis — both status vectors filled, as they pair."""
-        return self.column_statuses is not None and self.row_statuses is not None
+    def basis(self) -> tuple[Any, Any] | None:
+        """Both status vectors — filled exactly together — or ``None`` where the incumbent carries the start."""
+        if self.column_statuses is not None and self.row_statuses is not None:
+            return self.column_statuses, self.row_statuses
+        return None
 
 
 @dataclass(frozen=True)

@@ -184,9 +184,10 @@ class Xpress(Solver):
         it off, and a caller asking for a warm start after one has asked for
         the opposite of what that control says.
         """
-        if ws.is_basis:
+        if (basis := ws.basis()) is not None:
+            column_statuses, row_statuses = basis
             self._p.controls.keepbasis = 1
-            self._p.loadBasis(ws.row_statuses, ws.column_statuses)
+            self._p.loadBasis(row_statuses, column_statuses)
         else:
             assert ws.column_values is not None, (
                 'a warm start with no basis carries an incumbent — it holds nothing else'

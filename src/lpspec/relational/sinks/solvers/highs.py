@@ -286,10 +286,11 @@ class Highs(Solver):
         """
         import highspy
 
-        if ws.is_basis:
+        if (statuses := ws.basis()) is not None:
+            column_statuses, row_statuses = statuses
             basis = highspy.HighsBasis()
-            basis.col_status = [highspy.HighsBasisStatus(int(status)) for status in ws.column_statuses]
-            basis.row_status = [highspy.HighsBasisStatus(int(status)) for status in ws.row_statuses]
+            basis.col_status = [highspy.HighsBasisStatus(int(status)) for status in column_statuses]
+            basis.row_status = [highspy.HighsBasisStatus(int(status)) for status in row_statuses]
             basis.valid = True
             _took(self._handle.setBasis(basis), 'the carried basis')
         else:

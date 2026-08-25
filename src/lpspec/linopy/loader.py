@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -17,6 +16,7 @@ from lpspec.errors import (
     no_index_source_message,
     wrong_value_dtype_message,
 )
+from lpspec.frames import scan, to_pandas
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -58,10 +58,10 @@ def dimension_coords(
         table = tidy.get(dim)
         if table is None:
             raise DataError(no_index_source_message(dim))
-        frames[dim] = _through_numpy(collected(table))
+        frames[dim] = to_pandas(collected(table))
 
     master = {dim: pd.Index(pd.unique(frames[dim][dim]), name=dim) for dim in schema.dimensions}
-    relations = {name: _through_numpy(collected(tidy[name])) for name in schema.lookups}
+    relations = {name: to_pandas(collected(tidy[name])) for name in schema.lookups}
     return master, _lookup_arrays(schema, relations, master)
 
 
@@ -72,20 +72,7 @@ def collected(source: TidySource) -> pl.DataFrame:
     query; linopy holds the whole model in memory anyway, so this lane reads it
     where the engine would push it down.
     """
-    frame = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
-    return frame.collect()
-
-
-def _through_numpy(table: pl.DataFrame) -> pd.DataFrame:
-    """A polars frame as pandas, column by column, without reaching for pyarrow.
-
-    A dictionary-encoded column is widened first: it carries a writer's own
-    codes, and the labels have to compare the way every other arrival's do.
-    """
-    encoded = [name for name, kind in table.schema.items() if kind in (pl.Categorical, pl.Enum)]
-    if encoded:
-        table = table.with_columns(pl.col(name).cast(pl.String) for name in encoded)
-    return pd.DataFrame({name: table[name].to_numpy() for name in table.columns})
+    return scan(source).collect()
 
 
 def _lookup_arrays(
@@ -221,7 +208,7 @@ def _refuse_duplicate_index(name: str, index: pd.Index, dims: list[str]) -> None
     raise DataError(duplicate_coordinate_message(name, shown, dims))
 
 
-def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], declared: str = 'float') -> xr.DataArray:
+def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], declared: str) -> xr.DataArray:
     """A tidy ``(dims…, value)`` frame as the array this lane builds against.
 
     The seam that lets one object reach either lane: everything

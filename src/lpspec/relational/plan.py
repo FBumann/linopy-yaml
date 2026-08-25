@@ -575,6 +575,16 @@ def is_quadratic(expression: Expression) -> bool:
     return any(is_quadratic(child) for child in children(expression))
 
 
+def declares_quadratic(c: ConstraintDeclaration) -> bool:
+    """Whether constraint *c*'s expression multiplies two variable-carrying operands.
+
+    One home, because two readers act on it — the capability a program
+    requires, and which declarations the engine builds last — and a third side
+    added to a constraint has to be found by both.
+    """
+    return is_quadratic(c.lhs) or is_quadratic(c.rhs)
+
+
 def carries_variable(expression: Expression) -> bool:
     """Whether a variable appears anywhere under *expression*."""
     if isinstance(expression, Variable):

@@ -27,7 +27,7 @@ import polars as pl
 from math_spec import mask_of
 
 from lpspec.errors import DataError, PiecewiseExpansionError
-from lpspec.frames import TidySource, as_frame, scan
+from lpspec.frames import TidySource, as_frame, scan, to_pandas
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -487,10 +487,10 @@ def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any, di
     which is what keeps the guard's answer a property of the numbers rather
     than of how they arrived.
 
-    The frame crosses to pandas column by column through numpy: a whole-frame
-    conversion would reach for pyarrow, and this check already costs the caller
-    xarray without adding a third library. Issue #27 would make it numpy-only
-    and retire this function.
+    The frame crosses to pandas through :func:`lpspec.frames.to_pandas`: a
+    whole-frame conversion would reach for pyarrow, and this check already
+    costs the caller xarray without adding a third library. Issue #27 would
+    make it numpy-only and retire this function.
 
     Raises:
         KeyError: If there is nothing to lay out — an absent parameter, or one
@@ -508,8 +508,5 @@ def _as_dataarray(schema: Model, pname: str, values: Mapping[str, Any] | Any, di
     frame = pl.scan_parquet(obj) if isinstance(obj, (str, Path)) else as_frame(obj, tuple(dims))
     if frame is None or not dims or 'value' not in frame.collect_schema().names():
         raise KeyError(pname)
-    import pandas as pd
-
     tidy = frame.select([*dims, 'value']).collect()
-    columns = {name: tidy[name].to_numpy() for name in tidy.columns}
-    return xr.DataArray.from_series(pd.DataFrame(columns).set_index(dims)['value'])
+    return xr.DataArray.from_series(to_pandas(tidy).set_index(dims)['value'])

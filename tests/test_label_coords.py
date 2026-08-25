@@ -464,7 +464,7 @@ def test_a_targeted_lookup_compares_against_a_label_the_target_lacks():
     """
     model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send == 'atlantis'"}}}
     with lps.build(model, NETWORK_SOURCES) as bound:
-        surviving = bound._engine._model.variables['f'].select(pl.len()).collect().item()
+        surviving = bound._engine._model.variables['f'].frame.select(pl.len()).collect().item()
     assert surviving == 0, "a label no bus carries matches nothing, so no 'f' is built"
 
 

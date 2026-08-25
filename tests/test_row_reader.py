@@ -229,8 +229,8 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
     with lps.build(COMMITMENT, COMMITMENT_DATA) as bound:
         tables = bound._engine._model.tables()
         for name in ('commit', 'balance'):
-            block = bound._engine._model.constraint_blocks[name]
-            coordinates = bound._engine._model.constraints[name].collect()
+            block = bound._engine._model.constraints[name]
+            coordinates = block.frame.collect()
             for offset in range(block.height):
                 at = block.start + offset
                 given = tables.matrix_block(at, at + 1)

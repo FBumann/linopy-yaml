@@ -46,12 +46,19 @@ from math_spec import (
     where_of,
 )
 
-from lpspec.errors import DataError, LaneError, LanguageError, lane_cannot_build_message, null_bounds_message
+from lpspec.errors import (
+    DataError,
+    LaneError,
+    LanguageError,
+    lane_cannot_build_message,
+    null_bounds_message,
+    unbound_lookup_message,
+)
 from lpspec.linopy import absence
 from lpspec.linopy._notes import note
 from lpspec.linopy.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
 from lpspec.linopy.operators import OPERATORS, operator_at, operator_grouped_sum
-from lpspec.linopy.where import as_linopy_mask, evaluate_where
+from lpspec.linopy.where import WhereContext, as_linopy_mask, evaluate_where
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -74,20 +81,18 @@ _ARITHMETIC_OPS: dict[str, Callable[[Any, Any], Any]] = {
 
 
 @dataclass(frozen=True)
-class EvaluationContext:
+class EvaluationContext(WhereContext):
     """Everything expression evaluation needs to resolve names.
 
-    Extend this rather than adding parameters to ``_eval_ast`` and every
-    operator-facing seam.
+    :class:`~lpspec.linopy.where.WhereContext` plus the schema and namespace,
+    so a predicate reads it directly. Extend this rather than adding
+    parameters to ``_eval_ast`` and every operator-facing seam.
     """
 
+    #: Narrowed from the base: a build always has the model it populates.
     model: linopy.Model
-    dataset: xr.Dataset
-    master_coords: dict[str, pd.Index]
-    schema: Buildable
-    ns: Namespace
-    #: dim -> {coordinate name: values as a DataArray over that dim}
-    dim_coords: dict[str, dict[str, xr.DataArray]] = field(default_factory=dict)
+    schema: Buildable = field(kw_only=True)
+    ns: Namespace = field(kw_only=True)
 
 
 def build_model(
@@ -103,12 +108,12 @@ def build_model(
     the objective as declared in *schema*.
     """
     ctx = EvaluationContext(
-        model,
         dataset,
         master_coords,
-        schema,
-        Namespace.of(schema),
+        model,
         dim_coords or {},
+        schema=schema,
+        ns=Namespace.of(schema),
     )
     _build_variables(ctx)
     _build_sos(ctx)
@@ -130,7 +135,7 @@ def _build_variables(ctx: EvaluationContext) -> None:
             upper = _resolve_bound(vdef.bounds.upper, ctx.dataset)
 
             where = where_of(vdef.where, ctx.ns, f"variable '{vname}'", self_variable=vname)
-            mask = evaluate_where(where, ctx.dataset, ctx.master_coords, ctx.model, ctx.dim_coords)
+            mask = evaluate_where(where, ctx)
 
             _check_bounds_are_defined(vname, vdef, ctx.dataset, mask)
 
@@ -224,14 +229,14 @@ def _refuse_quadratic(node: ComparisonNode) -> None:
     ``NotImplementedError`` (:data:`lpspec.api.LANES`).
     """
     if any(is_quadratic(side) for side in (node.left, node.right)):
-        raise LanguageError(lane_cannot_build_message('linopy', ['quadratic_constraint']))
+        raise LaneError(lane_cannot_build_message('linopy', ['quadratic_constraint']))
 
 
 def _build_constraints(ctx: EvaluationContext) -> None:
     for cname, cdef in ctx.schema.constraints.items():
         with note(f"while building constraint '{cname}'"):
             c_where = where_of(cdef.where, ctx.ns, f"constraint '{cname}'")
-            mask = evaluate_where(c_where, ctx.dataset, ctx.master_coords, ctx.model, ctx.dim_coords)
+            mask = evaluate_where(c_where, ctx)
 
             ast = expression_of(cdef.expression, ctx.schema, ctx.ns, f"constraint '{cname}'")
             if not isinstance(ast, ComparisonNode):
@@ -239,8 +244,8 @@ def _build_constraints(ctx: EvaluationContext) -> None:
                 raise LanguageError(msg)
 
             _refuse_quadratic(ast)
-            check_divisors_cover(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask, ctx.model)
-            check_constant_side_covers(f"constraint '{cname}'", ast, ctx.schema, ctx.dataset, mask)
+            check_divisors_cover(f"constraint '{cname}'", ast, ctx, mask)
+            check_constant_side_covers(f"constraint '{cname}'", ast, ctx, mask)
 
             lhs = _eval_ast(ast.left, ctx)
             rhs = _eval_ast(ast.right, ctx)
@@ -301,7 +306,7 @@ def _build_objective(ctx: EvaluationContext) -> None:
             msg = f'Expression must not contain a comparison operator. Got: {odef.expression!r}'
             raise LanguageError(msg)
 
-        check_divisors_cover('the objective', ast, ctx.schema, ctx.dataset, None, ctx.model)
+        check_divisors_cover('the objective', ast, ctx, None)
 
         expr = _eval_ast(ast, ctx, ceiling=2)
         _refuse_an_objective_constant(expr)
@@ -405,7 +410,7 @@ def _eval_ast(
     assert_never(node)
 
 
-def _call(node: FunctionCallNode, ctx: EvaluationContext, *, ceiling: int = 1) -> Any:
+def _call(node: FunctionCallNode, ctx: EvaluationContext, *, ceiling: int) -> Any:
     """One operator call, its operands and keywords evaluated.
 
     Two names in :data:`OPERATORS` do not reach it by that table. ``by=`` names
@@ -437,21 +442,21 @@ def _call(node: FunctionCallNode, ctx: EvaluationContext, *, ceiling: int = 1) -
     return OPERATORS[node.name](*args, **{k: _keyword(v, ctx, ceiling=ceiling) for k, v in node.kwargs.items()})
 
 
-def _keyword(value: Any, ctx: EvaluationContext, *, ceiling: int = 1) -> Any:
+def _keyword(value: Any, ctx: EvaluationContext, *, ceiling: int) -> Any:
     """One operator keyword, as the operator below takes it.
 
     A lookup arrives as its values over the dimension it is over, *named* for
     the dimension those values are labels of — the convention
     :func:`_checked_mappings` follows for the operators that take one
     positionally, and what lets a partition read a parameter declared over its
-    target.
+    target. A partition names one lookup, plural refused at load, so the first
+    array is the whole of it.
     """
     if isinstance(value, DimensionNode):
         return value.name
     if isinstance(value, EdgeNode):
         return value.policy
     if isinstance(value, LookupNode):
-        # a partition names one lookup, refused plural at load
         return _lookup_arrays(value, ctx)[0].rename(value.into[0])
     return _eval_ast(value, ctx, ceiling=ceiling)
 
@@ -468,10 +473,5 @@ def _lookup_arrays(by: LookupNode, ctx: EvaluationContext) -> tuple[Any, ...]:
         try:
             arrays.append(ctx.dim_coords[by.dimension][name])
         except KeyError:
-            msg = (
-                f"lookup '{name}' over dimension '{by.dimension}' has no bound values. "
-                f"Pass sources={{'{by.dimension}': <table with '{by.dimension}' and "
-                f"'{name}' columns>}}."
-            )
-            raise DataError(msg) from None
+            raise DataError(unbound_lookup_message(name, by.dimension)) from None
     return tuple(arrays)

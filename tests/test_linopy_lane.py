@@ -315,23 +315,24 @@ def _resolved(text, parameters=('p_max',), dimensions=('g',)):
 
 
 def test_no_where_is_a_scalar_true(gens):
-    mask = where.evaluate_where(None, *gens)
+    mask = where.evaluate_where(None, where.WhereContext(*gens))
     assert mask.ndim == 0
     assert bool(mask) is True
 
 
 def test_a_bare_parameter_name_is_an_existence_check(gens):
-    assert where.evaluate_where(_resolved('p_max'), *gens).all()
+    assert where.evaluate_where(_resolved('p_max'), where.WhereContext(*gens)).all()
 
 
 def test_a_comparison_masks_per_coordinate(gens):
-    mask = where.evaluate_where(_resolved('p_max > 0'), *gens)
+    mask = where.evaluate_where(_resolved('p_max > 0'), where.WhereContext(*gens))
     assert [bool(mask.sel(g=g)) for g in ('wind', 'solar', 'gas')] == [True, False, True]
 
 
 def test_a_dimension_comparison_masks_on_the_coordinate_itself():
     node = _resolved('t > 0', parameters=(), dimensions=('t',))
-    mask = where.evaluate_where(node, xr.Dataset(), {'t': pd.Index([0, 1, 2], name='t')})
+    ctx = where.WhereContext(xr.Dataset(), {'t': pd.Index([0, 1, 2], name='t')})
+    mask = where.evaluate_where(node, ctx)
     assert [bool(mask.sel(t=t)) for t in (0, 1, 2)] == [False, True, True]
 
 

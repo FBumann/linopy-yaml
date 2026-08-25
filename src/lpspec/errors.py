@@ -276,6 +276,18 @@ def no_index_source_message(dim: str) -> str:
     )
 
 
+def unbound_lookup_message(name: str, over: str) -> str:
+    """A declared lookup read with no bound values — one wording for its two readers.
+
+    A ``where`` predicate and an operator's ``by=`` both read the same store,
+    and the builder's note already says which declaration was reading.
+    """
+    return (
+        f"lookup '{name}' over dimension '{over}' has no bound values. "
+        f"Pass sources={{'{over}': <table with '{over}' and '{name}' columns>}}."
+    )
+
+
 def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     r"""``unknown <kind> '<name>'``, plus the near miss or the declared set.
 

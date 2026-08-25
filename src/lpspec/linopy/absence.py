@@ -15,7 +15,17 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ['coefficient', 'filled', 'vacated', 'variable_term']
+__all__ = ['coefficient', 'filled', 'present', 'unmapped', 'vacated', 'variable_term']
+
+
+def present(model: Any, name: str) -> Any:
+    """The coordinates variable *name* occupies — ``-1`` is linopy's own marker for an absent slot."""
+    return model.variables[name].labels != -1
+
+
+def unmapped(key: object) -> bool:
+    """Whether a lookup left this member in no group: ``None``, or the NaN that never equals itself."""
+    return key is None or key != key
 
 
 def variable_term(variable: Any, absence: str) -> Any:
@@ -40,17 +50,10 @@ def variable_term(variable: Any, absence: str) -> Any:
 def coefficient(parameter: Any) -> Any:
     """A parameter in a coefficient position, its uncovered slots at zero.
 
-    Where this lane answers linopy's v1 absence convention (linopy's
-    ``doc/design/convention.rst``): the answer is *positional* — one missing
-    row means zero in a coefficient, an error in ``bounds:``, false in a
-    ``where`` operand — so it lives at the read, not as one fill in
-    ``load_parameters`` that would be wrong for the other two. A tidy
-    parameter table is a compressed dense array, not a record of absence:
-    rows only for the live coordinates says the coefficient is zero elsewhere
-    (the data-binding rules). ``load_parameters`` reindexes to the master coordinates, so an
-    uncovered slot arrives as NaN — and v1 §5 refuses a NaN in a
-    user-supplied constant. Correct under the legacy convention too, so not
-    conditional on ``linopy.options['semantics']``.
+    ``load_parameters`` reindexes to the master coordinates, so an uncovered
+    slot arrives as NaN — and v1 §5 refuses a NaN in a user-supplied constant.
+    Correct under the legacy convention too, so not conditional on
+    ``linopy.options['semantics']``.
     """
     return parameter.fillna(0.0)
 

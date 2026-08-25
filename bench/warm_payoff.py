@@ -289,7 +289,7 @@ def _empty_cuts() -> dict[str, pl.DataFrame]:
 
 def _blocks(engine: PolarsEngine) -> tuple[dict[str, Any], list[str]]:
     """The engine's row blocks and the order they were numbered in."""
-    return dict(engine._model.constraint_blocks), [c.name for c in engine._model.program.constraints]
+    return dict(engine._model.constraints), [c.name for c in engine._model.program.constraints]
 
 
 def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
@@ -381,7 +381,7 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
             lower = cold.objective
             assert cold.primal is not None, 'the master is bounded and feasible at every capacity it proposes'
             capacity = pl.DataFrame(
-                {'generator': gens, 'value': engine._model.variable_blocks['cap'].share(cold.primal).to_list()}
+                {'generator': gens, 'value': engine._model.variables['cap'].share(cold.primal).to_list()}
             )
             if upper < float('inf') and upper - lower <= TOLERANCE * abs(upper):
                 converged = True
