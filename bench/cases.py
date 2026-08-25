@@ -621,6 +621,33 @@ def _ladder(
     )
 
 
+def _width_ladder(
+    entities: dict[str, int], snapshots: int, per_snapshot: int, multipliers: Sequence[int] = (1, 10, 100, 1000)
+) -> tuple[Shape, ...]:
+    """The size ladder's variable counts, grown sideways instead of forward.
+
+    Every other ladder here grows ``snapshot`` and holds the entity counts
+    fixed, which measures one of the two shapes a real model has: 8760 hours of
+    fifty units, and a day of five thousand. Only the first was measured, and
+    the omission is not neutral — `transport`'s bus x generator incidence is
+    20 x 100 at *every* rung of its size ladder, so the join the case exists to
+    expose never grows at all.
+
+    The multipliers are chosen so each rung matches the size ladder's width
+    exactly: ``w1`` is ``xs``, ``w1000`` is ``l``. Same variables, same rows,
+    different shape — which is what makes the two ladders readable against each
+    other rather than against themselves.
+    """
+    return tuple(
+        Shape(
+            f'w{m}',
+            {name: count * m for name, count in entities.items()} | {'snapshot': snapshots},
+            snapshots * per_snapshot * m,
+        )
+        for m in multipliers
+    )
+
+
 def _declaration_sweep(pool: int, snapshots: int, counts: Sequence[int]) -> tuple[Shape, ...]:
     """One model size, several declaration counts — rungs named ``n002``/``n008``/…
 
@@ -709,16 +736,22 @@ CASES: dict[str, Case] = {
     'transport': Case(
         name='transport',
         model=MODELS / 'transport' / 'model.yaml',
-        ladder=_ladder(
-            {'generator': 100, 'bus': 20, 'line': 40}, (70, 700, 7_000, 70_000, 280_000, 840_000), per_snapshot=140
+        ladder=(
+            *_ladder(
+                {'generator': 100, 'bus': 20, 'line': 40}, (70, 700, 7_000, 70_000, 280_000, 840_000), per_snapshot=140
+            ),
+            *_width_ladder({'generator': 100, 'bus': 20, 'line': 40}, snapshots=70, per_snapshot=140),
         ),
         write=_transport_data,
     ),
     'storage': Case(
         name='storage',
         model=MODELS / 'storage' / 'model.yaml',
-        ladder=_ladder(
-            {'generator': 40, 'store': 20}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100
+        ladder=(
+            *_ladder(
+                {'generator': 40, 'store': 20}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100
+            ),
+            *_width_ladder({'generator': 40, 'store': 20}, snapshots=100, per_snapshot=100),
         ),
         write=_storage_data,
     ),

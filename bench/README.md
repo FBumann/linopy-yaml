@@ -447,6 +447,21 @@ neither multi-threaded native code nor these rungs.
 maintainer to connect the repository to the CodSpeed GitHub app — until then the
 workflow runs and uploads nothing.
 
+## Two ladders
+
+Every case grows `snapshot` and holds its entity counts fixed. `transport` and
+`storage` also carry a **width ladder** — entity counts x N with the snapshots
+frozen — because one axis is not scaling and the omission was not neutral:
+`transport`'s bus x generator incidence is 20 x 100 at *every* rung of its size
+ladder, so the join the case exists to expose never grew.
+
+The multipliers are chosen so each width rung matches a size rung variable for
+variable: `w1` is `xs`, `w10` is `s`, `w100` is `m`, `w1000` is `l`. Same
+model, same size, different shape — which is what makes the two tables readable
+against each other, and what `test_a_width_rung_matches_its_size_twin...` holds
+them to. They render as their own table: sorting `w10` and `s` into one column
+would read as a single curve that is really two shapes.
+
 ## Adding a case
 
 Add `bench/models/<case>/model.yaml`, and a data generator and a ladder to

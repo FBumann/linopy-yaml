@@ -226,7 +226,12 @@ def _at_rung(rows: dict[Key, Row], case: str, size: str, sink: str, arms: tuple[
 
 _DENSITY_RUNG = re.compile(r'd\d+$')
 _DECLARATION_RUNG = re.compile(r'n\d+$')
-_SWEEPS = (_DENSITY_RUNG, _DECLARATION_RUNG)
+#: Rungs that grow the model sideways — entity counts x N, snapshots fixed.
+#: Its own axis rather than more rungs of the size ladder: `w10` and `s` carry
+#: the same variables and the same rows, so sorting them into one column would
+#: read as a single monotone curve that is really two shapes.
+_WIDTH_RUNG = re.compile(r'w\d+$')
+_SWEEPS = (_DENSITY_RUNG, _DECLARATION_RUNG, _WIDTH_RUNG)
 
 
 def _sweep_of(size: str) -> re.Pattern[str] | None:
@@ -428,7 +433,14 @@ def marginal(loop_rows: list[Row]) -> str:
     return '\n'.join(lines)
 
 
-def _sweep(rows: dict[Key, Row], rung: re.Pattern[str], heading: list[str], second: str, newest_first: bool) -> str:
+def _sweep(
+    rows: dict[Key, Row],
+    rung: re.Pattern[str],
+    heading: list[str],
+    second: str,
+    newest_first: bool,
+    sink: str = 'lp',
+) -> str:
     """A sweep table: one model size, one axis varied, every case that has it.
 
     Held at one model size, so this is the axis the size ladder cannot show.
@@ -436,7 +448,7 @@ def _sweep(rows: dict[Key, Row], rung: re.Pattern[str], heading: list[str], seco
     actually varies — and is read off the rung label, because the label is the
     only place the swept value survives into the results file.
     """
-    cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, 'lp', sweep=rung)]
+    cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, sink, sweep=rung)]
     if not cases:
         return ''
 
@@ -444,9 +456,9 @@ def _sweep(rows: dict[Key, Row], rung: re.Pattern[str], heading: list[str], seco
 
     def body() -> Iterable[tuple[list[str], Arms]]:
         for case in cases:
-            sizes = sizes_of(case, rows, 'lp', sweep=rung)
+            sizes = sizes_of(case, rows, sink, sweep=rung)
             for size in reversed(sizes) if newest_first else sorted(sizes):
-                at_rung, ref = _at_rung(rows, case, size, 'lp', arms)
+                at_rung, ref = _at_rung(rows, case, size, sink, arms)
                 if ref:
                     label = _live(ref) if second == 'live' else str(int(size[1:]))
                     yield [case, label, _si(ref['counts']['columns'])], at_rung
@@ -472,6 +484,32 @@ def density(rows: dict[Key, Row]) -> str:
         ],
         second='live',
         newest_first=True,
+    )
+
+
+def width(rows: dict[Key, Row]) -> str:
+    """The same variable counts as the size ladder, reached by widening.
+
+    Every rung here has a twin in the size ladder above — `w10` is `s`, `w1000`
+    is `l` — carrying the same variables and the same rows through a different
+    shape. A library whose cost tracks the row count answers the two the same
+    way; one that pays for joins, for mapping tables or for materialising a
+    product does not, and this is the only table that can tell them apart.
+    """
+    return _sweep(
+        rows,
+        _WIDTH_RUNG,
+        [
+            '### The width ladder',
+            '',
+            'Entity counts x N with the snapshot count held fixed, through the `highs` '
+            'sink. Each rung matches one of the size ladder rungs above variable for '
+            'variable — `w10` is `s`, `w1000` is `l` — so the pair reads as one model '
+            'at one size in two shapes.',
+        ],
+        second='entities x',
+        newest_first=False,
+        sink='highs',
     )
 
 
@@ -600,7 +638,7 @@ def main(argv: list[str] | None = None) -> int:
     fragments = {
         'results': '\n'.join(results),
         'marginal': marginal(loop),
-        'sweeps': '\n\n'.join(t for t in (density(rows), declarations(rows)) if t),
+        'sweeps': '\n\n'.join(t for t in (width(rows), density(rows), declarations(rows)) if t),
     }
     fragments = {name: body for name, body in fragments.items() if body.strip()}
 
