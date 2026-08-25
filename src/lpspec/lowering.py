@@ -351,18 +351,15 @@ class _Lowering:
         per-entity width, which the language holds to the two rules that make it
         mean one thing before this is reached.
 
-        ``by=`` partitions the window, which is language and not a plan node
-        here: refused after the dim rules, so a partition this lane would build
-        wrongly is answered by :func:`_partitioned_window_message` rather than by
-        a window that quietly spans two groups.
+        ``by=`` names the lookup the window stops at the edges of, and rides on
+        the node the way it rides on a translation — the dim rules have already
+        held it to one lookup over the walked dimension.
         """
         over_node = node.kwargs['over']
         if not isinstance(over_node, DimensionNode):
             raise LanguageError(f'{self.context}: sum_back(over=...) must name a dimension')
         within_node = node.kwargs['within']
         self._dim_rules(node)
-        if node.kwargs.get('by') is not None:
-            raise LanguageError(f'{self.context}: {_partitioned_window_message()}')
         operand = self.expr(node.args[0])
         wrap = _window_edge(node.kwargs.get('edge'), self.context)
         width: int | str
@@ -376,7 +373,7 @@ class _Lowering:
             width = int(within_node.value)
         else:
             raise LanguageError(f'{self.context}: {_window_width_message()}')
-        return plan.Window(operand, over_node.name, width=width, wrap=wrap)
+        return plan.Window(operand, over_node.name, width=width, wrap=wrap, partition=_partition_of(node))
 
     def shift(self, node: FunctionCallNode) -> plan.Expression:
         """``shift(x, over=d, offset=n)`` — the value at *t - offset* along one dim.
@@ -511,26 +508,6 @@ def _named_offset_edge_message(name: str) -> str:
         f'per-entity offset cannot say yet.\n'
         f"Add edge='wrap' for a cyclic translation, or edge=<number> for what the "
         f'vacated positions contribute.'
-    )
-
-
-def _partitioned_window_message() -> str:
-    """A window the language partitions and this repository does not build.
-
-    Ignoring the keyword is a wrong answer rather than a missing one: the window
-    then reaches across the seam between two groups and sums rows that are not
-    neighbours, and the model that makes builds, solves and reports optimal.
-
-    One refusal serves both lanes because both enter here — ``lpspec.linopy``'s
-    ``build`` runs this lowering pass before it evaluates anything, so the eager
-    operators never see a call this refuses.
-    """
-    return (
-        "sum_back(by=...) stops the window at each group's edge, and neither lane builds "
-        'that yet. It is refused rather than built as though the keyword were absent — a '
-        'window reaching across the seam sums rows that are not neighbours, and the model '
-        'that makes solves and reports optimal.\n'
-        '  Drop the by=, if the axis is one run of positions after all.'
     )
 
 

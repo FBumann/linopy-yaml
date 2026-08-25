@@ -107,7 +107,7 @@ per group below.
 | `sum(x, by=lk)` | the lookup attached as a coordinate, then `.groupby()`, reindexed onto the target dimension's declared labels — one key per lookup, so `by=[lk1, lk2]` groups by both at once |
 | `at(p, by=lk)` | `.sel({into: lookup})` — xarray's vectorised selection *is* the pullback, and one entry per lookup reads a tuple of labels at once |
 | `shift(x, over=t, offset=n)` | `.shift({t: n})`; `.roll({t: n})` under `edge: wrap`; a `.sel()` gather where the offset differs per entity or `by=` groups it |
-| `sum_back(x, over=t, within=w)` | a sum of `w` scalar gathers, each unreachable position contributing zero |
+| `sum_back(x, over=t, within=w)` | a sum of `w` scalar gathers, each unreachable position contributing zero; under `by=` each gather reads inside the group, so the window stops at its edge |
 
 | A `where:` | linopy |
 |---|---|

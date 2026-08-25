@@ -230,6 +230,12 @@ class Window(Expression):
     window differs per entity — a minimum up time, a rolling budget, a delivery
     horizon. A named width may not depend on the dimension being summed over.
 
+    ``partition`` names a lookup over that dimension, and the window then stops
+    at each group's edge: a representative day, a season, a scenario's own run
+    of hours. Positions are counted inside the group rather than along the
+    axis, so a coordinate the lookup places nowhere reaches nothing at all —
+    not even itself.
+
     One node rather than a sum of ``Translate``s, because the number of terms
     would then be read from data and the plan's *shape* is fixed before any
     data is bound. What data supplies is the mask's cardinality, exactly as it
@@ -240,6 +246,7 @@ class Window(Expression):
     dimension: str
     width: int | str
     wrap: bool = False
+    partition: str | None = None
 
 
 def children(expression: Expression) -> tuple[Expression, ...]:

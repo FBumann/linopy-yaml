@@ -16,11 +16,11 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import DimensionError, LanguageError
-from lpspec.lowering import _Lowering, _partitioned_window_message
+from lpspec.lowering import _Lowering
 from lpspec.relational.plan import Window
-from tests.conftest import resolved, schema_of
+from tests.conftest import relation, resolved, schema_of
 from tests.differential import differential
-from tests.oracle import lpspec_linopy, pd  # skips the module without the [linopy] extra
+from tests.oracle import pd
 
 MIN_UP = {'slow': 3, 'fast': 1}
 UNITS, PERIODS = list(MIN_UP), [0, 1, 2, 3, 4]
@@ -196,34 +196,117 @@ def test_a_per_entity_window_reaching_nothing_is_that_entitys_row_alone():
         assert run.oracle == pytest.approx(10.0), 'take[narrow, 1] is capped by nothing, and no other take is free'
 
 
-def test_a_partitioned_window_is_refused_in_the_same_words_on_both_lanes():
-    """``by=`` is language this repository does not build, and says so.
+#: Representative days are separate samples rather than consecutive hours, so a
+#: unit started at the last hour of one must not be held on into the next. The
+#: start is forced *inside* a day, which is what the seam is read at.
+DAY_WINDOW = {
+    'description': 'A minimum up time that stops at each representative day.',
+    'dimensions': {'t': {'dtype': 'int'}, 'day': {'dtype': 'str'}},
+    'lookups': {'day_of': {'over': 't', 'into': 'day'}},
+    'parameters': {'must_start': {'dims': ['t']}},
+    'variables': {
+        'started': {'foreach': ['t'], 'domain': 'binary'},
+        'on': {'foreach': ['t'], 'domain': 'binary'},
+    },
+    'constraints': {
+        'starts_when_told': {'foreach': ['t'], 'expression': 'started >= must_start'},
+        'stays_up_inside_its_day': {'foreach': ['t'], 'expression': 'WINDOW <= on'},
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(on)'},
+}
 
-    Unread it is a wrong answer rather than a missing one: the window spans the
-    seam between two groups and sums rows that are not neighbours. Measured on
-    the language it arrived in, before this refusal existed: the relational lane
-    built the window across the seam and solved and reported optimal, and the
-    eager lane answered the same file with a `TypeError` out of a function
-    signature.
+DAYS = ['early'] * 3 + ['late'] * 3
 
-    Both lanes are asked because the answer is one sentence from one place —
-    `lpspec.linopy.build` lowers before it evaluates, so the eager operators
-    never see the call at all.
+
+def day_window(window: str, *, starts: list[float], days: list[str | None] = DAYS) -> tuple[dict, dict]:
+    """`DAY_WINDOW` carrying *window*, and the sources that force *starts*."""
+    model = deepcopy(DAY_WINDOW)
+    model['constraints']['stays_up_inside_its_day']['expression'] = f'{window} <= on'
+    sources = {
+        't': pd.Index(range(6), name='t'),
+        'day': pd.Index(['early', 'late'], name='day'),
+        'day_of': relation('t', 'day', range(6), days),
+        'must_start': pd.Series(starts, index=pd.Index(range(6), name='t')),
+    }
+    return model, sources
+
+
+def _on(result) -> list[float]:
+    """`on` in coordinate order, which is what a window's reach is about."""
+    return result.primal('on').sort('t')['value'].to_list()
+
+
+def test_a_window_stops_at_the_edge_of_the_group_it_is_partitioned_by():
+    """The seam is where the axis stops being one run of positions.
+
+    The start sits at the last hour of the first day, so an unpartitioned
+    window of three would hold the unit on there and at the first two hours of
+    the *next* day — hours that follow it in the axis and not in time. Inside
+    its own group the window reaches back over positions that are its
+    neighbours, and only that hour is held.
     """
-    model = up_time_model(None)
-    model['dimensions']['day'] = {'dtype': 'str', 'values': ['early', 'late']}
-    model['lookups'] = {'day_of': {'over': 't', 'into': 'day'}}
-    model['constraints']['stays_up_its_own_time']['expression'] = (
-        'sum_back(started, over=t, within=min_up, by=day_of) <= on'
-    )
-    sources = UP_TIME_DATA | {'day_of': pd.DataFrame({'t': PERIODS, 'day': ['early'] * 2 + ['late'] * 3})}
+    model, sources = day_window('sum_back(started, over=t, within=3, by=day_of)', starts=[0, 0, 1, 0, 0, 0])
+    with differential(model, sources) as run:
+        assert _on(run.result) == [0.0, 0.0, 1.0, 0.0, 0.0, 0.0], (
+            'the start holds its own hour on, and no hour of the day after it'
+        )
+        assert run.oracle == pytest.approx(1.0), 'one hour held on, where the axis-wide window holds three'
 
-    with pytest.raises(LanguageError) as relational:
-        lps.build(model, sources)
-    with pytest.raises(LanguageError) as eager:
-        lpspec_linopy.build(model, sources)
-    for lane, refusal in (('relational', relational), ('eager', eager)):
-        assert _partitioned_window_message() in str(refusal.value), f'the {lane} lane owes the shared wording'
+
+def test_a_partitioned_window_wraps_inside_its_own_group():
+    """``edge='wrap'`` closes on the group's size, not the axis's.
+
+    A representative day stands for a cycle of its own, so the window at its
+    first hour comes round to its last — and stops there. Three hours in the
+    group and a width of three is every hour of it, which is what makes the
+    contrast with the acyclic run above visible in one number.
+    """
+    model, sources = day_window(
+        "sum_back(started, over=t, within=3, by=day_of, edge='wrap')", starts=[0, 0, 1, 0, 0, 0]
+    )
+    with differential(model, sources) as run:
+        assert _on(run.result) == [1.0, 1.0, 1.0, 0.0, 0.0, 0.0], (
+            "the start reaches every hour of its own day and none of the other day's"
+        )
+        assert run.oracle == pytest.approx(3.0), 'every hour of the started day, and no hour of the other'
+
+
+def test_a_window_width_may_be_read_per_group():
+    """``within=`` over the dimension the partition groups into.
+
+    No frame carries a column of `day`: what travels with an hour is the
+    lookup's own value, so the width is read under the lookup's name and each
+    group is reached by its own. The two days differ, which is what a single
+    width cannot reproduce.
+    """
+    model, sources = day_window('sum_back(started, over=t, within=up, by=day_of)', starts=[0, 1, 0, 1, 0, 0])
+    model['parameters']['up'] = {'dims': ['day'], 'dtype': 'int'}
+    sources['up'] = pd.Series([1, 3], index=pd.Index(['early', 'late'], name='day'))
+    with differential(model, sources) as run:
+        assert _on(run.result) == [0.0, 1.0, 0.0, 1.0, 1.0, 1.0], (
+            'the early day holds for one hour and the late day for three, each its own width'
+        )
+        assert run.oracle == pytest.approx(4.0), 'one hour held for the early day and three for the late one'
+
+
+def test_an_hour_the_lookup_places_in_no_day_reaches_nothing():
+    """A coordinate in no group is the one way a window loses a row.
+
+    Unpartitioned a window always contains the position it sits at, so every
+    row is built. A partitioned one reaches inside a group, and an hour that
+    belongs to none reaches nothing at all — not even itself — so its row has
+    no terms and is not built, the reading a partial lookup gets everywhere
+    else.
+    """
+    model, sources = day_window(
+        'sum_back(started, over=t, within=3, by=day_of)',
+        starts=[0, 0, 1, 0, 0, 0],
+        days=[*DAYS[:5], None],
+    )
+    with differential(model, sources) as run:
+        assert run.engine.diagnostics().rows == 11, (
+            'five window rows — one per hour in a day, none for the hour in none — and six starts_when_told rows'
+        )
 
 
 @pytest.mark.parametrize('width', ['0', '1.5', '-2'], ids=['zero', 'fractional', 'negative'])
@@ -267,6 +350,7 @@ def test_the_window_lowers_to_one_node():
     plan = _Lowering(schema, 'k').expr(resolved('sum_back(started, over=t, within=min_up)', schema))
     assert isinstance(plan, Window), 'a window is its own plan node'
     assert plan.width == 'min_up', 'the width travels as the parameter name, resolved at bind'
+    assert plan.partition is None, 'and no partition where the call names no lookup'
 
 
 @pytest.mark.parametrize(

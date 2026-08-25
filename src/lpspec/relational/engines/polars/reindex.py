@@ -43,6 +43,25 @@ _POS = '__pos in group__'
 _SPAN = '__group size__'
 
 
+def _walked(compiler: PolarsCompiler, dimension: str, partition: str | None) -> pl.LazyFrame:
+    """*dimension*'s table, ranked inside each group where the walk is partitioned.
+
+    Unpartitioned, the axis-wide ``ord`` is the position and there is no span
+    for a wrap to close on. Under a lookup both are read per group, so a
+    neighbour is decided by position within *that* group — and a coordinate the
+    map places nowhere is not in this table at all and joins to nothing, which
+    is what it reaches everywhere else.
+    """
+    table = compiler.data.dimensions[dimension]
+    if partition is None:
+        return table
+    group = pl.col(partition)
+    return compiler.partitioned(dimension, partition).with_columns(
+        (pl.col('ord').rank('ordinal').over(group) - 1).cast(pl.Int64).alias(_POS),
+        pl.len().over(group).cast(pl.Int64).alias(_SPAN),
+    )
+
+
 def window_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Window, context: str) -> TermFragment:
     """A one-to-many remap of the dim through its ord.
 
@@ -58,19 +77,29 @@ def window_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Window, c
 
     Unlike a shift this vacates nothing: the window at the first position
     is short rather than empty, since it always contains that position
-    itself. So an operand with no presence gains none.
+    itself. So an operand with no presence gains none — unless a partition
+    makes one, a coordinate in no group reaching nothing at all.
+
+    Under ``by=`` the walk is inside the group: positions are the within-group
+    rank rather than the axis-wide ``ord``, and a wrap closes on the group's
+    own size, exactly as :func:`translate_fragment` walks a partitioned shift.
     """
     if s.dimension not in p.dims:
         refuse_a_fragment_without_the_dims(p, [s.dimension], context, f'sum_back(over={s.dimension!r})')
     card = compiler.data.cardinality[s.dimension]
-    table = compiler.data.dimensions[s.dimension]
-    incoming = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_IN))
-    outgoing = table.select(pl.col('val').alias(s.dimension), pl.col('ord').alias(_ORD_OUT))
+    table = _walked(compiler, s.dimension, s.partition)
+    position = _POS if s.partition is not None else 'ord'
+    group = [pl.col(s.partition)] if s.partition is not None else []
+    incoming = table.select(
+        pl.col('val').alias(s.dimension),
+        pl.col(position).alias(_ORD_IN),
+        *group,
+        *([pl.col(_SPAN)] if s.partition is not None else []),
+    )
+    outgoing = table.select(pl.col('val').alias(s.dimension), pl.col(position).alias(_ORD_OUT), *group)
 
     width_name = s.width if isinstance(s.width, str) else None
-    width_dims: tuple[str, ...] = ()
     if width_name is not None:
-        width_dims = tuple(compiler.program.parameter(width_name).dims)
         widest = int(compiler.data.parameters[width_name].select(pl.col('value').max()).collect().item() or 0)
     else:
         assert not isinstance(s.width, str)
@@ -79,20 +108,18 @@ def window_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Window, c
 
     moved = pl.col(_ORD_IN) + pl.col(_LAG)
     if s.wrap:
-        moved = moved % card
+        moved = moved % (pl.col(_SPAN) if s.partition is not None else pl.lit(card))
 
     def remap(source: pl.LazyFrame, carried: list[str], source_dims: tuple[str, ...] | None = None) -> pl.LazyFrame:
         kept = [d for d in (source_dims if source_dims is not None else p.dims) if d != s.dimension]
         walked = source.join(incoming, on=s.dimension, how='inner').drop(s.dimension).join(lags, how='cross')
         if width_name is not None:
-            walked = walked.join(
-                compiler.data.parameters[width_name].select(*width_dims, pl.col('value').cast(pl.Int64).alias(_WIDTH)),
-                on=list(width_dims),
-                how='inner',
-            ).filter(pl.col(_LAG) < pl.col(_WIDTH))
+            widths, keys = _named_amount(compiler, s.dimension, s.partition, width_name, _WIDTH)
+            walked = walked.join(widths, on=keys, how='inner').filter(pl.col(_LAG) < pl.col(_WIDTH))
+        landing = [_ORD_OUT, s.partition] if s.partition is not None else [_ORD_OUT]
         return (
             walked.with_columns(moved.alias(_ORD_OUT))
-            .join(outgoing, on=_ORD_OUT, how='inner')
+            .join(outgoing, on=landing, how='inner')
             .select(*kept, s.dimension, *carried)
         )
 
@@ -103,6 +130,11 @@ def window_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Window, c
         return Presence(remap(source, [], keyed_by).unique(), keyed_by)
 
     frame = remap(p.frame, p.carried)
+    if not p.presences and s.partition is not None:
+        # A coordinate the map places nowhere is in no group, so the window
+        # reaches nothing for it — including itself, which is what makes this
+        # the one way a window loses a row it would otherwise keep.
+        return TermFragment(p.dims, frame, p.kind, presences=(Presence(_grouped(compiler, s), (s.dimension,)),))
     return TermFragment(p.dims, frame, p.kind, presences=tuple(travelled(x) for x in p.presences))
 
 
@@ -127,19 +159,7 @@ def translate_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Transl
         refuse_a_fragment_without_the_dims(p, [s.dimension], context, f'shift(over={s.dimension!r})')
     card = compiler.data.cardinality[s.dimension]
     others = [d for d in p.dims if d != s.dimension]
-    table = compiler.data.dimensions[s.dimension]
-    if s.partition is not None:
-        # Inside a group the neighbour is decided by position within *that*
-        # group, so both joins read a rank rather than the axis-wide `ord`
-        # and a wrap closes on the group's own size. A coordinate the map
-        # places nowhere is not in this table at all and joins to nothing,
-        # which is what it reaches everywhere else.
-        table = compiler.partitioned(s.dimension, s.partition)
-        grouped = pl.col(s.partition)
-        table = table.with_columns(
-            (pl.col('ord').rank('ordinal').over(grouped) - 1).cast(pl.Int64).alias(_POS),
-            pl.len().over(grouped).cast(pl.Int64).alias(_SPAN),
-        )
+    table = _walked(compiler, s.dimension, s.partition)
     position = _POS if s.partition is not None else 'ord'
     group_cols = [pl.col(s.partition)] if s.partition is not None else []
     incoming = table.select(
@@ -174,7 +194,7 @@ def translate_fragment(compiler: PolarsCompiler, p: TermFragment, s: plan.Transl
             # A per-entity offset is one more equi-join, on keys the frame
             # already carries — the same locality class as a literal one,
             # since the reach is still a lookup on the dim table.
-            offsets, keys = _offsets(compiler, s)
+            offsets, keys = _named_amount(compiler, s.dimension, s.partition, str(s.offset), _OFFSET)
             walked = walked.join(offsets, on=keys, how='inner')
         landing = [_ORD_OUT, s.partition] if s.partition is not None else [_ORD_OUT]
         return (
@@ -265,40 +285,41 @@ def offset_dims(compiler: PolarsCompiler, s: plan.Translate) -> tuple[str, ...]:
     """
     if not isinstance(s.offset, str):
         return ()
-    grouped = _grouped_into(compiler, s)
+    grouped = _grouped_into(compiler, s.dimension, s.partition, s.offset)
     return tuple(d for d in compiler.program.parameter(s.offset).dims if d != grouped)
 
 
-def _grouped_into(compiler: PolarsCompiler, s: plan.Translate) -> str | None:
-    """The dimension the partition groups into, where the offset is over it.
+def _grouped_into(compiler: PolarsCompiler, dimension: str, partition: str | None, name: str | None) -> str | None:
+    """The dimension the partition groups into, where the named amount is over it.
 
-    ``None`` for every other shift — a numeric offset, an unpartitioned
+    ``None`` for every other walk — a numeric offset or width, an unpartitioned
     one, or one over dims the operand carries itself.
     """
-    if s.partition is None or not isinstance(s.offset, str):
+    if partition is None or name is None:
         return None
-    targeted = {lk.name: lk.target for lk in compiler.program.dimension(s.dimension).lookups}
-    target = targeted[s.partition]
-    return target if target in compiler.program.parameter(s.offset).dims else None
+    targeted = {lk.name: lk.target for lk in compiler.program.dimension(dimension).lookups}
+    target = targeted[partition]
+    return target if target in compiler.program.parameter(name).dims else None
 
 
-def _offsets(compiler: PolarsCompiler, s: plan.Translate) -> tuple[pl.LazyFrame, list[str]]:
-    """A named offset's values and the keys a frame reads them by.
+def _named_amount(
+    compiler: PolarsCompiler, dimension: str, partition: str | None, name: str, alias: str
+) -> tuple[pl.LazyFrame, list[str]]:
+    """A named offset's or width's values, and the keys a frame reads them by.
 
-    A **per-group** offset is declared over the dimension the partition
-    groups into, and no frame carries a column of it: what travels with a
-    coordinate is the lookup's own value, so the offset is read under the
-    lookup's name and one equi-join lands each group's own lag (#1161).
-    A coordinate the map places nowhere is in no partitioned table and
-    joins to nothing, which is what it reaches everywhere else.
+    A **per-group** amount is declared over the dimension the partition groups
+    into, and no frame carries a column of it: what travels with a coordinate is
+    the lookup's own value, so the amount is read under the lookup's name and one
+    equi-join lands each group its own (#1161). A coordinate the map places
+    nowhere is in no partitioned table and joins to nothing, which is what it
+    reaches everywhere else.
     """
-    assert isinstance(s.offset, str)
-    grouped = _grouped_into(compiler, s)
-    dims = compiler.program.parameter(s.offset).dims
-    keys = [str(s.partition) if d == grouped else d for d in dims]
-    frame = compiler.data.parameters[s.offset].select(
+    grouped = _grouped_into(compiler, dimension, partition, name)
+    dims = compiler.program.parameter(name).dims
+    keys = [str(partition) if d == grouped else d for d in dims]
+    frame = compiler.data.parameters[name].select(
         *(pl.col(d).alias(key) for d, key in zip(dims, keys, strict=True)),
-        pl.col('value').cast(pl.Int64).alias(_OFFSET),
+        pl.col('value').cast(pl.Int64).alias(alias),
     )
     return frame, keys
 
@@ -333,7 +354,7 @@ def _edge(compiler: PolarsCompiler, s: plan.Translate, card: int, *, vacated: bo
         position, span = pl.col('ord'), pl.lit(card, dtype=pl.Int64)
     dims = offset_dims(compiler, s)
     if isinstance(s.offset, str):
-        offsets, keys = _offsets(compiler, s)
+        offsets, keys = _named_amount(compiler, s.dimension, s.partition, str(s.offset), _OFFSET)
         on = [key for key in keys if key == s.partition]
         table = table.join(offsets, on=on, how='inner') if on else table.join(offsets, how='cross')
         offset = pl.col(_OFFSET)
@@ -345,12 +366,12 @@ def _edge(compiler: PolarsCompiler, s: plan.Translate, card: int, *, vacated: bo
     return table.filter(outside if vacated else ~outside).select(pl.col('val').alias(s.dimension), *dims)
 
 
-def _grouped(compiler: PolarsCompiler, s: plan.Translate) -> pl.LazyFrame:
+def _grouped(compiler: PolarsCompiler, s: plan.Translate | plan.Window) -> pl.LazyFrame:
     """The labels the partition lookup actually places in a group.
 
-    The rest belong to none, so a translation reaches nothing for them and
-    their rows are not built — the reading ``sum(by=)`` gives a label the
-    map has no row for, and the one an edge policy cannot speak about.
+    The rest belong to none, so a partitioned walk reaches nothing for them and
+    their rows are not built — the reading ``sum(by=)`` gives a label the map
+    has no row for, and the one an edge policy cannot speak about.
     """
     return compiler.partitioned(s.dimension, str(s.partition)).select(pl.col('val').alias(s.dimension))
 
