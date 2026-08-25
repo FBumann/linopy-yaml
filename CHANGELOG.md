@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.255](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.254...v0.0.1-alpha.255) (2026-08-25)
+
+
+### Features
+
+* **api:** the types the verbs return can be named ([#1262](https://github.com/fluxopt/lpspec/issues/1262)) ([1b39969](https://github.com/fluxopt/lpspec/commit/1b399695eb54098b3c17db49b636acafdec3862a))
+
 ## [0.0.1-alpha.254](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.253...v0.0.1-alpha.254) (2026-08-25)
 
 
