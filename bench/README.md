@@ -418,6 +418,7 @@ every consumer whichever of the two the case has.
 | `conftest.py` | selection flags, the ragged parametrization, the data fixture, the parity gate |
 | `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
+| `tidy.py` | the same records as one long CSV — a row per number, dims in columns, no nulls. What a plot nobody planned for is built from |
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |
 | `warm_payoff.py` / `expansion/` | does a basis carried across a rebuild pay? A scaled Benders, its master solved cold and warm at every rebuild |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |

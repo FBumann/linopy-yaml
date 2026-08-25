@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from bench import conftest as harness
-from bench import floor, plot, report, warm_payoff
+from bench import floor, plot, report, tidy, warm_payoff
 from bench.arms.lpspec import _tables, checked_sources
 from bench.cases import CASES, Shape
 from bench.conftest import (
@@ -150,6 +150,66 @@ def _loop(case: str, arm: str, width: int) -> dict[str, Any]:
         'steady_build_seconds': 0.05,
         'counts': {'columns': width, 'rows': 10, 'nonzeros': width},
     }
+
+
+# ---------------------------------------------------------------------------
+# the long table: a row per number, and no holes (bench/tidy.py)
+# ---------------------------------------------------------------------------
+
+
+def _long(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return list(tidy.measurements(records, run='r'))
+
+
+def test_a_timing_record_fans_into_one_row_per_metric() -> None:
+    rows = _long([_timing('lpspec')])
+    assert [r['metric'] for r in rows] == [
+        'wall_seconds',
+        'peak_rss_bytes',
+        'iqr_seconds',
+        'median_seconds',
+        'rounds',
+        'live_fraction',
+        'columns',
+        'rows',
+        'nonzeros',
+    ], 'every number the record carries becomes a row, counts last, memray absent because it was not measured'
+    assert {r['case'] for r in rows} == {'dispatch'}, 'the dims repeat down the rows — that is what long form is'
+    assert {r['arm'] for r in rows} == {'lpspec'}
+
+
+def test_a_number_the_run_did_not_produce_is_an_absent_row() -> None:
+    """A hole is refused here for the same reason the language refuses one in a
+    value column: a null would have to mean *something*, and nothing it could
+    mean is true of a measurement that was never taken."""
+    rows = _long([_timing('lpspec', peak_rss_bytes=None, counts={'columns': 10, 'rows': 1, 'nonzeros': None})])
+    assert [r['metric'] for r in rows].count('peak_rss_bytes') == 0, 'no isolate=True, so no rss row at all'
+    assert [r['metric'] for r in rows].count('nonzeros') == 0, 'an arm that cannot count nonzeros writes none'
+    assert all(r['value'] is not None for r in rows), 'every value column is complete'
+
+
+def test_the_rebuild_loop_becomes_two_phases() -> None:
+    rows = [r for r in _long([_loop('dispatch', 'lpspec', 1200)]) if r['metric'] == 'wall_seconds']
+    assert [(r['phase'], r['value']) for r in rows] == [('first', 0.1), ('steady', 0.05)], (
+        'first and steady answer different questions, so they are two rows and never one'
+    )
+    assert {r['sink'] for r in rows} == {''}, 'the rebuild loop has no sink — it stops before one'
+
+
+def test_the_long_table_and_the_published_table_agree_on_a_cell() -> None:
+    """The two renderings read one extraction. If they could disagree, the long
+    form would be a second source of truth rather than a second view."""
+    record = _timing('lpspec', wall_seconds=0.5)
+    wall = next(r['value'] for r in _long([record]) if r['metric'] == 'wall_seconds')
+    assert f'{wall:.2f}' in report.table('dispatch', report.best([record]), 'lp')
+
+
+def test_the_fingerprint_is_long_too() -> None:
+    run = {'record': 'run', 'python': '3.12.0', 'versions': {'polars': '1.0', 'gurobipy': None}, 'commits': {}}
+    rows = list(tidy.fingerprint([run], run='r'))
+    assert [(r['key'], r['value']) for r in rows] == [('python', '3.12.0'), ('version:polars', '1.0')], (
+        'a package the environment does not have is absent, not blank — blank would read as a version'
+    )
 
 
 #: Renders the marginal table for three cases of identical width. Run twice
