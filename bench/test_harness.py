@@ -258,7 +258,7 @@ def test_no_budget_measures_everything() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'lpspec'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
     """Every arm but `lpspec` is a model somebody typed twice.
