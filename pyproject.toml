@@ -335,6 +335,10 @@ floors = { features = ["floors"], no-default-feature = true }
 # rungs — stays there and is invoked with `pixi run -e <env> …`.
 [tool.pixi.tasks]
 test = { cmd = "pytest -q -n auto", description = "The suite, across cores" }
+# `testpaths` is `tests`, so the line above says nothing about `bench/`. Its own
+# task rather than a wider `testpaths`: these are the harness's *own* tests, they
+# want no plugin the default environment lacks, and they take nine seconds.
+test-bench = { cmd = "pytest bench/test_harness.py -q", description = "The harness measures what it says it measures" }
 lint = { cmd = "ruff check .", description = "Lint" }
 format = { cmd = "ruff format .", description = "Format in place" }
 format-check = { cmd = "ruff format --check .", description = "Formatting has not drifted" }
@@ -372,11 +376,11 @@ docs-build = { cmd = "mkdocs build --strict", description = "The site, built the
 ladder = { cmd = "pytest bench --benchmark-memory --sizes xs s m l --benchmark-json=bench/results/latest.json", description = "The size ladder" }
 density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --skip-gate --benchmark-json=bench/results/density.json", description = "The density sweep" }
 declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --skip-gate --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep" }
-report = { cmd = "python -m bench.report bench/results/latest.json bench/results/density.json bench/results/declarations.json", description = "All three results files as the published markdown" }
+report = { cmd = "python -m bench.report bench/results", description = "Every results file in the directory, as the published markdown" }
 plot = { cmd = "python -m bench.plot", description = "The figures, and the chart page's numbers" }
 # The same three files as `report`, rendered with no opinions: a row per number,
 # so a question the renderers do not answer is a filter rather than a patch.
-table = { cmd = "python -m bench.tidy bench/results/latest.json bench/results/density.json bench/results/declarations.json > bench/results/measurements.csv && python -m bench.tidy bench/results/latest.json bench/results/density.json bench/results/declarations.json --runs > bench/results/runs.csv", description = "Every measurement as one long CSV, and the fingerprint beside it" }
+table = { cmd = "python -m bench.tidy bench/results > bench/results/measurements.csv && python -m bench.tidy bench/results --runs > bench/results/runs.csv", description = "Every measurement as one long CSV, and the fingerprint beside it" }
 
 [tool.pixi.feature.bench.tasks.refresh]
 description = "Re-measure the published ladder and rewrite the tables and the chart page"

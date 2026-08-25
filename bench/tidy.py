@@ -134,12 +134,14 @@ def write(rows: Iterable[dict[str, Any]], header: tuple[str, ...], out: Any) -> 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog='python -m bench.tidy')
-    parser.add_argument('files', nargs='+', type=Path, help='result files — the same ones bench.report takes')
+    parser.add_argument(
+        'files', nargs='*', type=Path, default=[Path('bench/results')], help='result files, or a directory of them'
+    )
     parser.add_argument('--runs', action='store_true', help='the fingerprint table instead of the measurements')
     args = parser.parse_args(argv)
 
     rows: list[dict[str, Any]] = []
-    for path in args.files:
+    for path in [f for target in args.files for f in bench_results.files(target)]:
         records = list(bench_results.records(path))
         run = path.stem
         rows += list(fingerprint(records, run) if args.runs else measurements(records, run))

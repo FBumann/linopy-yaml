@@ -161,6 +161,23 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
         }
 
 
+def files(target: Path) -> list[Path]:
+    """Every result file under *target*, or *target* itself when it is one.
+
+    The readers took a written-out list of three names, two of which no run had
+    ever produced — so `pixi run report` raised ``FileNotFoundError`` on a clean
+    checkout, and the list could not be right both before a refresh and after
+    it. A directory cannot go stale.
+
+    ``.jsonl`` first and pytest-benchmark's ``.json`` after: the historic files
+    are the older measurements, and the readers collapse repeats by minimum in
+    the order they are given.
+    """
+    if target.is_dir():
+        return sorted(target.glob('*.jsonl')) + sorted(target.glob('*.json'))
+    return [target]
+
+
 def load(*paths: Path) -> list[dict[str, Any]]:
     """Flatten several result files, newest last — the readers take as many as given."""
-    return [r for p in paths for r in records(p)]
+    return [r for p in paths for f in files(p) for r in records(f)]

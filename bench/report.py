@@ -449,14 +449,16 @@ def main(argv: list[str] | None = None) -> int:
     because a chart nobody can check is decoration.
     """
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('results', type=Path, nargs='*', default=[Path('bench/results/latest.json')])
+    ap.add_argument(
+        'results', type=Path, nargs='*', default=[Path('bench/results')], help='result files, or a directory of them'
+    )
     opts = ap.parse_args(argv)
 
     run: dict[str, Any] = {}
     gates: list[Row] = []
     timings: list[Row] = []
     loop: list[Row] = []
-    for path in opts.results:
+    for path in [f for target in opts.results for f in bench_results.files(target)]:
         one_run, one_gates, one_timings, one_loop = load(path)
         run = run or one_run
         gates += one_gates

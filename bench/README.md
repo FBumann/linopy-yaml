@@ -1,9 +1,17 @@
 # The performance harness
 
-Not shipped in the wheel, not imported by `lpspec`, not run in CI. It exists so
-that [docs/about/benchmarks.md](../docs/about/benchmarks.md) has a *provenance* — the last
-set of published numbers came from a `scratch/` script that was deleted, and a
-claim nobody can re-run is a claim with a shelf life.
+Not shipped in the wheel and not imported by `lpspec`. It exists so that
+[docs/about/benchmarks.md](../docs/about/benchmarks.md) has a *provenance* — the last set of
+published numbers came from a `scratch/` script that was deleted, and a claim
+nobody can re-run is a claim with a shelf life.
+
+**No measurement is taken in CI, but this directory is checked there.**
+`pixi run test-bench` runs `test_harness.py` in the default environment on
+every PR, and `codspeed.yml` runs `test_ladder.py` under its own instrument.
+That gate is new because it was missing: four entry points here were broken by
+`src/` refactors inside one week — a renamed parquet column (#1185) took
+`bench/floor.py` down, a class that moved (#1245) took both profilers — and
+every one of them was already covered by a test that nothing ran.
 
 It is **one pytest suite** (`bench/test_ladder.py`), and every question below is
 a selection out of it: `--cases / --sizes / --arms / --sinks`, plus `-k`.
@@ -33,9 +41,16 @@ whose fingerprint no longer describes it.
 
 The committed `results/*.jsonl` are the provenance of the tables
 `docs/about/benchmarks.md` publishes *today*, written by the pre-pytest harness. The
-readers no longer parse them — a full ladder run replaces them with `.json`,
-and until someone takes one on an idle machine the published numbers stand on
-files nothing in this directory can still read.
+readers still parse them — `results.records` takes both shapes — and a full
+ladder run adds its `.json` beside them rather than replacing them. Until
+someone takes one on an idle machine the published numbers stand on those
+files.
+
+**The readers take the directory, not a list of names.** `bench.report` and
+`bench.tidy` default to `bench/results` and read every file in it, `.jsonl`
+first. They used to name three files, two of which no run had ever written, so
+`pixi run report` failed on a clean checkout — and no written-out list can be
+right both before a refresh and after one.
 
 A bare `pytest bench` is **not** the committed ladder: `--sizes` defaults to
 `xs s m`, so it stops below the rung every interesting claim lives at.
