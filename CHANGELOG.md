@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.253](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.252...v0.0.1-alpha.253) (2026-08-25)
+
+
+### Refactoring
+
+* **architecture:** each layer holds what its docstring says it holds ([#1257](https://github.com/fluxopt/lpspec/issues/1257)) ([d3fa90a](https://github.com/fluxopt/lpspec/commit/d3fa90a09c63c7749103608a497e04b3a54d6d90))
+
 ## [0.0.1-alpha.252](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.251...v0.0.1-alpha.252) (2026-08-24)
 
 
