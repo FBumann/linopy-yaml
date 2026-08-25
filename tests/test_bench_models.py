@@ -1,6 +1,8 @@
 """The benchmark corpus still loads, and still builds.
 
-`bench/` has its own models, and until #343 nothing checked them. The benchmark
+`bench/` has its own models — one directory per case, holding `model.yaml`
+beside the same model in every dialect the harness has an arm for — and until
+#343 nothing checked them. The benchmark
 workflow runs only on a `trigger:bench` label — asked for, never guessed, which
 is right for a job that costs a runner — so no gate ever opened these files.
 #329 removed `equations:`, `examples/` was migrated, and all six bench models
@@ -25,15 +27,17 @@ MODELS = Path(__file__).resolve().parent.parent / 'bench' / 'models'
 
 
 def _models() -> list[Path]:
-    return sorted(MODELS.glob('*.yaml'))
+    return sorted(MODELS.glob('*/model.yaml'))
 
 
-#: Case names are the model stems, so this needs no import from `bench`, which
-#: is what lets the load gate below run on the bare install.
-CASE_NAMES = [p.stem for p in _models()]
+#: Case names are the directory each model sits in — a case is a directory now,
+#: holding its `model.yaml` beside the same model hand-written in every dialect
+#: the harness has an arm for. Read off the tree rather than imported from
+#: `bench`, which is what lets the load gate below run on the bare install.
+CASE_NAMES = [p.parent.name for p in _models()]
 
 
-@pytest.mark.parametrize('model', _models(), ids=lambda p: p.stem)
+@pytest.mark.parametrize('model', _models(), ids=lambda p: p.parent.name)
 def test_a_bench_model_loads(model: Path):
     """Every language change has to migrate this corpus too, or fail here."""
     lps.check(model)
@@ -66,7 +70,8 @@ def test_a_bench_case_builds_on_the_smallest_rung(case: str, tmp_path: Path, ben
 
 def test_every_model_backs_a_case(bench_cases):
     """A model nothing runs, or a case whose model was renamed away. The two
-    lists are matched by stem, which is what the parametrisation above assumes.
+    lists are matched by directory name, which is what the parametrisation
+    above assumes.
     A case may generate its model per rung instead of committing one —
     `declarations` does, and `bench/test_harness.py` gates the generated file —
     so the stem match covers exactly the cases that name a committed file.
