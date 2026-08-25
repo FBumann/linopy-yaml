@@ -16,11 +16,11 @@ import pytest
 
 import lpspec as lps
 from lpspec.errors import DimensionError, LanguageError
-from lpspec.lowering import _Lowering
+from lpspec.lowering import _Lowering, _partitioned_window_message
 from lpspec.relational.plan import Window
 from tests.conftest import resolved, schema_of
 from tests.differential import differential
-from tests.oracle import pd
+from tests.oracle import lpspec_linopy, pd  # skips the module without the [linopy] extra
 
 MIN_UP = {'slow': 3, 'fast': 1}
 UNITS, PERIODS = list(MIN_UP), [0, 1, 2, 3, 4]
@@ -196,21 +196,34 @@ def test_a_per_entity_window_reaching_nothing_is_that_entitys_row_alone():
         assert run.oracle == pytest.approx(10.0), 'take[narrow, 1] is capped by nothing, and no other take is free'
 
 
-WIDTH_REFUSALS = {
-    'not-an-integer': ('rate', 'needs an integer parameter'),
-    'along-the-summed-dim': ('drift', 'a different window at every position'),
-}
+def test_a_partitioned_window_is_refused_in_the_same_words_on_both_lanes():
+    """``by=`` is language this repository does not build, and says so.
 
+    Unread it is a wrong answer rather than a missing one: the window spans the
+    seam between two groups and sums rows that are not neighbours. Measured on
+    the language it arrived in, before this refusal existed: the relational lane
+    built the window across the seam and solved and reported optimal, and the
+    eager lane answered the same file with a `TypeError` out of a function
+    signature.
 
-@pytest.mark.parametrize(('name', 'expected'), list(WIDTH_REFUSALS.values()), ids=list(WIDTH_REFUSALS))
-def test_a_named_width_that_cannot_mean_a_window_is_refused(name: str, expected: str):
-    """A width counts positions along one axis and is constant along the other."""
+    Both lanes are asked because the answer is one sentence from one place —
+    `lpspec.linopy.build` lowers before it evaluates, so the eager operators
+    never see the call at all.
+    """
     model = up_time_model(None)
-    model['parameters']['rate'] = {'dims': ['g']}
-    model['parameters']['drift'] = {'dims': ['g', 't'], 'dtype': 'int'}
-    model['constraints']['stays_up_its_own_time']['expression'] = f'sum_back(started, over=t, within={name}) <= on'
-    with pytest.raises(LanguageError, match=expected):
-        lps.check(model)
+    model['dimensions']['day'] = {'dtype': 'str', 'values': ['early', 'late']}
+    model['lookups'] = {'day_of': {'over': 't', 'into': 'day'}}
+    model['constraints']['stays_up_its_own_time']['expression'] = (
+        'sum_back(started, over=t, within=min_up, by=day_of) <= on'
+    )
+    sources = UP_TIME_DATA | {'day_of': pd.DataFrame({'t': PERIODS, 'day': ['early'] * 2 + ['late'] * 3})}
+
+    with pytest.raises(LanguageError) as relational:
+        lps.build(model, sources)
+    with pytest.raises(LanguageError) as eager:
+        lpspec_linopy.build(model, sources)
+    for lane, refusal in (('relational', relational), ('eager', eager)):
+        assert _partitioned_window_message() in str(refusal.value), f'the {lane} lane owes the shared wording'
 
 
 @pytest.mark.parametrize('width', ['0', '1.5', '-2'], ids=['zero', 'fractional', 'negative'])
