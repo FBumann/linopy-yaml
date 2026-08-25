@@ -57,6 +57,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
     g.addoption('--builds', type=int, default=5, help='rebuilds per process in the first-vs-steady pass; 0 skips it')
     g.addoption(
+        '--budget',
+        type=float,
+        default=120.0,
+        help='seconds a measurement may take before its arm stops climbing that ladder; 0 measures everything',
+    )
+    g.addoption(
         '--i-know-another-is-running',
         action='store_true',
         help='start despite the machine lock or a high load average (#705); the numbers are on you',
@@ -300,6 +306,89 @@ def paths() -> Any:
 @pytest.fixture(scope='session')
 def builds(request: pytest.FixtureRequest) -> int:
     return int(request.config.getoption('--builds'))
+
+
+#: Where a ladder stopped, and why. Read by `pytest_terminal_summary`, which is
+#: the only place a skipped cell can still say something.
+CEILINGS = pytest.StashKey[dict]()
+
+
+class Ceiling:
+    """Which arms have stopped climbing which ladders, and the sentence why.
+
+    An arm that builds per entity costs roughly what the rung is wide, and the
+    rungs grow tenfold — so one measurement is enough to know the next one is
+    out of reach. *That a library is far slower is the finding*; a number
+    measured over an hour to say it again is a machine kept busy for nothing.
+
+    The projection is stated in the reason and never recorded as a measurement:
+    it is arithmetic on one rung, not a second rung.
+    """
+
+    def __init__(self, budget: float, stash: dict) -> None:
+        self.budget = budget
+        self.reasons = stash
+
+    def reached(self, arm: str, case_name: str, sink: str) -> str | None:
+        return self.reasons.get((arm, case_name, sink))
+
+    def record(self, arm: str, case_name: str, size: str, sink: str, seconds: float | None) -> None:
+        """Take one measurement, and decide whether the next rung is worth taking."""
+        if not self.budget or seconds is None:
+            return
+        key = (arm, case_name, sink)
+        if seconds > self.budget:
+            self.reasons[key] = (
+                f'{arm} took {_seconds(seconds)} on {case_name}/{size}, over the {_seconds(self.budget)} budget'
+            )
+            return
+        projected = seconds * _growth(case_name, size)
+        if projected > self.budget:
+            self.reasons[key] = (
+                f'{arm} took {_seconds(seconds)} on {case_name}/{size}, so the next rung projects to '
+                f'{_seconds(projected)} — over the {_seconds(self.budget)} budget'
+            )
+
+
+def _seconds(value: float) -> str:
+    """Seconds at a precision that survives both ends: a 0.013 s rung and a 4000 s projection."""
+    return f'{value:.3g} s'
+
+
+def _growth(case_name: str, size: str) -> float:
+    """How much wider the rung after *size* is. 1.0 at the top of a ladder."""
+    ladder = CASES[case_name].ladder
+    labels = [s.label for s in ladder]
+    if size not in labels:
+        return 1.0
+    index = labels.index(size)
+    if index + 1 >= len(ladder):
+        return 1.0
+    here, following = ladder[index].nominal_variables, ladder[index + 1].nominal_variables
+    return following / here if here else 1.0
+
+
+@pytest.fixture(scope='session')
+def ceiling(request: pytest.FixtureRequest) -> Ceiling:
+    stash = request.config.stash.setdefault(CEILINGS, {})
+    return Ceiling(float(request.config.getoption('--budget')), stash)
+
+
+def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pytest.Config) -> None:
+    """Every ladder an arm stopped climbing, printed where the run ends.
+
+    A skipped cell leaves no record in the results file — a measurement nobody
+    took is an absent row, not a null — so this is the one place the *reason*
+    survives the run.
+    """
+    del exitstatus
+    reasons = config.stash.get(CEILINGS, {})
+    if not reasons:
+        return
+    terminalreporter.write_sep('-', 'over budget')
+    for _arm, _case, sink in sorted(reasons):
+        where = f' [{sink} sink]' if sink else ''
+        terminalreporter.write_line(f'{reasons[(_arm, _case, sink)]}{where}')
 
 
 def shape_of(case_name: str, size: str) -> Shape:

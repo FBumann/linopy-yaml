@@ -64,8 +64,20 @@ def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -
     info['variables'] = shape.nominal_variables
 
 
+def _measured(benchmark: Any) -> float | None:
+    """The fastest round, in seconds — or None under an instrument that has none.
+
+    CodSpeed replaces the `benchmark` fixture with one that reports to a service
+    rather than keeping a distribution, so there is nothing here to read and the
+    budget simply does not apply there. It is not needed there either: that job
+    runs one small rung.
+    """
+    stats = getattr(getattr(benchmark, 'stats', None), 'stats', None)
+    return float(stats.min) if stats is not None else None
+
+
 @pytest.mark.benchmem(isolate=True)
-def test_emit(benchmark: Any, paths: Any, case_name: str, size: str, arm: str, sink: str) -> None:
+def test_emit(benchmark: Any, paths: Any, ceiling: Any, case_name: str, size: str, arm: str, sink: str) -> None:
     """Build the model and hand it over — an LP file on disk, or a populated solver.
 
     Both arms start from the same parquet and stop at the same seam, so each
@@ -75,7 +87,7 @@ def test_emit(benchmark: Any, paths: Any, case_name: str, size: str, arm: str, s
     ``checked_sources`` runs before the clock: it is harness bookkeeping, and the
     linopy arm has no counterpart to be charged for it.
     """
-    missing = unmeasurable(arm, case_name, sink)
+    missing = unmeasurable(arm, case_name, sink) or ceiling.reached(arm, case_name, sink)
     if missing:
         pytest.skip(missing)
 
@@ -83,9 +95,10 @@ def test_emit(benchmark: Any, paths: Any, case_name: str, size: str, arm: str, s
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
     counts = benchmark(module.build_and_emit, sink, prepared)
     _record(benchmark, counts, case_name, size)
+    ceiling.record(arm, case_name, size, sink, _measured(benchmark))
 
 
-def test_rebuild(benchmark: Any, paths: Any, builds: int, case_name: str, size: str, arm: str) -> None:
+def test_rebuild(benchmark: Any, paths: Any, ceiling: Any, builds: int, case_name: str, size: str, arm: str) -> None:
     """First build against every later one, in one process.
 
     Two questions, two numbers. **First** is what a caller pays who builds one
@@ -105,7 +118,7 @@ def test_rebuild(benchmark: Any, paths: Any, builds: int, case_name: str, size: 
     """
     if builds < 1:
         pytest.skip('--builds 0')
-    missing = unmeasurable(arm, case_name, ARMS[arm].SINKS[0])
+    missing = unmeasurable(arm, case_name, ARMS[arm].SINKS[0]) or ceiling.reached(arm, case_name, '')
     if missing:
         pytest.skip(missing)
     module = ARMS[arm]
@@ -117,3 +130,4 @@ def test_rebuild(benchmark: Any, paths: Any, builds: int, case_name: str, size: 
         warmup_rounds=0,
     )
     _record(benchmark, counts, case_name, size)
+    ceiling.record(arm, case_name, size, '', _measured(benchmark))
