@@ -4,8 +4,8 @@ One case = one YAML model + a deterministic data generator + a size ladder.
 Cases are chosen so each stresses a *different* SQL shape (docs/about/architecture.md,
 "read the verdict off the SQL"), not to cover the language:
 
-``dispatch``   pointwise bounds + one ``sum`` — raw throughput, and the case
-               where a dense eager broadcast is at its best, so our worst ratio.
+``dispatch``   pointwise bounds + one ``sum`` — raw throughput, and the case a
+               dense array representation is best at, so our worst ratio.
                Its ``where`` is declared but *vacuous*, which is a measurement
                in itself: the engine pays for a mask that removes nothing.
 ``commitment`` dispatch with a binary commitment gating every generator — the
@@ -19,10 +19,11 @@ Cases are chosen so each stresses a *different* SQL shape (docs/about/architectu
                different *amounts* of work rather than the same work in a
                different order.
 ``transport``  three ``sum(by=)`` joins per row — the mapping-table path, where
-               the eager lane has to materialise a bus x generator product.
-``storage``    a cyclic ``shift`` recurrence — the only locality class whose cost
-               has no eager analogue: xarray shifts an array, we join a term
-               stream against itself on ``snapshot.ord - 1``. Held at
+               a dense representation has to materialise a bus x generator
+               product.
+``storage``    a cyclic ``shift`` recurrence — the only locality class with no
+               array analogue: we join a term stream against itself on
+               ``snapshot.ord - 1``. Held at
                ``dispatch``'s width on ``dispatch``'s snapshot counts, so the two
                ladders differ in exactly one thing: whether a row reaches the
                previous one. ``soc_balance`` carries a row per store against
@@ -47,9 +48,9 @@ declarations, so the ladders read against each other.  ``nominal_variables`` is
 the full coordinate product; what survives a mask is measured rather than
 assumed (``live`` in the report).
 
-Data is generated once per (case, shape) into a cache directory and both arms
-read the same parquet files, so no arm pays a generation cost and neither can
-be measured against different numbers. Feasibility is by construction — every
+Data is generated once per (case, shape) into a cache directory and every arm
+reads the same parquet files, so no arm pays a generation cost and none can be
+measured against different numbers. Feasibility is by construction — every
 bus serves its own load with no flow, and ``sparse`` sizes its load against the
 tightest snapshot — so a solve never fails for a reason the harness invented.
 """
@@ -59,7 +60,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -99,7 +100,6 @@ class Case:
     name: str
     ladder: tuple[Shape, ...]
     write: Callable[[Shape, Path], dict[str, str]]
-    eager_inputs: Callable[[dict[str, str]], dict[str, Any]]
     model: Path | None = None
     generate_model: Callable[[Shape], str] | None = None
 
@@ -170,22 +170,6 @@ def _installed_frame(nodes: list[str], techs: list[str], installed: np.ndarray, 
     )
 
 
-def _dense_pairs(path: str, index: pd.Series, columns: pd.Series) -> pd.Series:
-    """A sparse two-key table reindexed over its full product.
-
-    The eager lane has nowhere to put an absent pair, so this is where
-    structural sparsity becomes NaN padding. Done in the open, because doing it
-    at all is the point of the sparse cases.
-
-    Tidy — a column per dim and a `value` — rather than laid out wide: both
-    lanes read a table by the names of its dims, and a wide frame says nothing
-    about which axis is which.
-    """
-    pairs = pd.MultiIndex.from_product([index, columns], names=[index.name, columns.name])
-    dense = pd.read_parquet(path).set_index([index.name, columns.name])['value'].reindex(pairs).fillna(0.0)
-    return dense.rename('value').reset_index()
-
-
 # --------------------------------------------------------------------------
 # dispatch
 
@@ -214,24 +198,6 @@ def _dispatch_data(shape: Shape, dest: Path) -> dict[str, str]:
         },
         dest,
     )
-
-
-def _dispatch_eager(paths: dict[str, str]) -> dict[str, Any]:
-    """The same parquet files, as the linopy lane wants them.
-
-    Reading them is the eager arm's own cost and is timed inside its build
-    phase — that is how linopy is actually used, and pretending the data is
-    already in memory would flatter it.
-    """
-    p_max = pd.read_parquet(paths['p_max']).set_index('generator')['value']
-    cost = pd.read_parquet(paths['cost']).set_index('generator')['value']
-    load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
-    data = {'p_max': p_max, 'cost': cost, 'load': load}
-    index = {
-        'generator': pd.Index(p_max.index, name='generator'),
-        'snapshot': pd.Index(load.index, name='snapshot'),
-    }
-    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -266,22 +232,6 @@ def _commitment_data(shape: Shape, dest: Path) -> dict[str, str]:
         },
         dest,
     )
-
-
-def _commitment_eager(paths: dict[str, str]) -> dict[str, Any]:
-    p_max = pd.read_parquet(paths['p_max']).set_index('generator')['value']
-    load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
-    data = {
-        'p_max': p_max,
-        'cost': pd.read_parquet(paths['cost']).set_index('generator')['value'],
-        'fix_cost': pd.read_parquet(paths['fix_cost']).set_index('generator')['value'],
-        'load': load,
-    }
-    index = {
-        'generator': pd.Index(p_max.index, name='generator'),
-        'snapshot': pd.Index(load.index, name='snapshot'),
-    }
-    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -356,33 +306,6 @@ def _nodal_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _nodal_eager(paths: dict[str, str]) -> dict[str, Any]:
-    """The same parquet files, as the linopy lane wants them.
-
-    The eager lane cannot hold an absent pair, so ``installed`` is reindexed
-    over the full node x tech product: that is what turns structural sparsity
-    into NaN padding, and doing it here rather than pretending otherwise is the
-    point of the case.
-    """
-
-    nodes = pd.read_parquet(paths['node'])['node']
-    techs = pd.read_parquet(paths['tech'])['tech']
-    cost = pd.read_parquet(paths['cost']).set_index('tech')['value']
-    demand = pd.read_parquet(paths['demand'])
-    installed = _dense_pairs(paths['installed'], nodes, techs)
-    data = {
-        'installed': installed,
-        'cost': cost,
-        'demand': demand,
-    }
-    index = {
-        'snapshot': pd.Index(sorted(demand['snapshot'].unique()), name='snapshot'),
-        'node': pd.Index(nodes, name='node'),
-        'tech': pd.Index(techs, name='tech'),
-    }
-    return data | index
-
-
 # --------------------------------------------------------------------------
 # sector
 
@@ -440,35 +363,6 @@ def _sector_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _sector_eager(paths: dict[str, str]) -> dict[str, Any]:
-    """The same parquet files, as the linopy lane wants them.
-
-    Both sparse tables are reindexed over their full product: the eager lane
-    has nowhere else to put an absent pair, and doing it in the open is what
-    makes the arms comparable.
-    """
-
-    nodes = pd.read_parquet(paths['node'])['node']
-    techs = pd.read_parquet(paths['tech'])['tech']
-    carriers = pd.read_parquet(paths['carrier'])['carrier']
-    demand = pd.read_parquet(paths['demand'])
-    installed = _dense_pairs(paths['installed'], nodes, techs)
-    produces = _dense_pairs(paths['produces'], techs, carriers)
-    data = {
-        'installed': installed,
-        'produces': produces,
-        'cost': pd.read_parquet(paths['cost']).set_index('tech')['value'],
-        'demand': demand,
-    }
-    index = {
-        'snapshot': pd.Index(sorted(demand['snapshot'].unique()), name='snapshot'),
-        'node': pd.Index(nodes, name='node'),
-        'tech': pd.Index(techs, name='tech'),
-        'carrier': pd.Index(carriers, name='carrier'),
-    }
-    return data | index
-
-
 # --------------------------------------------------------------------------
 # transport
 
@@ -517,41 +411,8 @@ def _transport_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _transport_eager(paths: dict[str, str]) -> dict[str, Any]:
-
-    gens = pd.read_parquet(paths['generator'])
-    lines = pd.read_parquet(paths['line'])
-    load = pd.read_parquet(paths['load'])
-    data = {
-        'p_max': pd.read_parquet(paths['p_max']).set_index('generator')['value'],
-        'cost': pd.read_parquet(paths['cost']).set_index('generator')['value'],
-        'cap': pd.read_parquet(paths['cap']).set_index('line')['value'],
-        'neg_cap': pd.read_parquet(paths['neg_cap']).set_index('line')['value'],
-        'load': load,
-    }
-    index = {
-        'snapshot': pd.Index(sorted(load['snapshot'].unique()), name='snapshot'),
-        'generator': gens,
-        'bus': pd.Index(pd.read_parquet(paths['bus'])['bus'], name='bus'),
-        'line': lines,
-        'gen_bus': pd.read_parquet(paths['gen_bus']),
-        'line_from': pd.read_parquet(paths['line_from']),
-        'line_to': pd.read_parquet(paths['line_to']),
-    }
-    return data | index
-
-
 # --------------------------------------------------------------------------
 # fleet — many declarations rather than one large one
-
-
-#: The variables `fleet` declares. Named here rather than inline because the
-#: model file and the eager arm both have to agree on them, and a mismatch
-#: would show up as a parity failure rather than as the typo it is.
-FLEET_VARIABLES = (
-    'p', 'p_up', 'p_down', 'reserve_up', 'reserve_down', 'charge',
-    'discharge', 'soc', 'spill', 'curtail', 'import_', 'export_',
-)  # fmt: skip
 
 
 def _fleet_data(shape: Shape, dest: Path) -> dict[str, str]:
@@ -578,18 +439,6 @@ def _fleet_data(shape: Shape, dest: Path) -> dict[str, str]:
         },
         dest,
     )
-
-
-def _fleet_eager(paths: dict[str, str]) -> dict[str, Any]:
-    p_max = pd.read_parquet(paths['p_max']).set_index('unit')['value']
-    cost = pd.read_parquet(paths['cost']).set_index('unit')['value']
-    demand = pd.read_parquet(paths['demand']).set_index('snapshot')['value']
-    data = {'p_max': p_max, 'cost': cost, 'demand': demand}
-    index = {
-        'unit': pd.Index(p_max.index, name='unit'),
-        'snapshot': pd.Index(demand.index, name='snapshot'),
-    }
-    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -702,42 +551,6 @@ def _profiled_data(shape: Shape, dest: Path) -> dict[str, str]:
     )
 
 
-def _profiled_eager(paths: dict[str, str]) -> dict[str, Any]:
-    """The same parquet files, as the linopy lane wants them.
-
-    This is the eager lane at its best, and the case exists to let it be: the
-    file already carries the layout xarray wants, so ``availability`` reads and
-    reshapes rather than aligning. Routing it through ``from_series`` like the
-    sparse cases would time a sort the *harness* imposed rather than one the
-    shape requires, and would make the comparison dishonest in our favour.
-    Order is load-bearing — ``_profiled_data`` writes C-order (snapshot, node,
-    tech) — so a permuted file would change the objective and the parity gate
-    would kill the run before anything is timed.
-    """
-
-    nodes = pd.read_parquet(paths['node'])['node']
-    techs = pd.read_parquet(paths['tech'])['tech']
-    snapshots = pd.read_parquet(paths['snapshot'])['snapshot']
-    demand = pd.read_parquet(paths['demand'])
-
-    availability = pd.read_parquet(paths['availability'])['value']
-    availability.index = pd.MultiIndex.from_product(
-        [snapshots.to_numpy(), nodes.to_numpy(), techs.to_numpy()], names=['snapshot', 'node', 'tech']
-    )
-
-    data = {
-        'availability': availability,
-        'cost': pd.read_parquet(paths['cost']).set_index('tech')['value'],
-        'demand': demand,
-    }
-    index = {
-        'snapshot': pd.Index(snapshots, name='snapshot'),
-        'node': pd.Index(nodes, name='node'),
-        'tech': pd.Index(techs, name='tech'),
-    }
-    return data | index
-
-
 # --------------------------------------------------------------------------
 # storage — the cyclic recurrence, the one shape that reaches sideways
 
@@ -777,26 +590,6 @@ def _storage_data(shape: Shape, dest: Path) -> dict[str, str]:
         },
         dest,
     )
-
-
-def _storage_eager(paths: dict[str, str]) -> dict[str, Any]:
-    p_max = pd.read_parquet(paths['p_max']).set_index('generator')['value']
-    load = pd.read_parquet(paths['load']).set_index('snapshot')['value']
-    e_max = pd.read_parquet(paths['e_max']).set_index('store')['value']
-    data = {
-        'p_max': p_max,
-        'cost': pd.read_parquet(paths['cost']).set_index('generator')['value'],
-        'load': load,
-        'e_max': e_max,
-        'p_store': pd.read_parquet(paths['p_store']).set_index('store')['value'],
-        'eta': pd.read_parquet(paths['eta']).set_index('store')['value'],
-    }
-    index = {
-        'generator': pd.Index(p_max.index, name='generator'),
-        'store': pd.Index(e_max.index, name='store'),
-        'snapshot': pd.Index(load.index, name='snapshot'),
-    }
-    return data | index
 
 
 # --------------------------------------------------------------------------
@@ -866,27 +659,23 @@ CASES: dict[str, Case] = {
         model=MODELS / 'dispatch.yaml',
         ladder=_ladder({'generator': 100}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100),
         write=_dispatch_data,
-        eager_inputs=_dispatch_eager,
     ),
     'commitment': Case(
         name='commitment',
         model=MODELS / 'commitment.yaml',
         ladder=_ladder({'generator': 50}, (10, 100, 1_000, 10_000, 40_000, 120_000), per_snapshot=100),
         write=_commitment_data,
-        eager_inputs=_commitment_eager,
     ),
     'fleet': Case(
         name='fleet',
         model=MODELS / 'fleet.yaml',
         ladder=_ladder({'unit': 50}, (20, 200, 2_000, 20_000, 80_000, 240_000), per_snapshot=600),
         write=_fleet_data,
-        eager_inputs=_fleet_eager,
     ),
     'declarations': Case(
         name='declarations',
         ladder=_declaration_sweep(pool=512, snapshots=2_000, counts=(2, 8, 32, 128)),
         write=_fleet_data,
-        eager_inputs=_fleet_eager,
         generate_model=_declarations_model,
     ),
     'nodal': Case(
@@ -899,7 +688,6 @@ CASES: dict[str, Case] = {
             *_density_sweep({'node': 50, 'tech': 12}, 2_000, 600, (1.0, 0.5, 0.25, 0.083)),
         ),
         write=_nodal_data,
-        eager_inputs=_nodal_eager,
     ),
     'sector': Case(
         name='sector',
@@ -911,14 +699,12 @@ CASES: dict[str, Case] = {
             density=0.083,
         ),
         write=_sector_data,
-        eager_inputs=_sector_eager,
     ),
     'profiled': Case(
         name='profiled',
         model=MODELS / 'profiled.yaml',
         ladder=_ladder({'node': 50, 'tech': 12}, (20, 200, 2_000, 20_000, 80_000, 240_000), per_snapshot=600),
         write=_profiled_data,
-        eager_inputs=_profiled_eager,
     ),
     'transport': Case(
         name='transport',
@@ -927,7 +713,6 @@ CASES: dict[str, Case] = {
             {'generator': 100, 'bus': 20, 'line': 40}, (70, 700, 7_000, 70_000, 280_000, 840_000), per_snapshot=140
         ),
         write=_transport_data,
-        eager_inputs=_transport_eager,
     ),
     'storage': Case(
         name='storage',
@@ -936,6 +721,5 @@ CASES: dict[str, Case] = {
             {'generator': 40, 'store': 20}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100
         ),
         write=_storage_data,
-        eager_inputs=_storage_eager,
     ),
 }

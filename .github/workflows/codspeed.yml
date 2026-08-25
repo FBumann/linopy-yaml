@@ -204,7 +204,7 @@ jobs:
           POLARS_MAX_THREADS: 1
         with:
           mode: memory
-          run: pixi run -e codspeed pytest bench --arms lpspec --sizes s --skip-gate --codspeed
+          run: pixi run -e codspeed pytest bench --sizes s --codspeed
 
   walltime:
     name: Wall time (macro runner)
@@ -259,4 +259,4 @@ jobs:
       - uses: CodSpeedHQ/action@v5
         with:
           mode: walltime
-          run: pixi run -e codspeed pytest bench --arms lpspec --sizes m l --skip-gate --codspeed
+          run: pixi run -e codspeed pytest bench --sizes m l --codspeed

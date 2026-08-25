@@ -28,13 +28,12 @@ on:
     types: [labeled]
 
 env:
-  # The regression slice of the ladder: one lane, the rungs small enough to run
-  # twice in a job. `--skip-gate` because a single-arm gate compares an
-  # objective with itself — the cross-lane check belongs to the published run.
+  # The regression slice of the ladder: the rungs small enough to run twice in
+  # a job. There is one arm and no gate to skip; both flags were dropped with
+  # the eager arm.
   SELECT: >-
-    --arms lpspec --sizes s m
+    --sizes s m
     --cases dispatch nodal transport profiled
-    --skip-gate
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

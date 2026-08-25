@@ -27,17 +27,17 @@ sends it to a fresh process: peak RSS is a property of a process, and two
 measurements in one interpreter report the larger of them twice.
 
 **The library is imported inside the verb, never at module scope.** The import
-is part of what an arm costs — linopy's alone exceeds lpspec's entire build at
-the `xs` rung — so a harness that had already paid for it before measuring
-would be charging one arm for the other's work. That is also why `ARMS` maps to
-modules rather than to imported callables.
+is part of what an arm costs — a modelling library's alone can exceed lpspec's
+entire build at the `xs` rung — so a harness that had already paid for it
+before measuring would be charging one arm for another's work. That is also
+why `ARMS` maps to modules rather than to imported callables.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from bench.arms import linopy, lpspec
+from bench.arms import lpspec
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -50,11 +50,11 @@ Counts = dict[str, Any]
 #: Name to the module that speaks for it. Written out rather than discovered by
 #: scanning: a misnamed module would go missing as an *absent arm*, which reads
 #: as "not measured" rather than as the error it is.
-ARMS: dict[str, ModuleType] = {'lpspec': lpspec, 'linopy': linopy}
+ARMS: dict[str, ModuleType] = {'lpspec': lpspec}
 
 
 def solved(arm: str, case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]) -> float:
-    """Prepare and solve on *arm*, for the parity gate and for `bench.floor`.
+    """Prepare and solve on *arm* — what `bench.floor` checks its own answer against.
 
     Not a measurement — the one thing the harness does that is allowed to be
     slow, because a performance number describing two different models is worse
