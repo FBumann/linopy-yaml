@@ -460,6 +460,21 @@ def test_a_cell_with_no_number_in_it_is_never_marked() -> None:
     assert f'\u2014{report.MARK}' not in table, 'an absent measurement cannot be noisy'
 
 
+def test_the_marginal_table_carries_no_ratio_between_libraries() -> None:
+    """A build-only number is not comparable across libraries.
+
+    One that defers materialising its coefficients to its writer spends almost
+    nothing in the build and pays at the seam: on `dispatch` at 1M columns
+    linopy built in 18.6 ms against lpspec's 33.7 ms and then emitted in 0.64 s
+    against 0.44 s, so a ratio drawn here says the opposite of the run it came
+    from. The tables that measure to a common artifact carry the ratios.
+    """
+    table = report.marginal([_loop('dispatch', 'lpspec', 1200), _loop('dispatch', 'linopy', 1200)])
+    assert 'lpspec: steady' in table and 'linopy: steady' in table, 'both libraries still get their columns'
+    assert '\u00f7' not in table, 'no ratio column here — the build is not the same work in each'
+    assert 'not across the row' in table, 'and the table says so where it is read'
+
+
 def test_a_run_of_one_arm_has_no_ratio_column() -> None:
     """A number divided by itself is not a comparison, and a column of 1.00x
     reads like one."""

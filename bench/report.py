@@ -353,6 +353,15 @@ def marginal(loop_rows: list[Row]) -> str:
     most of the differences this file reports — so publishing one figure would
     misreport whichever use case it was not.
 
+    **Read down a column, never across the row.** This table times the *build*
+    with no hand-off after it, and the libraries do not put the same work
+    there: one that defers coefficient materialisation to its writer spends
+    almost nothing here and pays at the seam instead. Measured on `dispatch` at
+    1M columns, linopy builds in 18.6 ms against our 33.7 ms and then emits in
+    0.64 s against our 0.44 s — a row read across says the opposite of the run
+    it came from. That is why there are no ratio columns here and why `table()`
+    above, which measures to a common artifact, is where a comparison belongs.
+
     The sweep rungs are skipped: each sweep is several variants of one model
     size and would render as rows sharing a label. They have their own tables.
     """
@@ -368,7 +377,6 @@ def marginal(loop_rows: list[Row]) -> str:
     if not best:
         return ''
     arms = arms_in(best)
-    against = [a for a in arms if a != BASELINE]
 
     def order(key: tuple[str, str]) -> tuple[float, str, str]:
         """Widest model last, then by name — a *total* order, off whichever arm ran.
@@ -392,24 +400,20 @@ def marginal(loop_rows: list[Row]) -> str:
         'and **steady** the best of the rounds after it, so the pair is what a '
         'rolling horizon pays for its second window against its first. ' + _settling(best, seen, arms),
         '',
-        '| '
-        + ' | '.join(
-            [
-                'case',
-                'vars',
-                *(f'{a}: {half}' for a in arms for half in ('first', 'steady')),
-                *(f'steady ÷ {a}' for a in against),
-            ]
-        )
-        + ' |',
-        '|' + '---|' * (2 + 2 * len(arms) + len(against)),
+        '**Read down a column, not across the row.** The build is not the same '
+        'work in every library — one that defers materialising its coefficients '
+        'to its writer spends almost nothing here and pays it at the seam — so '
+        'these columns carry no ratios. The tables above measure to a common '
+        'artifact and are where a comparison belongs.',
+        '',
+        '| ' + ' | '.join(['case', 'vars', *(f'{a}: {half}' for a in arms for half in ('first', 'steady'))]) + ' |',
+        '|' + '---|' * (2 + 2 * len(arms)),
     ]
     for case, size in seen:
         at_rung = {a: best.get((case, size, a)) for a in arms}
         ref = next((r for r in at_rung.values() if r), None)
         if ref is None:
             continue
-        ours = at_rung.get(BASELINE)
         lines.append(
             '| '
             + ' | '.join(
@@ -417,13 +421,6 @@ def marginal(loop_rows: list[Row]) -> str:
                     case,
                     _si(ref.get('nominal_variables', 0)),
                     *(_ms(at_rung[a], half, bold=a == BASELINE) for a in arms for half in ('first', 'steady')),
-                    *(
-                        _ratio(
-                            ours['steady_build_seconds'] if ours else None,
-                            at_rung[a]['steady_build_seconds'] if at_rung[a] else None,
-                        )
-                        for a in against
-                    ),
                 ]
             )
             + ' |'
