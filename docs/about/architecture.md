@@ -131,11 +131,13 @@ flowchart TB
     class DATA data
 ```
 
-Eight modules sit outside a fence, and each is legitimately **both** halves:
+Seven modules sit outside a fence, and each is legitimately **both** halves:
 the two drawn above, plus `curves.py`, the one guard that needs numbers,
 `api.py`, which runs the lot, `strategy.py`, which drives it a slice at a time,
-`frames.py` and `errors.py`, the two leaves every fence points at, and
-`_notes.py`, which is plumbing. That is a category, not a leftovers bin — see
+and `frames.py` and `errors.py`, the two leaves every fence points at. That is
+a category, not a leftovers bin, and the size of a module does not buy it a
+place — one only a single lane reaches is that lane's, down to a 24-line
+contextmanager (`linopy/_notes.py`). See
 [What counts as language](#what-counts-as-language).
 
 Eligibility is decided by **attempting the lowering** — `lower_program` returns
@@ -520,7 +522,6 @@ it.
 | `frames.py` | the boundary — caller tables in, via the Arrow PyCapsule protocol, and `TidySource`, what one is once read; read by the front door, the driver, the linopy lane and the engine |
 | `lowering.py` | core AST → logical plan (defines the relational subset) |
 | `errors.py` | the run half, and the whole re-exported — what a caller catches off `lps.`; a wording lives here only where two modules raise it |
-| `_notes.py` | attach context to an exception on the way out; no package imports, no opinions |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `relational/plan.py` | frozen logical-plan dataclasses — what an engine consumes |
 | `relational/engines/polars/compiler.py` | plan → lazy frames; pure, reads nothing |
@@ -545,6 +546,7 @@ it.
 | `linopy/builder.py` | eager backend: core AST → `linopy.Model` |
 | `linopy/operators.py` | the eager evaluation of every built-in, on xarray and linopy; the table `tests/test_architecture.py` holds to the language's own |
 | `linopy/where.py` | a resolved `where:` as a boolean array, and the shape linopy's `mask=` takes |
+| `linopy/_notes.py` | attach context to an exception on the way out; no package imports, no opinions |
 
 **Two subpackages, and the directory *is* the rule in both cases.** Everything
 under `relational/` is the relational lane and imports nothing else from the

@@ -65,9 +65,9 @@ except ModuleNotFoundError as exc:
 
 from math_spec import ComparisonNode, Namespace, expand_piecewise, expression_of, load_model
 
-from lpspec._notes import note
 from lpspec.curves import validate_curve_extent, validate_piecewise_data
 from lpspec.errors import unknown_name_message
+from lpspec.linopy._notes import note
 from lpspec.linopy.builder import EvaluationContext, _eval_ast, build_model
 from lpspec.linopy.loader import dimension_coords, load_parameters
 from lpspec.lowering import lower_expression, lower_program

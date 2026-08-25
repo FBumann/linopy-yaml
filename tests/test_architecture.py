@@ -880,7 +880,7 @@ def test_every_module_is_documented_somewhere():
     for path in _all_modules():
         name = path.name
         if name.startswith('_'):
-            continue  # private plumbing (_notes) needs no doc entry
+            continue  # private plumbing needs no doc entry
         if name == '__init__.py':
             continue
         readmes = [d / 'README.md' for d in path.parents if PKG in d.parents or d == PKG]
