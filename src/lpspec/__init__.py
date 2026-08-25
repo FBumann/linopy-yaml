@@ -22,19 +22,25 @@ installed reads ``0.0.0``.
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
-from lpspec.api import build, check, solve, write
+from math_spec import Model
+
+from lpspec.api import BoundModel, build, check, solve, write
 from lpspec.errors import (
     DataError,
     DimensionError,
     LaneError,
     LanguageError,
     LpspecError,
+    LpspecWarning,
+    NoSolutionError,
     PiecewiseExpansionError,
     SchemaError,
 )
-from lpspec.strategy import EachCoordinate, EachWindow, solve_over
+from lpspec.relational.result import Result
+from lpspec.strategy import EachCoordinate, EachWindow, Runs, solve_over
 
 __all__ = [
+    'BoundModel',
     'DataError',
     'DimensionError',
     'EachCoordinate',
@@ -42,7 +48,12 @@ __all__ = [
     'LaneError',
     'LanguageError',
     'LpspecError',
+    'LpspecWarning',
+    'Model',
+    'NoSolutionError',
     'PiecewiseExpansionError',
+    'Result',
+    'Runs',
     'SchemaError',
     'build',
     'check',
