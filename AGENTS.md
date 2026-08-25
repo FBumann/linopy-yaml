@@ -238,24 +238,46 @@ def solve(sources: Mapping[str, Any], solver_name: str = 'highs') -> Result:
 
 ## Commit messages and PR titles
 
-The subject names **the problem solved**. One line, scannable, no mechanism, no
-"why", no trailing clause. Conventional-commit form and the two forbidden
-markers: [CONTRIBUTING.md](CONTRIBUTING.md#branches-commits-prs).
+**The title is the changelog line.** release-please prints it in `CHANGELOG.md`,
+where the reader has no diff, no issue and none of our vocabulary. It names the
+problem solved — an outcome, not an activity, not a mechanism.
+
+- **A complete sentence, as long as it needs.** `a curve varying along a dim` is
+  a telegram; `a curve that varies along a dimension` is longer and it reads.
+- **A tail that parses on its own.** `…, not the two it was written for` is a
+  fragment, and it argues against a shape only that diff's reviewer saw. Give it
+  a verb — `rather than` — or drop it.
+- **A subject the changelog reader can name.** Not `a walk`, `a build`, `an arm`, `the
+  builder`; not `dim`, `lane`, `sink`, `rung`.
+- **Type by who can observe the work.** `feat fix perf refactor docs` publish,
+  `chore test ci build style` hide. The bench harness, the agent docs, test
+  scaffolding and an internal reshuffle hide.
+
+Lower case, no full stop, conventional-commit form and the two forbidden
+markers: [CONTRIBUTING.md](CONTRIBUTING.md#branches-commits-prs). The 72-char
+warning in `pr-title.yaml` is about `git log --oneline`; the changelog does not
+truncate.
 
 ```
 yes  fix(api): a closed result says it was closed
-yes  feat(language): a coordinate may declare its own label space
-yes  perf(engine): bounds stop dominating build on wide models
+yes  fix(data): a piecewise curve that is short of a breakpoint is refused at load
 
-no   perf(engine): the bound attach reads the ordinal off the Enum, not a dictionary
-     ^ how it was done
-no   perf(engine): the objective keeps the hash count — bought order was a shape-dependent bet
-     ^ mechanism plus its argument; two descriptions in a title
 no   fix(data): fix dtype bug
      ^ an activity, not an outcome
+no   perf(engine): the bound attach reads the ordinal off the Enum, not a dictionary
+     ^ how it was done
+no   fix(data): a piecewise curve short of a breakpoint is refused, not read as the origin
+     ^ telegraphed, and the tail is a fragment → the yes above
+no   refactor(engine): a build is a value, so the engine holds one field not twenty-six
+     ^ the tail does not parse alone, and `a build` is internal
+     → chore(engine): the engine holds one build result instead of twenty-six fields
 ```
 
 ## PR descriptions
+
+**Forty words to the claim**, everything under it in `<details>` — mutation
+tables, benchmark output, method, each guard walked. A body longer than its diff
+is one nobody finishes.
 
 - **Lead with the claim**, then the evidence.
 - **Each number names what is counted** — build vs solve, LP file vs direct sink
@@ -265,6 +287,8 @@ no   fix(data): fix dtype bug
 - **Name what you deliberately did not do**, and any default in Part 2 you
   departed from.
 - **One issue, one PR.** Separable work is stacked, not bundled.
+- **A body the work has overtaken is rewritten**, not appended to in a comment.
+- **The stack is the base branch**, not pin hashes and retarget notes in prose.
 - **Mark it**, evidence in `<details>`.
 
 ## Branch and worktree
