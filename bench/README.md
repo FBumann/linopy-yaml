@@ -135,6 +135,21 @@ docstring: which defaults were switched off, and what each one cost.
 Not measured, deliberately: solve time (that is the solver, identical either
 way, and it would swamp the build), and anything about expressiveness.
 
+**An arm stops climbing a ladder it cannot afford.** A library that builds per
+entity costs about what the rung is wide, and the rungs grow tenfold — so one
+measurement settles the next one. After every cell the harness projects the rung
+above it, and if that projection is over `--budget` (120 s by default) the arm
+skips the rest of that ladder with a sentence saying what it measured and what
+it projected. *That a library is far slower is the finding*; an hour spent
+measuring it again to two decimal places is a machine kept busy for nothing.
+
+The projection is never recorded as a measurement — it is arithmetic on one
+rung, not a second rung — and a skipped cell leaves no row in the results file,
+because a measurement nobody took is an absent row rather than a null. The
+reasons print together under `over budget` when the run ends, which is the one
+place a skipped cell can still say something. `--budget 0` measures everything,
+which is what to pass when the slow number is the point.
+
 **A number the run cannot stand behind is marked, not dropped.** Every
 measurement's distribution — `iqr`, `median`, `rounds` — is carried into the
 result file beside the minimum the tables publish, and `bench.report` appends

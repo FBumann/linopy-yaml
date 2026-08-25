@@ -156,6 +156,66 @@ def _loop(case: str, arm: str, width: int) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# an arm stops climbing a ladder it cannot afford (bench/conftest.py)
+# ---------------------------------------------------------------------------
+
+
+def _ceiling(budget: float) -> Any:
+    return harness.Ceiling(budget, {})
+
+
+def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
+    """The rungs grow tenfold, so one measurement settles the next one.
+
+    `dispatch/xs` is 10k variables and `s` is 100k, so a 20 s build at `xs`
+    projects to 200 s — and taking that measurement would buy nothing the
+    projection has not already said.
+    """
+    ceiling = _ceiling(120.0)
+    ceiling.record('pyomo', 'dispatch', 'xs', 'lp', 20.0)
+    reason = ceiling.reached('pyomo', 'dispatch', 'lp')
+    assert reason is not None, 'a projection over budget stops the ladder'
+    assert '200 s' in reason and '20 s' in reason, 'the reason carries the measurement and the projection'
+
+
+def test_a_rung_inside_budget_lets_the_ladder_continue() -> None:
+    ceiling = _ceiling(120.0)
+    ceiling.record('lpspec', 'dispatch', 'xs', 'lp', 0.5)
+    assert ceiling.reached('lpspec', 'dispatch', 'lp') is None, '0.5 s projects to 5 s, well inside 120 s'
+
+
+def test_a_measurement_over_budget_stops_the_ladder_without_projecting() -> None:
+    ceiling = _ceiling(120.0)
+    ceiling.record('pyomo', 'dispatch', 'm', 'lp', 300.0)
+    reason = ceiling.reached('pyomo', 'dispatch', 'lp')
+    assert reason is not None and 'projects' not in reason, (
+        'a rung that already blew the budget needs no arithmetic about the next one'
+    )
+
+
+def test_the_top_of_a_ladder_never_projects() -> None:
+    """`2xl` has no rung after it, so its growth is 1.0 and a slow-but-inside
+    measurement there stops nothing."""
+    ceiling = _ceiling(120.0)
+    ceiling.record('lpspec', 'dispatch', '2xl', 'lp', 100.0)
+    assert ceiling.reached('lpspec', 'dispatch', 'lp') is None
+
+
+def test_a_ceiling_is_per_sink() -> None:
+    """Writing an LP file and filling a solver are different costs, and an arm
+    that cannot afford one may still afford the other."""
+    ceiling = _ceiling(120.0)
+    ceiling.record('pyomo', 'dispatch', 'xs', 'lp', 20.0)
+    assert ceiling.reached('pyomo', 'dispatch', 'highs') is None, 'the other sink was never measured'
+
+
+def test_no_budget_measures_everything() -> None:
+    ceiling = _ceiling(0.0)
+    ceiling.record('pyomo', 'dispatch', 'xs', 'lp', 9999.0)
+    assert ceiling.reached('pyomo', 'dispatch', 'lp') is None, '--budget 0 is the way to take the slow number anyway'
+
+
+# ---------------------------------------------------------------------------
 # a hand-written arm is the same model, or it is not an arm
 # ---------------------------------------------------------------------------
 
