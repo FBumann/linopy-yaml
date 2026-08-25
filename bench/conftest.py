@@ -26,6 +26,7 @@ does not parse.
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -37,6 +38,8 @@ from bench.arms import ARMS
 from bench.cases import CASES
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from bench.cases import Shape
 
 
@@ -92,6 +95,16 @@ def pytest_configure(config: pytest.Config) -> None:
     """
     if hasattr(config.option, 'benchmark_min_rounds') and not flag_passed(config, '--benchmark-min-rounds'):
         config.option.benchmark_min_rounds = MIN_ROUNDS
+
+
+#: How a rung label says which ladder it belongs to. `bench/report.py` renders
+#: each as its own table for the same reason the budget decides each on its own:
+#: `w10` and `s` carry the same variables through different shapes.
+_LADDERS = (
+    ('width', re.compile(r'w\d+$')),
+    ('density', re.compile(r'd\d+$')),
+    ('declarations', re.compile(r'n\d+$')),
+)
 
 
 #: Machine-global on purpose — `tempfile.gettempdir()`, not the repo: the run
@@ -325,24 +338,25 @@ class Ceiling:
     it is arithmetic on one rung, not a second rung.
     """
 
-    def __init__(self, budget: float, stash: dict) -> None:
+    def __init__(self, budget: float, stash: dict, selected: Sequence[str]) -> None:
         self.budget = budget
         self.reasons = stash
+        self.selected = selected
 
-    def reached(self, arm: str, case_name: str, sink: str) -> str | None:
-        return self.reasons.get((arm, case_name, sink))
+    def reached(self, arm: str, case_name: str, size: str, sink: str) -> str | None:
+        return self.reasons.get((arm, case_name, ladder_of(size), sink))
 
     def record(self, arm: str, case_name: str, size: str, sink: str, seconds: float | None) -> None:
         """Take one measurement, and decide whether the next rung is worth taking."""
         if not self.budget or seconds is None:
             return
-        key = (arm, case_name, sink)
+        key = (arm, case_name, ladder_of(size), sink)
         if seconds > self.budget:
             self.reasons[key] = (
                 f'{arm} took {_seconds(seconds)} on {case_name}/{size}, over the {_seconds(self.budget)} budget'
             )
             return
-        projected = seconds * _growth(case_name, size)
+        projected = seconds * _growth(case_name, size, self.selected)
         if projected > self.budget:
             self.reasons[key] = (
                 f'{arm} took {_seconds(seconds)} on {case_name}/{size}, so the next rung projects to '
@@ -355,23 +369,40 @@ def _seconds(value: float) -> str:
     return f'{value:.3g} s'
 
 
-def _growth(case_name: str, size: str) -> float:
-    """How much wider the rung after *size* is. 1.0 at the top of a ladder."""
-    ladder = CASES[case_name].ladder
-    labels = [s.label for s in ladder]
-    if size not in labels:
+def ladder_of(size: str) -> str:
+    """Which ladder a rung belongs to — its own, or the size one.
+
+    A case can carry more than one, and they ask different questions: `l` is the
+    longest model and `w1000` is the widest. A library that cannot afford the
+    top of one may be perfectly able to climb the other, so the budget has to
+    decide them separately.
+    """
+    return next((name for name, pattern in _LADDERS if pattern.match(size)), 'size')
+
+
+def _growth(case_name: str, size: str, selected: Sequence[str]) -> float:
+    """How much wider the next rung *of this run* is. 1.0 when there is none.
+
+    Read off the rungs the run was asked for rather than off everything the case
+    defines. A ladder measured to `l` has `xl` and `2xl` behind it, four and
+    twelve times wider, and projecting onto a rung nobody asked for stops the
+    climb on arithmetic about work that was never going to happen — which is
+    what it did on the first published run, taking the width ladder down with
+    it because the ceiling outlived the ladder that set it.
+    """
+    ladder = ladder_of(size)
+    rungs = [s for s in CASES[case_name].ladder if s.label in set(selected) and ladder_of(s.label) == ladder]
+    labels = [s.label for s in rungs]
+    if size not in labels or labels.index(size) + 1 >= len(rungs):
         return 1.0
-    index = labels.index(size)
-    if index + 1 >= len(ladder):
-        return 1.0
-    here, following = ladder[index].nominal_variables, ladder[index + 1].nominal_variables
-    return following / here if here else 1.0
+    here, following = rungs[labels.index(size)], rungs[labels.index(size) + 1]
+    return following.nominal_variables / here.nominal_variables if here.nominal_variables else 1.0
 
 
 @pytest.fixture(scope='session')
 def ceiling(request: pytest.FixtureRequest) -> Ceiling:
     stash = request.config.stash.setdefault(CEILINGS, {})
-    return Ceiling(float(request.config.getoption('--budget')), stash)
+    return Ceiling(float(request.config.getoption('--budget')), stash, request.config.getoption('--sizes'))
 
 
 def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pytest.Config) -> None:

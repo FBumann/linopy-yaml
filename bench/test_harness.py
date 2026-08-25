@@ -230,8 +230,8 @@ def test_a_width_rung_grows_entities_and_holds_the_snapshots(case_name: str) -> 
 # ---------------------------------------------------------------------------
 
 
-def _ceiling(budget: float) -> Any:
-    return harness.Ceiling(budget, {})
+def _ceiling(budget: float, selected: tuple[str, ...] = ('xs', 's', 'm', 'l')) -> Any:
+    return harness.Ceiling(budget, {}, selected)
 
 
 def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
@@ -243,7 +243,7 @@ def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
     """
     ceiling = _ceiling(120.0)
     ceiling.record('pyomo', 'dispatch', 'xs', 'lp', 20.0)
-    reason = ceiling.reached('pyomo', 'dispatch', 'lp')
+    reason = ceiling.reached('pyomo', 'dispatch', 'xs', 'lp')
     assert reason is not None, 'a projection over budget stops the ladder'
     assert '200 s' in reason and '20 s' in reason, 'the reason carries the measurement and the projection'
 
@@ -251,24 +251,43 @@ def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
 def test_a_rung_inside_budget_lets_the_ladder_continue() -> None:
     ceiling = _ceiling(120.0)
     ceiling.record('lpspec', 'dispatch', 'xs', 'lp', 0.5)
-    assert ceiling.reached('lpspec', 'dispatch', 'lp') is None, '0.5 s projects to 5 s, well inside 120 s'
+    assert ceiling.reached('lpspec', 'dispatch', 'xs', 'lp') is None, '0.5 s projects to 5 s, well inside 120 s'
 
 
 def test_a_measurement_over_budget_stops_the_ladder_without_projecting() -> None:
     ceiling = _ceiling(120.0)
     ceiling.record('pyomo', 'dispatch', 'm', 'lp', 300.0)
-    reason = ceiling.reached('pyomo', 'dispatch', 'lp')
+    reason = ceiling.reached('pyomo', 'dispatch', 'xs', 'lp')
     assert reason is not None and 'projects' not in reason, (
         'a rung that already blew the budget needs no arithmetic about the next one'
     )
 
 
-def test_the_top_of_a_ladder_never_projects() -> None:
-    """`2xl` has no rung after it, so its growth is 1.0 and a slow-but-inside
-    measurement there stops nothing."""
-    ceiling = _ceiling(120.0)
-    ceiling.record('lpspec', 'dispatch', '2xl', 'lp', 100.0)
-    assert ceiling.reached('lpspec', 'dispatch', 'lp') is None
+def test_the_top_of_the_run_never_projects() -> None:
+    """The last rung *this run asked for* has nothing after it.
+
+    Read off the selection rather than off the case: a ladder measured to `l`
+    still has `xl` and `2xl` defined behind it, four and twelve times wider, and
+    projecting onto a rung nobody asked for stops the climb over work that was
+    never going to happen. On the first published run it did exactly that.
+    """
+    ceiling = _ceiling(120.0, selected=('xs', 's', 'm', 'l'))
+    ceiling.record('lpspec', 'dispatch', 'l', 'lp', 100.0)
+    assert ceiling.reached('lpspec', 'dispatch', 'l', 'lp') is None, (
+        '`l` is the top of this run; `xl` is not being measured and cannot stop it'
+    )
+
+
+def test_a_ceiling_on_one_ladder_leaves_the_other_alone() -> None:
+    """A case can carry two ladders, and they ask different questions — `l` is
+    the longest model, `w1000` the widest. The first published run ceilinged
+    pyomo and `gurobipy-loop` on the size ladder and lost them from the width
+    tables entirely, which is a measurement nobody decided not to take.
+    """
+    ceiling = _ceiling(120.0, selected=('xs', 's', 'm', 'l', 'w1', 'w10', 'w100', 'w1000'))
+    ceiling.record('pyomo', 'transport', 'm', 'lp', 20.0)
+    assert ceiling.reached('pyomo', 'transport', 'l', 'lp') is not None, 'the size ladder stops'
+    assert ceiling.reached('pyomo', 'transport', 'w10', 'lp') is None, 'the width ladder is a separate climb'
 
 
 def test_a_ceiling_is_per_sink() -> None:
@@ -276,13 +295,15 @@ def test_a_ceiling_is_per_sink() -> None:
     that cannot afford one may still afford the other."""
     ceiling = _ceiling(120.0)
     ceiling.record('pyomo', 'dispatch', 'xs', 'lp', 20.0)
-    assert ceiling.reached('pyomo', 'dispatch', 'highs') is None, 'the other sink was never measured'
+    assert ceiling.reached('pyomo', 'dispatch', 'xs', 'highs') is None, 'the other sink was never measured'
 
 
 def test_no_budget_measures_everything() -> None:
     ceiling = _ceiling(0.0)
     ceiling.record('pyomo', 'dispatch', 'xs', 'lp', 9999.0)
-    assert ceiling.reached('pyomo', 'dispatch', 'lp') is None, '--budget 0 is the way to take the slow number anyway'
+    assert ceiling.reached('pyomo', 'dispatch', 'xs', 'lp') is None, (
+        '--budget 0 is the way to take the slow number anyway'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -513,7 +534,8 @@ def test_marking_leaves_the_published_number_alone() -> None:
 def test_the_ratio_beside_a_marked_cell_is_marked_too() -> None:
     """A ratio is only as quotable as the two minima it divides, and #797 is a
     ratio that would have flipped from 0.73x to 1.23x on one contaminated arm."""
-    assert '| 1.00x~ |' in _rendered(iqr=1.9), 'a ratio drawn from a marked minimum carries the doubt'
+    marked = report.density(report.best([_timing('lpspec', size='d100', iqr=1.9), _timing('linopy', size='d100')]))
+    assert '| 1.00x~ |' in marked, 'a ratio drawn from a marked minimum carries the doubt'
 
 
 def test_a_cell_with_no_number_in_it_is_never_marked() -> None:
@@ -594,6 +616,18 @@ def test_the_marginal_table_carries_no_ratio_between_libraries() -> None:
     assert 'lpspec: steady' in table and 'linopy: steady' in table, 'both libraries still get their columns'
     assert '\u00f7' not in table, 'no ratio column here — the build is not the same work in each'
     assert 'not across the row' in table, 'and the table says so where it is read'
+
+
+def test_a_model_table_shows_the_numbers_and_leaves_the_dividing_to_the_reader() -> None:
+    """Five libraries times wall, peak and a ratio each is nineteen columns
+    before the dimensions start, and the ratio is the half a reader can do by
+    eye from the two numbers beside it. The sweeps keep theirs: they compare at
+    one size, with no column of absolutes to read a ratio off.
+    """
+    rows = report.best([_timing('lpspec'), _timing('linopy')])
+    table = report.table('dispatch', rows, 'lp')
+    assert 'wall: lpspec' in table and 'wall: linopy' in table, 'every library measured is still a column'
+    assert '\u00f7' not in table, 'the per-model table carries no ratio'
 
 
 def test_a_run_of_one_arm_has_no_ratio_column() -> None:

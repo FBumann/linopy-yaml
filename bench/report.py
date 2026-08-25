@@ -162,7 +162,12 @@ def arms_in(keys: Iterable[Key]) -> tuple[str, ...]:
 
 
 def _grid(
-    heading: list[str], leading: tuple[str, ...], body: Iterable[tuple[list[str], Arms]], arms: tuple[str, ...]
+    heading: list[str],
+    leading: tuple[str, ...],
+    body: Iterable[tuple[list[str], Arms]],
+    arms: tuple[str, ...],
+    *,
+    ratios: bool = True,
 ) -> str:
     """A comparison table: cells that identify a row, then every arm and its ratio.
 
@@ -178,8 +183,15 @@ def _grid(
     A run of the baseline alone renders no ratio columns at all: a number
     divided by itself is not a comparison, and a column of `1.00x` reads like
     one.
+
+    ``ratios=False`` drops them whatever the run carried, which is what the
+    per-model tables ask for. Five libraries times wall, peak and a ratio each
+    is nineteen columns before the dimensions, and the ratio is the half a
+    reader can do by eye from the two numbers beside it. The sweeps keep theirs:
+    they compare one library against another *at one size*, where there is no
+    column of absolutes to read the ratio off.
     """
-    against = [a for a in arms if a != BASELINE]
+    against = [a for a in arms if a != BASELINE] if ratios else []
     head = [
         *leading,
         *(f'wall: {a}' for a in arms),
@@ -299,6 +311,7 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
             if ref
         ),
         arms,
+        ratios=False,
     )
 
 
