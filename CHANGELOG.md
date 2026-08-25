@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.0.1-alpha.256](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.255...v0.0.1-alpha.256) (2026-08-25)
+
+
+### Features
+
+* **bench:** every measurement is a row, so a plot is a filter not a patch ([#1265](https://github.com/fluxopt/lpspec/issues/1265)) ([99de9ed](https://github.com/fluxopt/lpspec/commit/99de9ed708721e4214885a4aa5def5d67ac4c6a9))
+
+
+### Bug Fixes
+
+* **bench:** a rename in src cannot retire a bench entry point unnoticed ([#1267](https://github.com/fluxopt/lpspec/issues/1267)) ([7a72612](https://github.com/fluxopt/lpspec/commit/7a72612a879ede2992936fc7f4967f343f264c4f))
+
+
+### Refactoring
+
+* **bench:** an arm is a module, not a branch in three verbs ([#1264](https://github.com/fluxopt/lpspec/issues/1264)) ([e62cc33](https://github.com/fluxopt/lpspec/commit/e62cc332831f933931c3a5b864286b60699af420))
+* **bench:** the eager lane is not one of the libraries we compare against ([#1268](https://github.com/fluxopt/lpspec/issues/1268)) ([37ca9c3](https://github.com/fluxopt/lpspec/commit/37ca9c3436483c234507b1be989a00f794b6b5b9))
+
 ## [0.0.1-alpha.255](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.254...v0.0.1-alpha.255) (2026-08-25)
 
 
