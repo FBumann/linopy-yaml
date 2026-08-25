@@ -23,6 +23,7 @@ import pytest
 
 from bench import conftest as harness
 from bench import floor, plot, profile_build, profile_phases, report, tidy, warm_payoff
+from bench.arms import ARMS, solved
 from bench.arms.lpspec import _tables, checked_sources
 from bench.cases import CASES, Shape
 from bench.conftest import (
@@ -152,6 +153,37 @@ def _loop(case: str, arm: str, width: int) -> dict[str, Any]:
         'steady_build_seconds': 0.05,
         'counts': {'columns': width, 'rows': 10, 'nonzeros': width},
     }
+
+
+# ---------------------------------------------------------------------------
+# a hand-written arm is the same model, or it is not an arm
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport'])
+@pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'lpspec'])
+def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
+    """Every arm but `lpspec` is a model somebody typed twice.
+
+    `lpspec.linopy` could never be a different model — it read the same YAML
+    (hard rule 3), which is what made it an oracle. A hand-written dialect has
+    no such protection: a transposed index or a load vector read in the wrong
+    order builds a *different model* that benchmarks perfectly, and the faster
+    it is the more likely someone quotes it.
+
+    So the smallest rung of each case is solved both ways and the objectives
+    compared. It is slow for a test — four LPs — and it is the whole reason to
+    believe any number these arms produce.
+    """
+    pytest.importorskip('gurobipy')
+    case = CASES[case_name]
+    smallest = case.ladder[0].label
+    paths = case.data(case.shape(smallest))
+    ours = solved('lpspec', case_name, smallest, paths, {})
+    theirs = solved(dialect, case_name, smallest, paths, {})
+    assert theirs == pytest.approx(ours, rel=1e-9), (
+        f'{dialect} solves {case_name}/{smallest} to {theirs}, lpspec to {ours} — not the same model'
+    )
 
 
 # ---------------------------------------------------------------------------
