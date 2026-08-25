@@ -212,7 +212,7 @@ and why, is [the roadmap](roadmap.md).
 
 ### The Python surface
 
-**Fourteen names, and the count is the feature.** The model is the YAML file;
+**Nineteen names, and the count is the feature.** The model is the YAML file;
 Python is how you *run* it — so the whole surface is the diagram above written
 out, with nothing that constructs math and nothing that reaches the plan. Names
 are `lpspec.` unless shown otherwise, and what each one *does* is
@@ -222,12 +222,23 @@ that says *no* needs nothing but the file, which is what makes it a CI verb.
 
 **Loading a file and rendering one are not on this list.** Six names left the
 `__all__` with the language — `load_model`, `Model`, `SymbolTable` and the
-three `to_…` renderers — taking twenty down to fourteen, and
-`expand_piecewise` and the `python -m lpspec` shell front, neither of which was
-ever exported, went with them. They are `math_spec.`'s now, counted in its own
-`__all__`, and a caller that wants them imports that package rather than a
-re-export here: one name, one home. What this package exports is what it does,
-which is bind, build, solve and read back.
+three `to_…` renderers — and `expand_piecewise` and the `python -m lpspec`
+shell front, neither of which was ever exported, went with them. They are
+`math_spec.`'s now, counted in its own `__all__`, and a caller that wants them
+imports that package rather than a re-export here: one name, one home. What
+this package exports is what it does, which is bind, build, solve and read
+back.
+
+**What a verb hands back is part of that verb's signature**, which is why
+`BoundModel`, `Result` and `Runs` are named here and not only reached off a
+call. A caller that *wraps* this package — a framework whose own function
+returns a solve — writes the type down, and a type it cannot import is a type
+it cannot write. The same argument runs the errors one step further than the
+language half: `NoSolutionError` is what every reader on a `Result` raises and
+`LpspecWarning` is what `check` emits, so a sweep that records an infeasible
+scenario rather than dying on it needs both by name. None of the five
+constructs math or reaches the plan — each is what a verb already handed over,
+which is the line the count is drawn on.
 
 | | you want to | the call | data? |
 |---|---|---|---|
@@ -242,7 +253,10 @@ which is bind, build, solve and read back.
 | **read it** | values, shadow prices, the objective | `result.objective` · `.primal` · `.dual`, plus the status pair | — |
 | | the quantity the model named | `result.expression(name)` — lowered on demand at the read, never at build; `lpspec.linopy.expression` on the other lane | — |
 | | bridge out to another library | `.to_pandas` · `.to_dataarray` · `.to_parquet` | — |
+| | name it in your own signature | `BoundModel` · `Result` · `Runs` — what `build`, `solve` and `solve_over` hand back | — |
 | **catch it** | tell a bad model from bad data | `LpspecError` ⊃ `LanguageError` · `DataError` · `DimensionError` · `SchemaError` · `PiecewiseExpansionError` · `LaneError` | — |
+| | record an infeasible run instead of dying on it | `NoSolutionError`, raised by every reader on a `Result` | — |
+| | fail CI on advice, not just on errors | `LpspecWarning`, what `check` emits | no |
 
 **Flat, and a namespace marks a lane rather than a topic.** `lpspec.linopy` is
 the only one, and it earns it by being a different lane — its own dependencies,

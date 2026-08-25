@@ -62,7 +62,7 @@ if TYPE_CHECKING:
 _COMPRESSION = 'zstd'
 
 
-class Cut(NamedTuple):
+class _Cut(NamedTuple):
     """One slice of a sweep: the key, and the sources that build it.
 
     A tuple on purpose: a hand-built axis is documented as a plain list of
@@ -72,7 +72,7 @@ class Cut(NamedTuple):
     """
 
     key: Any
-    sources: dict[str, Any]
+    sources: Mapping[str, Any]
 
 
 class _SliceMeta(NamedTuple):
@@ -256,7 +256,7 @@ class EachCoordinate:
     dim: str
     ordered: bool = False
 
-    def _slices(self, sources: Mapping[str, Any], key_name: str) -> tuple[list[Cut], _OriginalIndex | None]:
+    def _slices(self, sources: Mapping[str, Any], key_name: str) -> tuple[list[_Cut], _OriginalIndex | None]:
         """One cut per coordinate, keyed by it. Sources without *dim* pass through.
 
         No :class:`_OriginalIndex`: nothing was re-indexed, so a slice's frames
@@ -264,10 +264,10 @@ class EachCoordinate:
         """
         del key_name
         carrying, coordinates = _coordinates(sources, self.dim, 'slice')
-        out: list[Cut] = []
+        out: list[_Cut] = []
         for key in coordinates:
             cut = {name: _lazy(sources[name]).filter(pl.col(self.dim) == key).drop(self.dim) for name in carrying}
-            out.append(Cut(key, {**sources, **cut}))
+            out.append(_Cut(key, {**sources, **cut}))
         return out, None
 
 
@@ -302,7 +302,7 @@ class EachWindow:
         if self.into == self.dim:
             raise ValueError(f'into={self.into!r} must differ from dim — the local index replaces the global one')
 
-    def _slices(self, sources: Mapping[str, Any], key_name: str) -> tuple[list[Cut], _OriginalIndex]:
+    def _slices(self, sources: Mapping[str, Any], key_name: str) -> tuple[list[_Cut], _OriginalIndex]:
         """One cut per window, keyed by its **first coordinate**.
 
         Keyed by the coordinate rather than the window's position, which is
@@ -319,7 +319,7 @@ class EachWindow:
         keeps all of it and nothing is dropped off the tail.
         """
         carrying, coordinates = _coordinates(sources, self.dim, 'window')
-        out: list[Cut] = []
+        out: list[_Cut] = []
         owned: list[dict[str, Any]] = []
         for start in range(0, len(coordinates), self.step):
             window = coordinates[start : start + self.length]
@@ -333,7 +333,7 @@ class EachWindow:
                 )
                 for name in carrying
             }
-            out.append(Cut(window[0], {**sources, **cut, self.into: range(len(window))}))
+            out.append(_Cut(window[0], {**sources, **cut, self.into: range(len(window))}))
             owned.extend(
                 {key_name: window[0], self.into: position, self.dim: coordinate}
                 for position, coordinate in enumerate(window[: self.step])
@@ -584,7 +584,7 @@ def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], meta: pl.
 def solve_over(
     model: Any,
     sources: Mapping[str, Any],
-    axis: Axis | Sequence[Cut],
+    axis: Axis | Sequence[tuple[Any, Mapping[str, Any]]],
     *,
     carry: Mapping[str, tuple[str, int | None]] | None = None,
     key_name: str | None = None,
@@ -668,7 +668,7 @@ def solve_over(
     if not cut:
         raise DataError('the axis produced no slices')
 
-    cuts = [Cut(*entry) for entry in cut]
+    cuts = [_Cut(*entry) for entry in cut]
     solving = {'solver_name': solver_name, 'solver_options': dict(solver_options or {}) or None}
     rows: list[dict[str, Any]] = []
     primals: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
@@ -706,7 +706,7 @@ def solve_over(
 
 def _serially(
     schema: Model,
-    cuts: Sequence[Cut],
+    cuts: Sequence[_Cut],
     solving: Mapping[str, Any],
     plan: Mapping[str, _CarryRule],
     keep: Keep,
@@ -763,7 +763,7 @@ def _pooled(
     executor: Any,
     workers_share_fs: bool | None,
     schema: Model,
-    cuts: Sequence[Cut],
+    cuts: Sequence[_Cut],
     solving: Mapping[str, Any],
 ) -> Generator[tuple[Any, _Answer], None, None]:
     """The same, from slices built independently and possibly elsewhere.
@@ -871,7 +871,7 @@ def _run_slice(
 
 
 def _key_column(
-    axis: Axis | Sequence[Cut],
+    axis: Axis | Sequence[tuple[Any, Mapping[str, Any]]],
     key_name: str | None,
     schema: Model,
 ) -> str:
