@@ -374,10 +374,13 @@ density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --sk
 declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --skip-gate --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep" }
 report = { cmd = "python -m bench.report bench/results/latest.json bench/results/density.json bench/results/declarations.json", description = "All three results files as the published markdown" }
 plot = { cmd = "python -m bench.plot", description = "The figures, and the chart page's numbers" }
+# The same three files as `report`, rendered with no opinions: a row per number,
+# so a question the renderers do not answer is a filter rather than a patch.
+table = { cmd = "python -m bench.tidy bench/results/latest.json bench/results/density.json bench/results/declarations.json > bench/results/measurements.csv && python -m bench.tidy bench/results/latest.json bench/results/density.json bench/results/declarations.json --runs > bench/results/runs.csv", description = "Every measurement as one long CSV, and the fingerprint beside it" }
 
 [tool.pixi.feature.bench.tasks.refresh]
 description = "Re-measure the published ladder and rewrite the tables and the chart page"
-depends-on = ["ladder", "density", "declarations", "report", "plot"]
+depends-on = ["ladder", "density", "declarations", "report", "plot", "table"]
 
 # The suite, serial, against the floors — and the absence check first, because a
 # green suite with linopy on disk would be testing the wrong environment.
