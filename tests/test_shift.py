@@ -1,8 +1,8 @@
 """shift: time-coupled recurrences through both backends.
 
 examples/storage.yaml is dispatch plus a cyclic battery:
-soc == shift(soc, over=snapshot, offset=1, edge='wrap") + charge * 0.9 - discharge. The eager backend
-The eager backend implements `edge='wrap'` with linopy"s circular .roll(); the
+soc == shift(soc, over=snapshot, offset=1, edge='wrap') + charge * 0.9 - discharge.
+The eager backend implements `edge='wrap'` with linopy's circular .roll(); the
 relational backend lowers it to plan.Translate — a pointwise ord-join remap.
 """
 
@@ -19,7 +19,16 @@ from lpspec.relational.plan import (
     Translate,
     Variable,
 )
-from tests.conftest import DISPATCH_MODEL, EXAMPLES_DIR, by_coord, override, relation, resolved, schema_of
+from tests.conftest import (
+    DISPATCH_MODEL,
+    EXAMPLES_DIR,
+    by_coord,
+    masked_operand_model,
+    override,
+    relation,
+    resolved,
+    schema_of,
+)
 from tests.differential import differential
 from tests.oracle import pd
 
@@ -56,6 +65,19 @@ def _soc_trace(result):
     )
 
 
+def _storage_variant(replacement: str) -> str:
+    """``examples/storage.yaml`` with its wrap respelled as *replacement*."""
+    original = STORAGE_YAML.read_text()
+    wrap = "shift(soc, over=snapshot, offset=1, edge='wrap')"
+    assert wrap in original, 'examples/storage.yaml no longer spells the wrap this file rewrites'
+    return original.replace(wrap, replacement)
+
+
+def _dimmed(storage_inputs: dict) -> dict:
+    """The storage instance with its load eased, so an acyclic battery stays feasible."""
+    return {**storage_inputs, 'load': (storage_inputs['load'] * 0.93).round(3)}
+
+
 # ---------------------------------------------------------------------------
 # the recurrence, end to end
 # ---------------------------------------------------------------------------
@@ -90,16 +112,8 @@ def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inp
     propagation, the relational one from the vacated coordinates leaving the
     presence set.
     """
-    data = storage_inputs
-    data = {**data, 'load': (data['load'] * 0.93).round(3)}
-
-    original = STORAGE_YAML.read_text()
-    assert "shift(soc, over=snapshot, offset=1, edge='wrap')" in original
-    acyclic = original.replace(
-        "shift(soc, over=snapshot, offset=1, edge='wrap')", 'shift(soc, over=snapshot, offset=1)'
-    )
-
-    with differential(acyclic, data) as run:
+    acyclic = _storage_variant('shift(soc, over=snapshot, offset=1)')
+    with differential(acyclic, _dimmed(storage_inputs)) as run:
         soc, charge, discharge = _soc_trace(run.result)
         assert np.allclose(soc[1:], soc[:-1] + 0.9 * charge[1:] - discharge[1:], atol=1e-6), (
             'the recurrence holds from the second snapshot on'
@@ -117,16 +131,8 @@ def test_a_forward_shift_drops_the_row_at_the_far_end_on_both_lanes(storage_inpu
     shift until #837, where the typesetter turned out to abort on one. The
     engine had always been right; that is the half no test said.
     """
-    data = storage_inputs
-    data = {**data, 'load': (data['load'] * 0.93).round(3)}
-
-    original = STORAGE_YAML.read_text()
-    assert "shift(soc, over=snapshot, offset=1, edge='wrap')" in original
-    forward = original.replace(
-        "shift(soc, over=snapshot, offset=1, edge='wrap')", 'shift(soc, over=snapshot, offset=-1)'
-    )
-
-    with differential(forward, data) as run:
+    forward = _storage_variant('shift(soc, over=snapshot, offset=-1)')
+    with differential(forward, _dimmed(storage_inputs)) as run:
         soc, charge, discharge = _soc_trace(run.result)
         assert np.allclose(soc[:-1], soc[1:] + 0.9 * charge[:-1] - discharge[:-1], atol=1e-6), (
             'the recurrence reads forwards, and holds up to the second-to-last snapshot'
@@ -145,15 +151,8 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
     the last snapshot keeps its equation, with the successor term contributing
     nothing.
     """
-    data = storage_inputs
-    data = {**data, 'load': (data['load'] * 0.93).round(3)}
-
-    original = STORAGE_YAML.read_text()
-    filled = original.replace(
-        "shift(soc, over=snapshot, offset=1, edge='wrap')", 'shift(soc, over=snapshot, offset=-1, edge=0)'
-    )
-
-    with differential(filled, data) as run:
+    filled = _storage_variant('shift(soc, over=snapshot, offset=-1, edge=0)')
+    with differential(filled, _dimmed(storage_inputs)) as run:
         soc, charge, discharge = _soc_trace(run.result)
         assert run.model.constraints['soc_balance'].labels.values[-1] != -1, (
             'edge=0 asks for a value at the boundary, so the last row is built rather than dropped'
@@ -166,19 +165,7 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
 #: A mask that removes one interior coordinate, so the operand's own absence
 #: sits where no edge is. `edge: 0` may fill the boundary and nothing else, and
 #: the two are one call to `fillna` apart on the eager lane (#987).
-MASKED_INTERIOR = {
-    'dimensions': {'t': {'dtype': 'int'}},
-    'parameters': {'usable': {'dims': ['t']}},
-    'variables': {
-        'level': {'foreach': ['t'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
-        'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
-    },
-    'constraints': {'link': {'foreach': ['t'], 'expression': 'take <= shift(level, over=t, offset=1, edge=0)'}},
-    'objective': {
-        'sense': 'maximize',
-        'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)',
-    },
-}
+MASKED_INTERIOR = masked_operand_model('link', 'take <= shift(level, over=t, offset=1, edge=0)')
 
 
 def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_there():
@@ -220,35 +207,16 @@ BY_PARAMETER = {
     },
 }
 
-IN_GROUPS = {
-    'dimensions': {'t': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
-    'lookups': {'season_of': {'over': 't', 'into': 'season'}},
-    'parameters': {'usable': {'dims': ['t']}},
-    'variables': {
-        'level': {'foreach': ['t'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
-        'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
-    },
-    'constraints': {
-        'link': {'foreach': ['t'], 'expression': 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)'}
-    },
-    'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)'},
-}
+IN_GROUPS = masked_operand_model(
+    'link', 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)', grouped=True
+)
 
 #: The same, with nothing masked at all: `level` carries no `where`, so the
 #: operand reaches the shift with no presence frame of its own. Which of the
 #: two group-less readings the lane takes used to depend on that (#1061).
-IN_GROUPS_UNMASKED = {
-    'dimensions': {'t': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
-    'lookups': {'season_of': {'over': 't', 'into': 'season'}},
-    'variables': {
-        'level': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
-        'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
-    },
-    'constraints': {
-        'link': {'foreach': ['t'], 'expression': 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)'}
-    },
-    'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)'},
-}
+IN_GROUPS_UNMASKED = masked_operand_model(
+    'link', 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)', grouped=True, masked=False
+)
 
 #: A fourth snapshot the lookup sends nowhere, for both models above.
 GROUPLESS_SOURCES = {
@@ -494,22 +462,13 @@ def test_an_offset_may_differ_per_entity_and_per_group_at_once():
         assert run.oracle == pytest.approx(41.0), '(0 + 10 + 0 + 30) + (0 + 1 + 0 + 0)'
 
 
-def test_shift_semantics_are_positional_not_lexicographic():
+def test_shift_semantics_are_positional_not_lexicographic(storage_inputs):
     """Coords whose sorted order differs from declared order (string labels:
     lexicographic t0,t1,t10,... vs positional t0..t47). Both backends must
     couple the same neighbours."""
-    n_s = 48
-    labels = pd.Index([f't{i}' for i in range(n_s)], name='snapshot')
+    labels = pd.Index([f't{i}' for i in range(len(storage_inputs['snapshot']))], name='snapshot')
     assert list(labels.sort_values()) != list(labels), 'the fixture is only a fixture if sorted != positional'
-
-    p_max = pd.Series({'wind': 80.0, 'gas': 70.0})
-    t = np.arange(n_s)
-    data = {
-        'p_max': p_max,
-        'cost': pd.Series({'wind': 1.0, 'gas': 40.0}),
-        'load': pd.Series((110 + 60 * np.sin(2 * np.pi * t / 24)).round(3), index=labels),
-    }
-    data |= {'snapshot': labels, 'generator': pd.Index(p_max.index, name='generator')}
+    data = {**storage_inputs, 'load': storage_inputs['load'].set_axis(labels), 'snapshot': labels}
 
     original = STORAGE_YAML.read_text()
     assert 'dtype: int' in original

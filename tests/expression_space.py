@@ -26,10 +26,10 @@ are left to the curated file.
 divergence when they are not went unnoticed for as long as the oracle shared it
 (#311). The condition is read off the tree rather than assumed.
 
-**Degree two goes in the objective, never a constraint row.** The eager lane
-refuses a quadratic constraint outright (#942), so a degree-two expression in a
-row is a lane limit rather than a disagreement, and generating one would make
-the sweep report a gap it already knows about.
+**A degree-two node is generated only as an operand, never emitted as a
+case.** The eager lane refuses a quadratic constraint outright (#942), and
+every case here is a constraint row, so a degree-two expression would make the
+sweep report a lane limit it already knows about.
 """
 
 from __future__ import annotations

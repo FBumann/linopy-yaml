@@ -26,7 +26,7 @@ import yaml as pyyaml
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError
-from tests.conftest import relation, schema_of
+from tests.conftest import by_coord, relation, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
@@ -144,9 +144,6 @@ def test_a_negative_position_counts_from_the_end():
     """`-1` is the last coordinate — the cyclic boundary's other half."""
     sources = _inputs()
     cyclic = MODEL.replace(
-        'expression: soc == soc_initial + inflow - out',
-        'expression: soc == soc_initial + inflow - out',
-    ).replace(
         """objective:""",
         """  soc_final:
     foreach: [snapshot]
@@ -356,18 +353,21 @@ def test_a_comparator_reads_the_same_grouped_as_ungrouped():
     assert _masked('position(snapshot, by=period_of) < 1') == [10, 20], 'and its complement'
 
 
-def test_a_coordinate_in_no_group_has_no_boundary():
+@pytest.mark.parametrize(
+    'where',
+    [
+        pytest.param('position(snapshot, by=period_of) == 0', id='first'),
+        pytest.param('position(snapshot, by=period_of) == -1', id='last'),
+        pytest.param('position(snapshot, by=period_of) >= 0', id='everything'),
+    ],
+)
+def test_a_coordinate_in_no_group_has_no_boundary(where):
     """Snapshot 99 maps nowhere, so no group's boundary is its own.
 
     The same reading a null lookup value gets everywhere else — it belongs to
     no group, so `sum(by=)` places its terms nowhere and this places no row.
     """
-    for where in (
-        'position(snapshot, by=period_of) == 0',
-        'position(snapshot, by=period_of) == -1',
-        'position(snapshot, by=period_of) >= 0',
-    ):
-        assert 99 not in _masked(where), f'{where} claimed a coordinate that is in no group'
+    assert 99 not in _masked(where), f'{where} claimed a coordinate that is in no group'
 
 
 def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
@@ -458,8 +458,8 @@ def test_the_seasons_page_number():
     """
     with differential(SEASONS, _seasons_sources()) as run:
         assert run.oracle == pytest.approx(74.0, rel=RTOL), 'winter 50 and summer 24, agreed by both lanes'
-        released = {int(r['snapshot']): r['value'] for r in run.result.primal('release').to_dicts()}
-        held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
+        released = by_coord(run.result, 'release', 'snapshot')
+        held = by_coord(run.result, 'soc', 'snapshot')
 
     assert released[3] == pytest.approx(10.0), "winter's inflow leaves at winter's own best price"
     assert held[4] == pytest.approx(0.0), 'and winter closes where it opened, handing summer nothing'
@@ -521,7 +521,7 @@ def test_a_filled_partitioned_edge_builds_every_row():
     """`edge=0` per group: the row survives and its first snapshot starts empty."""
     model = _partitioned('edge=0, by=season_of')
     with differential(model, _seasons_sources()) as run:
-        held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
+        held = by_coord(run.result, 'soc', 'snapshot')
     with lps.build(pyyaml.safe_load(model), _seasons_sources()) as built:
         assert built.diagnostics().omissions.is_empty(), 'a filled edge builds every row'
     assert held[5] == pytest.approx(0.0), "summer's first snapshot starts from the 0 its own edge was filled with"
@@ -535,14 +535,22 @@ def test_the_axis_wrap_is_a_different_model():
     """
     with differential(_partitioned("edge='wrap'"), _seasons_sources()) as run:
         assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the horizon as one cycle, worth 6 more to winter'
-        held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
+        held = by_coord(run.result, 'soc', 'snapshot')
     assert held[1] == pytest.approx(6.0), "winter's first snapshot opens on what summer left"
 
     with differential(_partitioned("edge='wrap', by=season_of"), _seasons_sources()) as run:
         assert run.oracle == pytest.approx(74.0, rel=RTOL), 'each season closed on itself, and 6 poorer for it'
 
 
-def test_coordinates_in_no_group_translate_from_nothing():
+@pytest.mark.parametrize(
+    ('edge', 'omissions'),
+    [
+        pytest.param("edge='wrap', by=season_of", 2, id='wrap'),
+        pytest.param('edge=0, by=season_of', 2, id='zero'),
+        pytest.param('by=season_of', 4, id='bare'),
+    ],
+)
+def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
     """Snapshots the lookup sends nowhere are in no group, so they reach nothing.
 
     **Two** of them, which is the case that separates "in no group" from "in a
@@ -550,8 +558,10 @@ def test_coordinates_in_no_group_translate_from_nothing():
     second a predecessor — the first — and write a balance row about a season
     that does not exist. Under a wrap it would close them onto each other.
 
-    All three edge policies, because a numeric one is the case that used to
-    read "reached nothing" as "the shift vacated this" and fill it (#1061).
+    Each edge policy is its own case, because a numeric one is the case that
+    used to read "reached nothing" as "the shift vacated this" and fill it
+    (#1061). The bare edge drops each season's first row as well, so its
+    omission count is higher.
     """
     sources = _seasons_sources()
     snapshots = [1, 2, 3, 4, 5, 6, 7, 98, 99]
@@ -560,17 +570,15 @@ def test_coordinates_in_no_group_translate_from_nothing():
     for name in ('inflow', 'price'):
         sources[name] = pl.concat([sources[name], pl.DataFrame({'snapshot': [98, 99], 'value': [1.0, 1.0]})])
 
-    for edge in ("edge='wrap', by=season_of", 'edge=0, by=season_of', 'by=season_of'):
-        model = _partitioned(edge)
-        with differential(model, sources) as run:
-            held = {int(r['snapshot']): r['value'] for r in run.result.primal('soc').to_dicts()}
-        with lps.build(pyyaml.safe_load(model), sources) as built:
-            omitted = {r['constraint']: r['rows_not_built'] for r in built.diagnostics().omissions.to_dicts()}
+    model = _partitioned(edge)
+    with differential(model, sources) as run:
+        held = by_coord(run.result, 'soc', 'snapshot')
+    with lps.build(pyyaml.safe_load(model), sources) as built:
+        omitted = {r['constraint']: r['rows_not_built'] for r in built.diagnostics().omissions.to_dicts()}
 
-        expected = 2 if edge.startswith('edge=') else 4  # bare drops each season's first as well
-        assert omitted['season_balance'] == expected, f'{edge}: the two group-less snapshots build no row'
-        assert held[98] == pytest.approx(0.0), f'{edge}: and their levels sit in no balance at all'
-        assert held[99] == pytest.approx(0.0), f'{edge}: neither reads the other'
+    assert omitted['season_balance'] == omissions, f'{edge}: the two group-less snapshots build no row'
+    assert held[98] == pytest.approx(0.0), f'{edge}: and their levels sit in no balance at all'
+    assert held[99] == pytest.approx(0.0), f'{edge}: neither reads the other'
 
 
 def test_a_lookup_over_another_dimension_cannot_partition_a_translation():

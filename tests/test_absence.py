@@ -153,7 +153,7 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
     """
     with differential(GROUPED_CONSTANT_MODEL, _grouped_constant_sources(), lp=True) as run:
         assert run.result.objective == pytest.approx(7.0, rel=RTOL), 'north imports up to 3 + 4, south up to nothing'
-        built = {row['bus']: row['value'] for row in run.result.primal('imports').to_dicts()}
+        built = by_coord(run.result, 'imports', 'bus')
 
     assert built['south'] == pytest.approx(0.0), "an empty group caps south's imports at the empty sum"
 
@@ -189,7 +189,7 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
     }
     with differential(SPANNED_GROUPED_CONSTANT_MODEL, sources, lp=True) as run:
         assert run.result.objective == pytest.approx(7.0 + 2.0, rel=RTOL), 'north takes both snapshots, south neither'
-        built = {(row['snapshot'], row['bus']): row['value'] for row in run.result.primal('imports').to_dicts()}
+        built = by_coord(run.result, 'imports', 'snapshot', 'bus')
 
     assert built[(0, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
     assert built[(1, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
@@ -232,7 +232,7 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     }
     with differential(PLURAL_GROUPED_CONSTANT_MODEL, sources, lp=True) as run:
         assert run.result.objective == pytest.approx(3.0 + 4.0, rel=RTOL), 'south holds nothing at either technology'
-        built = {(row['bus'], row['technology']): row['value'] for row in run.result.primal('imports').to_dicts()}
+        built = by_coord(run.result, 'imports', 'bus', 'technology')
 
     assert built[('south', 'wind')] == pytest.approx(0.0), 'no generator sits at (south, wind)'
     assert built[('south', 'solar')] == pytest.approx(0.0), 'no generator sits at (south, solar)'

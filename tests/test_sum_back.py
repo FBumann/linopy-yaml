@@ -18,7 +18,7 @@ import lpspec as lps
 from lpspec.errors import DimensionError, LanguageError
 from lpspec.lowering import _Lowering
 from lpspec.relational.plan import Window
-from tests.conftest import relation, resolved, schema_of
+from tests.conftest import masked_operand_model, relation, resolved, schema_of
 from tests.differential import differential
 from tests.oracle import pd
 
@@ -104,16 +104,7 @@ def test_a_literal_width_is_the_last_n_positions():
 #: A window over an operand that is masked away at one interior position. The
 #: width decides what the mask means: a wider window reaches it *and* live
 #: positions, a width of 1 reaches nothing else at all (#1059, #1060).
-MASKED_WINDOW = {
-    'dimensions': {'t': {'dtype': 'int'}},
-    'parameters': {'usable': {'dims': ['t']}},
-    'variables': {
-        'level': {'foreach': ['t'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
-        'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
-    },
-    'constraints': {'held': {'foreach': ['t'], 'expression': 'take <= sum_back(level, over=t, within=1)'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)'},
-}
+MASKED_WINDOW = masked_operand_model('held', 'take <= sum_back(level, over=t, within=1)')
 
 MASKED_WINDOW_SOURCES = {
     't': pd.Index([0, 1, 2, 3], name='t'),

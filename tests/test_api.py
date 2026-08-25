@@ -1,7 +1,7 @@
 """Native API: YAML → streaming engine → solver, with linopy never imported.
 
-The linopy-free guarantee is asserted in a subprocess so conftest's optional
-lpspec_linopy import cannot pollute the check.
+The linopy-free guarantee is asserted in a subprocess so the suite's own
+oracle imports cannot pollute the check.
 
 This module is deliberately **pandas-free**: it is the bare install's proof
 that the native path — frames in, build, solve, frames out — needs no
@@ -607,8 +607,8 @@ def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs
 def test_check_catches_a_dim_error_with_no_sources_bound():
     """`check` is a CI verb, and this is what makes it one.
 
-    Every dim rule is decided from declarations alone — `tests/language/
-    test_dimensions.py` is the whole set — so the claim worth making *here* is
+    Every dim rule is decided from declarations alone — math-spec's own suite
+    is the whole set (#1150) — so the claim worth making *here* is
     not that the rule exists but that the runner reaches it without a byte of
     data. Kept on this side of the split for that reason: it is an assertion
     about `check`, not about dims.

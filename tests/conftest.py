@@ -32,7 +32,7 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
-from math_spec import load_model
+from math_spec import Namespace, expression_of, load_model
 
 from lpspec.sources import bindable
 
@@ -59,7 +59,7 @@ EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 #: reach the outside answer, ``test_rebind.py`` whether a rebind reaches the
 #: answer a fresh build does.
 PORTS_DIR = EXAMPLES_DIR / 'ports'
-PORT_REFERENCES: dict[str, dict[str, Any]] = json.loads((PORTS_DIR / 'references.json').read_text())
+PORT_REFERENCES: dict[str, dict[str, Any]] = constructs.REFERENCES
 
 
 def bindable_on_this_install(name: str) -> None:
@@ -185,15 +185,15 @@ def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
     return dict(zip(keys, frame['value'], strict=True))
 
 
-def resolved(text, schema):
+def resolved(text: str, schema: Any) -> Any:
     """Parse + expand + resolve — exactly what a backend receives.
 
-    Tests that call `_Lowering.expr` or `evaluate_where` directly must go through
-    this: a raw `parse_expression` result still holds NameNodes, and both
-    backends now assert those never reach them (resolution.py).
+    Tests that call ``_Lowering.expr`` or ``evaluate_where`` directly must go
+    through this: a raw ``parse_expression`` result still holds NameNodes, and
+    both backends assert those never reach them (``lowering.py``,
+    ``linopy/builder.py``). The ``'t'`` is the error-context label the
+    resolver stamps on refusals, not a dimension.
     """
-    from math_spec import Namespace, expression_of
-
     return expression_of(text, schema, Namespace.of(schema), 't')
 
 
@@ -311,8 +311,6 @@ def dispatch_frame_inputs():
     Tests that assert the native API's behaviour use this one, so they stay
     runnable with no dataframe library beyond the engine's own installed.
     """
-    import polars as pl
-
     generators = list(DISPATCH_GENERATORS)
     return {
         'p_max': pl.DataFrame({'generator': generators, 'value': list(DISPATCH_P_MAX)}),
@@ -408,6 +406,36 @@ def law_model(
     }
 
 
+def masked_operand_model(constraint: str, expression: str, *, grouped: bool = False, masked: bool = True) -> dict:
+    """The probe behind the shift and window edge cases, over one masked operand.
+
+    ``level`` is masked where ``usable`` says so (or not at all, under
+    ``masked=False`` — the operand that reaches the operator with no presence
+    frame of its own), and ``take`` is capped only by *expression*'s row. The
+    1000x penalty on ``level`` is the knowledge: it makes "row dropped" and
+    "row built and binding" separable from the objective alone, rather than
+    only from a row count. ``grouped`` adds the ``season_of`` lookup the
+    partitioned walks read.
+    """
+    model: dict[str, Any] = {
+        'dimensions': {'t': {'dtype': 'int'}},
+        'parameters': {'usable': {'dims': ['t']}},
+        'variables': {
+            'level': {'foreach': ['t'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
+            'take': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+        },
+        'constraints': {constraint: {'foreach': ['t'], 'expression': expression}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t) - 1000 * sum(level, over=t)'},
+    }
+    if grouped:
+        model['dimensions']['season'] = {'dtype': 'str'}
+        model['lookups'] = {'season_of': {'over': 't', 'into': 'season'}}
+    if not masked:
+        del model['parameters']
+        del model['variables']['level']['where']
+    return model
+
+
 @pytest.fixture
 def transport_data():
     """A four-bus network whose data is feasible by construction.
@@ -463,8 +491,6 @@ def recomputed_row_values(engine, result) -> Any:
     Scattered rather than ``reduceat``-ed: a purely quadratic row owns no
     linear entries, and ``reduceat`` repeats the previous row on an empty span.
     """
-    import numpy as np
-
     tables = engine._model.tables()
     x = np.zeros(tables.column_count)
     for name, block in engine._model.variables.items():

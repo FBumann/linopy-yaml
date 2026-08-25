@@ -34,7 +34,7 @@ from math_spec import expand_piecewise
 from lpspec.errors import DimensionError, LanguageError, SchemaError
 from lpspec.lowering import _Lowering, lower_program
 from lpspec.relational.plan import GroupSum, Variable
-from tests.conftest import override, raw_of, relation, resolved, schema_of
+from tests.conftest import by_coord, override, raw_of, relation, resolved, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import operators, pd, xr
 from tests.test_compiler import compiler
@@ -122,7 +122,7 @@ def test_grouping_through_two_lookups_agrees_across_the_lanes():
     sources = _inputs()
     with differential(MODEL, sources, lp=True) as run:
         assert run.oracle == pytest.approx(10 * 1.0 + 5 * 2.0 + 5 * 3.0, rel=RTOL)
-        built = dict(run.result.primal('p').select('generator', 'value').iter_rows())
+        built = by_coord(run.result, 'p', 'generator')
 
     assert built['g1'] == pytest.approx(10.0), '(a, wind) is the binding limit'
     assert built['g2'] == pytest.approx(5.0), '(a, sun) is the binding limit'

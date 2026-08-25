@@ -72,23 +72,20 @@ def _in_breach() -> list[str]:
 
 
 def test_an_assertion_whose_claim_is_not_on_the_line_carries_a_message() -> None:
+    """The ratchet holds in both directions, off one pass over the tree.
+
+    Above the constant, an assertion was added whose claim is not written
+    down; below it, the count fell and the ceiling did not — and a ceiling
+    nobody lowers is a ceiling that stops meaning anything, since the next
+    unmessaged assertion lands under the old headroom unremarked.
+    """
     breach = _in_breach()
     assert len(breach) <= IN_BREACH, (
         f'{len(breach)} assertions state a claim their expression does not carry, above the {IN_BREACH} '
-        f'this ratchet was set at — put the claim in the message, since a message is what prints. New:\n  '
-        + '\n  '.join(breach[IN_BREACH:])
+        f'this ratchet was set at — put the claim in the message, since a message is what prints. '
+        f'In breach, in full:\n  ' + '\n  '.join(breach)
     )
-
-
-def test_the_ratchet_is_not_left_behind_by_the_tree() -> None:
-    """A ceiling nobody lowers is a ceiling that stops meaning anything.
-
-    Not a style point: if the count has fallen and the constant has not, the
-    next assertion added without a message lands under the old headroom and the
-    check says nothing about it.
-    """
-    breach = len(_in_breach())
-    assert breach == IN_BREACH, (
-        f'{breach} assertions are in breach but IN_BREACH says {IN_BREACH} — set it to {breach} in this PR, '
-        f'so the headroom the check leaves is the headroom the tree actually has'
+    assert len(breach) == IN_BREACH, (
+        f'{len(breach)} assertions are in breach but IN_BREACH says {IN_BREACH} — set it to {len(breach)} '
+        f'in this PR, so the headroom the check leaves is the headroom the tree actually has'
     )

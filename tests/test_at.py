@@ -27,7 +27,7 @@ import polars as pl
 import pytest
 
 import lpspec as lps
-from tests.conftest import EXAMPLES_DIR, relation
+from tests.conftest import EXAMPLES_DIR, by_coord, relation
 
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
 PAGE = Path('docs/examples/multi_period.md')
@@ -133,8 +133,8 @@ def test_one_binary_gates_every_flow_of_its_component():
     }
     with lps.solve(COMPONENT_GATE, sources) as result:
         assert result.objective == pytest.approx(38.0)
-        running = {(r['component'], r['t']): r['value'] for r in result.primal('on').to_dicts()}
-        rates = {(r['flow'], r['t']): r['value'] for r in result.primal('rate').to_dicts()}
+        running = by_coord(result, 'on', 'component', 't')
+        rates = by_coord(result, 'rate', 'flow', 't')
 
     for t in (0, 1):
         for flow, component in zip(flows, ['c1', 'c1', 'c2'], strict=True):

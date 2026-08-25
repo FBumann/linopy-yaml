@@ -40,10 +40,10 @@ def test_no_file_carries_a_conflict_marker(path: Path) -> None:
     try:
         text = path.read_text()
     except (UnicodeDecodeError, FileNotFoundError):
-        return  # binary, or a path git tracks that the checkout does not hold
+        pytest.skip('binary, or a path git tracks that the checkout does not hold')
 
     if path == Path(__file__):
-        return  # this module names the markers it looks for
+        pytest.skip('this module names the markers it looks for')
 
     found = MARKER.search(text)
     assert not found, (

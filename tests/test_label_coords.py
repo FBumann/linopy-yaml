@@ -22,6 +22,7 @@ from math_spec import FORMATS, load_model, typeset
 
 import lpspec as lps
 from lpspec.errors import DataError, LpspecError, LpspecWarning
+from tests.conftest import by_coord
 
 
 def _model(objective: str = 'sum(x, over=snapshot)') -> dict:
@@ -518,7 +519,7 @@ def test_a_declared_map_needs_no_index_source():
     case rather than an error or a default.
     """
     with lps.solve(DECLARED, DECLARED_SOURCES) as result:
-        built = {row['generator']: row['value'] for row in result.primal('p').to_dicts()}
+        built = by_coord(result, 'p', 'generator')
         assert result.objective == pytest.approx(13.0)
     assert built['g3'] == pytest.approx(0.0), 'a generator on no bus can serve no load, however cheap'
 
@@ -743,7 +744,7 @@ def test_a_supplied_relation_reaches_the_declared_map_without_touching_the_index
     list, so nothing here rewrites a table someone else generated.
     """
     with lps.solve(SUPPLIED, _SUPPLIED_SOURCES) as result:
-        built = {row['generator']: row['value'] for row in result.primal('p').to_dicts()}
+        built = by_coord(result, 'p', 'generator')
         assert result.objective == pytest.approx(13.0)
     assert built['g3'] == pytest.approx(0.0), 'a generator in no row of the map is a generator on no bus'
 

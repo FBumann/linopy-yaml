@@ -24,7 +24,9 @@ import pytest
 from lpspec.errors import DataError, LaneError, LanguageError
 from lpspec.sources import tidy_sources
 from tests.conftest import schema_of
+from tests.differential import differential
 from tests.oracle import builder, linopy, loader, lpspec_linopy, operators, pd, where, xr
+from tests.piecewise_models import curve_frame
 
 if TYPE_CHECKING:
     from math_spec import Model
@@ -227,6 +229,18 @@ class TestLoadParameters:
 # builder: the operand shapes an operator refuses
 # ---------------------------------------------------------------------------
 
+#: Which operators take a lookup, what kwargs each needs, and how a message
+#: names it — one fact, three tests.
+LOOKUP_OPERATORS = [
+    pytest.param(
+        operators.operator_grouped_sum,
+        {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}},
+        'sum(by=)',
+        id='sum-by',
+    ),
+    pytest.param(operators.operator_at, {'into': ('b',)}, 'at()', id='at'),
+]
+
 
 class TestOperandShapesAnOperatorRefuses:
     """Reachable only by a hand-built call, and therefore only from here.
@@ -239,35 +253,15 @@ class TestOperandShapesAnOperatorRefuses:
     `AttributeError` from inside xarray.
     """
 
-    @pytest.mark.parametrize(
-        ('call', 'kwargs'),
-        [
-            pytest.param(
-                operators.operator_grouped_sum,
-                {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}},
-                id='sum-by',
-            ),
-            pytest.param(operators.operator_at, {'into': ('b',)}, id='at'),
-        ],
-    )
-    def test_a_lookup_that_is_not_an_array_names_what_arrived(self, call, kwargs):
+    @pytest.mark.parametrize(('call', 'kwargs', 'named'), LOOKUP_OPERATORS)
+    def test_a_lookup_that_is_not_an_array_names_what_arrived(self, call, kwargs, named):
         array = xr.DataArray([1.0, 2.0], dims=['g'], coords={'g': ['w', 's']})
 
         with pytest.raises(TypeError, match='lookup must be an array'):
             call(array, ({'w': 'n'},), **kwargs)
 
-    @pytest.mark.parametrize(
-        ('call', 'kwargs'),
-        [
-            pytest.param(
-                operators.operator_grouped_sum,
-                {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}},
-                id='sum-by',
-            ),
-            pytest.param(operators.operator_at, {'into': ('b',)}, id='at'),
-        ],
-    )
-    def test_a_lookup_over_two_dims_is_refused_as_language(self, call, kwargs):
+    @pytest.mark.parametrize(('call', 'kwargs', 'named'), LOOKUP_OPERATORS)
+    def test_a_lookup_over_two_dims_is_refused_as_language(self, call, kwargs, named):
         """A lookup is one column of one index, so two dims is not a shape it has."""
         array = xr.DataArray([1.0, 2.0], dims=['g'], coords={'g': ['w', 's']})
         wide = xr.DataArray([['n', 'e']], dims=['t', 'g'], coords={'t': [0], 'g': ['w', 's']})
@@ -275,18 +269,7 @@ class TestOperandShapesAnOperatorRefuses:
         with pytest.raises(LanguageError, match='exactly one dimension'):
             call(array, (wide,), **kwargs)
 
-    @pytest.mark.parametrize(
-        ('call', 'kwargs', 'named'),
-        [
-            pytest.param(
-                operators.operator_grouped_sum,
-                {'into': ('b',), 'labels': {'b': pd.Index(['n'], name='b')}},
-                'sum(by=)',
-                id='sum-by',
-            ),
-            pytest.param(operators.operator_at, {'into': ('b',)}, 'at()', id='at'),
-        ],
-    )
+    @pytest.mark.parametrize(('call', 'kwargs', 'named'), LOOKUP_OPERATORS)
     def test_an_operand_the_operator_cannot_read_names_the_call(self, call, kwargs, named):
         """The operand reaches the guard, not xarray — so the message says which operator."""
         mapping = xr.DataArray(['n', 'n'], dims=['g'], coords={'g': ['w', 's']})
@@ -594,8 +577,6 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
     the eager lane by building the declared expression on the solved model and
     taking linopy's native `.solution`.
     """
-    from tests.differential import differential
-
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
     with differential(path, EXPRESSION_DATA) as run:
         tidy = run.result.expression(name)
@@ -646,24 +627,13 @@ objective:
 """
 
 
-def _curve(points):
-    """A per-generator curve as the tidy frame it is supplied as."""
-    return pl.DataFrame(
-        {
-            'generator': [g for g, _ in points],
-            'bp': [k for _, k in points],
-            'value': list(points.values()),
-        }
-    )
-
-
 MASKED_CURVE_DATA = {
     'p_max': pd.Series({'hydro': 40.0, 'gas': 80.0}),
     'load': pd.Series([50.0], index=pd.RangeIndex(1, name='snapshot')),
-    'bp_x': _curve(
+    'bp_x': curve_frame(
         {('hydro', 0): 0.0, ('hydro', 1): 40.0, ('gas', 0): 0.0, ('gas', 1): 20.0, ('gas', 2): 50.0, ('gas', 3): 80.0}
     ),
-    'bp_y': _curve(
+    'bp_y': curve_frame(
         {
             ('hydro', 0): 0.0,
             ('hydro', 1): 200.0,
@@ -687,8 +657,6 @@ def test_a_named_expression_reads_off_a_masked_curve(yaml_file):
     parameter no caller wrote and none can supply. `build` passed the file and
     this reader passed the expansion, which is the only reason one worked.
     """
-    from tests.differential import differential
-
     path = yaml_file(MASKED_CURVE_YAML, 'masked_curve.yaml')
     with differential(path, MASKED_CURVE_DATA) as run:
         tidy = run.result.expression('spend')
@@ -712,8 +680,6 @@ def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inpu
     conversion at the call site, which is what made the two accepted-input sets
     a divergence a user hit directly (#60).
     """
-    from tests.differential import differential
-
     frames = dispatch_frame_inputs
     path = tmp_path / 'load.parquet'
     frames['load'].write_parquet(path)
@@ -848,29 +814,20 @@ def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
     assert 'x' in lpspec_linopy.build(model, indexed).variables
 
 
-class TestLoadTimeIntegration:
-    """The eager lane's entry points, so only this class needs the [linopy] extra.
-
-    ``tests.oracle`` is imported per test rather than at module scope: the rest
-    of the module is pure load-time validation and runs on a bare install.
-    """
-
-    def test_from_yaml_fails_before_data_validation(self, tmp_path):
-        """A typo in an expression errors even when data= is absent."""
-        from tests.oracle import lpspec_linopy
-
-        f = tmp_path / 'm.yaml'
-        f.write_text(
-            'dimensions:\n'
-            '  g:\n'
-            '    values: [wind, solar]\n'
-            'variables:\n'
-            '  p:\n'
-            '    foreach: [g]\n'
-            'constraints:\n'
-            '  cap:\n'
-            '    foreach: [g]\n'
-            '    expression: pp <= 100\n'
-        )
-        with pytest.raises(ValueError, match="'pp' not found"):
-            lpspec_linopy.build(f, {})
+def test_from_yaml_fails_before_data_validation(tmp_path):
+    """A typo in an expression errors even when data= is absent."""
+    f = tmp_path / 'm.yaml'
+    f.write_text(
+        'dimensions:\n'
+        '  g:\n'
+        '    values: [wind, solar]\n'
+        'variables:\n'
+        '  p:\n'
+        '    foreach: [g]\n'
+        'constraints:\n'
+        '  cap:\n'
+        '    foreach: [g]\n'
+        '    expression: pp <= 100\n'
+    )
+    with pytest.raises(ValueError, match="'pp' not found"):
+        lpspec_linopy.build(f, {})
