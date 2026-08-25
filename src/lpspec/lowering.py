@@ -348,19 +348,25 @@ class _Lowering:
         """``sum_back(x, over=d, within=w)`` — a trailing window along one dimension.
 
         *within* is an integer literal of at least one, or a parameter naming a
-        per-entity width, which :meth:`_named_width` holds to the two rules
-        that make it mean one thing.
+        per-entity width, which the language holds to the two rules that make it
+        mean one thing before this is reached.
+
+        ``by=`` partitions the window, which is language and not a plan node
+        here: refused after the dim rules, so a partition this lane would build
+        wrongly is answered by :func:`_partitioned_window_message` rather than by
+        a window that quietly spans two groups.
         """
         over_node = node.kwargs['over']
         if not isinstance(over_node, DimensionNode):
             raise LanguageError(f'{self.context}: sum_back(over=...) must name a dimension')
         within_node = node.kwargs['within']
         self._dim_rules(node)
+        if node.kwargs.get('by') is not None:
+            raise LanguageError(f'{self.context}: {_partitioned_window_message()}')
         operand = self.expr(node.args[0])
         wrap = _window_edge(node.kwargs.get('edge'), self.context)
         width: int | str
         if isinstance(within_node, ParameterNode):
-            self._named_width(within_node.name, over_node.name)
             width = within_node.name
         elif (
             isinstance(within_node, NumberNode)
@@ -375,10 +381,9 @@ class _Lowering:
     def shift(self, node: FunctionCallNode) -> plan.Expression:
         """``shift(x, over=d, offset=n)`` — the value at *t - offset* along one dim.
 
-        The longest of the four because *offset* and *edge* are read together: a
-        named offset is refused a negation and held to :meth:`_named_offset`'s
-        four rules, and what the vacated positions contribute has to be decided
-        before either is checked.
+        The longest of the four because *offset* and *edge* are read together:
+        what the vacated positions contribute decides whether a named offset is
+        sayable at all, so it is settled before the offset is read.
         """
         over_node = node.kwargs['over']
         if not isinstance(over_node, DimensionNode):
@@ -402,9 +407,8 @@ class _Lowering:
             raise LanguageError(_shift_over_data_message(self.context))
         by: int | str
         if isinstance(by_node, ParameterNode):
-            self._named_offset(by_node.name, node, over_node.name, wrap=wrap, fill=fill)
-            if sign < 0:
-                raise LanguageError(f'{self.context}: {_negated_offset_message(by_node.name)}')
+            if not wrap and fill is None:
+                raise LanguageError(f'{self.context}: {_named_offset_edge_message(by_node.name)}')
             by = by_node.name
         else:
             assert isinstance(by_node, NumberNode)
@@ -419,88 +423,6 @@ class _Lowering:
         frame is ``dimensions.check_schema``'s business.
         """
         dims_of(node, self.schema, self.context)
-
-    def _named_width(self, name: str, dimension: str) -> None:
-        """The two rules that make a per-entity window width mean one thing.
-
-        A width that varies along the dimension being summed over would make the
-        window a different length at every position, which no longer reads as
-        "the last *n*"; and a non-integral width cannot count positions.
-        """
-        declared = self.schema.parameters[name]
-        if declared.dtype != 'int':
-            raise LanguageError(
-                f"{self.context}: sum_back(within={name}) needs an integer parameter, and '{name}' is "
-                f"declared '{declared.dtype}'. A width counts positions rather than measuring a "
-                f'distance.'
-            )
-        if dimension in declared.dims:
-            raise LanguageError(
-                f"{self.context}: sum_back(within={name}) sums over '{dimension}', and '{name}' is "
-                f'declared over it ({sorted(declared.dims)}). A width that changes along '
-                f"'{dimension}' gives a different window at every position, which is not a "
-                f'trailing window. Sum over a width that is constant along it.'
-            )
-
-    def _named_offset(
-        self, name: str, node: FunctionCallNode, dimension: str, *, wrap: bool, fill: float | None
-    ) -> None:
-        """The four rules that make a per-entity offset mean one thing.
-
-        An offset that depends on the dimension it translates would move each
-        position by a different amount *along that axis*, which is a permutation
-        rather than a translation and has no reading as a lag. An offset that is
-        not integral cannot land on a coordinate. An offset varying over a
-        dimension neither the operand nor a partition puts within reach has no
-        coordinate to be read at, and would broadcast the shifted expression onto
-        a dimension the operator's dim rule says it does not have (#1161). And a
-        named offset must say what the vacated positions contribute: the absent
-        edge propagates through a presence frame keyed by the dimension alone,
-        which a per-entity edge is not — refused here rather than answered wrongly
-        (#850).
-        """
-        # An undeclared name never reaches here: resolution refuses it first, and
-        # names the parameters that do exist, which is the better message.
-        declared = self.schema.parameters[name]
-        if declared.dtype != 'int':
-            raise LanguageError(
-                f"{self.context}: shift(offset={name}) needs an integer parameter, and '{name}' is "
-                f"declared '{declared.dtype}'. An offset lands on a coordinate, so it counts "
-                f'positions rather than measuring a distance.'
-            )
-        if dimension in declared.dims:
-            raise LanguageError(
-                f'{self.context}: shift(offset={name}) is offset by a parameter that itself spans '
-                f"'{dimension}', the dimension being translated. That moves each position by "
-                f'a different amount along the axis it is moving, which is a permutation and '
-                f'not a lag — drop the dimension from the parameter, or state the map you mean '
-                f'as a lookup.'
-            )
-        stray = sorted(set(declared.dims) - self._within_reach(node))
-        if stray:
-            raise LanguageError(f'{self.context}: {_stray_offset_message(name, stray, _partition_of(node))}')
-        if not wrap and fill is None:
-            raise LanguageError(
-                f'{self.context}: shift(offset={name}) leaves the vacated positions absent, which a '
-                f'per-entity offset cannot say yet.\n'
-                f"Add edge='wrap' for a cyclic translation, or edge=<number> for what the "
-                f'vacated positions contribute.'
-            )
-
-    def _within_reach(self, node: FunctionCallNode) -> set[str]:
-        """The dims a named offset may vary over.
-
-        Two ways for a coordinate of the offset to be one the shift can read it
-        at: the shifted expression carries the dim, or the partition groups the
-        walked axis *into* it, and then every coordinate of a group shares the
-        group's own lag.
-        """
-        reach = set(dims_of(node.args[0], self.schema, self.context))
-        by_node = node.kwargs.get('by')
-        if by_node is not None:
-            assert isinstance(by_node, LookupNode)
-            reach |= set(by_node.into)
-        return reach
 
 
 #: One lowering per name in the language's ``BUILTIN_NAMES``. A table rather
@@ -557,8 +479,8 @@ def _partition_of(node: FunctionCallNode) -> str | None:
     """The lookup a translation walks inside, if the call names one.
 
     That it is a *single* lookup, and one *over the translated dimension*, is
-    checked at load with the other dim rules (``language/dimensions.py``), where
-    a model is refused before any data is read.
+    checked with the other dim rules (``math_spec.dimensions``), where a model
+    is refused before any data is read.
     """
     by_node = node.kwargs.get('by')
     if by_node is None:
@@ -576,18 +498,39 @@ def _shift_by_message() -> str:
     )
 
 
-def _negated_offset_message(name: str) -> str:
-    """Why ``offset=-lead`` is refused rather than negated.
+def _named_offset_edge_message(name: str) -> str:
+    """Why a named offset must say what the vacated positions contribute.
 
-    A literal offset is written with its sign in the call; a named one carries
-    it in the values, where the reader of the data can see which way each row
-    points. Allowing both spellings would let one model say ``offset=-lead`` and
-    another ``offset=lead`` with negative values and mean the same thing.
+    The absent edge propagates through a presence frame keyed by the translated
+    dimension alone, and a per-entity offset vacates a different slot for each
+    entity — which that frame cannot say. Refused rather than answered wrongly
+    (#850); the two edges that write their own answer are allowed.
     """
     return (
-        f'shift(offset=-{name}) negates a named offset, which the language does not do.\n'
-        f"Put the sign in '{name}' itself — a named offset carries its direction "
-        f'in the data, where the row that points backwards says so.'
+        f'shift(offset={name}) leaves the vacated positions absent, which a '
+        f'per-entity offset cannot say yet.\n'
+        f"Add edge='wrap' for a cyclic translation, or edge=<number> for what the "
+        f'vacated positions contribute.'
+    )
+
+
+def _partitioned_window_message() -> str:
+    """A window the language partitions and this repository does not build.
+
+    Ignoring the keyword is a wrong answer rather than a missing one: the window
+    then reaches across the seam between two groups and sums rows that are not
+    neighbours, and the model that makes builds, solves and reports optimal.
+
+    One refusal serves both lanes because both enter here — ``lpspec.linopy``'s
+    ``build`` runs this lowering pass before it evaluates anything, so the eager
+    operators never see a call this refuses.
+    """
+    return (
+        "sum_back(by=...) stops the window at each group's edge, and neither lane builds "
+        'that yet. It is refused rather than built as though the keyword were absent — a '
+        'window reaching across the seam sums rows that are not neighbours, and the model '
+        'that makes solves and reports optimal.\n'
+        '  Drop the by=, if the axis is one run of positions after all.'
     )
 
 
@@ -614,28 +557,6 @@ def _window_edge(edge: ArithmeticNode | None, context: str) -> bool:
         f"{context}: sum_back(edge=...) takes 'wrap' or nothing. A window sums the terms "
         f'it reaches, so a position before the first contributes nothing rather than a '
         f'fill value; add the constant to the expression if you want one.'
-    )
-
-
-def _stray_offset_message(name: str, stray: list[str], partition: str | None) -> str:
-    """Why an offset over a dim nothing puts within reach is refused.
-
-    Without this the eager lane broadcasts the shifted expression onto that
-    dim — a bigger model than the file reads as, and one the operator's own
-    dim rule says it does not have — while the relational lane asks for a
-    column no frame carries (#1161).
-    """
-    grouped = (
-        f'or over what by={partition} groups into, which is one lag per group'
-        if partition is not None
-        else 'or, under by=<lookup>, over the dimension that lookup groups into — one lag per group'
-    )
-    return (
-        f'shift(offset={name}) is offset by a parameter over {stray}, which the shifted '
-        f'expression does not carry.\n'
-        f'An offset is read at the coordinate it moves, so it varies over the dims that '
-        f'expression has, {grouped}.\n'
-        f"Read '{name}' onto those dims with at(), or drop {stray} from it."
     )
 
 

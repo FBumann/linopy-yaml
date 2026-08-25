@@ -494,42 +494,6 @@ def test_an_offset_may_differ_per_entity_and_per_group_at_once():
         assert run.oracle == pytest.approx(41.0), '(0 + 10 + 0 + 30) + (0 + 1 + 0 + 0)'
 
 
-OFFSET_OUT_OF_REACH = {
-    'nothing-puts-it-in-reach': ('lead', '', r"over \['season'\], which the shifted expression does not carry"),
-    'not-what-the-partition-groups-into': ('far', ', by=season_of', r"over \['g'\], which the shifted expression"),
-}
-
-
-@pytest.mark.parametrize(
-    ('offset', 'partition', 'match'), list(OFFSET_OUT_OF_REACH.values()), ids=list(OFFSET_OUT_OF_REACH)
-)
-def test_an_offset_over_a_dim_nothing_puts_in_reach_is_refused(offset: str, partition: str, match: str):
-    """An offset is read at the coordinate it moves, so it must vary over a dim
-    that coordinate has — the shifted expression's own, or the one a partition
-    groups into.
-
-    Neither refusal is pedantry: the eager lane broadcast the shifted
-    expression onto the stray dim and built a bigger model than the file reads
-    as, while the relational lane asked for a column no frame carries (#1161).
-    """
-    model = {
-        'dimensions': {
-            'g': {'dtype': 'str', 'values': ['a']},
-            't': {'dtype': 'int', 'values': [0, 1]},
-            'season': {'dtype': 'str', 'values': ['s']},
-        },
-        'lookups': {'season_of': {'over': 't', 'into': 'season'}},
-        'parameters': {'lead': {'dims': ['season'], 'dtype': 'int'}, 'far': {'dims': ['g'], 'dtype': 'int'}},
-        'variables': {'x': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
-        'constraints': {
-            'k': {'foreach': ['t'], 'expression': f"x >= shift(x, over=t, offset={offset}, edge='wrap'{partition})"}
-        },
-        'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
-    }
-    with pytest.raises(LanguageError, match=match):
-        lps.check(model)
-
-
 def test_shift_semantics_are_positional_not_lexicographic():
     """Coords whose sorted order differs from declared order (string labels:
     lexicographic t0,t1,t10,... vs positional t0..t47). Both backends must
@@ -896,42 +860,6 @@ def test_an_offset_may_differ_per_entity(edge: str):
         )
 
 
-NAMED_OFFSET_REFUSALS = {
-    'not-a-parameter': ('missing', "'missing' not found"),
-    'not-an-integer': ('rate', 'needs an integer parameter'),
-    'along-the-shifted-dim': ('drift', 'the dimension being translated'),
-}
-
-
-@pytest.mark.parametrize(('offset', 'match'), list(NAMED_OFFSET_REFUSALS.values()), ids=list(NAMED_OFFSET_REFUSALS))
-def test_a_named_offset_that_cannot_mean_a_lag_is_refused(offset: str, match: str):
-    """The three ways a per-entity offset stops being a translation.
-
-    An undeclared name is a typo, and resolution refuses it before lowering
-    sees it — pinned here so the better message stays the one that prints. A
-    non-integral offset cannot land on a coordinate: it counts positions rather
-    than measuring a distance.
-    And one that spans the dimension it translates moves each position by a
-    different amount *along the axis it is moving*, which is a permutation with
-    no reading as a lag.
-    """
-    model = {
-        'dimensions': {'g': {'dtype': 'str', 'values': ['a']}, 't': {'dtype': 'int', 'values': [0, 1]}},
-        'parameters': {
-            'lead': {'dims': ['g'], 'dtype': 'int'},
-            'rate': {'dims': ['g']},
-            'drift': {'dims': ['g', 't'], 'dtype': 'int'},
-        },
-        'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
-        'constraints': {
-            'k': {'foreach': ['g', 't'], 'expression': f"x >= shift(x, over=t, offset={offset}, edge='wrap')"}
-        },
-        'objective': {'sense': 'minimize', 'expression': 'sum(x * 1.0)'},
-    }
-    with pytest.raises(LanguageError, match=match):
-        lps.check(model)
-
-
 def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
     """The absent edge is refused for a named offset, deliberately and for now.
 
@@ -949,19 +877,6 @@ def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
         'objective': {'sense': 'minimize', 'expression': 'sum(x * 1.0)'},
     }
     with pytest.raises(LanguageError, match='vacated positions absent'):
-        lps.check(model)
-
-
-def test_a_named_offset_carries_its_sign_in_the_data():
-    """`by=-lead` is refused rather than negated, so one spelling means one thing."""
-    model = {
-        'dimensions': {'g': {'dtype': 'str', 'values': ['a']}, 't': {'dtype': 'int', 'values': [0, 1]}},
-        'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
-        'variables': {'x': {'foreach': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
-        'constraints': {'k': {'foreach': ['g', 't'], 'expression': "x >= shift(x, over=t, offset=-lead, edge='wrap')"}},
-        'objective': {'sense': 'minimize', 'expression': 'sum(x * 1.0)'},
-    }
-    with pytest.raises(LanguageError, match='negates a named offset'):
         lps.check(model)
 
 
