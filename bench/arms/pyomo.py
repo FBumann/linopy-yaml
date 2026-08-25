@@ -37,6 +37,12 @@ if TYPE_CHECKING:
 #: Every sink pyomo can hand a model to.
 SINKS = ('lp', 'highs', 'gurobi')
 
+#: What has to be importable for this arm to run. pyomo is in `dev` so the
+#: default and bench environments carry it; the `codspeed` one deliberately does
+#: not, and an absent library skips the cell with its reason rather than
+#: erroring the run.
+REQUIRES = ('pyomo',)
+
 #: Which formulation module in `bench/models/<case>/` this arm builds from.
 DIALECT = 'pyomo'
 
