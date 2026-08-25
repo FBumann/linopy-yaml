@@ -341,28 +341,14 @@ class TestWhatBindRefusesAndWhatItTakes:
     tests in the file and the first to look at when a source stops binding.
     """
 
-    @pytest.mark.parametrize(
-        ('patch', 'match'),
-        [
-            # generator dim deliberately not summed
-            pytest.param(
-                {
-                    'constraints': (
-                        ConstraintDeclaration(
-                            'power_balance', ('snapshot',), lhs=Variable('p'), sense='==', rhs=Parameter('load')
-                        ),
-                    )
-                },
-                'missing a Sum',
-                id='a-term-carrying-a-dim-the-foreach-does-not',
-            ),
-        ],
-    )
-    def test_a_program_outside_the_language_is_rejected(self, dispatch_data, patch, match):
+    def test_a_program_outside_the_language_is_rejected(self, dispatch_data):
         """A term carrying a dim the constraint does not `foreach` is refused."""
         gens, load = dispatch_data
-        with PolarsEngine() as engine, pytest.raises(LanguageError, match=match):
-            engine.build(replace(dispatch_program(), **patch), dispatch_sources(gens, load))
+        unsummed = ConstraintDeclaration(
+            'power_balance', ('snapshot',), lhs=Variable('p'), sense='==', rhs=Parameter('load')
+        )
+        with PolarsEngine() as engine, pytest.raises(LanguageError, match='missing a Sum'):
+            engine.build(replace(dispatch_program(), constraints=(unsummed,)), dispatch_sources(gens, load))
 
     def test_missing_source_rejected(self, dispatch_data):
         gens, load = dispatch_data

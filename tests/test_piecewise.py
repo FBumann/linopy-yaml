@@ -14,8 +14,6 @@ sight — which is the reason the block is only for the nonconvex case.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import polars as pl
 import pytest
@@ -26,7 +24,7 @@ import lpspec as lps
 from lpspec.errors import DataError
 from lpspec.lowering import lower_program
 from lpspec.sources import tidy_sources, validate_piecewise_data
-from tests.conftest import by_coord, override, raw_of, schema_of
+from tests.conftest import EXAMPLES_DIR, by_coord, override, raw_of, schema_of
 from tests.differential import differential
 from tests.oracle import lpspec_linopy, pd
 from tests.piecewise_models import CHP_YAML, GATED_YAML, NONCONVEX_YAML, SOS2_MODEL, TWO_DIM_YAML, curve_frame
@@ -149,7 +147,7 @@ def test_breakpoints_may_vary_along_another_dim():
     each one's cost has to sit on its own curve: the hull is exact here,
     because the curves are convex and the objective minimises.
     """
-    example = Path('examples/piecewise.yaml')
+    example = EXAMPLES_DIR / 'piecewise.yaml'
     rng = np.random.default_rng(31)
     n_s = 24
     gens = pd.Index(['cheap', 'mid'], name='generator')
@@ -434,8 +432,6 @@ def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
 # ---------------------------------------------------------------------------
 # the data guard: a curve carries a value at every breakpoint it is built over
 # ---------------------------------------------------------------------------
-
-
 
 
 @pytest.fixture

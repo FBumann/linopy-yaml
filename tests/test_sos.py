@@ -25,7 +25,9 @@ from math_spec import load_model, to_markdown
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError
 from lpspec.relational.sinks import sos as sos_sink
-from tests.conftest import solve_written_file
+from tests.conftest import EXAMPLES_DIR, solve_written_file
+
+SOS_YAML = EXAMPLES_DIR / 'sos.yaml'
 
 SITES = ['north', 'south']
 SIZES = [0, 1, 2, 3]
@@ -533,7 +535,7 @@ def test_the_example_prices_on_the_curve_and_not_on_its_hull():
     stopped restricting anything would match the curve nowhere.
     """
     sources = _curve_sources()
-    result = lps.solve('examples/sos.yaml', sources)
+    result = lps.solve(SOS_YAML, sources)
     assert result.is_ok
 
     dispatched = result.primal('p')
@@ -558,7 +560,7 @@ def _without_the_set() -> dict[str, Any]:
     block expands into, minus the set. ``method: convex`` cannot spell this
     relaxation: the curvature guard refuses it on a concave curve.
     """
-    raw = load_model('examples/sos.yaml').to_dict()
+    raw = load_model(SOS_YAML).to_dict()
     raw.pop('piecewise')
     raw['variables']['lam'] = {'foreach': ['snapshot', 'generator', 'bp'], 'bounds': {'lower': 0, 'upper': 1}}
     raw['constraints'] |= {

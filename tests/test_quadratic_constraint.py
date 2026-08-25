@@ -17,6 +17,8 @@ that is why one test here is an optimum done by hand.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import polars as pl
 import pytest
 
@@ -249,8 +251,6 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     which pair a row holds also changes how many there are. Asked of the tables
     directly instead: one entry at a different column, same coefficient.
     """
-    from dataclasses import replace
-
     with lps.build(MODEL, SOURCES) as bound:
         tables = bound._engine._model.tables()
         assert tables.qmatrix.height, 'the model under test carries a quadratic row'
@@ -266,7 +266,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
 # ---------------------------------------------------------------------------
 
 
-def test_the_linopy_lane_refuses_it_in_the_languages_own_words():
+def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
     """Hard rule 3's amendment where it bites. Both lanes still *accept* the
     model — one ``lower_program`` gate — and the refusal names the lane and the
     way round, where linopy's ``NotImplementedError`` names neither."""
@@ -275,16 +275,12 @@ def test_the_linopy_lane_refuses_it_in_the_languages_own_words():
     with pytest.raises(LpspecError, match='linopy lane cannot build'):
         lps.check(MODEL, sink='linopy')
 
-    import tempfile
-    from pathlib import Path
-
     import yaml as pyyaml
 
-    with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / 'model.yaml'
-        path.write_text(pyyaml.safe_dump(MODEL))
-        with pytest.raises(LaneError, match='linopy lane cannot build'):
-            lpspec_linopy.build(path, SOURCES)
+    path = tmp_path / 'model.yaml'
+    path.write_text(pyyaml.safe_dump(MODEL))
+    with pytest.raises(LaneError, match='linopy lane cannot build'):
+        lpspec_linopy.build(path, SOURCES)
 
 
 def test_highs_refuses_it_before_the_build_and_names_who_takes_it():

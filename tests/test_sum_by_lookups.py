@@ -85,7 +85,7 @@ OF_BUS = ['a', 'a', 'b', 'b']
 OF_TECH = ['wind', 'sun', 'wind', 'wind']
 
 
-def _inputs(technologies=('wind', 'sun')):
+def _inputs():
     index = pd.DataFrame({'generator': GENERATORS})
     limits = pd.DataFrame(
         {
@@ -102,7 +102,7 @@ def _inputs(technologies=('wind', 'sun')):
         'gen_bus': relation('generator', 'bus', GENERATORS, OF_BUS),
         'gen_tech': relation('generator', 'technology', GENERATORS, OF_TECH),
         'bus': pd.Index(['a', 'b'], name='bus'),
-        'technology': pd.Index(list(technologies), name='technology'),
+        'technology': pd.Index(['wind', 'sun'], name='technology'),
     }
 
 
@@ -192,7 +192,7 @@ def test_a_declared_order_the_groupby_would_not_pick():
     So this model builds on both lanes only because the eager lane puts its
     result back into declared order.
     """
-    sources = _inputs(technologies=('wind', 'sun'))
+    sources = _inputs()
     assert list(sources['technology']) != sorted(sources['technology']), 'the point of the case is the order'
     with differential(MODEL, sources) as run:
         assert run.oracle == pytest.approx(35.0, rel=RTOL)

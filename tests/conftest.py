@@ -635,9 +635,7 @@ def assert_agrees_with_highs(solver_name: str, case: str, variable: str, constra
             highs.activity(constraint)['value'].to_list()
         )
         if has_duals:
-            assert other.dual(constraint)['value'].to_list() == pytest.approx(
-                highs.dual(constraint)['value'].to_list()
-            )
+            assert other.dual(constraint)['value'].to_list() == pytest.approx(highs.dual(constraint)['value'].to_list())
 
 
 def assert_infeasible_reports_both_axes(solver_name: str) -> None:

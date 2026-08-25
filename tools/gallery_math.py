@@ -56,11 +56,14 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from math_spec import read_yaml, to_latex, to_markdown
 
 from tools.constructs import GALLERY, ROOT, models, replace_between
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SYMBOLS = ROOT / 'examples' / 'symbols'
 BEGIN, END = '<!-- math:begin -->', '<!-- math:end -->'

@@ -32,7 +32,7 @@ import yaml as pyyaml
 
 import lpspec as lps
 from lpspec.errors import PiecewiseExpansionError
-from tests.conftest import schema_of
+from tests.conftest import override, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import lpspec_linopy, pd
 from tests.piecewise_models import LP_MODEL as MODEL
@@ -153,9 +153,10 @@ def test_lp_and_convex_reach_one_optimum():
     bounds it below by the segment lines. Under minimisation both are exact,
     and an objective that differed would mean one of them is not.
     """
-    hull = pyyaml.safe_load(MODEL)
-    hull['piecewise']['cost_curve']['method'] = 'convex'
-    hull['piecewise']['cost_curve']['links'] = [['p', 'bp_x'], ['op_cost', 'bp_y']]
+    hull = override(
+        pyyaml.safe_load(MODEL),
+        **{'piecewise.cost_curve.method': 'convex', 'piecewise.cost_curve.links': [['p', 'bp_x'], ['op_cost', 'bp_y']]},
+    )
 
     with lps.solve(pyyaml.safe_load(MODEL), _relational()) as lines, lps.solve(hull, _relational()) as weights:
         assert lines.objective == pytest.approx(weights.objective, rel=RTOL)
@@ -181,8 +182,9 @@ def test_the_bounded_link_may_be_written_first():
     two spellings of one block are one model — and the chord rows have to come
     out against `bp_x` either way round.
     """
-    swapped = pyyaml.safe_load(MODEL)
-    swapped['piecewise']['cost_curve']['links'] = [['op_cost', 'bp_y', '>='], ['p', 'bp_x']]
+    swapped = override(
+        pyyaml.safe_load(MODEL), **{'piecewise.cost_curve.links': [['op_cost', 'bp_y', '>='], ['p', 'bp_x']]}
+    )
 
     with lps.solve(swapped, _relational()) as result:
         assert result.objective == pytest.approx(sum(_on_the_curve(x) for x in LOAD), rel=RTOL), (
@@ -213,9 +215,10 @@ def test_a_one_breakpoint_curve_is_that_point_under_the_weight_methods(method):
     One weight, forced to 1 by the convexity row, puts both links on the only
     breakpoint there is. This is the number the case below asks `lp` for.
     """
-    point = pyyaml.safe_load(MODEL)
-    point['piecewise']['cost_curve']['method'] = method
-    point['piecewise']['cost_curve']['links'] = [['p', 'bp_x'], ['op_cost', 'bp_y']]
+    point = override(
+        pyyaml.safe_load(MODEL),
+        **{'piecewise.cost_curve.method': method, 'piecewise.cost_curve.links': [['p', 'bp_x'], ['op_cost', 'bp_y']]},
+    )
 
     with lps.solve(point, _relational(load=[10.0, 10.0, 10.0], xs=[10.0], ys=[25.0])) as result:
         assert result.objective == pytest.approx(3 * 25.0, rel=RTOL), (
@@ -239,11 +242,12 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
     table, and a boolean mask marks them in a table that may be dense. A count
     of the rows that carry a value gets the first right and the second wrong.
     """
-    ragged = pyyaml.safe_load(PER_UNIT_MODEL)
     mask = spelling == 'boolean-mask'
+    ragged = override(
+        pyyaml.safe_load(PER_UNIT_MODEL), **{'piecewise.cost_curve.points': 'runs_to' if mask else 'bp_x'}
+    )
     if mask:
         ragged['parameters']['runs_to'] = {'dims': ['unit', 'bp'], 'dtype': 'bool', 'description': 'curve length'}
-    ragged['piecewise']['cost_curve']['points'] = 'runs_to' if mask else 'bp_x'
 
     with lps.solve(ragged, _per_unit_points(short=False, mask=mask)) as result:
         assert result.objective == pytest.approx(25.0, rel=RTOL), 'two points is one segment, and that is enough'
@@ -268,9 +272,13 @@ def test_values_past_the_mask_are_not_part_of_the_curve():
             pl.when(past).then(unusable).otherwise(pl.col('value')).alias('value')
         )
 
-    ragged = pyyaml.safe_load(PER_UNIT_MODEL)
-    ragged['parameters']['runs_to'] = {'dims': ['unit', 'bp'], 'dtype': 'bool', 'description': 'curve length'}
-    ragged['piecewise']['cost_curve']['points'] = 'runs_to'
+    ragged = override(
+        pyyaml.safe_load(PER_UNIT_MODEL),
+        **{
+            'parameters.runs_to': {'dims': ['unit', 'bp'], 'dtype': 'bool', 'description': 'curve length'},
+            'piecewise.cost_curve.points': 'runs_to',
+        },
+    )
 
     with lps.solve(ragged, sources) as result:
         assert result.objective == pytest.approx(25.0, rel=RTOL), (
@@ -311,9 +319,10 @@ def test_the_saving_is_columns_paid_for_in_rows():
         ('convex', [['p', 'bp_x'], ['op_cost', 'bp_y']]),
         ('lp', [['p', 'bp_x'], ['op_cost', 'bp_y', '>=']]),
     ):
-        model = pyyaml.safe_load(MODEL)
-        model['piecewise']['cost_curve']['method'] = method
-        model['piecewise']['cost_curve']['links'] = links
+        model = override(
+            pyyaml.safe_load(MODEL),
+            **{'piecewise.cost_curve.method': method, 'piecewise.cost_curve.links': links},
+        )
         built = lps.build(model, _relational())
         sizes[method] = built.diagnostics()
         built.close()
@@ -345,9 +354,10 @@ def test_the_curvature_the_sign_states_is_required(sign, sense, ys, wanted):
     optimal with a wrong answer. `method: convex`'s own guard would pass such a
     curve, since it is not mixed; only `lp` cares which way it bends.
     """
-    model = pyyaml.safe_load(MODEL)
-    model['piecewise']['cost_curve']['links'] = [['p', 'bp_x'], ['op_cost', 'bp_y', sign]]
-    model['objective']['sense'] = sense
+    model = override(
+        pyyaml.safe_load(MODEL),
+        **{'piecewise.cost_curve.links': [['p', 'bp_x'], ['op_cost', 'bp_y', sign]], 'objective.sense': sense},
+    )
     with pytest.raises(PiecewiseExpansionError, match=f'exact only for a {wanted} curve'):
         lps.solve(model, _relational(ys=ys))
     assert schema_of(MODEL) is not None, 'and the schema alone is fine — this needs the values'
@@ -410,16 +420,10 @@ def test_a_concave_curve_is_refused_whatever_the_breakpoints_are_measured_in():
     xs = [0.0, 1e6, 2e6, 3e6]
     concave = [0.0, 1e6, 2e6 - 1000.0, 3e6 - 3000.0]
 
-    stretched = pyyaml.safe_load(MODEL)
-    stretched['variables']['p']['bounds']['upper'] = 3e6
+    stretched = override(pyyaml.safe_load(MODEL), **{'variables.p.bounds.upper': 3e6})
 
     with pytest.raises(PiecewiseExpansionError, match='exact only for a convex curve'):
         lps.build(stretched, _relational(load=[5e5, 1.5e6, 2.5e6], xs=xs, ys=concave))
-
-
-# ---------------------------------------------------------------------------
-# the shape lp needs, refused at load
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

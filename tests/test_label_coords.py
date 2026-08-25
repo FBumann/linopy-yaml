@@ -294,17 +294,22 @@ NETWORK = {
 }
 
 LINES = ['ring_a', 'ring_b', 'loop', 'spur']
+SEND = ['north', 'south', 'north', 'north']
+RECV = ['south', 'north', 'north']
+VOLTAGE = [220, 380, 220, 380]
+CAP = [10.0, 20.0, 30.0, 40.0]
+PRICE = [1.0, 1.0, 1.0, 1.0]
 
 #: `loop` starts and ends on the same bus; `spur` has no receiving end at all,
 #: which `recv` says by having no row for it.
 NETWORK_SOURCES = {
     'bus': pl.DataFrame({'bus': ['north', 'south']}),
     'line': pl.DataFrame({'line': LINES}),
-    'send': pl.DataFrame({'line': LINES, 'bus': ['north', 'south', 'north', 'north']}),
-    'recv': pl.DataFrame({'line': LINES[:3], 'bus': ['south', 'north', 'north']}),
-    'voltage': pl.DataFrame({'line': LINES, 'voltage': [220, 380, 220, 380]}),
-    'cap': pl.DataFrame({'line': LINES, 'value': [10.0, 20.0, 30.0, 40.0]}),
-    'price': pl.DataFrame({'line': LINES, 'value': [1.0, 1.0, 1.0, 1.0]}),
+    'send': pl.DataFrame({'line': LINES, 'bus': SEND}),
+    'recv': pl.DataFrame({'line': LINES[:3], 'bus': RECV}),
+    'voltage': pl.DataFrame({'line': LINES, 'voltage': VOLTAGE}),
+    'cap': pl.DataFrame({'line': LINES, 'value': CAP}),
+    'price': pl.DataFrame({'line': LINES, 'value': PRICE}),
 }
 
 
@@ -360,20 +365,15 @@ def test_a_lookup_where_agrees_with_the_oracle(where, objective):
 
     model = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': where}}}
     data = {
-        'cap': pd.Series([10.0, 20.0, 30.0, 40.0], index=LINES),
-        'price': pd.Series([1.0, 1.0, 1.0, 1.0], index=LINES),
+        'cap': pd.Series(CAP, index=LINES),
+        'price': pd.Series(PRICE, index=LINES),
     }
     index = {
         'bus': pd.Index(['north', 'south'], name='bus'),
         'line': pd.DataFrame({'line': LINES}),
-        'send': pd.DataFrame({'line': LINES, 'bus': ['north', 'south', 'north', 'north']}),
-        'recv': pd.DataFrame({'line': LINES[:3], 'bus': ['south', 'north', 'north']}),
-        'voltage': pd.DataFrame(
-            {
-                'line': LINES,
-                'voltage': [220, 380, 220, 380],
-            }
-        ),
+        'send': pd.DataFrame({'line': LINES, 'bus': SEND}),
+        'recv': pd.DataFrame({'line': LINES[:3], 'bus': RECV}),
+        'voltage': pd.DataFrame({'line': LINES, 'voltage': VOLTAGE}),
     }
     with differential(model, data | index) as run:
         assert run.result.objective == pytest.approx(objective), (
@@ -493,9 +493,13 @@ def test_a_targeted_lookup_orders_bytewise_not_by_declaration():
 #: dimension's own `values:` does for labels, `values:` on a lookup does for
 #: the map, so a relation small enough to read lives beside the equation that
 #: traverses it. `g3` maps to no bus: the partial case, declared by omission.
+GENERATORS = ['g1', 'g2', 'g3']
+COST = [1.0, 2.0, 0.5]
+LOAD = [5.0, 4.0]
+
 DECLARED = {
     'dimensions': {
-        'generator': {'values': ['g1', 'g2', 'g3']},
+        'generator': {'values': GENERATORS},
         'bus': {'values': ['north', 'south']},
     },
     'lookups': {'gen_bus': {'over': 'generator', 'into': 'bus', 'values': {'g1': 'north', 'g2': 'south'}}},
@@ -506,8 +510,8 @@ DECLARED = {
 }
 
 DECLARED_SOURCES = {
-    'cost': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'value': [1.0, 2.0, 0.5]}),
-    'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [5.0, 4.0]}),
+    'cost': pl.DataFrame({'generator': GENERATORS, 'value': COST}),
+    'load': pl.DataFrame({'bus': ['north', 'south'], 'value': LOAD}),
 }
 
 
@@ -530,8 +534,8 @@ def test_a_declared_map_agrees_with_the_oracle():
     from tests.oracle import pd
 
     data = {
-        'cost': pd.Series([1.0, 2.0, 0.5], index=['g1', 'g2', 'g3']),
-        'load': pd.Series([5.0, 4.0], index=['north', 'south']),
+        'cost': pd.Series(COST, index=GENERATORS),
+        'load': pd.Series(LOAD, index=['north', 'south']),
     }
     with differential(DECLARED, data) as run:
         assert run.result.objective == pytest.approx(13.0)
@@ -541,25 +545,25 @@ def test_a_declared_map_agrees_with_the_oracle():
 #: the file owns the relation over them.
 MAP_ONLY = {**DECLARED, 'dimensions': {'generator': {}, 'bus': {'values': ['north', 'south']}}}
 
-_LABELS = pl.DataFrame({'generator': ['g1', 'g2', 'g3']})
-_LABELS_AND_MAP = pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'gen_bus': ['south', 'north', None]})
+_LABELS = pl.DataFrame({'generator': GENERATORS})
+_LABELS_AND_MAP = pl.DataFrame({'generator': GENERATORS, 'gen_bus': ['south', 'north', None]})
 
 
 @pytest.mark.parametrize(
-    ('model', 'sources', 'names'),
+    'supplied',
     [
-        pytest.param(DECLARED, {'generator': _LABELS}, 'dimensions.generator.values', id='labels-twice'),
-        pytest.param(DECLARED, {'generator': ['g1', 'g2', 'g3']}, 'dimensions.generator.values', id='bare-labels'),
+        pytest.param(_LABELS, id='labels-twice'),
+        pytest.param(GENERATORS, id='bare-labels'),
     ],
 )
-def test_a_declared_index_refuses_a_supplied_one(model, sources, names):
+def test_a_declared_index_refuses_a_supplied_one(supplied):
     """One fact, one home — the labels, said by the file or by the caller.
 
     A precedence rule instead lets the file describe a model the caller does
     not build, and the file a reviewer reads is not the model that solved.
     """
-    with pytest.raises(DataError, match=re.escape(names)):
-        lps.solve(model, {**DECLARED_SOURCES, **sources})
+    with pytest.raises(DataError, match=re.escape('dimensions.generator.values')):
+        lps.solve(DECLARED, {**DECLARED_SOURCES, 'generator': supplied})
 
 
 def test_a_map_is_not_a_column_of_the_index_it_runs_over():

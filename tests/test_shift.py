@@ -207,9 +207,7 @@ BY_PARAMETER = {
     },
 }
 
-IN_GROUPS = masked_operand_model(
-    'link', 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)', grouped=True
-)
+IN_GROUPS = masked_operand_model('link', 'take <= shift(level, over=t, offset=1, edge=0, by=season_of)', grouped=True)
 
 #: The same, with nothing masked at all: `level` carries no `where`, so the
 #: operand reaches the shift with no presence frame of its own. Which of the

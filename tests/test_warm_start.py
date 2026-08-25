@@ -98,9 +98,6 @@ def capped_sources() -> dict[str, pl.DataFrame]:
     }
 
 
-
-
-
 def _tables(model: dict[str, Any], given: dict[str, Any]) -> Any:
     """*model*'s solver tables, read off it built on *given*."""
     with lps.build(model, given) as built:

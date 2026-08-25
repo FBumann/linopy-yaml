@@ -33,11 +33,11 @@ from lpspec.relational.plan import (
     Variable,
 )
 from lpspec.sources import tidy_sources
-from tests.conftest import override, resolved, schema_of
+from tests.conftest import EXAMPLES_DIR, override, resolved, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import lpspec_linopy, pd, transport_eager_objective
 
-TRANSPORT_YAML = Path('examples/transport.yaml')
+TRANSPORT_YAML = EXAMPLES_DIR / 'transport.yaml'
 
 
 def _inputs(gens, lines, load):
@@ -473,7 +473,7 @@ def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
 # the same construct, grouping time
 # ---------------------------------------------------------------------------
 
-MONTHLY_YAML = Path('examples/monthly_budget.yaml')
+MONTHLY_YAML = EXAMPLES_DIR / 'monthly_budget.yaml'
 MONTHLY_PAGE = Path('docs/examples/monthly_budget.md')
 
 

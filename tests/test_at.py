@@ -224,10 +224,6 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
     respectively (#60). The claim here is about what the language can state,
     and the engine is what states it.
     """
-    import polars as pl
-
-    import lpspec as lps
-
     up_time = {'slow': 3, 'fast': 1}
     hours = list(range(6))
     model = {
@@ -309,6 +305,19 @@ DANGLING = {
     'objective': {'sense': 'maximize', 'expression': 'sum(take, over=flow) - 1000 * sum(level, over=component)'},
 }
 DANGLING_MAP = ['c1', 'c1', None]
+FLOWS, COMPONENTS = ['f1', 'f2', 'f3'], ['c1', 'c2']
+
+
+def _dangling_sources(map_: list | None = None, **extra):
+    """The three flows and two components every case here binds, the map under its own key."""
+    from tests.oracle import pd
+
+    return {
+        'flow': pd.DataFrame({'flow': FLOWS}),
+        'component_of': relation('flow', 'component', FLOWS, DANGLING_MAP if map_ is None else map_),
+        'component': pd.Index(COMPONENTS, name='component'),
+        **extra,
+    }
 
 
 def test_at_through_a_null_lookup_takes_the_row_with_it():
@@ -327,17 +336,9 @@ def test_at_through_a_null_lookup_takes_the_row_with_it():
     case below carries the relational lane, and reads the same answer off the
     row count as well as the objective.
     """
-    from tests.oracle import lpspec_linopy, pd
+    from tests.oracle import lpspec_linopy
 
-    flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
-    built = lpspec_linopy.build(
-        DANGLING,
-        {
-            'flow': pd.DataFrame({'flow': flows}),
-            'component_of': relation('flow', 'component', flows, DANGLING_MAP),
-            'component': pd.Index(components, name='component'),
-        },
-    )
+    built = lpspec_linopy.build(DANGLING, _dangling_sources())
     labels = built.constraints['link'].labels.to_series().to_dict()
     assert labels['f3'] == -1, 'a flow mapping nowhere has no row, and -1 is how linopy spells one that was not built'
     assert labels['f1'] != -1 and labels['f2'] != -1, 'the flows that do map keep theirs'
@@ -357,18 +358,8 @@ def test_at_through_a_null_lookup_agrees_between_lanes():
     something the model never said, with nothing anywhere reporting it.
     """
     from tests.differential import differential
-    from tests.oracle import pd
 
-    flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
-    with differential(
-        DANGLING,
-        {
-            'flow': pd.DataFrame({'flow': flows}),
-            'component_of': relation('flow', 'component', flows, DANGLING_MAP),
-            'component': pd.Index(components, name='component'),
-        },
-        lp=True,
-    ) as run:
+    with differential(DANGLING, _dangling_sources(), lp=True) as run:
         assert run.oracle == pytest.approx(10.0)
         assert run.engine.diagnostics().rows == 2, 'the two flows that map somewhere have a row, and f3 has none'
 
@@ -441,17 +432,8 @@ def test_at_over_a_masked_variable_takes_the_row_with_it():
     from tests.differential import differential
     from tests.oracle import pd
 
-    flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
-    with differential(
-        MASKED,
-        {
-            'flow': pd.DataFrame({'flow': flows}),
-            'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
-            'component': pd.Index(components, name='component'),
-            'usable': pd.Series([1.0, 0.0], index=pd.Index(components, name='component')),
-        },
-        lp=True,
-    ) as run:
+    usable = pd.Series([1.0, 0.0], index=pd.Index(COMPONENTS, name='component'))
+    with differential(MASKED, _dangling_sources(['c1', 'c1', 'c2'], usable=usable), lp=True) as run:
         assert run.oracle == pytest.approx(10.0), 'take[f3] is held by its own bound — 0.0 would mean a row bound it'
         assert run.engine.diagnostics().rows == 2, 'only the flows whose component has a level are asserted'
 
@@ -505,18 +487,8 @@ def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
     from tests.differential import differential
     from tests.oracle import pd
 
-    flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
-    with differential(
-        DANGLING_SHIFTED,
-        {
-            'flow': pd.DataFrame({'flow': flows}),
-            'component_of': relation('flow', 'component', flows, DANGLING_MAP),
-            'component': pd.Index(components, name='component'),
-            't': pd.Index([0, 1], name='t'),
-            'u': pd.Index(['a', 'b'], name='u'),
-        },
-        lp=True,
-    ) as run:
+    extra = {'t': pd.Index([0, 1], name='t'), 'u': pd.Index(['a', 'b'], name='u')}
+    with differential(DANGLING_SHIFTED, _dangling_sources(**extra), lp=True) as run:
         assert run.engine.diagnostics().rows == 8, (
             'the flows that map somewhere are asserted at both t, and f3 at neither'
         )

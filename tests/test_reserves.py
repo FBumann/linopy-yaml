@@ -16,17 +16,15 @@ same discipline a correctness guard owes its mutation table.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import polars as pl
 import pytest
 
 import lpspec as lps
 from lpspec.api import load_model
-from tests.conftest import port_sources
+from tests.conftest import EXAMPLES_DIR, port_sources
 from tests.differential import RTOL, differential
 
-RESERVES_YAML = Path('examples/reserves.yaml')
+RESERVES_YAML = EXAMPLES_DIR / 'reserves.yaml'
 
 #: Hand-derived, and what both lanes and the reference script reach. Energy:
 #: b2's surplus exports over l1 (pinned at 15 by ``bus_cap``, not its own 20)

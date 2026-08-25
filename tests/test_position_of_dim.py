@@ -26,7 +26,7 @@ import yaml as pyyaml
 
 import lpspec as lps
 from lpspec.errors import DataError, LanguageError, LpspecError
-from tests.conftest import by_coord, relation, schema_of
+from tests.conftest import EXAMPLES_DIR, by_coord, relation, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
@@ -428,7 +428,7 @@ def test_a_lookup_over_another_dimension_carries_no_position():
 # the teaching model
 # ---------------------------------------------------------------------------
 
-SEASONS = Path('examples/seasons.yaml')
+SEASONS = EXAMPLES_DIR / 'seasons.yaml'
 SEASONS_PAGE = Path('docs/examples/seasons.md')
 
 

@@ -101,9 +101,9 @@ CASES = [
 ]
 
 
-def _written(model: Any, data: Any, directory: Path, suffix: str = '.mps') -> Path:
-    """*model* built once and written to ``model<suffix>``."""
-    return lps.write(model, data, directory / f'model{suffix}')
+def _written(model: Any, data: Any, directory: Path) -> Path:
+    """*model* built once and written as MPS text."""
+    return lps.write(model, data, directory / 'model.mps')
 
 
 @pytest.mark.parametrize(('model', 'data'), CASES)
