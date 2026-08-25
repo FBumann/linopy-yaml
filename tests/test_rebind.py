@@ -23,6 +23,7 @@ from math_spec import load_model
 
 import lpspec as lps
 from lpspec.relational.sinks import SOLVERS
+from lpspec.sources import bindable
 from tests.conftest import bindable_on_this_install, override, port_sources
 
 GENERATORS = ['wind', 'solar', 'gas']
@@ -275,8 +276,7 @@ def _declared(given: dict[str, Any], schema: Any) -> dict[str, Any]:
     `reactance` its model reads through `cycle_incidence` instead — and this is
     what hands both of them the same thing.
     """
-    known = {**schema.parameters, **schema.dimensions, **schema.lookups}
-    return {name: value for name, value in given.items() if name in known}
+    return {name: value for name, value in given.items() if name in bindable(schema)}
 
 
 def _scaled(given: dict[str, Any], by: float) -> dict[str, Any]:

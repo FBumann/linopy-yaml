@@ -34,6 +34,8 @@ import pytest
 import yaml as pyyaml
 from math_spec import load_model
 
+from lpspec.sources import bindable
+
 # The language's own tests own these (#1150); the noqa marks the two this file
 # re-exports without using, so the forty-odd tests on the other side of the cut
 # keep importing all four from one place.
@@ -101,8 +103,7 @@ def port_sources(name: str) -> dict[str, Any]:
     tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
     model = PORTS_DIR / f'{name}.yaml'
     schema = load_model(model if model.exists() else EXAMPLES_DIR / f'{name}.yaml')
-    known = {**schema.parameters, **schema.dimensions, **schema.lookups}
-    return {k: v for k, v in tables.items() if k in known}
+    return {k: v for k, v in tables.items() if k in bindable(schema)}
 
 
 def port_model(name: str) -> Path:
