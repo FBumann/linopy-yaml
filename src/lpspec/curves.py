@@ -27,7 +27,7 @@ import polars as pl
 from math_spec import mask_of
 
 from lpspec.errors import DataError, PiecewiseExpansionError
-from lpspec.frames import TidySource, as_frame
+from lpspec.frames import TidySource, as_frame, scan
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -312,8 +312,7 @@ def _label_frame(dim: str, sources: Mapping[str, TidySource], present: pl.LazyFr
     source = sources.get(dim)
     if source is None:
         return present.select(dim).unique(maintain_order=True)
-    table = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
-    return table.select(dim).unique(maintain_order=True)
+    return scan(source).select(dim).unique(maintain_order=True)
 
 
 def _grid(extents: Mapping[str, pl.LazyFrame], dims: Sequence[str], present: pl.LazyFrame) -> pl.LazyFrame:

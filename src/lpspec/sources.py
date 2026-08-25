@@ -12,6 +12,9 @@ only data and knows nothing about expressions.
 
 The guards that need the numbers rather than the shapes are
 :mod:`lpspec.curves`, which :func:`tidy_sources` calls on the way through.
+
+Every ``*_message`` helper here is worded once and raised by both lanes, so a
+caller fixing a defect reads one sentence whichever lane found it.
 """
 
 from __future__ import annotations
@@ -34,10 +37,15 @@ from lpspec.errors import (
     did_you_mean,
     index_without_its_label_column_message,
 )
-from lpspec.frames import TidySource, as_frame, is_dense_array, is_multi_indexed, labels_frame
+from lpspec.frames import TidySource, as_frame, is_dense_array, is_multi_indexed, labels_frame, scan
 
 if TYPE_CHECKING:
     from math_spec import Model
+
+
+def bindable(schema: Model) -> dict[str, Any]:
+    """Every name data may be bound to — parameters, dimensions and lookups, one flat namespace."""
+    return {**schema.parameters, **schema.dimensions, **schema.lookups}
 
 
 def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySource]:
@@ -45,37 +53,28 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
 
     Every in-memory source becomes a tidy :class:`polars.LazyFrame` with columns
     ``(dims…, value)``; parquet paths pass through untouched for the engine to
-    scan directly. The indices come from :func:`dimension_sources`, which both
-    lanes read.
-
-    Normalising here rather than at the engine is what lets the piecewise
-    curvature guard see every in-memory shape alike (:mod:`frames`
-    is where the shapes are recognised).
+    scan directly. Normalising here rather than at the engine is what lets the
+    piecewise curvature guard see every in-memory shape alike.
 
     **Dimensions are resolved first** — ownership included, so a map with two
     authors is refused before either author's table is read — because the
-    plain-Python parameter shapes :func:`_spread` accepts (a sequence, one
-    number for every coordinate) are meaningless without the labels they are
-    spread over. A
-    ``piecewise:`` block's derived flags come next, before the parameter loop
-    asks for data no caller can have (:func:`derive_curve_edges`).
+    plain-Python parameter shapes :func:`_spread` accepts are meaningless
+    without the labels they are spread over. A ``piecewise:`` block's derived
+    flags come next, before the parameter loop asks for data no caller can
+    have (:func:`derive_curve_edges`).
 
     Whether a *parameter* source carries the columns its declaration needs is
-    *not* asked here. Binding asks it of every source, path or frame, so a copy
-    of the question on this side would answer only for the in-memory half — a
-    second wording for one defect, and the narrower one.
+    *not* asked here — binding asks it of every source, path or frame.
 
     A **lookup** comes back under its own name too, as the ``(over, lookup)``
     relation :func:`lookup_relations` checked — the rows it maps and no others.
-    Each lane holds a map the way it needs one, and neither reads it off an
-    index: this door hands over the relation itself.
 
     Raises:
         DataError: A key naming nothing the model declares, a declared parameter
             with no data, or one bound to something neither a tidy table nor
             :func:`_spread` can read.
     """
-    known = {**schema.parameters, **schema.dimensions, **schema.lookups}
+    known = bindable(schema)
     if unknown := set(data) - set(known):
         raise DataError(_unknown_source_keys_message(unknown, known))
 
@@ -110,13 +109,10 @@ def tidy_sources(schema: Model, data: Mapping[str, object]) -> dict[str, TidySou
 
 
 def _dense_array_message(name: str) -> str:
-    """A dense array where a table belongs — one wording, both lanes.
+    """A dense array where a table belongs.
 
-    An ``xarray.DataArray`` is recognisable and has ``__len__``, so left alone
-    it would be read positionally on one lane and directly on the other. Both
-    refuse it: this package reads tables — rows under named columns, an index
-    being a column wearing a hat — and hands arrays back rather than taking
-    them.
+    An ``xarray.DataArray`` has ``__len__``, so left alone it would be read
+    positionally on one lane and directly on the other.
     """
     return (
         f"parameter '{name}': an xarray.DataArray is not a source. lpspec reads tables — "
@@ -127,12 +123,10 @@ def _dense_array_message(name: str) -> str:
 
 
 def _multi_indexed_series_message(name: str, dims: Sequence[str]) -> str:
-    """A pandas Series carrying its dims in a MultiIndex — one wording, both lanes.
+    """A pandas Series carrying its dims in a MultiIndex.
 
-    The index depth is a second statement of how many dimensions the parameter
-    has, and it is the caller's rather than the file's, so the two can disagree
-    with nothing able to tell which was meant. Columns cannot: a tidy frame
-    says it once, in the vocabulary the engine already reads.
+    The index depth is a second statement of the parameter's arity, and the
+    two can disagree with nothing able to tell which was meant.
     """
     tidy = [*dims, 'value']
     return (
@@ -144,13 +138,10 @@ def _multi_indexed_series_message(name: str, dims: Sequence[str]) -> str:
 
 
 def _unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
-    """A source key naming nothing the file declares — one wording, both doors.
+    """A source key naming nothing the file declares.
 
-    Refused rather than ignored, and ``rebind`` is where the reason was settled
-    first: a name it does not recognise is a typo, and ignoring one there is a
-    silent re-solve of the numbers you meant to replace. Binding owes the same
-    answer — a dump carrying more than a model uses is filtered at the call,
-    where the caller can see what was dropped.
+    Refused rather than ignored: a name nothing recognises is a typo, and
+    ignoring one silently re-solves the numbers it meant to replace.
     """
     unknown = sorted(keys)
     lead = f'source key {unknown[0]!r} names' if len(unknown) == 1 else f'source keys {unknown} name'
@@ -167,17 +158,11 @@ def dimension_sources(schema: Model, data: Mapping[str, object]) -> dict[str, ob
     A key in *data*, or the ``values:`` the YAML declares, never both
     (:func:`check_index_ownership`). What comes back is what the caller or the
     file passed and nothing more — a path, a table, a sequence of labels —
-    because each lane reads it into its own frame library
-    (:func:`polars_index` here, ``linopy/loader.py`` there), and a shared frame
-    would make one of them convert twice over.
+    because each lane reads it into its own frame library.
 
     A dimension nothing supplies an index for is simply absent: which
-    dimensions *need* one is the caller's question — the engine asks it of the
-    dims its program spans, the eager lane of every dim the file declares.
-
-    A map does not travel with the source, whether the file declares it
-    (:meth:`~math_spec.model.Model.declared_maps`) or the caller supplies
-    it under the lookup's own key. Both become the same relation in
+    dimensions *need* one is the caller's question. A map does not travel with
+    the source — both spellings become the same relation in
     :func:`lookup_relations`, read against the labels this returns.
 
     Raises:
@@ -199,15 +184,10 @@ def dimension_sources(schema: Model, data: Mapping[str, object]) -> dict[str, ob
 
 
 def _declared_map_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
-    """A dimension whose maps have an author and whose labels have none — both lanes.
+    """A dimension whose maps have an author and whose labels have none.
 
-    Its own wording rather than the missing-index one, because the fix is not
-    "pass a table carrying these lookup columns": those columns belong to
-    whoever already supplies the map, and passing them again is refused. Only
-    the labels are wanted.
-
-    *authors* names each map where it comes from, a declaration or a source
-    key, so a model mixing the two reads back which is which.
+    Its own wording rather than the missing-index one: only the labels are
+    wanted — the lookup columns belong to whoever already supplies the map.
     """
     declared = ', '.join(sorted(authors))
     return (
@@ -239,18 +219,12 @@ def lookup_relations(
     One shape whichever author supplied it: the file's ``values:`` becomes the
     same two columns the caller's own key carries, so nothing downstream asks
     where a map came from. Rows only where the map is defined — a label it
-    leaves out simply has none, which is the absence rule everything else here
-    obeys.
-
-    The value column is renamed to the lookup, which is the name every lane
-    reads a map by; what the caller writes it as is the space its values are
-    labels of (:meth:`~math_spec.model.Model.label_space`).
+    leaves out simply has none. The value column is renamed to the lookup, the
+    name every lane reads a map by.
 
     **Both label columns are checked here**, against the indices this is handed:
     the keys against ``over``'s, and — for a lookup with a target — the values
-    against that dimension's. Each lane used to ask the second question of its
-    own representation, one in polars and one in pandas, for a defect a caller
-    fixes the same way either way.
+    against that dimension's.
 
     Returns:
         ``{lookup name: (over, lookup) frame}`` for every lookup the model
@@ -281,12 +255,10 @@ def lookup_relations(
 
 
 def _lookup_target_without_labels_message(dim: str, lookup: str, target: str) -> str:
-    """A lookup whose target has no label set to check against — one wording, both lanes.
+    """A lookup whose target has no label set to check against.
 
-    Its own wording rather than the missing-index one, because what is missing
-    is not obvious from where the model breaks: the dimension the *values* are
-    labels of may be one no constraint spans, so nothing else in the model
-    would ask for its index at all.
+    Its own wording because the target dimension may be one no constraint
+    spans, so nothing else in the model would ask for its index at all.
     """
     return (
         f"dimension '{dim}' lookup '{lookup}' targets '{target}', which nothing in this model "
@@ -299,14 +271,10 @@ def _lookup_target_without_labels_message(dim: str, lookup: str, target: str) ->
 def _check_values_are_labels(rows: pl.LazyFrame, over: str, lookup: str, target: str, labels: pl.Series) -> None:
     """Refuse a map holding a value *target* does not have as a label.
 
-    The check that makes ``sum(by=)`` safe: a value naming no label of the
-    dimension it targets is dropped by the join that places its terms — an
-    inner join relationally, an alignment on the eager lane — so the model
-    builds and solves with those terms silently missing.
-
-    Offenders keep their own type — a python native off polars, never a numpy
-    scalar — because the message reprs them and an ``int`` label read back as
-    ``np.int64(99)`` is a second sentence for one defect.
+    The check that makes ``sum(by=)`` safe: such a value is dropped by the join
+    that places its terms, so the model builds and solves with them silently
+    missing. Offenders keep their own type — a python native off polars, never
+    a numpy scalar — because the message reprs them.
     """
     known = set(labels.to_list())
     seen: dict[Any, None] = {v: None for v in rows.select(lookup).collect()[lookup].to_list() if v not in known}
@@ -315,12 +283,10 @@ def _check_values_are_labels(rows: pl.LazyFrame, over: str, lookup: str, target:
 
 
 def _lookup_values_are_not_labels_message(dim: str, lookup: str, target: str, values: Sequence[Any]) -> str:
-    """A lookup value naming no label of the dimension it targets — one wording, both lanes.
+    """A lookup value naming no label of the dimension it targets.
 
-    A *null* is not one: the label belongs to no group, which is the
-    row-absence idiom the rest of the language uses. Only a value that is
-    present and unknown is a typo, and that one drops terms in the join that
-    places them rather than raising anywhere.
+    A *null* is not one — the label belongs to no group, the row-absence idiom
+    the rest of the language uses. Only a value present and unknown is a typo.
     """
     shown = ', '.join(repr(v) for v in values)
     return (
@@ -334,8 +300,7 @@ def _lookup_values_are_not_labels_message(dim: str, lookup: str, target: str, va
 
 def _labels_of(dim: str, index: TidySource) -> pl.Series:
     """One dimension's labels, for a check that is about to run against them."""
-    frame = pl.scan_parquet(index) if isinstance(index, (str, Path)) else index
-    return frame.select(dim).collect()[dim]
+    return scan(index).select(dim).collect()[dim]
 
 
 def _check_keys_are_labels(rows: pl.LazyFrame, lookup: str, over: str, labels: pl.Series, said: str) -> None:
@@ -357,18 +322,14 @@ def _check_keys_are_labels(rows: pl.LazyFrame, lookup: str, over: str, labels: p
 
 
 def _map_keys_are_not_labels_message(
-    dim: str, lookup: str, strays: Sequence[str], labels: Sequence[str], said: str = 'declares values for'
+    dim: str, lookup: str, strays: Sequence[str], labels: Sequence[str], said: str
 ) -> str:
-    """A map keyed by something the caller's index does not carry — both lanes.
+    """A map keyed by something the caller's index does not carry.
 
-    The same law ``Model._declared_lookup_errors`` decides at load where the
-    dimension declares its own labels, arriving later because these labels do
-    not exist until the caller supplies them. Refused rather than dropped: a key
-    matching no label is a typo, and the join that reads the map would silently
-    place its terms nowhere.
-
-    *said* is how the map got here — declared in the file, or supplied as its
-    own relation — because the fix differs and the law does not.
+    The law ``Model._declared_lookup_errors`` decides at load, arriving later
+    because these labels do not exist until the caller supplies them. *said* is
+    how the map got here — declared in the file, or supplied as its own
+    relation — because the fix differs and the law does not.
     """
     shown = ', '.join(strays[:5]) + (' …' if len(strays) > 5 else '')
     return (
@@ -411,13 +372,10 @@ def _read_relation(source: object, lookup: str, over: str, space: str) -> pl.Laz
 
 
 def _lookup_relation_columns_message(lookup: str, over: str, space: str, available: Sequence[str]) -> str:
-    """A supplied lookup relation short of one of its two columns — both lanes.
+    """A supplied lookup relation short of one of its two columns.
 
     Both names are the declaration's, so the message spells the pair rather
-    than asking the reader to derive it: the key column is the dimension the
-    lookup runs ``over``, and the value column is named after the space the
-    values are labels of — the target dimension, or the lookup itself where it
-    owns its label space.
+    than asking the reader to derive it.
     """
     return (
         f"lookup '{lookup}' is supplied as a relation and must carry columns "
@@ -427,13 +385,10 @@ def _lookup_relation_columns_message(lookup: str, over: str, space: str, availab
 
 
 def _lookup_relation_holes_message(lookup: str, column: str, holes: int, shown: str) -> str:
-    """A supplied lookup relation with a null in it — both lanes.
+    """A supplied lookup relation with a null in it.
 
-    The same law a parameter's values are held to
-    (:func:`lpspec.errors.holes_in_values_message`), landing where a lookup is the one
-    relation that used to want the opposite: a partial map is rows for the
-    labels it maps and no row for the rest, so a null says the label is mapped
-    and unmapped at once.
+    A partial map is rows for the labels it maps and no row for the rest, so a
+    null says the label is mapped and unmapped at once.
     """
     at = f': {shown}' if shown else ''
     return (
@@ -444,11 +399,10 @@ def _lookup_relation_holes_message(lookup: str, column: str, holes: int, shown: 
 
 
 def _lookup_relation_not_single_valued_message(lookup: str, over: str, offenders: Sequence[str]) -> str:
-    """A supplied lookup relation giving one label two values — both lanes.
+    """A supplied lookup relation giving one label two values.
 
-    Refused rather than resolved: a second row would multiply the label's terms
-    through the join that reads it, so the model that builds is larger than the
-    one the file says.
+    Refused rather than resolved: a second row would multiply the label's
+    terms through the join that reads it.
     """
     shown = ', '.join(offenders[:5]) + (' …' if len(offenders) > 5 else '')
     return (
@@ -460,14 +414,10 @@ def _lookup_relation_not_single_valued_message(lookup: str, over: str, offenders
 def polars_index(source: object, dim: str, dtype: str) -> pl.LazyFrame:
     """One dimension's index, read once — the only read of one in the package.
 
-    :func:`dimension_sources` says which object supplies an index; this turns
-    that object into labels. A lane wanting another library **converts this
-    frame** rather than reading the source a second time, which is what makes a
-    caller's choice of dataframe invisible past this line: two readers gave one
-    instant two spellings and needed a guard per place they met.
-
-    A parquet path stays lazy — :func:`polars.scan_parquet` is the scan, not
-    the read — so the engine still hands the file to the query it builds.
+    A lane wanting another library **converts this frame** rather than reading
+    the source a second time, which is what makes a caller's choice of
+    dataframe invisible past this line. A parquet path stays lazy, so the
+    engine still hands the file to the query it builds.
 
     Raises:
         DataError: A table with no column named after the dimension, or labels
@@ -565,8 +515,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, object]) -> list[Any]:
             f"for '{dim}'. Declare dimensions.{dim}.values, pass '{dim}': [...] in sources, "
             f"or pass '{name}' as a table carrying its own '{dim}' column."
         )
-    frame = pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
-    return frame.select(dim).unique(maintain_order=True).collect()[dim].to_list()  # pyrefly: ignore[missing-attribute]
+    return scan(source).select(dim).unique(maintain_order=True).collect()[dim].to_list()
 
 
 def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
@@ -620,11 +569,10 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
 
 
 def _lookup_column_on_an_index_message(dim: str, lookup: str) -> str:
-    """An index carrying a column named after a lookup over it — one wording, both lanes.
+    """An index carrying a column named after a lookup over it.
 
-    Refused rather than filtered away, unlike every other column a source
-    carries and the model does not take: this one is a map somebody meant to
-    supply, and dropping it silently would build the model they did not write.
+    Refused rather than filtered away, unlike every other stray column: this
+    one is a map somebody meant to supply.
     """
     return (
         f"index for dimension '{dim}' carries a '{lookup}' column, and '{lookup}' is a lookup "
@@ -634,15 +582,10 @@ def _lookup_column_on_an_index_message(dim: str, lookup: str) -> str:
 
 
 def _one_fact_two_authors_message(fact: str, first: str, second: str) -> str:
-    """A dimension's labels, or one lookup's map, claimed by two authors — both lanes.
+    """A dimension's labels, or one lookup's map, claimed by two authors.
 
     Refused rather than resolved by precedence: any rule picking a winner lets
-    one author describe a model the other does not build, and the file a
-    reviewer reads stops being the model that solved.
-
-    *fact* names what was said twice, because the two are answerable
-    separately — a caller's label set under a file's declared map is the
-    working shape, not a collision.
+    one author describe a model the other does not build.
     """
     return (
         f'{fact} is said twice — by {first} and by {second}. Exactly one may say it: '
@@ -651,13 +594,7 @@ def _one_fact_two_authors_message(fact: str, first: str, second: str) -> str:
 
 
 def _unsupplied_lookup_message(lookup: str, over: str, space: str) -> str:
-    """A lookup nothing gives a map for — one wording, both lanes.
-
-    The counterpart of a declared parameter with no data, and the refusal that
-    replaced three: with one data transport the map is present and
-    single-valued by construction, so the only thing left to be wrong about is
-    whether anyone said it at all.
-    """
+    """A lookup nothing gives a map for — the counterpart of a parameter with no data."""
     return (
         f"no data provided for lookup '{lookup}'. Pass it under key '{lookup}' as a table with "
         f"columns ['{over}', '{space}'] — one row per '{over}' label it maps, and no row for a "
@@ -667,7 +604,5 @@ def _unsupplied_lookup_message(lookup: str, over: str, space: str) -> str:
 
 def _column_names(source: Any, dim: str) -> frozenset[str]:
     """What a supplied index carries, or nothing where it is a bare label sequence."""
-    if isinstance(source, (str, Path)):
-        return frozenset(pl.scan_parquet(source).collect_schema().names())
-    table = as_frame(source, (dim,))
+    table = scan(source) if isinstance(source, (str, Path)) else as_frame(source, (dim,))
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()

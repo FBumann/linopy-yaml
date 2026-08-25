@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-__all__ = ['TidySource', 'as_frame', 'is_dense_array', 'labels_frame']
+__all__ = ['TidySource', 'as_frame', 'is_dense_array', 'is_multi_indexed', 'labels_frame', 'scan']
 
 #: What a source is once :func:`~lpspec.sources.tidy_sources` has read it: a
 #: tidy ``(dims…, value)`` frame, or the parquet path the engine scans for
@@ -38,6 +38,11 @@ __all__ = ['TidySource', 'as_frame', 'is_dense_array', 'labels_frame']
 #: it — the door, the curve guard and the linopy lane's loader — and this is
 #: the boundary module all three already import.
 TidySource: TypeAlias = pl.LazyFrame | str | Path
+
+
+def scan(source: Any) -> pl.LazyFrame:
+    """One :data:`TidySource` as a lazy frame — a parquet path becomes a scan, a frame stays itself."""
+    return pl.scan_parquet(source) if isinstance(source, (str, Path)) else source
 
 
 def as_frame(obj: object, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
