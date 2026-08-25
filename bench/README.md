@@ -26,7 +26,7 @@ pixi run refresh
 pixi run ladder        # --sizes xs s m l          -> bench/results/latest.json
 pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
 pixi run declarations  # --sizes n002 … n128       -> bench/results/declarations.json
-pixi run report        # all three                 -> markdown
+pixi run report        # every results file       -> written into the page
 pixi run plot          #                           -> the chart page
 
 # anything narrower than the published ladder: send it somewhere else

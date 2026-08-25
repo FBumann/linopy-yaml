@@ -460,6 +460,57 @@ def test_a_cell_with_no_number_in_it_is_never_marked() -> None:
     assert f'\u2014{report.MARK}' not in table, 'an absent measurement cannot be noisy'
 
 
+_FENCED = """# A page
+
+Prose the numbers are read with.
+
+<!-- bench:results -->
+
+| old | table |
+
+<!-- bench:/results -->
+
+More prose.
+"""
+
+
+def test_a_fenced_block_is_replaced_and_the_prose_around_it_is_not() -> None:
+    """The page is a tracked source file: its prose and headings are reviewed in
+    a diff like any other code, and only what sits inside a fence is
+    mechanical. That is the split `bench.plot` already makes on the chart."""
+    written = report.splice(_FENCED, {'results': '| new | table |'})
+    assert '| new | table |' in written and '| old | table |' not in written
+    assert 'Prose the numbers are read with.' in written, 'everything outside the fence survives'
+    assert 'More prose.' in written
+
+
+def test_writing_twice_changes_nothing_the_second_time() -> None:
+    once = report.splice(_FENCED, {'results': '| new | table |'})
+    assert report.splice(once, {'results': '| new | table |'}) == once, 'a re-render has an empty diff'
+
+
+@pytest.mark.parametrize(
+    ('page', 'complaint'),
+    [
+        pytest.param('# A page\n\nno fence here\n', 'no `<!-- bench:results -->`', id='missing'),
+        pytest.param('<!-- bench:/results -->\n<!-- bench:results -->\n', 'closes the results fence', id='inverted'),
+    ],
+)
+def test_a_page_that_cannot_take_the_block_is_refused(page: str, complaint: str) -> None:
+    """Refused rather than appended to: a page that quietly grew a second copy
+    of every table would look fine in the render and wrong in the diff."""
+    with pytest.raises(SystemExit, match=complaint):
+        report.splice(page, {'results': '| new | table |'})
+
+
+def test_an_empty_fragment_never_blanks_the_page() -> None:
+    """A results file that rendered nothing would otherwise publish nothing,
+    silently — the failure mode `bench/results.py` warns about, where a run
+    that died leaves a page that looks merely quiet."""
+    with pytest.raises(SystemExit, match='refusing to blank the page'):
+        report.splice(_FENCED, {'results': '   '})
+
+
 def test_the_marginal_table_carries_no_ratio_between_libraries() -> None:
     """A build-only number is not comparable across libraries.
 
