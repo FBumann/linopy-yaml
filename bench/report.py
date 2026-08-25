@@ -28,11 +28,11 @@ from bench import results as bench_results
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-ARMS = ('lpspec', 'linopy')
-
-#: The ratio columns are lpspec ÷ linopy: the eager lane is what this one is
-#: judged against, and the only arm still measured.
-_RATIO_AGAINST = 'linopy'
+#: What every ratio is drawn against. This project is the *subject* of the
+#: page and a comparison arm is what it is measured against, so the division is
+#: always ours ÷ theirs and below 1.00 is always a win for us — whichever arms
+#: a run happened to carry.
+BASELINE = 'lpspec'
 
 #: How far a cell's IQR may reach, as a fraction of its own median, before the
 #: number is marked rather than published. Measured on a full ladder at
@@ -145,19 +145,48 @@ def _note(lines: list[str], *, marked: bool) -> list[str]:
     return [*lines, '', _SPREAD_NOTE] if marked else lines
 
 
-def _grid(heading: list[str], leading: tuple[str, ...], body: Iterable[tuple[list[str], Arms]]) -> str:
-    """A comparison table: cells that identify a row, then both arms and their ratios.
+def arms_in(keys: Iterable[Key]) -> tuple[str, ...]:
+    """Whichever arms a run measured, `BASELINE` first.
 
-    Every table on this page shares one tail — each arm's minimum, the ratio
-    between them, and `MARK` on any wall cell whose rounds spread past
+    Read off the records rather than named in this module: which libraries a
+    ladder was run against is a property of the run, and a table that names
+    them in advance renders a column of dashes for an arm nobody measured and
+    silently drops one nobody predicted.
+
+    First appearance after the baseline, not sorted — the order here is the
+    column order, and sorting would reshuffle a published table because a new
+    arm's name happens to start with a `g`.
+    """
+    seen = list(dict.fromkeys(a for *_, a in keys))
+    return tuple(([BASELINE] if BASELINE in seen else []) + [a for a in seen if a != BASELINE])
+
+
+def _grid(
+    heading: list[str], leading: tuple[str, ...], body: Iterable[tuple[list[str], Arms]], arms: tuple[str, ...]
+) -> str:
+    """A comparison table: cells that identify a row, then every arm and its ratio.
+
+    Every table on this page shares one tail — each arm's minimum, its ratio
+    against `BASELINE`, and `MARK` on any wall cell whose rounds spread past
     `SPREAD_BUDGET` — and differs only in what identifies a row and in what
-    order the rows come. Those are the two arguments; the rule is here once.
+    order the rows come. Those are the arguments; the rule is here once.
 
     It is one rule rather than three that look alike: #801 added the noise mark
     and had to write the same four lines into each of the three renderers this
     replaces, which is the duplication showing itself.
+
+    A run of the baseline alone renders no ratio columns at all: a number
+    divided by itself is not a comparison, and a column of `1.00x` reads like
+    one.
     """
-    head = [*leading, *(f'wall: {a}' for a in ARMS), 'wall', *(f'peak: {a}' for a in ARMS), 'peak']
+    against = [a for a in arms if a != BASELINE]
+    head = [
+        *leading,
+        *(f'wall: {a}' for a in arms),
+        *(f'wall ÷ {a}' for a in against),
+        *(f'peak: {a}' for a in arms),
+        *(f'peak ÷ {a}' for a in against),
+    ]
     lines = [*heading, '', '| ' + ' | '.join(head) + ' |', '|' + '---|' * len(head)]
     marked = False
     for cells, arms in body:
@@ -170,10 +199,13 @@ def _grid(heading: list[str], leading: tuple[str, ...], body: Iterable[tuple[lis
             + ' | '.join(
                 [
                     *cells,
-                    *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in ARMS),
-                    _marked(_ratio(wall['lpspec'], wall[_RATIO_AGAINST]), noisy=any(noisy.values())),
-                    *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in ARMS),
-                    _ratio(peak['lpspec'], peak[_RATIO_AGAINST]),
+                    *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in arms),
+                    *(
+                        _marked(_ratio(wall.get(BASELINE), wall[a]), noisy=noisy.get(BASELINE, False) or noisy[a])
+                        for a in against
+                    ),
+                    *(f'{_gb(peak[a])} GB' if peak[a] else '—' for a in arms),
+                    *(_ratio(peak.get(BASELINE), peak[a]) for a in against),
                 ]
             )
             + ' |'
@@ -181,15 +213,15 @@ def _grid(heading: list[str], leading: tuple[str, ...], body: Iterable[tuple[lis
     return '\n'.join(_note(lines, marked=marked))
 
 
-def _at_rung(rows: dict[Key, Row], case: str, size: str, sink: str) -> tuple[Arms, Row | None]:
-    """Both arms at one rung, and whichever of them is there to read shared cells off.
+def _at_rung(rows: dict[Key, Row], case: str, size: str, sink: str, arms: tuple[str, ...]) -> tuple[Arms, Row | None]:
+    """Every arm at one rung, and whichever of them is there to read shared cells off.
 
     The shared cells — the counts, the live fraction — are a property of the
     *model*, so either arm answers for them and a rung measured on only one arm
     still renders. ``None`` for the second value means neither arm ran it.
     """
-    arms = {a: rows.get((case, size, sink, a)) for a in ARMS}
-    return arms, next((r for r in arms.values() if r), None)
+    at_rung = {a: rows.get((case, size, sink, a)) for a in arms}
+    return at_rung, next((r for r in at_rung.values() if r), None)
 
 
 _DENSITY_RUNG = re.compile(r'd\d+$')
@@ -224,21 +256,22 @@ def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, sweep: re.Pat
 _CHART_PAGE = '*The same runs with a cursor: [the chart page](benchmarks-scaling.html).*'
 
 
-#: How each arm reaches each sink, said once so a table can name its own seam.
+#: What every arm in a column has ended up holding, said once so a table can
+#: name its own seam. It describes the artifact rather than the arms, because
+#: which arms a run carried is the run's business and this is the sink's.
 _SEAM = {
-    'lp': 'lpspec writes the LP file, linopy through its `lp-polars` writer.',
+    'lp': 'Each arm has written the LP file, through whichever writer it has.',
     'highs': (
-        'Both arms end holding a populated `highspy.Highs` with `run()` never '
-        'called: lpspec through `build_highs`, linopy through '
-        '`to_highspy(set_names=False)`. The simplex is the same work whoever '
-        'filled the model, so timing it would say nothing about the lane that '
-        'filled it.'
+        'Each arm ends holding a populated `highspy.Highs` with `run()` never '
+        'called — lpspec through `build_highs`. The simplex is the same work '
+        'whoever filled the model, so timing it would say nothing about the '
+        'lane that filled it.'
     ),
     'gurobi': (
-        'Both arms end holding a populated `gurobipy.Model` with `optimize()` '
-        'never called: lpspec through `build_gurobi`, linopy through '
-        '`to_gurobipy(set_names=False)`. Opt-in — it needs the `[gurobi]` '
-        'extra — and the same discipline as the `highs` sink.'
+        'Each arm ends holding a populated `gurobipy.Model` with `optimize()` '
+        'never called — lpspec through `build_gurobi`, and gurobipy through '
+        '`update()`, which is where its own deferred writes land. Opt-in: it '
+        'needs the `[gurobi]` extra.'
     ),
 }
 
@@ -250,15 +283,17 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
     ``<details>``, and a heading in there still lands in the table of contents
     — a rail full of entries for tables the page has just called the appendix.
     """
+    arms = arms_in(rows)
     return _grid(
         [f'**{case} — {sink} sink**', '', _SEAM[sink]],
         ('variables', 'live', 'rows'),
         (
-            ([_si(ref['counts']['columns']), _live(ref), _si(ref['counts']['rows'])], arms)
+            ([_si(ref['counts']['columns']), _live(ref), _si(ref['counts']['rows'])], at_rung)
             for size in sizes_of(case, rows, sink)
-            for arms, ref in [_at_rung(rows, case, size, sink)]
+            for at_rung, ref in [_at_rung(rows, case, size, sink, arms)]
             if ref
         ),
+        arms,
     )
 
 
@@ -273,7 +308,7 @@ def _live(r: Row) -> str:
     return '—' if frac is None else f'{frac * 100:.0f}%'
 
 
-def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]]) -> str:
+def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]], arms: tuple[str, ...]) -> str:
     """How far the first recorded round sits from steady state, per arm.
 
     Rendered from the results file rather than stated, so a refresh moves it
@@ -283,7 +318,7 @@ def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]]
     Measuring that cost needs a fresh interpreter per arm, which no rung takes.
     """
     per_arm = []
-    for arm in ARMS:
+    for arm in arms:
         deltas = sorted(
             (best[(case, size, arm)]['first_build_seconds'] - best[(case, size, arm)]['steady_build_seconds']) * 1000
             for case, size in seen
@@ -297,6 +332,18 @@ def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]]
         'The harness warms up before it records, so neither column carries the '
         'one-time import cost: the median gap between them is ' + ' and '.join(per_arm) + '.'
     )
+
+
+def _ms(row: Row | None, half: str, *, bold: bool) -> str:
+    """One half of the first-vs-steady pair, or a dash where that arm has none.
+
+    The baseline's steady column is the one a reader is looking for, so it is
+    the one in bold — the rest of the row is what it is being read against.
+    """
+    if row is None or row.get(f'{half}_build_seconds') is None:
+        return '—'
+    cell = f'{row[f"{half}_build_seconds"] * 1000:.1f} ms'
+    return f'**{cell}**' if bold and half == 'steady' else cell
 
 
 def marginal(loop_rows: list[Row]) -> str:
@@ -320,6 +367,8 @@ def marginal(loop_rows: list[Row]) -> str:
             best[key] = r
     if not best:
         return ''
+    arms = arms_in(best)
+    against = [a for a in arms if a != BASELINE]
 
     def order(key: tuple[str, str]) -> tuple[float, str, str]:
         """Widest model last, then by name — a *total* order, off whichever arm ran.
@@ -332,7 +381,7 @@ def marginal(loop_rows: list[Row]) -> str:
         results file rendering in a different row order run to run. A published
         table that a re-render reshuffles has a diff that means nothing.
         """
-        widths = (best[(*key, a)].get('nominal_variables') for a in ARMS if (*key, a) in best)
+        widths = (best[(*key, a)].get('nominal_variables') for a in arms if (*key, a) in best)
         return (next((w for w in widths if w is not None), 0), *key)
 
     seen = sorted({(c, s) for c, s, _ in best}, key=order)
@@ -341,26 +390,40 @@ def marginal(loop_rows: list[Row]) -> str:
         '',
         'Build only, repeated in one process. **first** is the first recorded round '
         'and **steady** the best of the rounds after it, so the pair is what a '
-        'rolling horizon pays for its second window against its first. ' + _settling(best, seen),
+        'rolling horizon pays for its second window against its first. ' + _settling(best, seen, arms),
         '',
-        '| case | vars | lpspec: first | lpspec: steady | linopy: first | linopy: steady | steady vs linopy |',
-        '|---|---|---|---|---|---|---|',
+        '| '
+        + ' | '.join(
+            [
+                'case',
+                'vars',
+                *(f'{a}: {half}' for a in arms for half in ('first', 'steady')),
+                *(f'steady ÷ {a}' for a in against),
+            ]
+        )
+        + ' |',
+        '|' + '---|' * (2 + 2 * len(arms) + len(against)),
     ]
     for case, size in seen:
-        ours, eager = best.get((case, size, 'lpspec')), best.get((case, size, 'linopy'))
-        if not ours or not eager:
+        at_rung = {a: best.get((case, size, a)) for a in arms}
+        ref = next((r for r in at_rung.values() if r), None)
+        if ref is None:
             continue
+        ours = at_rung.get(BASELINE)
         lines.append(
             '| '
             + ' | '.join(
                 [
                     case,
-                    _si(ours.get('nominal_variables', 0)),
-                    f'{ours["first_build_seconds"] * 1000:.1f} ms',
-                    f'**{ours["steady_build_seconds"] * 1000:.1f} ms**',
-                    f'{eager["first_build_seconds"] * 1000:.1f} ms',
-                    f'{eager["steady_build_seconds"] * 1000:.1f} ms',
-                    _ratio(ours['steady_build_seconds'], eager['steady_build_seconds']),
+                    _si(ref.get('nominal_variables', 0)),
+                    *(_ms(at_rung[a], half, bold=a == BASELINE) for a in arms for half in ('first', 'steady')),
+                    *(
+                        _ratio(
+                            ours['steady_build_seconds'] if ours else None,
+                            at_rung[a]['steady_build_seconds'] if at_rung[a] else None,
+                        )
+                        for a in against
+                    ),
                 ]
             )
             + ' |'
@@ -380,16 +443,18 @@ def _sweep(rows: dict[Key, Row], rung: re.Pattern[str], heading: list[str], seco
     if not cases:
         return ''
 
+    arms = arms_in(rows)
+
     def body() -> Iterable[tuple[list[str], Arms]]:
         for case in cases:
             sizes = sizes_of(case, rows, 'lp', sweep=rung)
             for size in reversed(sizes) if newest_first else sorted(sizes):
-                arms, ref = _at_rung(rows, case, size, 'lp')
+                at_rung, ref = _at_rung(rows, case, size, 'lp', arms)
                 if ref:
                     label = _live(ref) if second == 'live' else str(int(size[1:]))
-                    yield [case, label, _si(ref['counts']['columns'])], arms
+                    yield [case, label, _si(ref['counts']['columns'])], at_rung
 
-    return _grid(heading, ('case', second, 'variables'), body())
+    return _grid(heading, ('case', second, 'variables'), body(), arms)
 
 
 def density(rows: dict[Key, Row]) -> str:

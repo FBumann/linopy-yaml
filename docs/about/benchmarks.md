@@ -64,8 +64,11 @@ and `scaling` are older files, at `98f382d`, and say so.
 Darwin 25.2.0, python 3.13.2, 26 GB · lpspec 0.0.1a61 · polars 1.43.1 · linopy
 0.8.0.post1.dev140+g346943317 (the v1-semantics build, PyPSA/linopy#717) ·
 highspy 1.15.1 · gurobipy 13.0.2 · scipy 1.18.0 · numpy 2.5.1. Nine rounds per
-measurement; the report takes the minimum. Parity gate: all six cases
-agree to 0.0e+00 relative (`fleet` to 4.6e-16) before anything is timed.
+measurement; the report takes the minimum. Parity gate, as it stood for this
+run: all six cases agreed to 0.0e+00 relative (`fleet` to 4.6e-16) before
+anything was timed. It compared two arms at the smallest rung and went with the
+eager one; a hand-written arm answers to an objective check in
+`bench/test_harness.py` instead, which CI runs on every pull request.
 
 **Peak is measured cold.** `pytest-benchmem` 0.5 dropped the warmup from the
 isolated pass, so a peak here is the first call in a fresh process — which is
