@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.257](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.256...v0.0.1-alpha.257) (2026-08-25)
+
+
+### Documentation
+
+* **agents:** a PR title is a changelog line ([#1274](https://github.com/fluxopt/lpspec/issues/1274)) ([1890651](https://github.com/fluxopt/lpspec/commit/1890651e8a82058bf9acc8c22b9811d4a560e3ab))
+
 ## [0.0.1-alpha.256](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.255...v0.0.1-alpha.256) (2026-08-25)
 
 
