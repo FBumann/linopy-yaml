@@ -38,6 +38,12 @@ if TYPE_CHECKING:
 #: Every sink linopy can hand a model to — the same three as ours.
 SINKS = ('lp', 'highs', 'gurobi')
 
+#: What has to be importable for this arm to run. The `codspeed` environment
+#: deliberately leaves `dev` out — it resolves linopy from a git branch and the
+#: job measured no linopy model until this arm existed — so an absent library
+#: has to skip the cell with its reason rather than error the run.
+REQUIRES = ('linopy',)
+
 #: Which formulation module in `bench/models/<case>/` this arm builds from.
 DIALECT = 'linopy'
 
