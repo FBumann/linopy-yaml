@@ -497,6 +497,42 @@ def declarations(rows: dict[Key, Row]) -> str:
     )
 
 
+#: The published page, and the only file `--write` touches.
+PAGE = Path('docs/about/benchmarks.md')
+
+
+def _fenced(name: str) -> tuple[str, str]:
+    return f'<!-- bench:{name} -->', f'<!-- bench:/{name} -->'
+
+
+def splice(text: str, fragments: dict[str, str]) -> str:
+    """Replace each fenced block in *text* with the fragment of the same name.
+
+    The page is a tracked source file: its prose, its headings and the sentences
+    that read the numbers are reviewed in a diff like any other code, and only
+    the measurements inside the fences are mechanical. That is the same split
+    `bench.plot` makes on the chart page, for the same reason — a table pasted
+    by hand goes stale silently, and this one had: the block it replaces still
+    carried an `LP` column the renderer stopped emitting.
+
+    Raises:
+        SystemExit: If a fence is missing, unclosed or out of order, or if a
+            fragment came out empty. Every one of those would quietly publish
+            less than the run measured.
+    """
+    for name, body in fragments.items():
+        opening, closing = _fenced(name)
+        start, end = text.find(opening), text.find(closing)
+        if start < 0 or end < 0:
+            raise SystemExit(f'{PAGE} has no `{opening}` … `{closing}` fence — nothing to write {name} into')
+        if end < start:
+            raise SystemExit(f'{PAGE} closes the {name} fence before it opens it')
+        if not body.strip():
+            raise SystemExit(f'{name} rendered empty from these results — refusing to blank the page')
+        text = text[: start + len(opening)] + '\n\n' + body.strip() + '\n\n' + text[end:]
+    return text
+
+
 def main(argv: list[str] | None = None) -> int:
     """Print the published page for the given result files.
 
@@ -513,6 +549,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument(
         'results', type=Path, nargs='*', default=[Path('bench/results')], help='result files, or a directory of them'
+    )
+    ap.add_argument(
+        '--write',
+        action='store_true',
+        help=f'write each table into its fence in {PAGE} instead of printing, the way bench.plot writes the chart',
     )
     opts = ap.parse_args(argv)
 
@@ -545,32 +586,32 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         print('Parity gate: enforced at measurement time — every arm below built the same model.')
-    print()
-    print(_CHART_PAGE)
+    results = [_CHART_PAGE]
     for case in sorted({c for c, _, _, _ in rows}):
         sinks = [k for k in sorted({k for c, _, k, _ in rows if c == case}) if sizes_of(case, rows, k)]
         if not sinks:
             continue
-        print()
-        print(f'<details markdown="1">\n<summary><b>{case}</b> — every rung, every sink</summary>\n')
-        for sink in sinks:
-            print(table(case, rows, sink))
-            print()
-        print('</details>')
-    loop_table = marginal(loop)
-    if loop_table:
-        print()
-        print(loop_table)
-    density_table = density(rows)
-    if density_table:
-        print()
-        print(density_table)
-    declaration_table = declarations(rows)
-    if declaration_table:
-        print()
-        print(declaration_table)
+        results.append(f'\n<details markdown="1">\n<summary><b>{case}</b> — every rung, every sink</summary>\n')
+        results += [table(case, rows, sink) + '\n' for sink in sinks]
+        results.append('</details>')
     for key, error in sorted(failed.items()):
-        print(f'\n<!-- {" ".join(k for k in key if k)}: {error} -->')
+        results.append(f'<!-- {" ".join(k for k in key if k)}: {error} -->')
+
+    fragments = {
+        'results': '\n'.join(results),
+        'marginal': marginal(loop),
+        'sweeps': '\n\n'.join(t for t in (density(rows), declarations(rows)) if t),
+    }
+    fragments = {name: body for name, body in fragments.items() if body.strip()}
+
+    if opts.write:
+        PAGE.write_text(splice(PAGE.read_text(), fragments))
+        print(f'{PAGE} refreshed: {", ".join(fragments)}')
+        return 0
+
+    for body in fragments.values():
+        print()
+        print(body)
     return 0
 
 

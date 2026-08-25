@@ -383,15 +383,19 @@ docs-build = { cmd = "mkdocs build --strict", description = "The site, built the
 ladder = { cmd = "pytest bench --benchmark-memory --sizes xs s m l --benchmark-json=bench/results/latest.json", description = "The size ladder" }
 density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --benchmark-json=bench/results/density.json", description = "The density sweep" }
 declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep" }
-report = { cmd = "python -m bench.report bench/results", description = "Every results file in the directory, as the published markdown" }
+report = { cmd = "python -m bench.report --write", description = "Write every table into its fence in docs/about/benchmarks.md. Drop --write to print instead" }
 plot = { cmd = "python -m bench.plot", description = "The figures, and the chart page's numbers" }
 # The same three files as `report`, rendered with no opinions: a row per number,
 # so a question the renderers do not answer is a filter rather than a patch.
-table = { cmd = "python -m bench.tidy bench/results > bench/results/measurements.csv && python -m bench.tidy bench/results --runs > bench/results/runs.csv", description = "Every measurement as one long CSV, and the fingerprint beside it" }
+# Prints; nothing commits it. The CSV is a *reduction* — the minimum plus its
+# spread — where the JSON beside it keeps every round, so the archive is the
+# JSON and this is the interface. A committed copy would be a cache of a pure
+# function, free to drift, and nothing here reads it back.
+table = { cmd = "python -m bench.tidy bench/results", description = "Every measurement as one long CSV on stdout; --runs for the fingerprint" }
 
 [tool.pixi.feature.bench.tasks.refresh]
 description = "Re-measure the published ladder and rewrite the tables and the chart page"
-depends-on = ["ladder", "density", "declarations", "report", "plot", "table"]
+depends-on = ["ladder", "density", "declarations", "report", "plot"]
 
 # The suite, serial, against the floors — and the absence check first, because a
 # green suite with linopy on disk would be testing the wrong environment.
