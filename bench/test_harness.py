@@ -8,6 +8,8 @@ is timed.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -20,7 +22,7 @@ import numpy as np
 import pytest
 
 from bench import conftest as harness
-from bench import floor, plot, report, tidy, warm_payoff
+from bench import floor, plot, profile_build, profile_phases, report, tidy, warm_payoff
 from bench.arms.lpspec import _tables, checked_sources
 from bench.cases import CASES, Shape
 from bench.conftest import (
@@ -150,6 +152,49 @@ def _loop(case: str, arm: str, width: int) -> dict[str, Any]:
         'steady_build_seconds': 0.05,
         'counts': {'columns': width, 'rows': 10, 'nonzeros': width},
     }
+
+
+# ---------------------------------------------------------------------------
+# the entry points still run — every one of these broke unnoticed in one week
+# ---------------------------------------------------------------------------
+
+
+def test_the_report_renders_from_the_committed_results() -> None:
+    """`pixi run report` named three files, two of which no run had ever
+    written, so it raised `FileNotFoundError` on a clean checkout. The readers
+    take the directory now, and this is what says they still find something in
+    it."""
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert report.main([]) == 0
+    assert '| variables |' in out.getvalue(), 'the default target is bench/results, and it renders a table'
+
+
+def test_the_long_table_renders_from_the_committed_results() -> None:
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert tidy.main([]) == 0
+    lines = out.getvalue().splitlines()
+    assert lines[0] == 'run,case,size,sink,arm,phase,variables,metric,value', 'the header is the schema'
+    assert len(lines) > 1, 'the committed provenance produces rows, not just a header'
+
+
+def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
+    """Both profilers monkeypatch a private engine class by name, so a refactor
+    in `src/` retires them without touching `bench/`. #1245 moved the build
+    methods off `PolarsEngine` onto `_Assembly` and both died on the next run —
+    a day before anyone looked."""
+    import importlib
+
+    from lpspec.relational.engines.polars.engine import _Assembly
+
+    for module_path, class_name, method in profile_build.STEPS:
+        module = importlib.import_module(module_path)
+        owner = module if class_name is None else getattr(module, class_name, None)
+        assert owner is not None, f'profile_build patches {class_name} in {module_path}, which moved'
+        assert hasattr(owner, method), f'profile_build patches {class_name or module_path}.{method}, which moved'
+    for method in profile_phases.PHASES:
+        assert hasattr(_Assembly, method), f'profile_phases patches _Assembly.{method}, which moved'
 
 
 # ---------------------------------------------------------------------------

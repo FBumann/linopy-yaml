@@ -53,18 +53,18 @@ def main(argv: list[str] | None = None) -> int:
 
     from lpspec.lowering import lower_program
     from lpspec.relational.engines.polars import engine as executor_module
-    from lpspec.relational.engines.polars.engine import PolarsEngine
+    from lpspec.relational.engines.polars.engine import PolarsEngine, _Assembly
     from lpspec.sources import tidy_sources
 
     spent: dict[str, list[float]] = collections.defaultdict(list)
     for name in PHASES:
-        setattr(PolarsEngine, name, _timed(name, getattr(PolarsEngine, name), spent))
+        setattr(_Assembly, name, _timed(name, getattr(_Assembly, name), spent))
 
     case = bench_cases.CASES[args.case]
     shape = case.shape(args.size)
     schema = load_model(str(case.model_path(shape)))
     program = lower_program(schema)
-    sources = tidy_sources(schema, dict(case.data(shape)), None)
+    sources = tidy_sources(schema, dict(case.data(shape)))
 
     real_bind = executor_module.bind
     cached: list[Any] = []

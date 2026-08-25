@@ -138,6 +138,13 @@ jobs:
       - run: pixi run typecheck github
       - run: pixi run test
 
+      # The harness's own tests, which `pixi run test` does not reach:
+      # `testpaths` is `tests`. Four entry points under `bench/` were broken by
+      # `src/` refactors in a single week — a renamed parquet column (#1185) and
+      # a class that moved (#1245) — and every one of them was already covered
+      # by a test nothing ran. Nine seconds, default environment.
+      - run: pixi run test-bench
+
       # The site, built strictly: `strict: true` in mkdocs.yml turns every
       # warning into a failure, so this gate catches a dead cross-link, a model
       # page added without a nav entry, and an anchor that stopped resolving.

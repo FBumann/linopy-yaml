@@ -116,9 +116,9 @@ def read(paths: dict[str, str]) -> Raw:
         cap=column('cap').to_numpy(),
         neg_cap=column('neg_cap').to_numpy(),
         load=column('load').to_numpy(),
-        gen_bus=positions(column('generator', 'gen_bus').to_numpy()),
-        line_from=positions(column('line', 'line_from').to_numpy()),
-        line_to=positions(column('line', 'line_to').to_numpy()),
+        gen_bus=positions(column('gen_bus', 'bus').to_numpy()),
+        line_from=positions(column('line_from', 'bus').to_numpy()),
+        line_to=positions(column('line_to', 'bus').to_numpy()),
         n_snap=len(column('snapshot', 'snapshot')),
         n_bus=len(buses),
     )
