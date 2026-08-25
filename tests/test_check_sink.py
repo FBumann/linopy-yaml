@@ -8,6 +8,7 @@ no installed solver, and a refusal names the sinks that would have taken it.
 
 from __future__ import annotations
 
+import re
 import warnings
 
 import pytest
@@ -80,10 +81,11 @@ def test_a_set_is_silent_on_the_sinks_that_carry_one(sink):
 
 
 def test_an_unknown_sink_names_the_ones_there_are():
-    with pytest.raises(LpspecError, match='unknown sink'):
+    with pytest.raises(LpspecError, match='unknown sink') as refused:
         lps.check(PLAIN, sink='cplex')
-    with pytest.raises(LpspecError, match=r'\.lp, \.mps, gurobi, highs, xpress'):
-        lps.check(PLAIN, sink='cplex')
+    assert re.search(r'\.lp, \.mps, gurobi, highs, xpress', str(refused.value)), (
+        'the refusal lists every sink there is, so a reader picks one instead of guessing'
+    )
 
 
 def test_the_question_needs_no_solver_installed(monkeypatch):

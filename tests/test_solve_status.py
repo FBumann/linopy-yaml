@@ -29,19 +29,7 @@ from lpspec.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, 
 from lpspec.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
 from lpspec.relational.sinks.solvers.xpress import _BEYOND_LINOPY, _CONDITION_OF_SOL_STATUS
 from lpspec.relational.status import STATUS_TO_TERMINATION_CONDITIONS, SolveStatus
-
-INFEASIBLE = {
-    'dimensions': {'snapshot': {'dtype': 'int', 'values': [0]}},
-    'parameters': {'load': {'dims': ['snapshot']}},
-    'variables': {'p': {'foreach': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}}},
-    'constraints': {'meet': {'foreach': ['snapshot'], 'expression': 'p == load'}},
-    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
-}
-
-
-def _infeasible_sources():
-    return {'load': pl.DataFrame({'snapshot': [0], 'value': [99.0]})}
-
+from tests.conftest import CASES
 
 # ---------------------------------------------------------------------------
 # linopy as the oracle for the vocabulary
@@ -174,7 +162,7 @@ def test_ok_means_values_worth_reading_not_optimality():
 
 
 def test_an_infeasible_solve_reports_both_axes_and_a_nan_objective():
-    with lps.solve(INFEASIBLE, _infeasible_sources()) as solution:
+    with lps.solve(*CASES['INFEASIBLE']) as solution:
         assert solution.status == 'warning'
         assert solution.termination_condition == 'infeasible'
         assert not solution.is_ok
@@ -184,7 +172,7 @@ def test_an_infeasible_solve_reports_both_axes_and_a_nan_objective():
 def test_reading_results_without_a_solution_raises(tmp_path):
     """HiGHS returns a full-length vector of zeros whatever the status, so
     handing it back would be indistinguishable from an answer."""
-    with lps.solve(INFEASIBLE, _infeasible_sources()) as solution:
+    with lps.solve(*CASES['INFEASIBLE']) as solution:
         with pytest.raises(NoSolutionError, match='infeasible'):
             solution.primal('p')
         with pytest.raises(NoSolutionError):

@@ -34,6 +34,7 @@ import pytest
 import yaml as pyyaml
 from math_spec import Namespace, expression_of, load_model
 
+from lpspec.relational.sinks import SOLVERS
 from lpspec.sources import bindable
 
 # The language's own tests own these (#1150); the noqa marks the two this file
@@ -523,3 +524,167 @@ SOLVER_VECTOR_MODEL = {
 
 
 SOLVER_VECTOR_LOAD = {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
+
+
+# ---------------------------------------------------------------------------
+# the sink cases: what a second solver has to earn
+# ---------------------------------------------------------------------------
+
+LP = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1, 2]}},
+    'parameters': {'load': {'dims': ['t']}, 'price': {'dims': ['t']}},
+    'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {'meet': {'foreach': ['t'], 'expression': 'p >= load'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * price, over=t)'},
+}
+
+#: A convex quadratic objective — the third convention for one form, so two
+#: sinks agreeing is what says the conversion is right rather than consistent.
+QP = {
+    'dimensions': {'g': {'dtype': 'str', 'values': ['a', 'b']}},
+    'parameters': {'need': {'dims': []}, 'toll': {'dims': ['g']}},
+    'variables': {
+        'p': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
+        'q': {'foreach': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'meet': {'foreach': [], 'expression': 'sum(p, over=g) + sum(q, over=g) >= need'}},
+    #: A linear term beside the quadratic one, deliberately: ``setMObjective``
+    #: sets the *whole* objective, so a hand-off that passed only ``Q`` would
+    #: drop the linear half — and a purely quadratic case could not tell.
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * p + p * q + q * q + q * toll, over=g)'},
+}
+
+QP_SOURCES = {
+    'need': pl.DataFrame({'value': [24.0]}),
+    'toll': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 7.0]}),
+}
+
+#: Maximisation *and* an objective constant, which are the two things the
+#: sink states outside the frames: ``ModelSense`` and ``ObjCon``.
+MAX = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0, 1]}},
+    'parameters': {'cap': {'dims': ['t']}},
+    'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'lim': {'foreach': ['t'], 'expression': 'p <= cap'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(p, over=t) + 5'},
+}
+
+MIP = {
+    'dimensions': {'i': {'dtype': 'int', 'values': [0, 1, 2]}, 'one': {'dtype': 'int', 'values': [0]}},
+    'parameters': {'w': {'dims': ['i']}, 'cap': {'dims': ['one']}},
+    'variables': {'x': {'foreach': ['i'], 'domain': 'binary'}},
+    'constraints': {'budget': {'foreach': ['one'], 'expression': 'sum(x * w, over=i) <= cap'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * w, over=i)'},
+}
+
+INFEASIBLE = {
+    'dimensions': {'t': {'dtype': 'int', 'values': [0]}},
+    'parameters': {'load': {'dims': ['t']}},
+    'variables': {'p': {'foreach': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'constraints': {'meet': {'foreach': ['t'], 'expression': 'p == load'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+}
+
+#: Each case is the ``(model, data)`` pair a call site unpacks:
+#: ``lps.solve(*CASES['MIP'])``.
+CASES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
+    'LP': (
+        LP,
+        {
+            'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]}),
+            'price': pl.DataFrame({'t': [0, 1, 2], 'value': [10.0, 20.0, 30.0]}),
+        },
+    ),
+    'MAX': (MAX, {'cap': pl.DataFrame({'t': [0, 1], 'value': [3.0, 4.0]})}),
+    'MIP': (
+        MIP,
+        {
+            'w': pl.DataFrame({'i': [0, 1, 2], 'value': [2.0, 3.0, 4.0]}),
+            'cap': pl.DataFrame({'one': [0], 'value': [5.0]}),
+        },
+    ),
+    'INFEASIBLE': (INFEASIBLE, {'load': pl.DataFrame({'t': [0], 'value': [99.0]})}),
+    'QP': (QP, QP_SOURCES),
+}
+
+
+def assert_agrees_with_highs(solver_name: str, case: str, variable: str, constraint: str, *, has_duals: bool) -> None:
+    """The claim a second solver has to earn, on all four quantities.
+
+    Coordinates as well as values, since a sink that loaded the columns in a
+    different order would still reach the same objective on these models — and
+    duals under ``maximize``, where a sign convention could differ and nothing
+    else in the suite would notice. Activity is the quantity every member
+    reaches through its own door — HiGHS reads its own ``row_value``, the
+    others subtract slack from the right-hand side — so agreement is two
+    solvers *and* two derivations; it holds on the MIP too, being gated on
+    ``has_primal`` alone where duals are not.
+    """
+    import lpspec as lps
+
+    with lps.solve(*CASES[case]) as highs, lps.solve(*CASES[case], solver_name=solver_name) as other:
+        assert other.termination_condition == highs.termination_condition
+        assert other.objective == pytest.approx(highs.objective)
+
+        expected, got = highs.primal(variable), other.primal(variable)
+        assert got.columns == expected.columns
+        assert got.drop('value').equals(expected.drop('value'))
+        assert got['value'].to_list() == pytest.approx(expected['value'].to_list())
+
+        assert other.activity(constraint)['value'].to_list() == pytest.approx(
+            highs.activity(constraint)['value'].to_list()
+        )
+        if has_duals:
+            assert other.dual(constraint)['value'].to_list() == pytest.approx(
+                highs.dual(constraint)['value'].to_list()
+            )
+
+
+def assert_infeasible_reports_both_axes(solver_name: str) -> None:
+    """The status pair, and the solver's own word for it where a user reads it."""
+    import lpspec as lps
+    from lpspec.errors import NoSolutionError
+
+    with lps.solve(*CASES['INFEASIBLE'], solver_name=solver_name) as solution:
+        assert solution.status == 'warning'
+        assert solution.termination_condition == 'infeasible'
+        assert not solution.has_primal
+        assert solution.objective != solution.objective, 'nan, not 0.0'
+        with pytest.raises(NoSolutionError, match='INFEASIBLE'):
+            solution.primal('p')
+
+
+#: A knapsack, because nothing above declares a discrete variable. Shared
+#: because two modules need a MILP: a rebound one re-solves on a solver still
+#: holding the last solve's incumbent, and a solved one leaves no valid basis
+#: for a warm start to carry.
+ITEMS = [f'item{i}' for i in range(12)]
+KNAPSACK = {
+    'dimensions': {'item': {'dtype': 'str'}},
+    'parameters': {'worth': {'dims': ['item']}, 'weight': {'dims': ['item']}, 'capacity': {'dims': []}},
+    'variables': {'take': {'foreach': ['item'], 'domain': 'binary'}},
+    'constraints': {'fits': {'foreach': [], 'expression': 'sum(weight * take, over=item) <= capacity'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(take * worth)'},
+}
+
+
+def knapsack_sources(items: list[str] = ITEMS) -> dict[str, pl.DataFrame]:
+    return {
+        'item': pl.DataFrame({'item': items}),
+        'worth': pl.DataFrame({'item': items, 'value': [float(7 * i % 13 + 1) for i in range(len(items))]}),
+        'weight': pl.DataFrame({'item': items, 'value': [float(5 * i % 11 + 1) for i in range(len(items))]}),
+        'capacity': pl.DataFrame({'value': [20.0]}),
+    }
+
+
+@pytest.fixture(params=sorted(SOLVERS))
+def solver_name(request: pytest.FixtureRequest) -> str:
+    """Every sink that can stay loaded, skipping one this build cannot run.
+
+    Asked through the sink's own availability rule rather than by naming its
+    package here, so a member that grows a second dependency does not also grow
+    a second skip.
+    """
+    if not SOLVERS[request.param].is_available():
+        pytest.skip(f'{request.param} is not installed here')
+    return str(request.param)
