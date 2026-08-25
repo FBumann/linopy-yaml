@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.258](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.257...v0.0.1-alpha.258) (2026-08-25)
+
+
+### Features
+
+* **bench:** a table shows the arms the run measured, not the two it was written for ([#1271](https://github.com/fluxopt/lpspec/issues/1271)) ([29b84a3](https://github.com/fluxopt/lpspec/commit/29b84a30f9e5c426b1b49a21c4aac4ab32a27432))
+
 ## [0.0.1-alpha.257](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.256...v0.0.1-alpha.257) (2026-08-25)
 
 
