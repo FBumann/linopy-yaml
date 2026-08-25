@@ -785,6 +785,25 @@ def _keywords_read(fn: ast.FunctionDef, helpers: Mapping[str, ast.FunctionDef]) 
     return found
 
 
+def _dispatched_by_name(fn: ast.FunctionDef) -> set[str]:
+    """The operators *fn* spells out by name — ``if node.name == 'at'``.
+
+    What ``_call`` reads off a ``.kwargs`` mapping it reads for these alone;
+    every other operator is handed its keywords and takes them as parameters.
+    """
+    return {
+        comparator.value
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Compare) and _is_name(node.left) and isinstance(node.ops[0], ast.Eq)
+        for comparator in node.comparators[:1]
+        if isinstance(comparator, ast.Constant)
+    }
+
+
+def _is_name(node: ast.expr) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == 'name'
+
+
 def _is_kwargs(node: ast.expr) -> bool:
     return isinstance(node, ast.Attribute) and node.attr == 'kwargs'
 
@@ -825,9 +844,10 @@ def test_both_lanes_read_every_keyword_the_language_declares():
 
     The two lanes cover a keyword differently and both count. A lowering reads
     it off ``node.kwargs``; an eager operator takes it as a parameter, unless
-    ``_call`` consumed it first — ``by=`` names a lookup rather than an operand
-    and decides *which* operation runs, so what ``_call`` reads by name is read
-    for every operator rather than exempted for the two it dispatches.
+    ``_call`` consumed it first — and it consumes one only for the operators it
+    spells out by name, every other operator being handed its keywords. Credited
+    for all of them instead, this test stayed green while ``sum_back(by=…)``
+    reached the eager evaluator as a ``TypeError`` out of a signature.
     """
     from math_spec import BUILTIN_NAMES, call_shape_error
 
@@ -846,9 +866,12 @@ def test_both_lanes_read_every_keyword_the_language_declares():
 
     eager_tree = ast.parse((PKG / 'linopy' / 'operators.py').read_text())
     eager_fns = _functions(eager_tree)
-    intercepted = _keywords_read(_functions(ast.parse((PKG / 'linopy' / 'builder.py').read_text()))['_call'], {})
+    call = _functions(ast.parse((PKG / 'linopy' / 'builder.py').read_text()))['_call']
+    intercepted, dispatched = _keywords_read(call, {}), _dispatched_by_name(call)
+    assert dispatched, 'nothing in _call is spelled out by name, so no operator may be credited its keywords'
     eager = {
-        name: {a.arg for a in eager_fns[fn].args.args + eager_fns[fn].args.kwonlyargs} | intercepted
+        name: {a.arg for a in eager_fns[fn].args.args + eager_fns[fn].args.kwonlyargs}
+        | (intercepted if name in dispatched else set())
         for name, fn in _table(eager_tree, 'OPERATORS').items()
     }
 

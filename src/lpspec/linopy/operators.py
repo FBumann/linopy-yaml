@@ -187,7 +187,7 @@ def _operator_shift(array: Any, *, over: str, offset: float, edge: str | float |
     raise _unsupported('shift()', array)
 
 
-def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None = None) -> Any:
+def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None = None, by: Any = None) -> Any:
     """Sum *array* over a trailing window along one dimension.
 
     YAML: ``sum_back(started, over=snapshot, within=min_up)``. The result at
@@ -212,14 +212,31 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     a row about constants alone, so the fill is paired with the positions any
     lag actually reached, and a window that reached none of them keeps no row
     (#1059, #1060).
+
+    ``by=`` stops the window at each group's edge, and it is the same gather
+    one lag at a time: :func:`_gather_in_groups` reads each position's peer
+    inside its own group, so a lag reaching past the group's start is the
+    unreachable position it already is at the axis edge. A coordinate the
+    lookup places nowhere is in no group and reaches nothing, itself included,
+    which is the one way a window loses a row.
+
+    A width declared over the group's own dim is read through the lookup first
+    (:func:`_per_group`): left as it came it would broadcast the comparison
+    ``within > lag`` onto that dim and hand the constraint a dimension the
+    language says a window does not have.
     """
     card = int(array.sizes[over])
+    within = _per_group(within, by) if by is not None else within
     widest = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
     widest = min(widest, card)
     terms: list[Any] = []
     reached: list[Any] = []
     for lag in range(widest):
-        lagged = _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=None, card=card)
+        lagged = (
+            _gather_in_groups(array, over, lag, groups=by, wrap=edge == EDGE_WRAP, fill=None)
+            if by is not None
+            else _gather_by_offset(array, over, lag, wrap=edge == EDGE_WRAP, fill=None, card=card)
+        )
         live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
         if isinstance(within, xr.DataArray):
             live, term = live & (within > lag), term * (within > lag).astype(float)
