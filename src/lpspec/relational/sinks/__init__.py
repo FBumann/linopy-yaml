@@ -29,7 +29,7 @@ from lpspec.relational.sinks.tables import ModelTables
 from lpspec.relational.sinks.writers import WRITERS, writer
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Collection, Sequence
 
     from lpspec.relational import plan
 
@@ -65,20 +65,20 @@ def sink_capabilities(name: str) -> caps.Capabilities:
     raise LpspecError(unknown_name_message('sink', name, (*SOLVERS, *WRITERS)))
 
 
-def _takes(program: plan.Program, name: str) -> bool:
-    """Whether the sink called *name* would take *program* as it stands."""
-    table = sink_capabilities(name)
-    needed = caps.required(program)
-    return not table.missing(needed) and table.excluded(needed) is None
+def _blocker(name: str, needed: Collection[caps.Capability]) -> Callable[[Sequence[str]], str] | None:
+    """Why the sink called *name* refuses capabilities *needed*, or ``None``.
 
-
-def _takers(program: plan.Program, exclude: str) -> list[str]:
-    """Every sink but *exclude* that would take *program* — a refusal's third clause.
-
-    Asked without building a message, or it would reach back into
-    :func:`refusal` and ask every sink about every other one.
+    The one home for what "takes" means, so the refusal and the takers it
+    names cannot disagree. What comes back is the message short of its third
+    clause — a function of the takers — because naming them means asking this
+    of every other sink first.
     """
-    return [name for name in (*SOLVERS, *WRITERS) if name != exclude and _takes(program, name)]
+    table = sink_capabilities(name)
+    if missing := table.missing(needed):
+        return lambda takers: _sink_refuses_message(name, missing, takers)
+    if combination := table.excluded(needed):
+        return lambda takers: _sink_refuses_combination_message(name, sorted(combination), takers)
+    return None
 
 
 def refusal(program: plan.Program, name: str) -> str | None:
@@ -90,13 +90,10 @@ def refusal(program: plan.Program, name: str) -> str | None:
     different remedies: a capability the sink lacks outright, and a pair it has
     both halves of and refuses together.
     """
-    table = sink_capabilities(name)
     needed = caps.required(program)
-    if missing := table.missing(needed):
-        return _sink_refuses_message(name, missing, _takers(program, name))
-    if combination := table.excluded(needed):
-        return _sink_refuses_combination_message(name, sorted(combination), _takers(program, name))
-    return None
+    if (refuses := _blocker(name, needed)) is None:
+        return None
+    return refuses([other for other in (*SOLVERS, *WRITERS) if other != name and _blocker(other, needed) is None])
 
 
 def _instead(takers: Sequence[str]) -> str:
@@ -144,28 +141,15 @@ def relaxations(program: plan.Program, name: str) -> list[str]:
     """
     table = sink_capabilities(name)
     needed = caps.required(program)
-    declared = any(v.variable_type != 'continuous' for v in program.variables)
     return [
         _sink_reformulates_message(
             name,
             c,
-            integrality_added=c in caps.REWRITTEN_AS_INTEGRALITY and not declared,
+            integrality_added=c in caps.REWRITTEN_AS_INTEGRALITY and 'integrality' not in needed,
         )
         for c in caps.CAPABILITIES
         if c in needed and table.support(c) == 'reformulated'
     ]
-
-
-def _instead(takers: Sequence[str]) -> str:
-    """The third clause of the refusal contract: who *does* take it.
-
-    Naming another *sink* is not the lane redirection hard rule 3 forbids —
-    both lanes still accept the same language, and this is about where a model
-    can land.
-    """
-    if not takers:
-        return 'No sink this build has takes it.'
-    return f'Sinks that do take it: {", ".join(sorted(takers))}.'
 
 
 def _sink_reformulates_message(sink: str, capability: str, *, integrality_added: bool) -> str:
@@ -222,6 +206,6 @@ def ingestible(name: str, model: ModelTables, program: plan.Program | None = Non
     """
     if program is not None and (refused := refusal(program, name)) is not None:
         raise LpspecError(refused)
-    if model.sos.height and solver(name).capabilities.support('sos') == 'reformulated':
+    if model.sos.height and sink_capabilities(name).support('sos') == 'reformulated':
         return sos.reformulated(model)
     return model

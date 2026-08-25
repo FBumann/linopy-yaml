@@ -16,7 +16,7 @@ from typing import IO
 
 import polars as pl
 
-__all__ = ['digits', 'number', 'sink']
+__all__ = ['chunk_key', 'digits', 'number', 'sink']
 
 
 def sink(frame: pl.LazyFrame, f: IO[bytes]) -> None:
@@ -31,6 +31,16 @@ def sink(frame: pl.LazyFrame, f: IO[bytes]) -> None:
     the bytes non-reproducible in silence (#109).
     """
     frame.sink_csv(f, include_header=False, quote_style='never', maintain_order=True)
+
+
+def chunk_key(axis: pl.Expr, lo: int, slots: int, within: pl.Expr) -> pl.Expr:
+    """The one sort key of a chunked section: ``slots`` consecutive keys per *axis* value.
+
+    Chunk-relative, so the product is bounded by a chunk's height rather than
+    the model's — a global index times ``slots`` is one careless model away
+    from overflowing ``Int64`` and reordering the file in silence.
+    """
+    return ((axis - lo) * slots + within).alias('key')
 
 
 def number(value: pl.Expr) -> pl.Expr:

@@ -237,12 +237,7 @@ class Highs(Solver):
         self._handle = build_highs(model, batch_rows, self._options)
 
     def push(self, model: ModelTables) -> None:
-        """*model*'s bounds, costs and right-hand sides onto the loaded model.
-
-        Everything a rebind may change without moving a label. The index
-        vectors are built here rather than held, an ``arange`` being cheaper
-        to make than to keep.
-        """
+        """The index vectors are built here rather than held — an ``arange`` is cheaper to make than to keep."""
         import highspy
         import numpy as np
 
@@ -291,7 +286,7 @@ class Highs(Solver):
         """
         import highspy
 
-        if ws.column_statuses is not None and ws.row_statuses is not None:
+        if ws.is_basis:
             basis = highspy.HighsBasis()
             basis.col_status = [highspy.HighsBasisStatus(int(status)) for status in ws.column_statuses]
             basis.row_status = [highspy.HighsBasisStatus(int(status)) for status in ws.row_statuses]
@@ -355,7 +350,6 @@ class Highs(Solver):
         self._handle.clearSolver()
 
     def close(self) -> None:
-        """Release the loaded model. Idempotent."""
         if self._handle is not None:
             self._handle.clear()
         self._handle = None

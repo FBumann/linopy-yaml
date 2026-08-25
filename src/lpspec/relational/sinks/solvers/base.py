@@ -62,6 +62,11 @@ class WarmStart:
     #: or ``None`` where the basis carries the start instead.
     column_values: Any | None
 
+    @property
+    def is_basis(self) -> bool:
+        """Whether this start is a basis — both status vectors filled, as they pair."""
+        return self.column_statuses is not None and self.row_statuses is not None
+
 
 @dataclass(frozen=True)
 class SolveAnswer:
@@ -148,6 +153,30 @@ class Solver(ABC):
     #: import that needs it, and there is only one of it. Named for when it
     #: prints rather than for what it advises: it is a message, not a verb.
     unavailable_message: ClassVar[str]
+
+    def keeps(self, model: ModelTables, solver_options: Mapping[str, Any] | None) -> bool:
+        """Whether this held solver may keep its load and take *model* by value.
+
+        Both halves of the recorded evidence live here — the digest of what was
+        loaded and the options it was loaded with — so the reuse test reads
+        them where they were written.
+        """
+        return self._options == dict(solver_options or {}) and self._structure == model.structure
+
+    @classmethod
+    def imported(cls) -> Any:
+        """Every package in :attr:`requires`, imported — or :attr:`unavailable_message`.
+
+        Returns the first, the member's own library; the rest are imported only
+        to fail here, where the message covers them, rather than mid-load.
+        """
+        import importlib
+
+        try:
+            modules = [importlib.import_module(package) for package in cls.requires]
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(cls.unavailable_message) from exc
+        return modules[0]
 
     @classmethod
     def is_available(cls) -> bool:

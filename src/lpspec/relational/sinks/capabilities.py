@@ -56,10 +56,10 @@ Support = Literal['native', 'reformulated', 'absent']
 CAPABILITIES: tuple[Capability, ...] = get_args(Capability)
 
 #: Those whose ``reformulated`` rewrite is binaries and linking rows
-#: (:func:`~lpspec.relational.sinks.sos.reformulated`). Two things read it: a
-#: sink promising such a rewrite must take integrality to perform it, and a
-#: model that declared none reaches that sink mixed-integer, so it comes back
-#: without the duals an LP would have returned.
+#: (:func:`~lpspec.relational.sinks.sos.reformulated`): a sink promising such
+#: a rewrite must take integrality to perform it, and a model that declared
+#: none reaches that sink mixed-integer, so it comes back without the duals an
+#: LP would have returned.
 REWRITTEN_AS_INTEGRALITY: frozenset[Capability] = frozenset({'sos'})
 
 
