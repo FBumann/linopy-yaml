@@ -184,14 +184,14 @@ def check() -> tuple[float, float]:
     quietly built a different model would make every headroom claim off it
     wrong.
     """
-    from bench.workloads import objective
+    from bench.arms import solved
 
     case = bench_cases.CASES[CASE]
     rung = case.ladder[0]
     paths = case.data(rung)
     h = handoff(arrays(read(paths)))
     h.run()
-    return float(h.getInfo().objective_function_value), objective('lpspec', CASE, rung.label, paths)
+    return float(h.getInfo().objective_function_value), solved('lpspec', CASE, rung.label, paths, {})
 
 
 def _maxrss_mb() -> float:

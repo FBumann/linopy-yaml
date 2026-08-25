@@ -26,8 +26,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from bench.arms import ARMS, solved
 from bench.cases import CASES
-from bench.workloads import objective
 
 if TYPE_CHECKING:
     from bench.cases import Shape
@@ -40,7 +40,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     g = parser.getgroup('ladder', 'the lpspec benchmark ladder')
     g.addoption('--cases', nargs='+', default=sorted(CASES), choices=sorted(CASES))
     g.addoption('--sizes', nargs='+', default=['xs', 's', 'm'], help="rung labels, or 'all' for every rung a case has")
-    g.addoption('--arms', nargs='+', default=['lpspec', 'linopy'], choices=('lpspec', 'linopy'))
+    g.addoption('--arms', nargs='+', default=['lpspec', 'linopy'], choices=sorted(ARMS))
     g.addoption(
         '--sinks',
         nargs='+',
@@ -326,6 +326,7 @@ def gate(request: pytest.FixtureRequest) -> Any:
     checked: dict[str, None] = {}
     skip = request.config.getoption('--skip-gate')
     arms = request.config.getoption('--arms')
+    options = {'io_api': request.config.getoption('--io-api')}
 
     def check(case_name: str, resolve: Any) -> None:
         if skip or case_name in checked:
@@ -333,7 +334,7 @@ def gate(request: pytest.FixtureRequest) -> Any:
         checked[case_name] = None
         smallest = CASES[case_name].ladder[0].label
         paths_ = resolve(case_name, smallest)
-        objectives = {a: objective(a, case_name, smallest, paths_) for a in arms}
+        objectives = {a: solved(a, case_name, smallest, paths_, options) for a in arms}
         lo, hi = min(objectives.values()), max(objectives.values())
         if abs(hi - lo) / max(abs(lo), 1e-12) > GATE_RTOL:
             raise AssertionError(f'{case_name}/{smallest}: arms disagree on the objective — {objectives}')

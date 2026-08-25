@@ -30,9 +30,8 @@ from typing import Any
 
 import pytest
 
-from bench.cases import CASES
+from bench.arms import ARMS
 from bench.conftest import shape_of
-from bench.workloads import build_only, checked_sources, linopy_build_and_emit, lpspec_build_and_emit
 
 
 def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -> None:
@@ -82,12 +81,9 @@ def test_emit(
         pytest.importorskip('gurobipy')
     gate(case_name, paths)
 
-    case_paths = paths(case_name, size)
-    if arm == 'linopy':
-        counts = benchmark(linopy_build_and_emit, case_name, size, sink, case_paths, io_api)
-    else:
-        sources = checked_sources(CASES[case_name], size, case_paths)
-        counts = benchmark(lpspec_build_and_emit, case_name, size, sink, sources)
+    module = ARMS[arm]
+    prepared = module.prepare(case_name, size, paths(case_name, size), {'io_api': io_api})
+    counts = benchmark(module.build_and_emit, sink, prepared)
     _record(benchmark, counts, case_name, size)
 
 
@@ -113,10 +109,10 @@ def test_rebuild(benchmark: Any, gate: Any, paths: Any, builds: int, case_name: 
 
     if builds < 1:
         pytest.skip('--builds 0')
-    case_paths = paths(case_name, size)
+    module = ARMS[arm]
     counts = benchmark.pedantic(
-        build_only,
-        args=(arm, case_name, size, case_paths),
+        module.build_only,
+        args=(module.prepare(case_name, size, paths(case_name, size), {}),),
         rounds=builds,
         iterations=1,
         warmup_rounds=0,
