@@ -80,11 +80,12 @@ def _portability(program: Program, sink: str) -> tuple[str | None, list[str]]:
     exists (docs/about/architecture.md, hard rule 2). A lane rewrites nothing —
     everything it supports it builds natively — so its second answer is empty.
     """
+    relaxed: list[str] = []
     if (lane := LANES.get(sink)) is not None:
         missing = lane.missing(required(program))
-        return (lane_cannot_build_message(sink, missing) if missing else None), []
+        return (lane_cannot_build_message(sink, missing) if missing else None), relaxed
     refused = sinks.refusal(program, sink)
-    return refused, [] if refused else sinks.relaxations(program, sink)
+    return refused, relaxed if refused else sinks.relaxations(program, sink)
 
 
 def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -> Model:
@@ -133,7 +134,10 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
     for name in buildable.expressions:
         lower_expression(buildable, name)
     notes = [*unbounded_notes(buildable), *advice(program)]
-    refused, relaxed = _portability(program, sink) if sink is not None else (None, [])
+    refused: str | None = None
+    relaxed: list[str] = []
+    if sink is not None:
+        refused, relaxed = _portability(program, sink)
     for note in (*notes, *relaxed):
         warnings.warn(note, LpspecWarning, stacklevel=2)
     if refused is not None:
