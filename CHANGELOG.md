@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.259](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.258...v0.0.1-alpha.259) (2026-08-26)
+
+
+### Refactoring
+
+* the package and its test suite state each shared fact once ([#1284](https://github.com/fluxopt/lpspec/issues/1284)) ([2065436](https://github.com/fluxopt/lpspec/commit/20654367b4e4c6dfa770466bb5beaafc59cdb9f8))
+
 ## [0.0.1-alpha.258](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.257...v0.0.1-alpha.258) (2026-08-25)
 
 
