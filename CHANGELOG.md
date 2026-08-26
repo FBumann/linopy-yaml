@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.262](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.261...v0.0.1-alpha.262) (2026-08-26)
+
+
+### Bug Fixes
+
+* **solver:** a gurobi solver releases its model and licence however it is dropped ([#1292](https://github.com/fluxopt/lpspec/issues/1292)) ([f33c3e9](https://github.com/fluxopt/lpspec/commit/f33c3e9fd4f1b1c63a303f6242648331805882af))
+
+
+### Refactoring
+
+* **solver:** every solver states what it holds and releases it the same way ([#1297](https://github.com/fluxopt/lpspec/issues/1297)) ([ab848b7](https://github.com/fluxopt/lpspec/commit/ab848b7db471e5b66ed1af0f135be0deb3e12b4f))
+
 ## [0.0.1-alpha.261](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.260...v0.0.1-alpha.261) (2026-08-26)
 
 
