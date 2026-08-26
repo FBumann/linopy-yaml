@@ -280,7 +280,20 @@
       }
     },
     "structural": {
-      "error": "ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Generator-p_set",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "Link-p_set",
+        "objective"
+      ],
+      "mismatch": [],
+      "region": []
     }
   },
   "rung_02_storage": {
@@ -723,7 +736,38 @@
       }
     },
     "structural": {
-      "error": "ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "StorageUnit-fix-p_dispatch-lower",
+        "StorageUnit-fix-p_dispatch-upper",
+        "StorageUnit-fix-p_store-lower",
+        "StorageUnit-fix-p_store-upper",
+        "StorageUnit-fix-state_of_charge-lower",
+        "StorageUnit-fix-state_of_charge-upper",
+        "StorageUnit-p_dispatch",
+        "StorageUnit-p_set",
+        "StorageUnit-p_store",
+        "StorageUnit-spill",
+        "StorageUnit-state_of_charge",
+        "StorageUnit-state_of_charge_set",
+        "Store-e",
+        "Store-e_set",
+        "Store-fix-e-lower",
+        "Store-fix-e-upper",
+        "Store-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "region": [
+        "StorageUnit-energy_balance",
+        "Store-energy_balance"
+      ]
     }
   },
   "rung_03_expansion": {
@@ -1403,7 +1447,71 @@
       }
     },
     "structural": {
-      "error": "ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-e_sum_max",
+        "Generator-e_sum_min",
+        "Generator-ext-p-lower",
+        "Generator-ext-p-upper",
+        "Generator-ext-p_nom-lower",
+        "Generator-ext-p_nom-upper",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Generator-p_nom",
+        "Generator-p_nom_set",
+        "Link-ext-p-lower",
+        "Link-ext-p-upper",
+        "Link-ext-p_nom-lower",
+        "Link-ext-p_nom-upper",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "Link-p_nom",
+        "Link-p_nom_set",
+        "StorageUnit-ext-p_dispatch-lower",
+        "StorageUnit-ext-p_dispatch-upper",
+        "StorageUnit-ext-p_nom-lower",
+        "StorageUnit-ext-p_nom-upper",
+        "StorageUnit-ext-p_store-lower",
+        "StorageUnit-ext-p_store-upper",
+        "StorageUnit-ext-state_of_charge-lower",
+        "StorageUnit-ext-state_of_charge-upper",
+        "StorageUnit-fix-p_dispatch-lower",
+        "StorageUnit-fix-p_dispatch-upper",
+        "StorageUnit-fix-p_store-lower",
+        "StorageUnit-fix-p_store-upper",
+        "StorageUnit-fix-state_of_charge-lower",
+        "StorageUnit-fix-state_of_charge-upper",
+        "StorageUnit-p_dispatch",
+        "StorageUnit-p_nom",
+        "StorageUnit-p_nom_set",
+        "StorageUnit-p_store",
+        "StorageUnit-state_of_charge",
+        "Store-e",
+        "Store-e_nom",
+        "Store-e_nom_set",
+        "Store-ext-e-lower",
+        "Store-ext-e-upper",
+        "Store-ext-e_nom-lower",
+        "Store-ext-e_nom-upper",
+        "Store-fix-e-lower",
+        "Store-fix-e-upper",
+        "Store-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "region": [
+        "Generator-p-ramp_limit_down",
+        "Generator-p-ramp_limit_up",
+        "Link-p-ramp_limit_down",
+        "Link-p-ramp_limit_up",
+        "StorageUnit-energy_balance",
+        "Store-energy_balance",
+        "tech_capacity_expansion_limit",
+        "transmission_expansion_cost_limit",
+        "transmission_volume_expansion_limit"
+      ]
     }
   },
   "rung_04_ramps": {
@@ -1701,7 +1809,23 @@
       }
     },
     "structural": {
-      "error": "ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "region": [
+        "Generator-p-ramp_limit_down",
+        "Generator-p-ramp_limit_up",
+        "Link-p-ramp_limit_down",
+        "Link-p-ramp_limit_up"
+      ]
     }
   },
   "rung_05_global_constraints": {
@@ -2161,7 +2285,36 @@
       }
     },
     "structural": {
-      "error": "ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "StorageUnit-fix-p_dispatch-lower",
+        "StorageUnit-fix-p_dispatch-upper",
+        "StorageUnit-fix-p_store-lower",
+        "StorageUnit-fix-p_store-upper",
+        "StorageUnit-fix-state_of_charge-lower",
+        "StorageUnit-fix-state_of_charge-upper",
+        "StorageUnit-p_dispatch",
+        "StorageUnit-p_store",
+        "StorageUnit-state_of_charge",
+        "Store-e",
+        "Store-fix-e-lower",
+        "Store-fix-e-upper",
+        "Store-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "region": [
+        "StorageUnit-energy_balance",
+        "Store-energy_balance",
+        "operational_limit",
+        "primary_energy"
+      ]
     }
   },
   "rung_06_kvl": {
@@ -2556,7 +2709,33 @@
       }
     },
     "structural": {
-      "error": "ValueError: cannot reshape array of size 0 into shape (0,5,newaxis)"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Kirchhoff-Voltage-Law",
+        "Line-ext-s-lower",
+        "Line-ext-s-upper",
+        "Line-ext-s_nom-lower",
+        "Line-ext-s_nom-upper",
+        "Line-fix-s-lower",
+        "Line-fix-s-upper",
+        "Line-s",
+        "Line-s_nom",
+        "Line-s_nom_set",
+        "Line-s_set",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "region": [
+        "tech_capacity_expansion_limit",
+        "transmission_expansion_cost_limit",
+        "transmission_volume_expansion_limit"
+      ]
     }
   },
   "rung_07_commitment": {
@@ -3448,7 +3627,45 @@
       }
     },
     "structural": {
-      "error": "ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-com-ext-p-lower",
+        "Generator-com-ext-p-lower-nonneg",
+        "Generator-com-ext-p-upper-bigM",
+        "Generator-com-ext-p-upper-cap",
+        "Generator-com-mod-p-lower",
+        "Generator-com-mod-p-upper",
+        "Generator-ext-p_nom-lower",
+        "Generator-ext-p_nom-upper",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-n_mod",
+        "Generator-p",
+        "Generator-p_nom",
+        "Generator-p_nom_modularity",
+        "Generator-shut_down",
+        "Generator-shut_down-p-fixed-upper",
+        "Generator-shut_down-p_nom-variable-upper",
+        "Generator-start_up",
+        "Generator-start_up-p-fixed-upper",
+        "Generator-start_up-p_nom-variable-upper",
+        "Generator-status",
+        "Generator-status-p-fixed-upper",
+        "Generator-status-p_nom-variable-upper",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "region": [
+        "Generator-com-transition-shut-down",
+        "Generator-com-transition-start-up",
+        "Generator-p-ramp_limit_down-run-bigM",
+        "Generator-p-ramp_limit_down-shut-bigM",
+        "Generator-p-ramp_limit_up-run-bigM",
+        "Generator-p-ramp_limit_up-start-bigM"
+      ]
     }
   },
   "rung_09_multilink": {
@@ -3720,7 +3937,18 @@
       }
     },
     "structural": {
-      "error": "ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p",
+        "objective"
+      ],
+      "mismatch": [],
+      "region": []
     }
   },
   "rung_10_quadratic_costs": {

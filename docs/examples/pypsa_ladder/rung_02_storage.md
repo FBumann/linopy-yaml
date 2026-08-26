@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-2): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **4456.659315422355** on both sides; ≠ `StorageUnit-energy_balance` 8 vs 3+4+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `Store-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; prices agree on 8 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **4456.659315422355** on both sides; ≠ `StorageUnit-energy_balance` 8 vs 3+4+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `Store-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; prices agree on 8 rows; **model for model**: 25 blocks equal, 2 documented splits.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>

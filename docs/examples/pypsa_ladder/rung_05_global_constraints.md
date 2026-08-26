@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-5): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; ≠ `StorageUnit-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `Store-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `operational_limit` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `primary_energy` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; prices agree on 8 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; ≠ `StorageUnit-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `Store-energy_balance` 4 vs 3+1 — three blocks — carried, initial, cyclic — where PyPSA masks one row three ways; `operational_limit` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `primary_energy` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; prices agree on 8 rows; **model for model**: 21 blocks equal, 4 documented splits.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>

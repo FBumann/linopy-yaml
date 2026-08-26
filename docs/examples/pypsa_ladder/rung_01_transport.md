@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://math-spec.readthedocs.io/en/latest/examples/pypsa/#rung-1): the file `pypsa.yaml` projected onto what this network builds, bound to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **7182.222222222221** on both sides; ✔ 45 rows · 16 columns; prices agree on 8 rows; objective only — `lpspec.linopy` stops at `ValueError: cannot reshape array of size 0 into shape (4,0,newaxis)`.
+> ✔ Verified against pypsa 1.3.0 — objective **7182.222222222221** on both sides; ✔ 45 rows · 16 columns; prices agree on 8 rows; **model for model**: 10 blocks equal, 0 documented splits.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against lpspec, name for name</summary>
