@@ -199,7 +199,10 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     empty. The window that reaches **nothing** is the exception — a zero there
     would build a row about constants alone, so the fill is paired with the
     positions any lag actually reached, and a window that reached none keeps
-    no row (#1059, #1060).
+    no row (#1059, #1060). A width of zero everywhere — read from data, a
+    literal being refused below one — is that window at every position: the
+    one lag always gathered is excluded by ``within > 0`` and masks the whole
+    of it (#1306).
 
     ``by=`` stops the window at each group's edge — the same gather one lag at
     a time, a lag past the group's start being the unreachable position it
@@ -208,8 +211,8 @@ def _operator_sum_back(array: Any, *, over: str, within: Any, edge: str | None =
     would broadcast ``within > lag`` onto that dim.
     """
     within = _per_group(within, by) if by is not None else within
-    widest = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
-    widest = min(widest, int(array.sizes[over]))
+    asked = int(np.max(np.asarray(within))) if isinstance(within, xr.DataArray) else int(within)
+    widest = max(1, min(asked, int(array.sizes[over])))
     probe = _Edge(wrap=edge == EDGE_WRAP, fill=None)
     terms: list[Any] = []
     reached: list[Any] = []
