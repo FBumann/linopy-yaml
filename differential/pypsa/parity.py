@@ -60,9 +60,10 @@ sys.path.insert(0, str(RUNGS))
 
 import instances  # noqa: E402  the corpus data's own loader
 import linopy  # noqa: E402
-import lpspec as lps  # noqa: E402
 import math_spec  # noqa: E402
 import prep  # noqa: E402
+
+import lpspec as lps  # noqa: E402
 
 MODEL = CORPUS / 'examples' / 'pypsa.yaml'
 
