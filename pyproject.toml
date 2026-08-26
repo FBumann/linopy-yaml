@@ -409,9 +409,9 @@ args = [
     { arg = "arms", default = "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" },
 ]
 cmd = """
-pytest bench --benchmark-memory
-  --cases dispatch transport storage fleet
-  --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }}
+pytest bench --benchmark-memory \
+  --cases dispatch transport storage fleet \
+  --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }} \
   --budget 30 --benchmark-json=bench/results/latest.json
 """
 
