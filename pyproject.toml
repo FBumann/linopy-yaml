@@ -415,10 +415,16 @@ pytest bench --benchmark-memory
   --budget 30 --benchmark-json=bench/results/latest.json
 """
 
-# The subset a runner can take: no Gurobi, because its licence cannot build at
-# scale and the two gurobipy libraries only reach that sink. Every HiGHS margin
-# on the page is 1.37x or wider, which survives a shared host; the Gurobi ones
-# are 4-14% and would not, so they stay a local run whatever the licence says.
+# The subset a runner can take, and the reason is precision rather than licence.
+# A runner *can* build the Gurobi columns: the licence gurobipy's wheel ships
+# refuses `optimize()` above 2,000 columns and caps nothing else, so a probe on
+# `ubuntu-24.04` built ten million columns and rows in 17.96 s and was refused
+# only when asked to solve one million.
+#
+# They stay out because of what they would say, not what they cost. Every HiGHS
+# margin on the page is 1.37x or wider and survives a shared host; the Gurobi
+# ones are 4-14%, which is inside the variance a shared host adds — a number
+# nobody could quote, taken monthly. They are a local run on an idle machine.
 [tool.pixi.feature.bench.tasks.ladder-ci]
 description = "The published ladder minus the columns a runner cannot take"
 depends-on = [
