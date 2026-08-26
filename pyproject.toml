@@ -302,7 +302,8 @@ lpspec = { path = ".", editable = true, extras = ["linopy", "gurobi", "xpress"] 
 # built wheel rather than editable — a packaging error (a subpackage missing
 # from the wheel) is one of the things this gate is for.
 #
-# pytest is unconstrained: it is the runner, not a dependency under test.
+# pytest and pytest-xdist are unconstrained: they run the suite, they are not
+# under test, and execnet is all xdist adds to the shipped shape.
 # Linux only, where every gate runs. This is not a portability claim being
 # dodged: the floors are the *shipped shape*, and pyyaml reaches win-64 as an
 # sdist that does not build there, so declaring the platform would assert
@@ -320,6 +321,7 @@ polars = "==1.30"
 numpy = "==1.26"
 highspy = "==1.13"
 pytest = "*"
+pytest-xdist = "*"
 
 [tool.pixi.environments]
 default = ["dev"]
@@ -456,10 +458,11 @@ depends-on = [
 description = "Re-measure the published ladder and rewrite the tables and the chart page"
 depends-on = ["ladder", "density", "declarations", "report", "plot"]
 
-# The suite, serial, against the floors — and the absence check first, because a
-# green suite with linopy on disk would be testing the wrong environment.
+# The suite against the floors, across cores like the default one — and the
+# absence check first, because a green suite with linopy on disk would be
+# testing the wrong environment.
 [tool.pixi.feature.floors.tasks]
-test-floors = { cmd = "python -c \"import importlib.util as u, sys; sys.exit(u.find_spec('linopy') is not None)\" && pytest -q", description = "The suite on the shipped shape, at the declared floors" }
+test-floors = { cmd = "python -c \"import importlib.util as u, sys; sys.exit(u.find_spec('linopy') is not None)\" && pytest -q -n auto", description = "The suite on the shipped shape, at the declared floors" }
 
 [tool.ruff]
 target-version = "py311"

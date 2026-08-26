@@ -1,10 +1,14 @@
 name: CI
 
-# Billing is per job, rounded up to the minute, and the suite takes ~5s. So the
-# cost of CI is the number of jobs, not their duration: five jobs doing ninety
-# seconds of work cost five minutes. Hence one job, one Python, three pixi
-# environments. Do not split a step out into a job of its own to parallelise it
-# — that trades a few seconds of wall clock for a whole billed minute.
+# Three jobs in parallel; `ci` runs nothing and reports whether they passed, so
+# the branch ruleset keeps naming one fixed check.
+#
+# This was one job because billing is per job rounded up to the minute. That is
+# a private-repository rule: GitHub bills no minutes for standard runners on a
+# public one. What the single job cost instead was wall clock — the suite and
+# the floors gate are both pytest, and neither could start until the other
+# finished. The split is by environment, so nothing installs twice that did not
+# install twice before.
 
 on:
   push:
@@ -13,209 +17,103 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  ci:
-    # The single required check. Fixed name, no matrix, so the branch ruleset can
-    # name it directly and never needs updating.
+  suite:
+    # ~500 CPU-seconds on four cores: the long pole, and the only job anyone can
+    # shorten.
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
-      # No `python-version:` here or in any other workflow: the interpreter is
-      # `[tool.pixi.dependencies]` in pyproject.toml, so which Python a gate
-      # runs on is one fact with one home. pixi itself floats; the floor that matters is
-      # `requires-pixi`, declared beside the features that need it.
-      #
-      # `run-install: false` because every step below names the environment it
-      # wants and pixi installs it on first use. Installing all three up front
-      # would pay for the docs and floors environments on a prose-only pull
-      # request, which is what the scope step exists to avoid.
+      # No `python-version:`: the interpreter is `[tool.pixi.dependencies]`, so
+      # which Python a gate runs on has one home. `run-install: false` because
+      # each job names its environment and pixi installs it on first use.
       - uses: prefix-dev/setup-pixi@v0.10.1
         with:
           run-install: false
 
-      # setup-pixi caches solved environments off a `pixi.lock`, and this tree
-      # has none — pyproject.toml says why. What is cached instead is the layer
-      # underneath, all of it under one directory: the conda packages, the
-      # repodata, and the wheels pixi's uv downloads. The solve is paid on every
-      # run, which is the point of refusing the lock — `linopy@master` and
-      # `math-spec` resolve fresh, and a break upstream shows up here rather
-      # than at the next bump.
+      # There is no `pixi.lock` — pyproject.toml says why — so what is cached is
+      # the layer under it: conda packages, repodata, and uv's wheels. The solve
+      # is paid every run, which is the point: `linopy@master` and `math-spec`
+      # resolve fresh. A key per job, or whichever job saved first would decide
+      # what the other two restore.
       - uses: actions/cache@v4
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-ci-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: pixi-ci-${{ runner.os }}-
+          key: pixi-ci-suite-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-ci-suite-${{ runner.os }}-
 
-      # A denylist, unlike the `paths:` filter bench.yml refuses: an allowlist
-      # drifts and a job that stopped running looks like one that passed, so
-      # this asks whether *every* changed path is inert and a directory nobody
-      # listed runs everything. Not `paths-ignore:` — `ci` is required, and a
-      # workflow that never starts never reports the status the PR waits for.
-      #
-      # Only an answer sets the output. A diff that did not read, or read as
-      # empty, is not evidence of inertness — the default is to run everything,
-      # because the alternative is skipping a gate on a failed API call.
-      #
-      # An entry earns its place by being unreachable from all three steps:
-      # prose and the licence are read by nothing, `mkdocs.yml` only by the
-      # strict build above, and the release manifest by release-please — the
-      # version the build stamps comes from the git tag, not from that file.
-      - name: Is every changed file inert?
-        id: scope
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if ! changed=$(gh pr diff ${{ github.event.number }} --name-only); then
-            echo 'The diff did not read; running everything.'
-            exit 0
-          fi
-          live=$(printf '%s\n' "$changed" | grep -Ev \
-            '(^|/)[^/]+\.md$|^LICENSE$|^mkdocs\.yml$|^\.release-please-manifest\.json$' || true)
-          if [ -n "$changed" ] && [ -z "$live" ]; then
-            echo 'inert=true' >> "$GITHUB_OUTPUT"
-            echo 'Prose only — the TeX render and the floors gate are skipped.'
-          else
-            printf 'Running everything. Live files:\n%s\n' "$live"
-          fi
-
-      # TeX costs 36s to install and nothing before the render needs it, so it
-      # installs across the steps below rather than in front of them: 5.4s of
-      # `apt-get update`, 1s of download, and 24s of `tex-common` triggers
-      # building the formats — a cost no package cache avoids, only overlap.
-      # Its output goes to a file, not the step's stdout, because a child
-      # holding that pipe open keeps the step running. Collected below, where
-      # a failed install surfaces with its log.
-      #
-      # The package list is deliberately minimal, and each entry earns its place:
-      #   texlive-latex-base        geometry.sty, amsmath.sty (and pulls in
-      #                             texlive-base, which carries amssymb.sty)
-      #   texlive-fonts-recommended the msam/msbm fonts amssymb *draws* with —
-      #                             \mathbb and \ominus are unset without them
-      # If the preamble ever grows a \usepackage, this list grows with it, and
-      # that is the point: it keeps the preamble installable from a small TeX.
-      - name: Start installing a minimal TeX
-        if: steps.scope.outputs.inert != 'true'
-        run: |
-          cat > "$RUNNER_TEMP/install-tex.sh" <<SH
-          set -x
-          for attempt in 1 2 3; do
-            timeout 120 apt-get update -qq && break
-            echo "apt-get update did not finish in 120s (attempt \$attempt of 3)"
-          done
-          apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
-            texlive-latex-base texlive-fonts-recommended
-          echo \$? > "$RUNNER_TEMP/tex-status.part"
-          mv "$RUNNER_TEMP/tex-status.part" "$RUNNER_TEMP/tex-status"
-          SH
-          nohup sudo -n bash "$RUNNER_TEMP/install-tex.sh" \
-            > "$RUNNER_TEMP/tex-install.log" 2>&1 &
-
-      # Current dependencies, the default environment: lint, format, types, suite.
-      # The install is its own step so its cost is legible in the timing view;
-      # the four below would each have triggered it anyway.
       - run: pixi install -e default
       - run: pixi run lint
       - run: pixi run format-check
-      # `github` is the task's `--output-format` — a positional argument, and the
-      # task declares the four pyrefly accepts — so a finding lands as an
-      # annotation on the diff. The task covers both configs: the package, and
-      # the linopy reference scripts, which carry annotations the gallery shows,
-      # so a Series annotated as a DataFrame fails here rather than teaching a
-      # wrong type on the site.
-      #
-      # Only meaningful here, not in the floors environment below: missing-import
-      # is an error, and the linopy lane imports linopy/xarray, which the shipped
-      # shape deliberately lacks.
+      # `github` is the task's `--output-format`, so a finding lands as an
+      # annotation on the diff. Meaningless in the floors job: missing-import is
+      # an error there, and the shipped shape has no linopy.
       - run: pixi run typecheck github
       - run: pixi run test
 
-      # The harness's own tests, which `pixi run test` does not reach:
-      # `testpaths` is `tests`. Four entry points under `bench/` were broken by
-      # `src/` refactors in a single week — a renamed parquet column (#1185) and
-      # a class that moved (#1245) — and every one of them was already covered
-      # by a test nothing ran. Nine seconds, default environment.
+      # `testpaths` is `tests`, so the line above reaches no harness test. Four
+      # bench entry points broke under `src/` refactors in one week (#1185,
+      # #1245), every one already covered by a test nothing ran.
       - run: pixi run test-bench
 
-      # The site, built strictly: `strict: true` in mkdocs.yml turns every
-      # warning into a failure, so this gate catches a dead cross-link, a model
-      # page added without a nav entry, and an anchor that stopped resolving.
-      # A step, not a job of its own — see the note at the top of this file;
-      # the docs environment is small and adds a few seconds to a job we already
-      # pay a whole minute for.
-      #
-      # The build also *runs* `docs/interactive.ipynb` (`execute: true`), so
-      # this needs the package importable and a failing cell fails the gate.
-      # That is why the `docs` environment carries the project as well as the
-      # toolchain — and it is the same environment `.readthedocs.yaml` builds,
-      # which is what stops CI and the published site from drifting apart.
-      #
-      # Its position among the steps is free: each environment is a directory of
-      # its own, so no step here disturbs another's.
+  docs:
+    # The tree as a document. Off the critical path, which is why TeX installs
+    # in the foreground here — under `nohup` it only ever bought this overlap.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          run-install: false
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-ci-docs-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-ci-docs-${{ runner.os }}-
+
+      # texlive-latex-base carries geometry/amsmath (and pulls texlive-base for
+      # amssymb.sty); texlive-fonts-recommended carries the msam/msbm fonts
+      # amssymb *draws* with — \mathbb and \ominus are unset without them. A new
+      # \usepackage in the preamble grows this list, which keeps the preamble
+      # installable from a small TeX. The retry is for a slow apt mirror, which
+      # killed four runs across three branches on 2026-08-19.
+      - name: A minimal TeX
+        run: |
+          for attempt in 1 2 3; do
+            timeout 120 sudo apt-get update -qq && break
+            echo "apt-get update did not finish in 120s (attempt $attempt of 3)"
+          done
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+            texlive-latex-base texlive-fonts-recommended
+
+      - run: pixi install -e docs
+
+      # `strict: true` turns every warning into a failure, and the build runs
+      # docs/interactive.ipynb, so a failing cell fails the gate. Same
+      # environment `.readthedocs.yaml` builds, which is what stops CI and the
+      # published site from drifting.
       - run: pixi run docs-build
 
-      # The install started before the suite; this is where it is waited on,
-      # so a failure reports apt's exit status and log rather than a missing
-      # `pdflatex` further down.
-      #
-      # The budget is generous because it is not a performance number: the
-      # install overlaps the suite, so every second here is one apt was going
-      # to take anyway, and the only thing a tight budget buys is a red run
-      # that has to be re-run. It has to cover the worst case the script above
-      # allows — three 120s update attempts and the install itself — with room
-      # over, because the runner's apt mirror is occasionally slow rather than
-      # broken (2026-08-19: four runs across three branches, `main` included,
-      # died on the old 300s).
-      - name: Collect the TeX install
-        if: steps.scope.outputs.inert != 'true'
-        run: |
-          for _ in $(seq 900); do
-            if [ -f "$RUNNER_TEMP/tex-status" ]; then
-              status=$(cat "$RUNNER_TEMP/tex-status")
-              [ "$status" = 0 ] && exit 0
-              echo "the TeX install exited $status; its log:"
-              cat "$RUNNER_TEMP/tex-install.log"
-              exit 1
-            fi
-            sleep 1
-          done
-          echo 'the TeX install had not finished 900s after the suite; its log:'
-          cat "$RUNNER_TEMP/tex-install.log"
-          exit 1
-
-      # Typst is compiled by the suite above — it ships as a pip wheel, so
-      # `pytest` already proves that half. LaTeX needs a toolchain, so its
-      # compile lives here. The suite's structural checks (brace balance,
-      # environment nesting, \left/\right pairing) are what a *generator* gets
-      # wrong and need nothing installed, but they are not a compile: a
-      # malformed \mathcal or a package we forgot to \usepackage passes every
-      # one of them.
-      #
-      # Every model, examples *and* ports — `examples/*.yaml` is not recursive
-      # and would cover five of sixteen, which is the bug #282 fixed in two
-      # test globs. A port is exactly where an unusual construct shows up.
-      #
-      # reason from the other end: they are written to cover every operator, so
-      # they are where a spelling nothing else reaches — \boxplus, a forward
-      # translation — first meets a real TeX.
-      #
-      # One interpreter for all 55 models rather than one each: the process
-      # starts were 24.2s of this step's 32.4s, against 8.2s for every
-      # `pdflatex` put together.
+      # Typst compiles in the suite as a pip wheel; LaTeX needs a toolchain, so
+      # it compiles here. The suite's structural checks are what a *generator*
+      # gets wrong — a malformed \mathcal or a missing \usepackage passes all of
+      # them. Ports included: `examples/*.yaml` is not recursive and covers five
+      # of sixteen (#282), and a port is where an unusual spelling first meets a
+      # real TeX. One interpreter for all 55 models, because the process starts
+      # were 24.2s of this step's 32.4s against 8.2s of pdflatex.
       - name: Every model renders to LaTeX that compiles
         # (the Typst half of this claim is `test_typst_output_compiles`)
-        if: steps.scope.outputs.inert != 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/tex"
-          pixi run python - "$RUNNER_TEMP/tex" \
+          pixi run -e docs python - "$RUNNER_TEMP/tex" \
             examples/*.yaml examples/ports/*.yaml <<'PY'
           import sys
           from pathlib import Path
@@ -235,45 +133,44 @@ jobs:
             xargs -0 -P "$(nproc)" -n1 pdflatex -halt-on-error \
               -interaction=nonstopmode -output-directory "$RUNNER_TEMP/tex"
 
-      # The same checkout in the shipped shape, at the declared floors: the
-      # `floors` environment in pyproject.toml pins every runtime dependency to
-      # the version `[project.dependencies]` names as its lower bound, installs
-      # the project from a built wheel rather than editable, and carries nothing
-      # else. Two claims in one environment:
-      #   1. the relational product runs with no linopy, xarray, pandas or
-      #      pyarrow on disk — polars is the only dataframe library it needs;
-      #   2. the lower bounds in pyproject.toml are real. Without this they are
-      #      decoration, and decoration is how they go wrong: `>=1.0` on duckdb
-      #      once sat five minor versions below the first release carrying the
-      #      method the sink called, and nothing noticed until this job existed.
-      #
-      # An environment of its own, deliberately, and one that names no extra:
-      # pixi solves each environment separately, so the `[linopy]` extra's
-      # `polars>=1.31.1` cannot reach this solve and raise the floor being
-      # tested. A resolver that answered across every declared extra would
-      # defeat claim 2 with exactly that constraint.
-      #
-      # Verified green at polars 1.30.0 / numpy 1.26.0 / highspy 1.13.0. The
-      # language's floors are not among them and cannot be: math-spec is a
-      # pinned direct reference, so it is already exact and has no lower bound
-      # to prove — what it depends on resolves freely. That repository's own
-      # bare-install job is where those floors are claims, which is where they
-      # are used.
-      #
-      # Pinned exactly rather than resolved low, and the pins are checked:
-      # `tests/test_tooling_pins.py` fails when one stops matching the floor it
-      # mirrors. Verified green at polars 1.30.0 / numpy 1.26.0 / highspy
-      # 1.13.0 / pydantic 2.1.0 / pyparsing 3.1.0 / pyyaml 6.0.
-      #
-      # The task asserts linopy is absent before it runs the suite, serially: a
-      # green suite in an environment that quietly had linopy would be proving
-      # nothing this gate is for.
-      #
-      # The floors are a 3.12 claim only, which is the interpreter the
-      # environment names: numpy 1.26.0 predates 3.13 and has no wheel for it,
-      # so a newer one would try a source build and fail. Raise a floor when the
-      # code relies on that version's behaviour, not to chase a newer
-      # interpreter — see the early-development note in RELEASING.md.
-      - name: the shipped shape, at the dependency floors
-        if: steps.scope.outputs.inert != 'true'
-        run: pixi run test-floors
+  floors:
+    # The shipped shape at the declared floors, proving two things: the
+    # relational product needs no linopy, xarray, pandas or pyarrow, and the
+    # lower bounds are real rather than decorative — `>=1.0` on duckdb once sat
+    # five minors below the method the sink called.
+    #
+    # The environment names no extra on purpose: pixi solves each separately, so
+    # the `[linopy]` extra's `polars>=1.31.1` cannot reach this solve and raise
+    # the floor under test. The pins are checked by `tests/test_tooling_pins.py`
+    # and the task asserts linopy is absent before running.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          run-install: false
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-ci-floors-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-ci-floors-${{ runner.os }}-
+      - run: pixi run test-floors
+
+  ci:
+    # The single required check, named by the branch ruleset. `always()`, or one
+    # failed job would leave this *skipped* — which GitHub reports as neither
+    # passed nor failed, and a pull request merges over it.
+    needs: [suite, docs, floors]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = success ] || exit 1
+          done
