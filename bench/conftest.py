@@ -204,9 +204,10 @@ def refuse_to_overwrite_the_provenance(config: pytest.Config) -> None:
     `bench/README.md` has warned about it in prose since the harness became
     pytest; this is the same sentence where it can be enforced.
 
-    Narrower *sinks* or *libraries* are allowed — the scheduled run takes
-    `highs` only, because a runner has no Gurobi licence that can build at
-    scale. Narrower *rungs* are what makes a run a smoke test.
+    Narrower *sinks* or *libraries* are allowed — the scheduled run takes one
+    sink per job, so each half writes a file naming the sink it measured and
+    `bench.report` reads the pair. Narrower *rungs* are what makes a run a
+    smoke test.
 
     Raises:
         pytest.UsageError: If the run is missing a published rung and would

@@ -4,9 +4,14 @@ name: Ladder
 # Three attempts to take it by hand were lost — twice to interruptions, once to
 # the machine sleeping overnight.
 #
-# **The selection is not here.** `pixi run ladder-ci` is the whole of it, so this
-# file cannot drift from what a contributor runs; `pyproject.toml` says which
-# columns a runner leaves out and why. `bench/reproduce.py` reads the same task.
+# **The selection is not here.** `pixi run ladder-ci <sink>` is the whole of it,
+# so this file cannot drift from what a contributor runs; `pyproject.toml` says
+# what a runner leaves out and why. `bench/reproduce.py` reads the same task.
+#
+# **One sink per job**, because both in one projects past the six-hour ceiling a
+# hosted job is killed at, and a kill loses the sink that had already finished.
+# `bench.report` and `bench.plot` read a *directory* of result files, so the two
+# halves need no merging step beyond downloading them side by side.
 #
 # **Switching runners is the `runs-on:` line.** A bare-metal service (Blacksmith,
 # Namespace, Depot, Cirrus) is a drop-in and lowers the variance; confirm two
@@ -22,14 +27,20 @@ on:
   workflow_dispatch:
 
 jobs:
-  ladder:
-    name: The published ladder
+  measure:
+    name: ${{ matrix.sink }}
     runs-on: ubuntu-24.04
-    # The hand-taken run of this selection was 3h10m on a laptop; a shared
-    # runner is slower, and the ceiling is six hours. If a month's run times out
-    # this is the number to look at first — and the artifact is lost when it
-    # does, which is the argument for not cutting it fine.
-    timeout-minutes: 350
+    # Each half projects to about 2.4 h. The ceiling on a hosted job is six
+    # hours and cannot be raised, so this is the number to look at first if a
+    # month's run is killed — and the half that was killed is the one that is
+    # lost, which is the argument for the split above. Method: #1315.
+    timeout-minutes: 300
+    strategy:
+      # One sink failing must not cancel the other: half a ladder is a result,
+      # and it is the half this run can still publish.
+      fail-fast: false
+      matrix:
+        sink: [highs, gurobi]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -44,7 +55,49 @@ jobs:
           restore-keys: pixi-bench-${{ runner.os }}-
       - run: pixi install -e bench
 
-      - run: pixi run -e bench ladder-ci
+      # The committed measurements are this checkout's own, taken on a laptop.
+      # `bench.results` reads every file in the directory and collapses repeats
+      # by minimum, so carrying them forward would let the faster machine's
+      # numbers win cell by cell and publish a run that never happened. Removed
+      # here rather than in `render` so that no job can upload them by accident.
+      - run: rm -f bench/results/latest.json bench/results/latest.ceilings.json
+
+      - run: pixi run -e bench ladder-ci ${{ matrix.sink }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ladder-measurements-${{ github.run_id }}-${{ matrix.sink }}
+          path: bench/results
+          retention-days: 90
+
+  render:
+    name: The published tables
+    needs: measure
+    # `always()` so that one sink timing out still publishes the other.
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          run-install: false
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-bench-${{ runner.os }}-
+      - run: pixi install -e bench
+
+      - run: rm -f bench/results/latest.json bench/results/latest.ceilings.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ladder-measurements-${{ github.run_id }}-*
+          merge-multiple: true
+          path: bench/results
+
       - run: pixi run -e bench report
       - run: pixi run -e bench plot
 
@@ -54,10 +107,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ladder-${{ github.run_id }}
+          name: ladder-page-${{ github.run_id }}
           path: |
-            bench/results/latest.json
-            bench/results/latest.ceilings.json
+            bench/results
             docs/about/benchmarks.md
             docs/about/benchmarks-scaling.html
           retention-days: 90

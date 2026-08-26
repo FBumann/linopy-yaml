@@ -42,16 +42,21 @@ LADDER = ('xs', 's', 'm', 'l')
 _DATA = re.compile(r'^const DATA = .*;$', re.MULTILINE)
 
 
-def measurements(name: str) -> Path:
-    """The results file called *name*, in whichever format is committed."""
-    for suffix in ('.json', '.jsonl'):
-        path = Path('bench/results') / f'{name}{suffix}'
-        if path.exists():
-            return path
-    raise SystemExit(f'no bench/results/{name}.json — run the ladder first (bench/README.md)')
+def measurements() -> list[Path]:
+    """Every results file under ``bench/results``, the way `bench.report` reads them.
+
+    A directory rather than one name, because the scheduled run takes one sink
+    per job and lands `latest-highs.json` beside `latest-gurobi.json`. Reading
+    a single `latest.json` here plotted whichever half was renamed and silently
+    dropped the other.
+    """
+    found = bench_results.files(Path('bench/results'))
+    if not found:
+        raise SystemExit('no results under bench/results — run the ladder first (bench/README.md)')
+    return found
 
 
-def series(path: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
+def series(*paths: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
     """``(case, sink, arm) -> rung -> what one panel line needs at that rung``.
 
     ``wall`` is the median, which is what the tables publish, and the band is the
@@ -66,7 +71,7 @@ def series(path: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
     than plotted as zero.
     """
     out: dict[tuple[str, str, str], dict[str, Any]] = {}
-    for record in bench_results.records(path):
+    for record in (r for p in paths for r in bench_results.records(p)):
         if record.get('record') != 'timing' or 'error' in record:
             continue
         if record.get('peak_rss_bytes') is None or record['size'] not in LADDER:
@@ -122,11 +127,13 @@ def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dic
 
 
 def main() -> int:
-    path = measurements('latest')
-    taken = series(path)
-    ceilings = [r for r in bench_results.records(path) if r.get('record') == 'ceiling']
+    paths = measurements()
+    taken = series(*paths)
+    ceilings = [r for p in paths for r in bench_results.records(p) if r.get('record') == 'ceiling']
     if not taken:
-        raise SystemExit('bench/results/latest.json has no plottable measurement — was it run with --benchmark-memory?')
+        raise SystemExit(
+            f'{[str(p) for p in paths]} has no plottable measurement — was it run with --benchmark-memory?'
+        )
     data = {'panels': panels(taken, ceilings), 'rungs': list(LADDER)}
 
     page = Path('docs/about/benchmarks-scaling.html')
