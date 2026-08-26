@@ -91,7 +91,7 @@ $$\sum_{f \in \mathcal{F}} \mathit{travel}_{f,t} = 1 \qquad \forall\thinspace t 
 
 **`ordering`**
 
-$$\sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{as\_from}(c) = f} u_{c} - \left( \sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{as\_to}(c) = t} u_{c} \right) + \mathrm{n} \cdot \mathit{travel}_{f,t} \le \mathrm{n} - 1 \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T} \thinspace:\thinspace f \neq \text{c01} \wedge t \neq \text{c01}$$
+$$\sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{as\_from}(c) = f} u_{c} - \left( \sum_{c \in \mathcal{C} \thinspace:\thinspace \mathrm{as\_to}(c) = t} u_{c} \right) + \mathrm{n} \cdot \mathit{travel}_{f,t} \le \mathrm{n} - 1 \qquad \forall\thinspace f \in \mathcal{F},\enspace t \in \mathcal{T} \thinspace:\thinspace f \neq \text{'}\mathrm{c01}\text{'} \wedge t \neq \text{'}\mathrm{c01}\text{'}$$
 
 #### Variable domains
 

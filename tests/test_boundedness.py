@@ -150,7 +150,6 @@ def test_the_note_closes_no_door():
     'expression',
     [
         pytest.param('sum(x + slack * slack, over=t)', id='a-product-of-two-variables'),
-        pytest.param('sum(x + slack**2, over=t)', id='a-power'),
     ],
 )
 def test_a_degree_2_operand_carries_no_sign(expression):

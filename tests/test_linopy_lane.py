@@ -294,7 +294,8 @@ def _resolved(text, parameters=('p_max',), dimensions=('g',)):
     """Resolve then evaluate — the evaluator no longer takes strings."""
     from math_spec import Namespace, where_of
 
-    return where_of(text, Namespace((), parameters, dimensions), 'test')
+    dtypes = {**dict.fromkeys(parameters, 'float'), **{d: 'int' if d == 't' else 'str' for d in dimensions}}
+    return where_of(text, Namespace((), parameters, dimensions, {}, dtypes), 'test')
 
 
 def test_no_where_is_a_scalar_true(gens):

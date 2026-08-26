@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from math_spec import Model
+    from math_spec.model import PiecewiseBlock
 
 
 def derive_curve_masks(
@@ -334,12 +335,26 @@ def _a_hole(required: pl.LazyFrame, present: pl.LazyFrame, dims: Sequence[str]) 
     return '(' + ', '.join(f'{d}={row[d]!r}' for d in dims) + ')'
 
 
+def curvature_required(pw: PiecewiseBlock) -> str | None:
+    """The curvature *pw*'s method is only exact for, if any.
+
+    ``'either'`` is the hull's condition — it cuts corners on a *mixed* curve
+    and nothing else. ``lp`` states one side of the curve and its sign says
+    which, so the opposite bend is silently wrong rather than merely loose.
+    """
+    if pw.method == 'convex':
+        return 'either'
+    if pw.method != 'lp':
+        return None
+    return 'convex' if pw.curve[1].sign == '>=' else 'concave'
+
+
 def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> None:
     """Data-time guard for the methods a curve's shape can make wrong.
 
     ``convex``'s hull relaxation is wrong for mixed curvature and ``lp``'s
     segment lines for the bend opposite their bounded link — see
-    :attr:`PiecewiseBlock.curvature_required` — and both are ill-defined when
+    :func:`curvature_required` — and both are ill-defined when
     the x-breakpoints are not strictly monotone. All of it is checkable once
     the breakpoint values are in hand, which the schema never has. *values*
     maps parameter names to whatever its lane holds — :func:`tidy_sources`'
@@ -394,7 +409,7 @@ def validate_piecewise_data(schema: Model, values: Mapping[str, Any] | Any) -> N
     import numpy as np
 
     for name, pw in schema.piecewise.items():
-        required = pw.curvature_required
+        required = curvature_required(pw)
         if required is None:
             continue
         try:
