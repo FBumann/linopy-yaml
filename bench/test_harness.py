@@ -157,6 +157,38 @@ def _loop(case: str, arm: str, width: int) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# the reproduction environment carries every library the harness measures
+# ---------------------------------------------------------------------------
+
+
+def test_the_lock_pins_every_library_an_arm_needs() -> None:
+    """`bench/reproduce.py.lock` is what makes a published number reproducible,
+    and the way it stops being that is quietly: an arm is added, the harness
+    measures it, and the environment somebody else installs has no idea it
+    exists. Two of these resolve from git — lpspec itself, and linopy from a
+    branch that moves — so the lock is the only place their commits are written
+    down at all.
+    """
+    locked = (Path(__file__).resolve().parent / 'reproduce.py.lock').read_text()
+    for name, module in sorted(ARMS.items()):
+        for required in getattr(module, 'REQUIRES', ()):
+            assert f'name = "{required}"' in locked, (
+                f'the {name} arm needs {required}, which bench/reproduce.py.lock does not pin — '
+                f're-run `uv lock --script bench/reproduce.py`'
+            )
+
+
+def test_the_lock_freezes_the_branch_linopy_moves_on() -> None:
+    """linopy is installed from `master`. A version string cannot pin that and a
+    published number taken against it is otherwise unrepeatable, so the lock has
+    to carry the commit."""
+    locked = (Path(__file__).resolve().parent / 'reproduce.py.lock').read_text()
+    assert 'git = "https://github.com/PyPSA/linopy?rev=master#' in locked, (
+        'the lock has to name the linopy commit, not the branch'
+    )
+
+
+# ---------------------------------------------------------------------------
 # the width ladder reaches the size ladder's rungs by a different route
 # ---------------------------------------------------------------------------
 

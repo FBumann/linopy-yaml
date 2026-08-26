@@ -468,6 +468,27 @@ Add `bench/models/<case>/model.yaml`, and a data generator and a ladder to
 `CASES` in `bench/cases.py`. Nothing else: the parametrization reads `CASES`,
 and the report is case-agnostic.
 
+## Reproducing a published number
+
+`bench/reproduce.py` is a PEP 723 script and `bench/reproduce.py.lock` beside it
+freezes every version it runs on, git commits included:
+
+```bash
+uv run --locked bench/reproduce.py
+```
+
+**Why it exists.** `pixi.lock` is not committed, and two of the libraries here
+install from git — lpspec itself, and linopy from `master`, a branch that moves.
+Before the lock, "the versions that produced this number" existed only inside a
+results file, after the fact, in a form nobody could install. `--locked` refuses
+to run if the resolution has drifted, and `test_the_lock_pins_every_library...`
+refuses a merge where an arm was added and the lock forgot it.
+
+It **drives** the harness rather than repeating it: the models and rungs live
+here, and a standalone script that rebuilt them would be a second definition of
+every model, free to disagree with the one being measured. Re-lock with
+`uv lock --script bench/reproduce.py` whenever an arm or a pin changes.
+
 ## Adding an arm
 
 Two files, because an arm is two different kinds of knowledge:
