@@ -76,12 +76,15 @@ RUNGS = CORPUS / 'examples' / 'references' / 'pypsa'
 HERE = Path(__file__).resolve().parent
 RECORDS = HERE / 'references.json'
 TABLES = HERE / 'tables'
+PROJECTIONS = HERE / 'rungs'
 sys.path.insert(0, str(RUNGS))
 sys.path.insert(0, str(HERE))
 
 import linopy  # noqa: E402
 import math_spec  # noqa: E402
 import prep  # noqa: E402  the binding, beside this file
+import projection  # noqa: E402
+import yaml  # noqa: E402
 
 import lpspec as lps  # noqa: E402
 from lpspec.sources import tidy_sources  # noqa: E402
@@ -116,6 +119,27 @@ def bound(model: Path, n) -> dict[str, object]:
 
 #: Model file -> the tables some lower rung already committed; a table is written once, under the rung that first feeds it.
 FIRST: dict[str, set[str]] = defaultdict(set)
+
+
+def projected(stem: str, model: Path, parity: dict, n) -> Path:
+    """Write the rung's projection of *model*, solve it, and hold it to the full file's objective.
+
+    The projection is what the page shows as this rung's model and what its
+    tables are cut to; solving it here is what makes it a model rather than
+    an excerpt — a cut that lost something load-bearing lands elsewhere than
+    PyPSA and reds the run.
+    """
+    raw = yaml.safe_load(model.read_text())
+    cut = projection.project(raw, parity)
+    path = PROJECTIONS / f'{stem}.yaml'
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(projection.dump(cut))
+    result = lps.solve(path, bound(path, n))
+    assert result.is_ok, f'{stem}: the projection did not solve — {result.termination_condition}'
+    assert math.isclose(float(result.objective), parity['lpspec_objective'], rel_tol=1e-9, abs_tol=1e-6), (
+        f'{stem}: the projection lands on {result.objective}, the file on {parity["lpspec_objective"]} — the cut lost a term'
+    )
+    return path
 
 
 def committed(stem: str, model: str, declared, tables: dict[str, object]) -> None:
@@ -306,7 +330,6 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     model = model_of(stem)
     declared = math_spec.load_model(model)
     tables = bound(model, network(stem))
-    committed(stem, model.name, declared, tables)
     result = lps.solve(model, tables)
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)
@@ -322,6 +345,8 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         'bound_nonempty': sorted(name for name, table in tables.items() if len(table)),
         'prices': prices(result, n),
     }
+    cut = projected(stem, model, parity, n)
+    committed(stem, model.name, math_spec.load_model(cut), bound(cut, n))
     try:
         ours = lpl.build(model, tables)
     except Exception as error:
@@ -397,8 +422,9 @@ def main() -> int:
     ladder = rungs()
     assert ladder, f'no rung scripts under {RUNGS} — is {CORPUS} a math-spec checkout?'
     committed = json.loads(RECORDS.read_text()) if RECORDS.exists() else {}
-    if TABLES.exists():
-        shutil.rmtree(TABLES)
+    for folder in (TABLES, PROJECTIONS):
+        if folder.exists():
+            shutil.rmtree(folder)
     stamped: dict[str, dict] = {}
     broken = []
     for stem in ladder:

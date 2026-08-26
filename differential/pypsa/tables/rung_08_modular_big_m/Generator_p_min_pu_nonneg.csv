@@ -1,4 +1,6 @@
 generator,value
+block,true
 coal,true
+flex,true
 gas,true
-must_run,true
+sink,false

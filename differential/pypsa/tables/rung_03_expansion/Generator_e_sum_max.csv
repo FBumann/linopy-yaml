@@ -1,4 +1,6 @@
 generator,value
 coal,inf
+diesel,70.0
 gas,inf
-must_run,inf
+solar,inf
+wind,inf
