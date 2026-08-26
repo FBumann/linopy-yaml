@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.267](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.266...v0.0.1-alpha.267) (2026-08-26)
+
+
+### Refactoring
+
+* **differential:** the pypsa corpus lives beside its runner, and the certificate is a committed file this tree must reproduce ([#1328](https://github.com/fluxopt/lpspec/issues/1328)) ([1e0aa53](https://github.com/fluxopt/lpspec/commit/1e0aa53477c153492539f6d77c45777e39ec73a6))
+
 ## [0.0.1-alpha.266](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.265...v0.0.1-alpha.266) (2026-08-26)
 
 
