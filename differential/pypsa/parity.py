@@ -110,7 +110,13 @@ def prices(result, n) -> dict[str, object]:
     gaps = [
         abs(row.value / weights[row.snapshot] - float(theirs.at[row.snapshot, row.bus])) for row in dual.itertuples()
     ]
-    return {'compared': len(gaps), 'max_abs_diff': max(gaps, default=0.0), 'matches': all(g <= 1e-6 for g in gaps)}
+    return {'compared': len(gaps), 'max_abs_diff': round(max(gaps, default=0.0), 9), 'matches': all(g <= 1e-6 for g in gaps)}
+
+
+def _commit(version: str) -> str:
+    """The commit a version was built from — `g<sha>` — since the dev counter before it depends on clone depth."""
+    found = re.search(r'\+(g[0-9a-f]{7,})', version)
+    return found.group(1) if found else version
 
 
 def pypsa_model(stem: str):
@@ -256,8 +262,8 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)
     parity = {
-        'lpspec': importlib.metadata.version('lpspec'),
-        'lpspec_objective': float(result.objective),
+        'lpspec': _commit(importlib.metadata.version('lpspec')),
+        'lpspec_objective': round(float(result.objective), 6),
         'matches': math.isclose(
             float(result.objective), float(n.objective) + float(n.objective_constant), rel_tol=1e-9, abs_tol=1e-6
         ),
