@@ -9,6 +9,12 @@ name: Ladder
 # hours, not minutes. It had been run by hand, and three separate attempts were
 # lost to the machine sleeping or somebody typing on it.
 #
+# **There is a button.** `workflow_dispatch` takes the selection as inputs, so a
+# narrower run is a form rather than an edit — and it can decline the ladder
+# entirely, which is what makes the licence probe below a thing you can ask in
+# twenty minutes instead of a three-hour commitment. A dispatched run says so in
+# its artifact name: only a scheduled run is the published selection.
+#
 # **`highs` only, and that is a decision rather than a limitation.** The Gurobi
 # columns need a licence that can build a ten-million-column model, and a
 # runner's licence is the wheel's size-limited one — `licence-probe` below finds
@@ -32,8 +38,25 @@ on:
     - cron: '0 3 1 * *'
   workflow_dispatch:
     inputs:
+      ladder:
+        description: 'Take the ladder (uncheck to run only the licence probe)'
+        type: boolean
+        default: true
+      sinks:
+        description: 'Which destinations to measure'
+        type: choice
+        options: ['highs', 'highs gurobi', 'lp highs gurobi']
+        default: 'highs'
+      sizes:
+        description: 'Rungs, space separated. Fewer is a smoke test, not a publishable run'
+        type: string
+        default: 'xs s m l w1 w10 w100 w1000'
+      arms:
+        description: 'Libraries, space separated'
+        type: string
+        default: 'lpspec linopy pyomo'
       probe_gurobi:
-        description: 'Also ask whether the runner licence can build a big Gurobi model'
+        description: 'Ask whether the runner licence can build a big Gurobi model'
         type: boolean
         default: false
 
@@ -44,6 +67,9 @@ concurrency:
 jobs:
   ladder:
     name: The published ladder
+    # The schedule always takes it; a manual run may decline, which is what
+    # makes the probe below a button rather than a three-hour commitment.
+    if: github.event_name == 'schedule' || inputs.ladder
     runs-on: ubuntu-24.04
     # Three hours of measurement plus the install. GitHub's ceiling is six.
     timeout-minutes: 330
@@ -74,13 +100,21 @@ jobs:
                   case.data(rung)
           PY
 
+      # Defaults are the published selection, and a scheduled run has no inputs
+      # at all — so the fallbacks below are what the page is taken with, and a
+      # manual run narrowing them produces a smoke test rather than a table.
       - name: take the ladder
+        env:
+          SIZES: ${{ inputs.sizes || 'xs s m l w1 w10 w100 w1000' }}
+          SINKS: ${{ inputs.sinks || 'highs' }}
+          ARMS: ${{ inputs.arms || 'lpspec linopy pyomo' }}
         run: |
+          echo "sizes=$SIZES  sinks=$SINKS  arms=$ARMS"
           pixi run -e bench pytest bench -q \
             --cases dispatch transport storage fleet \
-            --sizes xs s m l w1 w10 w100 w1000 \
-            --sinks highs \
-            --arms lpspec linopy pyomo \
+            --sizes $SIZES \
+            --sinks $SINKS \
+            --arms $ARMS \
             --budget 30 --benchmark-memory \
             --benchmark-json=bench/results/latest.json
 
@@ -96,7 +130,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ladder-${{ github.run_id }}
+          # The event is in the name: a scheduled run is the published
+          # selection, a dispatched one is whatever the operator asked for, and
+          # an artifact that does not say which invites the wrong one onto the
+          # page.
+          name: ladder-${{ github.event_name }}-${{ github.run_id }}
           path: |
             bench/results/latest.json
             bench/results/latest.ceilings.json
