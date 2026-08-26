@@ -1,30 +1,19 @@
 # How the benchmarks were taken
 
-**Cost is a property of the engine, not of the language.** The rules in the
-architecture notes constrain what a file may say and would survive an engine
-swap untouched; what a build *costs* is settled by measurement.
+The results are on the [benchmark page](benchmarks-scaling.html): five
+libraries over four models, with the numbers under each chart. This page is
+how they were taken.
 
-The results are on the [benchmark page](benchmarks-scaling.html) — five
-libraries over four models, with the numbers under each chart. This page is the
-method: how to reproduce a figure, what the harness refuses to measure, and
-what each sink can carry.
+**Every published number is the median of a measurement's rounds, and every
+band is the first to the third quartile of the same rounds.** Nine rounds is
+the floor. Not the fastest round — it is a best-of-n and n is not equal, since
+the harness calibrates by duration. Not the mean — one round in forty of a
+20 ms measurement took 1.5 s here, which drags a mean to 2.9x its median.
 
-**Every number published there is the median of a measurement's rounds, and
-every band is the first to the third quartile of the same rounds** — the middle
-half. Nine rounds is the floor; a quick cell takes many more.
-
-Not the fastest round, which is what this page used to print: the minimum is a
-best-of-n and n is not equal across libraries, because the harness calibrates by
-duration — a quick cell here took 84 rounds and a slow one 9. Not the mean
-either: these distributions carry a right tail that belongs to the machine, and
-one round in forty of a 20 ms measurement took 1.5 s, which drags its mean to
-2.9x its median. The median needs five bad rounds out of nine to move.
-
-The change is not free of consequence and the consequence ran against us: nine
-published cells flipped, every one on the `gurobi` sink, because our build there
-alternates between a fast and a slow state round after round where no other
-library's does ([#1288](https://github.com/fluxopt/lpspec/issues/1288)). On the
-fastest round that alternation is invisible.
+That choice cost us: nine cells flipped against lpspec, all on the `gurobi`
+sink, where our build alternates between a fast and a slow state round after
+round and no other library's does
+([#1288](https://github.com/fluxopt/lpspec/issues/1288)).
 
 ## How to reproduce it
 
@@ -32,28 +21,22 @@ fastest round that alternation is invisible.
 uv run --locked bench/reproduce.py
 ```
 
-`bench/reproduce.py` carries the published selection and
-`bench/reproduce.py.lock` beside it freezes every version it runs on — **git
-commits included**, which matters here more than it usually would: two of the
-five libraries install from git, and one of those is a branch. `--locked`
-refuses to start if the resolution has drifted.
+`bench/reproduce.py.lock` freezes every version, git commits included — two
+of the five libraries install from git and one of those is a branch, so
+without it "the versions that produced this number" is unrepeatable.
+`--locked` refuses to start if the resolution has drifted.
 
 Everything the tables are drawn from is in
 [`latest.json`](https://github.com/fluxopt/lpspec/blob/main/bench/results/latest.json):
-the machine, the library versions and the commit that produced them, and every
-round of every measurement rather than the median the tables print. The CSV
-form is `pixi run table`, which prints and commits nothing — the JSON is the
-archive because it keeps the rounds, and a second copy of a reduction would be
-free to drift from it.
-
-Re-taking the numbers rather than reproducing them is `pixi run refresh`, which
-runs the ladders and then writes the tables into this page between its fences
-and the chart's data literal into its own. Nothing here is pasted by hand.
+the machine, the versions, the commit, and every round of every measurement.
+`pixi run table` prints it as one long CSV and commits nothing — the JSON is
+the archive because it keeps the rounds. Re-taking rather than reproducing is
+`pixi run refresh`, which writes the tables into their fences and the chart's
+data literal into its own.
 
 ## First model against every model after it
 
-What a caller pays who builds one model and solves it, against what a
-rolling horizon pays for every window after the first.
+One model built, then built again in the same process.
 
 <!-- bench:marginal -->
 
@@ -86,9 +69,8 @@ Build only, repeated in one process. **first** is the first recorded round and *
 
 ## The same size, reached by widening
 
-Entity counts x N with the snapshots held fixed. Each rung matches one of
-the size rungs above variable for variable, so the pair is one model at one
-size in two shapes.
+Entity counts x N, snapshots fixed — the same sizes as the ladder, in a
+different shape.
 
 <!-- bench:sweeps -->
 
@@ -109,179 +91,33 @@ Entity counts x N with the snapshot count held fixed, through the `highs` sink. 
 
 <!-- bench:/sweeps -->
 
-## Sink capabilities
-
-What each sink can ingest, measured against the shipped solvers rather than
-assumed. The architectural reading is in
-[the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/#capability-is-not-the-ceiling); the plan is
-[Track 3](https://github.com/fluxopt/lpspec/issues/472).
-
-Three rows have since been acted on. Both quadratic rows are in the language —
-the math takes degree 2 — and each sink answers for itself: HiGHS by its two
-exclusions and by having no quadratic-constraint concept at all, Gurobi by
-having none, `lp_file` by writing a section either way. A quadratic constraint
-is also the first construct one *lane* cannot build, which is what hard rule 3's
-`accepts ≠ builds` amendment is for. The third is `sos:`
-([sos](https://math-spec.readthedocs.io/en/latest/reference/language/piecewise/#sos)) ships to every sink, natively where the row says
-so and as binaries plus linking rows where it says *no concept*.
-
-| | `lp_file` | `mps_file` | HiGHS direct | Gurobi direct | Xpress direct |
-|---|---|---|---|---|---|
-| affine rows, COO, integrality | text | text, `MARKER` | native | native | native |
-| semi-continuous | text | **not written** — no `SC` bound | `kSemiContinuous` | native | native |
-| SOS1 / SOS2 | text section | `SOS` section | **no concept** — `HighsLp` has no SOS field and no `addSos` | `addSOS` | `addSOS` |
-| indicator | text section | **not written** | **no concept** | `addGenConstrIndicator` | native |
-| convex quadratic objective | text section | **not written** — the section is an extension | `passHessian` | `setMObjective` | **no path here** |
-| nonconvex quadratic objective | text section | **not written** | **refused** — *"Cannot solve non-convex QP problems with HiGHS"* | native, at default parameters | **no path here** |
-| quadratic objective **and** integrality | text section | **not written** | **refused** — `run()` returns `kError` | native (MIQP) | **no path here** |
-| quadratic constraint | text section, unreadable | **not written** | **no concept** — no entry point at all | `addQConstr` / `addMQConstr` | **no path here** |
-
-**A rewrite is not free, and the cost is what comes back.** An LP carrying a
-set returns from HiGHS without duals — the reformulation makes it a MIP — and
-from Gurobi with them. That asymmetry is the argument for declaring capability
-rather than papering over it ([the ceiling](https://math-spec.readthedocs.io/en/latest/about/ceiling/#capability-is-not-the-ceiling)).
-
-**"No path here" is about this tree, not about Xpress.** The Optimizer takes a
-Hessian and quadratic rows; the sink in `solvers/xpress.py` never hands it one,
-and a descriptor says what the sink ingests rather than what the library could
-— so the entries are `absent` and a model needing one is refused by name.
-
-The four quadratic rows are probed rather than remembered, as are the two
-sections HiGHS writes and will not read back —
-`tests/test_sink_capability_probes.py` and
-`tests/test_gurobi_capability_probes.py`, each assertion naming this table.
-Capabilities move on somebody else's release, and nothing here calls
-`passHessian` yet, so without the probes a row would go wrong with the suite
-green. The four rows above them are still read off the APIs rather than
-measured, and so is the whole **Xpress** column — this repository probes the
-two sinks a quadratic model can actually reach. Three readings:
-
-- **HiGHS excludes quadratic twice**, by *convexity* and by *conjunction* with
-  integrality — and neither is a set membership. linopy declares HiGHS with
-  `INTEGER_VARIABLES` and `QUADRATIC_OBJECTIVE` in one flat `frozenset`, so its
-  own model reports MIQP as available.
-- **The `lp_file` column says what can be *written*, not what will be read
-  back.** The same HiGHS parser takes the quadratic-objective section and
-  refuses both the `sos` and the quadratic-constraint one, so only the round
-  trip says which — and a differential oracle that re-solves the written file
-  has the reader's answer, not the writer's.
-- **Gurobi's column was the unverified one** and is now measured, retiring one
-  piece of folklore: a nonconvex quadratic objective needs no `NonConvex=2`.
-
-### The quadratic handoff
-
-Neither direct API has a per-coefficient counterpart to `changeCoeff`:
-`passHessian` and `setMObjective` take the quadratic part whole. Under the
-aligned-only scope (`variable × variable` at the same coordinates) `Q` is
-**diagonal**, so it costs 16 bytes per quadratic column:
-
-| quadratic cols | diagonal Hessian |
-|---|---|
-| 10⁷ | 0.16 GB |
-| 3.56×10⁷ | 0.57 GB |
-| 10⁸ | 1.60 GB |
-
-Against a `solver_direct` peak already dominated by HiGHS's own model, that is
-a small fraction. On `lp_file` a quadratic
-objective is a text section and sinks like any other. So this is a cost, not an
-invariant violation. Two caveats:
-
-- HiGHS accepts `dim_ < num_col` (verified), so ordering quadratic variables
-  first bounds the Hessian to that block rather than the whole model.
-- **The diagonal argument dies as soon as the product is not aligned**, and
-  the shipped language does not restrict it to aligned: `x[i] * y[i, j]`
-  broadcasts and `x[i] * y[j] * a[i, j]` joins through a table. The replacement
-  bound is **one entry per pair the expression states** — `nnz` of whatever
-  couples the factors — which is a declared-shape quantity and still tracks the
-  model. What does *not* is the cross join of two reductions, and that is the
-  shape the language refuses (`language/degree.py`).
-
-**Whole is not the same as reloading.** A second `passHessian` lands on the
-model already loaded, replacing `Q` and leaving the LP standing — so a moved
-quadratic *coefficient* is pushed like a cost, and only the sparsity *pattern*
-is structure.
-
 ## Not measured yet
 
-This section exists so that a claim with no table under it is visible as one.
-Two of its entries are load-bearing elsewhere — `README.md` and the roadmap
-lead on cost, and until these land they lead on the hand-off numbers above and
-nothing else.
+Listed so that a claim with no table under it is visible as one.
 
-In rough order of what would change a decision:
-
-- **The LP-file route as a cold floor.** The hand-off tables compare against
-  linopy's *best* path deliberately. What they do not price is the route the
-  claim "there is no file" is really about: write the LP, then have a solver
-  read it back. The one figure in that direction is anecdotal and single-case —
-  `dispatch/l` through linopy's `io_api='lp'` peaks at 6.92 GB against 3.38 GB
-  direct — and it prices only the *writing* half, in the eager lane.
-- **Marginal cost per model in a loop.** The architectural claim is that
-  nothing accumulates between builds, so the hundredth rolling-horizon window
-  costs what the first did. It follows from there being no process-wide state
-  and no lifetime to leak, and every rung here is a single build in a fresh
-  process — which is exactly why none of them tests it.
-- **`storage` — the cyclic `shift` recurrence.** The one plan shape in the
-  language whose cost is not obviously linear in the model. The case now exists
-  — `bench/models/storage.yaml`, held at `dispatch`'s width on `dispatch`'s
-  ladder so the two read against each other — but every number on this page
-  predates it, so it is unmeasured here rather than unwritten.
-- **A MILP**, where solve time dwarfs build and the hand-off is the whole
-  comparison. The case now exists — `commitment` in `bench/cases.py`, a binary
-  commitment gating every generator, the only case whose `vtype` stream is not
-  all-continuous — but every number on this page predates it, so it is
-  unmeasured here rather than unwritten.
-- **The speed-of-light floor.** Without it, every ratio here has linopy as its
-  only denominator. The mechanism now exists — `bench/floor.py` hand-writes
-  `transport` from the case's cached parquet into numpy arrays and a CSR
-  matrix, ending at the same populated-`Highs` seam with `run()` never called —
-  but no number from it is published yet. When one is, the sentence becomes
-  *"we are at Nx the floor and linopy is at Mx"*.
-
-Two entries that used to be here are now measured and have moved into the file:
-`solver_direct` end to end (the `highs` sink, which now runs by default) and the
-mask-density sweep.
+- **Solve time.** Every number stops at the hand-off; the simplex is the
+  solver's work whoever filled the model.
+- **The LP-file round trip.** The tables price writing a file, never reading
+  one back.
+- **Sizes past `l`.** `xl` and `2xl` exist in the harness and no run
+  publishes them.
+- **Anything about expressiveness.** Four models say nothing about a fifth.
 
 ## Method
 
-**The published statistic is the median, with the interquartile range as its
-band**; the reasoning is at the top of this page and the distribution rides in
-the results file beside it, so any other summary can be recomputed without
-re-running anything.
+One process per measurement, `ru_maxrss` for peak rather than a tracker,
+import excluded from the timing and teardown included. A run refuses to
+start on a machine that is already working. The rest — every flag, every
+default switched off and what it costs — is in
+[`bench/README.md`](https://github.com/fluxopt/lpspec/blob/main/bench/README.md).
 
-Recorded in [`bench/README.md`](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — one process per
-measurement, `ru_maxrss` rather than a tracker, import excluded from
-`wall_seconds` and teardown included, and a parity gate that aborts the run
-before anything is timed if the two lanes disagree. Failures are results and are
-rendered as cells.
+**Peak carries an allocator cost that only the polars arms pay.** polars
+ships its own jemalloc settings, so a peak measured through it holds pages
+freed and not yet returned; an arm on the system allocator never enters
+jemalloc at all. Ours moves 12–27% with the decay clock on and off where
+linopy's does not move at three digits ([#896](https://github.com/fluxopt/lpspec/issues/896)).
+It runs against us and is left in.
 
-Measurement pitfall worth keeping: memray's tracker slows an allocation-heavy
-engine several-fold and overcounts reserved arenas, so it can attribute memory
-but must never time anything. Peak RSS is the gate metric; memray is for
-attribution only.
-
-### The allocator is in the number, and only on one arm
-
-**Every peak on this page includes a jemalloc decay component that the
-relational arm pays and the eager arm does not.** polars ships its own jemalloc
-settings, so a peak measured through it holds pages that have been freed and
-not yet returned; the eager arm's build is xarray and numpy on the system
-allocator and never enters jemalloc at all. The asymmetry is not an estimate —
-linopy's build arm measures the same to three digits with the decay clock on
-and off, where ours moves by 12–27% (#896). It runs one way, against the
-relational lane, on every row.
-
-The numbers are published at polars' default anyway, because that is what a
-caller who sets nothing actually pays. A caller near a memory ceiling can turn
-the decay off:
-
-```bash
-_RJEM_MALLOC_CONF=dirty_decay_ms:0,muzzy_decay_ms:0 python build_my_model.py
-```
-
-Two things make it look inert when it is not. It has to be set **before
-`import polars`** — jemalloc reads the variable at its first allocation, so
-assigning to `os.environ` afterwards is silently a no-op. And on macOS only `0`
-does anything, jemalloc's background purge thread being unavailable there. It
-costs wall time, which is why it is not a default, and what it costs has not
-been measured on this ladder.
+**memray never times anything.** Its tracker slows an allocation-heavy
+engine several-fold and overcounts reserved arenas. Peak RSS is the metric;
+memray is for attribution.
