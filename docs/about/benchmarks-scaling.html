@@ -135,6 +135,11 @@ figure td.best { font-weight: 700; }
   border-color: var(--text-primary); }
 .legend { display: flex; gap: .95rem; flex-wrap: wrap; margin: 0 0 .45rem; font-size: .8rem; }
 .legend > span { display: inline-flex; align-items: center; gap: .35rem; }
+.key { display: inline-flex; align-items: center; gap: .35rem; font: inherit; color: var(--text-secondary);
+  background: none; border: 0; padding: .1rem .2rem; cursor: pointer; border-radius: 5px; }
+.key:hover { background: var(--surface-2, rgba(127,127,127,.12)); }
+.key.off { opacity: .38; }
+.key.off .swatch { background: var(--text-muted) !important; }
 .swatch { width: 15px; height: 3px; border-radius: 2px; display: inline-block; }
 .swatch.dash { background: none !important; border-top: 3px dashed currentColor;
   height: 0; border-radius: 0; }
@@ -347,7 +352,7 @@ function numbers(panel, metric) {
   const fmt = metric === 'wall'
     ? (v => v < 1 ? (v * 1000).toFixed(0) + ' ms' : v.toFixed(2) + ' s')
     : (v => v.toFixed(2) + ' GB');
-  const names = Object.keys(panel.series);
+  const names = Object.keys(panel.series).filter(n => !HIDDEN.has(n));
   const head = `<tr><th>vars</th>${names.map(n => `<th>${SHORT[n] || n}</th>`).join('')}</tr>`;
   const rows = panel.rungs.map((rung, i) => {
     const taken = names.map(n => panel.series[n][metric][i]).filter(v => v !== null);
@@ -375,7 +380,8 @@ function facets(metric) {
 
     /* Each line carries its own x values: the libraries do not all reach the
        same rungs, because a time budget stops the slow ones early. */
-    const names = Object.keys(panel.series);
+    const names = Object.keys(panel.series).filter(n => !HIDDEN.has(n));
+    if (!names.length) continue;
     const series = names.map(n => ({ name: n, label: n,
       pts: panel.vars.map((v, i) => [v, panel.series[n][metric][i]]).filter(pt => pt[1] !== null) }));
     const bands = metric === 'wall'
@@ -400,15 +406,39 @@ function facets(metric) {
 }
 
 const LIBRARIES = [...new Set(Object.values(DATA.panels).flatMap(p => Object.keys(p.series)))];
-document.getElementById('facet-legend').innerHTML = legendHTML(
-  LIBRARIES.map(n => ({ name: n, label: n === 'polars' ? 'lpspec' : n })));
+/* Hidden by the reader, not by the data. Five lines is a lot on a small panel,
+   and the comparison somebody wants is usually two of them — so the legend is
+   the control. The charts take their scales from whatever they are handed, so
+   hiding a line rescales the axes to what is left, which is the point. */
+const HIDDEN = new Set();
+let METRIC = 'wall';
 
-facets('wall');
+function drawLegend() {
+  document.getElementById('facet-legend').innerHTML = LIBRARIES.map(n =>
+    `<button class="key${HIDDEN.has(n) ? ' off' : ''}" data-lib="${n}" aria-pressed="${!HIDDEN.has(n)}">` +
+    `<i class="swatch" style="background:${COLOR[n]}"></i>${n === 'polars' ? 'lpspec' : n}</button>`).join('');
+}
+
+function redraw() { drawLegend(); facets(METRIC); }
+
+document.getElementById('facet-legend').addEventListener('click', ev => {
+  const key = ev.target.closest('.key');
+  if (!key) return;
+  const name = key.dataset.lib;
+  /* The last visible line stays: an empty panel has no scale to draw and
+     reads as a broken chart rather than as a choice. */
+  if (!HIDDEN.has(name) && HIDDEN.size === LIBRARIES.length - 1) return;
+  HIDDEN.has(name) ? HIDDEN.delete(name) : HIDDEN.add(name);
+  redraw();
+});
 
 for (const b of document.querySelectorAll('.ctl')) b.addEventListener('click', () => {
   document.querySelectorAll('.ctl').forEach(x => x.classList.toggle('on', x === b));
-  facets(b.dataset.metric);
+  METRIC = b.dataset.metric;
+  redraw();
 });
+
+redraw();
 </script>
 </body>
 </html>
