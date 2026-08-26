@@ -1,18 +1,20 @@
-"""The parity gate: every rung of the pypsa corpus, as deep as the engines allow.
+"""The parity gate: every rung of the PyPSA corpus, as deep as the engines allow.
 
-    python differential/pypsa/parity.py
+    python differential/pypsa/parity.py <math-spec checkout>
 
-The corpus — the model files, the reference networks as data, their loader
-and the committed certificate — is `corpus/` beside this file; this file and
-`prep.py` are the engine side: bind, build, solve, compare. Run with this
-tree's lpspec, `pypsa==1.3.0` and `highspy` installed, and the `[linopy]`
-extra for the model comparison. No pixi environment carries pypsa, so the
-way to run it locally is the workflow's own line, which installs nothing on
-disk:
+The corpus is math-spec's — `examples/pypsa.yaml` and its quadratic sibling,
+one `rung_*.py` per rung whose `build()` returns the PyPSA network with its
+data inline, and `prep.py`, the binding that turns a network into the tables
+the file declares. This file is the engine side: bind, build, solve, compare,
+and it needs a checkout of that repository at the tag `pyproject.toml` pins,
+which is what the `PyPSA parity` workflow hands it. Run with this tree's
+lpspec, `pypsa==1.3.0` and `highspy` installed, and the `[linopy]` extra for
+the model comparison. No pixi environment carries pypsa, so the way to run it
+locally is the workflow's own line, which installs nothing on disk:
 
     pixi exec -s uv uv run --with-editable ".[linopy]" \
         --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=1.30" \
-        python differential/pypsa/parity.py
+        python differential/pypsa/parity.py ../math-spec
 
 Per rung, from the same network, three comparisons:
 
@@ -26,9 +28,11 @@ Per rung, from the same network, three comparisons:
    the upstream hardening this gate waits on — and its proof stops at (2).
 2. **One solved objective across the fence** — PyPSA's solve against
    `lpspec.relational`'s, both HiGHS, rtol 1e-9 on the generic spine.
-3. **Coverage stamps** — what the relational lane built per block, each
-   dimension's size, the tables bound non-empty — read by the repository's
-   coverage tests, so an equality is never over data that tests nothing.
+3. **Coverage** — what the relational lane built per block, each
+   dimension's size, the tables bound non-empty; and, over the ladder as a
+   whole, that every block is built by some rung, every mask is partially
+   true somewhere and every parameter is fed by some rung, so an equality is
+   never over data that tests nothing.
 4. **Prices across the fence** — PyPSA's ``buses_t.marginal_price`` against
    the relational lane's ``Bus_nodal_balance`` duals, per unit of the
    snapshot's objective weighting, which is how PyPSA reports them. A
@@ -46,13 +50,15 @@ PyPSA's model is built before `lpspec.linopy` is imported: that import flips
 linopy's global ``semantics`` option to ``v1`` and PyPSA speaks ``legacy``,
 so the option is reset around each PyPSA build.
 
-The stamps are rewritten into `corpus/references.json` on every run, so the
-committed certificate is always what the last run of this tree produced; the
-workflow fails on a diff, which is how a stale stamp shows.
+The stamps are rewritten into `references.json` beside this file on every
+run, so the committed certificate is always what the last run of this tree
+produced against the pinned corpus; the workflow fails on a diff, which is
+how a stale stamp shows.
 """
 
 from __future__ import annotations
 
+import importlib
 import json
 import math
 import re
@@ -62,21 +68,31 @@ from pathlib import Path
 
 import pandas as pd
 
-CORPUS = Path(__file__).resolve().parent / 'corpus'
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(CORPUS))
+CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else 'corpus').resolve()
+RUNGS = CORPUS / 'examples' / 'references' / 'pypsa'
+RECORDS = Path(__file__).resolve().parent / 'references.json'
+sys.path.insert(0, str(RUNGS))
 
-import instances  # noqa: E402  the corpus data's own loader
 import linopy  # noqa: E402
 import math_spec  # noqa: E402
-import prep  # noqa: E402
+import prep  # noqa: E402  the corpus's own binding
 
 import lpspec as lps  # noqa: E402
 
-MODEL = CORPUS / 'pypsa.yaml'
 
-#: A rung that states a different file says so here; every other rung binds the one file.
-MODELS = {'rung_10_quadratic_costs': CORPUS / 'pypsa_quadratic.yaml'}
+def rungs() -> list[str]:
+    """Every rung, in ladder order — the scripts beside the corpus's spine."""
+    return sorted(path.stem for path in RUNGS.glob('rung_*.py'))
+
+
+def network(stem: str):
+    """The rung's PyPSA network, built by its own script."""
+    return importlib.import_module(stem).build()
+
+
+def model_of(stem: str) -> Path:
+    """The file the rung binds: ``MODEL`` in its script where it names one, ``pypsa.yaml`` otherwise."""
+    return CORPUS / 'examples' / getattr(importlib.import_module(stem), 'MODEL', 'pypsa.yaml')
 
 
 def stands_for(description: str | None) -> str:
@@ -125,7 +141,7 @@ def pypsa_model(stem: str):
     """The network's own linopy model, built under the ``legacy`` semantics PyPSA speaks."""
     linopy.options['semantics'] = 'legacy'
     try:
-        return instances.build(stem).optimize.create_model()
+        return network(stem).optimize.create_model()
     finally:
         linopy.options['semantics'] = 'v1'
 
@@ -252,13 +268,13 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     from lpspec import linopy as lpl
 
     theirs = pypsa_model(stem)
-    n = instances.build(stem)
+    n = network(stem)
     gc_kinds = {str(label): str(gc['type']) for label, gc in n.global_constraints.iterrows()}
     status, condition = n.optimize(solver_name='highs')
     assert status == 'ok', f'{stem}: pypsa did not solve — {status} / {condition}'
-    model = MODELS.get(stem, MODEL)
+    model = model_of(stem)
     declared = math_spec.load_model(model)
-    tables = bound(model, instances.build(stem))
+    tables = bound(model, network(stem))
     result = lps.solve(model, tables)
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)
@@ -267,7 +283,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         'matches': math.isclose(
             float(result.objective), float(n.objective) + float(n.objective_constant), rel_tol=1e-9, abs_tol=1e-6
         ),
-        'model': str(model.relative_to(CORPUS)),
+        'model': model.name,
         'built_rows': built_rows,
         'built_columns': built_columns,
         'dims': {name: len(table) for name, table in tables.items() if name in declared.dimensions},
@@ -315,16 +331,49 @@ def _is_float(value: object) -> bool:
     return isinstance(value, float) and not isinstance(value, bool)
 
 
+def coverage(stamped: dict[str, dict]) -> list[str]:
+    """What the ladder as a whole leaves untested — empty when every block, mask and parameter is exercised.
+
+    A declared block no rung builds is a silent regime; a ``where:`` no rung
+    leaves half-true is untested as a mask; a parameter every rung leaves
+    empty is data no comparison has ever weighed.
+    """
+    gaps = []
+    by_file: dict[str, list[dict]] = defaultdict(list)
+    for stem in sorted(stamped):
+        by_file[stamped[stem]['parity']['model']].append(stamped[stem]['parity'])
+    for name, stamps in by_file.items():
+        declared = math_spec.load_model(CORPUS / 'examples' / name)
+        for kind, blocks in (('built_rows', declared.constraints), ('built_columns', declared.variables)):
+            for block_name, block in blocks.items():
+                counts = [stamp[kind][block_name] for stamp in stamps]
+                if not sum(counts):
+                    gaps.append(f'{name}: no rung builds {block_name}')
+                elif block.where and not any(
+                    0 < c < math.prod(stamp['dims'][d] for d in block.foreach)
+                    for c, stamp in zip(counts, stamps, strict=True)
+                ):
+                    gaps.append(f'{name}: {block_name} is always all-or-nothing, so its mask is untested')
+        fed = set().union(*(stamp['bound_nonempty'] for stamp in stamps))
+        gaps.extend(
+            f'{name}: no rung feeds {unfed}' for unfed in sorted({*declared.parameters, *declared.lookups} - fed)
+        )
+    return gaps
+
+
 def main() -> int:
-    stamped = json.loads(instances.RECORDS.read_text())
+    ladder = rungs()
+    assert ladder, f'no rung scripts under {RUNGS} — is {CORPUS} a math-spec checkout?'
+    committed = json.loads(RECORDS.read_text()) if RECORDS.exists() else {}
+    stamped: dict[str, dict] = {}
     broken = []
-    rungs = instances.rungs()
-    assert rungs, f'no rung folders under {instances.DATA} — nothing to certify'
-    for stem in rungs:
+    for stem in ladder:
         parity, structural, good = lanes(stem)
-        was = stamped.get(stem, {})
-        stamped[stem]['parity'] = settled(was.get('parity'), parity)
-        stamped[stem]['structural'] = settled(was.get('structural'), structural)
+        was = committed.get(stem, {})
+        stamped[stem] = {
+            'parity': settled(was.get('parity'), parity),
+            'structural': settled(was.get('structural'), structural),
+        }
         proof = (
             f'{len(structural["equal"])} equal · {len(structural["region"])} region'
             if 'equal' in structural
@@ -337,9 +386,12 @@ def main() -> int:
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
-    instances.write(stamped)
-    if broken:
-        print(f'{len(broken)} rung(s) differ: {", ".join(broken)}', file=sys.stderr)
+    RECORDS.write_text(json.dumps(stamped, indent=2, sort_keys=True) + '\n')
+    gaps = coverage(stamped)
+    for gap in gaps:
+        print(gap, file=sys.stderr)
+    if broken or gaps:
+        print(f'{len(broken)} rung(s) differ, {len(gaps)} coverage gap(s)', file=sys.stderr)
         return 1
     print('every rung matches PyPSA as deep as the engines allow, and says how deep that is')
     return 0
