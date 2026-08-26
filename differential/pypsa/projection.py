@@ -113,5 +113,22 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+class _Compact(yaml.SafeDumper):
+    """Lists and scalar-only mappings inline — ``foreach: [snapshot, generator]``, ``bounds: {lower: 0}`` — as the file writes them."""
+
+
+def _inline_list(dumper: yaml.SafeDumper, data: list) -> yaml.Node:
+    return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+
+
+def _inline_scalar_mapping(dumper: yaml.SafeDumper, data: dict) -> yaml.Node:
+    flat = all(isinstance(v, (str, int, float, bool)) or v is None for v in data.values())
+    return dumper.represent_mapping('tag:yaml.org,2002:map', data, flow_style=flat and len(data) <= 3)
+
+
+_Compact.add_representer(list, _inline_list)
+_Compact.add_representer(dict, _inline_scalar_mapping)
+
+
 def dump(projected: dict[str, Any]) -> str:
-    return yaml.safe_dump(projected, sort_keys=False, allow_unicode=True, width=100)
+    return yaml.dump(projected, Dumper=_Compact, sort_keys=False, allow_unicode=True, width=100)
