@@ -72,6 +72,45 @@ about a sink nobody named would be noise on every one of them. You get back:
 Answered off a declared table with **no data and no installed solver**, so
 `check(m, sink='gurobi')` answers on a machine that has never had gurobipy.
 
+#### What each sink takes
+
+Measured against the shipped solvers rather than assumed. The four quadratic
+rows and the two sections HiGHS writes but will not read back are *probed* —
+`tests/test_sink_capability_probes.py` and
+`tests/test_gurobi_capability_probes.py`, each assertion naming this table —
+because a capability moves on somebody else's release and a stale row would go
+wrong with the suite green. The rest are read off the APIs.
+
+| | `lp_file` | `mps_file` | HiGHS direct | Gurobi direct | Xpress direct |
+|---|---|---|---|---|---|
+| affine rows, COO, integrality | text | text, `MARKER` | native | native | native |
+| semi-continuous | text | **not written** — no `SC` bound | `kSemiContinuous` | native | native |
+| SOS1 / SOS2 | text section | `SOS` section | **no concept** — rewritten to binaries | `addSOS` | native |
+| indicator | text section | **not written** | **no concept** | `addGenConstrIndicator` | native |
+| convex quadratic objective | text section | **not written** | `passHessian` | `setMObjective` | **no path here** |
+| nonconvex quadratic objective | text section | **not written** | **refused** | native, at default parameters | **no path here** |
+| quadratic objective **and** integrality | text section | **not written** | **refused** | native (MIQP) | **no path here** |
+| quadratic constraint | text section, unreadable | **not written** | **no concept** | `addQConstr` | **no path here** |
+
+Three readings worth having:
+
+- **HiGHS excludes quadratic twice** — by convexity, and by conjunction with
+  integrality. Neither is a set membership, which is why a flat capability set
+  gets it wrong: linopy declares HiGHS with `INTEGER_VARIABLES` and
+  `QUADRATIC_OBJECTIVE` together, so its own model reports MIQP as available.
+- **The `lp_file` column says what can be written, not what reads back.** The
+  same HiGHS parser takes the quadratic-objective section and refuses both the
+  `sos` and the quadratic-constraint one.
+- **"No path here" is about this tree, not about Xpress.** The Optimizer takes
+  a Hessian; the sink in `solvers/xpress.py` never hands it one, and a
+  descriptor says what the sink ingests rather than what the library could.
+
+**A rewrite is not free, and the cost is what comes back.** A model carrying a
+set returns from HiGHS without duals — the reformulation makes it a MIP — and
+from Gurobi with them. That asymmetry is the argument for declaring capability
+rather than papering over it, and it is why `sink=` warns rather than staying
+silent.
+
 Asking is optional; being refused is not. `solve` and `write` read the same
 table when they get there, so `lps.write(m, sources, 'model.mps')` on a model
 carrying a quadratic term is refused by name rather than handed back as a file

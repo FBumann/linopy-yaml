@@ -535,6 +535,29 @@ Xpress take the three CSR arrays, gurobipy a matrix object) and because an
 optional package must stay off the import path of a caller who does not use
 it.
 
+### What a quadratic objective costs the sink
+
+Neither direct API has a per-coefficient counterpart to `changeCoeff`:
+`passHessian` and `setMObjective` take the quadratic part whole. Under the
+aligned-only scope (`variable × variable` at the same coordinates) `Q` is
+**diagonal**, so it costs 16 bytes per quadratic column — 0.16 GB at 10⁷
+columns, 1.60 GB at 10⁸ — against a direct-sink peak already dominated by the
+solver's own model. HiGHS accepts `dim_ < num_col` (verified), so ordering the
+quadratic variables first bounds the Hessian to that block.
+
+**The diagonal argument dies as soon as the product is not aligned**, and the
+language does not restrict it to aligned: `x[i] * y[i, j]` broadcasts and
+`x[i] * y[j] * a[i, j]` joins through a table. The replacement bound is one
+entry per pair the expression states — the `nnz` of whatever couples the
+factors — which is still a declared-shape quantity. What is not is the cross
+join of two reductions, and that is the shape the language refuses
+(`language/degree.py`).
+
+**Whole is not the same as reloading.** A second `passHessian` lands on the
+model already loaded, replacing `Q` and leaving the LP standing — so a moved
+quadratic *coefficient* is pushed like a cost, and only the sparsity *pattern*
+is structure.
+
 ## Module map
 
 | Module | Role |
