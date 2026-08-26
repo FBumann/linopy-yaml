@@ -95,7 +95,6 @@
 .viz-root figure { margin: 0; min-width: 0; }
 .viz-root figcaption { font-size: .8rem; font-weight: 600; color: var(--text-secondary);
   margin: 0 0 .3rem; }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.8rem; margin-top: 1rem; }
 /* A grid item defaults to `min-width: auto`, which is *content* width, not
    zero — so a table wider than its cell widens the whole track and spills into
    the panel beside it. Every figure here holds a table of six numeric columns,
@@ -113,7 +112,13 @@ figure th, figure td { padding: .18rem .3rem; text-align: right; border-bottom: 
 figure th:first-child, figure td:first-child { text-align: left; }
 figure th { font-weight: 600; color: var(--muted); }
 figure td.best { font-weight: 700; }
-.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(370px, 1fr)); gap: 1.4rem; margin-top: 1rem; }
+/* Two, said rather than implied. `auto-fit` packs in as many columns as fit,
+   which is three on a wide window and one column too many for a panel that
+   carries a chart and its table. `minmax(0, 1fr)` rather than `1fr`: the zero
+   is what lets a track be narrower than its content, so a wide table scrolls
+   inside its panel instead of widening it. */
+.grid3 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.4rem 1.8rem; margin-top: 1rem; }
+@media (max-width: 800px) { .grid3 { grid-template-columns: minmax(0, 1fr); } }
 .plot { position: relative; }
 .plot svg { display: block; width: 100%; height: auto; overflow: visible; }
 .controls { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin: .2rem 0; }
