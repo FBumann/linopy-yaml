@@ -81,7 +81,7 @@ def test_block_boundaries_do_not_move_the_answer(batch_rows: int | None) -> None
     with lps.build(model, data) as bound:
         tables = bound._engine._model.tables()
         reference = bound.solve().objective
-    problem = build_xpress(tables, batch_rows=batch_rows)
+    problem = build_xpress(tables, batch_rows=batch_rows).handle
     problem.optimize()
     assert float(problem.attributes.objval) == pytest.approx(reference), f'batch_rows={batch_rows} moved the answer'
 
@@ -144,7 +144,7 @@ def test_solver_options_reach_xpress() -> None:
     model, data = CASES['LP']
     with lps.build(model, data) as bound:
         tables = bound._engine._model.tables()
-    problem = build_xpress(tables, solver_options={'timelimit': 42})
+    problem = build_xpress(tables, solver_options={'timelimit': 42}).handle
     assert int(problem.controls.timelimit) == 42, 'the option did not reach the problem'
 
 
@@ -153,7 +153,7 @@ def test_build_xpress_loads_the_model_and_stops() -> None:
     model, data = CASES['LP']
     with lps.build(model, data) as bound:
         tables = bound._engine._model.tables()
-    problem = build_xpress(tables)
+    problem = build_xpress(tables).handle
     assert (problem.attributes.rows, problem.attributes.cols) == (tables.row_count, tables.column_count)
     assert int(problem.attributes.solvestatus) == 0, 'build_xpress loads the model and does not solve it'
 
@@ -166,7 +166,7 @@ def test_a_set_reaches_the_solver_natively() -> None:
 
     with lps.build(model(2), DATA) as bound:
         tables = bound._engine._model.tables()
-    problem = build_xpress(tables)
+    problem = build_xpress(tables).handle
     assert int(problem.attributes.sets) == 2, 'both declared sets reached the solver as sets'
     problem.optimize()
     assert float(problem.attributes.objval) == pytest.approx(best(2))

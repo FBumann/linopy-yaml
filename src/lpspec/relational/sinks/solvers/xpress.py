@@ -76,17 +76,19 @@ def build_xpress(
     model: ModelTables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
-) -> Any:
+) -> Xpress:
     """Load the model into an :class:`xpress.problem` and stop there.
 
     :func:`~lpspec.relational.sinks.solvers.highs.build_highs`'s seam, drawn
     for its reason: the search is the same work whoever filled the model.
 
-    The problem owns its licence and releases it when it is collected, so
-    unlike :func:`~lpspec.relational.sinks.solvers.gurobi.build_gurobi` this
-    needs no finalizer — there is one object, and dropping it is the release.
+    Returns:
+        The :class:`Xpress` holding the problem, at ``.handle``. The problem
+        owns its licence and releases it when it is collected, so the holder
+        needs no finalizer — there is one object, and dropping it is the
+        release.
     """
-    return _built(model, batch_rows, solver_options)
+    return Xpress(model, batch_rows, solver_options)
 
 
 class Xpress(Solver):
@@ -126,6 +128,10 @@ class Xpress(Solver):
 
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._p = _built(model, batch_rows, self._options)
+
+    @property
+    def handle(self) -> Any:
+        return self._p
 
     def push(self, model: ModelTables) -> None:
         """Whole vectors by index, in three calls.
