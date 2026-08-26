@@ -97,6 +97,24 @@ def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
     )
 
 
+def prices(result, n) -> dict[str, object]:
+    """`Bus_nodal_balance` duals against PyPSA's `marginal_price`, per (snapshot, bus).
+
+    PyPSA divides the row dual by the objective weighting; so does this. An
+    integer variable leaves the lane without duals, and the stamp says so.
+    """
+    try:
+        dual = result.dual('Bus_nodal_balance').to_pandas()
+    except lps.LpspecError as error:
+        return {'compared': 0, 'skipped': str(error).splitlines()[0][:120]}
+    weights = n.snapshot_weightings['objective']
+    theirs = n.buses_t.marginal_price
+    gaps = [
+        abs(row.value / weights[row.snapshot] - float(theirs.at[row.snapshot, row.bus])) for row in dual.itertuples()
+    ]
+    return {'compared': len(gaps), 'max_abs_diff': max(gaps, default=0.0), 'matches': all(g <= 1e-6 for g in gaps)}
+
+
 def pypsa_model(stem: str):
     """The network's own linopy model, built under the ``legacy`` semantics PyPSA speaks."""
     linopy.options['semantics'] = 'legacy'
@@ -247,15 +265,21 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         'built_columns': built_columns,
         'dims': {name: len(table) for name, table in tables.items() if name in declared.dimensions},
         'bound_nonempty': sorted(name for name, table in tables.items() if len(table)),
+        'prices': prices(result, n),
     }
     try:
         ours = lpl.build(model, tables)
     except Exception as error:
         note = f'{type(error).__name__}: {error}'.splitlines()[0][:200]
-        return parity, {'linopy': linopy.__version__, 'error': note}, parity['matches']
+        return parity, {'linopy': linopy.__version__, 'error': note}, parity['matches'] and priced(parity)
     verdict = compare(theirs, ours, declared, gc_kinds)
     structural = {'linopy': linopy.__version__, **verdict}
-    return parity, structural, parity['matches'] and not verdict['mismatch']
+    return parity, structural, parity['matches'] and priced(parity) and not verdict['mismatch']
+
+
+def priced(parity: dict) -> bool:
+    """Prices agree, or the lane had none to offer."""
+    return parity['prices']['compared'] == 0 or parity['prices']['matches']
 
 
 def main() -> int:
@@ -272,7 +296,9 @@ def main() -> int:
             if 'equal' in structural
             else f'objective only — {structural["error"]}'
         )
-        print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {proof}')
+        prices_ = parity['prices']
+        priced_ = f'prices on {prices_["compared"]} rows' if prices_['compared'] else f'no prices — {prices_["skipped"]}'
+        print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
     instances.write(stamped)
