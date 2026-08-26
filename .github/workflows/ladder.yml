@@ -1,0 +1,146 @@
+name: Ladder
+
+# The published comparison, taken on a schedule instead of on somebody's laptop.
+#
+# **Why this exists.** `bench.yml` answers *did this pull request make us
+# slower* against its own base, in four billed minutes. This answers *what do
+# the tables on the benchmark page say*, which is a different question with a
+# different cost: four models, three libraries, four sizes, nine rounds each —
+# hours, not minutes. It had been run by hand, and three separate attempts were
+# lost to the machine sleeping or somebody typing on it.
+#
+# **`highs` only, and that is a decision rather than a limitation.** The Gurobi
+# columns need a licence that can build a ten-million-column model, and a
+# runner's licence is the wheel's size-limited one — `licence-probe` below finds
+# out whether it can, and until it answers the Gurobi cells stay a local run.
+# Nothing is lost by waiting: every HiGHS conclusion on the page is a margin of
+# 1.37x to 3.82x, which survives any runner. The Gurobi margins are 4% to 14%
+# and would drown in a shared host whatever we did about the licence.
+#
+# **Switching runners is the two `runs-on:` lines below.** A bare-metal service
+# (Blacksmith, Namespace, Depot, Cirrus) is a drop-in for `ubuntu-24.04` and
+# lowers the variance a lot; two things to confirm with whichever you pick,
+# because neither is universal: that the CPU model is pinned across runs — a
+# different SKU month to month moves every number without a line of code
+# changing — and that the vCPUs are dedicated rather than burst. Neither this
+# file nor the harness cares which you use.
+
+on:
+  schedule:
+    # 03:00 on the first of the month. Nothing else runs then, which is the
+    # whole point: the harness refuses to start on a machine already working.
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+    inputs:
+      probe_gurobi:
+        description: 'Also ask whether the runner licence can build a big Gurobi model'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ladder
+  cancel-in-progress: false
+
+jobs:
+  ladder:
+    name: The published ladder
+    runs-on: ubuntu-24.04
+    # Three hours of measurement plus the install. GitHub's ceiling is six.
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          run-install: false
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-bench-${{ runner.os }}-
+      - run: pixi install -e bench
+
+      # Outside the measured region on purpose: generating a rung's parquet is
+      # the harness's work, not the engine's, and the session fixture would
+      # otherwise charge whichever measurement reached it first.
+      - name: warm the data cache
+        run: |
+          pixi run -e bench python - <<'PY'
+          from bench.cases import CASES
+          for name in ('dispatch', 'transport', 'storage', 'fleet'):
+              case = CASES[name]
+              for rung in case.ladder:
+                  case.data(rung)
+          PY
+
+      - name: take the ladder
+        run: |
+          pixi run -e bench pytest bench -q \
+            --cases dispatch transport storage fleet \
+            --sizes xs s m l w1 w10 w100 w1000 \
+            --sinks highs \
+            --arms lpspec linopy pyomo \
+            --budget 30 --benchmark-memory \
+            --benchmark-json=bench/results/latest.json
+
+      # The page is written from the results, never by hand.
+      - name: write the tables and the chart
+        run: |
+          pixi run -e bench python -m bench.report --write
+          pixi run -e bench python -m bench.plot
+
+      # Not committed by the workflow: a published number is a change somebody
+      # reviews, and a scheduled job that pushes to a docs page is a number
+      # nobody read. The artifact is what a person opens a pull request from.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ladder-${{ github.run_id }}
+          path: |
+            bench/results/latest.json
+            bench/results/latest.ceilings.json
+            docs/about/benchmarks.md
+            docs/about/benchmarks-scaling.html
+          retention-days: 90
+
+  licence-probe:
+    name: Can the runner licence build a big model?
+    if: inputs.probe_gurobi
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@v0.10.1
+        with:
+          run-install: false
+      - run: pixi install -e bench
+
+      # The one fact nobody here knows. gurobipy's wheel carries a size-limited
+      # licence that refuses `optimize()` above 2,000 columns; it does not refuse
+      # `write()`, which is why the parity check works in CI. Whether it refuses
+      # to *build* ten million columns has never been asked, because the Gurobi
+      # cells have never run on a runner. If it builds, this workflow can take
+      # the Gurobi columns too — subject to the noise caveat above.
+      - name: build 10M columns and report what happens
+        run: |
+          pixi run -e bench python - <<'PY'
+          import gurobipy as gp, numpy as np, scipy.sparse as sp, time
+          print('gurobipy', gp.gurobi.version())
+          for n in (2_000, 100_000, 1_000_000, 10_000_000):
+              env = gp.Env(params={'OutputFlag': 0})
+              m = gp.Model(env=env)
+              try:
+                  started = time.perf_counter()
+                  x = m.addMVar(n, ub=np.ones(n))
+                  m.addMConstr(sp.eye(n, format='csr'), x, '<', np.ones(n))
+                  m.update()
+                  print(f'{n:>10,} columns: built in {time.perf_counter() - started:.2f}s')
+              except gp.GurobiError as error:
+                  print(f'{n:>10,} columns: REFUSED — {error}')
+                  break
+              finally:
+                  m.dispose(); env.dispose()
+          PY
