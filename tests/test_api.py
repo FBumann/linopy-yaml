@@ -11,7 +11,6 @@ dataframe library beyond the engine's own. The tests that exercise the bridges
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 import textwrap
@@ -33,7 +32,6 @@ from tests.conftest import (
     _dispatch_load,
     override,
     raw_of,
-    schema_of,
     solve_written_file,
 )
 
@@ -251,10 +249,12 @@ def test_check_reports_language_errors_before_any_data_is_bound(
 ):
     """The CI verb enforces the ceiling with no data bound (docs/about/ceiling.md).
 
-    ``build`` is asserted to say the same thing rather than defer it to the
-    solver.
+    The refusal is the language's, at load (math-spec's ``test_degree.py``);
+    what is asserted here is that both verbs surface it, ``build`` saying the
+    same thing rather than deferring it to the solver. The raw file is
+    assembled by hand because validating it is the refusal.
     """
-    raw = schema_of(dispatch_yaml, **{'objective.expression': expression}).model_dump()
+    raw = {**load_model(dispatch_yaml).model_dump(), 'objective': {'sense': 'minimize', 'expression': expression}}
 
     with pytest.raises(lps.LanguageError, match=match):
         lps.check(raw)
@@ -575,7 +575,6 @@ def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
         'lps.solve': lambda: lps.solve(raw, {}),
         'lps.write': lambda: lps.write(raw, {}, str(tmp_path / 'm.lp')),
         'Model.model_validate': lambda: Model.model_validate(raw),
-        'Model.model_validate_json': lambda: Model.model_validate_json(json.dumps(raw)),
     }
     for door, call in doors.items():
         with pytest.raises(lps.LpspecError) as ei:

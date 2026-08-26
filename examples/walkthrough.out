@@ -98,8 +98,8 @@ model: examples/walkthrough.yaml
       Define 'cumsum' as a macro under 'macros:' if it composes built-ins; if the math is not sayable in the language, use a declared escape.
 
     variable x variable x variable — the ceiling is degree 2, not "nonlinear is fine":
-    caught by check() as LanguageError
-      the objective: this product is degree 3. The language takes degree 2, in the **objective** and nowhere else: a sink takes a quadratic form and none takes a cubic one.
+    caught by check() as SchemaError
+      The objective: this product is degree 3. The language takes degree 2 and nothing above it.
       Multiply by a parameter instead, or give the inner product a name — a variable constrained to equal it is degree 1 wherever it is used.
 
 docs/about/architecture.md has the rules these stages enforce.

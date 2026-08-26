@@ -34,6 +34,7 @@ import pytest
 import yaml as pyyaml
 from math_spec import Namespace, expression_of, load_model
 
+from lpspec.curves import curvature_required
 from lpspec.relational.sinks import SOLVERS
 from lpspec.sources import bindable
 
@@ -74,7 +75,7 @@ def bindable_on_this_install(name: str) -> None:
     only the data-touching tests skip.
     """
     schema = load_model(port_model(name))
-    if any(pw.curvature_required is not None for pw in schema.piecewise.values()):
+    if any(curvature_required(pw) is not None for pw in schema.piecewise.values()):
         pytest.importorskip('xarray', reason=f"{name}'s curvature guard needs xarray until #27")
 
 

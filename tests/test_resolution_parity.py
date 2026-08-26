@@ -139,7 +139,13 @@ def test_every_resolved_predicate_is_parity_tested():
     unresolved = {UnresolvedNameNode, UnresolvedComparisonNode, UnresolvedPositionNode}
     expected = set(get_args(WhereNode)) - unresolved
 
-    ns = Namespace(('p',), ('p_max', 'cost', 'load'), ('snapshot', 'generator'))
+    ns = Namespace(
+        ('p',),
+        ('p_max', 'cost', 'load'),
+        ('snapshot', 'generator'),
+        {},
+        {'p_max': 'float', 'cost': 'float', 'load': 'float', 'snapshot': 'int', 'generator': 'str'},
+    )
     covered: set[type] = set()
 
     def walk(node):

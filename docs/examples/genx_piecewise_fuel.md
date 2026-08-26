@@ -91,47 +91,47 @@ $$\mathit{shed}_{t,h} \le \mathrm{shed}^{\mathrm{limit}}_{t} \cdot \mathrm{deman
 
 **`committed_units_exist`**
 
-$$\mathit{committed}_{p,h} \le \mathit{units}_{p} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
+$$\mathit{committed}_{p,h} \le \mathit{units}_{p} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}$$
 
 **`thermal_ceiling`**
 
-$$\mathit{output}_{p,h} \le \mathit{committed}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{availability}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
+$$\mathit{output}_{p,h} \le \mathit{committed}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{availability}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}$$
 
 **`thermal_floor`**
 
-$$\mathit{output}_{p,h} \ge \mathit{committed}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{min\_output}_{p} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
+$$\mathit{output}_{p,h} \ge \mathit{committed}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{min\_output}_{p} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}$$
 
 **`variable_ceiling`**
 
-$$\mathit{output}_{p,h} \le \mathit{units}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{availability}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{free}$$
+$$\mathit{output}_{p,h} \le \mathit{units}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{availability}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{'}\mathrm{free}\text{'}$$
 
 **`commitment_tracks_starts`**
 
-$$\mathit{committed}_{p,h} - \mathit{committed}_{p,h \ominus 1} = \mathit{starting}_{p,h} - \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
+$$\mathit{committed}_{p,h} - \mathit{committed}_{p,h \ominus 1} = \mathit{starting}_{p,h} - \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}$$
 
 **`stay_up_once_started`**
 
-$$\mathit{committed}_{p,h} \ge \mathit{starting}_{p,h} + \mathit{starting}_{p,h \ominus 1} + \mathit{starting}_{p,h \ominus 2} + \mathit{starting}_{p,h \ominus 3} + \mathit{starting}_{p,h \ominus 4} + \mathit{starting}_{p,h \ominus 5} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
+$$\mathit{committed}_{p,h} \ge \mathit{starting}_{p,h} + \mathit{starting}_{p,h \ominus 1} + \mathit{starting}_{p,h \ominus 2} + \mathit{starting}_{p,h \ominus 3} + \mathit{starting}_{p,h \ominus 4} + \mathit{starting}_{p,h \ominus 5} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}$$
 
 **`stay_down_once_shut`**
 
-$$\mathit{units}_{p} - \mathit{committed}_{p,h} \ge \mathit{shutting}_{p,h} + \mathit{shutting}_{p,h \ominus 1} + \mathit{shutting}_{p,h \ominus 2} + \mathit{shutting}_{p,h \ominus 3} + \mathit{shutting}_{p,h \ominus 4} + \mathit{shutting}_{p,h \ominus 5} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
+$$\mathit{units}_{p} - \mathit{committed}_{p,h} \ge \mathit{shutting}_{p,h} + \mathit{shutting}_{p,h \ominus 1} + \mathit{shutting}_{p,h \ominus 2} + \mathit{shutting}_{p,h \ominus 3} + \mathit{shutting}_{p,h \ominus 4} + \mathit{shutting}_{p,h \ominus 5} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}$$
 
 **`ramp_up`**
 
-$$\mathit{output}_{p,h} - \mathit{output}_{p,h \ominus 1} \le \mathrm{ramp}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) + \mathrm{start\_headroom}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{starting}_{p,h} - \mathrm{min\_output}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
+$$\mathit{output}_{p,h} - \mathit{output}_{p,h \ominus 1} \le \mathrm{ramp}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) + \mathrm{start\_headroom}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{starting}_{p,h} - \mathrm{min\_output}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}$$
 
 **`ramp_down`**
 
-$$\mathit{output}_{p,h \ominus 1} - \mathit{output}_{p,h} \le \mathrm{ramp}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) - \mathrm{min\_output}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{starting}_{p,h} + \mathrm{start\_headroom}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{unit}$$
+$$\mathit{output}_{p,h \ominus 1} - \mathit{output}_{p,h} \le \mathrm{ramp}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) - \mathrm{min\_output}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{starting}_{p,h} + \mathrm{start\_headroom}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}$$
 
 **`fuel_above_each_piece`**
 
-$$\mathit{burned}_{p,h} \ge \mathrm{fuel\_slope}_{p,s} \cdot \mathit{output}_{p,h} + \mathrm{fuel\_intercept}_{p,s} \cdot \mathit{committed}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace s \in \mathcal{S},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{fuel\_use}(p) = \text{curve}$$
+$$\mathit{burned}_{p,h} \ge \mathrm{fuel\_slope}_{p,s} \cdot \mathit{output}_{p,h} + \mathrm{fuel\_intercept}_{p,s} \cdot \mathit{committed}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace s \in \mathcal{S},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{fuel\_use}(p) = \text{'}\mathrm{curve}\text{'}$$
 
 **`fuel_at_the_heat_rate`**
 
-$$\mathit{burned}_{p,h} = \mathrm{heat\_rate}_{p} \cdot \mathit{output}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{fuel\_use}(p) = \text{flat}$$
+$$\mathit{burned}_{p,h} = \mathrm{heat\_rate}_{p} \cdot \mathit{output}_{p,h} \qquad \forall\thinspace p \in \mathcal{P},\enspace h \in \mathcal{H} \thinspace:\thinspace \mathrm{fuel\_use}(p) = \text{'}\mathrm{flat}\text{'}$$
 
 **`fuel_to_start`**
 

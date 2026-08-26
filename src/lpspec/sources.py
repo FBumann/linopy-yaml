@@ -206,7 +206,8 @@ def map_authors(schema: Model, data: Mapping[str, object], dimension: str) -> li
     have none, which is why it names the *author* rather than the lookup: the
     two spellings want different fixes and neither is "pass the column".
     """
-    return [f'lookups.{n}.values' for n in sorted(schema.declared_maps(dimension))] + [
+    declared = [n for n, lk in schema.lookups.items() if lk.over == dimension and lk.values is not None]
+    return [f'lookups.{n}.values' for n in sorted(declared)] + [
         f'sources[{n!r}]' for n in sorted(schema.lookups) if n in data and schema.lookups[n].over == dimension
     ]
 
@@ -243,7 +244,7 @@ def lookup_relations(
             rows = pl.LazyFrame({over: keys, name: [lookup.values[k] for k in keys]}).drop_nulls(name)
             said = 'declares values for'
         else:
-            rows = _read_relation(data[name], name, over, schema.label_space(name))
+            rows = _read_relation(data[name], name, over, lookup.into or name)
             said = 'maps'
         _check_keys_are_labels(rows, name, over, _labels_of(over, indices[over]), said)
         if (target := lookup.into) is not None:
@@ -530,8 +531,7 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
 
     A declared map is deliberately *not* a claim on the labels: it is a partial
     relation over the dimension, free to omit members and written in whatever
-    key order someone typed
-    (:meth:`~math_spec.model.Model.declared_maps`). A sparse map over a
+    key order someone typed. A sparse map over a
     caller's label set is therefore the one index with two authors — one per
     fact — and it is the shape this check exists to keep honest.
 
@@ -552,7 +552,7 @@ def check_index_ownership(schema: Model, data: Mapping[str, object]) -> None:
                 )
             )
         if not supplied and not declared:
-            raise DataError(_unsupplied_lookup_message(name, lookup.over, schema.label_space(name)))
+            raise DataError(_unsupplied_lookup_message(name, lookup.over, lookup.into or name))
 
     for dim, ddef in schema.dimensions.items():
         if dim not in data:
