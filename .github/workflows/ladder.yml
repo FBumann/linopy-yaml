@@ -25,8 +25,11 @@ jobs:
   ladder:
     name: The published ladder
     runs-on: ubuntu-24.04
-    # Three hours of measurement plus the install; GitHub's ceiling is six.
-    timeout-minutes: 330
+    # The hand-taken run of this selection was 3h10m on a laptop; a shared
+    # runner is slower, and the ceiling is six hours. If a month's run times out
+    # this is the number to look at first — and the artifact is lost when it
+    # does, which is the argument for not cutting it fine.
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v7
         with:
