@@ -26,12 +26,46 @@ either way, and it would swamp the build) and anything about expressiveness.
 
 from __future__ import annotations
 
+import gc
 from typing import Any
 
 import pytest
 
 from bench.arms import ARMS, unmeasurable
 from bench.conftest import shape_of
+
+
+def _rounds(benchmark: Any, request: pytest.FixtureRequest, fn: Any, *args: Any) -> Any:
+    """*fn* once per round, with a full garbage collection before each clock starts.
+
+    A round otherwise inherits the last one's garbage, and what that costs is
+    not noise: the gurobi sink leaves a million `Var` objects young, and
+    whether the collector's generation-1 pass lands on them is arithmetic on
+    the round's allocation count — every second round, on `dispatch/m`,
+    which put 0.45 s and 0.67 s in one distribution and decided nine
+    published comparisons by whichever the median fell on (#1288). Collecting
+    first is what linopy's own benchmark loop does, and it measures one build
+    rather than one build plus a share of the previous.
+
+    Pedantic mode is the only one with a hook before the clock, and it takes
+    its rounds from the caller rather than `--benchmark-min-rounds`, so the
+    option is read here. CodSpeed's fixture has no rounds to hook and no
+    `extra_info`; there the plain call stands.
+    """
+    if getattr(benchmark, 'extra_info', None) is None:
+        return benchmark(fn, *args)
+    return benchmark.pedantic(
+        fn,
+        args=args,
+        setup=_collected,
+        rounds=request.config.option.benchmark_min_rounds,
+        iterations=1,
+        warmup_rounds=0,
+    )
+
+
+def _collected() -> None:
+    gc.collect()
 
 
 def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -> None:
@@ -77,7 +111,9 @@ def _measured(benchmark: Any) -> float | None:
 
 
 @pytest.mark.benchmem(isolate=True)
-def test_emit(benchmark: Any, paths: Any, ceiling: Any, case_name: str, size: str, arm: str, sink: str) -> None:
+def test_emit(
+    benchmark: Any, request: pytest.FixtureRequest, paths: Any, ceiling: Any, case_name: str, size: str, arm: str, sink: str
+) -> None:
     """Build the model and hand it over — an LP file on disk, or a populated solver.
 
     Both arms start from the same parquet and stop at the same seam, so each
@@ -93,7 +129,7 @@ def test_emit(benchmark: Any, paths: Any, ceiling: Any, case_name: str, size: st
 
     module = ARMS[arm]
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
-    counts = benchmark(module.build_and_emit, sink, prepared)
+    counts = _rounds(benchmark, request, module.build_and_emit, sink, prepared)
     _record(benchmark, counts, case_name, size)
     ceiling.record(arm, case_name, size, sink, _measured(benchmark))
 
@@ -125,6 +161,7 @@ def test_rebuild(benchmark: Any, paths: Any, ceiling: Any, builds: int, case_nam
     counts = benchmark.pedantic(
         module.build_only,
         args=(module.prepare(case_name, size, paths(case_name, size), {}),),
+        setup=_collected,
         rounds=builds,
         iterations=1,
         warmup_rounds=0,

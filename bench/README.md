@@ -165,6 +165,13 @@ default is 5, and its calibration gives the fewest rounds to the slowest cells â
 exactly where sustained interference is most likely and a clean round hardest
 to come by. `--benchmark-min-rounds` still wins where a run wants more.
 
+**Every round starts with a full garbage collection.** A round otherwise
+inherits the last one's garbage, and on the gurobi sink that is a million
+`Var` objects the collector's generation-1 pass walks on every second round â€”
+0.45 s against 0.67 s in one distribution, and nine published comparisons
+decided by which one the median fell on (#1288). What a round measures is one
+build.
+
 ## Why it is built this way
 
 **One process per measurement.** Peak RSS is a property of a process: a second
