@@ -415,6 +415,20 @@ pytest bench --benchmark-memory
   --budget 30 --benchmark-json=bench/results/latest.json
 """
 
+# The subset a runner can take: no Gurobi, because its licence cannot build at
+# scale and the two gurobipy libraries only reach that sink. Every HiGHS margin
+# on the page is 1.37x or wider, which survives a shared host; the Gurobi ones
+# are 4-14% and would not, so they stay a local run whatever the licence says.
+[tool.pixi.feature.bench.tasks.ladder-ci]
+description = "The published ladder minus the columns a runner cannot take"
+depends-on = [
+    { task = "ladder", args = [
+        "xs s m l w1 w10 w100 w1000",
+        "highs",
+        "lpspec linopy pyomo",
+    ] },
+]
+
 [tool.pixi.feature.bench.tasks.refresh]
 description = "Re-measure the published ladder and rewrite the tables and the chart page"
 depends-on = ["ladder", "density", "declarations", "report", "plot"]
