@@ -49,7 +49,6 @@ from math_spec import (
 from lpspec.errors import (
     DataError,
     LaneError,
-    LanguageError,
     lane_cannot_build_message,
     null_bounds_message,
     unbound_lookup_message,
@@ -70,7 +69,7 @@ if TYPE_CHECKING:
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
 
-#: The language's arithmetic. ``**`` is absent on purpose — see ``_eval_ast``.
+#: The language's arithmetic. ``**`` is reached only over parameters — ``check_binary`` refuses it over a variable.
 _ARITHMETIC_OPS: dict[str, Callable[[Any, Any], Any]] = {
     '+': operator.add,
     '-': operator.sub,
@@ -169,20 +168,9 @@ def _check_bounds_are_defined(name: str, vdef: Any, dataset: xr.Dataset, mask: A
         raise DataError(null_bounds_message(name, missing))
 
 
-def _resolve_bound(
-    value: float | str,
-    dataset: xr.Dataset,
-) -> Any:
-    """Resolve a bound value — either a literal number or a parameter name."""
-    if isinstance(value, str):
-        if value not in dataset:
-            msg = (
-                f"Bound references parameter '{value}' which is not in the "
-                f'loaded dataset. Available: {sorted(map(str, dataset.data_vars))}'
-            )
-            raise DataError(msg)
-        return dataset[value]
-    return value
+def _resolve_bound(value: float | str, dataset: xr.Dataset) -> Any:
+    """A bound as linopy takes it: the literal, or the named parameter's array."""
+    return dataset[value] if isinstance(value, str) else value
 
 
 # ---------------------------------------------------------------------------
@@ -239,9 +227,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
             mask = evaluate_where(c_where, ctx)
 
             ast = expression_of(cdef.expression, ctx.schema, ctx.ns, f"constraint '{cname}'")
-            if not isinstance(ast, ComparisonNode):
-                msg = f'expression must contain exactly one comparison operator (<=, >=, ==).\nGot: {cdef.expression!r}'
-                raise LanguageError(msg)
+            assert isinstance(ast, ComparisonNode), 'load-time validation refuses a constraint without a comparison'
 
             _refuse_quadratic(ast)
             check_divisors_cover(f"constraint '{cname}'", ast, ctx, mask)
@@ -301,10 +287,7 @@ def _build_objective(ctx: EvaluationContext) -> None:
         return
     with note('while building the objective'):
         ast = expression_of(odef.expression, ctx.schema, ctx.ns, 'the objective')
-
-        if isinstance(ast, ComparisonNode):
-            msg = f'Expression must not contain a comparison operator. Got: {odef.expression!r}'
-            raise LanguageError(msg)
+        assert not isinstance(ast, ComparisonNode), 'load-time validation refuses a comparison in the objective'
 
         check_divisors_cover('the objective', ast, ctx, None)
 

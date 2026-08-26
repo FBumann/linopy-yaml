@@ -217,7 +217,10 @@ def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], d
     step differs from what the relational lane does with it.
 
     Read through numpy rather than ``to_pandas()``, which wants pyarrow: this
-    extra ships pandas and xarray, and nothing says it ships that too.
+    extra ships pandas and xarray, and nothing says it ships that too. A
+    dims-less value keeps the dtype it arrived with, as a column does — a
+    ``bool`` cast to ``0.0`` reads as *defined* under a bare ``where``, which
+    is the opposite of what the file said.
 
     Raises:
         DataError: The frame does not carry the declared dims and ``value``, or
@@ -231,8 +234,9 @@ def _from_tidy(name: str, table: pl.LazyFrame | pl.DataFrame, dims: list[str], d
             f'columns {wanted}. Got {frame.columns}.'
         )
     if not dims:
-        _check_values(name, pd.Series([frame['value'][0]]), (), declared)
-        return xr.DataArray(float(frame['value'][0]))
+        value = frame['value'].to_numpy()[0]
+        _check_values(name, pd.Series([value]), (), declared)
+        return xr.DataArray(value)
     columns = [frame[d].to_numpy() for d in dims]
     index = pd.Index(columns[0], name=dims[0]) if len(dims) == 1 else pd.MultiIndex.from_arrays(columns, names=dims)
     _refuse_duplicate_index(name, index, dims)

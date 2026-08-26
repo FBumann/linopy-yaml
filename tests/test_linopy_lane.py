@@ -186,6 +186,22 @@ class TestLoadParameters:
         assert float(ds['a'].sel(**select)) == expected
 
     @pytest.mark.parametrize(
+        ('dtype', 'value', 'kind'),
+        [
+            pytest.param('bool', False, 'b', id='bool'),
+            pytest.param('str', 'a', 'U', id='str'),
+            pytest.param('int', 3, 'i', id='int'),
+            pytest.param('float', 2.5, 'f', id='float'),
+        ],
+    )
+    def test_a_dims_less_parameter_keeps_the_dtype_it_declares(self, dtype, value, kind):
+        s = _schema(params={'a': {'dims': [], 'dtype': dtype}})
+        tidy = tidy_sources(s, {'a': pd.DataFrame({'value': [value]})})
+        ds = loader.load_parameters(s, tidy, loader.dimension_coords(s, tidy)[0])
+        assert ds['a'].dtype.kind == kind, f'declared {dtype}, loaded as {ds["a"].dtype}'
+        assert ds['a'].item() == value
+
+    @pytest.mark.parametrize(
         ('dims', 'params', 'data', 'match'),
         [
             pytest.param(
@@ -476,6 +492,29 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
     eager, native = (float(v) for v in out.stdout.split())
     assert eager == pytest.approx(native), f'lanes disagree outside the harness: {eager} vs {native}'
     assert native == pytest.approx(125.0), 'the masked row should be dropped, leaving x[b] at its bound'
+
+
+#: A scalar switch gates one variable; the other keeps the model non-empty
+#: whichever way the switch is thrown.
+SCALAR_SWITCH = {
+    'dimensions': {'i': {'dtype': 'int'}},
+    'parameters': {'on': {'dims': [], 'dtype': 'bool'}},
+    'variables': {
+        'x': {'foreach': ['i'], 'bounds': {'lower': 1, 'upper': 5}, 'where': 'on'},
+        'y': {'foreach': ['i'], 'bounds': {'lower': 2, 'upper': 5}},
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(x) + sum(y)'},
+}
+
+
+@pytest.mark.parametrize(('on', 'expected'), [pytest.param(True, 6.0, id='on'), pytest.param(False, 4.0, id='off')])
+def test_a_where_on_a_scalar_bool_agrees_on_both_lanes(on, expected):
+    """Was: the lane loaded a dims-less bool through ``float()``, so ``False``
+    arrived as ``0.0`` and a bare ``where: on`` read it as *defined* — x was
+    built at every coordinate while the relational lane built none.
+    """
+    with differential(SCALAR_SWITCH, {'i': [1, 2], 'on': on}) as agreed:
+        assert agreed.oracle == pytest.approx(expected), 'x is built only where the switch is on'
 
 
 def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml_file):
