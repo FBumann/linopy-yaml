@@ -640,12 +640,15 @@ def _lower_where_node(node: WhereNode, context: str) -> plan.Predicate:
 def advice(program: plan.Program) -> list[str]:
     """Modeling advice ``check`` surfaces as warnings — never errors.
 
-    One rule today: **everything under ``dimensions:`` should be an axis** —
-    indexed by something, or aggregated into. A declared dimension with neither
-    is a label space wearing a dimension's clothes, or dead weight. Advice
-    rather than an error because it reads intent: a dimension declared ahead of
-    the declarations that will use it is a model part-written, not a wrong one,
-    and ``check`` is the door that says so without refusing to build.
+    Every dimension should be an axis — indexed by something, or aggregated
+    into. Each one that is neither gets a note: one that only serves as a
+    lookup's target is a label space and the note says how to declare it as
+    one; one nothing reaches at all is unused. A warning rather than an error
+    because it reads intent: a dimension declared ahead of the declarations
+    that will use it is a model part-written, not a wrong one.
+
+    Returns:
+        One note per dimension that is never an axis, in declaration order.
     """
     axes: set[str] = set()
     for declaration in (*program.parameters, *program.variables, *program.constraints):
