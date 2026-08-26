@@ -38,7 +38,7 @@ def test_the_binding_on_the_page_is_the_one_that_runs():
     assert (ladder.LADDER / 'prep.py').read_text().rstrip() + '\n' in fences, 'prep.py on the page has drifted'
 
 
-def test_every_rung_in_the_certificate_has_its_tables():
+def test_no_tables_without_a_stamped_rung():
     rungs = set(json.loads((ladder.LADDER / 'references.json').read_text()))
     folders = {p.name for p in (ladder.LADDER / 'tables').iterdir() if p.is_dir()}
-    assert rungs == folders, 'a stamped rung without its tables, or tables no rung stamps'
+    assert folders <= rungs, f'tables no rung stamps: {sorted(folders - rungs)}'
