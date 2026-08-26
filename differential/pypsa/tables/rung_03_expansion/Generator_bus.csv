@@ -1,0 +1,6 @@
+generator,Generator_bus
+coal,north
+diesel,island
+gas,south
+solar,north
+wind,north

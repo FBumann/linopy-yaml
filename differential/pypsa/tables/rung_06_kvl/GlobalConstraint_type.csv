@@ -1,0 +1,6 @@
+global_constraint,value
+cost_ac,transmission_expansion_cost_limit
+cost_ac_floor,transmission_expansion_cost_limit
+tech_ac,tech_capacity_expansion_limit
+vol_ac,transmission_volume_expansion_limit
+vol_ac_floor,transmission_volume_expansion_limit

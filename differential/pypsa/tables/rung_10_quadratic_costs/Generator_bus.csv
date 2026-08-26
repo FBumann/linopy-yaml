@@ -1,0 +1,5 @@
+generator,Generator_bus
+coal,north
+engine,north
+gas,south
+steam,north

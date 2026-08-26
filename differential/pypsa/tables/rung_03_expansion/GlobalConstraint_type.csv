@@ -1,0 +1,9 @@
+global_constraint,value
+cost_dc,transmission_expansion_cost_limit
+cost_dc_exact,transmission_expansion_cost_limit
+tech_dc,tech_capacity_expansion_limit
+tech_h2,tech_capacity_expansion_limit
+tech_phs,tech_capacity_expansion_limit
+tech_solar,tech_capacity_expansion_limit
+tech_wind,tech_capacity_expansion_limit
+vol_dc,transmission_volume_expansion_limit

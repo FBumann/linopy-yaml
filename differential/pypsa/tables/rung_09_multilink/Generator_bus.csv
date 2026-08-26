@@ -1,0 +1,5 @@
+generator,Generator_bus
+coal,north
+gas,south
+grid_import,power
+well,gasb

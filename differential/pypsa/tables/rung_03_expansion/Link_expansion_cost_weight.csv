@@ -1,0 +1,3 @@
+global_constraint,link,value
+cost_dc,cable,20.0
+cost_dc_exact,cable,20.0

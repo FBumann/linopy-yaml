@@ -63,6 +63,7 @@ import importlib
 import json
 import math
 import re
+import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -73,6 +74,7 @@ CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else 'corpus').resolve()
 RUNGS = CORPUS / 'examples' / 'references' / 'pypsa'
 HERE = Path(__file__).resolve().parent
 RECORDS = HERE / 'references.json'
+TABLES = HERE / 'tables'
 sys.path.insert(0, str(RUNGS))
 sys.path.insert(0, str(HERE))
 
@@ -81,6 +83,7 @@ import math_spec  # noqa: E402
 import prep  # noqa: E402  the binding, beside this file
 
 import lpspec as lps  # noqa: E402
+from lpspec.sources import tidy_sources  # noqa: E402
 
 
 def rungs() -> list[str]:
@@ -108,6 +111,23 @@ def bound(model: Path, n) -> dict[str, object]:
     declared = math_spec.load_model(model)
     names = {*declared.dimensions, *declared.parameters, *declared.lookups}
     return {name: table for name, table in prep.sources(n).items() if name in names}
+
+
+def committed(stem: str, declared, tables: dict[str, object]) -> None:
+    """Write what the rung binds as CSV, one file per non-empty table, rows sorted — the tables the page embeds.
+
+    Written through :func:`tidy_sources`, so a file holds exactly the tidy
+    frame `lps.solve` received; the workflow's diff gate makes a table that
+    drifts from `prep.sources(build())` a red diff.
+    """
+    folder = TABLES / stem
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True)
+    for name, source in tidy_sources(declared, tables).items():
+        frame = source.collect() if hasattr(source, 'collect') else source
+        if len(frame):
+            frame.sort(frame.columns).write_csv(folder / f'{name}.csv')
 
 
 def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
@@ -278,6 +298,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     model = model_of(stem)
     declared = math_spec.load_model(model)
     tables = bound(model, network(stem))
+    committed(stem, declared, tables)
     result = lps.solve(model, tables)
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)

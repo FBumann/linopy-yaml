@@ -1,0 +1,5 @@
+load,Load_bus
+district,heat
+homes,power
+north_load,north
+south_load,south

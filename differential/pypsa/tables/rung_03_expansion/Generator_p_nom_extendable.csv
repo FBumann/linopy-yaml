@@ -1,0 +1,6 @@
+generator,value
+coal,false
+diesel,false
+gas,false
+solar,true
+wind,true

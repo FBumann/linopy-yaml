@@ -87,7 +87,7 @@ def test_the_model_says_what_it_is(model: tuple[str, Path]) -> None:
 
 def test_no_page_without_a_model() -> None:
     """The reverse: a page for a model that was deleted or renamed."""
-    named = {name for name, _ in constructs.models()} | {'index', 'data'}
+    named = {name for name, _ in constructs.models()} | {'index', 'data', 'pypsa_ladder'}
     orphans = sorted(p.stem for p in GALLERY.glob('*.md') if p.stem not in named)
     assert not orphans, f'gallery pages with no model behind them: {orphans}'
 

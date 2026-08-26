@@ -1,0 +1,17 @@
+snapshot,load,value
+0,east_load,5.0
+0,north_load,30.0
+0,south_load,40.0
+0,swing,0.0
+1,east_load,20.0
+1,north_load,30.0
+1,south_load,40.0
+1,swing,25.0
+2,east_load,25.0
+2,north_load,30.0
+2,south_load,40.0
+2,swing,45.0
+3,east_load,10.0
+3,north_load,30.0
+3,south_load,40.0
+3,swing,0.0
