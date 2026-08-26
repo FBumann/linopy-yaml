@@ -407,32 +407,48 @@ args = [
     { arg = "sizes", default = "xs s m l w1 w10 w100 w1000" },
     { arg = "sinks", default = "highs gurobi" },
     { arg = "arms", default = "lpspec linopy pyomo gurobipy-loop gurobipy-matrix" },
+    { arg = "out", default = "bench/results/latest.json" },
 ]
 cmd = """
 pytest bench --benchmark-memory \
   --cases dispatch transport storage fleet \
   --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }} \
-  --budget 30 --benchmark-json=bench/results/latest.json
+  --budget 30 --benchmark-json={{ out }}
 """
 
-# What a runner takes: everything. A probe on `ubuntu-24.04` built ten million
-# columns and rows in 17.96 s on the licence gurobipy's wheel ships — the cap is
-# on `optimize()`, which the harness never calls.
+# What a runner takes: everything, one sink per job.
 #
-# A shared host cannot resolve every comparison, and that is what the bands are
-# for. Of the eleven lpspec-vs-rival margins on the `gurobi` sink, six are 1.3x
-# to 4.1x and survive any host; five sit between 1.04x and 1.23x and do not.
-# Leaving the sink out to protect the five costs the six — including the
+# A probe on `ubuntu-24.04` built ten million columns and rows in 17.96 s on the
+# licence gurobipy's wheel ships — the cap is on `optimize()`, which the harness
+# never calls. So the sink is affordable; the wall clock is what is not.
+#
+# A hosted runner measures this tree 2.33x slower than the laptop the tables
+# were taken on, and a job there is capped at six hours. Both sinks in one job
+# projects past that cap, and a job killed on timeout loses every column it had
+# already measured, including the sink that finished. Split by sink and each
+# half fits with hours to spare, a bad runner costs one sink rather than the
+# run, and `bench.report` merges the two files because it already reads a
+# directory. Numbers and method: #1313.
+#
+# A shared host still cannot resolve every comparison, and that is what the
+# bands are for. Of the eleven lpspec-vs-rival margins on the `gurobi` sink, six
+# are 1.3x to 4.1x and survive any host; five sit between 1.04x and 1.23x and do
+# not. Leaving the sink out to protect the five costs the six — including the
 # `gurobipy-loop` against `gurobipy-matrix` pair, 3x apart, which is the whole
 # how-you-write-it finding. Overlapping bands say "these two cannot be told
 # apart", which is true and is the page's stated reading.
+#
+# `sink` has no default on purpose: a `ladder-ci` that quietly measured half the
+# published columns is the failure this task exists to make impossible.
 [tool.pixi.feature.bench.tasks.ladder-ci]
-description = "The published ladder, as a runner can take it"
+description = "One sink of the published ladder, the half a runner takes in a job"
+args = [{ arg = "sink" }]
 depends-on = [
     { task = "ladder", args = [
         "xs s m l w1 w10 w100 w1000",
-        "highs gurobi",
+        "{{ sink }}",
         "lpspec linopy pyomo gurobipy-loop gurobipy-matrix",
+        "bench/results/latest-{{ sink }}.json",
     ] },
 ]
 

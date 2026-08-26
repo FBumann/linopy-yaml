@@ -183,9 +183,10 @@ def test_a_short_run_pointed_anywhere_else_is_nobody_business(tmp_path: Path) ->
 
 
 def test_narrower_sinks_still_write_the_provenance() -> None:
-    """The scheduled run takes `highs` only — a runner has no Gurobi licence
-    that can build at scale — and it is still the published run. What makes a
-    run a smoke test is leaving out *rungs*, not destinations."""
+    """The scheduled run takes one sink per job — both in one job project past
+    the ceiling a hosted job is killed at — and each half is still the published
+    run. What makes a run a smoke test is leaving out *rungs*, not
+    destinations."""
     harness.refuse_to_overwrite_the_provenance(_config(sorted(harness.published_rungs()), str(harness.COMMITTED)))
 
 
