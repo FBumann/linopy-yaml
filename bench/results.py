@@ -13,6 +13,7 @@ feeds them — so this module speaks the record shape they already read:
     {'record': 'loop',   'case', 'size', 'arm',
      'first_build_seconds', 'steady_build_seconds'}
     {'record': 'run',    'platform', 'python', 'versions', 'commits'}
+    {'record': 'ceiling','case', 'size', 'sink', 'arm', 'ladder', 'budget', 'reason'}
 
 **Where each number comes from.** ``wall_seconds`` is pytest-benchmark's own
 ``min`` — repeats collapse by minimum because noise only ever adds, which is
@@ -36,6 +37,12 @@ band that overlaps another line's is two numbers this run cannot tell apart.
 trustworthy: a run whose every round was slow prints a clean-looking minimum
 and nothing else in the record contradicts it (#797). They are a quality
 signal, not a second headline — the tables still publish ``min``.
+
+**A cell nobody measured is a result too.** A library the time budget stopped
+leaves no benchmark entry at all, so its ceiling rides in a `.ceilings.json`
+beside the measurements and comes back as a `ceiling` record. Without it the
+tables print one em dash for *too slow to measure* and the same em dash for
+*this library has no HiGHS*, which are different answers.
 
 **One thing the old runner did that this does not: record a failure as a
 result.** It caught a child that died, kept the exception line, and the report
@@ -123,6 +130,10 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
                 yield json.loads(line)
         return
 
+    ceilings = path.with_suffix('.ceilings.json')
+    if ceilings.exists():
+        yield from json.loads(ceilings.read_text())
+
     doc = json.loads(path.read_text())
     machine, commit = doc.get('machine_info', {}), doc.get('commit_info', {})
     yield {
@@ -182,9 +193,15 @@ def files(target: Path) -> list[Path]:
     ``.jsonl`` first and pytest-benchmark's ``.json`` after: the historic files
     are the older measurements, and the readers collapse repeats by minimum in
     the order they are given.
+
+    A ``.ceilings.json`` is not a results file — it is the sidecar naming what a
+    run refused to measure, and `records` picks it up beside the measurements it
+    belongs to. Reading it as a run of its own means parsing a list as a
+    document, which is an `AttributeError` halfway through a render.
     """
     if target.is_dir():
-        return sorted(target.glob('*.jsonl')) + sorted(target.glob('*.json'))
+        found = sorted(target.glob('*.jsonl')) + sorted(target.glob('*.json'))
+        return [p for p in found if not p.name.endswith('.ceilings.json')]
     return [target]
 
 

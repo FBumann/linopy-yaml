@@ -11,18 +11,22 @@
 <div class="viz-root">
 
 <header>
-  <h1>How five libraries scale on the same four models</h1>
+  <h1>Five libraries, four models</h1>
   <p class="lede">
-    Build a model and hand it to HiGHS, with <code>run()</code> never called. Every
-    point is one process, best of three, on an idle machine. The parity gate passed on
-    all six models: the two lanes agree on the objective to <code>0.0e+00</code>
-    relative (<code>fleet</code> to 4.6e-16), so nothing here is fast because it built
-    a different model.
+    Each model is built and handed to a solver — <code>run()</code> and
+    <code>optimize()</code> are never called. Every rival model is hand-written in
+    <code>bench/models/</code> beside ours and is solved against ours in CI, so
+    nothing here is fast because it built a different model.
   </p>
+  <dl class="models">
+    <dt>dispatch</dt><dd>meet a demand from a fleet of units — bounds and one balance, the floor</dd>
+    <dt>transport</dt><dd>a network of buses and lines — mapping tables, three joins per row</dd>
+    <dt>storage</dt><dd>charge and discharge over time — a recurrence, the one shape with no array analogue</dd>
+    <dt>fleet</dt><dd>twelve declarations rather than one big one — cost per declaration, not per row</dd>
+  </dl>
 </header>
 
 <section>
-  <h2>Five libraries, four models, both axes logarithmic</h2>
   <div class="controls">
     <span class="ctl-label">Show</span>
     <button class="ctl on" data-metric="wall">wall time</button>
@@ -31,25 +35,12 @@
   <div class="legend" id="facet-legend"></div>
   <div id="facets" class="grid3"></div>
   <p class="note">
-    One panel per model and destination, one line per library, log on both axes —
-    the only shape that shows a <b>slope</b>, and the slope is the claim. A table
-    can say a library is behind at one size; only the curve says whether it is
-    falling further behind or catching up.
-  </p>
-  <p class="note">
-    <b>The shaded band is that measurement's own rounds</b> — the middle half of
-    them, first quartile to third. It is not a confidence interval and not the
-    spread across models: it is what this machine did to the same work nine times
-    over. <b>Two lines whose bands overlap are two numbers this run cannot tell
-    apart</b>, and a line that stops short of the others was refused by the
-    harness's time budget rather than missing.
-  </p>
-  <p class="note">
-    Quartiles rather than the full envelope on purpose: one nine-round
-    measurement here read
-    <code>[1.18, 1.02, 1.07, 1.02, 1.02, 1.02, 1.06, 1.45, 9.97]</code>, so a
-    min-to-max band would have drawn a single outlying round ten times the height
-    of the model it belongs to.
+    Log on both axes: the slope is the claim. The shaded band is the middle half
+    of that measurement's own rounds — <b>two lines whose bands overlap are two
+    numbers this run cannot tell apart</b>. <code>&gt;30 s</code> is a
+    measurement the harness refused: it was projected past its time budget and
+    skipped. An em dash is a cell that has no number for another reason —
+    <code>gurobipy</code> has no HiGHS.
   </p>
 </section>
 
@@ -105,7 +96,16 @@
 .viz-root figcaption { font-size: .8rem; font-weight: 600; color: var(--text-secondary);
   margin: 0 0 .3rem; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.8rem; margin-top: 1rem; }
-.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: 1.4rem; margin-top: 1rem; }
+.models { display: grid; grid-template-columns: max-content 1fr; gap: .15rem .8rem;
+  margin: .9rem 0 0; font-size: .95rem; }
+.models dt { font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.models dd { margin: 0; color: var(--muted); }
+figure table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: .4rem; }
+figure th, figure td { padding: .18rem .3rem; text-align: right; border-bottom: 1px solid var(--rule); }
+figure th:first-child, figure td:first-child { text-align: left; }
+figure th { font-weight: 600; color: var(--muted); }
+figure td.best { font-weight: 700; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(370px, 1fr)); gap: 1.4rem; margin-top: 1rem; }
 .plot { position: relative; }
 .plot svg { display: block; width: 100%; height: auto; overflow: visible; }
 .controls { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin: .2rem 0; }
@@ -145,7 +145,7 @@
 </style>
 
 <script>
-const DATA = {"panels": {"dispatch \u2014 gurobi": {"case": "dispatch", "sink": "gurobi", "series": {"gurobipy-loop": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0114, 0.1099, 1.4091, 15.0671], "lo": [0.0116, 0.1525, 1.4187, 15.3724], "hi": [0.012, 0.179, 1.4474, 15.9254], "peak": [0.1708, 0.2091, 0.617, 4.0501]}, "gurobipy-matrix": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0059, 0.0506, 0.4989, 5.0094], "lo": [0.006, 0.0512, 0.5011, 5.017], "hi": [0.0063, 0.0519, 0.5155, 5.0905], "peak": [0.1773, 0.2025, 0.5023, 3.5564]}, "linopy": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0181, 0.0746, 0.6453, 6.3184], "lo": [0.0183, 0.075, 0.6472, 6.3376], "hi": [0.0188, 0.0764, 0.6537, 6.3586], "peak": [0.2286, 0.2573, 0.6771, 4.6934]}, "polars": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0129, 0.0523, 0.4449, 4.3756], "lo": [0.0132, 0.0531, 0.448, 4.671], "hi": [0.0157, 0.0672, 0.672, 6.0148], "peak": [0.2113, 0.2584, 0.7313, 4.6632]}, "pyomo": {"vars": [10000, 100000, 1000000], "rungs": ["xs", "s", "m"], "wall": [0.0669, 0.8822, 9.3507], "lo": [0.0977, 0.9314, 9.416], "hi": [0.106, 0.9644, 9.8638], "peak": [0.1753, 0.3697, 2.2346]}}}, "dispatch \u2014 highs": {"case": "dispatch", "sink": "highs", "series": {"linopy": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0116, 0.0177, 0.0826, 1.0161], "lo": [0.012, 0.0179, 0.0874, 1.0203], "hi": [0.0124, 0.0185, 0.0919, 1.2494], "peak": [0.2234, 0.2378, 0.4004, 1.8401]}, "polars": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0083, 0.013, 0.056, 0.5203], "lo": [0.0086, 0.0134, 0.0574, 0.5246], "hi": [0.0091, 0.0137, 0.0599, 0.5415], "peak": [0.2004, 0.2252, 0.4761, 2.2983]}, "pyomo": {"vars": [10000, 100000, 1000000], "rungs": ["xs", "s", "m"], "wall": [0.0549, 0.7427, 8.5971], "lo": [0.0873, 0.7833, 8.9424], "hi": [0.0909, 0.8303, 9.1616], "peak": [0.1699, 0.3354, 1.8373]}}}, "fleet \u2014 gurobi": {"case": "fleet", "sink": "gurobi", "series": {"gurobipy-loop": {"vars": [12000, 120000, 1200000], "rungs": ["xs", "s", "m"], "wall": [0.0371, 0.4206, 4.1591], "lo": [0.0381, 0.4315, 4.2978], "hi": [0.0486, 0.4999, 4.5733], "peak": [0.1721, 0.2307, 0.9203]}, "gurobipy-matrix": {"vars": [12000, 120000, 1200000, 12000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0115, 0.1064, 0.9921, 9.9041], "lo": [0.0118, 0.108, 0.9976, 9.9267], "hi": [0.0123, 0.1862, 1.0106, 10.0099], "peak": [0.1813, 0.2279, 0.7643, 5.9208]}, "linopy": {"vars": [12000, 120000, 1200000, 12000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.1035, 0.217, 1.2569, 11.6584], "lo": [0.1044, 0.2202, 1.2588, 11.7575], "hi": [0.1064, 0.2243, 1.2718, 11.9918], "peak": [0.2318, 0.2857, 0.9701, 7.7437]}, "polars": {"vars": [12000, 120000, 1200000, 12000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0479, 0.1315, 0.9535, 8.9221], "lo": [0.0496, 0.1344, 0.991, 9.7483], "hi": [0.0507, 0.1597, 1.104, 10.989], "peak": [0.2179, 0.2904, 1.0348, 7.3078]}, "pyomo": {"vars": [12000, 120000, 1200000], "rungs": ["xs", "s", "m"], "wall": [0.139, 1.8949, 18.7852], "lo": [0.1398, 1.9496, 19.5097], "hi": [0.1425, 2.0386, 20.0771], "peak": [0.185, 0.442, 2.9485]}}}, "fleet \u2014 highs": {"case": "fleet", "sink": "highs", "series": {"linopy": {"vars": [12000, 120000, 1200000, 12000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0888, 0.0994, 0.2141, 1.5689], "lo": [0.09, 0.1004, 0.217, 1.5767], "hi": [0.0922, 0.104, 0.2235, 1.6117], "peak": [0.225, 0.249, 0.5199, 3.0303]}, "polars": {"vars": [12000, 120000, 1200000, 12000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0407, 0.0479, 0.1289, 1.0964], "lo": [0.0414, 0.0489, 0.1291, 1.1334], "hi": [0.0427, 0.0498, 0.1339, 1.1929], "peak": [0.2022, 0.2431, 0.5952, 3.4394]}, "pyomo": {"vars": [12000, 120000], "rungs": ["xs", "s"], "wall": [0.2132, 3.6073], "lo": [0.2135, 3.6394], "hi": [0.2158, 3.7487], "peak": [0.1767, 0.3681]}}}, "storage \u2014 gurobi": {"case": "storage", "sink": "gurobi", "series": {"gurobipy-loop": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0253, 0.2914, 2.8723, 29.724], "lo": [0.026, 0.2955, 2.9529, 29.8895], "hi": [0.027, 0.3354, 3.1989, 30.9656], "peak": [0.1724, 0.2131, 0.6994, 5.3027]}, "gurobipy-matrix": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0079, 0.0661, 0.6324, 6.2665], "lo": [0.0081, 0.0685, 0.6349, 6.2833], "hi": [0.0091, 0.071, 0.6469, 6.4335], "peak": [0.1787, 0.2126, 0.6096, 4.248]}, "linopy": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0525, 0.1257, 0.8275, 8.0911], "lo": [0.053, 0.1273, 0.8328, 8.3139], "hi": [0.0536, 0.1299, 0.8526, 10.0533], "peak": [0.2306, 0.2671, 0.7542, 4.6954]}, "polars": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0255, 0.0777, 0.6043, 5.9556], "lo": [0.0264, 0.0823, 0.646, 6.673], "hi": [0.0285, 0.0993, 0.758, 7.5724], "peak": [0.2149, 0.2717, 0.8729, 5.0885]}, "pyomo": {"vars": [10000, 100000, 1000000], "rungs": ["xs", "s", "m"], "wall": [0.1436, 1.3635, 13.6829], "lo": [0.1443, 1.3793, 14.0347], "hi": [0.1485, 1.4434, 14.8243], "peak": [0.1792, 0.3587, 2.3335]}}}, "storage \u2014 highs": {"case": "storage", "sink": "highs", "series": {"linopy": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0434, 0.0528, 0.1484, 1.3752], "lo": [0.044, 0.0532, 0.1495, 1.3975], "hi": [0.0445, 0.0542, 0.1537, 1.5017], "peak": [0.2242, 0.2456, 0.4639, 2.8595]}, "polars": {"vars": [10000, 100000, 1000000, 10000000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0192, 0.0276, 0.1041, 1.0576], "lo": [0.0199, 0.028, 0.1055, 1.0725], "hi": [0.0207, 0.0294, 0.107, 1.1187], "peak": [0.2011, 0.2379, 0.5782, 2.6548]}, "pyomo": {"vars": [10000, 100000, 1000000], "rungs": ["xs", "s", "m"], "wall": [0.1258, 2.0075, 64.8876], "lo": [0.1643, 2.021, 65.053], "hi": [0.1698, 2.1022, 65.5267], "peak": [0.1718, 0.3206, 1.8611]}}}, "transport \u2014 gurobi": {"case": "transport", "sink": "gurobi", "series": {"gurobipy-loop": {"vars": [9800, 98000, 980000, 9800000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0222, 0.2522, 2.5279, 26.1806], "lo": [0.0224, 0.2556, 2.5953, 26.2963], "hi": [0.0233, 0.2698, 2.7638, 26.4947], "peak": [0.1718, 0.2144, 0.679, 4.6154]}, "gurobipy-matrix": {"vars": [9800, 98000, 980000, 9800000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0078, 0.0597, 0.5705, 5.7196], "lo": [0.0079, 0.0606, 0.5813, 5.7318], "hi": [0.0083, 0.0618, 0.6209, 5.7985], "peak": [0.1783, 0.2069, 0.5977, 4.0346]}, "linopy": {"vars": [9800, 98000, 980000, 9800000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0356, 0.1126, 0.9268, 9.6128], "lo": [0.036, 0.1139, 0.9338, 9.9548], "hi": [0.0369, 0.1252, 0.9472, 10.4651], "peak": [0.2338, 0.337, 1.3592, 5.649]}, "polars": {"vars": [9800, 98000, 980000, 9800000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0225, 0.0706, 0.5542, 5.7702], "lo": [0.024, 0.0728, 0.5581, 6.663], "hi": [0.0261, 0.0885, 0.7305, 8.1366], "peak": [0.2171, 0.2806, 0.8654, 4.81]}, "pyomo": {"vars": [9800, 98000, 980000], "rungs": ["xs", "s", "m"], "wall": [0.0957, 1.2407, 13.1249], "lo": [0.0962, 1.2583, 13.2565], "hi": [0.097, 1.3499, 14.2632], "peak": [0.1796, 0.379, 2.4398]}}}, "transport \u2014 highs": {"case": "transport", "sink": "highs", "series": {"linopy": {"vars": [9800, 98000, 980000, 9800000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0295, 0.05, 0.2775, 3.1557], "lo": [0.0312, 0.0511, 0.2795, 4.0475], "hi": [0.0345, 0.0528, 0.286, 4.3456], "peak": [0.2281, 0.3255, 1.137, 5.8095]}, "polars": {"vars": [9800, 98000, 980000, 9800000], "rungs": ["xs", "s", "m", "l"], "wall": [0.0171, 0.0246, 0.0985, 1.0565], "lo": [0.0182, 0.025, 0.0999, 1.0688], "hi": [0.0205, 0.026, 0.1035, 1.1144], "peak": [0.2036, 0.2457, 0.5656, 2.6391]}, "pyomo": {"vars": [9800, 98000, 980000], "rungs": ["xs", "s", "m"], "wall": [0.1029, 1.4584, 31.2571], "lo": [0.1031, 1.4732, 31.4524], "hi": [0.1037, 1.518, 33.455], "peak": [0.1758, 0.3288, 1.978]}}}}, "rungs": ["xs", "s", "m", "l"]};
+const DATA = {"panels": {"dispatch \u2014 gurobi": {"case": "dispatch", "sink": "gurobi", "series": {"gurobipy-loop": {"wall": [0.0114, 0.1099, 1.4091, 15.0671], "lo": [0.0116, 0.1525, 1.4187, 15.3724], "hi": [0.012, 0.179, 1.4474, 15.9254], "peak": [0.1708, 0.2091, 0.617, 4.0501], "bound": [null, null, null, null]}, "gurobipy-matrix": {"wall": [0.0059, 0.0506, 0.4989, 5.0094], "lo": [0.006, 0.0512, 0.5011, 5.017], "hi": [0.0063, 0.0519, 0.5155, 5.0905], "peak": [0.1773, 0.2025, 0.5023, 3.5564], "bound": [null, null, null, null]}, "linopy": {"wall": [0.0181, 0.0746, 0.6453, 6.3184], "lo": [0.0183, 0.075, 0.6472, 6.3376], "hi": [0.0188, 0.0764, 0.6537, 6.3586], "peak": [0.2286, 0.2573, 0.6771, 4.6934], "bound": [null, null, null, null]}, "polars": {"wall": [0.0129, 0.0523, 0.4449, 4.3756], "lo": [0.0132, 0.0531, 0.448, 4.671], "hi": [0.0157, 0.0672, 0.672, 6.0148], "peak": [0.2113, 0.2584, 0.7313, 4.6632], "bound": [null, null, null, null]}, "pyomo": {"wall": [0.0669, 0.8822, 9.3507, null], "lo": [0.0977, 0.9314, 9.416, null], "hi": [0.106, 0.9644, 9.8638, null], "peak": [0.1753, 0.3697, 2.2346, null], "bound": [null, null, null, ">30 s"]}}, "rungs": ["xs", "s", "m", "l"], "vars": [10000, 100000, 1000000, 10000000]}, "dispatch \u2014 highs": {"case": "dispatch", "sink": "highs", "series": {"linopy": {"wall": [0.0116, 0.0177, 0.0826, 1.0161], "lo": [0.012, 0.0179, 0.0874, 1.0203], "hi": [0.0124, 0.0185, 0.0919, 1.2494], "peak": [0.2234, 0.2378, 0.4004, 1.8401], "bound": [null, null, null, null]}, "polars": {"wall": [0.0083, 0.013, 0.056, 0.5203], "lo": [0.0086, 0.0134, 0.0574, 0.5246], "hi": [0.0091, 0.0137, 0.0599, 0.5415], "peak": [0.2004, 0.2252, 0.4761, 2.2983], "bound": [null, null, null, null]}, "pyomo": {"wall": [0.0549, 0.7427, 8.5971, null], "lo": [0.0873, 0.7833, 8.9424, null], "hi": [0.0909, 0.8303, 9.1616, null], "peak": [0.1699, 0.3354, 1.8373, null], "bound": [null, null, null, ">30 s"]}}, "rungs": ["xs", "s", "m", "l"], "vars": [10000, 100000, 1000000, 10000000]}, "fleet \u2014 gurobi": {"case": "fleet", "sink": "gurobi", "series": {"gurobipy-loop": {"wall": [0.0371, 0.4206, 4.1591, null], "lo": [0.0381, 0.4315, 4.2978, null], "hi": [0.0486, 0.4999, 4.5733, null], "peak": [0.1721, 0.2307, 0.9203, null], "bound": [null, null, null, ">30 s"]}, "gurobipy-matrix": {"wall": [0.0115, 0.1064, 0.9921, 9.9041], "lo": [0.0118, 0.108, 0.9976, 9.9267], "hi": [0.0123, 0.1862, 1.0106, 10.0099], "peak": [0.1813, 0.2279, 0.7643, 5.9208], "bound": [null, null, null, null]}, "linopy": {"wall": [0.1035, 0.217, 1.2569, 11.6584], "lo": [0.1044, 0.2202, 1.2588, 11.7575], "hi": [0.1064, 0.2243, 1.2718, 11.9918], "peak": [0.2318, 0.2857, 0.9701, 7.7437], "bound": [null, null, null, null]}, "polars": {"wall": [0.0479, 0.1315, 0.9535, 8.9221], "lo": [0.0496, 0.1344, 0.991, 9.7483], "hi": [0.0507, 0.1597, 1.104, 10.989], "peak": [0.2179, 0.2904, 1.0348, 7.3078], "bound": [null, null, null, null]}, "pyomo": {"wall": [0.139, 1.8949, 18.7852, null], "lo": [0.1398, 1.9496, 19.5097, null], "hi": [0.1425, 2.0386, 20.0771, null], "peak": [0.185, 0.442, 2.9485, null], "bound": [null, null, null, ">30 s"]}}, "rungs": ["xs", "s", "m", "l"], "vars": [12000, 120000, 1200000, 12000000]}, "fleet \u2014 highs": {"case": "fleet", "sink": "highs", "series": {"linopy": {"wall": [0.0888, 0.0994, 0.2141, 1.5689], "lo": [0.09, 0.1004, 0.217, 1.5767], "hi": [0.0922, 0.104, 0.2235, 1.6117], "peak": [0.225, 0.249, 0.5199, 3.0303], "bound": [null, null, null, null]}, "polars": {"wall": [0.0407, 0.0479, 0.1289, 1.0964], "lo": [0.0414, 0.0489, 0.1291, 1.1334], "hi": [0.0427, 0.0498, 0.1339, 1.1929], "peak": [0.2022, 0.2431, 0.5952, 3.4394], "bound": [null, null, null, null]}, "pyomo": {"wall": [0.2132, 3.6073, null, null], "lo": [0.2135, 3.6394, null, null], "hi": [0.2158, 3.7487, null, null], "peak": [0.1767, 0.3681, null, null], "bound": [null, null, ">30 s", ">30 s"]}}, "rungs": ["xs", "s", "m", "l"], "vars": [12000, 120000, 1200000, 12000000]}, "storage \u2014 gurobi": {"case": "storage", "sink": "gurobi", "series": {"gurobipy-loop": {"wall": [0.0253, 0.2914, 2.8723, 29.724], "lo": [0.026, 0.2955, 2.9529, 29.8895], "hi": [0.027, 0.3354, 3.1989, 30.9656], "peak": [0.1724, 0.2131, 0.6994, 5.3027], "bound": [null, null, null, null]}, "gurobipy-matrix": {"wall": [0.0079, 0.0661, 0.6324, 6.2665], "lo": [0.0081, 0.0685, 0.6349, 6.2833], "hi": [0.0091, 0.071, 0.6469, 6.4335], "peak": [0.1787, 0.2126, 0.6096, 4.248], "bound": [null, null, null, null]}, "linopy": {"wall": [0.0525, 0.1257, 0.8275, 8.0911], "lo": [0.053, 0.1273, 0.8328, 8.3139], "hi": [0.0536, 0.1299, 0.8526, 10.0533], "peak": [0.2306, 0.2671, 0.7542, 4.6954], "bound": [null, null, null, null]}, "polars": {"wall": [0.0255, 0.0777, 0.6043, 5.9556], "lo": [0.0264, 0.0823, 0.646, 6.673], "hi": [0.0285, 0.0993, 0.758, 7.5724], "peak": [0.2149, 0.2717, 0.8729, 5.0885], "bound": [null, null, null, null]}, "pyomo": {"wall": [0.1436, 1.3635, 13.6829, null], "lo": [0.1443, 1.3793, 14.0347, null], "hi": [0.1485, 1.4434, 14.8243, null], "peak": [0.1792, 0.3587, 2.3335, null], "bound": [null, null, null, ">30 s"]}}, "rungs": ["xs", "s", "m", "l"], "vars": [10000, 100000, 1000000, 10000000]}, "storage \u2014 highs": {"case": "storage", "sink": "highs", "series": {"linopy": {"wall": [0.0434, 0.0528, 0.1484, 1.3752], "lo": [0.044, 0.0532, 0.1495, 1.3975], "hi": [0.0445, 0.0542, 0.1537, 1.5017], "peak": [0.2242, 0.2456, 0.4639, 2.8595], "bound": [null, null, null, null]}, "polars": {"wall": [0.0192, 0.0276, 0.1041, 1.0576], "lo": [0.0199, 0.028, 0.1055, 1.0725], "hi": [0.0207, 0.0294, 0.107, 1.1187], "peak": [0.2011, 0.2379, 0.5782, 2.6548], "bound": [null, null, null, null]}, "pyomo": {"wall": [0.1258, 2.0075, 64.8876, null], "lo": [0.1643, 2.021, 65.053, null], "hi": [0.1698, 2.1022, 65.5267, null], "peak": [0.1718, 0.3206, 1.8611, null], "bound": [null, null, null, ">30 s"]}}, "rungs": ["xs", "s", "m", "l"], "vars": [10000, 100000, 1000000, 10000000]}, "transport \u2014 gurobi": {"case": "transport", "sink": "gurobi", "series": {"gurobipy-loop": {"wall": [0.0222, 0.2522, 2.5279, 26.1806], "lo": [0.0224, 0.2556, 2.5953, 26.2963], "hi": [0.0233, 0.2698, 2.7638, 26.4947], "peak": [0.1718, 0.2144, 0.679, 4.6154], "bound": [null, null, null, null]}, "gurobipy-matrix": {"wall": [0.0078, 0.0597, 0.5705, 5.7196], "lo": [0.0079, 0.0606, 0.5813, 5.7318], "hi": [0.0083, 0.0618, 0.6209, 5.7985], "peak": [0.1783, 0.2069, 0.5977, 4.0346], "bound": [null, null, null, null]}, "linopy": {"wall": [0.0356, 0.1126, 0.9268, 9.6128], "lo": [0.036, 0.1139, 0.9338, 9.9548], "hi": [0.0369, 0.1252, 0.9472, 10.4651], "peak": [0.2338, 0.337, 1.3592, 5.649], "bound": [null, null, null, null]}, "polars": {"wall": [0.0225, 0.0706, 0.5542, 5.7702], "lo": [0.024, 0.0728, 0.5581, 6.663], "hi": [0.0261, 0.0885, 0.7305, 8.1366], "peak": [0.2171, 0.2806, 0.8654, 4.81], "bound": [null, null, null, null]}, "pyomo": {"wall": [0.0957, 1.2407, 13.1249, null], "lo": [0.0962, 1.2583, 13.2565, null], "hi": [0.097, 1.3499, 14.2632, null], "peak": [0.1796, 0.379, 2.4398, null], "bound": [null, null, null, ">30 s"]}}, "rungs": ["xs", "s", "m", "l"], "vars": [9800, 98000, 980000, 9800000]}, "transport \u2014 highs": {"case": "transport", "sink": "highs", "series": {"linopy": {"wall": [0.0295, 0.05, 0.2775, 3.1557], "lo": [0.0312, 0.0511, 0.2795, 4.0475], "hi": [0.0345, 0.0528, 0.286, 4.3456], "peak": [0.2281, 0.3255, 1.137, 5.8095], "bound": [null, null, null, null]}, "polars": {"wall": [0.0171, 0.0246, 0.0985, 1.0565], "lo": [0.0182, 0.025, 0.0999, 1.0688], "hi": [0.0205, 0.026, 0.1035, 1.1144], "peak": [0.2036, 0.2457, 0.5656, 2.6391], "bound": [null, null, null, null]}, "pyomo": {"wall": [0.1029, 1.4584, 31.2571, null], "lo": [0.1031, 1.4732, 31.4524, null], "hi": [0.1037, 1.518, 33.455, null], "peak": [0.1758, 0.3288, 1.978, null], "bound": [null, null, null, ">30 s"]}}, "rungs": ["xs", "s", "m", "l"], "vars": [9800, 98000, 980000, 9800000]}}, "rungs": ["xs", "s", "m", "l"]};
 
 /* Two categorical slots, validated all-pairs in both modes (worst CVD dE 24.7
    light / 26.8 dark, worst normal-vision 33.6 / 31.8, both clear of the surface
@@ -309,6 +309,30 @@ function legend(host, entries) {
   host.parentNode.insertBefore(d, host);
 }
 
+/* The numbers under their own chart. A cell is one of three things and the
+   table says which: a measurement, a bound the harness refused to spend time
+   under, or an em dash for a library that could never reach this destination. */
+function numbers(panel, metric) {
+  const fmt = metric === 'wall'
+    ? (v => v < 1 ? (v * 1000).toFixed(0) + ' ms' : v.toFixed(2) + ' s')
+    : (v => v.toFixed(2) + ' GB');
+  const names = Object.keys(panel.series);
+  const head = `<tr><th>variables</th>${names.map(n => `<th>${n === 'polars' ? 'lpspec' : n}</th>`).join('')}</tr>`;
+  const rows = panel.rungs.map((rung, i) => {
+    const taken = names.map(n => panel.series[n][metric][i]).filter(v => v !== null);
+    const fastest = taken.length ? Math.min(...taken) : null;
+    const cells = names.map(n => {
+      const v = panel.series[n][metric][i];
+      if (v === null) return `<td>${panel.series[n].bound[i] || '—'}</td>`;
+      return `<td class="${v === fastest ? 'best' : ''}">${fmt(v)}</td>`;
+    });
+    return `<tr><td>${fmtX(panel.vars[i])}</td>${cells.join('')}</tr>`;
+  });
+  const table = document.createElement('table');
+  table.innerHTML = `<thead>${head}</thead><tbody>${rows.join('')}</tbody>`;
+  return table;
+}
+
 function facets(metric) {
   const host = document.getElementById('facets');
   host.innerHTML = '';
@@ -322,11 +346,13 @@ function facets(metric) {
        same rungs, because a time budget stops the slow ones early. */
     const names = Object.keys(panel.series);
     const series = names.map(n => ({ name: n, label: n,
-      pts: panel.series[n].vars.map((v, i) => [v, panel.series[n][metric][i]]) }));
+      pts: panel.vars.map((v, i) => [v, panel.series[n][metric][i]]).filter(pt => pt[1] !== null) }));
     const bands = metric === 'wall'
       ? names.map(n => ({ name: n,
-          pts: panel.series[n].vars.map((v, i) => [v, panel.series[n].lo[i], panel.series[n].hi[i]]) }))
+          pts: panel.vars.map((v, i) => [v, panel.series[n].lo[i], panel.series[n].hi[i]])
+                 .filter(pt => pt[1] !== null) }))
       : [];
+    fig.appendChild(numbers(panel, metric));
     chart(plot, {
       series, bands,
       logX: true, logY: true, xLabel: 'variables',
@@ -335,7 +361,7 @@ function facets(metric) {
         ? (v => v < 1 ? (v * 1000).toFixed(0) + ' ms' : v.toFixed(0) + ' s')
         : (v => v + ' GB'),
       fmtTip: metric === 'wall' ? fmtS : fmtG,
-      tipTitle: i => `${title} — ${fmtX(panel.series[names[0]].vars[i])} variables`,
+      tipTitle: i => `${title} — ${fmtX(panel.vars[i])} variables`,
       aria: `${title}: ${metric} against model size, one line per library`,
     });
   }

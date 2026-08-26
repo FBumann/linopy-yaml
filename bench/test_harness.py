@@ -570,21 +570,22 @@ def test_a_fenced_block_is_replaced_and_the_prose_around_it_is_not() -> None:
     """The page is a tracked source file: its prose and headings are reviewed in
     a diff like any other code, and only what sits inside a fence is
     mechanical. That is the split `bench.plot` already makes on the chart."""
-    written = report.splice(_FENCED, {'results': '| new | table |'})
+    written, skipped = report.splice(_FENCED, {'results': '| new | table |'})
+    assert skipped == [], 'the page has the fence, so nothing was skipped'
     assert '| new | table |' in written and '| old | table |' not in written
     assert 'Prose the numbers are read with.' in written, 'everything outside the fence survives'
     assert 'More prose.' in written
 
 
 def test_writing_twice_changes_nothing_the_second_time() -> None:
-    once = report.splice(_FENCED, {'results': '| new | table |'})
-    assert report.splice(once, {'results': '| new | table |'}) == once, 'a re-render has an empty diff'
+    once, _ = report.splice(_FENCED, {'results': '| new | table |'})
+    assert report.splice(once, {'results': '| new | table |'})[0] == once, 'a re-render has an empty diff'
 
 
 @pytest.mark.parametrize(
     ('page', 'complaint'),
     [
-        pytest.param('# A page\n\nno fence here\n', 'no `<!-- bench:results -->`', id='missing'),
+        pytest.param('<!-- bench:results -->\nhalf a fence\n', 'half a `results` fence', id='unclosed'),
         pytest.param('<!-- bench:/results -->\n<!-- bench:results -->\n', 'closes the results fence', id='inverted'),
     ],
 )
@@ -593,6 +594,16 @@ def test_a_page_that_cannot_take_the_block_is_refused(page: str, complaint: str)
     of every table would look fine in the render and wrong in the diff."""
     with pytest.raises(SystemExit, match=complaint):
         report.splice(page, {'results': '| new | table |'})
+
+
+def test_a_page_without_a_fence_is_told_so_rather_than_failed() -> None:
+    """The tables live on the chart page now, and a page is entitled to host
+    only the parts it wants. Named in the return rather than raised, so the
+    caller can print what it had nowhere to put — silence would let a renamed
+    fence stop updating a table with nobody the wiser."""
+    written, skipped = report.splice('# A page\n\nno fence here\n', {'results': '| new | table |'})
+    assert skipped == ['results'], 'the fragment is reported, not written'
+    assert written == '# A page\n\nno fence here\n', 'and the page is untouched'
 
 
 def test_an_empty_fragment_never_blanks_the_page() -> None:

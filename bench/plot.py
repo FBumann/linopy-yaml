@@ -76,37 +76,52 @@ def series(path: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
     return out
 
 
-def panels(taken: dict[tuple[str, str, str], dict[str, Any]]) -> dict[str, Any]:
-    """One panel per (case, sink), each line carrying its own x values.
+def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dict[str, Any]]) -> dict[str, Any]:
+    """One panel per (case, sink): a shared rung axis, and a line per library.
 
-    Per line, not per panel: the libraries do not all reach the same rungs — a
-    time budget stops the slow ones early — and a shared x axis would either
-    truncate the fast lines to the shortest one or leave the short ones
-    trailing a value that belongs to somebody else's rung.
+    Shared, with ``null`` where a library has no measurement, because the panel
+    feeds both the chart and the table under it. The chart skips a null; the
+    table prints what the run actually decided there — ``>30 s`` where the time
+    budget stopped that library, an em dash where it simply has no number.
 
-    A library that cannot reach a sink is absent rather than empty: `gurobipy`
-    has no HiGHS, and a legend entry with no line is a question the page cannot
-    answer.
+    A library that cannot reach a sink is absent from the panel rather than
+    present and empty: `gurobipy` has no HiGHS, and a row of dashes says the
+    measurement was missed rather than impossible.
     """
     out: dict[str, Any] = {}
     for (case, sink, arm), rungs in sorted(taken.items()):
-        sizes = [r for r in LADDER if r in rungs]
-        if not sizes:
-            continue
-        panel = out.setdefault(f'{case} — {sink}', {'case': case, 'sink': sink, 'series': {}})
-        panel['series'][NAME.get(arm, arm)] = {
-            'vars': [rungs[r]['vars'] for r in sizes],
-            'rungs': sizes,
-            **{k: [round(rungs[r][k], 4) for r in sizes] for k in ('wall', 'lo', 'hi', 'peak')},
-        }
+        title = f'{case} — {sink}'
+        panel = out.setdefault(title, {'case': case, 'sink': sink, 'series': {}, 'rungs': []})
+        for rung in LADDER:
+            if rung in rungs and rung not in panel['rungs']:
+                panel['rungs'].append(rung)
+        panel['series'][NAME.get(arm, arm)] = {'arm': arm, 'at': rungs}
+
+    stopped = {(c['case'], c['sink'], c['arm']): c for c in ceilings}
+    for panel in out.values():
+        order = [r for r in LADDER if r in panel['rungs']]
+        panel['rungs'] = order
+        panel['vars'] = [next(s['at'][r]['vars'] for s in panel['series'].values() if r in s['at']) for r in order]
+        for line in panel['series'].values():
+            at, ceiling = line.pop('at'), stopped.get((panel['case'], panel['sink'], line.pop('arm')))
+            for key in ('wall', 'lo', 'hi', 'peak'):
+                line[key] = [round(at[r][key], 4) if r in at else None for r in order]
+            line['bound'] = [
+                f'>{ceiling["budget"]:g} s'
+                if r not in at and ceiling and order.index(r) > order.index(ceiling['size'])
+                else None
+                for r in order
+            ]
     return out
 
 
 def main() -> int:
-    taken = series(measurements('latest'))
+    path = measurements('latest')
+    taken = series(path)
+    ceilings = [r for r in bench_results.records(path) if r.get('record') == 'ceiling']
     if not taken:
         raise SystemExit('bench/results/latest.json has no plottable measurement — was it run with --benchmark-memory?')
-    data = {'panels': panels(taken), 'rungs': list(LADDER)}
+    data = {'panels': panels(taken, ceilings), 'rungs': list(LADDER)}
 
     page = Path('docs/about/benchmarks-scaling.html')
     text = page.read_text()

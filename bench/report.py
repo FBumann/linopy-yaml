@@ -34,6 +34,30 @@ if TYPE_CHECKING:
 #: a run happened to carry.
 BASELINE = 'lpspec'
 
+#: Ceilings from every results file read, in the order they were read. A cell
+#: with no measurement is looked up here before it renders as absent: a library
+#: the budget stopped is *over* a number, and printing the same em dash for that
+#: as for a sink it cannot reach answers two questions with one mark.
+CEILINGS: list[dict[str, Any]] = []
+
+
+def over_budget(case: str, size: str, sink: str, arm: str) -> str | None:
+    """``>30 s`` where the budget stopped this arm below this rung, else None.
+
+    Every rung *above* the one that triggered is covered, not just the next:
+    the climb stopped there, and each rung after it is wider still.
+    """
+    from bench.cases import CASES
+
+    for ceiling in CEILINGS:
+        if (ceiling['case'], ceiling['sink'], ceiling['arm']) != (case, sink, arm):
+            continue
+        labels = [s.label for s in CASES[case].ladder]
+        if size in labels and ceiling['size'] in labels and labels.index(size) > labels.index(ceiling['size']):
+            return f'>{ceiling["budget"]:g} s'
+    return None
+
+
 #: How far a cell's IQR may reach, as a fraction of its own median, before the
 #: number is marked rather than published. Measured on a full ladder at
 #: `3f0dfac`, 192 measurements: iqr/median is p50 5.8%, p75 10.1%, p90 16.0%,
@@ -64,6 +88,7 @@ def load(
     gates = [r for r in records if r.get('record') == 'gate']
     timings = [r for r in records if r.get('record') == 'timing']
     loop = [r for r in records if r.get('record') == 'loop']
+    CEILINGS.extend(r for r in records if r.get('record') == 'ceiling')
     return run, gates, timings, loop
 
 
@@ -169,7 +194,7 @@ def arms_in(keys: Iterable[Key]) -> tuple[str, ...]:
 def _grid(
     heading: list[str],
     leading: tuple[str, ...],
-    body: Iterable[tuple[list[str], Arms]],
+    body: Iterable[tuple[list[str], Arms, tuple[str, str, str]]],
     arms: tuple[str, ...],
     *,
     ratios: bool = True,
@@ -206,17 +231,18 @@ def _grid(
     ]
     lines = [*heading, '', '| ' + ' | '.join(head) + ' |', '|' + '---|' * len(head)]
     marked = False
-    for cells, arms in body:
+    for cells, arms, cells_key in body:
         wall = {a: (r['wall_seconds'] if r else None) for a, r in arms.items()}
         peak = {a: (r['peak_rss_bytes'] if r else None) for a, r in arms.items()}
         noisy = {a: suspect(r) for a, r in arms.items()}
+        over = {a: over_budget(*cells_key, a) for a in arms}
         marked = marked or any(noisy.values())
         lines.append(
             '| '
             + ' | '.join(
                 [
                     *cells,
-                    *(_marked(f'{wall[a]:.2f} s' if wall[a] else '—', noisy=noisy[a]) for a in arms),
+                    *(_marked(f'{wall[a]:.2f} s' if wall[a] else (over[a] or '—'), noisy=noisy[a]) for a in arms),
                     *(
                         _marked(_ratio(wall.get(BASELINE), wall[a]), noisy=noisy.get(BASELINE, False) or noisy[a])
                         for a in against
@@ -310,7 +336,7 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
         [f'**{case} — {sink} sink**', '', _SEAM[sink]],
         ('variables', 'live', 'rows'),
         (
-            ([_si(ref['counts']['columns']), _live(ref), _si(ref['counts']['rows'])], at_rung)
+            ([_si(ref['counts']['columns']), _live(ref), _si(ref['counts']['rows'])], at_rung, (case, size, sink))
             for size in sizes_of(case, rows, sink)
             for at_rung, ref in [_at_rung(rows, case, size, sink, arms)]
             if ref
@@ -472,14 +498,14 @@ def _sweep(
 
     arms = arms_in(k for k in rows if rung.match(k[1]) and k[2] == sink)
 
-    def body() -> Iterable[tuple[list[str], Arms]]:
+    def body() -> Iterable[tuple[list[str], Arms, tuple[str, str, str]]]:
         for case in cases:
             sizes = sizes_of(case, rows, sink, sweep=rung)
             for size in reversed(sizes) if newest_first else sorted(sizes):
                 at_rung, ref = _at_rung(rows, case, size, sink, arms)
                 if ref:
                     label = _live(ref) if second == 'live' else str(int(size[1:]))
-                    yield [case, label, _si(ref['counts']['columns'])], at_rung
+                    yield [case, label, _si(ref['counts']['columns'])], at_rung, (case, size, sink)
 
     return _grid(heading, ('case', second, 'variables'), body(), arms)
 
@@ -561,7 +587,7 @@ def _fenced(name: str) -> tuple[str, str]:
     return f'<!-- bench:{name} -->', f'<!-- bench:/{name} -->'
 
 
-def splice(text: str, fragments: dict[str, str]) -> str:
+def splice(text: str, fragments: dict[str, str]) -> tuple[str, list[str]]:
     """Replace each fenced block in *text* with the fragment of the same name.
 
     The page is a tracked source file: its prose, its headings and the sentences
@@ -571,22 +597,33 @@ def splice(text: str, fragments: dict[str, str]) -> str:
     by hand goes stale silently, and this one had: the block it replaces still
     carried an `LP` column the renderer stopped emitting.
 
+    A fragment the page has no fence for is *skipped and named*, not an error:
+    the tables live on the chart page now, and a page is entitled to host only
+    the parts it wants. Half a fence is still an error — that is a typo, not a
+    decision.
+
+    Returns:
+        The rewritten text, and the fragments the page had nowhere to put.
+
     Raises:
-        SystemExit: If a fence is missing, unclosed or out of order, or if a
-            fragment came out empty. Every one of those would quietly publish
-            less than the run measured.
+        SystemExit: If a fence is half-written or out of order, or a fragment
+            came out empty. Each of those publishes less than the run measured.
     """
+    skipped: list[str] = []
     for name, body in fragments.items():
         opening, closing = _fenced(name)
         start, end = text.find(opening), text.find(closing)
+        if start < 0 and end < 0:
+            skipped.append(name)
+            continue
         if start < 0 or end < 0:
-            raise SystemExit(f'{PAGE} has no `{opening}` … `{closing}` fence — nothing to write {name} into')
+            raise SystemExit(f'{PAGE} has half a `{name}` fence — one of the pair is missing')
         if end < start:
             raise SystemExit(f'{PAGE} closes the {name} fence before it opens it')
         if not body.strip():
             raise SystemExit(f'{name} rendered empty from these results — refusing to blank the page')
         text = text[: start + len(opening)] + '\n\n' + body.strip() + '\n\n' + text[end:]
-    return text
+    return text, skipped
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -661,8 +698,12 @@ def main(argv: list[str] | None = None) -> int:
     fragments = {name: body for name, body in fragments.items() if body.strip()}
 
     if opts.write:
-        PAGE.write_text(splice(PAGE.read_text(), fragments))
-        print(f'{PAGE} refreshed: {", ".join(fragments)}')
+        written, skipped = splice(PAGE.read_text(), fragments)
+        PAGE.write_text(written)
+        wrote = [name for name in fragments if name not in skipped]
+        print(f'{PAGE} refreshed: {", ".join(wrote) or "nothing"}')
+        if skipped:
+            print(f'  no fence for: {", ".join(skipped)} — rendered elsewhere, or the page does not want them')
         return 0
 
     for body in fragments.values():

@@ -111,12 +111,16 @@ nav:
       - about/index.md
       - Architecture: about/architecture.md
       - Decomposition: about/decomposition.md
-      - Benchmarks: about/benchmarks.md
-      # A source file, not a generated page: mkdocs copies it through and the
-      # nav links it like any other. It is the same data as the figures on the
-      # page above, with a cursor — which is the whole reason it is reachable
-      # from the nav rather than from one link mid-paragraph.
-      - Benchmarks (interactive): about/benchmarks-scaling.html
+      # The results themselves: charts and their numbers, one page. A source
+      # file rather than a generated one — mkdocs copies it through and the nav
+      # links it like any other — because the charts are hand-written SVG and
+      # only the `const DATA` line inside it is mechanical.
+      - Benchmarks: about/benchmarks-scaling.html
+      # How those numbers were taken, and what is not measured. Separate because
+      # a reader comparing libraries and a reader checking the method want
+      # different pages, and putting both in one made the first scroll past the
+      # second.
+      - Benchmarks — method: about/benchmarks.md
       - Relationship to linopy: about/linopy.md
       - Prior art and credit: about/prior-art.md
       - Roadmap: about/roadmap.md

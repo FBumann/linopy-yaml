@@ -344,7 +344,31 @@ class Ceiling:
         self.selected = selected
 
     def reached(self, arm: str, case_name: str, size: str, sink: str) -> str | None:
-        return self.reasons.get((arm, case_name, ladder_of(size), sink))
+        found = self.reasons.get((arm, case_name, ladder_of(size), sink))
+        return found[1] if found else None
+
+    def rows(self) -> list[dict[str, Any]]:
+        """Every ceiling as a record, for the file beside the measurements.
+
+        A cell nobody measured leaves no benchmark entry, so without this the
+        only trace is a line in the terminal — and the table then prints the
+        same em dash for *too slow to measure* as it does for a sink the
+        library cannot reach. They are different answers and the reader is
+        entitled to both.
+        """
+        return [
+            {
+                'record': 'ceiling',
+                'arm': arm,
+                'case': case_name,
+                'ladder': ladder,
+                'sink': sink,
+                'size': size,
+                'budget': self.budget,
+                'reason': reason,
+            }
+            for (arm, case_name, ladder, sink), (size, reason) in self.reasons.items()
+        ]
 
     def record(self, arm: str, case_name: str, size: str, sink: str, seconds: float | None) -> None:
         """Take one measurement, and decide whether the next rung is worth taking."""
@@ -353,14 +377,16 @@ class Ceiling:
         key = (arm, case_name, ladder_of(size), sink)
         if seconds > self.budget:
             self.reasons[key] = (
-                f'{arm} took {_seconds(seconds)} on {case_name}/{size}, over the {_seconds(self.budget)} budget'
+                size,
+                f'{arm} took {_seconds(seconds)} on {case_name}/{size}, over the {_seconds(self.budget)} budget',
             )
             return
         projected = seconds * _growth(case_name, size, self.selected)
         if projected > self.budget:
             self.reasons[key] = (
+                size,
                 f'{arm} took {_seconds(seconds)} on {case_name}/{size}, so the next rung projects to '
-                f'{_seconds(projected)} — over the {_seconds(self.budget)} budget'
+                f'{_seconds(projected)} — over the {_seconds(self.budget)} budget',
             )
 
 
@@ -417,9 +443,32 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pyte
     if not reasons:
         return
     terminalreporter.write_sep('-', 'over budget')
-    for _arm, _case, sink in sorted(reasons):
-        where = f' [{sink} sink]' if sink else ''
-        terminalreporter.write_line(f'{reasons[(_arm, _case, sink)]}{where}')
+    for key in sorted(reasons):
+        where = f' [{key[-1]} sink]' if key[-1] else ''
+        terminalreporter.write_line(f'{reasons[key][1]}{where}')
+    _write_ceilings(config)
+
+
+def _write_ceilings(config: pytest.Config) -> None:
+    """The ceilings, beside the file the measurements went to.
+
+    Named from `--benchmark-json` rather than fixed, so a scratch run's ceilings
+    land with its scratch results and never overwrite the committed ones. Read
+    off the command line rather than off `config.option`: pytest-benchmark keeps
+    that path in its own storage object, and the attribute a plugin does not
+    promise is one that goes missing on an upgrade without failing.
+    """
+    import json
+
+    reasons = config.stash.get(CEILINGS, {})
+    destination = next(
+        (arg.split('=', 1)[1] for arg in config.invocation_params.args if arg.startswith('--benchmark-json=')), None
+    )
+    if not destination or not reasons:
+        return
+    stash = Ceiling(float(config.getoption('--budget')), reasons, config.getoption('--sizes'))
+    path = Path(str(destination)).with_suffix('.ceilings.json')
+    path.write_text(json.dumps(stash.rows(), indent=1))
 
 
 def shape_of(case_name: str, size: str) -> Shape:

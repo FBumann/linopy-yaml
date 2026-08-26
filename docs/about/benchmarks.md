@@ -1,34 +1,13 @@
-# Measured results
+# How the benchmarks were taken
 
-**Cost is a property of the engine, not of the language.** The rules in
-the architecture notes constrain what a file may say and would survive an engine
-swap untouched; what a build *costs* is settled here, by measurement. That
-separation is why this file can be rewritten by a benchmark run without
-anything in the language reference moving.
+**Cost is a property of the engine, not of the language.** The rules in the
+architecture notes constrain what a file may say and would survive an engine
+swap untouched; what a build *costs* is settled by measurement.
 
-Peak RSS and wall time for the same model built two ways — declaratively on the
-relational engine, and eagerly through linopy — from the same parquet files to
-the same destination. `wall` and `peak` columns are **lpspec ÷ linopy: below
-1.00 is a win for us.** The [chart page](benchmarks-scaling.html) plots the same
-run.
-
-**The eager arm is `lpspec.linopy.build`, not hand-written linopy** — our own
-YAML→`linopy.Model` lane, so it carries our loader on top of linopy's work.
-Against hand-written linopy on the same model that lane costs a constant
-**~2.3 ms**: a fixed offset, nowhere near enough to move a conclusion.
-
-**Every linopy column here is frozen at the run that took it.** The harness no
-longer measures that arm: what it says about *our* eager lane is not what this
-page is for, and the column a reader wants under the name `linopy` is
-hand-written linopy, which is being added as an arm of its own. Until it lands
-the tables below stand on their committed provenance and are not re-taken;
-`bench/floor.py` — one model hand-written straight into HiGHS — is the only
-denominator a fresh run can still produce.
-
-**Two sinks, and they are not the same comparison.** The LP file is the artifact
-fewest callers want; `highs` is the one most reach for, and there HiGHS's own
-dense model is resident in both arms, which narrows every ratio. Read the sink
-you actually use.
+The results are on the [benchmark page](benchmarks-scaling.html) — five
+libraries over four models, with the numbers under each chart. This page is the
+method: how to reproduce a figure, what the harness refuses to measure, and
+what each sink can carry.
 
 ## How to reproduce it
 
@@ -53,174 +32,6 @@ free to drift from it.
 Re-taking the numbers rather than reproducing them is `pixi run refresh`, which
 runs the ladders and then writes the tables into this page between its fences
 and the chart's data literal into its own. Nothing here is pasted by hand.
-
-## Results
-<!-- bench:results -->
-
-*The same runs with a cursor: [the chart page](benchmarks-scaling.html).*
-
-<details markdown="1">
-<summary><b>dispatch</b> — every rung, every sink</summary>
-
-**dispatch — gurobi sink**
-
-Each arm ends holding a populated `gurobipy.Model` with `optimize()` never called — lpspec through `build_gurobi`, and gurobipy through `update()`, which is where its own deferred writes land. Opt-in: it needs the `[gurobi]` extra.
-
-| variables | live | rows | wall: lpspec | wall: linopy | wall: pyomo | wall: gurobipy-loop | wall: gurobipy-matrix | peak: lpspec | peak: linopy | peak: pyomo | peak: gurobipy-loop | peak: gurobipy-matrix |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 10k | 100% | 100 | 0.01 s | 0.02 s | 0.07 s | 0.01 s | 0.01 s | 0.21 GB | 0.23 GB | 0.18 GB | 0.17 GB | 0.18 GB |
-| 100k | 100% | 1k | 0.05 s | 0.07 s | 0.88 s | 0.11 s | 0.05 s | 0.26 GB | 0.26 GB | 0.37 GB | 0.21 GB | 0.20 GB |
-| 1M | 100% | 10k | 0.44 s~ | 0.65 s | 9.35 s | 1.41 s | 0.50 s | 0.73 GB | 0.68 GB | 2.23 GB | 0.62 GB | 0.50 GB |
-| 10M | 100% | 100k | 4.38 s~ | 6.32 s | — | 15.07 s | 5.01 s | 4.66 GB | 4.69 GB | — | 4.05 GB | 3.56 GB |
-
-`~` marks a measurement whose rounds spread wider than 25% of their own median. Every round was slow, so the minimum printed for it has no clean round behind it and may be contaminated: **do not quote a marked number, or a ratio drawn from one** — re-take the cell on an idle machine.
-
-**dispatch — highs sink**
-
-Each arm ends holding a populated `highspy.Highs` with `run()` never called — lpspec through `build_highs`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
-
-| variables | live | rows | wall: lpspec | wall: linopy | wall: pyomo | peak: lpspec | peak: linopy | peak: pyomo |
-|---|---|---|---|---|---|---|---|---|
-| 10k | 100% | 100 | 0.01 s | 0.01 s | 0.05 s | 0.20 GB | 0.22 GB | 0.17 GB |
-| 100k | 100% | 1k | 0.01 s | 0.02 s | 0.74 s | 0.23 GB | 0.24 GB | 0.34 GB |
-| 1M | 100% | 10k | 0.06 s | 0.08 s | 8.60 s | 0.48 GB | 0.40 GB | 1.84 GB |
-| 10M | 100% | 100k | 0.52 s | 1.02 s | — | 2.30 GB | 1.84 GB | — |
-
-</details>
-
-<details markdown="1">
-<summary><b>fleet</b> — every rung, every sink</summary>
-
-**fleet — gurobi sink**
-
-Each arm ends holding a populated `gurobipy.Model` with `optimize()` never called — lpspec through `build_gurobi`, and gurobipy through `update()`, which is where its own deferred writes land. Opt-in: it needs the `[gurobi]` extra.
-
-| variables | live | rows | wall: lpspec | wall: linopy | wall: pyomo | wall: gurobipy-loop | wall: gurobipy-matrix | peak: lpspec | peak: linopy | peak: pyomo | peak: gurobipy-loop | peak: gurobipy-matrix |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 12k | 100% | 6.02k | 0.05 s | 0.10 s | 0.14 s | 0.04 s~ | 0.01 s | 0.22 GB | 0.23 GB | 0.18 GB | 0.17 GB | 0.18 GB |
-| 120k | 100% | 60.2k | 0.13 s | 0.22 s | 1.89 s | 0.42 s | 0.11 s~ | 0.29 GB | 0.29 GB | 0.44 GB | 0.23 GB | 0.23 GB |
-| 1.2M | 100% | 602k | 0.95 s | 1.26 s | 18.79 s | 4.16 s | 0.99 s | 1.03 GB | 0.97 GB | 2.95 GB | 0.92 GB | 0.76 GB |
-| 12M | 100% | 6.02M | 8.92 s | 11.66 s | — | — | 9.90 s | 7.31 GB | 7.74 GB | — | — | 5.92 GB |
-
-`~` marks a measurement whose rounds spread wider than 25% of their own median. Every round was slow, so the minimum printed for it has no clean round behind it and may be contaminated: **do not quote a marked number, or a ratio drawn from one** — re-take the cell on an idle machine.
-
-**fleet — highs sink**
-
-Each arm ends holding a populated `highspy.Highs` with `run()` never called — lpspec through `build_highs`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
-
-| variables | live | rows | wall: lpspec | wall: linopy | wall: pyomo | peak: lpspec | peak: linopy | peak: pyomo |
-|---|---|---|---|---|---|---|---|---|
-| 12k | 100% | 6.02k | 0.04 s | 0.09 s | 0.21 s | 0.20 GB | 0.22 GB | 0.18 GB |
-| 120k | 100% | 60.2k | 0.05 s | 0.10 s | 3.61 s | 0.24 GB | 0.25 GB | 0.37 GB |
-| 1.2M | 100% | 602k | 0.13 s | 0.21 s | — | 0.60 GB | 0.52 GB | — |
-| 12M | 100% | 6.02M | 1.10 s | 1.57 s | — | 3.44 GB | 3.03 GB | — |
-
-</details>
-
-<details markdown="1">
-<summary><b>storage</b> — every rung, every sink</summary>
-
-**storage — gurobi sink**
-
-Each arm ends holding a populated `gurobipy.Model` with `optimize()` never called — lpspec through `build_gurobi`, and gurobipy through `update()`, which is where its own deferred writes land. Opt-in: it needs the `[gurobi]` extra.
-
-| variables | live | rows | wall: lpspec | wall: linopy | wall: pyomo | wall: gurobipy-loop | wall: gurobipy-matrix | peak: lpspec | peak: linopy | peak: pyomo | peak: gurobipy-loop | peak: gurobipy-matrix |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 10k | 100% | 2.1k | 0.03 s | 0.05 s | 0.14 s | 0.03 s | 0.01 s | 0.21 GB | 0.23 GB | 0.18 GB | 0.17 GB | 0.18 GB |
-| 100k | 100% | 21k | 0.08 s | 0.13 s | 1.36 s | 0.29 s | 0.07 s | 0.27 GB | 0.27 GB | 0.36 GB | 0.21 GB | 0.21 GB |
-| 1M | 100% | 210k | 0.60 s | 0.83 s | 13.68 s | 2.87 s | 0.63 s | 0.87 GB | 0.75 GB | 2.33 GB | 0.70 GB | 0.61 GB |
-| 10M | 100% | 2.1M | 5.96 s | 8.09 s | — | 29.72 s | 6.27 s | 5.09 GB | 4.70 GB | — | 5.30 GB | 4.25 GB |
-
-**storage — highs sink**
-
-Each arm ends holding a populated `highspy.Highs` with `run()` never called — lpspec through `build_highs`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
-
-| variables | live | rows | wall: lpspec | wall: linopy | wall: pyomo | peak: lpspec | peak: linopy | peak: pyomo |
-|---|---|---|---|---|---|---|---|---|
-| 10k | 100% | 2.1k | 0.02 s | 0.04 s | 0.13 s | 0.20 GB | 0.22 GB | 0.17 GB |
-| 100k | 100% | 21k | 0.03 s | 0.05 s | 2.01 s | 0.24 GB | 0.25 GB | 0.32 GB |
-| 1M | 100% | 210k | 0.10 s | 0.15 s | 64.89 s | 0.58 GB | 0.46 GB | 1.86 GB |
-| 10M | 100% | 2.1M | 1.06 s | 1.38 s | — | 2.65 GB | 2.86 GB | — |
-
-</details>
-
-<details markdown="1">
-<summary><b>transport</b> — every rung, every sink</summary>
-
-**transport — gurobi sink**
-
-Each arm ends holding a populated `gurobipy.Model` with `optimize()` never called — lpspec through `build_gurobi`, and gurobipy through `update()`, which is where its own deferred writes land. Opt-in: it needs the `[gurobi]` extra.
-
-| variables | live | rows | wall: lpspec | wall: linopy | wall: pyomo | wall: gurobipy-loop | wall: gurobipy-matrix | peak: lpspec | peak: linopy | peak: pyomo | peak: gurobipy-loop | peak: gurobipy-matrix |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 9.8k | 100% | 1.4k | 0.02 s | 0.04 s | 0.10 s | 0.02 s | 0.01 s | 0.22 GB | 0.23 GB | 0.18 GB | 0.17 GB | 0.18 GB |
-| 98k | 100% | 14k | 0.07 s | 0.11 s | 1.24 s | 0.25 s | 0.06 s | 0.28 GB | 0.34 GB | 0.38 GB | 0.21 GB | 0.21 GB |
-| 980k | 100% | 140k | 0.55 s~ | 0.93 s | 13.12 s | 2.53 s | 0.57 s | 0.87 GB | 1.36 GB | 2.44 GB | 0.68 GB | 0.60 GB |
-| 9.8M | 100% | 1.4M | 5.77 s | 9.61 s | — | 26.18 s | 5.72 s | 4.81 GB | 5.65 GB | — | 4.62 GB | 4.03 GB |
-
-`~` marks a measurement whose rounds spread wider than 25% of their own median. Every round was slow, so the minimum printed for it has no clean round behind it and may be contaminated: **do not quote a marked number, or a ratio drawn from one** — re-take the cell on an idle machine.
-
-**transport — highs sink**
-
-Each arm ends holding a populated `highspy.Highs` with `run()` never called — lpspec through `build_highs`. The simplex is the same work whoever filled the model, so timing it would say nothing about the lane that filled it.
-
-| variables | live | rows | wall: lpspec | wall: linopy | wall: pyomo | peak: lpspec | peak: linopy | peak: pyomo |
-|---|---|---|---|---|---|---|---|---|
-| 9.8k | 100% | 1.4k | 0.02 s | 0.03 s | 0.10 s | 0.20 GB | 0.23 GB | 0.18 GB |
-| 98k | 100% | 14k | 0.02 s | 0.05 s | 1.46 s | 0.25 GB | 0.33 GB | 0.33 GB |
-| 980k | 100% | 140k | 0.10 s | 0.28 s | 31.26 s | 0.57 GB | 1.14 GB | 1.98 GB |
-| 9.8M | 100% | 1.4M | 1.06 s | 3.16 s | — | 2.64 GB | 5.81 GB | — |
-
-</details>
-
-<!-- bench:/results -->
-## What this says
-
-**Ahead of every library measured, on wall, in every model and both sinks.**
-Peak is not a clean sweep and says so below. At the widest rung each model
-reached, through `highs`:
-
-| | dispatch 10M | transport 9.8M | storage 10M | fleet 12M |
-|---|---|---|---|---|
-| lpspec | **0.52 s** | **1.06 s** | **1.06 s** | **1.10 s** |
-| linopy | 1.02 s | 3.16 s | 1.38 s | 1.57 s |
-| pyomo | — | — | — | — |
-
-Every pyomo cell at that rung is a refusal, not a gap: it was projected past the
-harness's thirty-second budget and skipped with the reason printed. Where it
-does reach, the distance is the story — `storage` at 1M variables is **0.10 s
-against 64.89 s**, and that is the same model, the same data, the same solver.
-
-**The Gurobi sink is where the interesting comparison lives**, because two of
-the five are the same library written two ways. At the top rung of each model:
-
-| | lpspec | gurobipy-matrix | gurobipy-loop | linopy |
-|---|---|---|---|---|
-| transport 9.8M | **5.77 s** | 5.72 s | 26.18 s | 9.61 s |
-| storage 10M | **5.96 s** | 6.27 s | 29.72 s | 8.09 s |
-| fleet 12M | **8.92 s** | 9.90 s | — | 11.66 s |
-
-`gurobipy-matrix` is within a few percent of us in both directions — it reaches
-the same `addMVar`/`addMConstr` seam our own `build_gurobi` does, so what
-separates the two columns is only where the matrix came from. `gurobipy-loop`
-is the *same library* at four to five times the cost. **Most of the distance
-between a modelling library and a fast one is how the model was written**, and
-a comparison that showed only one of those two columns would be telling you
-something else.
-
-**Peak is model-dependent and we lose two of four.** Through `highs`, at the
-same rungs: `transport` 2.64 GB against linopy's 5.81, `storage` 2.65 against
-2.86 — and `dispatch` 2.30 against 1.84, `fleet` 3.44 against 3.03. The two we
-lose are the two whose models are widest per row. `gurobipy-matrix` holds the
-lowest peak of anything here on every Gurobi cell, which is what a hand-built
-CSR and nothing else in the process looks like.
-
-**What the numbers are not.** They are build and hand-off — `run()` and
-`optimize()` are never called, because the simplex is the same work whoever
-filled the model. They are one machine, one run, and the cells marked `~` had
-rounds spread wider than a quarter of their own median and should not be
-quoted. And they are four models: a shape unlike all four may behave unlike all
-four.
 
 ## First model against every model after it
 
@@ -255,6 +66,31 @@ Build only, repeated in one process. **first** is the first recorded round and *
 | fleet | 12M | 776.0 ms | **850.1 ms** | 288.5 ms | 262.4 ms | — | — | — | — | 10147.9 ms | 10030.2 ms |
 
 <!-- bench:/marginal -->
+
+## The same size, reached by widening
+
+Entity counts x N with the snapshots held fixed. Each rung matches one of
+the size rungs above variable for variable, so the pair is one model at one
+size in two shapes.
+
+<!-- bench:sweeps -->
+
+### The width ladder
+
+Entity counts x N with the snapshot count held fixed, through the `highs` sink. Each rung matches one of the size ladder rungs above variable for variable — `w10` is `s`, `w1000` is `l` — so the pair reads as one model at one size in two shapes.
+
+| case | entities x | variables | wall: lpspec | wall: linopy | wall ÷ linopy | peak: lpspec | peak: linopy | peak ÷ linopy |
+|---|---|---|---|---|---|---|---|---|
+| storage | 1 | 10k | 0.02 s | 0.04 s | 0.43x | 0.20 GB | 0.22 GB | 0.91x |
+| storage | 10 | 100k | 0.03 s | 0.05 s | 0.52x | 0.24 GB | 0.24 GB | 0.98x |
+| storage | 100 | 1M | 0.13 s | 0.17 s | 0.75x | 0.59 GB | 0.46 GB | 1.27x |
+| storage | 1000 | 10M | 1.26 s | 1.44 s | 0.88x | 2.70 GB | 2.58 GB | 1.04x |
+| transport | 1 | 9.8k | 0.02 s | 0.03 s | 0.62x | 0.20 GB | 0.23 GB | 0.89x |
+| transport | 10 | 98k | 0.03 s | 0.23 s | 0.12x | 0.25 GB | 1.08 GB | 0.23x |
+| transport | 100 | 980k | 0.11 s | 50.98 s | 0.00x | 0.59 GB | 14.26 GB | 0.04x |
+| transport | 1000 | 9.8M | 1.03 s | >30 s | — | 2.74 GB | — | — |
+
+<!-- bench:/sweeps -->
 
 ## Sink capabilities
 
