@@ -148,7 +148,7 @@ include = ["/src"]
 # `benchmem(isolate=True)`, so below that floor the `rss` column means
 # something else.
 bench = [
-    "pytest-benchmem>=0.5",
+    "pytest-benchmem>=0.5.5",
 ]
 # The same suite (bench/), measured by CodSpeed instead. Its own group rather
 # than a share of `bench`, for the same reason `bench` is not a share of `dev`:
@@ -156,7 +156,7 @@ bench = [
 # pytest-codspeed replaces, and a second benchmarking plugin loaded into the
 # process being measured is a confounder bought for nothing.
 #
-# Pinned exactly, unlike `pytest-benchmem>=0.5`: CodSpeed keeps the baseline
+# Pinned exactly, unlike `pytest-benchmem>=0.5.5`: CodSpeed keeps the baseline
 # across commits, so the plugin version is part of the measurement rather than
 # part of the environment — a floor would let a bump land as a regression.
 #
