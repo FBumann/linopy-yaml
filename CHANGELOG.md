@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.268](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.267...v0.0.1-alpha.268) (2026-08-26)
+
+
+### Bug Fixes
+
+* **differential:** a stamp moves when its claim changes, not when the solver returns different bits ([#1333](https://github.com/fluxopt/lpspec/issues/1333)) ([a890c11](https://github.com/fluxopt/lpspec/commit/a890c11ad94bdab595c79556b1d04a951719aff7))
+
 ## [0.0.1-alpha.267](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.266...v0.0.1-alpha.267) (2026-08-26)
 
 
