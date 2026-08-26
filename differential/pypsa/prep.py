@@ -60,10 +60,10 @@ def _cycle_weights(n: pypsa.Network) -> pd.DataFrame:
     """The KVL basis PyPSA itself solves with — ``n.cycle_matrix(apply_weights=True)``: reactance on AC, resistance on DC."""
     n.determine_network_topology()
     n.calculate_dependent_values()
-    C = n.cycle_matrix(apply_weights=True)
+    cycles = n.cycle_matrix(apply_weights=True)
     rows = [
         {'line': str(name), 'cycle': str(cycle), 'value': float(weight)}
-        for (kind, name), weights in C.iterrows()
+        for (kind, name), weights in cycles.iterrows()
         for cycle, weight in weights.items()
         if kind == 'Line' and weight
     ]
