@@ -8,36 +8,42 @@ stale, so this rewrites exactly one line of it — the ``const DATA = {...};``
 literal — and touches nothing else. Templating the page instead would move the
 interesting part (what the bands *say*) into a file nobody opens.
 
-Two result files, because the page plots two runs: the ladder (six models to
-`l`, through the `highs` sink) and the scaling run (`dispatch` alone out to
-120M, through `lp`). A rung either run is missing stops this rather than
-drawing a line that skips it, which would read as a measurement.
+One panel per model and sink, one line per library, log on both axes — which is
+the only shape that shows a *slope*, and the slope is the claim. A table can
+say a library is behind at one size; only the curve says whether it is falling
+further behind or catching up.
+
+**The band around each line is that measurement's own rounds**, minimum to
+maximum. It is not a confidence interval and not the spread across models: it
+is what the machine did to the same work nine times over, so a line whose band
+overlaps another's is two numbers this run cannot tell apart. `bench/report.py`
+marks the same doubt with `~` where it exceeds a quarter of the median; here it
+is drawn, which is the one thing a table cannot do.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
 from bench import results as bench_results
 
-NAME = {'lpspec': 'polars', 'linopy': 'linopy'}
+#: What the page calls each library. Only lpspec is renamed — the page is about
+#: our engine and `polars` is what the reader sees named in the architecture —
+#: and anything unlisted keeps the name the harness measured it under.
+NAME = {'lpspec': 'polars'}
+
+#: The rungs the page plots, in order. Width rungs are their own axis and are
+#: not mixed in: `w10` and `s` are the same size through different shapes, so a
+#: single curve through both would read as one model growing.
 LADDER = ('xs', 's', 'm', 'l')
-SCALING = ('xs', 's', 'm', 'l', 'xl', '2xl')
 _DATA = re.compile(r'^const DATA = .*;$', re.MULTILINE)
 
 
 def measurements(name: str) -> Path:
-    """The results file called *name*, in whichever format is committed.
-
-    The harness writes `.json` now; `bench/results/` still holds the `.jsonl`
-    the previous one wrote. Preferring the new and falling back to the old is
-    what lets this run against the tree as it stands rather than only after
-    the next full ladder.
-    """
+    """The results file called *name*, in whichever format is committed."""
     for suffix in ('.json', '.jsonl'):
         path = Path('bench/results') / f'{name}{suffix}'
         if path.exists():
@@ -45,76 +51,92 @@ def measurements(name: str) -> Path:
     raise SystemExit(f'no bench/results/{name}.json — run the ladder first (bench/README.md)')
 
 
-def best(path: Path, sink: str) -> dict[str, dict[Any, Any]]:
-    """``(case, size, arm) -> fastest repeat``. Minimum, because noise only adds.
+def series(path: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
+    """``(case, sink, arm) -> rung -> what one panel line needs at that rung``.
 
-    A measurement taken without `benchmem(isolate=True)` has no peak, and the
-    page plots one — so such a record is dropped here rather than divided by a
-    billion halfway through the render. What the reader then gets is `_at`
-    naming the point the run is missing, which says what to re-measure.
+    ``wall`` is the median, which is what the tables publish, and the band is the
+    first to the third quartile — the middle half of the rounds, centred on the
+    line rather than hanging off it.
+
+    Not the maximum at the top: one nine-round measurement here read
+    ``[1.18, 1.02, 1.07, 1.02, 1.02, 1.02, 1.06, 1.45, 9.97]``, and a band drawn
+    to that outlier is ten times the height of the model it belongs to.
+
+    A measurement taken without `isolate=True` has no peak and is dropped rather
+    than plotted as zero.
     """
-    out: dict[str, dict[Any, Any]] = {'wall': {}, 'peak': {}, 'cols': {}}
-    for r in bench_results.records(path):
-        if r.get('record') != 'timing' or 'error' in r or r.get('sink') != sink:
+    out: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for record in bench_results.records(path):
+        if record.get('record') != 'timing' or 'error' in record:
             continue
-        if r.get('peak_rss_bytes') is None:
+        if record.get('peak_rss_bytes') is None or record['size'] not in LADDER:
             continue
-        k = (r['case'], r['size'], r['arm'])
-        out['wall'][k] = min(out['wall'].get(k, 9e99), r['wall_seconds'])
-        out['peak'][k] = min(out['peak'].get(k, 9e99), r['peak_rss_bytes'] / 1e9)
-        out['cols'][(r['case'], r['size'])] = r['counts']['columns']
+        key = (record['case'], record.get('sink', 'lp'), record['arm'])
+        out.setdefault(key, {})[record['size']] = {
+            'wall': record['wall_seconds'],
+            'lo': record.get('q1_seconds') or record['wall_seconds'],
+            'hi': record.get('q3_seconds') or record['wall_seconds'],
+            'peak': record['peak_rss_bytes'] / 1e9,
+            'vars': (record.get('counts') or {}).get('columns') or record.get('nominal_variables'),
+        }
     return out
 
 
-def _at(table: dict[Any, Any], key: Any) -> Any:
-    if key not in table:
-        raise SystemExit(f'no measurement for {key} — the page plots that point, so the run has to cover it')
-    return table[key]
+def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dict[str, Any]]) -> dict[str, Any]:
+    """One panel per (case, sink): a shared rung axis, and a line per library.
 
+    Shared, with ``null`` where a library has no measurement, because the panel
+    feeds both the chart and the table under it. The chart skips a null; the
+    table prints what the run actually decided there — ``>30 s`` where the time
+    budget stopped that library, an em dash where it simply has no number.
 
-def arms(t: dict[str, dict[Any, Any]]) -> tuple[str, ...]:
-    """Whichever arms the run measured.
-
-    Read off the records rather than named here: a committed file from a
-    two-arm run and a fresh single-arm one both have to plot, and a hardcoded
-    pair turns the second into `_at` refusing a point that was never measured.
-
-    First appearance, not sorted: the order here is the order the page draws
-    its series in, and sorting would redraw the committed chart to say the same
-    thing differently.
+    A library that cannot reach a sink is absent from the panel rather than
+    present and empty: `gurobipy` has no HiGHS, and a row of dashes says the
+    measurement was missed rather than impossible.
     """
-    return tuple(dict.fromkeys(a for _, _, a in t['wall']))
+    out: dict[str, Any] = {}
+    for (case, sink, arm), rungs in sorted(taken.items()):
+        title = f'{case} — {sink}'
+        panel = out.setdefault(title, {'case': case, 'sink': sink, 'series': {}, 'rungs': []})
+        for rung in LADDER:
+            if rung in rungs and rung not in panel['rungs']:
+                panel['rungs'].append(rung)
+        panel['series'][NAME.get(arm, arm)] = {'arm': arm, 'at': rungs}
 
-
-def panel(t: dict[str, dict[Any, Any]], case: str, rungs: tuple[str, ...]) -> dict[str, Any]:
-    return {
-        'vars': [_at(t['cols'], (case, r)) for r in rungs],
-        **{
-            m: {NAME.get(a, a): [round(_at(t[m], (case, r, a)), 3) for r in rungs] for a in arms(t)}
-            for m in ('wall', 'peak')
-        },
-    }
+    stopped = {(c['case'], c['sink'], c['arm']): c for c in ceilings}
+    for panel in out.values():
+        order = [r for r in LADDER if r in panel['rungs']]
+        panel['rungs'] = order
+        panel['vars'] = [next(s['at'][r]['vars'] for s in panel['series'].values() if r in s['at']) for r in order]
+        for line in panel['series'].values():
+            at, ceiling = line.pop('at'), stopped.get((panel['case'], panel['sink'], line.pop('arm')))
+            for key in ('wall', 'lo', 'hi', 'peak'):
+                line[key] = [round(at[r][key], 4) if r in at else None for r in order]
+            line['bound'] = [
+                f'>{ceiling["budget"]:g} s'
+                if r not in at and ceiling and order.index(r) > order.index(ceiling['size'])
+                else None
+                for r in order
+            ]
+    return out
 
 
 def main() -> int:
-    ladder = best(measurements('latest'), 'highs')
-    scaling = best(measurements('scaling'), 'lp')
-    cases = sorted({c for c, _, _ in ladder['wall']})
-    data = {
-        'scaling': panel(scaling, 'dispatch', SCALING),
-        'cases': {c: panel(ladder, c, LADDER) for c in cases},
-        'caseNames': cases,
-        'rungs': list(LADDER),
-    }
+    path = measurements('latest')
+    taken = series(path)
+    ceilings = [r for r in bench_results.records(path) if r.get('record') == 'ceiling']
+    if not taken:
+        raise SystemExit('bench/results/latest.json has no plottable measurement — was it run with --benchmark-memory?')
+    data = {'panels': panels(taken, ceilings), 'rungs': list(LADDER)}
 
     page = Path('docs/about/benchmarks-scaling.html')
     text = page.read_text()
     if not _DATA.search(text):
         raise SystemExit(f'{page} has no `const DATA = ...;` line — keep the literal on one line of its own')
     page.write_text(_DATA.sub(lambda _: 'const DATA = ' + json.dumps(data) + ';', text, count=1))
-    print(f'{page} refreshed')
+    print(f'{page} refreshed: {len(data["panels"])} panels')
     return 0
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    raise SystemExit(main())

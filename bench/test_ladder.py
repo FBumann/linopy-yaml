@@ -87,7 +87,7 @@ def test_emit(benchmark: Any, paths: Any, ceiling: Any, case_name: str, size: st
     ``checked_sources`` runs before the clock: it is harness bookkeeping, and the
     linopy arm has no counterpart to be charged for it.
     """
-    missing = unmeasurable(arm, case_name, sink) or ceiling.reached(arm, case_name, sink)
+    missing = unmeasurable(arm, case_name, sink) or ceiling.reached(arm, case_name, size, sink)
     if missing:
         pytest.skip(missing)
 
@@ -118,7 +118,7 @@ def test_rebuild(benchmark: Any, paths: Any, ceiling: Any, builds: int, case_nam
     """
     if builds < 1:
         pytest.skip('--builds 0')
-    missing = unmeasurable(arm, case_name, ARMS[arm].SINKS[0]) or ceiling.reached(arm, case_name, '')
+    missing = unmeasurable(arm, case_name, ARMS[arm].SINKS[0]) or ceiling.reached(arm, case_name, size, '')
     if missing:
         pytest.skip(missing)
     module = ARMS[arm]

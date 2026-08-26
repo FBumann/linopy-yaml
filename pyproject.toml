@@ -380,7 +380,7 @@ docs-build = { cmd = "mkdocs build --strict", description = "The site, built the
 # live here rather than in three documents that each quoted them: bench/README.md
 # explains what each measures, and quotes the task name.
 [tool.pixi.feature.bench.tasks]
-ladder = { cmd = "pytest bench --benchmark-memory --sizes xs s m l --benchmark-json=bench/results/latest.json", description = "The size ladder" }
+ladder = { cmd = "pytest bench --benchmark-memory --cases dispatch transport storage fleet --sizes xs s m l w1 w10 w100 w1000 --sinks highs gurobi --arms lpspec linopy pyomo gurobipy-loop gurobipy-matrix --budget 30 --benchmark-json=bench/results/latest.json", description = "Every model the page publishes, in every library that can express it" }
 density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --benchmark-json=bench/results/density.json", description = "The density sweep" }
 declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep" }
 report = { cmd = "python -m bench.report --write", description = "Write every table into its fence in docs/about/benchmarks.md. Drop --write to print instead" }
