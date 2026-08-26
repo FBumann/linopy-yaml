@@ -106,11 +106,14 @@ def prices(result, n) -> dict[str, object]:
     except lps.LpspecError as error:
         return {'compared': 0, 'skipped': str(error).splitlines()[0][:120]}
     weights = n.snapshot_weightings['objective']
+    if isinstance(n.snapshots, pd.MultiIndex):
+        weights = weights.mul(n.investment_period_weightings['objective'], level=0)
+    snapshots = list(n.snapshots)
     theirs = n.buses_t.marginal_price
     gaps = [
         abs(
-            row.value / weights[row.snapshot]
-            - float(theirs.at[row.snapshot, (row.scenario, row.bus) if 'scenario' in dual.columns else row.bus])
+            row.value / weights[snapshots[row.snapshot]]
+            - float(theirs.at[snapshots[row.snapshot], (row.scenario, row.bus) if 'scenario' in dual.columns else row.bus])
         )
         for row in dual.itertuples()
     ]

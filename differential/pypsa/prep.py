@@ -48,6 +48,8 @@ def _static(component: pd.DataFrame, attr: str, dim: str, *, sparse: bool = Fals
 
 
 def _melt(dense: pd.DataFrame, dim: str) -> pd.DataFrame:
+    if isinstance(dense.index, pd.MultiIndex):
+        dense = dense.set_axis(pd.Index(list(dense.index), tupleize_cols=False), axis=0)
     if dense.columns.empty:
         return pd.DataFrame(columns=['snapshot', dim, 'value']).astype({dim: str, 'value': float})
     if isinstance(dense.columns, pd.MultiIndex):
@@ -81,7 +83,7 @@ def _collapse(tables: dict[str, object]) -> dict[str, object]:
 
 
 def _varying(n: pypsa.Network, component: str, attr: str, dim: str, *, sparse: bool = False) -> pd.DataFrame:
-    table = _melt(get_switchable_as_dense(n, component, attr), dim)
+    table = _flat(n, _melt(get_switchable_as_dense(n, component, attr), dim))
     return table.dropna() if sparse else table
 
 
@@ -91,14 +93,22 @@ def _lookup(component: pd.DataFrame, attr: str, over: str, into: str) -> pd.Data
     return table[table[into] != '']
 
 
+def _flat(n: pypsa.Network, table: pd.DataFrame) -> pd.DataFrame:
+    """Snapshots as positions where a multi-period network keys them by (period, timestep)."""
+    if isinstance(n.snapshots, pd.MultiIndex) and 'snapshot' in table.columns and len(table):
+        positions = {key: i for i, key in enumerate(n.snapshots)}
+        table = table.assign(snapshot=table['snapshot'].map(positions).astype(int))
+    return table
+
+
 def _weighting(n: pypsa.Network, column: str) -> pd.DataFrame:
-    return pd.DataFrame({'snapshot': n.snapshots, 'value': n.snapshot_weightings[column].to_numpy()})
+    return _flat(n, pd.DataFrame({'snapshot': list(n.snapshots), 'value': n.snapshot_weightings[column].to_numpy()}))
 
 
 def _retention(n: pypsa.Network, component: str, dim: str) -> pd.DataFrame:
     losses = _one_scenario(n.static(component))['standing_loss']
     hours = n.snapshot_weightings['stores']
-    return _melt(pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots), dim)
+    return _flat(n, _melt(pd.DataFrame({name: (1.0 - loss) ** hours for name, loss in losses.items()}, index=n.snapshots), dim))
 
 
 def _cycle_weights(n: pypsa.Network) -> pd.DataFrame:
@@ -184,7 +194,7 @@ def _must_stay_up(n: pypsa.Network) -> pd.DataFrame:
         if not g['committable'] or g['up_time_before'] <= 0:
             continue
         remaining = int(min(g['min_up_time'] - g['up_time_before'], len(n.snapshots)))
-        rows.extend({'snapshot': t, 'generator': str(name), 'value': True} for t in n.snapshots[: max(remaining, 0)])
+        rows.extend({'snapshot': t, 'generator': str(name), 'value': True} for t in range(max(remaining, 0)))
     table = pd.DataFrame(rows, columns=['snapshot', 'generator', 'value'])
     return table.astype({'value': bool})
 
@@ -205,6 +215,35 @@ def _scenarios(n: pypsa.Network) -> dict[str, object]:
     return tables
 
 
+def _periods(n: pypsa.Network) -> dict[str, object]:
+    """The investment periods PyPSA's multi-period rows read: which period a snapshot is in and weighs, which assets stand in it, and the growth caps."""
+    if not isinstance(n.snapshots, pd.MultiIndex):
+        return {}
+    periods = list(n.investment_periods)
+    weights = n.investment_period_weightings['objective']
+    generators = _one_scenario(n.generators)
+    active = pd.DataFrame({p: n.c.generators.get_active_assets(p) for p in periods})
+    first = (active.cumsum(axis=1) == 1) & active
+    carriers = n.carriers
+    growth = carriers['max_growth']
+    return {
+        'period': pl.Series('period', [int(p) for p in periods], dtype=pl.Int64),
+        'carrier': pl.Series('carrier', list(carriers.index.astype(str)), dtype=pl.String),
+        'snapshot_period': pd.DataFrame({'snapshot': range(len(n.snapshots)), 'period': [int(p) for p, _ in n.snapshots]}),
+        'period_weight_objective': pd.DataFrame({'period': [int(p) for p in periods], 'value': weights.loc[periods].to_numpy(dtype=float)}),
+        'Generator_active': pd.DataFrame(
+            [{'snapshot': i, 'generator': str(g), 'value': bool(active.at[g, p])} for i, (p, _) in enumerate(n.snapshots) for g in generators.index]
+        ),
+        'Generator_capital_weight': pd.DataFrame({'generator': generators.index.astype(str), 'value': (active * weights.loc[periods]).sum(axis=1).to_numpy(dtype=float)}),
+        'Generator_first_active': pd.DataFrame(
+            [{'period': int(p), 'generator': str(g), 'value': float(first.at[g, p])} for p in periods for g in generators.index]
+        ),
+        'Generator_carrier': _lookup(generators, 'carrier', 'generator', 'carrier'),
+        'Carrier_max_growth': pd.DataFrame({'carrier': growth.index.astype(str), 'value': growth.to_numpy(dtype=float)}).replace([float('inf')], float('nan')).dropna(),
+        'Carrier_max_relative_growth': pd.DataFrame({'carrier': carriers.index.astype(str), 'value': carriers['max_relative_growth'].clip(lower=0).to_numpy(dtype=float)}),
+    }
+
+
 def _loss_fan(n: pypsa.Network, segments: int) -> dict[str, pd.DataFrame]:
     """The tangent fan PyPSA's `define_tangent_loss_constraints` builds: the loss at rating, and a slope and offset per segment."""
     n.calculate_dependent_values()
@@ -216,12 +255,12 @@ def _loss_fan(n: pypsa.Network, segments: int) -> dict[str, pd.DataFrame]:
     s_nom_max = lines.s_nom_max.where(lines.s_nom_extendable, lines.s_nom)
     top = s_max_pu * s_nom_max
     r = lines.r_pu_eff
-    upper = _melt(r * top**2, 'line')
+    upper = _flat(n, _melt(r * top**2, 'line'))
     slope, offset = [], []
     for k in range(1, segments + 1):
         p_k = k / segments * top
-        slope.append(_melt(2 * r * p_k, 'line').assign(segment=k))
-        offset.append(_melt(r * p_k**2 - 2 * r * p_k * p_k, 'line').assign(segment=k))
+        slope.append(_flat(n, _melt(2 * r * p_k, 'line')).assign(segment=k))
+        offset.append(_flat(n, _melt(r * p_k**2 - 2 * r * p_k * p_k, 'line')).assign(segment=k))
     return {
         'segment': pd.DataFrame({'segment': range(1, segments + 1)}),
         'Line_loss_max': upper,
@@ -241,7 +280,7 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
     big_m = one['p_nom_max'] * p_max_pu.max().clip(lower=1.0)
 
     tables: dict[str, object] = {
-        'snapshot': pl.Series('snapshot', list(n.snapshots), dtype=pl.Int64),
+        'snapshot': pl.Series('snapshot', list(range(len(n.snapshots))) if isinstance(n.snapshots, pd.MultiIndex) else list(n.snapshots), dtype=pl.Int64),
         'bus': pl.Series('bus', list(_names(n.buses).astype(str)), dtype=pl.String),
         'generator': pl.Series('generator', list(_names(generators).astype(str)), dtype=pl.String),
         'link': pl.Series('link', list(_names(links).astype(str)), dtype=pl.String),
@@ -253,6 +292,7 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
             'global_constraint', list(_names(n.global_constraints).astype(str)), dtype=pl.String
         ),
         **_scenarios(n),
+        **_periods(n),
         'Generator_bus': _lookup(generators, 'bus', 'generator', 'bus'),
         'Link_bus0': _lookup(links, 'bus0', 'link', 'bus'),
         'Link_bus1': _lookup(links, 'bus1', 'link', 'bus'),
@@ -366,8 +406,8 @@ def sources(n: pypsa.Network, *, segments: int = 0) -> dict[str, object]:
         'GlobalConstraint_type': _static(n.global_constraints, 'type', 'global_constraint').astype({'value': str}),
         'GlobalConstraint_sense': _static(n.global_constraints, 'sense', 'global_constraint').astype({'value': str}),
         'GlobalConstraint_constant': _gc_constants(n),
-        'snapshot_is_last': pd.DataFrame(
-            {'snapshot': n.snapshots, 'value': [0] * (len(n.snapshots) - 1) + [1] if len(n.snapshots) else []}
+        'snapshot_is_last': _flat(
+            n, pd.DataFrame({'snapshot': list(n.snapshots), 'value': [0] * (len(n.snapshots) - 1) + [1] if len(n.snapshots) else []})
         ),
         'Generator_marginal_cost_quadratic': _varying(n, 'Generator', 'marginal_cost_quadratic', 'generator'),
         **_loss_fan(n, segments),
