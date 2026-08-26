@@ -285,12 +285,23 @@ def priced(parity: dict) -> bool:
     return parity['prices']['compared'] == 0 or parity['prices']['matches']
 
 
+def rungs() -> list[str]:
+    """Every rung the corpus carries, in ladder order — the folders beside the spine.
+
+    Derived here rather than asked of `instances`. Which documents this tree
+    certifies is the runner's question, and the corpus is documents: the two
+    lineages of it disagree about whether `instances` offers the list at all,
+    and the folders are there in both.
+    """
+    return sorted(path.name for path in instances.DATA.iterdir() if path.is_dir() and path.name != 'base')
+
+
 def main() -> int:
     stamped = json.loads(instances.RECORDS.read_text())
     broken = []
-    rungs = instances.rungs()
-    assert rungs, f'no rung folders under {instances.DATA} — nothing to certify'
-    for stem in rungs:
+    certified = rungs()
+    assert certified, f'no rung folders under {instances.DATA} — nothing to certify'
+    for stem in certified:
         parity, structural, good = lanes(stem)
         stamped[stem]['parity'] = parity
         stamped[stem]['structural'] = structural
