@@ -342,13 +342,32 @@ class Solver(ABC):
         with nothing to discard implements this as a no-op.
         """
 
+    @property
+    @abstractmethod
+    def handle(self) -> Any:
+        """The native object the load handed back, or ``None`` once closed.
+
+        The library's own model — what ``build_<solver>`` gives a caller who
+        stops at the hand-off, and what a test reads the load back through.
+        Owned by this holder: the caller does not release it, :meth:`close`
+        does.
+        """
+
     @abstractmethod
     def close(self) -> None:
         """Release the loaded model, and anything outside this process with it.
 
         Idempotent, and the counterpart to holding one: a solver kept between
         solves is memory — and, for one of them, a licence — that no frame in
-        this process accounts for.
+        this process accounts for. Afterwards :attr:`handle` is ``None``.
+
+        **The same release happens to a holder dropped without closing.** A
+        member whose library releases its object on collection has that for
+        free; one that does not — or that holds two objects, a model on an
+        environment, where the order is innermost first — registers a
+        finalizer over the objects rather than over itself, so a half-torn
+        holder is never what runs it. ``tests/test_solver_release.py`` asks
+        every member.
         """
 
     def __enter__(self) -> Self:

@@ -114,7 +114,7 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
         else:
             from lpspec.relational.sinks.solvers.highs import build_highs
 
-            _handle = build_highs(_tables(bound))
+            build_highs(_tables(bound)).close()
 
         return _counts(_tables(bound), nonzeros=True)
 

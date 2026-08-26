@@ -95,8 +95,8 @@ def build_gurobi(
     :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks` for why.
 
     Returns:
-        The :class:`Gurobi` holding the model, which is at ``.model``. The
-        holder is what a caller owns, because the model's licence lives on an
+        The :class:`Gurobi` holding the model, at ``.handle``. The holder is
+        what a caller owns, because the model's licence lives on an
         environment gurobipy gives no way back to from the model — ``close``,
         or leaving a ``with``, releases both in the order Gurobi wants.
     """
@@ -170,8 +170,7 @@ class Gurobi(Solver):
         self._release = weakref.finalize(self, _released, self._m, self._env)
 
     @property
-    def model(self) -> Any:
-        """The loaded :class:`gurobipy.Model`, owned by this holder."""
+    def handle(self) -> Any:
         return self._m
 
     def push(self, model: ModelTables) -> None:

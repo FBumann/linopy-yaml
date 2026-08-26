@@ -185,7 +185,7 @@ def test_solver_options_land_on_the_environment() -> None:
         lps.build(*CASES['MIP']) as bound,
         build_gurobi(bound._engine._model.tables(), solver_options={'TimeLimit': 5.0}) as solver,
     ):
-        assert solver.model.Params.TimeLimit == 5.0
+        assert solver.handle.Params.TimeLimit == 5.0
 
 
 def test_build_gurobi_loads_the_model_and_stops() -> None:
@@ -194,7 +194,7 @@ def test_build_gurobi_loads_the_model_and_stops() -> None:
     with lps.build(*CASES['MIP']) as bound:
         tables = bound._engine._model.tables()
         with build_gurobi(tables) as solver:
-            m = solver.model
+            m = solver.handle
             assert (m.NumVars, m.NumConstrs) == (tables.column_count, tables.row_count)
             assert m.NumIntVars == tables.cols.filter(pl.col('vtype') != 'continuous').height
             assert m.ModelSense == gurobipy.GRB.MAXIMIZE
@@ -213,7 +213,7 @@ def test_a_dropped_solver_disposes_the_model_it_holds() -> None:
     """
     with lps.build(*CASES['MIP']) as bound:
         solver = build_gurobi(bound._engine._model.tables())
-        m = solver.model
+        m = solver.handle
         del solver
         gc.collect()
         with pytest.raises(gurobipy.GurobiError, match='freed'):
@@ -224,7 +224,7 @@ def test_close_disposes_a_model_the_caller_still_holds() -> None:
     """``close()`` is the release, not a hint to the collector — and it is idempotent."""
     with lps.build(*CASES['MIP']) as bound:
         solver = build_gurobi(bound._engine._model.tables())
-        m = solver.model
+        m = solver.handle
         solver.close()
         solver.close()
         with pytest.raises(gurobipy.GurobiError, match='freed'):
@@ -265,7 +265,7 @@ def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     which makes the build seam a complete hand-off rather than a model plus a
     number to remember."""
     with lps.build(*CASES['MAX']) as bound, build_gurobi(bound._engine._model.tables()) as solver:
-        assert solver.model.ObjCon == pytest.approx(5.0)
+        assert solver.handle.ObjCon == pytest.approx(5.0)
 
 
 def test_the_missing_extra_is_named() -> None:

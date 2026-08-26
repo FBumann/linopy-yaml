@@ -80,13 +80,22 @@ def build_highs(
     model: ModelTables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
-) -> Any:
+) -> Highs:
     """Load the model into a :class:`highspy.Highs` and stop there.
 
     The hand-off without the simplex, which is the same work whoever filled the
     model — so a measurement including it says nothing about the lane that
     filled it. `bench/` ends here, as linopy's ``Model.to_highspy()`` does on
     that side.
+
+    Returns:
+        The :class:`Highs` holding the model, at ``.handle``.
+    """
+    return Highs(model, batch_rows, solver_options)
+
+
+def _built(model: ModelTables, batch_rows: int | None, solver_options: Mapping[str, Any] | None) -> Any:
+    """The populated :class:`highspy.Highs`.
 
     ``batch_rows`` is the budget in *elements*, spent through
     :mod:`~lpspec.relational.chunking`; the parameter stays so tests can force
@@ -234,7 +243,11 @@ class Highs(Solver):
     )
 
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
-        self._handle = build_highs(model, batch_rows, self._options)
+        self._handle = _built(model, batch_rows, self._options)
+
+    @property
+    def handle(self) -> Any:
+        return self._handle
 
     def push(self, model: ModelTables) -> None:
         """The index vectors are built here rather than held — an ``arange`` is cheaper to make than to keep."""
