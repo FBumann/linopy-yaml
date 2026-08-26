@@ -19,7 +19,7 @@ from __future__ import annotations
 import importlib.util
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 from lpspec.errors import LpspecError
 
@@ -350,3 +350,10 @@ class Solver(ABC):
         solves is memory — and, for one of them, a licence — that no frame in
         this process accounts for.
         """
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc: object) -> Literal[False]:
+        self.close()
+        return False
