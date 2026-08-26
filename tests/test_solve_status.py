@@ -6,18 +6,15 @@ Copies rot. These tests import linopy and compare, so a divergence — ours
 drifting, or a linopy release moving — fails here instead of being discovered
 by a user who knows one vocabulary and is handed another.
 
-The gurobi map diverges from linopy's in three declared places, and that is
-checked in both directions: a copy is only honest if the exceptions are as
-pinned as the agreements.
-
-The engine itself never imports linopy (docs/about/architecture.md, hard rule 2). Tests
-may, and this is the same oracle arrangement the differential tests use for
-the math.
+The engine itself never imports linopy (docs/about/architecture.md, hard
+rule 2). Tests may — the same oracle arrangement the differential tests use
+for the math.
 """
 
 from __future__ import annotations
 
 import ast
+import inspect
 from typing import Any
 
 import polars as pl
@@ -50,14 +47,13 @@ def test_the_highs_mapping_matches_linopy():
 
 
 def test_the_gurobi_mapping_matches_linopy_where_it_claims_to():
-    """The same copy, and the same brittleness — plus three declared exceptions.
+    """The copy, minus three declared exceptions.
 
     linopy's Gurobi map contradicts Gurobi's own documented status codes in
-    three places, so copying it whole would import a wrong answer rather than
-    a shared vocabulary. Each is listed in ``_LINOPY_DIVERGENCES`` with its
-    reason, and this asserts **both** directions: everything else still
-    matches, and every declared divergence is still a divergence — so if
-    linopy fixes one, this fails and the exception goes away.
+    three places, each listed in ``_LINOPY_DIVERGENCES`` with its reason.
+    Asserted in both directions: everything else still matches, and every
+    declared divergence still diverges — so if linopy fixes one, the entry
+    has to go.
     """
     theirs = _linopy_condition_map('Gurobi', ast.Constant, 'value')
     assert set(theirs) == set(_CONDITION_OF_GUROBI_STATUS), (
@@ -89,10 +85,10 @@ def test_the_xpress_mapping_matches_linopy():
 def test_the_xpress_sink_adds_to_linopys_answer_rather_than_contradicting_it():
     """``_BEYOND_LINOPY`` is an addition, so it names no status code.
 
-    The distinction is the point: gurobi's ``_LINOPY_DIVERGENCES`` overrides a
-    verdict linopy gives, and is checked against it in both directions. This
-    reads a second axis linopy never looks at, so there is nothing to disagree
-    with — and the word it reports still has to be one linopy defines.
+    Gurobi's ``_LINOPY_DIVERGENCES`` overrides verdicts linopy gives; this
+    reads a second axis linopy never looks at, so there is nothing to
+    disagree with — and the word it reports still has to be one linopy
+    defines.
     """
     assert _BEYOND_LINOPY, 'the sink reads solvestatus for a reason — it belongs in the table'
     every = set().union(*STATUS_TO_TERMINATION_CONDITIONS.values())
@@ -126,8 +122,6 @@ def _linopy_condition_map(
     that rots. If linopy moves it, the assertions say so rather than passing
     vacuously.
     """
-    import inspect
-
     solvers = pytest.importorskip('linopy.solvers')
     tree = ast.parse(inspect.getsource(solvers))
     cls = next((n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == solver), None)
