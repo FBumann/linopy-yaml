@@ -6,7 +6,13 @@ The corpus — the model files, the reference networks as data, their loader
 and the committed records — lives in math-spec; this file and `prep.py`
 beside it are the engine side: bind, build, solve, compare. Run with this
 tree's lpspec, `pypsa==1.3.0` and `highspy` installed, and the `[linopy]`
-extra for the model comparison.
+extra for the model comparison. No pixi environment carries pypsa, so the
+way to run it locally is the workflow's own line, which installs nothing on
+disk:
+
+    pixi exec -s uv uv run --with-editable ".[linopy]" \
+        --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=1.30" \
+        python differential/pypsa/parity.py ../math-spec
 
 Per rung, from the same network, three comparisons:
 
