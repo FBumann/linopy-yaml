@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.260](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.259...v0.0.1-alpha.260) (2026-08-26)
+
+
+### Refactoring
+
+* **api:** check lowers the expressions of the model it lowers against ([#1290](https://github.com/fluxopt/lpspec/issues/1290)) ([efc8e01](https://github.com/fluxopt/lpspec/commit/efc8e01da5b4c744961129579387292a838bf432))
+
 ## [0.0.1-alpha.259](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.258...v0.0.1-alpha.259) (2026-08-26)
 
 
