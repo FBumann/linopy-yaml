@@ -1,17 +1,13 @@
-# The PyPSA parity gate: the corpus lives in math-spec, the engines live here,
-# so this is the required side of the contract — a change to lpspec that stops
-# interpreting the corpus, building it, or solving it to PyPSA's answers goes
-# red here, where the change was made.
+# The PyPSA parity gate. Every rung of the corpus under differential/pypsa/
+# solves through PyPSA and through this tree's lpspec, and the runner compares
+# them as deep as the engines allow: one objective and one set of prices
+# across the fence everywhere, the two linopy models label for label where
+# `lpspec.linopy` can build. A rung the linopy lane cannot build yet is
+# stamped, not failed, so this job tightens by itself as the lane hardens.
 #
-# The `ref` below is the corpus this lpspec certifies; bumping it is the
-# certification event, a one-line edit. The runner is
-# `differential/pypsa/parity.py` here — the corpus holds only documents: the
-# model files, the reference networks as data with their loader, and the
-# committed record. Per rung the runner compares the two linopy models label
-# for label where `lpspec.linopy` can build, and holds one solved objective
-# across the fence everywhere. A rung the linopy lane cannot build yet is
-# stamped, not failed, so this job tightens by itself as the lane hardens:
-# every empty-window or empty-dim fix widens what it gates with no edit here.
+# The certificate the runner writes, corpus/references.json, is committed
+# beside the corpus; the last step fails when a run of this tree would rewrite
+# it, so a stale stamp is a red diff rather than a passing string.
 name: PyPSA parity
 
 on:
@@ -33,14 +29,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - name: the corpus this lpspec certifies
-        uses: actions/checkout@v7
-        with:
-          repository: energy-models/math-spec
-          # The certified corpus: the head of math-spec#126 while the corpus
-          # stack (#122 → #126) is open. Move to a tag once it merges and tags.
-          ref: 5889d0a68c50383ea4510195071609aacd82f36d
-          path: corpus
       - uses: prefix-dev/setup-pixi@v0.10.1
         with:
           run-install: false
@@ -49,4 +37,6 @@ jobs:
           pixi exec -s uv uv run
           --with-editable ".[linopy]"
           --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=1.30"
-          python differential/pypsa/parity.py corpus
+          python differential/pypsa/parity.py
+      - name: the committed certificate is what this tree produces
+        run: git diff --exit-code -- differential/pypsa/corpus/references.json
