@@ -49,16 +49,18 @@ def _rounds(benchmark: Any, request: pytest.FixtureRequest, fn: Any, *args: Any)
 
     Pedantic mode is the only one with a hook before the clock, and it takes
     its rounds from the caller rather than `--benchmark-min-rounds`, so the
-    option is read here. CodSpeed's fixture has no rounds to hook and no
-    `extra_info`; there the plain call stands.
+    option is read here. Under CodSpeed there is no such option and no rounds
+    to hook — its instruments run the call their own way — so the plain call
+    stands; `conftest.py` tells the two apart the same way.
     """
-    if getattr(benchmark, 'extra_info', None) is None:
+    rounds = getattr(request.config.option, 'benchmark_min_rounds', None)
+    if rounds is None:
         return benchmark(fn, *args)
     return benchmark.pedantic(
         fn,
         args=args,
         setup=_collected,
-        rounds=request.config.option.benchmark_min_rounds,
+        rounds=rounds,
         iterations=1,
         warmup_rounds=0,
     )
@@ -112,7 +114,14 @@ def _measured(benchmark: Any) -> float | None:
 
 @pytest.mark.benchmem(isolate=True)
 def test_emit(
-    benchmark: Any, request: pytest.FixtureRequest, paths: Any, ceiling: Any, case_name: str, size: str, arm: str, sink: str
+    benchmark: Any,
+    request: pytest.FixtureRequest,
+    paths: Any,
+    ceiling: Any,
+    case_name: str,
+    size: str,
+    arm: str,
+    sink: str,
 ) -> None:
     """Build the model and hand it over — an LP file on disk, or a populated solver.
 
