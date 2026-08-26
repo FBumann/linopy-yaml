@@ -1,10 +1,10 @@
 """The parity gate: every rung of the pypsa corpus, as deep as the engines allow.
 
-    python differential/pypsa/parity.py <math-spec checkout>
+    python differential/pypsa/parity.py
 
 The corpus — the model files, the reference networks as data, their loader
-and the committed records — lives in math-spec; this file and `prep.py`
-beside it are the engine side: bind, build, solve, compare. Run with this
+and the committed certificate — is `corpus/` beside this file; this file and
+`prep.py` are the engine side: bind, build, solve, compare. Run with this
 tree's lpspec, `pypsa==1.3.0` and `highspy` installed, and the `[linopy]`
 extra for the model comparison. No pixi environment carries pypsa, so the
 way to run it locally is the workflow's own line, which installs nothing on
@@ -12,7 +12,7 @@ disk:
 
     pixi exec -s uv uv run --with-editable ".[linopy]" \
         --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=1.30" \
-        python differential/pypsa/parity.py ../math-spec
+        python differential/pypsa/parity.py
 
 Per rung, from the same network, three comparisons:
 
@@ -46,14 +46,13 @@ PyPSA's model is built before `lpspec.linopy` is imported: that import flips
 linopy's global ``semantics`` option to ``v1`` and PyPSA speaks ``legacy``,
 so the option is reset around each PyPSA build.
 
-The stamps are written into the corpus checkout: in CI that is scratch and
-the exit code is the verdict; run against a math-spec worktree it is how
-the corpus's committed certificate refreshes.
+The stamps are rewritten into `corpus/references.json` on every run, so the
+committed certificate is always what the last run of this tree produced; the
+workflow fails on a diff, which is how a stale stamp shows.
 """
 
 from __future__ import annotations
 
-import importlib.metadata
 import json
 import math
 import re
@@ -63,10 +62,9 @@ from pathlib import Path
 
 import pandas as pd
 
-CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else 'corpus').resolve()
-RUNGS = CORPUS / 'examples' / 'references' / 'pypsa'
+CORPUS = Path(__file__).resolve().parent / 'corpus'
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(RUNGS))
+sys.path.insert(0, str(CORPUS))
 
 import instances  # noqa: E402  the corpus data's own loader
 import linopy  # noqa: E402
@@ -75,10 +73,10 @@ import prep  # noqa: E402
 
 import lpspec as lps  # noqa: E402
 
-MODEL = CORPUS / 'examples' / 'pypsa.yaml'
+MODEL = CORPUS / 'pypsa.yaml'
 
 #: A rung that states a different file says so here; every other rung binds the one file.
-MODELS = {'rung_10_quadratic_costs': CORPUS / 'examples' / 'pypsa_quadratic.yaml'}
+MODELS = {'rung_10_quadratic_costs': CORPUS / 'pypsa_quadratic.yaml'}
 
 
 def stands_for(description: str | None) -> str:
@@ -261,7 +259,6 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     assert result.is_ok, f'{stem}: lpspec did not solve — {result.termination_condition}'
     built_rows, built_columns = built(result, declared)
     parity = {
-        'lpspec': importlib.metadata.version('lpspec'),
         'lpspec_objective': float(result.objective),
         'matches': math.isclose(
             float(result.objective), float(n.objective) + float(n.objective_constant), rel_tol=1e-9, abs_tol=1e-6
@@ -277,9 +274,9 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         ours = lpl.build(model, tables)
     except Exception as error:
         note = f'{type(error).__name__}: {error}'.splitlines()[0][:200]
-        return parity, {'linopy': linopy.__version__, 'error': note}, parity['matches'] and priced(parity)
+        return parity, {'error': note}, parity['matches'] and priced(parity)
     verdict = compare(theirs, ours, declared, gc_kinds)
-    structural = {'linopy': linopy.__version__, **verdict}
+    structural = verdict
     return parity, structural, parity['matches'] and priced(parity) and not verdict['mismatch']
 
 
@@ -303,7 +300,9 @@ def main() -> int:
             else f'objective only — {structural["error"]}'
         )
         prices_ = parity['prices']
-        priced_ = f'prices on {prices_["compared"]} rows' if prices_['compared'] else f'no prices — {prices_["skipped"]}'
+        priced_ = (
+            f'prices on {prices_["compared"]} rows' if prices_['compared'] else f'no prices — {prices_["skipped"]}'
+        )
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
