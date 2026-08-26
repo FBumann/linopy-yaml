@@ -9,6 +9,23 @@ libraries over four models, with the numbers under each chart. This page is the
 method: how to reproduce a figure, what the harness refuses to measure, and
 what each sink can carry.
 
+**Every number published there is the median of a measurement's rounds, and
+every band is the first to the third quartile of the same rounds** — the middle
+half. Nine rounds is the floor; a quick cell takes many more.
+
+Not the fastest round, which is what this page used to print: the minimum is a
+best-of-n and n is not equal across libraries, because the harness calibrates by
+duration — a quick cell here took 84 rounds and a slow one 9. Not the mean
+either: these distributions carry a right tail that belongs to the machine, and
+one round in forty of a 20 ms measurement took 1.5 s, which drags its mean to
+2.9x its median. The median needs five bad rounds out of nine to move.
+
+The change is not free of consequence and the consequence ran against us: nine
+published cells flipped, every one on the `gurobi` sink, because our build there
+alternates between a fast and a slow state round after round where no other
+library's does ([#1288](https://github.com/fluxopt/lpspec/issues/1288)). On the
+fastest round that alternation is invisible.
+
 ## How to reproduce it
 
 ```bash
@@ -24,7 +41,7 @@ refuses to start if the resolution has drifted.
 Everything the tables are drawn from is in
 [`latest.json`](https://github.com/fluxopt/lpspec/blob/main/bench/results/latest.json):
 the machine, the library versions and the commit that produced them, and every
-round of every measurement rather than the minimum the tables print. The CSV
+round of every measurement rather than the median the tables print. The CSV
 form is `pixi run table`, which prints and commits nothing — the JSON is the
 archive because it keeps the rounds, and a second copy of a reduction would be
 free to drift from it.
@@ -226,6 +243,11 @@ Two entries that used to be here are now measured and have moved into the file:
 mask-density sweep.
 
 ## Method
+
+**The published statistic is the median, with the interquartile range as its
+band**; the reasoning is at the top of this page and the distribution rides in
+the results file beside it, so any other summary can be recomputed without
+re-running anything.
 
 Recorded in [`bench/README.md`](https://github.com/fluxopt/lpspec/blob/main/bench/README.md) — one process per
 measurement, `ru_maxrss` rather than a tracker, import excluded from
