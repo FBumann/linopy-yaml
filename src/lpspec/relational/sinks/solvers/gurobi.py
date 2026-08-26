@@ -13,6 +13,15 @@ disagree about the model they load. Two things differ:
   is where this sink parts company with the HiGHS one. See
   :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks`.
 
+**A column costs 192 bytes of Python objects here, on top of the solver's
+own.** gurobipy backs an ``MVar`` with one ``Var`` object per column and
+reads and writes every attribute through them, so a model of a million
+columns holds ~190 MB of them for as long as it is loaded, and a garbage
+collection that runs while they are young walks all of them (#1288). There
+is no object-free path — a file round trip only defers the same objects to
+the first read-back — so this is the price of the sink rather than a cost
+of it.
+
 ``gurobipy`` and ``scipy`` are imported inside the functions, so importing
 this module stays free for a caller who never solves with it.
 """
@@ -76,7 +85,7 @@ def build_gurobi(
     model: ModelTables,
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
-) -> Any:
+) -> Gurobi:
     """Load the model into a :class:`gurobipy.Model` and stop there.
 
     :func:`~lpspec.relational.sinks.solvers.highs.build_highs`'s seam, drawn
@@ -85,16 +94,13 @@ def build_gurobi(
     it defaults to one call — see
     :meth:`~lpspec.relational.sinks.tables.ModelTables.row_blocks` for why.
 
-    **The caller owns the model, so the environment follows it.** gurobipy has
-    no ``Model.getEnv()``, so a caller handed only the model could never
-    release the licence it holds; a finalizer disposes the environment when the
-    model is collected, which under refcounting is when the caller drops it.
-    One thing to own rather than two, which is why this returns a model rather
-    than a pair.
+    Returns:
+        The :class:`Gurobi` holding the model, which is at ``.model``. The
+        holder is what a caller owns, because the model's licence lives on an
+        environment gurobipy gives no way back to from the model — ``close``,
+        or leaving a ``with``, releases both in the order Gurobi wants.
     """
-    m, _x, _blocks, _quadratic, environment = _built(model, batch_rows, solver_options)
-    weakref.finalize(m, environment.dispose)
-    return m
+    return Gurobi(model, batch_rows, solver_options)
 
 
 class Gurobi(Solver):
@@ -105,9 +111,12 @@ class Gurobi(Solver):
 
     - **A push writes through the read-back handles.** The ``MVar`` and the
       constraint blocks are what carry the attributes, so this keeps what
-      :func:`_built` returns rather than the model alone — and it is why
-      :func:`build_gurobi` is not reused: its finalizer disposes an
-      environment a held solver ends explicitly.
+      :func:`_built` returns rather than the model alone.
+    - **The release is one finalizer, however it is reached.** ``close`` runs
+      it, and a holder dropped without closing runs it when the collector
+      gets there; both dispose the model before its environment, the order
+      Gurobi's licence wants, and the finalizer holds the two handles rather
+      than the solver, so nothing here keeps itself alive.
     - **Nothing pushes ``Sense``.** A row's comparison comes from the YAML and
       no data can move it, so a model whose senses differ is one
       :attr:`~lpspec.relational.sinks.tables.ModelTables.structure` has already
@@ -121,6 +130,9 @@ class Gurobi(Solver):
     _m: Any
     _x: Any
     _blocks: list[Any]
+    #: :func:`_released` over the model and its environment, bound to this
+    #: holder's lifetime.
+    _release: weakref.finalize[[Any, Any], Gurobi]
     #: The quadratic constraints, in row order and **after** every linear one:
     #: they are the tail of the label space, so the read-back concatenates
     #: rather than scatters.
@@ -155,6 +167,12 @@ class Gurobi(Solver):
 
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
         self._m, self._x, self._blocks, self._qrows, self._env = _built(model, batch_rows, self._options)
+        self._release = weakref.finalize(self, _released, self._m, self._env)
+
+    @property
+    def model(self) -> Any:
+        """The loaded :class:`gurobipy.Model`, owned by this holder."""
+        return self._m
 
     def push(self, model: ModelTables) -> None:
         """Whole vectors, in as many calls as there are blocks.
@@ -270,17 +288,24 @@ class Gurobi(Solver):
     def close(self) -> None:
         """Release the model and the licence its environment holds.
 
-        Both, and in that order: gurobipy has no ``Model.getEnv()``, so an
-        environment left behind holds the licence until the collector reaches
-        it — the hazard :func:`build_gurobi`'s finalizer exists for, and which
-        a solver held between solves answers by ending explicitly.
+        Explicitly, and now: a model a caller still references is disposed
+        under them, which is what releasing a licence means.
         """
-        if self._m is not None:
-            self._m.dispose()
-            self._env.dispose()
-            self._m = self._x = self._env = None
-            self._blocks = []
-            self._qrows = []
+        self._release()
+        self._m = self._x = self._env = None
+        self._blocks = []
+        self._qrows = []
+
+
+def _released(m: Any, environment: Any) -> None:
+    """Dispose the model, then the environment it was built on.
+
+    In that order because Gurobi keeps an environment — and the licence on it
+    — alive until every model built on it is gone, so the reverse releases
+    nothing until the collector finds the model.
+    """
+    m.dispose()
+    environment.dispose()
 
 
 def _built(
@@ -307,11 +332,19 @@ def _built(
     otherwise (#434).
     """
     gurobipy = _gurobipy()
-    import numpy as np
-    import scipy.sparse
-
     environment = gurobipy.Env(params={'OutputFlag': 0, **dict(solver_options or {})})
     m = gurobipy.Model(env=environment)
+    try:
+        return m, *_filled(m, model, batch_rows, gurobipy), environment
+    except BaseException:
+        _released(m, environment)
+        raise
+
+
+def _filled(m: Any, model: ModelTables, batch_rows: int | None, gurobipy: Any) -> tuple[Any, list[Any], list[Any]]:
+    """Everything :func:`_built` loads after the environment exists, so a load that fails part way still releases it."""
+    import numpy as np
+    import scipy.sparse
 
     cols = model.dense_columns(gurobipy.GRB.INFINITY)
     discrete: dict[str, Any] = {'vtype': np.where(cols.integral, 'I', 'C')} if cols.integral.any() else {}
@@ -335,7 +368,7 @@ def _built(
     m.ObjCon = model.objective_constant
     _set_quadratic(m, x, model, cols.cost)
     m.update()
-    return m, x, blocks, quadratic, environment
+    return x, blocks, quadratic
 
 
 def _add_quadratic_rows(m: Any, x: Any, model: ModelTables, gurobipy: Any) -> list[Any]:

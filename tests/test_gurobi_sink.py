@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import builtins
 import gc
-import weakref
 from typing import Any
 
 import polars as pl
@@ -182,8 +181,11 @@ def test_solver_options_land_on_the_environment() -> None:
     through an ordinary parameter, since a licence one would need a licence:
     the model sees it as its default, which is what environment-level means.
     """
-    with lps.build(*CASES['MIP']) as bound:
-        assert build_gurobi(bound._engine._model.tables(), solver_options={'TimeLimit': 5.0}).Params.TimeLimit == 5.0
+    with (
+        lps.build(*CASES['MIP']) as bound,
+        build_gurobi(bound._engine._model.tables(), solver_options={'TimeLimit': 5.0}) as solver,
+    ):
+        assert solver.model.Params.TimeLimit == 5.0
 
 
 def test_build_gurobi_loads_the_model_and_stops() -> None:
@@ -191,34 +193,79 @@ def test_build_gurobi_loads_the_model_and_stops() -> None:
     reports is what was loaded rather than what was solved."""
     with lps.build(*CASES['MIP']) as bound:
         tables = bound._engine._model.tables()
-        m = build_gurobi(tables)
-        assert (m.NumVars, m.NumConstrs) == (tables.column_count, tables.row_count)
-        assert m.NumIntVars == tables.cols.filter(pl.col('vtype') != 'continuous').height
-        assert m.ModelSense == gurobipy.GRB.MAXIMIZE
-        assert m.SolCount == 0
+        with build_gurobi(tables) as solver:
+            m = solver.model
+            assert (m.NumVars, m.NumConstrs) == (tables.column_count, tables.row_count)
+            assert m.NumIntVars == tables.cols.filter(pl.col('vtype') != 'continuous').height
+            assert m.ModelSense == gurobipy.GRB.MAXIMIZE
+            assert m.SolCount == 0
 
 
-def test_nothing_keeps_a_built_model_alive() -> None:
-    """The precondition for releasing the licence a built model holds.
+def test_a_dropped_solver_disposes_the_model_it_holds() -> None:
+    """The licence a loaded model holds is released when its holder goes.
 
-    :func:`build_gurobi` hands ownership over and disposes the environment
-    through a finalizer on the model, so anything in this package still
-    referencing that model would hold a Gurobi licence open for the life of
-    the process. A held :class:`Gurobi` does not depend on this — its
-    ``close()`` disposes both explicitly.
+    Before this, a :class:`Gurobi` dropped without ``close()`` — and the
+    model :func:`build_gurobi` returned bare — left the environment to the
+    collector, and disposed it *before* the model where a finalizer ran at
+    all, which releases nothing: Gurobi keeps an environment until its last
+    model is gone. Asserted through a model the caller still holds, the case
+    where a refcount could not have done it.
     """
     with lps.build(*CASES['MIP']) as bound:
-        reference = weakref.ref(build_gurobi(bound._engine._model.tables()))
-    gc.collect()
-    assert reference() is None, 'a built gurobi model outlived its caller — its environment cannot be released'
+        solver = build_gurobi(bound._engine._model.tables())
+        m = solver.model
+        del solver
+        gc.collect()
+        with pytest.raises(gurobipy.GurobiError, match='freed'):
+            _ = m.NumVars
+
+
+def test_close_disposes_a_model_the_caller_still_holds() -> None:
+    """``close()`` is the release, not a hint to the collector — and it is idempotent."""
+    with lps.build(*CASES['MIP']) as bound:
+        solver = build_gurobi(bound._engine._model.tables())
+        m = solver.model
+        solver.close()
+        solver.close()
+        with pytest.raises(gurobipy.GurobiError, match='freed'):
+            _ = m.NumVars
+
+
+def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An environment started for a load that raises is disposed before the error leaves.
+
+    Otherwise a model the sink refuses part way — a bad option value, a
+    matrix Gurobi rejects — would hold a licence until the collector found the
+    half-built model.
+    """
+    from lpspec.relational.sinks.solvers import gurobi as sink
+
+    events: list[str] = []
+    real_env = gurobipy.Env
+
+    class Env(real_env):  # type: ignore[misc, valid-type]
+        def dispose(self) -> None:
+            events.append('env disposed')
+            super().dispose()
+
+    monkeypatch.setattr(gurobipy, 'Env', Env)
+    monkeypatch.setattr(sink, '_filled', lambda *args: (_ for _ in ()).throw(RuntimeError('mid-load')))
+    with lps.build(*CASES['MIP']) as bound:
+        try:
+            build_gurobi(bound._engine._model.tables())
+        except RuntimeError:
+            events.append('error left')
+    assert events[:2] == ['env disposed', 'error left'], (
+        'the environment is disposed before the error reaches the caller; gurobipy disposes again at dealloc'
+    )
 
 
 def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     """Gurobi has ``ObjCon``, so the constant is part of the model it holds —
     which makes the build seam a complete hand-off rather than a model plus a
     number to remember."""
-    with lps.build(*CASES['MAX']) as bound:
-        assert build_gurobi(bound._engine._model.tables()).ObjCon == pytest.approx(5.0)
+    with lps.build(*CASES['MAX']) as bound, build_gurobi(bound._engine._model.tables()) as solver:
+        assert solver.model.ObjCon == pytest.approx(5.0)
 
 
 def test_the_missing_extra_is_named() -> None:

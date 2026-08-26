@@ -110,7 +110,7 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
         elif sink == 'gurobi':
             from lpspec.relational.sinks.solvers.gurobi import build_gurobi
 
-            _handle = build_gurobi(_tables(bound))
+            build_gurobi(_tables(bound)).close()
         else:
             from lpspec.relational.sinks.solvers.highs import build_highs
 
