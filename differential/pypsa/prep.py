@@ -57,18 +57,16 @@ def _retention(n: pypsa.Network, component: str, dim: str) -> pd.DataFrame:
 
 
 def _cycle_weights(n: pypsa.Network) -> pd.DataFrame:
-    """The KVL basis PyPSA itself solves with: ``sub_network.C``, scaled by effective reactance."""
+    """The KVL basis PyPSA itself solves with — ``n.cycle_matrix(apply_weights=True)``: reactance on AC, resistance on DC."""
     n.determine_network_topology()
     n.calculate_dependent_values()
-    rows = []
-    for sub in n.sub_networks.obj:
-        cycles = sub.C.todense()
-        branches = sub.branches()
-        for c in range(cycles.shape[1]):
-            for b, (kind, name) in enumerate(branches.index):
-                if kind == 'Line' and cycles[b, c]:
-                    weight = float(cycles[b, c]) * float(n.lines.at[name, 'x_pu_eff'])
-                    rows.append({'line': str(name), 'cycle': f'{sub.name}-c{c}', 'value': weight})
+    C = n.cycle_matrix(apply_weights=True)
+    rows = [
+        {'line': str(name), 'cycle': str(cycle), 'value': float(weight)}
+        for (kind, name), weights in C.iterrows()
+        for cycle, weight in weights.items()
+        if kind == 'Line' and weight
+    ]
     return pd.DataFrame(rows, columns=['line', 'cycle', 'value']).astype({'value': float})
 
 

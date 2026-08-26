@@ -259,7 +259,9 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     parity = {
         'lpspec': importlib.metadata.version('lpspec'),
         'lpspec_objective': float(result.objective),
-        'matches': math.isclose(float(result.objective), float(n.objective), rel_tol=1e-9, abs_tol=1e-6),
+        'matches': math.isclose(
+            float(result.objective), float(n.objective) + float(n.objective_constant), rel_tol=1e-9, abs_tol=1e-6
+        ),
         'model': str(model.relative_to(CORPUS)),
         'built_rows': built_rows,
         'built_columns': built_columns,
