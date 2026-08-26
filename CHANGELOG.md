@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.1-alpha.265](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.264...v0.0.1-alpha.265) (2026-08-26)
+
+
+### Features
+
+* **differential:** the pypsa runner holds the nodal prices to PyPSA's ([#1318](https://github.com/fluxopt/lpspec/issues/1318)) ([b45bf15](https://github.com/fluxopt/lpspec/commit/b45bf15b33077837ae3aca459af91c2eb2179c4b))
+* the pypsa differential suite lives here, and the corpus keeps only documents ([#1310](https://github.com/fluxopt/lpspec/issues/1310)) ([c1db712](https://github.com/fluxopt/lpspec/commit/c1db712ed6a64da7d07cc80ae802bbe74bb9fb71))
+
+
+### Bug Fixes
+
+* **bench:** the scheduled ladder measures the selection it was given, not pytest's defaults ([#1312](https://github.com/fluxopt/lpspec/issues/1312)) ([3150844](https://github.com/fluxopt/lpspec/commit/315084487d1fd305f62bc59a93764a9d64e6eb80))
+* **differential:** the pypsa runner certifies the rung folders, and refuses an empty corpus ([#1313](https://github.com/fluxopt/lpspec/issues/1313)) ([2092629](https://github.com/fluxopt/lpspec/commit/209262931b85b52553a07bf20a2897d6badd2137))
+
 ## [0.0.1-alpha.264](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.263...v0.0.1-alpha.264) (2026-08-26)
 
 
