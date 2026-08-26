@@ -128,7 +128,7 @@ def check(model: str | Path | dict[str, Any] | Model, sink: str | None = None) -
     schema = load_model(model)
     buildable = expand_piecewise(schema)
     program = lower_program(buildable)
-    for name in schema.expressions:
+    for name in buildable.expressions:
         lower_expression(buildable, name)
     notes = [*unbounded_notes(buildable), *advice(program)]
     refused = _refused_by(program, sink) if sink is not None else None
