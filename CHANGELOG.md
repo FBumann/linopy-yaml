@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.1-alpha.261](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.260...v0.0.1-alpha.261) (2026-08-26)
+
+
+### Bug Fixes
+
+* **bench:** a time budget decides one ladder without deciding the other ([#1285](https://github.com/fluxopt/lpspec/issues/1285)) ([84850d9](https://github.com/fluxopt/lpspec/commit/84850d905239e475fb4fceb116ab88eac0b83be9))
+
+
+### Documentation
+
+* **api:** a docstring citing a hard rule says where the rules are ([#1296](https://github.com/fluxopt/lpspec/issues/1296)) ([2560343](https://github.com/fluxopt/lpspec/commit/2560343c201ac20f59d61761a9729b553d7f7aa2))
+
 ## [0.0.1-alpha.260](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.259...v0.0.1-alpha.260) (2026-08-26)
 
 
