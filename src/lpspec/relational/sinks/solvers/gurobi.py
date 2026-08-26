@@ -129,7 +129,7 @@ class Gurobi(Solver):
 
     #: Both halves of the extra, for the reason :attr:`unavailable_message`
     #: names both: the missing one is as often scipy.
-    requires = ('gurobipy', 'scipy')
+    requires = ('gurobipy', 'scipy.sparse')
     unavailable_message = 'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "lpspec[gurobi]"'
 
     #: Gurobi branches on a set itself, which is the whole reason to declare

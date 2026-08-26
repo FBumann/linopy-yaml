@@ -171,10 +171,11 @@ class Solver(ABC):
         Returns the first, the member's own library; the rest are imported only
         to fail here, where the message covers them, rather than mid-load.
         """
-        import importlib
-
         try:
-            modules = [importlib.import_module(package) for package in cls.requires]
+            # __import__, not import_module: the same hook the sinks' own
+            # `import` statements use, so an absence fails here with the
+            # message rather than raw at the first statement past the guard.
+            modules = [__import__(package) for package in cls.requires]
         except ModuleNotFoundError as exc:
             raise ModuleNotFoundError(cls.unavailable_message) from exc
         return modules[0]
@@ -190,10 +191,11 @@ class Solver(ABC):
         (:func:`~lpspec.relational.sinks.solvers.solver`).
 
         A probe of the import system rather than an import: answering must not
-        cost the load it is asked to avoid, and must not raise.
+        cost the load it is asked to avoid, and must not raise. Probed at the
+        top-level name — ``find_spec`` on a dotted one imports the parent.
         Uncached, being asked once per solve — against a solve.
         """
-        return all(importlib.util.find_spec(package) is not None for package in cls.requires)
+        return all(importlib.util.find_spec(package.partition('.')[0]) is not None for package in cls.requires)
 
     @abstractmethod
     def _load(self, model: ModelTables, batch_rows: int | None) -> None:
