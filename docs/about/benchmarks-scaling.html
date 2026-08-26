@@ -32,7 +32,11 @@
     <button class="ctl on" data-metric="wall">wall time</button>
     <button class="ctl" data-metric="peak">peak RSS</button>
   </div>
-  <div class="legend" id="facet-legend"></div>
+  <div class="controls legend-row">
+    <span class="ctl-label">Libraries</span>
+    <div class="legend" id="facet-legend"></div>
+    <span class="hint">click to hide</span>
+  </div>
   <div id="facets" class="grid3"></div>
   <p class="note">
     Log on both axes: the slope is the claim. The shaded band is the middle half
@@ -139,6 +143,9 @@ figure td.best { font-weight: 700; }
   background: none; border: 0; padding: .1rem .2rem; cursor: pointer; border-radius: 5px; }
 .key:hover { background: var(--surface-2, rgba(127,127,127,.12)); }
 .key.off { opacity: .38; }
+.legend-row { align-items: center; gap: .5rem; flex-wrap: wrap; }
+.legend-row .legend { margin: 0; }
+.hint { color: var(--text-muted); font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; }
 .key.off .swatch { background: var(--text-muted) !important; }
 .swatch { width: 15px; height: 3px; border-radius: 2px; display: inline-block; }
 .swatch.dash { background: none !important; border-top: 3px dashed currentColor;
