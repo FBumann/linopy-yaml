@@ -1022,11 +1022,11 @@ op_wind,wind5,1.0
 
 ```csv
 global_constraint,generator,value
-co2_cap,coal5,2.5714285714285716
+co2_cap,coal5,2.571428571429
 co2_cap,gas5,0.8
-co2_exact,coal5,2.5714285714285716
+co2_exact,coal5,2.571428571429
 co2_exact,gas5,0.8
-co2_floor,coal5,2.5714285714285716
+co2_floor,coal5,2.571428571429
 co2_floor,gas5,0.8
 ```
 

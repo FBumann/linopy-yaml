@@ -1017,13 +1017,13 @@ snapshot,storage_unit,value
 
 ```csv
 snapshot,storage_unit,value
-0,battery,0.99498743710662
+0,battery,0.994987437107
 0,reservoir,1.0
 1,battery,0.9801
 1,reservoir,1.0
-2,battery,0.9850375627355538
+2,battery,0.985037562736
 2,reservoir,1.0
-3,battery,0.9751871871081982
+3,battery,0.975187187108
 3,reservoir,1.0
 ```
 
@@ -1142,10 +1142,10 @@ snapshot,store,value
 
 ```csv
 snapshot,store,value
-0,cavern,0.9974968671630001
+0,cavern,0.997496867163
 1,cavern,0.990025
-2,cavern,0.9925093828271851
-3,cavern,0.9875468359130493
+2,cavern,0.992509382827
+3,cavern,0.987546835913
 ```
 
 `snapshot_weightings_stores.csv`
