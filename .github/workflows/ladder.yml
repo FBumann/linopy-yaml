@@ -33,7 +33,7 @@ jobs:
     # Each half projects to about 2.4 h. The ceiling on a hosted job is six
     # hours and cannot be raised, so this is the number to look at first if a
     # month's run is killed — and the half that was killed is the one that is
-    # lost, which is the argument for the split above. Method: #1313.
+    # lost, which is the argument for the split above. Method: #1315.
     timeout-minutes: 300
     strategy:
       # One sink failing must not cancel the other: half a ladder is a result,

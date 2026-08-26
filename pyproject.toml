@@ -428,7 +428,7 @@ pytest bench --benchmark-memory \
 # already measured, including the sink that finished. Split by sink and each
 # half fits with hours to spare, a bad runner costs one sink rather than the
 # run, and `bench.report` merges the two files because it already reads a
-# directory. Numbers and method: #1313.
+# directory. Numbers and method: #1315.
 #
 # A shared host still cannot resolve every comparison, and that is what the
 # bands are for. Of the eleven lpspec-vs-rival margins on the `gurobi` sink, six
