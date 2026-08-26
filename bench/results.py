@@ -7,7 +7,7 @@ and safe move was to leave every one of those lines alone and change only what
 feeds them — so this module speaks the record shape they already read:
 
     {'record': 'timing', 'case', 'size', 'arm', 'sink',
-     'wall_seconds', 'iqr', 'median', 'rounds',
+     'wall_seconds', 'q1_seconds', 'q3_seconds', 'iqr', 'median', 'rounds',
      'peak_rss_bytes', 'peak_bytes', 'allocations',
      'counts': {...}, 'live_fraction'}
     {'record': 'loop',   'case', 'size', 'arm',
@@ -22,6 +22,14 @@ records under ``benchmem(isolate=True)`` and the only memory number honest
 across two libraries (see `bench/test_ladder.py`). ``first`` and ``steady`` are
 read off the per-round series: round 0 is the cold build, and the minimum of
 the rest is what a rolling horizon pays.
+
+``q1_seconds`` and ``q3_seconds`` are the middle half of the same rounds, and
+they are what the chart page draws as a band. Not min to max: one nine-round
+measurement here read
+``[1.18, 1.02, 1.07, 1.02, 1.02, 1.02, 1.06, 1.45, 9.97]``, so its envelope
+would have been a single outlying round drawn ten times the height of the
+model it belongs to. The quartiles say where the work actually sits, and a
+band that overlaps another line's is two numbers this run cannot tell apart.
 
 **The distribution rides along with the minimum.** ``iqr``, ``median`` and
 ``rounds`` are carried so the report can say whether a published minimum is
@@ -150,6 +158,8 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
             'record': 'timing',
             'sink': params.get('sink'),
             'wall_seconds': stats.get('min'),
+            'q1_seconds': stats.get('q1'),
+            'q3_seconds': stats.get('q3'),
             'iqr': stats.get('iqr'),
             'median': stats.get('median'),
             'rounds': stats.get('rounds'),

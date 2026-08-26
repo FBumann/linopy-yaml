@@ -646,9 +646,11 @@ def test_a_measurement_without_a_peak_is_skipped_rather_than_divided(tmp_path: P
     records = [_timing('lpspec'), _timing('linopy', size='l', peak_rss_bytes=None)]
     path.write_text('\n'.join(json.dumps(r) for r in records))
 
-    table = plot.best(path, 'lp')
-    assert ('dispatch', 'l', 'linopy') not in table['wall'], 'a record with no peak cannot be plotted, so it is dropped'
-    assert ('dispatch', 'm', 'lpspec') in table['wall'], 'and the records around it still are'
+    taken = plot.series(path)
+    assert 'l' not in taken.get(('dispatch', 'lp', 'linopy'), {}), (
+        'a record with no peak cannot be plotted, so it is dropped'
+    )
+    assert 'm' in taken[('dispatch', 'lp', 'lpspec')], 'and the records around it still are'
 
 
 @pytest.mark.parametrize(
