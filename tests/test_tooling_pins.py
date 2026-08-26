@@ -84,12 +84,16 @@ def _declared_floors() -> dict[str, str]:
     return {match[1]: match[2] for spec in declared if (match := _FLOOR.match(spec))}
 
 
+#: What runs the suite, installed unconstrained: neither has a floor to prove.
+_RUNNER = frozenset({'pytest', 'pytest-xdist'})
+
+
 def _pinned_in_the_floors_environment() -> dict[str, str]:
     pixi = tomllib.loads((REPO / 'pyproject.toml').read_text())['tool']['pixi']
     pinned = pixi['feature']['floors']['pypi-dependencies']
-    # `lpspec` is the project under test and `pytest` is the runner; neither is a
-    # dependency whose floor is being claimed.
-    return {name: spec for name, spec in pinned.items() if isinstance(spec, str) and name != 'pytest'}
+    # `lpspec` is the project under test and `_RUNNER` is what runs it; neither is
+    # a dependency whose floor is being claimed.
+    return {name: spec for name, spec in pinned.items() if isinstance(spec, str) and name not in _RUNNER}
 
 
 def test_the_floors_environment_pins_every_declared_lower_bound():
