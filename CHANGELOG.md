@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.1-alpha.269](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.268...v0.0.1-alpha.269) (2026-08-26)
+
+
+### Bug Fixes
+
+* **linopy:** a parameter with no dimensions keeps the type it declares ([#1340](https://github.com/fluxopt/lpspec/issues/1340)) ([89f57f1](https://github.com/fluxopt/lpspec/commit/89f57f1c9c5d822f79a7a62b5d62e02d5b6f54b7))
+
 ## [0.0.1-alpha.268](https://github.com/fluxopt/lpspec/compare/v0.0.1-alpha.267...v0.0.1-alpha.268) (2026-08-26)
 
 
